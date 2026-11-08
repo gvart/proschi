@@ -20,6 +20,8 @@ import SkillTrends from './SkillTrends';
  */
 
 const card = 'rounded-brutal border-bw-2 border-ink bg-surface shadow-brutal-md';
+/** A block of the progress page's History section. */
+const subCard = 'rounded-brutal border-bw-2 border-ink bg-surface shadow-brutal-sm';
 const SHOWN = 8;
 
 const titleOf = (id: string) => problems.find((p) => p.id === id)?.title ?? id;
@@ -68,25 +70,25 @@ export default function InterviewHistory() {
   const shown = all ? sessions : sessions.slice(0, SHOWN);
   const earlier = total - sessions.length;
   return (
-    <section aria-labelledby="interview-history" className="mt-10" data-testid="interview-history">
-      <h2 id="interview-history" className="flex items-center gap-2 font-display text-2xl font-extrabold text-ink">
-        <HistoryIcon size={22} aria-hidden="true" />
+    <section aria-labelledby="interview-history" className="mt-6" data-testid="interview-history">
+      <h3 id="interview-history" className="flex items-center gap-2 font-display text-lg font-bold text-ink">
+        <HistoryIcon size={18} aria-hidden="true" />
         Interview history
-      </h2>
+      </h3>
       {total === 0 ? (
-        <p className={`mt-3 p-4 text-sm text-ink/80 ${card}`}>No mock interviews yet. Start one from any problem with Interview mode, then its verdict and scores show up here.</p>
+        <p className={`mt-2 p-4 text-sm text-ink/80 ${subCard}`}>No mock interviews yet. Start one from any problem with Interview mode, then its verdict and scores show up here.</p>
       ) : (
         <>
           {full && sessions.length > 0 && (
-            <div className={`mt-3 p-4 sm:p-5 ${card}`}>
-              <h3 className={eyebrow}>Score per skill over time</h3>
+            <div className={`mt-2 p-4 sm:p-5 ${subCard}`}>
+              <h4 className={eyebrow}>Score per skill over time</h4>
               <div className="mt-3">
                 <SkillTrends sessions={sessions} problemTitle={titleOf} />
               </div>
             </div>
           )}
-          <div className={`mt-3 overflow-hidden ${card}`}>
-            {!full && <h3 className={`px-4 pt-3 ${eyebrow}`}>Your latest interview</h3>}
+          <div className={`mt-2 overflow-hidden ${subCard}`}>
+            {!full && <h4 className={`px-4 pt-3 ${eyebrow}`}>Your latest interview</h4>}
             <ul className="divide-y divide-ink/15" data-testid="history-list">
               {shown.map((s) => (
                 <SessionRow key={s.id} s={s} />

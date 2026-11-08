@@ -325,8 +325,9 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
         {route && !onPage && (
           <p className="max-w-4xl mx-auto px-4 pt-6 text-sm text-red-700 dark:text-red-300">No problem called “{problemId}”. Pick one below.</p>
         )}
+        {/* The streak chip by the bar, except where the page shows the streak itself: the home's Today panel and the progress page's summary. */}
         {hubTab ? (
-          <PracticeHub tab={hubTab} onIntent={preloadSection} aside={hubTab === 'problems' ? undefined : streak}>
+          <PracticeHub tab={hubTab} onIntent={preloadSection} aside={hubTab === 'problems' || onProgress ? undefined : streak}>
             {signedIn && <Announcement onChange={onAnnouncement} />}
             {hubTab === 'problems' ? (
               <ProblemList

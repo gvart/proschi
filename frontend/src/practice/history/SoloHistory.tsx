@@ -15,7 +15,7 @@ import { formatDay } from './api';
  * Left out before the first one.
  */
 
-const card = 'rounded-brutal border-bw-2 border-ink bg-surface shadow-brutal-md';
+const card = 'rounded-brutal border-bw-2 border-ink bg-surface shadow-brutal-sm';
 const SHOWN = 8;
 
 const titleOf = (id: string) => problems.find((p) => p.id === id)?.title ?? id;
@@ -26,12 +26,12 @@ export default function SoloHistory() {
   if (sessions.length === 0) return null;
   const shown = all ? sessions : sessions.slice(0, SHOWN);
   return (
-    <section aria-labelledby="solo-history" className="mt-10" data-testid="solo-history">
-      <h2 id="solo-history" className="flex items-center gap-2 font-display text-2xl font-extrabold text-ink">
-        <Clock size={22} aria-hidden="true" />
+    <section aria-labelledby="solo-history" className="mt-6" data-testid="solo-history">
+      <h3 id="solo-history" className="flex items-center gap-2 font-display text-lg font-bold text-ink">
+        <Clock size={18} aria-hidden="true" />
         Interviews on your own
-      </h2>
-      <div className={`mt-3 overflow-hidden ${card}`}>
+      </h3>
+      <div className={`mt-2 overflow-hidden ${card}`}>
         <ul className="divide-y divide-ink/15">
           {shown.map((s) => {
             const counts = soloSummaryCounts(s);

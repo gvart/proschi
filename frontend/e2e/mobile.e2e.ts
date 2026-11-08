@@ -218,7 +218,7 @@ test.describe('no sideways scrolling on a phone', () => {
   test('settings, progress and a public profile, with a badge open', async ({ page }) => {
     await visit(page, 'practice/#/me');
     await visit(page, 'practice/#/progress');
-    await page.getByText(/^All \d+ badges$/).click();
+    await page.getByRole('button', { name: /^Show all \d+$/ }).click();
     await page.locator('[data-achievement="reviews-100"]').getByRole('button').click();
     await expectNoHorizontalOverflow(page, '#/progress with a badge open');
     await mockProfile(page);
