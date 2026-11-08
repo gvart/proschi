@@ -280,8 +280,8 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
             engine={engine}
             account={account}
             {...(fromRoadmap
-              ? { back: { href: '#/roadmap', label: 'Roadmap' }, banner: <RoadmapBanner id={problem.id} stages={roadmap} problems={problems} progress={progress} />, openLesson: lessonRoute ? ('always' as const) : ('unread' as const) }
-              : { openLesson: lessonRoute ? ('always' as const) : ('unread' as const) })}
+              ? { back: { href: '#/roadmap', label: 'Roadmap' }, banner: <RoadmapBanner id={problem.id} stages={roadmap} problems={problems} progress={progress} />, staged: true, openLesson: lessonRoute ? ('always' as const) : ('unread' as const) }
+              : { openLesson: lessonRoute ? ('always' as const) : undefined })}
           />
         </Suspense>
       </FeaturesContext.Provider>

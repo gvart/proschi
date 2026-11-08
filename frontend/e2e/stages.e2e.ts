@@ -112,7 +112,7 @@ for (const [device, viewport] of [
 
 test('going back keeps the notes, and a reload lands where you were', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('proschi.lessons', JSON.stringify({ 'url-shortener': true })));
-  await page.goto('practice/#/url-shortener');
+  await page.goto('practice/#/roadmap/url-shortener');
   // The lesson was read: straight to Clarify.
   await expect(page.getByTestId('stage-clarify')).toBeVisible();
   const notes = page.getByLabel('Your clarifying questions and assumptions');
@@ -142,4 +142,17 @@ test('going back keeps the notes, and a reload lands where you were', async ({ p
   await rail(page).getByRole('button', { name: 'Lesson' }).click();
   await expect(page.getByRole('article', { name: 'Lesson' })).toBeVisible();
   await expect(next(page)).toHaveText('Continue: Clarify');
+});
+
+test('a problem opened from Problems is the plain workspace: no stage bar, no lesson gate', async ({ page }) => {
+  await page.goto('practice/#/url-shortener');
+  await expect(page.locator('[data-view="editor"]')).toBeVisible();
+  await expect(page.locator('.cm-content')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Run tests' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Stages' })).toHaveCount(0);
+  await expect(page.getByTestId('stage-next')).toHaveCount(0);
+  await expect(page.getByRole('article', { name: 'Lesson' })).toHaveCount(0);
+  // The modes and the lesson are where they were before the stages.
+  await expect(page.getByRole('link', { name: 'Interview mode' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Lesson' }).first()).toBeVisible();
 });
