@@ -9,7 +9,7 @@ import Roadmap, { RoadmapBanner } from './RoadmapView';
 import NextForYou from './history/NextForYou';
 import { verdictIdOf } from './history/api';
 import { FeaturesContext, useFeatures } from '../components/featureState';
-import { ROADMAP, roadmapAccess, roadmapFor, roadmapState, roadmapTarget, routeLock } from './roadmap';
+import { ROADMAP, roadmapAccess, roadmapFor, roadmapHref, roadmapState, roadmapTarget, routeLock } from './roadmap';
 import { findGuide, GUIDES } from './guide/guides';
 import { lessonsRead, loadProgress, markLessonsRead, onLessonsRead, saveProgress, type Progress } from './progress';
 import { useLessonsRead } from './useLessonsRead';
@@ -356,7 +356,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
               </Suspense>
             ) : guide ? (
               <Suspense fallback={<PageLoading label={`Loading ${guide.title}…`} />}>
-                <GuideRoute guide={guide} startHref="#/roadmap" startLabel="Go to the roadmap" />
+                <GuideRoute guide={guide} startHref={roadmapNow.next ? roadmapHref(roadmapNow.next.id) : '#/roadmap'} startLabel={roadmapNow.next ? `${roadmapNow.solved === 0 ? 'Start' : 'Continue'}: ${problems.find((p) => p.id === roadmapNow.next?.id)?.title ?? roadmapNow.next.id}` : 'Go to the roadmap'} />
               </Suspense>
             ) : (
               <Roadmap

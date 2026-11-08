@@ -135,13 +135,13 @@ test.describe('lessons', () => {
 
     test('the guide is open to everyone and linked from the roadmap', async ({ page }) => {
     await page.goto('practice/#/roadmap');
-    await page.getByRole('link', { name: /How to approach a system design interview/ }).click();
+    await page.getByRole('link', { name: /How to approach a system design interview/ }).first().click();
     await expect(page).toHaveURL(/#\/roadmap\/approach$/);
     await expect(page).toHaveTitle('How to approach a system design interview · Proschi practice');
     await expect(page.getByRole('heading', { level: 1, name: 'How to approach a system design interview' })).toBeVisible();
     await expect(page.getByRole('heading', { level: 2, name: 'The four steps' })).toBeVisible();
-    await page.getByRole('link', { name: 'Go to the roadmap' }).click();
-    await expect(page).toHaveURL(/#\/roadmap$/);
+    await page.getByRole('link', { name: 'Start: Hello, Proschi' }).click();
+    await expect(page).toHaveURL(/#\/roadmap\/hello-proschi$/);
   });
 
   test('the static problem page has the lesson as an article with anchors', async ({ page }) => {

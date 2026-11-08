@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { problems } from './catalog';
-import { OPTIONAL_STEPS, ROADMAP, requiredStages, roadmapAccess, roadmapFor, roadmapState, roadmapTarget, routeLock, stepLock, validateRoadmap, type RoadmapStage } from './roadmap';
+import { OPTIONAL_STEPS, ROADMAP, requiredStages, roadmapAccess, roadmapFor, roadmapState, roadmapTarget, readFirstPending, routeLock, stepLock, validateRoadmap, type RoadmapStage } from './roadmap';
 import type { Progress } from './progress';
 import { roadmapAfterSolve } from './solveSummary';
 import { ruleProgress, type StatsSnapshot } from '../learn/achievements';
@@ -203,5 +203,21 @@ describe('stepLock', () => {
     const state = roadmapState(roadmap, {});
     expect(stepLock(state, 'elsewhere', 'open')).toEqual({ kind: 'open' });
     expect(stepLock(state, 'elsewhere', 'sign-in')).toEqual({ kind: 'sign-in' });
+  });
+});
+
+describe('readFirstPending', () => {
+  const state = (...ids: string[]) => roadmapState(stages(['a', 'b']), solved(...ids));
+
+  it('is on for a newcomer who has not read the guide', () => {
+    expect(readFirstPending('approach', [], state())).toBe(true);
+    expect(readFirstPending('approach', ['a'], state())).toBe(true);
+  });
+
+  it('is off once the guide is read', () => expect(readFirstPending('approach', ['approach'], state())).toBe(false));
+
+  it('is off once a problem is solved, or with no guide', () => {
+    expect(readFirstPending('approach', [], state('a'))).toBe(false);
+    expect(readFirstPending(undefined, [], state())).toBe(false);
   });
 });

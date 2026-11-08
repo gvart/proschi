@@ -3,7 +3,7 @@ import { ArrowRight, BookCheck, BookOpen, Lock, LogIn, Map as MapIcon, PartyPopp
 import { DifficultyBadge, StatusIcon } from './Badges';
 import type { ProblemListing } from './listing';
 import type { Progress } from './progress';
-import { OPTIONAL_STEPS, SIGNED_OUT_STAGES, roadmapHref, roadmapState, type RoadmapAccess, type RoadmapStage, type RoadmapState, type StepLock } from './roadmap';
+import { OPTIONAL_STEPS, SIGNED_OUT_STAGES, roadmapHref, readFirstPending, roadmapState, type RoadmapAccess, type RoadmapStage, type RoadmapState, type StepLock } from './roadmap';
 import { PROVIDER_LABEL } from './account';
 import type { ProviderId } from '../services/api';
 import { eyebrow, primaryButton } from '../components/Playground/ui';
@@ -54,7 +54,28 @@ export default function Roadmap({ stages, problems, progress, access, providers,
   // Signed out, the next step past the first stage waits for a sign-in.
   const nextLocked = !!state.next && guest && state.next.stage >= SIGNED_OUT_STAGES;
   const total = state.steps.length;
+  const readFirst = !checking && readFirstPending(guide?.id, read, state);
   const current = stages[state.currentStage];
+
+  const guideCard = guide && (
+
+      <a
+        href={`#/roadmap/${guide.id}`}
+        className="group mt-8 flex items-start gap-3 rounded-brutal border-bw-2 border-ink bg-pop-lilac/20 p-4 shadow-brutal-md transition-[translate,transform,box-shadow] duration-d1 hover:-translate-x-px hover:-translate-y-px hover:shadow-brutal-lg focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-pop-blue"
+      >
+        <BookOpen size={22} className="mt-0.5 shrink-0 text-ink" aria-hidden="true" />
+        <span className="min-w-0 flex-1">
+          <span className={`flex flex-wrap items-center gap-2 ${eyebrow}`}>
+            Read first{guide.minutes ? ` · ${guide.minutes} min read` : ''}
+            {!checking && readSet.has(guide.id) && <ReadChip />}
+          </span>
+          <span className="mt-0.5 block font-display text-lg font-bold leading-tight text-ink group-hover:underline">{guide.title}</span>
+          <span className="mt-1 block text-sm text-ink/80">{guide.summary}</span>
+        </span>
+        <ArrowRight size={18} className="mt-1 shrink-0 text-ink" aria-hidden="true" />
+      </a>
+    
+  );
 
   return (
     <main className="max-w-4xl mx-auto px-4 pt-6 pb-8 sm:pb-14">
@@ -97,6 +118,16 @@ export default function Roadmap({ stages, problems, progress, access, providers,
             )}
             {state.next && nextLocked ? (
               <p className="sm:ml-auto text-sm font-semibold text-ink">Stage 1 done: sign in to continue</p>
+            ) : state.next && guide && readFirst ? (
+              <div className="sm:ml-auto flex flex-col gap-1 sm:items-end">
+                <a href={`#/roadmap/${guide.id}`} className={primaryButton}>
+                  Read first: {guide.title}
+                  <ArrowRight size={14} />
+                </a>
+                <a href={roadmapHref(state.next.id)} className="text-xs font-semibold text-ink underline underline-offset-2 hover:text-ink/70">
+                  or start {titleOf(problems, state.next.id)}
+                </a>
+              </div>
             ) : state.next ? (
               <a href={roadmapHref(state.next.id)} className={`sm:ml-auto ${primaryButton}`}>
                 {state.solved === 0 ? 'Start' : 'Continue'}: {titleOf(problems, state.next.id)}
@@ -123,27 +154,12 @@ export default function Roadmap({ stages, problems, progress, access, providers,
         </section>
       )}
 
+      {readFirst && guideCard}
       {nextForYou}
 
       {guest && <SignInToKeep providers={providers} onSignIn={onSignIn} stages={stages.length} />}
 
-      {guide && (
-        <a
-          href={`#/roadmap/${guide.id}`}
-          className="group mt-8 flex items-start gap-3 rounded-brutal border-bw-2 border-ink bg-pop-lilac/20 p-4 shadow-brutal-md transition-[translate,transform,box-shadow] duration-d1 hover:-translate-x-px hover:-translate-y-px hover:shadow-brutal-lg focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-pop-blue"
-        >
-          <BookOpen size={22} className="mt-0.5 shrink-0 text-ink" aria-hidden="true" />
-          <span className="min-w-0 flex-1">
-            <span className={`flex flex-wrap items-center gap-2 ${eyebrow}`}>
-              Read first{guide.minutes ? ` · ${guide.minutes} min read` : ''}
-              {!checking && readSet.has(guide.id) && <ReadChip />}
-            </span>
-            <span className="mt-0.5 block font-display text-lg font-bold leading-tight text-ink group-hover:underline">{guide.title}</span>
-            <span className="mt-1 block text-sm text-ink/80">{guide.summary}</span>
-          </span>
-          <ArrowRight size={18} className="mt-1 shrink-0 text-ink" aria-hidden="true" />
-        </a>
-      )}
+      {!readFirst && guideCard}
 
       <p className="mt-6 max-w-2xl text-sm text-ink/80">
         Each step is a lesson, then a challenge: read the concepts behind the problem, then design it and let the tests and the review check your

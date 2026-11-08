@@ -43,7 +43,7 @@ test('signed out, the first stage opens and sign-in is optional', async ({ page,
   await expect(stage2.getByRole('link', { name: /^(?!Read the lesson)/ })).toHaveCount(0);
   await expect(stage2.getByRole('img', { name: 'Locked' }).first()).toBeVisible();
 
-  await page.getByRole('link', { name: /^Start:/ }).click();
+  await page.getByRole('link', { name: /^or start / }).click();
   await expect(page).toHaveURL(/#\/roadmap\/[a-z0-9-]+$/);
   await expect(page.getByRole('region', { name: 'Roadmap' })).toContainText('Stage 1 of');
 
