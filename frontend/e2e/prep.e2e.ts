@@ -116,7 +116,8 @@ test.describe('practice hub', () => {
       await expect(hubNav(page).getByRole('button', { expanded: true })).toHaveCount(0);
       await expect(await sectionLink(page, tab)).toHaveAttribute('aria-current', 'page');
       await page.keyboard.press('Escape');
-      await expect(page.getByRole('group', { name: 'Daily streak' })).toHaveCount(1);
+      // The streak by the bar; the progress page shows it in its summary instead.
+      await expect(page.getByRole('group', { name: 'Daily streak' })).toHaveCount(tab === 'Progress' ? 0 : 1);
       await expect(headerPractice(page)).toHaveAttribute('aria-current', 'page');
     }
 
