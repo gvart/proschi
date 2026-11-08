@@ -1,0 +1,28 @@
+frontend/src/voice/MicButton.tsx
+  s_e17b87e0a1b3ca::t_7a66ab79da10ae 11-13,43-44,93-94
+  s_e17b87e0a1b3ca::t_21f91c22c7e128 123
+  s_e17b87e0a1b3ca::t_cf92d747113286 117,122
+frontend/src/voice/MicButton.test.tsx
+  s_e17b87e0a1b3ca::t_6ff3d5a0539f4e 48-52,57
+frontend/e2e/voice.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_3c4890b5b3cf50 74-75
+  s_e17b87e0a1b3ca::t_0f526eb79004b3 1-73,76-78
+docs/design/paid-plans.md
+  s_e17b87e0a1b3ca::t_36eca28521c720 332-338,349-351
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cb6914b706130a436bb5a9f00f5bf910f571e4d9",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
