@@ -404,7 +404,14 @@ id; don't rewrite old ones.
   the skill map and five interview badges (`interview-first`,
   `interviews-5`, `interview-hard`, `interview-on-time`,
   `interview-passed`; rule kinds `interviews`, `interview-passed`,
-  `interview-on-time`). **XP**: 50 per problem interviewed with the
+  `interview-on-time`). **Least effort**: one on your own counts only after
+  10 minutes on the clock, or once it reached Design with the whiteboard
+  changed from the starter; below that the result says it was too short,
+  with the bar, and the history marks it. One with the interviewer counts
+  once it has a verdict, since its credits were spent. The server stores
+  what was done (time, Design reached, drawn, solved) and derives whether it
+  counts and was on time when it reads progress, so a crafted request
+  cannot skip the bar. **XP**: 50 per problem interviewed with the
   interviewer, 20 per problem on your own, each problem once per way, so
   repeating one adds nothing. **Skill map**: a bonus of up to 5% (like
   Scale or Fail's) to the topics the problem relates to, scaled by the

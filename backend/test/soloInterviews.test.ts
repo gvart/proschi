@@ -5,7 +5,9 @@ import { call, resetDatabase, signedInUser } from './helpers';
 
 const send = (token: string | undefined, body: unknown) => call('/api/me/interviews/solo', { method: 'POST', token, body });
 const START = Date.UTC(2026, 10, 1);
-const session = (over: Record<string, unknown> = {}) => ({ problem: 'url-shortener', startedAt: START, durationMin: 45, onTime: false, ...over });
+const MIN = 60_000;
+/** Twelve minutes, Design not reached: it counts by time. */
+const session = (over: Record<string, unknown> = {}) => ({ problem: 'url-shortener', startedAt: START, durationMin: 45, totalMs: 12 * MIN, reachedDesign: false, drew: false, solved: false, ...over });
 const achievements = async (token: string) => (await (await call('/api/me/achievements', { token })).json()) as AchievementsAnswer;
 
 describe('mock interviews in progress', () => {
@@ -20,7 +22,9 @@ describe('mock interviews in progress', () => {
       { sessions: [session({ durationMin: 20 })] },
       { sessions: [session({ startedAt: 1.5 })] },
       { sessions: [session({ startedAt: Date.UTC(2020, 0, 1) })] },
-      { sessions: [session({ onTime: 'yes' })] },
+      { sessions: [session({ solved: 'yes' })] },
+      { sessions: [session({ totalMs: -1 })] },
+      { sessions: [session({ drew: undefined })] },
       { sessions: Array.from({ length: 51 }, (_, i) => session({ startedAt: START + i })) },
     ]) {
       expect((await send(token, body)).status, JSON.stringify(body).slice(0, 60)).toBe(400);
@@ -36,7 +40,7 @@ describe('mock interviews in progress', () => {
     expect(first.status).toBe(200);
     expect(await first.json()).toEqual({ added: 1 });
     // Sent again (a reload, another sign-in): nothing new.
-    expect(await (await send(token, { sessions: [session(), session({ startedAt: START + 1, onTime: true })] })).json()).toEqual({ added: 1 });
+    expect(await (await send(token, { sessions: [session(), session({ startedAt: START + 1, totalMs: 40 * MIN, solved: true })] })).json()).toEqual({ added: 1 });
 
     const after = await achievements(token);
     // Two sessions of one problem: it counts once.
@@ -51,6 +55,28 @@ describe('mock interviews in progress', () => {
     expect(exported.soloInterviews.map((s) => s.problem)).toEqual(['url-shortener', 'url-shortener']);
     expect((await call('/api/me', { method: 'DELETE', token })).status).toBe(204);
     expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM solo_interviews WHERE user_id = ?').bind(id).first<{ n: number }>())!.n).toBe(0);
+  });
+
+  it('keeps a short session as it was but counts it only with 10 minutes, or Design reached with a drawing', async () => {
+    const { token } = await signedInUser();
+    const short = [
+      session({ totalMs: 60_000 }),
+      // Design reached, nothing drawn; drawn, Design not reached.
+      session({ startedAt: START + 1, totalMs: 60_000, reachedDesign: true }),
+      session({ startedAt: START + 2, totalMs: 60_000, drew: true, solved: true }),
+    ];
+    expect(await (await send(token, { sessions: short })).json()).toEqual({ added: 3 });
+    let answer = await achievements(token);
+    expect(answer.stats.soloInterviews).toBe(0);
+    expect(answer.achievements.find((b) => b.id === 'interview-first')!.earned).toBe(false);
+    const exported = (await (await call('/api/me/export', { token })).json()) as { soloInterviews: { totalMs: number }[] };
+    expect(exported.soloInterviews.map((s) => s.totalMs)).toEqual([60_000, 60_000, 60_000]);
+
+    // Two minutes, but Design reached with a drawing: it counts, and solved within its time.
+    await send(token, { sessions: [session({ problem: 'pastebin', totalMs: 2 * MIN, reachedDesign: true, drew: true, solved: true })] });
+    answer = await achievements(token);
+    expect(answer.stats.soloInterviews).toBe(1);
+    expect(answer.achievements.find((b) => b.id === 'interview-on-time')!.earned).toBe(true);
   });
 
   it('counts an AI interview’s verdict: a pass, on time, and its scores in the skill map', async () => {

@@ -147,6 +147,8 @@ export interface InterviewSummary {
   estimates: { answered: number; correct: number; total: number; /** The answers' factors off, for "within 1.4× on average". */ factors: number[] };
   tests?: { passed: number; total: number; solved: boolean };
   checklist: { checked: number; total: number };
+  /** The whiteboard's design was changed from the starter (set by the room when it finishes; absent in older summaries). */
+  drew?: boolean;
 }
 
 export function summarize(s: InterviewSession, interview: Interview, now: number): InterviewSummary {

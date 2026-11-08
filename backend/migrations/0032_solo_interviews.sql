@@ -9,8 +9,16 @@ CREATE TABLE solo_interviews (
   -- When the session started, Unix milliseconds (the browser's id for it).
   started_at INTEGER NOT NULL,
   duration_min INTEGER NOT NULL,
-  -- 1 when finished within its time with every check passing.
-  on_time INTEGER NOT NULL DEFAULT 0,
+  -- What was done, as the browser kept it; whether it counts (10 minutes,
+  -- or Design reached with something drawn) and whether it was on time are
+  -- derived from these when the progress is read.
+  total_ms INTEGER NOT NULL,
+  -- 1 when it reached the Design phase.
+  reached_design INTEGER NOT NULL DEFAULT 0,
+  -- 1 when the whiteboard's design was changed from the starter.
+  drew INTEGER NOT NULL DEFAULT 0,
+  -- 1 when the last check run passed every check.
+  solved INTEGER NOT NULL DEFAULT 0,
   -- When it reached the server, Unix seconds.
   received_at INTEGER NOT NULL,
   PRIMARY KEY (user_id, problem_id, started_at)

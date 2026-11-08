@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
-import { ArrowRight, Lock, Sparkles, TrendingUp } from 'lucide-react';
+import { ArrowRight, Lock, Sparkles, Timer, TrendingUp } from 'lucide-react';
 import { eyebrow } from '../../components/Playground/ui';
 import type { AchievementsAnswer } from '../../learn/achievements';
+import { MIN_INTERVIEW_MINUTES } from '../../learn/mastery';
 import AchievementIcon from '../skills/AchievementIcon';
 import type { AchievementsState } from '../skills/useAchievements';
 import { progressChange } from './progressChange';
@@ -22,12 +23,15 @@ export default function ResultProgress({
   state,
   before,
   endedAt,
+  counts = true,
   onSeen,
 }: {
   state: AchievementsState;
   before?: AchievementsAnswer;
   /** When the interview ended, Unix ms. */
   endedAt: number;
+  /** It did enough to count (soloCounts); below the bar the block says so instead. */
+  counts?: boolean;
   onSeen: (ids: string[]) => void;
 }) {
   const after = state.status === 'ready' ? state.answer : undefined;
@@ -39,6 +43,19 @@ export default function ResultProgress({
     if (unseen) onSeen(unseen.split(','));
   }, [unseen, onSeen]);
 
+  if (!counts) {
+    return (
+      <section aria-label="Your progress" data-testid="result-progress" className={`mt-6 p-4 ${card}`}>
+        <p className="flex items-center gap-2 font-semibold text-ink">
+          <Timer size={16} aria-hidden="true" />
+          Too short to count towards your progress
+        </p>
+        <p className="mt-1 text-sm text-ink/80" data-testid="result-too-short">
+          An interview on your own counts once it runs {MIN_INTERVIEW_MINUTES} minutes or more, or reaches Design with something drawn on the whiteboard.
+        </p>
+      </section>
+    );
+  }
   if (state.status === 'loading' || state.status === 'error') return null;
   const link = (
     <a href="#/progress" className="inline-flex items-center gap-1 text-sm font-semibold text-ink underline underline-offset-2">

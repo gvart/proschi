@@ -238,10 +238,30 @@ test.describe('the interview room on your own', () => {
 });
 
 test.describe('an interview as progress', () => {
-  test('a finished interview on your own adds XP and a badge on the result, once, and joins the progress page', async ({ page }) => {
+  test('one too short to count says so, with the bar, and earns nothing', async ({ page }) => {
     await startOn(page, 'URL Shortener', '30 min');
     await rail(page).getByRole('button', { name: 'Reveal the rest' }).click();
     await rail(page).getByRole('button', { name: 'Start designing' }).click();
+    await rail(page).getByRole('button', { name: 'Wrap up' }).click();
+    await rail(page).getByRole('button', { name: 'Finish the interview' }).click();
+
+    const progress = page.getByTestId('interview-result').getByRole('region', { name: 'Your progress' });
+    await expect(progress).toContainText('Too short to count towards your progress');
+    await expect(progress.getByTestId('result-too-short')).toContainText('10 minutes or more, or reaches Design with something drawn');
+    await expect(progress.locator('[data-new-badge]')).toHaveCount(0);
+
+    await page.goto('practice/#/progress');
+    await expect(page.getByTestId('xp')).toHaveText('0 XP');
+    await expect(page.getByRole('region', { name: 'Interviews on your own' }).getByRole('listitem')).toContainText('Too short to count');
+  });
+
+  test('a finished interview on your own adds XP and a badge on the result, once, and joins the progress page', async ({ page }) => {
+    await page.clock.install();
+    await startOn(page, 'URL Shortener', '30 min');
+    await rail(page).getByRole('button', { name: 'Reveal the rest' }).click();
+    await rail(page).getByRole('button', { name: 'Start designing' }).click();
+    // Eleven minutes of design: past the 10 minutes an interview needs to count.
+    await page.clock.fastForward('11:00');
     await rail(page).getByRole('button', { name: 'Wrap up' }).click();
     await rail(page).getByRole('button', { name: 'Finish the interview' }).click();
 

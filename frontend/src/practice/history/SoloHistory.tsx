@@ -3,14 +3,15 @@ import { ArrowRight, Clock } from 'lucide-react';
 import problems from 'virtual:practice-listings';
 import { outlineButton } from '../../components/Playground/ui';
 import { loadHistory } from '../modes/store';
-import { soloOnTime } from '../interview/record';
+import { soloOnTime, soloSummaryCounts } from '../interview/record';
 import { setupHref } from '../interview/links';
 import { formatDay } from './api';
 
 /**
  * "Interviews on your own" on the progress page (docs/design/paid-plans.md
  * P48): the sessions kept in this browser (modes/store.ts), newest first,
- * each with its date, problem and how it ended, and a way to take it again.
+ * each with its date, problem and how it ended (or that it was too short to
+ * count, record.ts), and a way to take it again.
  * Left out before the first one.
  */
 
@@ -33,8 +34,9 @@ export default function SoloHistory() {
       <div className={`mt-3 overflow-hidden ${card}`}>
         <ul className="divide-y divide-ink/15">
           {shown.map((s) => {
-            const onTime = soloOnTime(s);
-            const outcome = onTime ? 'Solved on time' : s.overtime ? 'Over time' : s.tests?.solved ? 'Solved' : 'Finished';
+            const counts = soloSummaryCounts(s);
+            const onTime = counts && soloOnTime(s);
+            const outcome = !counts ? 'Too short to count' : onTime ? 'Solved on time' : s.overtime ? 'Over time' : s.tests?.solved ? 'Solved' : 'Finished';
             return (
               <li key={`${s.problem}-${s.startedAt}`}>
                 <a href={setupHref(s.problem, 'solo')} className="flex items-center gap-3 px-4 py-2.5 hover:bg-pop-yellow/25 focus-visible:outline-hidden focus-visible:bg-pop-yellow/25">

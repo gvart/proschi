@@ -83,6 +83,29 @@ export interface InterviewDone {
   scores?: Readonly<Record<string, number>>;
 }
 
+/**
+ * The least effort for an interview on your own to count towards progress
+ * (docs/design/paid-plans.md P48): MIN_INTERVIEW_MINUTES on the clock, or
+ * reaching the Design phase with something drawn on the whiteboard. One
+ * with the interviewer counts once it has a verdict (its credits were spent).
+ */
+export const MIN_INTERVIEW_MINUTES = 10;
+
+/** What an interview on your own did, as kept: enough to decide whether it counts. */
+export interface SoloEffort {
+  /** Milliseconds on the clock. */
+  totalMs: number;
+  /** Reached the Design phase. */
+  reachedDesign: boolean;
+  /** The whiteboard's design was changed from the problem's starter. */
+  drew: boolean;
+}
+
+/** Whether an interview on your own did enough to count. */
+export function soloCounts(e: SoloEffort): boolean {
+  return e.totalMs >= MIN_INTERVIEW_MINUTES * 60_000 || (e.reachedDesign && e.drew);
+}
+
 /** What an interview shows of a skill, from 0 to 1: the verdict's mean score scaled from 1–5, or SOLO_SHARE on your own. */
 export function interviewScore(i: Pick<InterviewDone, 'mode' | 'scores'>): number {
   if (i.mode === 'solo') return SOLO_SHARE;

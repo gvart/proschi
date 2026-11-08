@@ -5,13 +5,13 @@ import PaneLoading from '../../components/PaneLoading';
 import { loadProblem } from '../loadProblem';
 import type { Problem } from '../types';
 import { parseInterview } from '../modes/interviewFile';
-import { interviewReducer, summarize, type InterviewAction, type InterviewSession } from '../modes/session';
+import { interviewReducer, summarize, type InterviewAction, type InterviewSession, type InterviewSummary } from '../modes/session';
 import { appendHistory, loadHistory, loadSession, saveSession } from '../modes/store';
 import { loadActive, saveActive, type AiInterview } from '../modes/ai/api';
 import type { AchievementsAnswer } from '../../learn/achievements';
 import type { Achievements } from '../skills/useAchievements';
-import { useSoundPref } from './prefs';
-import { sendSoloInterviews } from './record';
+import { loadDesign, useSoundPref } from './prefs';
+import { drewOn, sendSoloInterviews, soloSummaryCounts } from './record';
 import ResultProgress from './ResultProgress';
 import { roomHref, setupHref } from './links';
 import { playCue } from './sounds';
@@ -107,14 +107,14 @@ function Interview({ problem, engine, header, achievements, signedIn }: { proble
     if (!session || !file) return;
     saveSession(session, problem.id);
     if (session.finishedAt !== undefined && !loadHistory().some((h) => h.problem === session.problem && h.startedAt === session.startedAt)) {
-      const summary = summarize(session, file, session.finishedAt);
+      const summary: InterviewSummary = { ...summarize(session, file, session.finishedAt), drew: drewOn(loadDesign(problem.id), problem.starter) };
       appendHistory(summary);
       if (soundOn) playCue('finish');
       // It counts towards the progress now: signed in, once the account has it.
       if (signedIn) void sendSoloInterviews([summary]).then(() => refresh?.(true));
       else refresh?.(true);
     }
-  }, [session, file, problem.id, soundOn, signedIn, refresh]);
+  }, [session, file, problem.id, problem.starter, soundOn, signedIn, refresh]);
 
   const none = !mockId && !session;
   useEffect(() => {
@@ -122,7 +122,8 @@ function Interview({ problem, engine, header, achievements, signedIn }: { proble
   }, [none, problem.id]);
   const exit = useCallback(() => (window.location.hash = setupHref()), []);
 
-  const progress = (endedAt: number) => achievements && <ResultProgress state={achievements.state} before={before} endedAt={endedAt} onSeen={achievements.markSeen} />;
+  const progress = (endedAt: number, counts = true) =>
+    achievements && <ResultProgress state={achievements.state} before={before} endedAt={endedAt} counts={counts} onSeen={achievements.markSeen} />;
 
   if (verdict) {
     return (
@@ -154,9 +155,11 @@ function Interview({ problem, engine, header, achievements, signedIn }: { proble
   }
   if (!session || !file) return <PaneLoading label="Opening the set-up…" />;
   if (session.finishedAt !== undefined) {
+    // As kept in the history when it finished (whether anything was drawn), else as it is now.
+    const summary = loadHistory().find((h) => h.problem === session.problem && h.startedAt === session.startedAt) ?? { ...summarize(session, file, session.finishedAt), drew: drewOn(loadDesign(problem.id), problem.starter) };
     return (
       <Page header={header}>
-        <Result kind="solo" problem={problem} summary={summarize(session, file, session.finishedAt)} progress={progress(session.finishedAt)} />
+        <Result kind="solo" problem={problem} summary={summary} progress={progress(session.finishedAt, soloSummaryCounts(summary))} />
       </Page>
     );
   }

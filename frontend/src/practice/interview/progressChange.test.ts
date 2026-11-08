@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { AchievementsAnswer, AchievementStatus } from '../../learn/achievements';
 import { progressChange } from './progressChange';
-import { soloInterviewsDone, soloOnTime } from './record';
+import { MIN_INTERVIEW_MINUTES } from '../../learn/mastery';
+import type { InterviewSummary } from '../modes/session';
+import { drewOn, soloInterviewsDone, soloOnTime, soloSummaryCounts } from './record';
 
 const badge = (id: string, earned: boolean, earnedAt?: number): AchievementStatus => ({
   id,
@@ -55,5 +57,35 @@ describe('interviews on your own as progress', () => {
     expect(soloOnTime({ overtime: true, tests: { passed: 10, total: 10, solved: true } })).toBe(false);
     expect(soloOnTime({ overtime: false })).toBe(false);
     expect(soloInterviewsDone([])).toEqual([]);
+  });
+
+  it('counts only with 10 minutes on the clock, or Design reached with something drawn', () => {
+    const phases = (design: number) => ({ clarify: 1000, estimate: 1000, design, wrapup: 0 });
+    const summary = (totalMs: number, design: number, drew?: boolean): InterviewSummary => ({
+      problem: 'url-shortener',
+      startedAt: 1,
+      durationMin: 45,
+      totalMs,
+      overtime: false,
+      phases: phases(design),
+      questions: { asked: 0, good: 0, weak: 0, goodTotal: 0 },
+      estimates: { answered: 0, correct: 0, total: 0, factors: [] },
+      checklist: { checked: 0, total: 4 },
+      ...(drew !== undefined ? { drew } : {}),
+    });
+    expect(soloSummaryCounts(summary(1000, 0))).toBe(false);
+    expect(soloSummaryCounts(summary(60_000, 5000))).toBe(false);
+    expect(soloSummaryCounts(summary(60_000, 0, true))).toBe(false);
+    expect(soloSummaryCounts(summary(60_000, 5000, true))).toBe(true);
+    expect(soloSummaryCounts(summary(MIN_INTERVIEW_MINUTES * 60_000, 0))).toBe(true);
+    expect(soloInterviewsDone([summary(1000, 0), summary(60_000, 5000, true)])).toHaveLength(1);
+  });
+
+  it('drew: anything but whitespace and comments changed from the starter', () => {
+    const starter = 'import "problem.proschi"\n\n# Add the components.\napi "API" [REST API]\n';
+    expect(drewOn(undefined, starter)).toBe(false);
+    expect(drewOn(starter, starter)).toBe(false);
+    expect(drewOn(`${starter}\n# a note\n   `, starter)).toBe(false);
+    expect(drewOn(`${starter}cache "Cache" [Redis]\n`, starter)).toBe(true);
   });
 });
