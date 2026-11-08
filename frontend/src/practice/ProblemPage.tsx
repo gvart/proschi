@@ -306,7 +306,12 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
     openTests(result.solved ? '40%' : '50%');
   };
 
+  // The tour shows the full editor, so asking for it opens Design there.
   const startTour = () => {
+    if (screen !== 'design' || !notes.editor) {
+      updateNotes((n) => ({ ...reachStage(n, 'design'), editor: true }));
+      setScreen('design');
+    }
     setTourRun((n) => n + 1);
     setTour('tour');
   };
