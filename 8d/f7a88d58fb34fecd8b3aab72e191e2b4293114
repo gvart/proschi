@@ -1,0 +1,95 @@
+frontend/src/practice/interview/record.ts
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 1-55
+docs/CARDS.md
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 300-304,335-337
+frontend/src/practice/interview/Result.tsx
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 14-15,18,51
+backend/src/progress.ts
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 26,168,287-288
+backend/migrations/0032_solo_interviews.sql
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 1-25
+frontend/src/practice/skills/ProgressRoute.tsx
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 8,26,38-39,96-97,155-156,158,163,263
+frontend/src/practice/PracticeApp.tsx
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 40-41,167-169,315
+frontend/e2e/interview.e2e.ts
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 328-380
+backend/src/soloInterviews.ts
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 1-137
+frontend/src/practice/history/SoloHistory.tsx
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 1-67
+frontend/e2e/visual-editing.e2e.ts
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 48-56,154,161-194,293-310
+  s_e17b87e0a1b3ca::t_6587237ee064da 311
+frontend/src/practice/interview/ResultProgress.tsx
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 1-146
+frontend/src/learn/achievements.test.ts
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 25,36,38-39,74-80,174,180-186,200
+backend/src/achievements.ts
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 26,117,126-127,176
+frontend/src/learn/achievements.ts
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 6,25,72-78,103-105,162-163,242-249,266-276,362-363,371,383,393-394,408,553
+frontend/src/learn/mastery.test.ts
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 134-162
+frontend/src/components/Playground/Playground.tsx
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 1888-1889
+frontend/src/practice/achievements.json
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 55-60
+frontend/src/practice/skills/localAchievements.ts
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 29,34-35,105-106
+backend/src/cfUsage.ts
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 82-85,118,183-187,207-213,239-252
+  s_e17b87e0a1b3ca::t_d80ee579d6b2c1 253
+backend/test/soloInterviews.test.ts
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 1-97
+docs/design/paid-plans.md
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 424
+  s_e17b87e0a1b3ca::t_21f80187c6bc79 425-453
+frontend/src/learn/level.ts
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 8,16-17,23-24,32-34,47,55-62
+backend/test/hardening.test.ts
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 266
+frontend/src/learn/mastery.ts
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 40-46,60-62,73-115,129-130,145-146,202-208,211,217
+frontend/src/practice/skills/AchievementIcon.tsx
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 1,21
+frontend/src/practice/interview/progressChange.ts
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 1-37
+frontend/src/practice/profile/profile.test.ts
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 60
+frontend/src/learn/level.test.ts
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 11,26-30
+  s_e17b87e0a1b3ca::t_c6f99c4341eeeb 31-32
+frontend/src/components/Diagram/EditableCanvas.tsx
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 1,92-101,105,142,212
+backend/test/achievements.test.ts
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 81,103
+frontend/src/practice/interview/InterviewRoute.tsx
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 8,11-15,39-42,45,57,69-71,82,85,97-103,110-111,113-115,117,125-127,131,146-147,158-159,162
+backend/src/index.ts
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 71,117,296
+frontend/src/practice/interview/progressChange.test.ts
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 1-91
+backend/test/cfUsage.test.ts
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 95-103,105,109-121,257,277-279,288
+frontend/src/practice/modes/session.ts
+  s_e17b87e0a1b3ca::t_0621d9eee64c78 150-151
+frontend/src/practice/achievements.lock
+  s_e17b87e0a1b3ca::t_87114fa5de3323 23-27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8df7a88d58fb34fecd8b3aab72e191e2b4293114",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
