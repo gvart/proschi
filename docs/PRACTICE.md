@@ -210,11 +210,21 @@ they show on every device; on sign-in the reads of the browser and of the
 account are joined. The reading badges count them (docs/CARDS.md,
 "Achievements": `lessons`, `stage-lessons`, `all-lessons`).
 
+### The stages
+
+A problem is worked through in stages, self-paced: **Lesson**, **Clarify**
+(your own questions first, then the interviewer's answers from
+`interview.md`), **Estimate** (its estimates, each checked after you commit
+to a number), **Design** (the whiteboard, with the full editor one click
+away) and **Wrap-up** (the tests, the review and a recall prompt). The
+notes of each stage are kept per problem in the browser
+(`proschi.practice.stages.<id>`); see `docs/design/paid-plans.md` P50.
+
 ## `interview.md`
 
 The mock interview has pages of its own: **Interview prep › Mock
-interview** (`practice/#/interview`), or **Interview mode** on a problem
-page, which opens it with that problem chosen. It goes in three steps.
+interview** (`practice/#/interview`), or **Practice this as a mock
+interview** in a problem's Wrap-up, which opens it with that problem chosen. It goes in three steps.
 
 1. **Set up.** The problem is **Surprise me** by default: a random one you
    have not done in a mock interview yet, revealed only in the room, with
@@ -361,7 +371,8 @@ Deployment tooling is not what is assessed; ask about load and constraints.
 
 ## `guided.md`
 
-Guided mode is an optional side panel on the roadmap's first stage
+Guided mode (**Walk me through it, step by step** in a problem's Design
+stage) is an optional step-by-step guide on the roadmap's first stage
 (`ROADMAP[0]` in `roadmapStages.ts`): each of those problems has a
 `guided.md`, and no other problem does (`guidedFile.test.ts`). Each step is
 a `## ` heading, its checkpoint as `- key: value` lines, then a short

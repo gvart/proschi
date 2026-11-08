@@ -493,3 +493,40 @@ id; don't rewrite old ones.
   own the stage is the session's phase. Late clarifying questions on
   your own are not possible past Clarify (the questions are a fixed
   list); with the interviewer the chat of every stage takes them.
+- **P50. A practice problem is worked through in stages.** Every practice
+  problem (from the roadmap or the problem list) is a flow of five
+  screens, self-paced, with no clock and no interviewer: **Lesson**,
+  **Clarify**, **Estimate**, **Design** and **Wrap-up**
+  (`frontend/src/practice/stages`). A rail on top shows them; every stage
+  up to the furthest reached opens (going back keeps the notes editable),
+  later ones wait, and each screen has one Next (loud once its own thinking
+  is done; a bar at the foot on phones). The lesson shows first until read,
+  then a problem opens where it was left; from the lesson, Next leads back
+  to that stage. **Think before you see**: Clarify types out the brief
+  without its Scale and Constraints, asks for your own questions and
+  assumptions, then shows the interviewer's answers from `interview.md`
+  (tick the ones you covered, the weak questions and why behind a fold);
+  Estimate puts the facts beside the worksheet of P49, whose rows are the
+  problem's estimates, each graded against its range only after Check.
+  **Design** is the whiteboard (the canvas, Add component, Flows) with a
+  guide beside it: what was learned and estimated, Run tests (they count as
+  on the full editor), hints one at a time, the brief, and "Open the full
+  editor" (code, tests, playback and analysis, as before; a Whiteboard
+  button leads back); Show code opens the code beside the whiteboard.
+  **Wrap-up** has the tests and the free review, "what breaks first at
+  10×?" to answer from memory, the next roadmap problem, the related
+  review cards and "Practice this as a mock interview" (the set-up with
+  this problem, which replaces the old Interview mode button). The old
+  Guided walkthrough becomes "Walk me through it, step by step" in the
+  Design guide. The problem is solved, as before, when every test passes.
+  The notes (stage, furthest stage, whether the editor is open, the
+  questions, the ticks, the worksheet and its checks, the reflection) are
+  kept per problem in this browser (`proschi.practice.stages.<id>`), like
+  the practice progress. **Design partner** coaches (P30) on every stage,
+  the lesson included: an edge tab on wider screens, a bottom sheet from
+  the stage bar on phones, the same credits and sign-in prompt. Text
+  selected on a stage (the brief, the lesson, your notes, a failing test)
+  can be asked about: a right-click on it opens a menu with "Ask Design
+  partner" and Copy (the code editor and the canvas keep their own), and
+  a small floating button under it does the same on touch; the quote goes
+  into the composer, after anything typed.
