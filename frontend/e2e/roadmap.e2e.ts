@@ -29,8 +29,11 @@ test.describe('interview prep roadmap', () => {
     await expect(pastebinStep).toContainText('Solve URL Shortener first');
     await expect(challenges(stage(page, 'Caching and the edge'))).toHaveCount(0);
 
-    // Start opens the first problem with the roadmap's banner.
-    await progress(page).getByRole('link', { name: 'Start: Hello, Proschi' }).click();
+    // The guide is read first: until it is read, the primary button leads to it and the first problem is a smaller link.
+    await expect(progress(page).getByRole('link', { name: /^Read first: How to approach/ })).toHaveAttribute('href', '#/roadmap/approach');
+    await expect(progress(page).getByRole('link', { name: 'Start: Hello, Proschi' })).toHaveCount(0);
+    // The first problem is still open: it opens with the roadmap's banner.
+    await progress(page).getByRole('link', { name: 'or start Hello, Proschi' }).click();
     await expect(page).toHaveURL(/#\/roadmap\/hello-proschi$/);
     const banner = page.getByRole('region', { name: 'Roadmap' });
     await expect(banner).toContainText(/Stage 1 of \d+: Foundations · 1 of \d+/);
@@ -79,7 +82,7 @@ test.describe('interview prep roadmap', () => {
 
     // The guide stays open.
     await page.goto('practice/#/roadmap');
-    await expect(page.getByRole('link', { name: /Read first/ })).toHaveAttribute('href', '#/roadmap/approach');
+    await expect(page.getByRole('link', { name: /Read first/ }).first()).toHaveAttribute('href', '#/roadmap/approach');
 
     // A locked challenge's address shows the roadmap with what unlocks it.
     await page.goto('practice/#/roadmap/pastebin');

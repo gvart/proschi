@@ -115,6 +115,10 @@ export function roadmapState(stages: RoadmapStage[], progress: Progress): Roadma
  * A build without accounts (`VITE_ACCOUNTS` unset: local development, the e2e
  * build, forks) has nothing to sign in to, so the roadmap is open there.
  */
+/** A newcomer (nothing solved yet) who has not read the "Read first" guide: the roadmap sends them to it before the first problem. Never a lock. */
+export const readFirstPending = (guideId: string | undefined, read: readonly string[], state: RoadmapState) =>
+  guideId !== undefined && state.solved === 0 && !read.includes(guideId);
+
 export type RoadmapAccess = 'open' | 'checking' | 'sign-in';
 
 export function roadmapAccess(account: AccountState): RoadmapAccess {
