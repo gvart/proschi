@@ -26,20 +26,43 @@ export function pickVoice(voices: readonly SpeechSynthesisVoice[], lang = 'en-US
   return [...english].sort((a, b) => rank(a) - rank(b))[0];
 }
 
-/** Reads `text` aloud, cutting off anything still being read; `onEnd` runs once it is done (or fails). */
+/**
+ * The utterance being read. Kept referenced: Chrome drops an utterance that
+ * nothing holds and then never fires its end, which left the interview
+ * room's mic waiting for good.
+ */
+let reading: SpeechSynthesisUtterance | undefined;
+let watchdog: ReturnType<typeof setTimeout> | undefined;
+
+/** The longest `text` can take to read aloud (slow speech, plus slack); past it `onEnd` runs even if the browser never says it ended. */
+export function speakingLimitMs(text: string): number {
+  return 5000 + text.trim().split(/\s+/).length * 600;
+}
+
+/** Reads `text` aloud, cutting off anything still being read; `onEnd` runs once it is done (or fails, or stalls), never for a reading cut off by a newer one. */
 export function speak(text: string, lang = 'en-US', onEnd?: () => void): void {
   if (!speechSupported() || !text.trim()) return;
   const synth = window.speechSynthesis;
-  synth.cancel();
+  clearTimeout(watchdog);
+  // Set first: the cut-off reading's error event then finds it is no longer current.
   const u = new SpeechSynthesisUtterance(text);
+  reading = u;
+  synth.cancel();
   const voice = pickVoice(synth.getVoices(), lang);
   if (voice) u.voice = voice;
   u.lang = voice?.lang ?? lang;
   u.rate = 1.02;
-  if (onEnd) {
-    u.onend = () => onEnd();
-    u.onerror = () => onEnd();
-  }
+  let ended = false;
+  const end = () => {
+    if (ended || reading !== u) return;
+    ended = true;
+    clearTimeout(watchdog);
+    reading = undefined;
+    onEnd?.();
+  };
+  u.onend = end;
+  u.onerror = end;
+  watchdog = setTimeout(end, speakingLimitMs(text));
   synth.speak(u);
 }
 
