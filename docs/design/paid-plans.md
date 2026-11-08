@@ -329,8 +329,13 @@ id; don't rewrite old ones.
 - **P39. Voice: speech to text, and spoken replies.** The mic
   (`frontend/src/voice`, in the mock interview and Design partner) uses the
   browser's Web Speech recognition where there is one, free, continuous and
-  restarted when the browser ends it. Elsewhere it records chunks cut at a
-  pause (silence is never sent) to `POST /api/voice/transcribe`: Workers AI
+  restarted at once, keeping the words so far, when the browser ends it (a
+  pause, its time limit, a `no-speech` or `network` error); only sessions
+  that end at once in a row give up. Elsewhere it records chunks cut at a
+  pause or, past 15 s, at a quiet moment, each starting before the last
+  stops so no audio falls between them (silence is never sent), shows `…`
+  while speech is not written down yet, and posts them to
+  `POST /api/voice/transcribe`: Workers AI
   `@cf/openai/whisper-large-v3-turbo` ($0.000513 an audio minute), metered
   as `voice` at the usual 2x, about 0.1 credit a minute. A chunk is at most
   1 MiB and 60 seconds and is billed for the larger of its declared length
@@ -341,7 +346,9 @@ id; don't rewrite old ones.
   AI Aura-2 ($0.030 per 1k characters) is about 28-57 credits for a
   45-minute interview at 2x, Aura-1 about half that; MeloTTS is nearly free
   but sounds worse than a good browser voice. That is too much against the
-  P40 cap; revisit as a paid option.
+  P40 cap; revisit as a paid option. The mic button is a 36x36 icon in
+  every state: recording is red with a pulsing ring (static with reduced
+  motion), and "Listening" is in its label and status, never in it.
 - **P40. Mock interview cap.** A session never charges more than 100, 150
   or 200 credits for 30, 45 or 60 minutes, plus its verdict (reserved
   apart, so the verdict can always be asked for). Each turn holds the lesser

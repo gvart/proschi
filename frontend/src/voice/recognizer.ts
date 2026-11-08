@@ -4,14 +4,17 @@
  *
  * - Web Speech (Chrome, Edge): SpeechRecognition with `continuous` and
  *   `interimResults`; the browser ends a session on its own after a pause or a
- *   minute, so it is started again while listening is on. Free.
+ *   minute (or after a 'no-speech' or 'network' error), so it is started
+ *   again at once while listening is on, keeping the words so far. Free.
  * - Server (Safari, Firefox): the microphone is recorded with MediaRecorder in
- *   chunks cut at a pause (or every CHUNK_MAX_MS), and each chunk with speech
- *   in it is posted to /api/voice/transcribe (Workers AI Whisper, about 0.1
- *   credit a minute). Chunks of silence are never sent.
+ *   chunks cut at a pause (or at a quiet moment past CHUNK_MAX_MS), each one
+ *   starting before the last stops, and each chunk with speech in it is
+ *   posted to /api/voice/transcribe (Workers AI Whisper, about 0.1 credit a
+ *   minute). Chunks of silence are never sent. While speech is recorded or
+ *   written down, the interim text is SPEAKING.
  *
- * Interim text (Web Speech only) replaces the previous interim text; a final
- * phrase is appended once and clears it.
+ * Interim text replaces the previous interim text; a final phrase is
+ * appended once and clears it.
  */
 
 export type MicState = 'idle' | 'starting' | 'listening' | 'transcribing' | 'denied' | 'unavailable' | 'error';
@@ -57,26 +60,40 @@ export function speechRecognitionCtor(): RecognitionCtor | undefined {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition;
 }
 
-/** Restarts in a row without a result before giving up (a recognizer that ends at once, say offline). */
-const MAX_EMPTY_RESTARTS = 5;
+/**
+ * Hands-free voice input (the interview room's send on silence, P45) sends a
+ * draft after this long with nothing heard, counted from the last words
+ * (interim or final), so a pause to think mid-sentence does not send it.
+ */
+export const SEND_AFTER_SILENCE_MS = 2500;
 
-export function webSpeechRecognizer(Ctor: RecognitionCtor, events: RecognizerEvents, lang: string): Recognizer {
+/** Sessions in a row that end this soon after starting, without a result, are a failure loop (say, offline)… */
+const FAST_END_MS = 1000;
+/** …and after this many the recognizer gives up. A long silence (Chrome ends a session after a few quiet seconds) never counts. */
+const MAX_FAST_ENDS = 5;
+/** Errors after which the browser ends the session and a new one is started: they pass. */
+const TRANSIENT = new Set(['no-speech', 'aborted', 'network']);
+
+export function webSpeechRecognizer(Ctor: RecognitionCtor, events: RecognizerEvents, lang: string, now: () => number = () => Date.now()): Recognizer {
   let active = false;
   let current: SpeechRecognitionLike | undefined;
-  let emptyRestarts = 0;
+  let fastEnds = 0;
   let interim = '';
   /** An error already reported: the end that follows it is not "idle". */
   let failed = false;
 
   const begin = () => {
     const r = new Ctor();
+    const startedAt = now();
+    let heard = false;
     r.continuous = true;
     r.interimResults = true;
     r.lang = lang;
     r.onstart = () => events.onState('listening');
     r.onresult = (e) => {
-      emptyRestarts = 0;
-      let now = '';
+      heard = true;
+      fastEnds = 0;
+      let words = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const result = e.results[i];
         const text = result[0].transcript.trim();
@@ -84,15 +101,15 @@ export function webSpeechRecognizer(Ctor: RecognitionCtor, events: RecognizerEve
         if (result.isFinal) {
           interim = '';
           events.onText(text, true);
-        } else now += (now ? ' ' : '') + text;
+        } else words += (words ? ' ' : '') + text;
       }
-      if (now !== interim) {
-        interim = now;
-        events.onText(now, false);
+      if (words !== interim) {
+        interim = words;
+        events.onText(words, false);
       }
     };
     r.onerror = (e) => {
-      if (e.error === 'no-speech' || e.error === 'aborted') return;
+      if (TRANSIENT.has(e.error)) return;
       active = false;
       failed = true;
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') events.onState('denied');
@@ -106,7 +123,9 @@ export function webSpeechRecognizer(Ctor: RecognitionCtor, events: RecognizerEve
         events.onText(interim, true);
         interim = '';
       }
-      if (active && ++emptyRestarts <= MAX_EMPTY_RESTARTS) {
+      fastEnds = !heard && now() - startedAt < FAST_END_MS ? fastEnds + 1 : 0;
+      if (active && fastEnds <= MAX_FAST_ENDS) {
+        // The browser ended the session (a pause, its time limit, a network blip): listening goes on at once.
         begin();
         return;
       }
@@ -132,7 +151,9 @@ export function webSpeechRecognizer(Ctor: RecognitionCtor, events: RecognizerEve
       if (active) return;
       active = true;
       failed = false;
-      emptyRestarts = 0;
+      fastEnds = 0;
+      // Still stopping (stop() waits for the last result): its end starts the next session instead of reporting idle.
+      if (current) return;
       events.onState('starting');
       begin();
     },
@@ -149,10 +170,19 @@ export function webSpeechRecognizer(Ctor: RecognitionCtor, events: RecognizerEve
 
 /** A chunk ends at a pause after at least this much… */
 export const CHUNK_MIN_MS = 2500;
-/** …or at this length, whatever is said. */
+/** …or, past this length, at the first quiet moment (not mid-word)… */
 export const CHUNK_MAX_MS = 15_000;
+/** …or at this length, whatever is said. */
+export const CHUNK_HARD_MS = 20_000;
 /** A pause: this long below the speech level. */
 export const PAUSE_MS = 700;
+/**
+ * The interim text while speech is recorded or still being written down
+ * (where there is a level meter): the server has no words until a chunk is
+ * transcribed, and this tells the composer the user is still talking, so a
+ * send on silence waits.
+ */
+export const SPEAKING = '…';
 /** RMS of the signal (0–1) that counts as speech. */
 const SPEECH_LEVEL = 0.02;
 
@@ -188,6 +218,18 @@ export function serverRecognizer(deps: ServerDeps, events: RecognizerEvents, lan
   let timer: ReturnType<typeof setInterval> | undefined;
   let pending = 0;
   let queue: Promise<void> = Promise.resolve();
+  /** Speech heard in the chunk being recorded (known only with a meter). */
+  let speaking = false;
+  /** SPEAKING is the interim text now. */
+  let shown = false;
+
+  /** Shows SPEAKING while speech is recorded or still being written down, and clears it after. */
+  const mark = () => {
+    const want = (active && speaking) || pending > 0;
+    if (want === shown) return;
+    shown = want;
+    events.onText(want ? SPEAKING : '', false);
+  };
 
   const release = () => {
     if (timer) clearInterval(timer);
@@ -199,10 +241,13 @@ export function serverRecognizer(deps: ServerDeps, events: RecognizerEvents, lan
   };
 
   const settled = () => {
-    if (pending === 0) events.onState(active ? 'listening' : 'idle');
+    if (pending !== 0) return;
+    // Stopped while the last chunk was being written down: the microphone is let go now.
+    if (!active) release();
+    events.onState(active ? 'listening' : 'idle');
   };
 
-  /** Records one chunk; when it ends (a pause, its length, or stop) it is sent and, while active, the next begins. */
+  /** Records one chunk; when it ends (a pause, its length, or stop) it is sent. While active, the next chunk starts before this one stops, so no audio falls between them. */
   const record = () => {
     if (!stream) return;
     const mime = recorderMime(deps.Recorder);
@@ -210,7 +255,9 @@ export function serverRecognizer(deps: ServerDeps, events: RecognizerEvents, lan
     const parts: Blob[] = [];
     const startedAt = now();
     let lastSpeech = 0;
-    let spoke = !meter;
+    const metered = !!meter;
+    let spoke = !metered;
+    speaking = false;
     r.ondataavailable = (e) => {
       if (e.data.size) parts.push(e.data);
     };
@@ -224,21 +271,26 @@ export function serverRecognizer(deps: ServerDeps, events: RecognizerEvents, lan
         queue = queue.then(async () => {
           try {
             const text = (await deps.transcribe(blob, seconds, lang)).trim();
-            if (text) events.onText(text, true);
+            if (text) {
+              // A final phrase replaces the interim text.
+              shown = false;
+              events.onText(text, true);
+            }
           } catch (e) {
             const status = e instanceof TranscribeError ? e.status : 0;
             active = false;
             release();
-            events.onState('error', status === 402 ? 'Out of credits for voice input.' : status === 401 ? 'Sign in to use voice input.' : 'Your speech could not be written down. Try again.');
             pending = 0;
+            mark();
+            events.onState('error', status === 402 ? 'Out of credits for voice input.' : status === 401 ? 'Sign in to use voice input.' : 'Your speech could not be written down. Try again.');
             return;
           }
           pending--;
+          if (metered) mark();
           settled();
         });
-      }
-      if (active) record();
-      else if (!pending) {
+      } else if (metered) mark();
+      if (!active && !pending) {
         release();
         events.onState('idle');
       }
@@ -248,15 +300,20 @@ export function serverRecognizer(deps: ServerDeps, events: RecognizerEvents, lan
     if (timer) clearInterval(timer);
     timer = setInterval(() => {
       const t = now();
-      if (meter && meter.level() > SPEECH_LEVEL) {
+      const loud = !!meter && meter.level() > SPEECH_LEVEL;
+      if (loud) {
         spoke = true;
+        speaking = true;
         lastSpeech = t;
+        mark();
       }
       const length = t - startedAt;
       const paused = spoke && t - lastSpeech >= PAUSE_MS;
-      if (length >= CHUNK_MAX_MS || (length >= CHUNK_MIN_MS && paused)) {
+      if (length >= CHUNK_HARD_MS || (length >= CHUNK_MAX_MS && !loud) || (length >= CHUNK_MIN_MS && paused)) {
         if (timer) clearInterval(timer);
         timer = undefined;
+        // The next chunk is already recording when this one stops.
+        if (active) record();
         if (r.state !== 'inactive') r.stop();
       }
     }, 100);
@@ -267,6 +324,12 @@ export function serverRecognizer(deps: ServerDeps, events: RecognizerEvents, lan
     start() {
       if (active) return;
       active = true;
+      if (stream) {
+        // Stopped a moment ago and still writing the last chunk down: the open microphone goes on recording.
+        events.onState(pending ? 'transcribing' : 'listening');
+        record();
+        return;
+      }
       events.onState('starting');
       deps.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }).then(
         (s) => {

@@ -8,7 +8,9 @@ import { createRecognizer, voiceSupported, type MicState, type Recognizer } from
  * is free and shows the words as they are spoken; elsewhere (Safari,
  * Firefox) the speech is written down on the server, a phrase at a time, for
  * about 0.1 credit a minute. While listening, the button turns red with a
- * pulsing dot; a blocked or missing microphone says so under it.
+ * pulsing ring (static with reduced motion) and keeps its 36x36 size: the
+ * word Listening is in its label and status, never in the button. A blocked
+ * or missing microphone says so above it.
  *
  *   <MicButton onText={(text, final) => …} onState={(s) => …} ref={mic} />
  *
@@ -38,8 +40,8 @@ interface Props {
 const LABEL: Record<MicState, string> = {
   idle: 'Start voice input',
   starting: 'Starting the microphone…',
-  listening: 'Stop voice input',
-  transcribing: 'Stop voice input',
+  listening: 'Listening. Stop voice input',
+  transcribing: 'Writing down what you said. Stop voice input',
   denied: 'Microphone blocked',
   unavailable: 'No microphone',
   error: 'Start voice input',
@@ -84,17 +86,12 @@ export default function MicButton({ onText, onState, disabled, lang, server = tr
     else r.start();
   };
 
-  const onRef = useRef(on);
-  useEffect(() => {
-    onRef.current = on;
-  }, [on]);
   useImperativeHandle(
     ref,
     () => ({
       stop: () => recognizer.current?.stop(),
-      start: () => {
-        if (!onRef.current) get()?.start();
-      },
+      // Not guarded by `on`: right after stop() the state still reads listening until the browser ends the session, and a start then must not be lost.
+      start: () => get()?.start(),
     }),
     [get],
   );
@@ -117,20 +114,13 @@ export default function MicButton({ onText, onState, disabled, lang, server = tr
         title={LABEL[state]}
         data-testid="mic-button"
         data-state={state}
-        className={`relative inline-flex items-center justify-center gap-1.5 h-9 min-w-9 shrink-0 rounded-sm border-bw-1 px-2 text-sm font-semibold transition-colors disabled:opacity-50 ${
+        className={`relative inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-sm border-bw-1 p-0 transition-colors disabled:opacity-50 ${
           on ? 'border-ink bg-red-600 text-white dark:bg-red-500' : state === 'denied' ? 'border-ink bg-pop-yellow/40 text-ink' : 'border-ink bg-surface text-ink hover:bg-pop-yellow/30'
         }`}
       >
         {busy ? <Loader2 size={16} className="animate-spin" aria-hidden="true" /> : state === 'denied' || state === 'unavailable' ? <MicOff size={16} aria-hidden="true" /> : <Mic size={16} aria-hidden="true" />}
-        {on && (
-          <span className="flex items-center gap-1 text-xs" aria-hidden="true">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-75 motion-reduce:animate-none" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-white" />
-            </span>
-            <span className="hidden sm:inline">{state === 'transcribing' ? 'Writing…' : 'Listening'}</span>
-          </span>
-        )}
+        {/* Recording: a ring just outside the button, pulsing (static with reduced motion). Absolute, so the button never changes size. */}
+        {on && <span data-testid="mic-ring" aria-hidden="true" className="pointer-events-none absolute -inset-[3px] rounded-[7px] border-2 border-red-500 animate-pulse motion-reduce:animate-none dark:border-red-400" />}
       </button>
       <span role="status" className="sr-only">
         {state === 'listening' ? 'Listening' : state === 'transcribing' ? 'Writing down what you said' : ''}
