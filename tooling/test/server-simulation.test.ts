@@ -118,4 +118,26 @@ test "Reads answer 404" {
     })) as { title: string; edit: { changes: Record<string, { newText: string }[]> } }[];
     expect(onHeader.map((a) => [a.title, a.edit.changes[uri][0].newText])).toEqual([['Add a traffic line for "Write"', '  "Write" 100 rps\n']]);
   });
+
+  it('shows inlay hints after nodes and code lenses above use cases, until the settings turn them off', async () => {
+    const uri = 'file:///tmp/sim-results.proschi';
+    await open(uri, `${ITEMS}traffic {\n  "Read" 1k rps\n}\nrequirements {\n  p99 "Read" < 100ms\n}\n`);
+    const range = { start: { line: 0, character: 0 }, end: { line: 20, character: 0 } };
+    const hints = async () => (await connection.sendRequest('textDocument/inlayHint', { textDocument: { uri }, range })) as { position: { line: number }; label: string }[];
+    const lenses = async () => (await connection.sendRequest('textDocument/codeLens', { textDocument: { uri } })) as { range: { start: { line: number } }; command: { title: string } }[];
+    expect((await hints()).map((h) => [h.position.line, h.label])).toEqual([
+      [1, '50% · $100/mo'],
+      [2, '5% · $400/mo'],
+    ]);
+    expect((await lenses()).map((l) => [l.range.start.line, l.command.title])).toEqual([
+      [5, 'p99 89.3 ms ✓'],
+      [14, '✓ 1/1 requirements pass'],
+    ]);
+
+    await connection.sendNotification('workspace/didChangeConfiguration', { settings: { proschi: { inlayHints: { enabled: false }, codeLens: { enabled: false } } } });
+    expect(await hints()).toEqual([]);
+    expect(await lenses()).toEqual([]);
+    await connection.sendNotification('workspace/didChangeConfiguration', { settings: { proschi: {} } });
+    expect(await hints()).toHaveLength(2);
+  });
 });

@@ -16,6 +16,10 @@ them.
 - Quick fixes: add a missing connection or a traffic line, fix a tech stack,
   remove a repeated capacity part, and apply the `x2` or `shards N` a failing
   requirement suggests
+- Simulation results in the code: utilisation and monthly cost after each
+  node (`62% · $400/mo`), `p99 38 ms ✓` above each use case, and results
+  above `whatif` and `requirements` blocks. Turn them off with
+  `proschi.inlayHints.enabled` and `proschi.codeLens.enabled`
 - Hover, go to definition, find references and an outline of groups, use cases
   and scenarios
 - Formatting (*Format Document*), the same layout as `proschi fmt`
