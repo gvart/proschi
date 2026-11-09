@@ -1304,7 +1304,7 @@ var UNIT_EXAMPLES = {
   MBps: "a bandwidth, e.g. 500 MB/s or 1 GB/s",
   "usd/GB": "a price per gigabyte, e.g. 0.05 usd/GB"
 };
-var CAPACITY_PARTS = "a rate, reads, writes, shards, size, latency, availability, cost, durable or volatile, consistency, bandwidth, egress or timeout";
+var CAPACITY_PARTS = "a rate, reads, writes, shards, size, latency, availability, cost, durable or volatile, consistency, bandwidth, egress, timeout or hit";
 var ASSERTION_HELP = 'Expected an assertion: "Use case" calls <node>, "Use case" writes <node> before responding, <node> calls <node>, no path from <node> to <node>, <node> has replicas >= 2, \u2026';
 var ASSERTION_VERBS = "calls, every scenario calls, never calls, never waits for, writes, responds, starts at, has scenario or handles failure of";
 var GENERIC_TECH = {
@@ -2664,6 +2664,7 @@ var Parser = class _Parser {
     }
     const override = { node: id.value, loc: this.lineLoc(tokens, line) };
     const seen = /* @__PURE__ */ new Set();
+    let hitLoc;
     for (let i = 1; i < tokens.length; ) {
       const t = tokens[i];
       let part;
@@ -2682,6 +2683,17 @@ var Parser = class _Parser {
         else if (part === "timeout") override.timeoutMs = value;
         else if (part === "availability") override.availability = value;
         else override.costUsd = value;
+        i += 2;
+      } else if (isWord(t, "hit")) {
+        part = "hit";
+        const value = this.quantityOf(tokens[i + 1], "%", t, line);
+        if (value === void 0) return;
+        if (value > 100) {
+          this.error("A hit rate cannot be more than 100%", this.locOf(tokens[i + 1], line));
+          return;
+        }
+        override.hitPercent = value;
+        hitLoc = this.locOf(t, line);
         i += 2;
       } else if (isWord(t, "durable") || isWord(t, "volatile")) {
         part = "durable or volatile";
@@ -2770,7 +2782,23 @@ var Parser = class _Parser {
       const storeOnly = ["shards", "consistency"].filter((p) => seen.has(p));
       if (storeOnly.length && !isDataStore(kindOf(node)))
         this.warning(`'${id.value}' is not a data store (${DATA_STORE_KINDS.join(", ")}); ${storeOnly.join(" and ")} only apply to data stores`, idLoc);
+      if (hitLoc) this.checkHitRate(node, override.hitPercent, hitLoc);
     });
+  }
+  /**
+   * A hit rate on something that is not a cache is a warning. A use case
+   * whose traffic `mix` splits it into scenarios already models hits and
+   * misses itself: the mix applies to it, and an info says so.
+   */
+  checkHitRate(node, percent, loc) {
+    const kind = kindOf(node);
+    if (kind !== "cache" && kind !== "cdn") this.warning(`'${node.id}' is not a cache or CDN; a hit rate only means something for one`, loc);
+    for (const entry of this.traffic) {
+      if (!entry.mix?.length) continue;
+      const useCase = this.built.find((u) => u.name === entry.useCase);
+      if (!useCase?.scenarios.some((s) => s.steps.some((step) => step.toServiceId === node.id))) continue;
+      this.info(`"${useCase.name}" splits its traffic into scenarios with mix, so its mix decides the hits and misses of '${node.id}', not the ${percent}% hit rate`, loc);
+    }
   }
   /** `entity Url [in db] ["description"] {` */
   parseEntity(tokens, line) {
@@ -2939,7 +2967,7 @@ var Parser = class _Parser {
   parseWhatIfLine(whatif, tokens, line) {
     const [first, second, third] = tokens;
     const loc = this.lineLoc(tokens, line);
-    const help = 'Expected a what-if change: traffic "Use case" x3, traffic "Use case" 50k rps, fail <node> or <node> x4';
+    const help = 'Expected a what-if change: traffic "Use case" x3, traffic "Use case" 50k rps, fail <node>, <node> x4 or <node> hit 40%';
     const checkNode = (id) => {
       const idLoc = this.locOf(id, line);
       this.deferred.push(() => {
@@ -2964,6 +2992,21 @@ var Parser = class _Parser {
     }
     if (first.kind === "ident" && second?.kind === "ident" && MULTIPLIER.test(second.value)) {
       this.error(`Replicas are a whole number, e.g. ${first.value} x4`, this.locOf(second, line));
+      return;
+    }
+    if (first.kind === "ident" && isWord(second, "hit") && tokens.length > 2) {
+      const percent = this.quantityOf(third, "%", second, line);
+      if (percent === void 0 || !this.expectEnd(tokens, 3, line)) return;
+      if (percent > 100) {
+        this.error("A hit rate cannot be more than 100%", this.locOf(third, line));
+        return;
+      }
+      if (whatif.changes.some((c) => c.kind === "hit" && c.node === first.value)) {
+        this.error(`The hit rate of '${first.value}' is set twice in this what-if`, this.locOf(first, line));
+        return;
+      }
+      checkNode(first);
+      whatif.changes.push({ kind: "hit", node: first.value, percent, loc });
       return;
     }
     if (isWord(first, "fail")) {
@@ -3541,6 +3584,16 @@ ${message}`;
     if (this.warned.has(key)) return;
     this.warned.add(key);
     this.error(message, loc);
+  }
+  info(message, loc) {
+    const key = `info
+${loc.file ?? ""}
+${loc.line}
+${loc.col}
+${message}`;
+    if (this.warned.has(key)) return;
+    this.warned.add(key);
+    this.diagnostics.push({ severity: "info", message, ...loc });
   }
   warning(message, loc) {
     const key = `${loc.file ?? ""}
@@ -4215,17 +4268,47 @@ function flowsOf(diagram, traffic) {
   }
   return [...flows.values()];
 }
+var works = (n) => Number.isFinite(n.capacityRps) && n.kind !== "client";
 function analysisOverlay(diagram, analysis) {
   const nodes = {};
+  const bottlenecks = new Set(bottlenecksOf(analysis));
+  const latency2 = /* @__PURE__ */ new Map();
   for (const n of analysis.nodes) {
-    const works = Number.isFinite(n.capacityRps) && n.kind !== "client";
+    latency2.set(n.id, n.latencyMs);
     nodes[n.id] = {
-      ...works ? { utilization: n.utilization, saturated: n.saturated } : {},
+      ...works(n) ? { utilization: n.utilization, saturated: n.saturated } : {},
       ...n.replicas > 1 ? { replicas: n.replicas } : {},
-      ...n.shards > 1 ? { shards: n.shards } : {}
+      ...n.shards > 1 ? { shards: n.shards } : {},
+      ...bottlenecks.has(n.id) ? { bottleneck: true } : {}
     };
   }
-  return { nodes, flows: flowsOf(diagram, diagram.traffic ?? []) };
+  const flows = flowsOf(diagram, diagram.traffic ?? []).map((f) => latency2.has(f.to) ? { ...f, latencyMs: latency2.get(f.to) } : f);
+  const critical = criticalPathOf(diagram, analysis);
+  return { nodes, flows, ...critical ? { critical } : {} };
+}
+var BOTTLENECK_FROM = 0.7;
+function bottlenecksOf(analysis) {
+  return analysis.nodes.filter((n) => works(n) && (n.saturated || n.utilization >= BOTTLENECK_FROM)).map((n) => n.id);
+}
+function criticalPathOf(diagram, analysis, useCase) {
+  const live = analysis.useCases.filter((u2) => u2.rps > 0);
+  const picked = useCase === void 0 ? void 0 : live.find((u2) => u2.id === useCase || u2.name === useCase);
+  const result = picked ?? live.reduce((best, u2) => !best || u2.rps > best.rps ? u2 : best, void 0);
+  if (!result) return void 0;
+  const u = diagram.useCases.find((d) => d.id === result.id) ?? findUseCase(diagram, result.name);
+  const scenario = u?.scenarios[result.tailScenario.p99] ?? u?.scenarios[0];
+  const entry = scenario?.steps[0];
+  if (!u || !scenario || !entry) return void 0;
+  const hops = criticalPath(u, scenario).flat();
+  const nodes = [entry.fromServiceId];
+  for (const h2 of hops) if (!nodes.includes(h2.target)) nodes.push(h2.target);
+  return {
+    useCase: u.name,
+    scenario: scenario.name,
+    p99Ms: result.percentiles.p99,
+    nodes,
+    links: hops.map((h2) => ({ from: h2.step.fromServiceId, to: h2.step.toServiceId }))
+  };
 }
 
 // ../frontend/src/sim/systems.ts
@@ -4579,6 +4662,16 @@ function trafficFor(diagram, options = {}, warnings = []) {
     const t = traffic.get(id);
     if (t) t.rps = Math.max(0, rps);
   }
+  const hits = hitRatesOf(diagram, options);
+  if (hits.size) {
+    const kinds = new Map(diagram.nodes.map((n) => [n.id, kindOf(n)]));
+    const access = accessIn(diagram);
+    for (const u of diagram.useCases) {
+      if (diagram.traffic?.some((e) => e.mix?.length && findUseCase(diagram, e.useCase) === u)) continue;
+      const miss = missFactors(u, hits, (id) => kinds.get(id), (step) => access(step) === "read");
+      if (miss.size) traffic.set(u.id, { ...traffic.get(u.id), miss });
+    }
+  }
   const failed = options.failed;
   if (!failed?.size) return traffic;
   for (const u of diagram.useCases) {
@@ -4604,6 +4697,31 @@ function trafficFor(diagram, options = {}, warnings = []) {
   }
   return traffic;
 }
+function hitRatesOf(diagram, options) {
+  const hits = /* @__PURE__ */ new Map();
+  for (const o of diagram.capacity ?? []) if (o.hitPercent !== void 0) hits.set(o.node, o.hitPercent);
+  for (const [id, percent] of options.hitRates ?? []) hits.set(id, percent);
+  return hits;
+}
+var BACKING_STORES = ["database", "search", "analytics", "storage"];
+function missFactors(useCase, hits, kindOf2, isRead) {
+  const factors = /* @__PURE__ */ new Map();
+  for (const s of useCase.scenarios) {
+    s.steps.forEach((lookup, i) => {
+      const hit = hits.get(lookup.toServiceId);
+      if (hit === void 0 || lookup.failed || !isRead(lookup)) return;
+      const caller = lookup.fromServiceId;
+      const reached = /* @__PURE__ */ new Set([lookup.toServiceId]);
+      for (const step of s.steps.slice(i + 1)) {
+        const fallsThrough = reached.has(step.fromServiceId) || step.fromServiceId === caller && isRead(step) && BACKING_STORES.includes(kindOf2(step.toServiceId));
+        if (!fallsThrough || step.toServiceId === caller) continue;
+        reached.add(step.toServiceId);
+        factors.set(step, (factors.get(step) ?? 1) * (1 - Math.min(100, Math.max(0, hit)) / 100));
+      }
+    });
+  }
+  return factors;
+}
 function averageTraffic(traffic) {
   if (![...traffic.values()].some((t) => t.average !== void 0)) return traffic;
   return new Map([...traffic].map(([id, t]) => [id, t.average === void 0 ? t : { ...t, rps: t.rps * t.average }]));
@@ -4611,11 +4729,11 @@ function averageTraffic(traffic) {
 var multiplierOf = (step) => step.multiplier !== void 0 && step.multiplier > 0 ? step.multiplier : 1;
 function forEachStepRate(diagram, traffic, visit) {
   for (const u of diagram.useCases) {
-    const { rps, shares } = traffic.get(u.id) ?? { rps: 0, shares: [] };
+    const { rps, shares, miss } = traffic.get(u.id) ?? { rps: 0, shares: [] };
     u.scenarios.forEach((s, i) => {
       const rate = rps * (shares[i] ?? 0);
       if (rate > 0) {
-        for (const step of s.steps) if (!step.failed) visit(step, rate);
+        for (const step of s.steps) if (!step.failed) visit(step, miss?.has(step) ? rate * miss.get(step) : rate);
       }
     });
   }

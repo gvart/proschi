@@ -236,12 +236,76 @@ capacity {
 | `bandwidth` | Network bandwidth, for transfer time |
 | `egress` | Price per GB sent to clients and third parties |
 | `timeout` | What a failed call to the node costs; 1 s by default |
+| `hit` | A cache's hit rate, which derives the load behind it: see below |
 
 An unknown node id is a warning, and so are `shards` or `consistency` on a
 non-store. A repeated part, a rate with `reads` or `writes`, and a second
 line for one node are errors.
 
 ![A load gauge for Orders DB with a capacity of 2k rps: 1.2k rps is sent, it runs hot from 1.4k (70%) and saturates at 2k (100%), so it takes 200 more rps before it runs hot and 800 more before it saturates](images/concepts/headroom.svg "Headroom: how much more load a node takes before it runs hot (70%) and before it saturates (100%).")
+
+### Cache hit rate
+
+`hit 90%` on a cache says how many reads it answers itself. The rest, the
+misses, go on to what is behind it, and the simulation sends that share of
+the load there without a scenario for each case.
+
+```proschi
+title "Product pages"
+
+user  "Shopper"  [Browser]
+api   "Catalog"  [REST API]   x4
+cache "Products" [Redis]      x2
+db    "Catalog"  [PostgreSQL] x2
+
+user -> api   : HTTPS
+api  -> cache : RESP
+api  -> db    : SQL
+
+usecase "View product" {
+  user -> api   : GET /products/{id}
+  api  -> cache : GET product
+  api  -> db    : SELECT product
+  api  -> cache : SET product
+  api --> user  : 200
+}
+
+traffic {
+  "View product" 4k rps
+}
+
+capacity {
+  cache hit 90%
+}
+
+requirements {
+  p99 "View product" < 150ms
+}
+
+whatif "Cold cache" {
+  cache hit 40%
+}
+```
+
+> **Try it:** the database takes 400 rps, a tenth of the reads. Run the
+> "Cold cache" what-if: at a 40% hit rate it takes 2.4k rps, six times as
+> many.
+
+- **What counts as the miss path.** After a read of the cache, the reads
+  the same caller sends to a store behind it (a database, search, analytics
+  or object storage), the calls the cache makes itself (a read-through
+  cache, a CDN fetching from its origin), and whatever those calls lead to.
+  Each takes `1 − hit` of the rate, and behind two caches the product.
+- **Writes are not discounted.** Filling the cache after a miss, as `SET
+  product` above, is a write and keeps the full rate.
+- **A mix wins.** A use case that splits hits and misses into
+  [scenarios](SCENARIOS.md) with a traffic `mix`, like the URL shortener at
+  the top, is left to its mix, and an info diagnostic says so.
+- **Only load changes.** Latency is still that of the whole path, a miss.
+  For p50 on hits and p99 on misses, write them as scenarios with a mix.
+- A rate over 100% is an error, and `hit` on a node that is not a cache or
+  CDN is a warning. `cache hit 40%` in a [what-if](TESTS.md#what-ifs) tries
+  another rate.
 
 ## Entities
 

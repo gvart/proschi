@@ -159,7 +159,7 @@ const UNIT_EXAMPLES: Record<Quantity['unit'], string> = {
   MBps: 'a bandwidth, e.g. 500 MB/s or 1 GB/s',
   'usd/GB': 'a price per gigabyte, e.g. 0.05 usd/GB',
 };
-const CAPACITY_PARTS = 'a rate, reads, writes, shards, size, latency, availability, cost, durable or volatile, consistency, bandwidth, egress or timeout';
+const CAPACITY_PARTS = 'a rate, reads, writes, shards, size, latency, availability, cost, durable or volatile, consistency, bandwidth, egress, timeout or hit';
 const ASSERTION_HELP =
   'Expected an assertion: "Use case" calls <node>, "Use case" writes <node> before responding, <node> calls <node>, no path from <node> to <node>, <node> has replicas >= 2, …';
 const ASSERTION_VERBS = 'calls, every scenario calls, never calls, never waits for, writes, responds, starts at, has scenario or handles failure of';
@@ -1672,6 +1672,7 @@ class Parser {
     }
     const override: CapacityOverride = { node: id.value, loc: this.lineLoc(tokens, line) };
     const seen = new Set<string>();
+    let hitLoc: SourceLoc | undefined;
     for (let i = 1; i < tokens.length; ) {
       const t = tokens[i];
       let part: string;
@@ -1690,6 +1691,18 @@ class Parser {
         else if (part === 'timeout') override.timeoutMs = value;
         else if (part === 'availability') override.availability = value;
         else override.costUsd = value;
+        i += 2;
+      } else if (isWord(t, 'hit')) {
+        // The cache hit rate, which derives the load on the miss path.
+        part = 'hit';
+        const value = this.quantityOf(tokens[i + 1], '%', t, line);
+        if (value === undefined) return;
+        if (value > 100) {
+          this.error('A hit rate cannot be more than 100%', this.locOf(tokens[i + 1], line));
+          return;
+        }
+        override.hitPercent = value;
+        hitLoc = this.locOf(t, line);
         i += 2;
       } else if (isWord(t, 'durable') || isWord(t, 'volatile')) {
         part = 'durable or volatile';
@@ -1783,7 +1796,24 @@ class Parser {
       const storeOnly = ['shards', 'consistency'].filter((p) => seen.has(p));
       if (storeOnly.length && !isDataStore(kindOf(node)))
         this.warning(`'${id.value}' is not a data store (${DATA_STORE_KINDS.join(', ')}); ${storeOnly.join(' and ')} only apply to data stores`, idLoc);
+      if (hitLoc) this.checkHitRate(node, override.hitPercent!, hitLoc);
     });
+  }
+
+  /**
+   * A hit rate on something that is not a cache is a warning. A use case
+   * whose traffic `mix` splits it into scenarios already models hits and
+   * misses itself: the mix applies to it, and an info says so.
+   */
+  private checkHitRate(node: DiagramNode, percent: number, loc: SourceLoc) {
+    const kind = kindOf(node);
+    if (kind !== 'cache' && kind !== 'cdn') this.warning(`'${node.id}' is not a cache or CDN; a hit rate only means something for one`, loc);
+    for (const entry of this.traffic) {
+      if (!entry.mix?.length) continue;
+      const useCase = this.built.find((u) => u.name === entry.useCase);
+      if (!useCase?.scenarios.some((s) => s.steps.some((step) => step.toServiceId === node.id))) continue;
+      this.info(`"${useCase.name}" splits its traffic into scenarios with mix, so its mix decides the hits and misses of '${node.id}', not the ${percent}% hit rate`, loc);
+    }
   }
 
   /** `entity Url [in db] ["description"] {` */
@@ -1960,7 +1990,7 @@ class Parser {
   private parseWhatIfLine(whatif: WhatIf, tokens: Token[], line: number) {
     const [first, second, third] = tokens;
     const loc = this.lineLoc(tokens, line);
-    const help = 'Expected a what-if change: traffic "Use case" x3, traffic "Use case" 50k rps, fail <node> or <node> x4';
+    const help = 'Expected a what-if change: traffic "Use case" x3, traffic "Use case" 50k rps, fail <node>, <node> x4 or <node> hit 40%';
     const checkNode = (id: Token) => {
       const idLoc = this.locOf(id, line);
       this.deferred.push(() => {
@@ -1989,6 +2019,22 @@ class Parser {
     }
     if (first.kind === 'ident' && second?.kind === 'ident' && MULTIPLIER.test(second.value)) {
       this.error(`Replicas are a whole number, e.g. ${first.value} x4`, this.locOf(second, line));
+      return;
+    }
+    // `<node> hit 40%`: a colder (or warmer) cache.
+    if (first.kind === 'ident' && isWord(second, 'hit') && tokens.length > 2) {
+      const percent = this.quantityOf(third, '%', second, line);
+      if (percent === undefined || !this.expectEnd(tokens, 3, line)) return;
+      if (percent > 100) {
+        this.error('A hit rate cannot be more than 100%', this.locOf(third, line));
+        return;
+      }
+      if (whatif.changes.some((c) => c.kind === 'hit' && c.node === first.value)) {
+        this.error(`The hit rate of '${first.value}' is set twice in this what-if`, this.locOf(first, line));
+        return;
+      }
+      checkNode(first);
+      whatif.changes.push({ kind: 'hit', node: first.value, percent, loc });
       return;
     }
     if (isWord(first, 'fail')) {
@@ -2616,6 +2662,13 @@ class Parser {
     if (this.warned.has(key)) return;
     this.warned.add(key);
     this.error(message, loc);
+  }
+
+  private info(message: string, loc: SourceLoc) {
+    const key = `info\n${loc.file ?? ''}\n${loc.line}\n${loc.col}\n${message}`;
+    if (this.warned.has(key)) return;
+    this.warned.add(key);
+    this.diagnostics.push({ severity: 'info', message, ...loc });
   }
 
   private warning(message: string, loc: SourceLoc) {

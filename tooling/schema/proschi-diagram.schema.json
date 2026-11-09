@@ -102,7 +102,8 @@
         "severity": {
           "enum": [
             "error",
-            "warning"
+            "warning",
+            "info"
           ]
         },
         "message": {
@@ -1301,6 +1302,12 @@
           "minimum": 0,
           "description": "`timeout`: what a failed call (`-x`) to the node costs, in milliseconds."
         },
+        "hitPercent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "`hit`: the share of reads a cache answers itself; the miss path takes the rest."
+        },
         "loc": {
           "$ref": "#/$defs/loc"
         }
@@ -1562,6 +1569,33 @@
             "kind",
             "node",
             "replicas",
+            "loc"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "hit"
+            },
+            "node": {
+              "type": "string"
+            },
+            "percent": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "`cache hit 40%`: the hit rate under this what-if."
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "node",
+            "percent",
             "loc"
           ],
           "additionalProperties": false

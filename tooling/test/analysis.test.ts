@@ -267,6 +267,22 @@ describe('peak traffic', () => {
   });
 });
 
+describe('cache hit rate', () => {
+  const src = 'api [REST API]\ncache [Redis]\ndb [PostgreSQL]\napi -> cache\napi -> db\nusecase "Read" {\n  api -> cache : GET\n  api -> db : SELECT\n}\ntraffic {\n  "Read" 1k rps\n}\ncapacity {\n  cache hit 90%\n}\n';
+  const c = analyze(src);
+
+  it('hovers the cache with its hit rate, and the store with the miss load', () => {
+    expect(c.diagnostics).toEqual([]);
+    expect(hover(c, { line: 1, character: 1 })?.markdown).toContain('Hit rate 90%: what it misses, 10% of reads, goes on to the backing store');
+    expect(hover(c, { line: 2, character: 1 })?.markdown).toContain('Load 100 rps of');
+  });
+
+  it('completes hit among the capacity parts', () => {
+    const typing = analyze(src.replace('  cache hit 90%', '  cache '));
+    expect(complete(typing, { line: 13, character: 8 }).map((i) => i.label)).toContain('hit');
+  });
+});
+
 describe('constants', () => {
   const src = 'let peak = 120k rps\nlet n = 3\napi [REST API] x$n\ndb [PostgreSQL]\napi -> db\nusecase "Read" {\n  api -> db\n}\ntraffic {\n  "Read" $peak\n}\nwhatif "Big" {\n  db x$n\n}\n';
   const c = analyze(src);

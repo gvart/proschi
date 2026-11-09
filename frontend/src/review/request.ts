@@ -64,7 +64,8 @@ export function modelSummary(diagram: Diagram, diagnostics: ParseResult['diagnos
     useCases: cap(diagram.useCases.map((u) => u.name)),
     decisions: cap((diagram.decisions ?? []).map((d) => d.title)),
     // Only the reviewed file's own lines; the given is error-free by construction.
-    diagnostics: cap(diagnostics.filter((d) => d.file === undefined).map((d) => ({ severity: d.severity, message: d.message, line: d.line }))),
+    // An info explains a choice; it is not a problem to review.
+    diagnostics: cap(diagnostics.filter((d) => d.file === undefined && d.severity !== 'info').map((d) => ({ severity: d.severity as 'error' | 'warning', message: d.message, line: d.line }))),
   };
 }
 

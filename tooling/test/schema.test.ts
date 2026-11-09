@@ -51,6 +51,16 @@ describe('JSON Schema', () => {
     expect(validate(result), JSON.stringify(validate.errors, null, 2)).toBe(true);
   });
 
+  it('describes cache hit rates, in capacity and what-ifs, and info diagnostics', () => {
+    const source =
+      'api [REST API]\ncache [Redis]\napi -> cache\nusecase "U" {\n  api -> cache : GET\n}\ntraffic {\n  "U" 1k rps mix "U" 100%\n}\ncapacity {\n  cache hit 90%\n}\nwhatif "Cold" {\n  cache hit 40%\n}';
+    const result = JSON.parse(JSON.stringify(parse(source)));
+    expect(result.diagram.capacity[0].hitPercent).toBe(90);
+    expect(result.diagram.whatifs[0].changes[0]).toMatchObject({ kind: 'hit', percent: 40 });
+    expect(result.diagnostics.map((d: { severity: string }) => d.severity)).toEqual(['info']);
+    expect(validate(result), JSON.stringify(validate.errors, null, 2)).toBe(true);
+  });
+
   it('describes every requirement, assertion and selector', () => {
     const source = [
       'title "T" "Summary"',

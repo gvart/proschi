@@ -47,6 +47,12 @@
           case without a traffic line adds no load.
         </p>
         <p>
+          A cache with a hit rate (<code>capacity { cache hit 90% }</code>) passes on only its misses: after a
+          read of it, the caller's reads from a store behind it and the calls the cache makes itself take
+          <code>1 − hit</code> of the rate, unless the use case already splits hits and misses with a
+          <code>mix</code>. Only load changes; latency stays that of the whole path.
+        </p>
+        <p>
           With <code>peak</code> (<code>"Read" 20k rps peak x3</code>), <var>R</var> is the peak, 60k: load,
           utilisation, latency and requirements are all taken at the busiest hour. Only egress is costed at the
           average, 20k (rule 1.8).
@@ -56,7 +62,8 @@
           over every request step to n that is not -x
           in every scenario s of every use case
 
-N(step) = the x&lt;N&gt; fan-out, 1 without one</code></pre>
+N(step) = the x&lt;N&gt; fan-out, 1 without one,
+          times 1 − hit on a cache's miss path</code></pre>
     </li>
 
     <li class="rule" id="reads-writes">
@@ -708,7 +715,11 @@ traffic {
       </tr>
       <tr>
         <th scope="row">Cache hit rate <span class="tag">either way</span></th>
-        <td>The hit rate is whatever <code>mix</code> says. Warm-up and eviction are not modelled, so write the cold case as its own scenario.</td>
+        <td>
+          The hit rate is what <code>hit</code> or <code>mix</code> says. Warm-up and eviction are not modelled, so
+          try the cold case in a what-if (<code>cache hit 40%</code>). A <code>hit</code> rate changes load, not
+          latency: every request is timed as a miss.
+        </td>
       </tr>
       <tr>
         <th scope="row">Hot keys and skew <span class="tag tag--opt">optimistic</span></th>

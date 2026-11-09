@@ -1,4 +1,5 @@
 import type { Diagram, DiagramNode, DiagramStep, DiagramUseCase, Kind, Percentile } from '../dsl/types';
+import { kindOf as nodeKind } from '../dsl/kinds';
 import { accessIn } from './access';
 import { criticalPath, fallbacksFor, findScenario, findUseCase, needs, pathNodes, type Hop } from './flow';
 import { formatPercent, formatRps } from './format';
@@ -147,6 +148,8 @@ export interface AnalyzeOptions {
    * use case's requests fails.
    */
   failed?: ReadonlySet<string>;
+  /** Cache hit rates (0..100) to use instead of `capacity { n hit … }`, by node id (a what-if's `cache hit 40%`). */
+  hitRates?: ReadonlyMap<string, number>;
   /** Internal: the load on every team design of the document being analysed (sim/systems.ts), passed to the team designs' own analyses. */
   sharedSystems?: SharedSystemLoad;
 }
@@ -189,6 +192,8 @@ export interface UseCaseTraffic {
   shares: number[];
   /** `peak` traffic: the average as a fraction of `rps` (the peak), 0..1. Absent for a flat rate. */
   average?: number;
+  /** Steps on a cache's miss path, with the share of the rate that reaches them (`1 − hit`, see `missFactors`). Absent without hit rates. */
+  miss?: Map<DiagramStep, number>;
   /** With failed nodes: the share of requests whose scenario needs a failed node and has no fallback, 0..1. Absent otherwise. */
   stranded?: number;
 }
@@ -240,6 +245,17 @@ export function trafficFor(diagram: Diagram, options: AnalyzeOptions = {}, warni
     const t = traffic.get(id);
     if (t) t.rps = Math.max(0, rps);
   }
+  const hits = hitRatesOf(diagram, options);
+  if (hits.size) {
+    const kinds = new Map(diagram.nodes.map((n) => [n.id, nodeKind(n)]));
+    const access = accessIn(diagram);
+    for (const u of diagram.useCases) {
+      // A use case that splits its traffic over scenarios models hits and misses itself: the mix wins.
+      if (diagram.traffic?.some((e) => e.mix?.length && findUseCase(diagram, e.useCase) === u)) continue;
+      const miss = missFactors(u, hits, (id) => kinds.get(id), (step) => access(step) === 'read');
+      if (miss.size) traffic.set(u.id, { ...traffic.get(u.id)!, miss });
+    }
+  }
   const failed = options.failed;
   if (!failed?.size) return traffic;
   for (const u of diagram.useCases) {
@@ -265,6 +281,48 @@ export function trafficFor(diagram: Diagram, options: AnalyzeOptions = {}, warni
     traffic.set(u.id, { ...t, shares, stranded: Math.min(1, stranded) });
   }
   return traffic;
+}
+
+/** Hit rates (0..100) by node: `capacity { n hit … }`, with the what-if's `hitRates` on top. */
+function hitRatesOf(diagram: Diagram, options: AnalyzeOptions): Map<string, number> {
+  const hits = new Map<string, number>();
+  for (const o of diagram.capacity ?? []) if (o.hitPercent !== undefined) hits.set(o.node, o.hitPercent);
+  for (const [id, percent] of options.hitRates ?? []) hits.set(id, percent);
+  return hits;
+}
+
+/** Kinds a cache-aside miss falls through to: the stores behind a cache. */
+const BACKING_STORES: readonly Kind[] = ['database', 'search', 'analytics', 'storage'];
+
+/**
+ * The miss path of every read of a cache with a hit rate, in each scenario of
+ * `useCase`: later steps sent by the cache itself (read-through, a CDN's
+ * origin fetch), later reads by the caller from a backing store (cache-aside),
+ * and the steps those nodes send in turn. Each such step gets `1 − hit` of
+ * the rate; behind two caches, the product.
+ */
+export function missFactors(
+  useCase: DiagramUseCase,
+  hits: ReadonlyMap<string, number>,
+  kindOf: (id: string) => Kind | undefined,
+  isRead: (step: DiagramStep) => boolean,
+): Map<DiagramStep, number> {
+  const factors = new Map<DiagramStep, number>();
+  for (const s of useCase.scenarios) {
+    s.steps.forEach((lookup, i) => {
+      const hit = hits.get(lookup.toServiceId);
+      if (hit === undefined || lookup.failed || !isRead(lookup)) return;
+      const caller = lookup.fromServiceId;
+      const reached = new Set([lookup.toServiceId]);
+      for (const step of s.steps.slice(i + 1)) {
+        const fallsThrough = reached.has(step.fromServiceId) || (step.fromServiceId === caller && isRead(step) && BACKING_STORES.includes(kindOf(step.toServiceId)!));
+        if (!fallsThrough || step.toServiceId === caller) continue;
+        reached.add(step.toServiceId);
+        factors.set(step, (factors.get(step) ?? 1) * (1 - Math.min(100, Math.max(0, hit)) / 100));
+      }
+    });
+  }
+  return factors;
 }
 
 /**
@@ -295,10 +353,10 @@ export interface Load {
  */
 export function forEachStepRate(diagram: Diagram, traffic: Map<string, UseCaseTraffic>, visit: (step: DiagramStep, rate: number) => void) {
   for (const u of diagram.useCases) {
-    const { rps, shares } = traffic.get(u.id) ?? { rps: 0, shares: [] };
+    const { rps, shares, miss } = traffic.get(u.id) ?? { rps: 0, shares: [] };
     u.scenarios.forEach((s, i) => {
       const rate = rps * (shares[i] ?? 0);
-      if (rate > 0) for (const step of s.steps) if (!step.failed) visit(step, rate);
+      if (rate > 0) for (const step of s.steps) if (!step.failed) visit(step, miss?.has(step) ? rate * miss.get(step)! : rate);
     });
   }
 }

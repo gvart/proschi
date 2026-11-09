@@ -42,7 +42,8 @@ export interface SourceLoc {
   file?: string;
 }
 
-export type Severity = 'error' | 'warning';
+/** `info` explains a choice the parser or simulation made, such as which of two cache models applies. */
+export type Severity = 'error' | 'warning' | 'info';
 
 export interface Diagnostic extends SourceLoc {
   severity: Severity;
@@ -250,7 +251,9 @@ export type WhatIfChange =
   /** `fail db`: the node is down. */
   | { kind: 'fail'; node: string; loc: SourceLoc }
   /** `db x4`: the node runs this many replicas. */
-  | { kind: 'replicas'; node: string; replicas: number; loc: SourceLoc };
+  | { kind: 'replicas'; node: string; replicas: number; loc: SourceLoc }
+  /** `cache hit 40%`: the cache's hit rate (0..100), e.g. a cold cache. */
+  | { kind: 'hit'; node: string; percent: number; loc: SourceLoc };
 
 /** `whatif "Black Friday" { traffic "Checkout" x3; fail cache; db x4 }`: a variant of the design to simulate. */
 export interface WhatIf {
@@ -389,6 +392,12 @@ export interface CapacityOverride {
   timeoutMs?: number;
   /** `size S|M|L`: an instance size that scales the tech's default capacity and cost (sim/profiles.ts `SIZES`). */
   size?: InstanceSize;
+  /**
+   * `hit 90%`, 0..100: the share of reads a cache answers itself. Steps after
+   * a read of it that go on to a backing store take (1 − hit) of the load,
+   * unless the use case splits hits and misses with a traffic `mix`.
+   */
+  hitPercent?: number;
   loc: SourceLoc;
 }
 

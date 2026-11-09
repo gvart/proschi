@@ -149,7 +149,7 @@ function validate(document: TextDocument) {
   const analysis = analysisOf(document);
   const toLsp = (source: string) => (d: Analysis['diagnostics'][number]) => ({
     range: toRange(d),
-    severity: d.severity === 'error' ? DiagnosticSeverity.Error : DiagnosticSeverity.Warning,
+    severity: d.severity === 'error' ? DiagnosticSeverity.Error : d.severity === 'info' ? DiagnosticSeverity.Information : DiagnosticSeverity.Warning,
     source,
     message: d.message,
   });

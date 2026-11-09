@@ -113,4 +113,5 @@ export const CAPACITY_PARTS: { label: string; detail: string; snippet: string }[
   { label: 'bandwidth', detail: 'Network bandwidth, for transfer time', snippet: 'bandwidth ${1:500} MB/s' },
   { label: 'egress', detail: 'Price per GB sent out', snippet: 'egress ${1:0.05} usd/GB' },
   { label: 'timeout', detail: 'What a failed call to the node costs', snippet: 'timeout ${1:300ms}' },
+  { label: 'hit', detail: 'Cache hit rate: the miss path takes the rest', snippet: 'hit ${1:90%}' },
 ];

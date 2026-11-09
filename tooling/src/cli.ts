@@ -105,7 +105,7 @@ export function format(results: CheckResult[], style: 'text' | 'github' | 'json'
   for (const { file, diagnostics } of results) {
     for (const d of diagnostics) {
       if (style === 'github') {
-        const level = d.severity === 'error' ? 'error' : 'warning';
+        const level = d.severity === 'error' ? 'error' : d.severity === 'info' ? 'notice' : 'warning';
         lines.push(`::${level} file=${file},line=${d.line},col=${d.col},title=proschi::${d.message.replace(/%/g, '%25').replace(/\r?\n/g, '%0A')}`);
       } else {
         lines.push(`${file}:${d.line}:${d.col}: ${d.severity}: ${d.message}`);
@@ -199,7 +199,7 @@ export function run(argv: string[], out: (s: string) => void = console.log, err:
     const results = checkFiles(files, (file, diagram) => openApiDiagnostics(file, diagram, specs));
     const text = format(results, style);
     if (text) out(text);
-    const failed = results.some((r) => r.diagnostics.some((d) => d.severity === 'error' || strict));
+    const failed = results.some((r) => r.diagnostics.some((d) => d.severity === 'error' || (strict && d.severity === 'warning')));
     return failed ? 1 : 0;
   }
 

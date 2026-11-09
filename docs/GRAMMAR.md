@@ -55,7 +55,8 @@ capacity     = "capacity" , "{" , { id , { capacity-part } } , "}" ;
 capacity-part = quantity | "reads" , quantity | "writes" , quantity | "shards" , integer | "size" , ( "S" | "M" | "L" )
              | "latency" , quantity | "availability" , quantity | "cost" , quantity
              | "durable" | "volatile" | "consistency" , ( "strong" | "eventual" )
-             | "bandwidth" , quantity | "egress" , quantity | "timeout" , quantity ;
+             | "bandwidth" , quantity | "egress" , quantity | "timeout" , quantity
+             | "hit" , quantity ;                       (* hit 90%: a cache's hit rate *)
 entity       = "entity" , id , [ "in" , id ] , [ string ] , "{" , { id , id , { flag } } , "}" ;
 flag         = "key" | "index" | "unique" | "optional" ;
 decision     = "decision" , string , ( "because" , string
@@ -74,7 +75,8 @@ assertion    = string , [ "scenario" , string ] , ( "calls" , selector , [ ( "be
 whatif       = "whatif" , string , "{" , { whatif-change } , "}" ;
 whatif-change = "traffic" , string , ( replicas | quantity )   (* x3 or x1.5 multiplies, 50k rps sets *)
              | "fail" , id
-             | id , replicas ;
+             | id , replicas
+             | id , "hit" , quantity ;                  (* cache hit 40%: a cold cache *)
 selector     = selector-atom , { "or" , selector-atom } ;
 selector-atom = id | tech | "any" , kind | "any" , ( "strong" | "eventual" ) , "store" ;
 kind         = "client" | "edge" | "cdn" | "loadbalancer" | "gateway" | "dns"
