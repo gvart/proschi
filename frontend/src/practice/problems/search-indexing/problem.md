@@ -1,6 +1,6 @@
 ---
 title: Search Indexing
-summary: DoorDash's search, fed through Kafka so menu edits show up in seconds and queries never wait on writes.
+summary: DoorDash's search, fed through Kafka so menu edits reach the index in near real time and queries never wait on writes.
 difficulty: medium
 company: DoorDash
 tags: [search, streaming, queues, async, replication, real-world]
@@ -14,9 +14,9 @@ hints:
 DoorDash's search finds stores and dishes near a diner. Its index is built
 from the stores, menus and items that merchants and operators edit all day,
 plus scores and tags that a nightly ETL computes for every item. The old
-indexing was slow and unreliable: changes took a long time to reach search,
-the index and the source of truth drifted apart, engineers fixed the
-mismatches by hand, and a full reindex took a week.
+indexing was slow and unreliable: it could take up to a week to reindex all
+of the changes, mismatches between the index and the source of truth had to
+be fixed by hand, and a full reindex job typically took a month.
 
 The rebuild separated the two sides completely. Edits go to the database,
 and a change event goes to Kafka. Flink jobs turn each event into a search
@@ -80,7 +80,8 @@ cases.
 ## What this model leaves out
 
 - **Freshness.** The point of the pipeline is that an edit shows up in search
-  within seconds instead of after a batch job. The simulation measures
+  as quickly as possible; this exercise takes "within seconds" as its goal
+  (DoorDash's post gives no figure). The simulation measures
   request latency, not how old the index is, so freshness is encoded as a
   test (edits are indexed from the stream) rather than as a number.
 - **How Elasticsearch spends its nodes.** A real query visits one copy of
@@ -99,12 +100,19 @@ cases.
 
 - Satish Saley, Danial Asif and Siddharth Kumar,
   [Building Faster Indexing with Apache Kafka and Elasticsearch](https://careersatdoordash.com/blog/open-source-search-indexing/),
-  DoorDash Engineering blog, July 2021: the legacy indexing's long delays,
-  drift between the index and the source of truth fixed by hand, and
-  week-long reindexing; a platform built on Kafka, Flink and Elasticsearch;
-  change events published by save hooks in the applications, carrying
-  entity ids (a Debezium connector was evaluated and judged too costly); an
-  Assembler job that fetches the full data from the backend services, and a
-  sink job that writes Elasticsearch with rate limiting; nightly ETL data
-  streamed into Kafka in batches spread over 24 hours so it does not
-  overwhelm the pipeline; and a full reindex down from a week to two hours.
+  DoorDash Engineering blog, July 14, 2021: the legacy indexing, where
+  reindexing all of the changes could take up to a week, a full reindex job
+  typically took a month, and mismatches with the source of truth were fixed
+  by hand; a platform built on Kafka, Flink and Elasticsearch, fed from
+  Postgres and a Snowflake warehouse; change events published by save hooks
+  in the applications ("application level CDC") and carrying only the
+  changed entities' ids, because Debezium change data capture showed too
+  much overhead in performance tests; a Flink Assembler that dedupes events
+  over a short window and fetches the full data in bulk from the services'
+  REST APIs, and a Flink sink that writes Elasticsearch in bulk with rate
+  limiting, a dead-letter queue and one consumer group per index; nightly
+  ETL data streamed into Kafka in batches sized so downstream is not
+  overwhelmed, with the goal of ingesting it within 24 hours; and the
+  results: a store backfill from one week to 6.5 hours, an item backfill
+  from two weeks to 6.5 hours, and a reindex of existing stores and items
+  from one week to two hours.

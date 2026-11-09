@@ -16,7 +16,7 @@ Shard a nearby-people index **by location**, not by user id: cover the map with 
 
 A dating app shows each user people nearby: within the distance they chose, filtered by age and other preferences. The candidates come from a search index of every active user, with their location and the fields the filters need. The profile store stays the source of truth; the index is a copy built for this one question.
 
-Tinder first kept that index as one large Elasticsearch index. Every search had to work through users across the whole world to keep the few within the radius, so searches got slower and the cluster more expensive as the user base grew. Their engineering blog describes the fix: shard the index by location into **geoshards**, built from S2 cells and balanced by load, so that a search reads only the geoshards near the searcher.
+Tinder first kept that index in one Elasticsearch cluster with one index and the default five shards, and scaled it with more replicas and bigger nodes until CPU and cost were too high. Every search had to work through users across the whole world to keep the few within the radius (at most 100 miles). Their engineering blog describes the fix: shard the index by location into **geoshards**, built from S2 cells and balanced by load, so that a search reads only the geoshards near the searcher.
 
 The problem has three use cases:
 
@@ -36,7 +36,7 @@ The tests check that searches go through the router and never read `profiles`, t
 $12,300 | a month for the reference design
 ```
 
-The rates and counts are assumptions for the exercise; Tinder did not publish them.
+Tinder's posts give 40 to 100 geoshards worldwide and an example where a 100-mile search reads 3 of 55; the rates, the 40% metro share and the 7 geoshards here are assumptions for the exercise.
 
 | Flow | Rate | Where it lands |
 |---|---|---|
@@ -103,7 +103,7 @@ quadtree-vs-geohash
 
 The simplest way to cut the map is into equal pieces: every geoshard the same number of cells. It fails on the first city. Users are packed into metros, and so are searches, so the geoshard over a big city gets a large share of the whole load while geoshards over oceans and deserts sit idle. That is a hot shard, and adding nodes to the cluster does not cool it.
 
-Tinder groups cells by **load** instead. Each cell gets a score from its active users and the searches made from it, and neighbouring cells are added to a geoshard until it holds its share of the total. A dense metro ends up as several small geoshards, and a sparse region much larger than it shares one. The cells stay contiguous, so a search circle still falls into a few geoshards. The grouping is computed ahead of time, not per search, and is redone when the map of load shifts.
+Tinder groups cells by **load** instead. Each cell (S2 level 7 or 8) gets a score from its unique users, active users, queries an hour or a mix of them, balance is measured as the standard deviation of the geoshards' scores, and neighbouring cells are added to a geoshard until it holds its share of the total. A dense metro ends up as several small geoshards, and a sparse region much larger than it shares one. The cells stay contiguous, so a search circle still falls into a few geoshards. The grouping is computed ahead of time, not per search, and is redone when the map of load shifts.
 
 In this problem the dense metros are their own group, `metro`, because the simulation spreads a node's load evenly over its shards and cannot see one hot geoshard inside a group. The metros take 40% of the searches on well under 1% of the land. Equal-area thinking gives them one geoshard; load balancing gives them three of the seven.
 
@@ -120,7 +120,7 @@ hot-partition-key
 
 The **geo router** sits between the API and the index. For each search it covers the circle with S2 cells, looks up each cell's geoshard in a small map that every router instance keeps in memory, sends the search to those geoshards in parallel, and merges what comes back. Tinder's posts call this an abstraction layer; it also hides the geoshard layout, so the layout can change without touching the recommendation service.
 
-A search near the middle of a large regional geoshard may read only one; one in a metro, where geoshards are small, reads several. The problem assumes about 3 per search. That is the whole gain: 3 geoshard searches instead of 7 shard searches, and each geoshard holds only nearby users, so each search scans less.
+A search near the middle of a large regional geoshard may read only one; one in a metro, where geoshards are small, reads several. Geoshards that are too small would make every search read many and hurt the P99, which is why Tinder kept 40 to 100 worldwide; in their example a 100-mile search reads 3 of 55. The problem assumes about 3 per search. That is the whole gain: 3 geoshard searches instead of 7 shard searches, and each geoshard holds only nearby users, so each search scans less.
 
 ```quiz
 geo-partitioning
@@ -130,7 +130,7 @@ geo-partitioning
 
 A geoshard lives on a primary and its replicas. Replicas are full copies that answer searches for the geoshard and take over when a node dies. They also cost writes, since every copy applies every location change.
 
-Replicas can follow load too: Tinder gives busy geoshards more copies and quiet ones fewer, and places geoshards from different time zones on the same nodes, so that one node's evening peak in New York is another geoshard's quiet night elsewhere. Here every geoshard gets three copies, so losing one leaves two to share its load.
+Replicas can follow load too: Tinder scales a hot geoshard by adding replicas, and spreads the primaries and replicas randomly over the data nodes (about four indexes per node), because geoshards in different time zones peak at different times, more than 10× apart in requests a second. One geoshard's evening peak in New York then shares a node with another's quiet night elsewhere. Here every geoshard gets three copies, so losing one leaves two to share its load.
 
 ```quiz
 search-indexing-shards-vs-replicas
@@ -141,7 +141,7 @@ three-replicas-parallel
 
 A location update has one job on the request path: save the location in `profiles` and answer. The index follows from a stream. The API publishes a change event; an indexer consumes it, computes the user's new cell and geoshard, and upserts the user there. A busy geoshard then slows only the indexer, never the app.
 
-Moves are the interesting case. When the new cell belongs to another geoshard, the indexer must **delete the user from the old geoshard and insert them into the new one**: two writes on two indexes, not atomic. Two quick moves applied out of order could put the user back where they were, or in two geoshards at once. Keying the stream by user id puts all of one user's changes in one partition, read in order by one consumer. A periodic resync from `profiles` repairs whatever still slips through.
+Moves are the interesting case. When the new cell belongs to another geoshard, the indexer must **delete the user from the old geoshard and insert them into the new one**: two writes on two indexes, not atomic. Two quick moves applied out of order could put the user back where they were, or in two geoshards at once. Keying the stream by user id puts all of one user's changes in one partition, read in order by one consumer; Tinder keys its Kafka partitions this way because a Passport move can follow another within milliseconds. Failed writes are retried with exponential backoff and jitter, and refeeding from `profiles` repairs whatever still slips through.
 
 ```quiz
 nearby-search-move-between-geoshards
@@ -176,8 +176,8 @@ transactional-outbox
 
 ## Further reading
 
-- Frank Ren, [Geosharded Recommendations Part 1: Sharding Approach](https://medium.com/tinder/geosharded-recommendations-part-1-sharding-approach-d5d54e0ec77a), Tinder Tech Blog, 2019, with [Part 2: Architecture](https://medium.com/tinder/geosharded-recommendations-part-2-architecture-3396a8a7efb) and [Part 3: Consistency](https://medium.com/tinder/geosharded-recommendations-part-3-consistency-2d2cb2f0594b): the system this problem is based on.
-- ByteByteGo, [How Tinder Recommends to 75 Million Users with Geosharding](https://blog.bytebytego.com/p/how-tinder-recommends-to-75-million): a summary of the three posts.
+- Frank Ren, [Geosharded Recommendations Part 1: Sharding Approach](https://medium.com/tinder/geosharded-recommendations-part-1-sharding-approach-d5d54e0ec77a) (May 14, 2019); Xiaohu Li, [Part 2: Architecture](https://medium.com/tinder/geosharded-recommendations-part-2-architecture-3396a8a7efb) (May 29, 2019); Devin Thomson, [Part 3: Consistency](https://medium.com/tinder/geosharded-recommendations-part-3-consistency-2d2cb2f0594b) (August 14, 2019); Tinder Tech Blog: the system this problem is based on.
+- ByteByteGo, [How Tinder Recommends to 75 Million Users with Geosharding](https://blog.bytebytego.com/p/how-tinder-recommends-to-75-million): a secondary summary of the three posts (the user count is ByteByteGo's, not from the posts).
 - S2 Geometry, [S2 Cells](https://s2geometry.io/devguide/s2cell_hierarchy) and [the S2 overview](https://s2geometry.io/about/overview): the cell hierarchy, cell ids and region covering.
 - Elastic, [Scalability and resilience: clusters, nodes and shards](https://www.elastic.co/guide/en/elasticsearch/reference/current/scalability.html): primaries, replicas and how a search uses them.
 - Martin Kleppmann, *Designing Data-Intensive Applications*, chapter 6, "Partitioning" (the sections on partitioning secondary indexes and skewed workloads).

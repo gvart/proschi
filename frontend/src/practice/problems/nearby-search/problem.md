@@ -12,10 +12,11 @@ hints:
 ---
 
 Tinder shows each user a stack of people nearby: within the distance they
-chose, matching their filters. Everyone searchable lives in an Elasticsearch
-index. When that index was one big index, every search read through users
-on other continents only to filter them out, which cost latency and
-infrastructure as the user base grew.
+chose (at most 100 miles), matching their filters. Everyone searchable
+lives in Elasticsearch. At first that was one cluster with one index and the
+default five shards, scaled with more replicas and bigger nodes until CPU
+and cost were too high: every search worked through users on other
+continents only to filter them out.
 
 Tinder's fix was to shard the index by location. The map is divided into
 **S2 cells** (Google's hierarchical cells on the sphere). Nearby cells are
@@ -61,8 +62,9 @@ requirements and tests in `problem.proschi` refer to them.
 - The searchable index needs at least **7 geoshards** to hold it.
 - An Elasticsearch node serves about **3k requests a second**.
 
-Tinder did not publish these rates or counts; they are assumptions for the
-exercise.
+Tinder's posts report 40 to 100 geoshards worldwide and an example where a
+100-mile search reads 3 of 55 geoshards. The rates, the 40% share, the 5% of
+moves and the 7 geoshards here are assumptions for the exercise.
 
 ## Constraints
 
@@ -93,9 +95,11 @@ the indexer and the three use cases.
   before any request. It is described in the lesson, not simulated.
 - **Circles on a boundary.** A search near the edge of a metro covers
   geoshards of both groups. The scenarios keep each search in one group.
-- **Time zones.** Each region peaks at its own local evening. Tinder places
-  geoshards from different time zones on the same nodes so the peaks
-  spread out; the simulation has one steady peak.
+- **Time zones.** Each region peaks at its own local evening, and Tinder saw
+  more than 10× difference in requests a second between geoshards. It spreads
+  the primaries and replicas of the geoshards randomly over the data nodes,
+  about four indexes per node, so the peaks even out; the simulation has one
+  steady peak.
 - **Consistency of a move.** A delete and an upsert on two indexes are not
   atomic, and two quick moves can arrive out of order. Partitioning the
   stream by user id keeps one user's changes in order; the simulation has
@@ -103,21 +107,32 @@ the indexer and the three use cases.
 
 ## Based on
 
+The series lists Frank Ren, Xiaohu Li, Devin Thomson and Daniel Geng as
+authors.
+
 - Frank Ren, [Geosharded Recommendations Part 1: Sharding Approach](https://medium.com/tinder/geosharded-recommendations-part-1-sharding-approach-d5d54e0ec77a),
-  Tinder Tech Blog, May 2019: a single Elasticsearch index replaced by
-  geoshards; Google's S2 cells as the unit of location; cells grouped into
-  geoshards balanced by load (active users and queries) rather than area,
-  so dense areas get smaller geoshards; a search reads only the geoshards
-  its distance range covers.
-- [Geosharded Recommendations Part 2: Architecture](https://medium.com/tinder/geosharded-recommendations-part-2-architecture-3396a8a7efb)
-  and [Part 3: Consistency](https://medium.com/tinder/geosharded-recommendations-part-3-consistency-2d2cb2f0594b),
-  Tinder Tech Blog, 2019: an abstraction layer that maps a search to its
-  geoshards, fans out and merges; one index per geoshard in one cluster,
-  with replicas per geoshard and geoshards from different time zones mixed
-  on the same nodes; location changes ordered per user through Kafka, and
-  moves handled as a removal from the old geoshard and an insert into the
-  new one.
-- These facts are as reported by ByteByteGo's summary of the series,
-  [How Tinder Recommends to 75 Million Users with Geosharding](https://blog.bytebytego.com/p/how-tinder-recommends-to-75-million),
-  because the original posts could not be read when this problem was
-  written.
+  Tinder Tech Blog, May 14, 2019: one Elasticsearch cluster and index with
+  the default five shards, scaled with replicas and bigger nodes until CPU
+  and cost were too high; searches capped at 100 miles; an equal
+  latitude-longitude grid giving hot and empty shards; a load score per cell
+  from unique users, active users or queries an hour, and balance measured
+  as the standard deviation of the scores; Google's S2 cells (levels 7 and
+  8) grouped by load, so low-load geoshards are large and dense cities like
+  New York and London small; 40 to 100 geoshards worldwide, since geoshards
+  that are too small make each search read many and hurt the P99; a 100-mile
+  search reading 3 of 55 geoshards in their example; a user crossing a
+  boundary moved to the new index and removed from the old, not atomically;
+  and a geosharded index handling 20× the computation of the single one.
+- Xiaohu Li, [Geosharded Recommendations Part 2: Architecture](https://medium.com/tinder/geosharded-recommendations-part-2-architecture-3396a8a7efb),
+  Tinder Tech Blog, May 29, 2019: an abstraction layer, an internal
+  microservice, that works out the geoshards from the location and distance
+  filter, queries them and aggregates; location changes going through the
+  profile and location services, which decide on a shard move; one index per
+  geoshard in one cluster rather than many clusters; replicas added to a hot
+  geoshard; and primaries and replicas spread randomly over the data nodes,
+  because geoshards in different time zones peak at different times.
+- Devin Thomson, [Geosharded Recommendations Part 3: Consistency](https://medium.com/tinder/geosharded-recommendations-part-3-consistency-2d2cb2f0594b),
+  Tinder Tech Blog, August 14, 2019: Kafka partitions keyed by document so
+  one user's writes stay in order; a move done as a fetch of the document
+  and an index into the new geoshard; retries with exponential backoff and
+  jitter by asynchronous workers; and refeeding from the source of truth.

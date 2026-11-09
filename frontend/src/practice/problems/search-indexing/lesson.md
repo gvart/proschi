@@ -16,7 +16,7 @@ Keep the **read path** (diners querying a search cluster) and the **write path**
 
 A food delivery app's search box answers "tacos near me, open now". The answer comes from stores, menus and items that merchants and operators edit all day, plus ranking scores and tags that a nightly job computes for every item. A relational database is the right home for those edits, with transactions and constraints, and the wrong tool for ranked text and location search over every menu. So the data lives twice: in the database as the **source of truth**, and in a search engine as an **index** built from it.
 
-The hard part is keeping the copy in step. DoorDash's first indexing system did it slowly and unreliably: an edit took a long time to appear in search, the index and the database disagreed often enough that engineers fixed stores by hand, and rebuilding the whole index took about a week. Their rebuild, on Kafka, Flink and Elasticsearch, made the index follow changes continuously and cut a full reindex to two hours.
+The hard part is keeping the copy in step. DoorDash's first indexing system did it slowly and unreliably: reindexing all of the changes could take up to a week, mismatches between the index and the database had to be fixed by hand, and a full reindex job typically took a month. Their rebuild, on Kafka, Flink and Elasticsearch, made the index follow changes as they happen, cut the reindex of existing stores and items from a week to two hours, and cut the store and item backfills (one and two weeks) to 6.5 hours each.
 
 The problem has four use cases:
 
@@ -75,7 +75,7 @@ inverted-index
 
 An edit commits to the database, then a change event goes to Kafka, and the merchant gets the answer. Indexers consume the stream and update the index a moment later. The merchant never waits for the search cluster, and a slow or failing cluster only makes the index a little older; it never fails an edit.
 
-DoorDash publishes these events from **save hooks** in the applications: code that runs whenever a store, menu or item is saved. They looked at the usual alternative, log-based change data capture with the Debezium connector for PostgreSQL, and found it too costly for their needs. Both approaches have the same shape: the database commits first, and an event follows.
+DoorDash publishes these events from **save hooks** in the applications: code that runs whenever a store, menu or item is saved. They looked at the usual alternative, log-based change data capture with Debezium, and performance tests showed too much overhead, especially on a database that also serves online traffic. Both approaches have the same shape: the database commits first, and an event follows.
 
 Two details make the stream robust:
 
@@ -99,7 +99,7 @@ Every request to a search cluster has a fixed cost: a round trip, a thread, a wr
 
 That is what the two scenarios model. In `"Buffered"` the indexer only adds to the buffer and the cluster sees nothing. In `"Flush"`, 1% of the time, one request writes the whole batch. The cluster takes 120 requests a second instead of 12k, and queries keep the nodes to themselves.
 
-The time limit matters as much as the size: without it, a quiet hour would leave a half-full buffer waiting. DoorDash's sink also **rate-limits** its writes, so that a burst of changes cannot crowd out queries on the cluster. The backfill gets the same protection one step earlier: the ETL's daily rows are streamed in batches spread over 24 hours, never all at once.
+The time limit matters as much as the size: without it, a quiet hour would leave a half-full buffer waiting. DoorDash's sink also **rate-limits** its writes, so that a burst of changes cannot crowd out queries on the cluster. The backfill gets the same protection one step earlier: the ETL's nightly rows are streamed in batches sized so the pipeline downstream is not overwhelmed, spread out rather than in a spike, with the goal of ingesting them within 24 hours.
 
 ```callout tip
 Batching trades a second of delay for a hundredfold cut in write requests. For a search index, where a second of staleness is invisible, that trade is almost free.
@@ -147,9 +147,9 @@ three-replicas-parallel
 ## In the interview
 
 - **Start from the two sides.** Writers and readers, their rates and their needs, then the stream between them. Saying "the read model is eventually consistent, the database decides" early frames everything that follows.
-- **Expect "how fresh?"** Seconds: the edit commits, the event is consumed within a second or two, and the bulk flush timer bounds the rest. Mention the refresh interval of the search engine as the last step.
+- **Expect "how fresh?"** Seconds, in this exercise (DoorDash's post says "as quickly as possible" without a figure): the edit commits, the event is consumed within a second or two, and the bulk flush timer bounds the rest. Mention the refresh interval of the search engine as the last step.
 - **Expect "what if an event is lost?"** Ids-only events and a full reindex make the index self-healing; an outbox or log-based capture closes the publish gap.
-- **Expect "how do you reindex everything?"** Stream every row through the same pipeline at a throttled rate, or build a new index alongside and switch an alias once it has caught up. DoorDash's rebuild brought a full reindex from a week to two hours.
+- **Expect "how do you reindex everything?"** Stream every row through the same pipeline at a throttled rate, or build a new index alongside and switch an alias once it has caught up. DoorDash's rebuild brought the reindex of existing stores and items from a week to two hours.
 - **Expect "shards or replicas?"** Shards for size and indexing spread, replicas for query throughput and failures; count nodes as shards × copies.
 
 ## Further reading
