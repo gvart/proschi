@@ -108,12 +108,17 @@ export function roadmapState(stages: RoadmapStage[], progress: Progress): Roadma
  * Whether the viewer may work through the roadmap: `open`, `checking` while
  * the account loads, or `sign-in`. Anyone can see the stages and work through
  * the first one signed out, with progress kept in this browser; the stages
- * after it take an account (see stepLock). This is the one place to put a paid
- * plan later (an `upgrade` answer for an account without one).
+ * after it take an account (see stepLock). The roadmap itself stays free; its
+ * paid part, the "Your next steps" picks, is the ai_roadmap feature
+ * (history/NextForYou.tsx, components/Feature.tsx).
  *
  * A build without accounts (`VITE_ACCOUNTS` unset: local development, the e2e
  * build, forks) has nothing to sign in to, so the roadmap is open there.
  */
+/** A newcomer (nothing solved yet) who has not read the "Read first" guide: the roadmap sends them to it before the first problem. Never a lock. */
+export const readFirstPending = (guideId: string | undefined, read: readonly string[], state: RoadmapState) =>
+  guideId !== undefined && state.solved === 0 && !read.includes(guideId);
+
 export type RoadmapAccess = 'open' | 'checking' | 'sign-in';
 
 export function roadmapAccess(account: AccountState): RoadmapAccess {

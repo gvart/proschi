@@ -131,3 +131,32 @@ describe('the Scale or Fail bonus', () => {
     expect(full.game).toBe(GAME_BONUS);
   });
 });
+
+describe('the mock interview bonus', () => {
+  it('adds up to INTERVIEW_BONUS to the related topics, by the verdict, half of it on your own, the best interview counting', async () => {
+    const { INTERVIEW_BONUS, SOLO_SHARE, interviewScore } = await import('./mastery');
+    const base = skills(input());
+    const caching = (s: ReturnType<typeof skills>) => s.topics.find((t) => t.topic === 'caching')!;
+    const estimation = (s: ReturnType<typeof skills>) => s.topics.find((t) => t.topic === 'estimation')!;
+    const scores = { requirements: 5, estimation: 1, design: 5, tradeoffs: 5, communication: 5 };
+    expect(interviewScore({ mode: 'mock', scores })).toBeCloseTo(0.8);
+    expect(interviewScore({ mode: 'solo' })).toBe(SOLO_SHARE);
+
+    // The cdn problem is tagged caching: its interview lifts caching, not queues.
+    const mocked = skills(input({ interviews: [{ problem: 'cdn', mode: 'mock', passed: true, onTime: true, scores }] }));
+    expect(caching(mocked).mastery).toBeCloseTo(caching(base).mastery + INTERVIEW_BONUS * 0.8);
+    expect(caching(mocked).interview).toBeCloseTo(INTERVIEW_BONUS * 0.8);
+    expect(mocked.topics.find((t) => t.topic === 'queues')!.interview).toBeUndefined();
+    // An estimation score of 1 adds nothing to estimation.
+    expect(estimation(mocked).interview).toBeUndefined();
+
+    const solo = skills(input({ interviews: [{ problem: 'cdn', mode: 'solo', passed: false, onTime: false }] }));
+    expect(caching(solo).interview).toBeCloseTo(INTERVIEW_BONUS * SOLO_SHARE);
+    const both = skills(input({ interviews: [{ problem: 'cdn', mode: 'solo', passed: false, onTime: false }, { problem: 'cdn', mode: 'mock', passed: true, onTime: true, scores }] }));
+    expect(caching(both).interview).toBeCloseTo(INTERVIEW_BONUS * 0.8);
+
+    // The verdict's estimation score counts for estimation, whatever the problem.
+    const estimated = skills(input({ interviews: [{ problem: 'chat', mode: 'mock', passed: false, onTime: false, scores: { ...scores, estimation: 5 } }] }));
+    expect(estimation(estimated).interview).toBeCloseTo(INTERVIEW_BONUS);
+  });
+});

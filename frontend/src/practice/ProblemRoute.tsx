@@ -17,7 +17,9 @@ interface ProblemRouteProps {
   /** Shown under the header, e.g. the roadmap's banner. */
   banner?: ReactNode;
   /** Open on the lesson: see ProblemPage. */
-  openLesson?: 'always' | 'unread';
+  openLesson?: 'always';
+  /** The staged flow (Interview prep only); else the plain workspace: see ProblemPage. */
+  staged?: boolean;
 }
 
 /**
@@ -25,7 +27,7 @@ interface ProblemRouteProps {
  * chunk only when a problem is opened, and it fetches only that problem's
  * files (suspending until they are there), so the list stays light.
  */
-export default function ProblemRoute({ id, progress, onProgress, engine = defaultEngine, account, back, banner, openLesson }: ProblemRouteProps) {
+export default function ProblemRoute({ id, progress, onProgress, engine = defaultEngine, account, back, banner, openLesson, staged }: ProblemRouteProps) {
   const problem = use(loadProblem(id));
   if (!problem) {
     return (
@@ -34,5 +36,6 @@ export default function ProblemRoute({ id, progress, onProgress, engine = defaul
       </p>
     );
   }
-  return <ProblemPage key={problem.id} problem={problem} progress={progress} onProgress={onProgress} engine={engine} account={account} back={back} banner={banner} openLesson={openLesson} />;
+  // Keyed on the entry too: going from the list's problem to the roadmap's starts the stages afresh.
+  return <ProblemPage key={`${problem.id}${staged ? ':staged' : ''}`} problem={problem} progress={progress} onProgress={onProgress} engine={engine} account={account} back={back} banner={banner} openLesson={openLesson} staged={staged} />;
 }

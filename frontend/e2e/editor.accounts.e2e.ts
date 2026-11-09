@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { mockSignedIn } from './accounts';
-import { appendCode, codeEditor, expect, test } from './fixtures';
+import { answerDialog, appendCode, codeEditor, expect, test } from './fixtures';
 
 /**
  * Cloud sync of the editor's diagrams, signed in (the build with accounts):
@@ -127,8 +127,8 @@ test('signed in, the diagrams sync with the account, and a conflict keeps both',
   await appendCode(page, '\nlocal "Local" [Service]\n');
   menu = await openMenu(page);
   await expect(menu.getByTestId('cloud-status')).toHaveText('Cloud sync is off — saved in this browser only');
-  page.once('dialog', (dialog) => void dialog.accept());
   await menu.getByRole('menuitem', { name: 'Delete my cloud copies' }).click();
+  await answerDialog(page, 'Delete cloud copies');
   await expect.poll(() => account.docs.size).toBe(0);
   expect(account.puts.length).toBe(puts);
   await expect(files(page)).toContainText('Cloud Diagram');
@@ -202,9 +202,9 @@ test('the account keeps a limited number of diagrams: the rest stay in this brow
   await page.keyboard.press('Escape');
 
   // Moving one to this browser only frees its slot, which the next most recent takes.
-  page.once('dialog', (dialog) => void dialog.accept());
   await files(page).getByRole('button', { name: 'Actions for Cloud Diagram' }).click();
   await page.getByRole('menuitem', { name: 'Move to this browser only' }).click();
+  await answerDialog(page, 'Move to this browser');
   await expect.poll(() => account.docs.get('cloud-1')?.deletedAt).not.toBeNull();
   await expect.poll(() => account.docs.get('d2')?.deletedAt).toBeNull();
   menu = await openMenu(page);

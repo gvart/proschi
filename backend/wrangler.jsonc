@@ -15,24 +15,37 @@
   // OAuth callbacks and the same-origin check would see proschi.app.
   "dev": { "host": "localhost:8787", "upstream_protocol": "http" },
   // The built site: `npm run build` in frontend/ first. Paths outside /api, /auth,
-  // /s (short links, src/shares.ts) and /u (public profile pages, src/profilePage.ts)
-  // are served straight from these files, without running the Worker.
+  // /s (short links, src/shares.ts), /u (public profile pages, src/profilePage.ts)
+  // and /share (live share links, src/documentShares.ts) are served straight
+  // from these files, without running the Worker.
   "assets": {
     "directory": "../frontend/dist",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*", "/auth/*", "/s/*", "/u/*"],
+    "run_worker_first": ["/api/*", "/auth/*", "/s/*", "/u/*", "/share/*"],
     "not_found_handling": "404-page"
   },
   // Hourly: the email reminders of users whose local time it is (src/reminders.ts);
   // in the 03:xx UTC run also delete expired sessions, abandoned game runs,
   // usage counts older than 400 days and old diagram tombstones (src/cron.ts).
   "triggers": { "crons": ["17 * * * *"] },
-  // Cloudflare Email Service: the reminder and confirmation emails (src/email.ts).
+  // Cloudflare Email Service: the reminders, their confirmation and email sign-in's links (src/email.ts).
   // proschi.app must be onboarded to Email Service (backend/README.md "Email reminders").
   "send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["reminders@proschi.app"] }],
   // APP_REDIRECT_URIS: where native apps may be sent back to after signing in
   // (exact URIs, comma-separated; README "Mobile apps"). Empty: app sign-in is off.
-  "vars": { "ENVIRONMENT": "production", "APP_REDIRECT_URIS": "" },
+  // Public values, kept here because a deploy overwrites dashboard variables. Secrets go in `wrangler secret put`.
+  "vars": {
+    "ENVIRONMENT": "production",
+    "APP_REDIRECT_URIS": "",
+    // Polar's live product ids (README "Production checklist"); .dev.vars overrides them with the sandbox ones.
+    "POLAR_PRODUCT_PRO_MONTHLY": "6301dcda-7d92-43bd-b9e6-45878f535a74",
+    "POLAR_PRODUCT_PRO_YEARLY": "965c669d-5b6d-43c3-a322-91a142be6512",
+    "POLAR_PRODUCT_MAX_MONTHLY": "545e7c76-70b4-45b7-8071-141bb5005be6",
+    "POLAR_PRODUCT_MAX_YEARLY": "3846113c-e9c6-4efb-84b7-2f1d61cdbff9",
+    "POLAR_PRODUCT_CREDITS_1000": "2809daaa-b4e9-4d0f-88b7-b0b390de465f",
+    // Turnstile is on only with this and the TURNSTILE_SECRET_KEY secret.
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAF5Qf326lE4XwTI"
+  },
   "d1_databases": [
     {
       "binding": "DB",
@@ -42,6 +55,9 @@
       "migrations_dir": "migrations"
     }
   ],
+  // Feedback screenshots (src/feedback.ts): private, served to the admin only through /api/admin/feedback.
+  // `npx wrangler r2 bucket create proschi-feedback` once (README "Production checklist").
+  "r2_buckets": [{ "binding": "FEEDBACK_BUCKET", "bucket_name": "proschi-feedback" }],
   // Per minute: test runs (they run the simulation), account changes,
   // progress uploads, card review requests, daily challenge attempts, short links, synced diagram
   // requests and reminder confirmation emails per user;
@@ -52,7 +68,6 @@
     { "name": "PROFILE_LIMITER", "namespace_id": "1003", "simple": { "limit": 10, "period": 60 } },
     { "name": "STATS_LIMITER", "namespace_id": "1004", "simple": { "limit": 120, "period": 60 } },
     { "name": "IMPORT_LIMITER", "namespace_id": "1005", "simple": { "limit": 3, "period": 60 } },
-    { "name": "REVIEW_LIMITER", "namespace_id": "1006", "simple": { "limit": 10, "period": 60 } },
     { "name": "CARD_LIMITER", "namespace_id": "1007", "simple": { "limit": 60, "period": 60 } },
     { "name": "CHALLENGE_LIMITER", "namespace_id": "1008", "simple": { "limit": 10, "period": 60 } },
     { "name": "GAME_LIMITER", "namespace_id": "1009", "simple": { "limit": 20, "period": 60 } },
@@ -60,14 +75,39 @@
     { "name": "SHARE_LIMITER", "namespace_id": "1011", "simple": { "limit": 10, "period": 60 } },
     { "name": "DOCS_LIMITER", "namespace_id": "1012", "simple": { "limit": 120, "period": 60 } },
     { "name": "EMAIL_LIMITER", "namespace_id": "1013", "simple": { "limit": 3, "period": 60 } },
-    { "name": "ADMIN_LIMITER", "namespace_id": "1014", "simple": { "limit": 30, "period": 60 } }
+    { "name": "ADMIN_LIMITER", "namespace_id": "1014", "simple": { "limit": 30, "period": 60 } },
+    // AI design reviews per user (src/review.ts); the daily cap is counted in D1.
+    // AI interviews per user (src/interviews.ts): sessions started, turns, verdicts and reads.
+    { "name": "INTERVIEW_START_LIMITER", "namespace_id": "1016", "simple": { "limit": 5, "period": 60 } },
+    { "name": "INTERVIEW_TURN_LIMITER", "namespace_id": "1017", "simple": { "limit": 20, "period": 60 } },
+    { "name": "INTERVIEW_FINISH_LIMITER", "namespace_id": "1018", "simple": { "limit": 5, "period": 60 } },
+    { "name": "INTERVIEW_READ_LIMITER", "namespace_id": "1019", "simple": { "limit": 60, "period": 60 } },
+    // Polar's webhook, per IP, before the signature is checked (src/billing.ts): generous, Polar sends from few addresses and
+    // retries; and at most one logged bad signature per IP a minute, so the log isn't a free write for anyone.
+    { "name": "WEBHOOK_LIMITER", "namespace_id": "1020", "simple": { "limit": 300, "period": 60 } },
+    { "name": "WEBHOOK_LOG_LIMITER", "namespace_id": "1021", "simple": { "limit": 1, "period": 60 } },
+    // Design partner requests per user (src/partner.ts): sessions, turns, reads and change decisions.
+    { "name": "PARTNER_LIMITER", "namespace_id": "1030", "simple": { "limit": 30, "period": 60 } },
+    // Voice input's server speech-to-text per user (src/voice.ts): one request per recorded chunk of up to 15 s.
+    { "name": "VOICE_LIMITER", "namespace_id": "1031", "simple": { "limit": 30, "period": 60 } }
   ],
+  // Workers AI (src/voice.ts): Whisper speech-to-text for voice input where the browser has no speech recognition (P39).
+  "ai": { "binding": "AI" },
   // The deployed version's id and time, for the admin panel's health page (src/admin.ts).
   "version_metadata": { "binding": "CF_VERSION_METADATA" },
   // Secrets (`npx wrangler secret put <NAME>`, the dashboard, or .dev.vars locally):
   // SESSION_SECRET (at least 32 characters), GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET,
   // GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, METRICS_TOKEN (GET /api/metrics/summary; unset: 404),
   // ADMIN_SETUP_TOKEN (registers the admin panel's first passkey; at least 16 characters)
+  // POLAR_ACCESS_TOKEN, POLAR_WEBHOOK_SECRET, POLAR_PRODUCT_PRO_MONTHLY, POLAR_PRODUCT_PRO_YEARLY,
+  // POLAR_PRODUCT_MAX_MONTHLY, POLAR_PRODUCT_MAX_YEARLY, POLAR_PRODUCT_CREDITS_1000, optionally
+  // CREDITS_USD_EUR (src/meter.ts; unset: 0.95) and, against Polar's sandbox, POLAR_SERVER=sandbox (billing, src/billing.ts; unset: 501)
+  // ANTHROPIC_API_KEY (the AI interviewer, src/interviews.ts; unset: 501), and through Cloudflare AI Gateway
+  // AI_GATEWAY_URL and, for an authenticated gateway, AI_GATEWAY_TOKEN
+  // TURNSTILE_SECRET_KEY (email sign-in's human check, src/turnstile.ts; unset: skipped); its public site key
+  // is TURNSTILE_SITE_KEY, a var (dashboard → Turnstile; README "Email sign-in")
+  // ADMIN_EMAIL (where the admin's campaign tests go, src/campaigns.ts; unset: no tests) and
+  // optionally CAMPAIGN_DAILY_CAP (campaign emails a UTC day; unset: 500; README "Campaigns")
 
   "env": {
     // staging.proschi.app: every deploy goes here first (`npm run deploy:staging`).
@@ -88,13 +128,13 @@
           "migrations_dir": "migrations"
         }
       ],
+      "r2_buckets": [{ "binding": "FEEDBACK_BUCKET", "bucket_name": "proschi-feedback-staging" }],
       "ratelimits": [
         { "name": "RUN_LIMITER", "namespace_id": "2001", "simple": { "limit": 30, "period": 60 } },
         { "name": "AUTH_LIMITER", "namespace_id": "2002", "simple": { "limit": 20, "period": 60 } },
         { "name": "PROFILE_LIMITER", "namespace_id": "2003", "simple": { "limit": 10, "period": 60 } },
         { "name": "STATS_LIMITER", "namespace_id": "2004", "simple": { "limit": 120, "period": 60 } },
         { "name": "IMPORT_LIMITER", "namespace_id": "2005", "simple": { "limit": 3, "period": 60 } },
-        { "name": "REVIEW_LIMITER", "namespace_id": "2006", "simple": { "limit": 10, "period": 60 } },
         { "name": "CARD_LIMITER", "namespace_id": "2007", "simple": { "limit": 60, "period": 60 } },
         { "name": "CHALLENGE_LIMITER", "namespace_id": "2008", "simple": { "limit": 10, "period": 60 } },
         { "name": "GAME_LIMITER", "namespace_id": "2009", "simple": { "limit": 20, "period": 60 } },
@@ -102,8 +142,17 @@
         { "name": "SHARE_LIMITER", "namespace_id": "2011", "simple": { "limit": 10, "period": 60 } },
         { "name": "DOCS_LIMITER", "namespace_id": "2012", "simple": { "limit": 120, "period": 60 } },
         { "name": "EMAIL_LIMITER", "namespace_id": "2013", "simple": { "limit": 3, "period": 60 } },
-        { "name": "ADMIN_LIMITER", "namespace_id": "2014", "simple": { "limit": 30, "period": 60 } }
+        { "name": "ADMIN_LIMITER", "namespace_id": "2014", "simple": { "limit": 30, "period": 60 } },
+        { "name": "INTERVIEW_START_LIMITER", "namespace_id": "2016", "simple": { "limit": 5, "period": 60 } },
+        { "name": "INTERVIEW_TURN_LIMITER", "namespace_id": "2017", "simple": { "limit": 20, "period": 60 } },
+        { "name": "INTERVIEW_FINISH_LIMITER", "namespace_id": "2018", "simple": { "limit": 5, "period": 60 } },
+        { "name": "INTERVIEW_READ_LIMITER", "namespace_id": "2019", "simple": { "limit": 60, "period": 60 } },
+        { "name": "WEBHOOK_LIMITER", "namespace_id": "2020", "simple": { "limit": 300, "period": 60 } },
+        { "name": "WEBHOOK_LOG_LIMITER", "namespace_id": "2021", "simple": { "limit": 1, "period": 60 } },
+        { "name": "PARTNER_LIMITER", "namespace_id": "2030", "simple": { "limit": 30, "period": 60 } },
+        { "name": "VOICE_LIMITER", "namespace_id": "2031", "simple": { "limit": 30, "period": 60 } }
       ],
+      "ai": { "binding": "AI" },
       "version_metadata": { "binding": "CF_VERSION_METADATA" }
     }
   }

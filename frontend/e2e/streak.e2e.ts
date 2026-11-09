@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, loadReferenceSolution, sectionLink, setPracticeGoal, test } from './fixtures';
 
 /**
  * The daily goal, streak and celebrations in a build without accounts, where
@@ -52,6 +52,9 @@ async function answer(page: Page, n: number, of: number): Promise<void> {
 }
 
 test.describe('daily streak', () => {
+  // The streak and its nudges show to those building a daily habit.
+  test.beforeEach(({ page }) => setPracticeGoal(page, ['habit']));
+
   test('a daily challenge and a finished Arcade run keep the streak like cards do', async ({ page }) => {
     // Three days ago cards, two days ago an Arcade run, yesterday the daily challenge (kept before its local day was recorded: its UTC day counts).
     const challenge = { day: dayFrom(-1), score: 100, maxScore: 600, correct: 1, perfect: false, totalMs: 1000, results: [{ cardId: 'x', answer: 0, ms: 1000, correct: true, points: 100, bonus: 0 }] };
@@ -64,11 +67,11 @@ test.describe('daily streak', () => {
   test('a session that reaches a milestone celebrates it, and the streak shows after it', async ({ page }) => {
     // A goal of 5 cards, met yesterday and the day before.
     await seed(page, { 'proschi.goal': 5, 'proschi.cards': seededReviews([-2, -1], 5) });
-    // The streak sits at the top of interview prep, on every tab.
+    // The streak sits at the top of every section of the hub.
     await page.goto('practice/#/roadmap');
     await expect(streak(page)).toContainText('2-day streak');
 
-    await page.getByRole('navigation', { name: 'Practice sections' }).getByRole('link', { name: 'Review', exact: true }).click();
+    await (await sectionLink(page, 'Review cards')).click();
     await expect(streak(page)).toContainText('2-day streak');
     await expect(streak(page)).toContainText('0 of 5 cards today, or solve a problem');
     await expect(page.getByRole('radio', { name: '5 cards a day' })).toHaveAttribute('aria-checked', 'true');
@@ -131,11 +134,11 @@ test.describe('daily streak', () => {
 });
 
 test.describe('solve celebration', () => {
+  test.beforeEach(({ page }) => setPracticeGoal(page, ['habit']));
+
   /** Loads the reference solution of the open problem and runs the tests. */
   async function solveWithReference(page: Page): Promise<void> {
-    page.on('dialog', (dialog) => dialog.accept());
-    await page.getByRole('button', { name: 'Show reference solution' }).click();
-    await page.getByRole('button', { name: 'Load into the editor' }).click();
+    await loadReferenceSolution(page);
     await page.getByRole('button', { name: 'Run tests' }).click();
   }
 
@@ -156,7 +159,7 @@ test.describe('solve celebration', () => {
 
     // The solve meets today's goal.
     await page.getByRole('link', { name: /Problems/ }).click();
-    await page.getByRole('navigation', { name: 'Practice sections' }).getByRole('link', { name: 'Roadmap' }).click();
+    await (await sectionLink(page, 'Roadmap')).click();
     await expect(streak(page)).toContainText('1-day streak');
     // A second solve of the same problem is not a first one.
     await page.goto('practice/#/url-shortener');
@@ -169,7 +172,6 @@ test.describe('solve celebration', () => {
     const solved = { status: 'solved' };
     await seed(page, { 'proschi.practice': { 'url-shortener': solved, pastebin: solved, 'shopping-cart': solved } });
     await page.goto('practice/#/roadmap/snowflake-ids');
-    await page.getByRole('button', { name: 'Start the challenge' }).first().click();
     await solveWithReference(page);
     const celebration = page.getByRole('region', { name: 'First solve' });
     await expect(celebration.getByRole('heading', { name: 'Stage complete: Foundations' })).toBeVisible();

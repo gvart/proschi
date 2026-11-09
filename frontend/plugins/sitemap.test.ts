@@ -41,6 +41,13 @@ describe('sitemap', () => {
     expect(urls).toHaveLength(7 + site.pages.length)
   })
 
+  it('lists the pricing page last, only in a build with paid plans', () => {
+    expect(sitemapUrls(site, [])).not.toContain('https://proschi.app/pricing/')
+    const urls = sitemapUrls(site, [], [], [], [], true)
+    expect(urls.at(-1)).toBe('https://proschi.app/pricing/')
+    expect(urls).toHaveLength(4 + site.pages.length)
+  })
+
   it('is a valid urlset', () => {
     const xml = sitemapXml(['https://proschi.app/'])
     expect(xml).toMatch(/^<\?xml version="1.0" encoding="UTF-8"\?>\n<urlset xmlns="http:\/\/www.sitemaps.org\/schemas\/sitemap\/0.9">/)

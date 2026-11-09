@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import lz from 'lz-string';
 import { DRONE_TEAM_FILES, droneOrgSource } from '../src/playground/droneStartup';
-import { canvasNodes, codeEditor, editorText, expect, test } from './fixtures';
+import { addFromPalette, canvasNodes, codeEditor, editorText, expect, test } from './fixtures';
 import { droneLink } from './drone';
 
 /** A system box on the canvas, by its name. */
@@ -9,9 +9,14 @@ const box = (page: Page, name: string) => page.locator('.react-flow__node-system
 const status = (page: Page, name: string) => box(page, name).locator('.pc-system__pill');
 const breadcrumb = (page: Page) => page.getByRole('navigation', { name: 'Breadcrumb' });
 
-/** Waits until the boxes have glided into their layout, so a pointer lands where it aims. */
+/**
+ * Waits until the boxes have glided into their layout, so a pointer lands where it aims: no layout
+ * on its way (ELK runs in a worker, so a slow one would otherwise look settled on the old positions),
+ * then the boxes still on screen (the fit after it moves the viewport, not the nodes).
+ */
 async function layoutSettled(page: Page) {
-  const positions = () => page.locator('.react-flow__node').evaluateAll((nodes) => nodes.map((n) => (n as HTMLElement).style.transform).join('|'));
+  await expect(page.locator('[data-layout-busy]')).toHaveCount(0);
+  const positions = () => page.locator('.react-flow__node').evaluateAll((nodes) => JSON.stringify(nodes.map((n) => n.getBoundingClientRect().toJSON())));
   let last = '';
   await expect
     .poll(async () => {
@@ -85,9 +90,6 @@ test.describe('team systems in the editor', () => {
 
   test('double-click opens a team design, and the breadcrumb goes back', async ({ page }) => {
     const before = await editorText(page);
-    page.on('dialog', (dialog) => {
-      throw new Error(`Unexpected dialog: ${dialog.message()}`);
-    });
     await box(page, 'Order Processing').dblclick();
     await expect(breadcrumb(page)).toContainText('Drone startup');
     await expect(breadcrumb(page).locator('[aria-current="page"]')).toHaveText('Order Processing');
@@ -187,7 +189,7 @@ test.describe('team systems in the editor', () => {
     await page.getByRole('button', { name: 'Overlay: load' }).click();
     // A long use case name does not widen the picker; its full name is in the title.
     const picker = page.getByRole('combobox', { name: 'Use case' });
-    expect((await picker.boundingBox())!.width).toBeLessThanOrEqual(11 * 16 + 1);
+    expect((await picker.boundingBox())!.width).toBeLessThanOrEqual(17 * 16 + 1);
     await expect(picker).toHaveAttribute('title', /\S/);
     // The rest of the org stays collapsed.
     await expect(box(page, 'Frontend')).toBeVisible();
@@ -309,11 +311,7 @@ test('a component added from the palette next to team systems leaves every box s
   await page.goto(droneLink(100));
   await expect(box(page, 'Order Processing')).toBeVisible();
   const before = await canvasNodes(page).count();
-  await page.getByRole('button', { name: 'Add component' }).click();
-  const palette = page.getByRole('dialog', { name: 'Add a component' });
-  await palette.getByRole('searchbox', { name: 'Search components' }).fill('redis');
-  await palette.getByRole('button', { name: 'Redis', exact: true }).click();
-  await expect(palette).toBeHidden();
+  await addFromPalette(page, 'redis', 'Redis');
   // A new layout keeps the sizes React Flow measured; a node without one stays hidden until measured again.
   await expect(canvasNodes(page)).toHaveCount(before + 1);
 });

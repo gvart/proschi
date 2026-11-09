@@ -57,7 +57,7 @@ describe('profile models', () => {
     const answer: AchievementsAnswer = {
       achievements: [status('first-card', true, 1, 1), status('reviews-100', false, 12, 100)],
       skills: { readiness: 0.42, topics: [{ topic: 'caching', mastery: 0.5 }], weakest: ['caching'] },
-      stats: { reviews: 12, mastered: 1, longestStreak: 3, estimateStreak: 0, solved: 1 },
+      stats: { reviews: 12, mastered: 1, longestStreak: 3, estimateStreak: 0, solved: 1, interviews: 0, soloInterviews: 0 },
     };
     const model = ownProfile({
       displayName: 'Ada',

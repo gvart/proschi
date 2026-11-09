@@ -2,7 +2,7 @@
 // `siteHref` prefixes them with the page's way back to it ('./' or '../'),
 // so the links work under any sub-path, like the rest of the build.
 
-export type SitePage = 'home' | 'editor' | 'practice' | 'docs' | 'blog';
+export type SitePage = 'home' | 'editor' | 'practice' | 'docs' | 'blog' | 'pricing';
 
 export interface SiteLink {
   label: string;
@@ -12,6 +12,8 @@ export interface SiteLink {
   page?: SitePage;
   /** Marked out in the header, for what the site wants found first. */
   accent?: boolean;
+  /** Opens the feedback dialog (src/feedback/links.ts); `href` is the fallback. */
+  feedback?: boolean;
 }
 
 export const GITHUB_URL = 'https://github.com/gvart/proschi';
@@ -20,7 +22,7 @@ export const CONTRIBUTING_URL = `${GITHUB_URL}/blob/main/CONTRIBUTING.md`;
 export const CONTRIBUTE_PROBLEM_URL = `${CONTRIBUTING_URL}#adding-a-new-problem`;
 /** A new issue from .github/ISSUE_TEMPLATE/problem-idea.md, for an idea without the code. */
 export const SUGGEST_PROBLEM_URL = `${GITHUB_URL}/issues/new?template=problem-idea.md`;
-/** The practice hub: the Today panel and the problem list, with the hub's tabs (src/practice/hub/). */
+/** The practice hub: the problem list, with the hub's sections (src/practice/hub/). */
 export const PRACTICE_HREF = 'practice/';
 /** The interview prep roadmap: a tab of the practice hub (src/practice/roadmap.ts). */
 export const ROADMAP_HREF = 'practice/#/roadmap';
@@ -38,10 +40,26 @@ export const ARCADE_HREF = 'practice/#/arcade';
  * one hub (the problems, the roadmap, daily review, the challenge, the Arcade
  * and progress are its tabs), marked current on every one of its addresses.
  */
+/**
+ * Whether the build has paid plans (VITE_BILLING=true), so the pricing page
+ * exists (vite.config.ts). Also read from the environment, for the header
+ * and footer that plugins/siteShell.ts renders at build time in Node.
+ */
+export const PRICING_ON =
+  import.meta.env?.VITE_BILLING === 'true' || (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.VITE_BILLING === 'true';
+
+/** Whether the build has accounts (VITE_ACCOUNTS=true), so feedback can be sent; read like PRICING_ON. */
+export const ACCOUNTS_ON =
+  import.meta.env?.VITE_ACCOUNTS === 'true' || (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.VITE_ACCOUNTS === 'true';
+
+/** The pricing page (src/pricing/), linked only in builds that have it. */
+export const PRICING_LINK: SiteLink = { label: 'Pricing', href: 'pricing/', page: 'pricing' };
+
 export const NAV: SiteLink[] = [
   { label: 'Docs', href: 'docs/', page: 'docs' },
   { label: 'Practice', href: PRACTICE_HREF, page: 'practice', accent: true },
   { label: 'Blog', href: 'blog/', page: 'blog' },
+  ...(PRICING_ON ? [PRICING_LINK] : []),
   { label: 'GitHub', href: GITHUB_URL },
 ];
 
@@ -74,9 +92,13 @@ export const FOOTER_COLUMNS: { title: string; links: SiteLink[] }[] = [
     links: [
       { label: 'GitHub', href: GITHUB_URL },
       { label: 'Blog', href: 'blog/' },
+      ...(PRICING_ON ? [PRICING_LINK] : []),
       { label: 'Contribute', href: CONTRIBUTING_URL },
       { label: 'Issues', href: `${GITHUB_URL}/issues` },
+      // Opens the dialog; without JavaScript, Settings, which has Contact us.
+      ...(ACCOUNTS_ON ? [{ label: 'Send feedback', href: 'practice/#/me', feedback: true }] : []),
       { label: 'Privacy', href: 'docs/privacy/' },
+      { label: 'Terms', href: 'docs/terms/' },
       { label: 'MIT license', href: `${GITHUB_URL}/blob/main/LICENSE` },
     ],
   },

@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { AlertCircle, ClipboardCheck } from 'lucide-react';
+import { AlertCircle, ClipboardCheck, MessagesSquare } from 'lucide-react';
 import type { SourceLoc } from '../dsl';
 import { outlineButton } from '../components/Playground/ui';
 import { REVIEW_SEVERITIES, type DesignReview, type DesignReviewIssue, type ReviewSeverity } from './contract';
 import { buildReviewRequest, type ReviewInput } from './request';
-import { defaultReviewer, ReviewUnavailableError, type DesignReviewer } from './reviewer';
+import { ReviewUnavailableError, ruleReviewer, type DesignReviewer } from './reviewer';
 
 interface ReviewPanelProps {
   /** The current source: a review of an older one is marked as such. */
@@ -13,7 +13,10 @@ interface ReviewPanelProps {
   input: () => ReviewInput;
   /** Jumps to a node the review names. */
   onSelect?: (loc: SourceLoc) => void;
+  /** A reviewer of the caller's (tests); the rule reviewer by default. */
   reviewer?: DesignReviewer;
+  /** Opens Design partner (src/partner), where there is one: offered under the review. */
+  onOpenPartner?: () => void;
 }
 
 type State =
@@ -35,38 +38,37 @@ const SEVERITY_TITLE: Record<ReviewSeverity, string> = { critical: 'Critical', m
 const SEVERITY_ORDER = [...REVIEW_SEVERITIES].reverse();
 
 /**
- * "Review my design": a review of the design's trade-offs, next to the
- * tests. By default the rule reviewer (./rules.ts) writes it from the
- * simulation and the test results; builds with VITE_AI_REVIEW=true ask an
- * LLM first (./reviewer.ts).
+ * "Review my design": the automatic review, next to the tests, written by
+ * the rule reviewer (./rules.ts) from the simulation and the test results.
+ * Free, instant and on every build. Talking a design through, with changes
+ * to accept, is Design partner's (src/partner), linked from here.
  */
-export default function ReviewPanel({ source, input, onSelect, reviewer = defaultReviewer }: ReviewPanelProps) {
+export default function ReviewPanel({ source, input, onSelect, reviewer = ruleReviewer, onOpenPartner }: ReviewPanelProps) {
   const [state, setState] = useState<State>({ status: 'idle' });
 
   const review = async () => {
     setState({ status: 'loading' });
+    const reviewInput = input();
+    const request = buildReviewRequest(reviewInput);
+    const locs = new Map(reviewInput.parsed.diagram.nodes.filter((n) => n.loc.file === undefined).map((n) => [n.id, n.loc]));
     try {
-      const reviewInput = input();
-      const result = await reviewer.review(buildReviewRequest(reviewInput));
-      const locs = new Map(reviewInput.parsed.diagram.nodes.filter((n) => n.loc.file === undefined).map((n) => [n.id, n.loc]));
-      setState({ status: 'done', review: result, source: reviewInput.source, locs });
+      setState({ status: 'done', review: await reviewer.review(request), source: reviewInput.source, locs });
     } catch (e) {
       if (e instanceof ReviewUnavailableError) setState({ status: 'unavailable' });
       else setState({ status: 'error', message: e instanceof Error ? e.message : String(e) });
     }
   };
 
+  const loading = state.status === 'loading';
   return (
-    <div className="px-3 py-3 space-y-3 text-sm" data-testid="design-review">
-      <p className="text-ink/80">
-        {reviewer.ai
-          ? 'An AI reviewer reads your design, its test results and the simulation’s numbers, and comments on the trade-offs.'
-          : 'An automatic review, based on the simulation and the tests.'}
-      </p>
-      <button onClick={() => void review()} disabled={state.status === 'loading'} className={`${outlineButton} disabled:opacity-50`}>
-        <ClipboardCheck size={14} />
-        {state.status === 'loading' ? 'Reviewing…' : 'Review my design'}
-      </button>
+    <div className="px-3 py-3 space-y-3 text-sm" data-testid="design-review" aria-busy={loading}>
+      <p className="text-ink/80">An automatic review, based on the simulation and the tests.</p>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <button onClick={() => void review()} disabled={loading} className={`${outlineButton} disabled:opacity-50`}>
+          <ClipboardCheck size={14} />
+          {loading ? 'Reviewing…' : 'Review my design'}
+        </button>
+      </div>
 
       {state.status === 'unavailable' && (
         <div role="status" className="rounded-sm border-bw-1 border-ink bg-pop-yellow/25 px-3 py-2 text-ink">
@@ -80,13 +82,22 @@ export default function ReviewPanel({ source, input, onSelect, reviewer = defaul
         </p>
       )}
       {state.status === 'done' && <Review review={state.review} stale={state.source !== source} locs={state.locs} onSelect={onSelect} />}
+      {onOpenPartner && (
+        <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted" data-testid="review-partner-link">
+          Want to talk it through, with changes you can accept?
+          <button type="button" onClick={onOpenPartner} className="inline-flex items-center gap-1 font-semibold text-ink underline decoration-ink/40 underline-offset-2 hover:decoration-ink">
+            <MessagesSquare size={12} aria-hidden="true" />
+            Open Design partner
+          </button>
+        </p>
+      )}
     </div>
   );
 }
 
 function Review({ review, stale, locs, onSelect }: { review: DesignReview; stale: boolean; locs: Map<string, SourceLoc>; onSelect?: (loc: SourceLoc) => void }) {
   return (
-    <div className="space-y-3" data-testid="review-result">
+    <div className="space-y-3" data-testid="review-result" data-by={review.by ?? 'rules'}>
       {stale && <p className="text-xs text-muted">Of an earlier version of your design.</p>}
       <p className="text-ink">{review.summary}</p>
       {SEVERITY_ORDER.map((severity) => {
@@ -114,7 +125,7 @@ function Review({ review, stale, locs, onSelect }: { review: DesignReview; stale
         </section>
       )}
       <p className="text-xs text-muted">
-        {review.by === 'rules' ? 'Every finding comes from the simulation and the tests; the tests are the verdict.' : 'AI feedback can be wrong; the tests are the verdict.'}
+        Every finding comes from the simulation and the tests; the tests are the verdict.
       </p>
     </div>
   );

@@ -8,7 +8,7 @@ describe('practice level', () => {
 
   it('adds 100 per solve, 20 per mastered card and 10 per day of the longest streak', () => {
     const l = levelOf({ solved: 2, mastered: 5, longestStreak: 3 });
-    expect(l.parts).toEqual({ solves: 200, mastered: 100, streak: 30 });
+    expect(l.parts).toEqual({ solves: 200, mastered: 100, streak: 30, interviews: 0 });
     expect(l.xp).toBe(330);
     expect(l.level).toBe(3);
     expect(l.floor).toBe(200);
@@ -21,6 +21,13 @@ describe('practice level', () => {
     expect(levelOf({ solved: 0, mastered: 0, longestStreak: 5 }).level).toBe(2);
     expect(levelOf({ solved: 8, mastered: 0, longestStreak: 0 }).level).toBe(5);
     expect(levelOf({ solved: 7, mastered: 4, longestStreak: 1 }).level).toBe(4);
+  });
+
+  it('adds 50 per problem interviewed with the interviewer and 20 on your own', () => {
+    const l = levelOf({ solved: 0, mastered: 0, longestStreak: 0, interviews: 2, soloInterviews: 1 });
+    expect(l.parts.interviews).toBe(120);
+    expect(l.xp).toBe(120);
+    expect(l.level).toBe(2);
   });
 
   it('ignores negative or broken counts', () => {

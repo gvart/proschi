@@ -7,9 +7,10 @@ runs entirely in the browser; documents and practice progress live in
 sign-in and global stats from the API on the same origin (backend/README.md).
 The practice page's "Review" view and the editor's Analysis view review a
 design with rules over the simulation and the test results (`src/review/`,
-`rules.ts`), on the page and at once. Built with `VITE_AI_REVIEW=true`, they
-ask `POST /api/review` (an LLM, once it is wired in) first, and fall back to
-the rules while it answers 501.
+`rules.ts`), on the page and at once. Built with paid plans
+(`VITE_BILLING=true`), they give Pro accounts an AI review from
+`POST /api/review` instead (20 a day), and fall back to the rules when it
+is off, busy or used up.
 
 | Page | Entry | Source |
 |---|---|---|

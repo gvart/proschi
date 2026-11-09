@@ -216,8 +216,8 @@ signed out there is no streak. The streak badges count the same streak.
 
 ### Daily challenge
 
-The practice page's daily challenge (`practice/#/challenge`, the Challenge
-tab of the practice hub) is the same five cards for everyone each day. The day is the **UTC date**, so it starts at
+The practice page's daily challenge (`practice/#/challenge`, in the practice
+page's More practice menu) is the same five cards for everyone each day. The day is the **UTC date**, so it starts at
 00:00 UTC everywhere. The rules are `frontend/src/learn/challenge.ts`, which
 the Worker runs too:
 
@@ -297,7 +297,11 @@ of the site without accounts computes the same from the browser's data.
 - for `estimation` only, the share of the last 20 estimate cards answered
   right (0.30).
 
-The weights of the parts that apply are scaled to add up to 1. "Interview
+The weights of the parts that apply are scaled to add up to 1. A finished
+mock interview adds a bonus of up to 5% to the topics its problem relates
+to: with the interviewer by the verdict's mean score, its estimation score
+also counting for `estimation`; on your own, half of it. The best interview
+counts. "Interview
 ready" is the topics' mastery weighted by their number of cards, and the
 three weakest topics link to `#/review/<topic>`.
 
@@ -328,6 +332,9 @@ in `ICONS` (`frontend/src/learn/achievements.ts`). The rule kinds:
 | `lessons` | `min`, `stage?` | that many problem lessons read, of that roadmap stage |
 | `stage-lessons` | — | every lesson of some roadmap stage read |
 | `all-lessons` | — | every problem lesson read |
+| `interviews` | `min`, `difficulty?` | mock interviews finished (with the interviewer or on your own) on that many problems, of that difficulty |
+| `interview-passed` | `min` | that many problems with a passing verdict from the interviewer |
+| `interview-on-time` | `min` | that many problems with an interview finished in time: with a pass, or on your own with every check passing |
 
 An id never changes and is never reused: earned badges are stored by it, in
 the `achievements` table. A badge once earned stays earned. Like the cards'

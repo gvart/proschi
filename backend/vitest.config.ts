@@ -8,6 +8,8 @@ export default defineConfig(async () => {
     plugins: [
       cloudflareTest({
         wrangler: { configPath: './wrangler.jsonc' },
+        // Never reach Cloudflare: CI has no token, and tests stub env.AI where they need it.
+        remoteBindings: false,
         miniflare: {
           bindings: {
             TEST_MIGRATIONS: migrations,
@@ -19,6 +21,26 @@ export default defineConfig(async () => {
             APP_REDIRECT_URIS: 'proschi://auth, https://app.proschi.test/callback?x=1',
             METRICS_TOKEN: 'test-metrics-token-0123456789',
             ADMIN_SETUP_TOKEN: 'test-admin-setup-token-0123456789',
+            POLAR_ACCESS_TOKEN: 'polar-test-token',
+            POLAR_WEBHOOK_SECRET: 'polar_whs_test-secret',
+            POLAR_SERVER: 'sandbox',
+            POLAR_PRODUCT_PRO_MONTHLY: 'prod-pro-monthly',
+            POLAR_PRODUCT_PRO_YEARLY: 'prod-pro-yearly',
+            POLAR_PRODUCT_MAX_MONTHLY: 'prod-max-monthly',
+            POLAR_PRODUCT_MAX_YEARLY: 'prod-max-yearly',
+            POLAR_PRODUCT_CREDITS_1000: 'prod-credits-1000',
+            // Never a developer's .dev.vars, which wrangler reads: the AI is off unless a test sets a key, with fetch mocked.
+            ANTHROPIC_API_KEY: '',
+            AI_GATEWAY_URL: '',
+            AI_GATEWAY_TOKEN: '',
+            // Turnstile off unless a test sets the secret (with Siteverify mocked).
+            TURNSTILE_SITE_KEY: '',
+            TURNSTILE_SECRET_KEY: '',
+            // The Cloudflare usage page is off unless a test sets them (with the API mocked).
+            CF_API_TOKEN: '',
+            CF_ACCOUNT_ID: '',
+            CF_ZONE_ID: '',
+            CF_PLAN: '',
           },
         },
       }),

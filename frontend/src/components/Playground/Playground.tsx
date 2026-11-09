@@ -11,6 +11,8 @@ import ReactFlow, {
 } from 'reactflow';
 import type { Edge, EdgeChange, Node, NodeChange } from 'reactflow';
 import 'reactflow/dist/style.css';
+import { confirm, copyFallback, notify, prompt } from '../../design/dialogs';
+import { useToastClearance } from '../../design/toastClearance';
 import { Group, Panel as SplitPanel, Separator, type Layout } from 'react-resizable-panels';
 import {
   AlignLeft,
@@ -30,11 +32,11 @@ import {
   LogIn,
   List,
   Play,
+  Route,
   Trash2,
   Upload,
   Code2,
   Pencil,
-  Plus,
   Gauge,
   Network,
   ArchiveRestore,
@@ -79,9 +81,11 @@ import { filesResolver, importableFiles, teamFileOf, usedImports, type TeamFile 
 import { LONG_LINK_MESSAGE, LONG_LINK_SHORTEN_MESSAGE, decodeShareLink, encodeShareHash, isLongLink, readShareLink, shareUrl, type PlaybackTarget } from '../../playground/share';
 import { applyMerge, backupFileName, buildBackup, mergeSummary, planMerge, readBackup } from '../../playground/backup';
 import { loadProgress, mergeProgress, saveProgress } from '../../practice/progress';
-import { addConnection, addNode, clearPositions, removeConnections, removeNode, renameNode, setNodePosition } from '../../dsl/edit';
+import { addConnection, addNode, clearPositions, removeConnections, removeNode, renameNode, setNodePosition, uniqueId } from '../../dsl/edit';
 import type { Diagram } from '../../dsl/types';
-import Palette, { TECH_DRAG_TYPE } from '../Diagram/Palette';
+import { TECH_DRAG_TYPE } from '../Diagram/Palette';
+import { CanvasMenu, ConnectHint, EmptyCanvas, PaletteDock, PaletteToggle, type CanvasMenuState } from '../Diagram/CanvasEditing';
+import { historyKey, useConnectHint, usePaletteOpen } from '../Diagram/canvasEditState';
 import Inspector from '../Diagram/Inspector';
 import FlowParticles from '../Overlay/FlowParticles';
 import type { SimOverlay } from '../../sim/overlay';
@@ -101,6 +105,11 @@ import Menu, { MenuItem } from './Menu';
 import { downloadBlob, downloadText, exportImage, fileNameFor, renderPreviewPng } from './exportDiagram';
 import { MAX_PREVIEW_BYTES, createShare, embedSnippet, embedUrl, fetchShare, shareIdFromSearch } from '../../services/shares';
 import { ApiError } from '../../services/api';
+import { FeaturesContext, showsUpgrade, useFeatures } from '../featureState';
+import PartnerButton from '../../partner/PartnerButton';
+import { usePartnerShortcut } from '../../partner/shortcut';
+import PartnerDock from '../../partner/PartnerDock';
+import { useIsPhone } from '../../onboarding/layout';
 import { useAccount } from '../../practice/useAccount';
 import AccountMenu from '../../practice/AccountMenu';
 import { track } from '../../services/metrics';
@@ -119,8 +128,9 @@ import { useCloudFiles } from './useCloudFiles';
 import { withCloudErrors } from '../../playground/cloudRefs';
 import type { VersionInfo } from '../../playground/versions';
 import type { VersionMode } from './VersionViewer';
-import { eyebrow, field, iconButton, outlineButton, primaryButton, subBar, toolButton } from './ui';
+import { eyebrow, iconButton, outlineButton, primaryButton, subBar, toolButton } from './ui';
 import Tabs from '../../design/Tabs';
+import Select from '../../design/Select';
 import HelpMenu from '../../onboarding/HelpMenu';
 import Header from '../../design/Header';
 import { markSeen, startMode, type StartMode } from '../../onboarding/seen';
@@ -128,15 +138,18 @@ import type { CoverBand } from '../../onboarding/Tour';
 import type { FitInset } from '../Diagram/useFitOnChange';
 import { PlaybackMiniMap, UseCasePlayback } from '../UseCases/UseCasePlayback';
 import { PLAYBACK_EDGE_TYPES, type PlaybackView } from '../UseCases/playbackView';
+import { useFeedbackDiagram } from '../../feedback/diagram';
 
 // Panes that are not visible at start load on first use.
 const HldView = lazy(() => import('../Hld/HldView'));
 const ResultsPanel = lazy(() => import('../Analysis/ResultsPanel'));
 const ReviewPanel = lazy(() => import('../../review/ReviewPanel'));
+const PartnerPanel = lazy(() => import('../../partner/PartnerPanel'));
 const ExamplesGallery = lazy(() => import('./ExamplesGallery'));
 const ShortLinksDialog = lazy(() => import('./ShortLinksDialog'));
 const ImportDialog = lazy(() => import('./ImportDialog'));
 const VersionsDialog = lazy(() => import('./VersionsDialog'));
+const ShareLinkDialog = lazy(() => import('./ShareLinkDialog'));
 const VersionViewer = lazy(() => import('./VersionViewer'));
 // First-run help costs nothing until it is shown.
 const EditorTour = lazy(() => import('../../onboarding/EditorTour'));
@@ -148,8 +161,9 @@ const LEGACY_SOURCE_KEY = 'proschi.playground.source';
 /** The splitter's position between the code and diagram panes. */
 const SPLIT_KEY = 'proschi.playground.split';
 const PARSE_DELAY_MS = 150;
-/** Whether the diagrams sidebar is open, on wider screens. */
+/** Whether the diagrams sidebar is pinned open, on wider screens; until it is set, from this width on. */
 const FILES_KEY = 'proschi.playground.files';
+const FILES_PINNED_FROM = 1440;
 const MOD_KEY = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl';
 const VIEW_LABEL: Record<View, string> = { diagram: 'Diagram', results: 'Results', hld: 'HLD' };
 
@@ -197,6 +211,8 @@ function initialTourMode(): StartMode {
   return startMode('editor', { deepLink: isDeepLink(), returning: isReturning() });
 }
 
+const EDITOR_CONTEXT = { kind: 'editor' } as const;
+
 /** The pane a phone opens on: the code on a first visit, where it all starts; the diagram for a link or a returning visitor. */
 function initialMobilePane(): 'code' | 'diagram' {
   return !isDeepLink() && !isReturning() ? 'code' : 'diagram';
@@ -215,6 +231,7 @@ export default function Playground() {
   const [linkCloud, setLinkCloud] = useState(() => ({ docId: docStore.get().currentId, files: cloudImports(decodeShareLink(window.location.hash)?.imports) }));
   const linkCloudFiles = linkCloud.docId === current.id ? linkCloud.files : {};
   const source = current.source;
+  useFeedbackDiagram(source);
   const rootPath = fileNameOf(current);
   const setSource = useCallback((next: string) => setDocState((s) => updateCurrent(s, next)), [setDocState]);
   /** The reader's own edit in the code pane (not a value set from outside, which the editor echoes back). */
@@ -242,8 +259,12 @@ export default function Playground() {
   const [initialStep, setInitialStep] = useState(linkPlayback ? linkPlayback.step - 1 : undefined);
   const [playStep, setPlayStep] = useState(0);
   const [showExamples, setShowExamples] = useState(false);
-  /** The diagrams sidebar on wider screens (remembered); phones open it as a drawer instead. */
-  const [filesOpen, setFilesOpen] = useState(() => loadJson<boolean>(FILES_KEY, true));
+  /**
+   * The diagrams sidebar on wider screens: pinned beside the code (remembered; by default from 1440px),
+   * else a rail that opens it over the panes ("peek"). Phones open it as a drawer instead.
+   */
+  const [filesPinned, setFilesPinned] = useState(() => loadJson<boolean | null>(FILES_KEY, null) ?? window.innerWidth >= FILES_PINNED_FROM);
+  const [filesPeek, setFilesPeek] = useState(false);
   const [drawer, setDrawer] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
   const [showShortLinks, setShowShortLinks] = useState(false);
@@ -252,6 +273,7 @@ export default function Playground() {
   const [shortening, setShortening] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showVersions, setShowVersions] = useState(false);
+  const [showShareLink, setShowShareLink] = useState(false);
   /** A saved version open read-only, or two compared, over the editor. */
   const [versionView, setVersionView] = useState<{ mode: VersionMode; versions: VersionInfo[] } | null>(null);
   /** The code and diagram panes' sizes, as last set with the splitter. */
@@ -343,7 +365,18 @@ export default function Playground() {
   const playback: PlaybackTarget | undefined =
     playing && useCase ? { useCase: useCase.id, ...(hasScenarios && scenario ? { scenario: scenario.id } : {}), step: playStep + 1 } : undefined;
   const playbackKey = playback ? `${playback.useCase}/${playback.scenario ?? ''}#${playback.step}` : '';
-  const useCaseGroups = useMemo(() => groupByEndpoint(shown.useCases), [shown]);
+  const useCaseOptions = useMemo(
+    () =>
+      groupByEndpoint(shown.useCases).flatMap((group) =>
+        group.useCases.map((u) => ({
+          value: u.id,
+          label: u.name,
+          group: group.label || undefined,
+          description: u.scenarios.length > 1 ? `${u.scenarios.length} scenarios` : undefined,
+        })),
+      ),
+    [shown],
+  );
   // The player restarts when this changes, so each scenario starts at its first step.
   const playedUseCase = useMemo(
     () => (useCase && scenario ? { id: `${useCase.id}/${scenario.id}`, name: useCase.name, steps: scenario.steps, condition: scenario.condition } : undefined),
@@ -444,7 +477,7 @@ export default function Playground() {
       });
     });
   }, []);
-  const layoutSettled = useAutoLayout(shown, showLaidOut);
+  const { settled: layoutSettled, busy: layoutBusy } = useAutoLayout(shown, showLaidOut);
 
   const stopPlaying = () => {
     setPlaying(false);
@@ -458,16 +491,21 @@ export default function Playground() {
     setSelectedScenarioId(undefined);
   };
 
-  const deleteDoc = (id: string, title: string) => {
-    if (window.confirm(`Delete "${title}"? This cannot be undone.`)) openDoc((s) => removeDoc(s, id));
+  const deleteDoc = async (id: string, title: string) => {
+    if (await confirm({ title: `Delete "${title}"?`, body: 'This cannot be undone.', confirmLabel: 'Delete', tone: 'danger' })) openDoc((s) => removeDoc(s, id));
   };
 
+  const pinFiles = (pinned: boolean) => {
+    setFilesPinned(pinned);
+    setFilesPeek(false);
+    saveJson(FILES_KEY, pinned);
+  };
   const toggleFiles = () => {
     if (!window.matchMedia('(min-width: 768px)').matches) return setDrawer((d) => !d);
-    setFilesOpen((open) => {
-      saveJson(FILES_KEY, !open);
-      return !open;
-    });
+    if (filesDocked) pinFiles(false);
+    // While the Design partner is open the sidebar stays folded, so the diagram keeps its width.
+    else if (partnerOpen) setFilesPeek((p) => !p);
+    else pinFiles(true);
   };
 
   /** Moves or renames files, then warns about the diagrams whose imports stopped finding a file. */
@@ -485,7 +523,10 @@ export default function Playground() {
   // Ctrl/Cmd+P: go to a diagram (instead of printing the page); Escape closes the phone drawer.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setDrawer(false);
+      if (e.key === 'Escape') {
+        setDrawer(false);
+        setFilesPeek(false);
+      }
       if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'p') {
         e.preventDefault();
         setQuickOpen(true);
@@ -499,10 +540,12 @@ export default function Playground() {
     open: (id) => {
       if (id !== docState.currentId) openDoc((s) => selectDoc(s, id));
       setDrawer(false);
+      setFilesPeek(false);
     },
     create: (folder) => {
       openDoc((s) => addDocIn(s, BLANK_SOURCE, folder));
       setDrawer(false);
+      setFilesPeek(false);
     },
     renameFile: (id, base) =>
       changeFiles((s) => {
@@ -519,9 +562,9 @@ export default function Playground() {
       if (doc) deleteDoc(id, titleOf(doc.source));
     },
     renameFolder: (from, to) => changeFiles((s) => renameFolder(s, from, to)),
-    removeFolder: (folder) => {
+    removeFolder: async (folder) => {
       const n = docsInFolder(docStore.get().docs, folder).length;
-      if (window.confirm(`Delete the folder "${folder}" and the ${n} ${n === 1 ? 'diagram' : 'diagrams'} in it? This cannot be undone.`)) openDoc((s) => removeFolder(s, folder));
+      if (await confirm({ title: `Delete the folder "${folder}" and the ${n} ${n === 1 ? 'diagram' : 'diagrams'} in it?`, body: 'This cannot be undone.', confirmLabel: 'Delete folder', tone: 'danger' })) openDoc((s) => removeFolder(s, folder));
     },
   };
 
@@ -532,6 +575,35 @@ export default function Playground() {
   };
 
   const signedIn = account.state.status === 'signed-in';
+  const features = useFeatures(account.state);
+  const shareLinks = features('share_links');
+
+  // Design partner (src/partner): on builds with accounts, beside the panes or as a sheet on phones.
+  const hasPartner = account.state.status !== 'off';
+  const [partnerOpen, setPartnerOpen] = useState(false);
+  const phone = useIsPhone();
+  const togglePartner = useCallback(() => setPartnerOpen((o) => !o), []);
+  // The pinned sidebar folds into its rail while the partner panel is open (not remembered), so the diagram keeps its width.
+  const filesDocked = filesPinned && !(hasPartner && partnerOpen);
+  const closePartner = useCallback(() => setPartnerOpen(false), []);
+  usePartnerShortcut(togglePartner, hasPartner);
+  const sourceNow = useRef(source);
+  const importsNow = useRef(imports);
+  useEffect(() => {
+    sourceNow.current = source;
+    importsNow.current = imports;
+  });
+  const partnerSource = useCallback(() => sourceNow.current, []);
+  const partnerFiles = useCallback(() => Object.entries(importsNow.current ?? {}).map(([name, text]) => ({ name, source: text })), []);
+  const applyPartner = useCallback(
+    (next: string) => {
+      if (editorRef.current) editorRef.current.replace(next);
+      else setSource(next);
+    },
+    [setSource],
+  );
+  const undoPartner = useCallback(() => editorRef.current?.undo() ?? false, []);
+  const partnerDiagram = useCallback((s: string) => parse(s, { path: rootPath, resolve: filesResolver(importsNow.current ?? {}, rootPath) }).diagram, [rootPath]);
 
   const copyText = async (text: string, prompt: string) => {
     try {
@@ -539,7 +611,7 @@ export default function Playground() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      window.prompt(prompt, text);
+      void copyFallback(text, { title: prompt.replace(/:$/, '') });
     }
   };
 
@@ -611,12 +683,14 @@ export default function Playground() {
     try {
       const backup = readBackup(new Uint8Array(await file.arrayBuffer()));
       const plan = planMerge(docState, backup.docs);
-      let replaced = 0;
-      const next = applyMerge(docState, plan, ({ existing }) => {
-        const yes = window.confirm(`"${titleOf(existing.source)}" (${fileNameOf(existing)}) differs from the copy in the backup. Replace it with the backup's version?`);
-        if (yes) replaced++;
-        return yes;
-      });
+      const agreed = new Set<(typeof plan.conflicts)[number]>();
+      for (const conflict of plan.conflicts) {
+        const { existing } = conflict;
+        const yes = await confirm({ title: `Replace "${titleOf(existing.source)}" with the backup's version?`, body: `${fileNameOf(existing)} differs from the copy in the backup.`, confirmLabel: 'Replace' });
+        if (yes) agreed.add(conflict);
+      }
+      const replaced = agreed.size;
+      const next = applyMerge(docState, plan, (conflict) => agreed.has(conflict));
       openDoc(() => next);
       saveProgress(mergeProgress(loadProgress(), backup.progress));
       setBanner({ message: mergeSummary(plan, replaced, Object.keys(backup.progress).length) });
@@ -652,7 +726,7 @@ export default function Playground() {
     for (const id of nodeIds) {
       const result = removeNode(next, id);
       if (result.error !== undefined) {
-        window.alert(result.error);
+        setNotice(result.error);
         return;
       }
       next = result.source;
@@ -692,11 +766,19 @@ export default function Playground() {
     else editSource((src) => renameNode(src, id, name));
   };
 
-  /** Adds a catalog component; one dropped on the canvas is pinned where it fell, a clicked one is laid out. */
+  /** Adds a catalog component and returns its id; one dropped on the canvas is pinned where it fell, a clicked one is laid out. */
   const addFromCanvas = (tech: string, position?: { x: number; y: number }) => {
-    if (systems.focusFile) return setNotice(`This is the design in ${systems.focusFile}; add components there.`);
-    editSource((src) => addNode(src, { name: tech, tech, position }).source);
+    if (systems.focusFile) {
+      setNotice(`This is the design in ${systems.focusFile}; add components there.`);
+      return undefined;
+    }
+    // The id is picked here, against imported nodes too, so the canvas can select the new node.
+    const id = uniqueId(source, tech, importedNodes.keys());
+    editSource((src) => addNode(src, { id, name: tech, tech, position }).source);
+    return id;
   };
+  const undoCanvas = useCallback(() => void editorRef.current?.undo(), []);
+  const redoCanvas = useCallback(() => void editorRef.current?.redo(), []);
 
   const connectNodes = (from: string, to: string) => {
     if (systems.focusFile || importedNodes.has(from) || importedNodes.has(to)) return setNotice(`Declared in ${systems.focusFile ?? importedNodes.get(from) ?? importedNodes.get(to)}; connect it there.`);
@@ -760,6 +842,19 @@ export default function Playground() {
     if (state.kind === 'offline') return { message: 'Offline: versions are in your account, so they need a connection.', actions: [] };
     return null;
   })();
+  /** Why this diagram cannot have a live share link yet (it is not in the account), with what to do; null when it can. */
+  const shareHint = ((): { message: string; actions: { label: string; run: () => void }[] } | null => {
+    if (cloud.state.kind === 'off' || !cloud.enabled) return { message: 'A share link shows the diagram kept in your account, and cloud sync is off in this browser.', actions: [{ label: 'Turn on cloud sync', run: () => cloud.setEnabled(true) }] };
+    if (cloud.local.has(current.id)) {
+      return {
+        message: 'This diagram stays in this browser only. Keep it in your account to share a link to it.',
+        actions: cloud.canKeep ? [{ label: 'Keep in cloud', run: () => cloud.keepInCloud(current.id) }] : [],
+      };
+    }
+    if (cloud.state.kind === 'loading') return { message: 'Connecting to your account…', actions: [] };
+    if (cloud.state.kind === 'offline') return { message: 'Offline: share links are made in your account, so they need a connection.', actions: [] };
+    return null;
+  })();
   const versionDraft = useMemo(() => ({ source, files: JSON.parse(importableKey) as Record<string, string> }), [source, importableKey]);
   /** "Restore into draft": the version's text replaces the draft's; the version stays as it is, and Undo puts the draft back. */
   const restoreVersion = (text: string, tag: string) => {
@@ -781,7 +876,7 @@ export default function Playground() {
   const canPlay = !!scenario && scenario.steps.length > 0;
   const problemCount = diagnostics.length;
 
-  return (
+  const page = (
     <div
       className="h-[100dvh] flex flex-col bg-paper text-ink"
       style={keyboard.style}
@@ -790,11 +885,11 @@ export default function Playground() {
     >
       <ZenCollapse zen={zen.zen}>
         <Header base="../" current="editor" compact siteNav={false} actions={<AccountMenu account={account} />}>
-        <div className="flex items-center gap-1 min-w-0 flex-1 sm:flex-none">
+        <div className="flex items-center gap-1 min-w-0 flex-1 sm:flex-initial">
           <button
             type="button"
             aria-label="Diagrams"
-            aria-pressed={filesOpen}
+            aria-pressed={filesDocked || filesPeek}
             title="Show or hide the diagrams list (Ctrl+P to jump to one)"
             onClick={toggleFiles}
             className={`${toolButton} min-w-0 aria-pressed:md:bg-ink/10`}
@@ -888,6 +983,18 @@ export default function Playground() {
                 >
                   Versions…
                 </MenuItem>
+                {/* Pro only; others see it (with an upgrade hint) only when paid plans are on. */}
+                {(shareLinks.ok || showsUpgrade(shareLinks)) && (
+                  <MenuItem
+                    icon={<Link2 size={14} />}
+                    onSelect={() => {
+                      setShowShareLink(true);
+                      close();
+                    }}
+                  >
+                    Share link…
+                  </MenuItem>
+                )}
                 <div className="my-1 border-t border-ink/10" />
                 <MenuItem
                   icon={<ArchiveRestore size={14} />}
@@ -932,32 +1039,27 @@ export default function Playground() {
           }}
         />
 
-        <div className="ps-header__wrap flex items-center gap-2 w-full sm:w-auto sm:min-w-0 sm:flex-wrap sm:ml-auto">
-          <select
+        <div className="ps-header__wrap flex items-center gap-2 w-full sm:w-auto sm:min-w-0 sm:flex-wrap xl:flex-nowrap sm:ml-auto">
+          <Select
             aria-label="Use case"
+            title={`Use case: the flow Play runs${useCase ? `. Now: ${useCase.name}` : ''}`}
+            prefix={
+              <>
+                <Route size={16} aria-hidden="true" className="shrink-0" />
+                <span className="hidden sm:inline shrink-0 text-xs font-bold uppercase tracking-[0.08em] text-muted">Use case</span>
+              </>
+            }
             value={useCase?.id ?? ''}
-            onChange={(e) => {
-              setSelectedUseCaseId(e.target.value);
+            onChange={(id) => {
+              setSelectedUseCaseId(id);
               setSelectedScenarioId(undefined);
               setInitialStep(undefined);
             }}
-            title={useCase?.name}
+            options={useCaseOptions}
+            placeholder="No use cases"
             disabled={shown.useCases.length === 0}
-            className={`flex-1 min-w-0 sm:flex-none sm:max-w-[11rem] truncate ${field}`}
-          >
-            {shown.useCases.length === 0 && <option value="">No use cases</option>}
-            {useCaseGroups.map((group) =>
-              group.label ? (
-                <optgroup key={group.label} label={group.label}>
-                  {group.useCases.map((u) => (
-                    <UseCaseOption key={u.id} useCase={u} />
-                  ))}
-                </optgroup>
-              ) : (
-                group.useCases.map((u) => <UseCaseOption key={u.id} useCase={u} />)
-              ),
-            )}
-          </select>
+            className="h-9 flex-1 min-w-0 sm:flex-none sm:w-[17rem]"
+          />
 
           {playing ? (
             <button
@@ -998,12 +1100,13 @@ export default function Playground() {
           <div data-tour="share">
             <Menu
               label={copied ? 'Copied' : 'Share'}
+              title="Share: a link, a short link or an embed"
               align="right"
               buttonClassName={outlineButton}
               trigger={
                 <>
                   {copied ? <Check size={16} className="text-pass" /> : <Link size={16} />}
-                  <span className="hidden sm:inline">{copied ? 'Copied' : shortening ? 'Sharing…' : 'Share'}</span>
+                  <span className="hidden xl:inline">{copied ? 'Copied' : shortening ? 'Sharing…' : 'Share'}</span>
                 </>
               }
             >
@@ -1081,7 +1184,8 @@ export default function Playground() {
           />
         )}
 
-        <div data-tour="panes" className="md:hidden bg-surface">
+        <div data-tour="panes" className="md:hidden flex items-stretch bg-surface">
+          <div className="flex-1 min-w-0">
           <Tabs
             label="View"
             idPrefix="pane"
@@ -1093,23 +1197,35 @@ export default function Playground() {
               { id: 'diagram', label: playing ? 'Playback' : VIEW_LABEL[view], icon: <Network size={16} /> },
             ]}
           />
+          </div>
+          {/* Phones: in the tab bar, not floating over the panes. */}
+          {hasPartner && phone && <PartnerButton bar open={partnerOpen} onToggle={togglePartner} />}
         </div>
       </ZenCollapse>
 
-      <div className="flex flex-1 min-h-0">
+      <div className="relative flex flex-1 min-h-0">
       {!zen.zen &&
-        (filesOpen ? (
+        (filesDocked ? (
           <div className="max-md:hidden w-60 shrink-0 border-r-bw-1 border-ink">
-            <FileSidebar docs={docState.docs} currentId={docState.currentId} actions={fileActions} cloud={cloud} onCollapse={toggleFiles} />
+            <FileSidebar docs={docState.docs} currentId={docState.currentId} actions={fileActions} cloud={cloud} onCollapse={() => pinFiles(false)} />
           </div>
         ) : (
-          // Folded: a rail that brings the diagrams back.
-          <div className="max-md:hidden shrink-0 flex flex-col items-center gap-1 border-r-bw-1 border-ink bg-surface px-1 py-2">
-            <button type="button" aria-label="Show sidebar" title="Show sidebar" onClick={toggleFiles} className="p-1.5 rounded-sm text-muted hover:text-ink hover:bg-ink/10">
-              <PanelLeftOpen size={16} />
-            </button>
-          </div>
+          <FilesRail
+            title={titleOf(source)}
+            cloud={cloud}
+            onShow={() => setFilesPeek(true)}
+            onQuickOpen={() => setQuickOpen(true)}
+            onCreate={() => fileActions.create(current ? folderOf(fileNameOf(current)) : '')}
+          />
         ))}
+      {!zen.zen && !filesDocked && filesPeek && (
+        // Opened from the rail, over the panes: a click beside it or Escape folds it again.
+        <div className="max-md:hidden absolute inset-0 z-30" onMouseDown={() => setFilesPeek(false)}>
+          <div className="h-full w-60 border-r-bw-1 border-ink shadow-brutal-lg" onMouseDown={(e) => e.stopPropagation()}>
+            <FileSidebar docs={docState.docs} currentId={docState.currentId} actions={fileActions} cloud={cloud} onPin={() => pinFiles(true)} onClose={() => setFilesPeek(false)} />
+          </div>
+        </div>
+      )}
       {/* Side by side on wider screens, with a splitter between; phones show one pane at a time (the tabs above). */}
       <Group
         id="playground-split"
@@ -1168,7 +1284,14 @@ export default function Playground() {
                     analysis={simulation.analysis}
                     results={simulation.results}
                     onSelect={selectDiagnostic}
-                    review={<ReviewPanel source={source} input={() => editorReviewInput(parsedSource, parsed, simulation.analysis, simulation.results)} onSelect={selectDiagnostic} />}
+                    review={
+                      <ReviewPanel
+                        source={source}
+                        input={() => editorReviewInput(parsedSource, parsed, simulation.analysis, simulation.results, { path: rootPath, imports })}
+                        onSelect={selectDiagnostic}
+                        onOpenPartner={hasPartner ? () => setPartnerOpen(true) : undefined}
+                      />
+                    }
                   />
                 ) : view === 'hld' && !playing ? (
                   <HldView
@@ -1210,6 +1333,9 @@ export default function Playground() {
                           onRenameNode={renameFromCanvas}
                           onAddNode={addFromCanvas}
                           onEdit={editSource}
+                          onUndo={undoCanvas}
+                          onRedo={redoCanvas}
+                          phone={phone}
                           diagram={shown}
                           crumbs={systems.crumbs}
                           focusFile={systems.focusFile}
@@ -1220,6 +1346,7 @@ export default function Playground() {
                           onResetLayout={() => editSource(clearPositions)}
                           onDelete={deleteFromCanvas}
                           fitKey={`${mobilePane}:${layoutSettled}`}
+                          layoutBusy={layoutBusy}
                         glideKey={String(splitMoves)}
                           imageRequest={imageRequest}
                           onImageDone={() => setImageRequest(null)}
@@ -1242,16 +1369,31 @@ export default function Playground() {
                     </Suspense>
                   </div>
                 ) : (
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <p className="text-sm text-muted">
-                      Start typing, e.g. <code className="px-1 bg-ink/5 rounded-sm font-mono">api -&gt; db</code>
-                    </p>
-                  </div>
+                  <EmptyCanvas />
                 ))}
             </div>
           </section>
         </SplitPanel>
       </Group>
+      {hasPartner && !phone && <PartnerButton open={partnerOpen} onToggle={togglePartner} />}
+      {hasPartner && (
+        <PartnerDock open={partnerOpen} phone={phone} onClose={closePartner}>
+          <Suspense fallback={<PaneLoading />}>
+            <PartnerPanel
+              storeKey={`editor:${current.id}`}
+              context={EDITOR_CONTEXT}
+              account={account}
+              source={source}
+              getSource={partnerSource}
+              getFiles={partnerFiles}
+              apply={applyPartner}
+              undo={undoPartner}
+              onClose={closePartner}
+              diagramOf={partnerDiagram}
+            />
+          </Suspense>
+        </PartnerDock>
+      )}
       </div>
 
       {drawer && (
@@ -1291,6 +1433,12 @@ export default function Playground() {
               if (shortLinkRef.current?.id === id) shortLinkRef.current = null;
             }}
           />
+        </Suspense>
+      )}
+
+      {showShareLink && (
+        <Suspense fallback={<PaneLoading overlay />}>
+          <ShareLinkDialog docId={current.id} title={titleOf(source)} hint={shareHint} pushedVersion={cloud.pushedVersion} onClose={() => setShowShareLink(false)} />
         </Suspense>
       )}
 
@@ -1383,15 +1531,8 @@ export default function Playground() {
       )}
     </div>
   );
-}
-
-function UseCaseOption({ useCase }: { useCase: DiagramUseCase }) {
-  const count = useCase.scenarios.length;
-  return (
-    <option value={useCase.id}>
-      {count > 1 ? `${useCase.name} · ${count} scenarios` : useCase.name}
-    </option>
-  );
+  // The paid features (components/Feature.tsx) for everything below: the review panel, the share link dialog.
+  return <FeaturesContext.Provider value={features}>{page}</FeaturesContext.Provider>;
 }
 
 interface ScenarioBarProps {
@@ -1459,10 +1600,15 @@ interface DiagramViewProps {
   onMoveNodes: (moved: { id: string; position: { x: number; y: number } }[]) => void;
   onConnectNodes: (from: string, to: string) => void;
   onRenameNode: (id: string, name: string) => void;
-  /** Adds a component from the palette, at a canvas position when it was dropped. */
-  onAddNode: (techStack: string, position?: { x: number; y: number }) => void;
+  /** Adds a component from the palette, at a canvas position when it was dropped; returns its id, if it was added. */
+  onAddNode: (techStack: string, position?: { x: number; y: number }) => string | undefined;
   /** Applies an inspector edit to the text. */
   onEdit: (edit: (source: string) => string) => void;
+  /** Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z on the canvas: the code editor's undo and redo, where every canvas edit is one step. */
+  onUndo: () => void;
+  onRedo: () => void;
+  /** Phones add components from a bottom sheet instead of the docked palette. */
+  phone: boolean;
   /** The parsed diagram, for the inspector. */
   diagram: Diagram;
   /** The simulation drawn on the canvas, when "Overlay: load" is on. */
@@ -1474,6 +1620,8 @@ interface DiagramViewProps {
   onDelete: (nodeIds: string[], edgeIds: string[]) => void;
   /** Changes when the view becomes visible again, so it can re-fit. */
   fitKey: string;
+  /** A layout is on its way (ELK, then the glide): `data-layout-busy` on the canvas, which the e2e tests wait out. */
+  layoutBusy: boolean;
   /** Changes when the pane was resized in place (the splitter), so it can glide to a new fit. */
   glideKey: string;
   /** An image to export (the Export menu in the header), made once the nodes are drawn. */
@@ -1514,6 +1662,9 @@ function DiagramView({
   onRenameNode,
   onAddNode,
   onEdit,
+  onUndo,
+  onRedo,
+  phone,
   diagram,
   overlay,
   canOverlay,
@@ -1521,6 +1672,7 @@ function DiagramView({
   onResetLayout,
   onDelete,
   fitKey,
+  layoutBusy,
   glideKey,
   imageRequest,
   onImageDone,
@@ -1539,7 +1691,25 @@ function DiagramView({
   const playing = playback.active;
   const { getNodes, screenToFlowPosition } = useReactFlow();
   const [selection, setSelection] = useState<{ nodes: Node[]; edges: Edge[] }>({ nodes: [], edges: [] });
-  const [paletteOpen, setPaletteOpen] = useState(false);
+  // Rename and Delete stay clear of the toasts.
+  const clearToasts = useToastClearance();
+  // The palette: docked beside the canvas on wider screens (remembered), a sheet on phones.
+  const [docked, setDocked] = usePaletteOpen('proschi.canvas.palette');
+  const [sheet, setSheet] = useState(false);
+  const [paletteFocus, setPaletteFocus] = useState(false);
+  const canAdd = !playing && crumbs.length === 1;
+  const paletteOpen = canAdd && (phone ? sheet : docked);
+  const togglePalette = () => {
+    setPaletteFocus(!paletteOpen);
+    if (phone) setSheet(!sheet);
+    else setDocked(!docked);
+  };
+  const closePalette = () => (phone ? setSheet(false) : setDocked(false));
+  const [menu, setMenu] = useState<CanvasMenuState | null>(null);
+  const closeMenu = useCallback(() => setMenu(null), []);
+  const [hintSeen, dismissHint] = useConnectHint();
+  /** A component just added, selected once the layout draws it. */
+  const [pendingSelect, setPendingSelect] = useState<string | null>(null);
   /** The node or connection whose settings were closed, so they stay closed until something else is selected. */
   const [closedSettings, setClosedSettings] = useState<string | null>(null);
   const single = selection.nodes.length + selection.edges.length === 1 ? (selection.nodes[0] ?? selection.edges[0]) : undefined;
@@ -1550,6 +1720,28 @@ function DiagramView({
   const hasSelection = !playing && selectionCount > 0;
   const singleNode = selection.nodes.length === 1 && selection.edges.length === 0 ? selection.nodes[0] : undefined;
   const dragStartRef = useRef(new Map<string, { x: number; y: number }>());
+
+  /**
+   * A dropped component is selected, so its settings open; one clicked in the palette is not, so
+   * the palette stays for the next one. A phone's sheet closes on a tap, and selects it too.
+   */
+  const addComponent = (tech: string, position?: { x: number; y: number }) => {
+    const id = onAddNode(tech, position);
+    if (id && (position || phone)) setPendingSelect(id);
+  };
+  /** Selects only `id` (a node or a connection), as a click would. */
+  const selectOnly = useCallback(
+    (id: string) => {
+      onNodesChange((current) => current.map((n) => (!!n.selected === (n.id === id) ? n : { ...n, selected: n.id === id })));
+      onEdgesChange((current) => current.map((e) => (!!e.selected === (e.id === id) ? e : { ...e, selected: e.id === id })));
+    },
+    [onNodesChange, onEdgesChange],
+  );
+  useEffect(() => {
+    if (!pendingSelect || !nodes.some((n) => n.id === pendingSelect)) return;
+    selectOnly(pendingSelect);
+    setPendingSelect(null);
+  }, [nodes, pendingSelect, selectOnly]);
 
   // React Flow re-sends the selection when this handler changes, so it must be stable
   // and must not store an equal selection again.
@@ -1562,10 +1754,10 @@ function DiagramView({
     });
   }, []);
 
-  const promptRename = (node: Node) => {
+  const promptRename = async (node: Node) => {
     // Ask the parent straight away, which explains why a node from an imported file cannot be renamed.
     if (importedNodes.has(node.id)) return onRenameNode(node.id, '');
-    const name = window.prompt('Display name', node.data?.name ?? node.id);
+    const name = await prompt({ title: 'Rename', label: 'Display name', defaultValue: node.data?.name ?? node.id, confirmLabel: 'Rename' });
     if (name !== null) onRenameNode(node.id, name);
   };
 
@@ -1599,7 +1791,7 @@ function DiagramView({
         await exportImage(imageRequest.format, drawn, viewport, fileNameFor(title, imageRequest.format), legend);
       } catch (error) {
         console.error('Export failed:', error);
-        window.alert('Sorry, the image could not be exported.');
+        notify({ title: 'Sorry, the image could not be exported.', tone: 'danger' });
       } finally {
         if (!cancelled) onImageDone();
       }
@@ -1628,8 +1820,8 @@ function DiagramView({
   }, [coverKey, fitKey]);
   // No animated fit: d3-zoom reads the pane size on the transition's first tick, and a pane hidden by
   // then (phone Code/Diagram tabs) is 0×0, which interpolates the viewport to NaN. Nodes already glide via settle.
-  // The exception: playback and the splitter resize a pane that stays shown, and there the diagram glides to its new fit.
-  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { wrapper: wrapperRef, inset, glide: `${playing ? 'playing' : ''}:${glideKey}` });
+  // The exception: playback, the splitter and the palette resize a pane that stays shown, and there the diagram glides to its new fit.
+  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { wrapper: wrapperRef, inset, glide: `${playing ? 'playing' : ''}:${glideKey}:${paletteOpen}` });
 
   const handleEdgesChange = useCallback(
     (changes: EdgeChange[]) => onEdgesChange((current) => applyEdgeChanges(changes, current)),
@@ -1641,10 +1833,41 @@ function DiagramView({
     [onNodesChange],
   );
 
+  // With the palette docked, the settings take its place beside the canvas instead of covering the diagram.
+  const dockSettings = showSettings && paletteOpen && !phone;
+  const inspector = showSettings && (
+    <Inspector
+      key={single.id}
+      node={selectedNode}
+      edge={selectedNode ? undefined : selectedEdge}
+      capacity={selectedNode ? diagram.capacity?.find((c) => c.node === selectedNode.id) : undefined}
+      importedFrom={selectedNode ? importedNodes.get(selectedNode.id) : selectedEdge?.loc.file}
+      system={selectedNode ? (nodes.find((n) => n.id === selectedNode.id)?.data as SystemNodeData | undefined)?.system : undefined}
+      docked={dockSettings}
+      onEdit={onEdit}
+      onDelete={deleteSelection}
+      onClose={() => setClosedSettings(single.id)}
+    />
+  );
+
   return (
     <div
+      className="flex h-full"
+      onKeyDown={(e) => {
+        const step = playing ? null : historyKey(e);
+        if (!step) return;
+        e.preventDefault();
+        if (step === 'undo') onUndo();
+        else onRedo();
+      }}
+    >
+    <PaletteDock open={paletteOpen} phone={phone} focus={paletteFocus} onAdd={(tech) => addComponent(tech)} onClose={closePalette} settings={dockSettings ? inspector : undefined} />
+    <div
       ref={wrapperRef}
-      className="relative h-full"
+      // Focusable, so the keys above work after a drop from the palette.
+      tabIndex={-1}
+      className={`relative h-full min-w-0 flex-1 outline-hidden ${playing ? '' : 'pc-editable'}`}
+      data-layout-busy={layoutBusy || undefined}
       onDragOver={(e) => {
         if (!e.dataTransfer.types.includes(TECH_DRAG_TYPE)) return;
         e.preventDefault();
@@ -1654,14 +1877,16 @@ function DiagramView({
         const tech = e.dataTransfer.getData(TECH_DRAG_TYPE);
         if (!tech || playing) return;
         e.preventDefault();
-        setPaletteOpen(false);
-        onAddNode(tech, screenToFlowPosition({ x: e.clientX, y: e.clientY }));
+        e.currentTarget.focus();
+        addComponent(tech, screenToFlowPosition({ x: e.clientX, y: e.clientY }));
       }}
       onKeyDown={(e) => {
         const target = e.target as HTMLElement;
         if ((e.key === 'Delete' || e.key === 'Backspace') && !target.closest('input, textarea, [contenteditable]')) {
           e.preventDefault();
           deleteSelection();
+          // The deleted item had the focus; keep it on the canvas so Ctrl+Z still works.
+          wrapperRef.current?.focus({ preventScroll: true });
         }
       }}
     >
@@ -1697,7 +1922,25 @@ function DiagramView({
           }
           if (moved.length > locked.length) onMoveNodes(moved.map((n) => ({ id: n.id, position: n.position })));
         }}
-        onConnect={(connection) => connection.source && connection.target && onConnectNodes(connection.source, connection.target)}
+        onConnect={(connection) => {
+          if (!connection.source || !connection.target) return;
+          dismissHint();
+          onConnectNodes(connection.source, connection.target);
+        }}
+        onNodeContextMenu={(event, node) => {
+          if (playing) return;
+          event.preventDefault();
+          selectOnly(node.id);
+          setClosedSettings(null);
+          setMenu({ x: event.clientX, y: event.clientY, label: node.data?.name ?? node.id });
+        }}
+        onEdgeContextMenu={(event, edge) => {
+          if (playing || edge.id.startsWith('step:')) return;
+          event.preventDefault();
+          selectOnly(edge.id);
+          setClosedSettings(null);
+          setMenu({ x: event.clientX, y: event.clientY, label: `${edge.source} → ${edge.target}` });
+        }}
         // A system box opens its team design; renaming it stays in its settings and the selection bar.
         onNodeDoubleClick={(_event, node) => {
           if (playing) return;
@@ -1722,34 +1965,17 @@ function DiagramView({
             <Breadcrumbs crumbs={crumbs} file={focusFile} readOnly={focusReadOnly} inbound={focusInbound} onPick={onCrumb} />
           </Panel>
         )}
-        {!playing && crumbs.length === 1 && <Panel position="top-left">
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setPaletteOpen((o) => !o)}
-              aria-label="Add component"
-              aria-expanded={paletteOpen}
-              aria-haspopup="dialog"
-              className={`${toolButton} border-ink bg-surface shadow-brutal-sm aria-expanded:bg-pop-yellow aria-expanded:text-on-accent`}
-            >
-              <Plus size={16} />
-              <span className="whitespace-nowrap">
-                Add<span className="hidden sm:inline"> component</span>
-              </span>
-            </button>
-            {paletteOpen && (
-              <div className="absolute left-0 top-full z-10 mt-1">
-                <Palette
-                  onAdd={(tech) => {
-                    setPaletteOpen(false);
-                    onAddNode(tech);
-                  }}
-                  onClose={() => setPaletteOpen(false)}
-                />
-              </div>
-            )}
-          </div>
-        </Panel>}
+        {canAdd && (
+          <Panel position="top-left">
+            {/* While the settings stand in for the palette, the button brings the palette back. */}
+            <PaletteToggle open={paletteOpen && !dockSettings} onToggle={() => (dockSettings ? setClosedSettings(single.id) : togglePalette())} />
+          </Panel>
+        )}
+        {canAdd && !hintSeen && nodes.length >= 2 && edges.length === 0 && (
+          <Panel position="top-center" className="max-md:!top-12">
+            <ConnectHint onDismiss={dismissHint} />
+          </Panel>
+        )}
         {/* With the settings card open, Delete is in its header; this bar covers several items or a closed card. */}
         {(notice || (hasSelection && !showSettings)) && (
           <Panel position="bottom-center" className="flex flex-col items-center gap-2">
@@ -1759,7 +1985,7 @@ function DiagramView({
               </p>
             )}
             {hasSelection && !showSettings && (
-              <div role="toolbar" aria-label="Selection" className="flex items-center gap-1 rounded-full border-bw-1 border-ink bg-surface py-1 pl-4 pr-1 shadow-brutal-sm">
+              <div ref={clearToasts} role="toolbar" aria-label="Selection" className="flex items-center gap-1 rounded-full border-bw-1 border-ink bg-surface py-1 pl-4 pr-1 shadow-brutal-sm">
                 <span className="max-w-[10rem] truncate pr-1 text-sm font-semibold text-ink">
                   {singleNode ? (singleNode.data?.name ?? singleNode.id) : `${selectionCount} selected`}
                 </span>
@@ -1787,7 +2013,7 @@ function DiagramView({
         )}
         {nodes.length > 0 && !playing && !(hasSelection && !showSettings) && (
           <Panel position="bottom-right" className="hidden md:block text-xs text-muted bg-paper/85 rounded-sm px-2 py-1">
-            Drag to pin · select to edit settings · drag between dots to connect · Delete removes
+            Drag to pin · select to edit · drag dot to dot to connect · right-click for more
           </Panel>
         )}
         {nodes.length > 0 && (!playing || diagram.legend) && (
@@ -1824,21 +2050,13 @@ function DiagramView({
           </Panel>
         )}
       </ReactFlow>
-      {showSettings && (
+      {showSettings && !dockSettings && (
         <div className="pointer-events-none absolute inset-x-2 bottom-2 z-10 flex max-h-[55%] max-md:[[data-keyboard]_&]:max-h-[calc(100%-1rem)] md:inset-x-auto md:bottom-auto md:right-2 md:top-14 md:max-h-[calc(100%-4.5rem)] md:w-72">
-          <Inspector
-            key={single.id}
-            node={selectedNode}
-            edge={selectedNode ? undefined : selectedEdge}
-            capacity={selectedNode ? diagram.capacity?.find((c) => c.node === selectedNode.id) : undefined}
-            importedFrom={selectedNode ? importedNodes.get(selectedNode.id) : selectedEdge?.loc.file}
-            system={selectedNode ? (nodes.find((n) => n.id === selectedNode.id)?.data as SystemNodeData | undefined)?.system : undefined}
-            onEdit={onEdit}
-            onDelete={deleteSelection}
-            onClose={() => setClosedSettings(single.id)}
-          />
+          {inspector}
         </div>
       )}
+      {menu && <CanvasMenu menu={menu} onSettings={() => setClosedSettings(null)} onDelete={deleteSelection} onClose={closeMenu} />}
+    </div>
     </div>
   );
 }
@@ -1883,6 +2101,35 @@ function Breadcrumbs({ crumbs, file, readOnly, inbound, onPick }: { crumbs: Crum
           {inbound}
         </span>
       )}
+    </nav>
+  );
+}
+
+/** The folded diagrams sidebar: open it, jump to a diagram (Ctrl/Cmd+P), start one, and the open diagram's name. */
+function FilesRail({ title, cloud, onShow, onQuickOpen, onCreate }: { title: string; cloud: { state: Parameters<typeof CloudIcon>[0]['state'] }; onShow: () => void; onQuickOpen: () => void; onCreate: () => void }) {
+  const rail = 'p-1.5 rounded-sm text-muted hover:text-ink hover:bg-ink/10';
+  return (
+    <nav aria-label="Diagrams rail" className="max-md:hidden shrink-0 flex w-10 flex-col items-center gap-1 border-r-bw-1 border-ink bg-surface py-2">
+      <button type="button" aria-label="Show sidebar" title="Show the diagrams" onClick={onShow} className={rail}>
+        <PanelLeftOpen size={16} />
+      </button>
+      <button type="button" aria-label="Go to diagram" title={`Go to diagram (${MOD_KEY}+P)`} onClick={onQuickOpen} className={rail}>
+        <Search size={16} />
+      </button>
+      <button type="button" aria-label="New diagram" title="New diagram" onClick={onCreate} className={rail}>
+        <FilePlus size={16} />
+      </button>
+      <span className="my-1 h-px w-5 bg-ink/15" aria-hidden="true" />
+      <CloudIcon state={cloud.state} />
+      <button
+        type="button"
+        onClick={onShow}
+        title={title}
+        aria-label={`Open diagram: ${title}`}
+        className="mt-1 min-h-0 flex-1 overflow-hidden rounded-sm px-1 py-1.5 text-xs font-semibold text-ink/75 hover:bg-ink/10 hover:text-ink"
+      >
+        <span className="block max-h-full truncate [writing-mode:vertical-rl] rotate-180">{title}</span>
+      </button>
     </nav>
   );
 }

@@ -2,13 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Layers, Map as MapIcon, PartyPopper, Trophy } from 'lucide-react';
 import { api, type EmailPrefs } from '../services/api';
 import problems from 'virtual:practice-listings';
-import type { Topic } from '../learn/cards';
 import type { Engine } from '../hld/engine';
 import { formatMs, formatUsd } from '../sim/format';
 import { eyebrow } from '../components/Playground/ui';
 import ShareButton from '../components/ShareButton';
 import { solveShareText } from '../learn/share';
 import { Celebration } from './Streak';
+import { useRelatedTopics } from './relatedTopics';
 import type { Progress } from './progress';
 import { ROADMAP, roadmapFor, roadmapHref } from './roadmap';
 import { compareToReference as compare, roadmapAfterSolve } from './solveSummary';
@@ -124,28 +124,6 @@ export default function SolveCelebration({ problem, engine, runs, metrics, befor
       </Celebration>
     </div>
   );
-}
-
-/** The topics of the cards whose `related:` names `problemId`, with how many; loaded with the deck, after the solve. */
-function useRelatedTopics(problemId: string): { topic: Topic; count: number }[] {
-  const [topics, setTopics] = useState<{ topic: Topic; count: number }[]>([]);
-  useEffect(() => {
-    let cancelled = false;
-    import('virtual:practice-cards').then(
-      ({ default: deck }) => {
-        if (cancelled) return;
-        const related = deck.cards.filter((c) => !c.retired && c.related.includes(problemId));
-        setTopics(
-          deck.topics.map((topic) => ({ topic, count: related.filter((c) => c.topic === topic.id).length })).filter((t) => t.count > 0),
-        );
-      },
-      () => undefined,
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [problemId]);
-  return topics;
 }
 
 /**

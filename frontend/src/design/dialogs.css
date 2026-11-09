@@ -1,0 +1,215 @@
+/* The confirm, prompt and copy dialogs and the toasts (src/design/dialogs.ts),
+   on the design tokens. Plain CSS, not Tailwind, so they look the same on
+   every page. */
+
+.ps-dialog {
+  width: min(28rem, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  margin: auto;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  color: rgb(var(--c-ink));
+}
+.ps-dialog::backdrop {
+  background: rgb(var(--c-slab) / 0.55);
+}
+.ps-dialog[open] .ps-dialog__panel {
+  animation: ps-dialog-in var(--d-2) var(--e-out);
+}
+
+.ps-dialog__panel {
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  padding: 20px;
+  border: var(--bw-2) solid rgb(var(--c-ink));
+  border-radius: var(--r-md);
+  background: rgb(var(--c-surface));
+  box-shadow: var(--sh-md);
+  font-family: var(--font-sans);
+}
+.ps-dialog[data-tone='danger'] .ps-dialog__panel {
+  border-top: 8px solid rgb(var(--c-fail));
+}
+
+.ps-dialog__title {
+  margin: 0;
+  font: 800 var(--fs-20) / 1.2 var(--font-display);
+  letter-spacing: var(--ls-display);
+  overflow-wrap: anywhere;
+}
+.ps-dialog__body {
+  margin-top: 8px;
+  color: rgb(var(--c-muted));
+  font-size: var(--fs-14);
+  line-height: var(--lh-body);
+  overflow-wrap: anywhere;
+}
+.ps-dialog__label {
+  display: block;
+  margin-top: 16px;
+  font-size: var(--fs-14);
+  font-weight: 600;
+}
+.ps-dialog__code {
+  padding: 1px 6px;
+  border-radius: var(--r-sm);
+  background: rgb(var(--c-ink) / 0.08);
+  font: 700 var(--fs-14) var(--font-mono);
+}
+.ps-dialog__field {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: var(--bw-1) solid rgb(var(--c-ink));
+  border-radius: var(--r-sm);
+  background: rgb(var(--c-paper));
+  color: rgb(var(--c-ink));
+  font: 400 var(--fs-16) / 1.4 var(--font-sans);
+}
+.ps-dialog__field:focus-visible {
+  outline: 3px solid rgb(var(--c-blue));
+  outline-offset: 2px;
+}
+.ps-dialog__field[aria-invalid='true'] {
+  border-color: rgb(var(--c-fail));
+}
+.ps-dialog__field--copy {
+  resize: vertical;
+  font: 400 var(--fs-14) / 1.5 var(--font-mono);
+  word-break: break-all;
+}
+.ps-dialog__error {
+  margin: 8px 0 0;
+  color: rgb(var(--c-fail));
+  font-size: var(--fs-14);
+  font-weight: 600;
+}
+.ps-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+@media (max-width: 480px) {
+  .ps-dialog__actions {
+    flex-direction: column-reverse;
+  }
+  .ps-dialog__actions .ps-btn {
+    width: 100%;
+  }
+}
+
+/* ---------- toasts ---------- */
+
+.ps-toasts {
+  position: fixed;
+  /* Clear of a column pinned to the right (toastClearance.ts useToastInset). */
+  right: calc(16px + var(--ps-toast-right, 0px));
+  /* Above any bar pinned to the bottom of the page (toastClearance.ts). */
+  bottom: calc(16px + var(--ps-toast-bottom, 0px));
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(24rem, calc(100vw - 32px));
+  pointer-events: none;
+}
+.ps-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border: var(--bw-1) solid rgb(var(--c-ink));
+  border-left-width: 8px;
+  border-radius: var(--r-md);
+  background: rgb(var(--c-surface));
+  color: rgb(var(--c-ink));
+  box-shadow: var(--sh-sm);
+  font-family: var(--font-sans);
+  pointer-events: auto;
+  animation: ps-toast-in var(--d-2) var(--e-out);
+}
+.ps-toast[data-tone='success'] {
+  border-left-color: rgb(var(--c-pass));
+}
+.ps-toast[data-tone='danger'] {
+  border-left-color: rgb(var(--c-fail));
+}
+.ps-toast__text {
+  flex: 1;
+  min-width: 0;
+  padding-top: 2px;
+}
+.ps-toast__title {
+  margin: 0;
+  font-size: var(--fs-14);
+  font-weight: 700;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.ps-toast__body {
+  margin-top: 4px;
+  color: rgb(var(--c-muted));
+  font-size: var(--fs-14);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.ps-toast__action {
+  flex: none;
+  min-height: 32px;
+}
+.ps-toast__close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: rgb(var(--c-muted));
+  cursor: pointer;
+}
+.ps-toast__close:hover {
+  background: rgb(var(--c-ink) / 0.08);
+  color: rgb(var(--c-ink));
+}
+.ps-toast__close:focus-visible {
+  outline: 3px solid rgb(var(--c-blue));
+  outline-offset: 1px;
+}
+
+@media (max-width: 640px) {
+  .ps-toasts {
+    right: 12px;
+    left: 12px;
+    bottom: calc(12px + max(var(--ps-toast-bottom, 0px), env(safe-area-inset-bottom)));
+    width: auto;
+  }
+}
+
+@keyframes ps-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+@keyframes ps-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ps-dialog[open] .ps-dialog__panel,
+  .ps-toast {
+    animation: none;
+  }
+}

@@ -9,6 +9,7 @@ import { siteShell } from './plugins/siteShell'
 import { docsSite } from './plugins/docsSite'
 import { blogSite } from './plugins/blogSite'
 import { sitemap } from './plugins/sitemap'
+import { fillFlagBlocks, flagsFromEnv } from './src/landing/flags'
 
 // `ANALYZE=1 npx vite build` also writes dist/stats.html, a treemap of every chunk.
 async function analyzer(): Promise<PluginOption> {
@@ -51,6 +52,8 @@ export default defineConfig(async () => ({
       stubsDir: fileURLToPath(new URL('./blog', import.meta.url)),
     }),
     siteShell(),
+    // The landing's copy that only some builds can promise: sign-in and sync, paid plans (src/landing/flags.ts).
+    { name: 'landing-flags', transformIndexHtml: (html: string) => fillFlagBlocks(html, flagsFromEnv(process.env)) },
     sitemap(fileURLToPath(new URL('../docs', import.meta.url)), fileURLToPath(new URL('./src/practice/problems', import.meta.url))),
     await analyzer(),
   ],
@@ -77,10 +80,16 @@ export default defineConfig(async () => ({
         admin: fileURLToPath(new URL('./admin/index.html', import.meta.url)),
         // The read-only diagram other sites frame (src/embed/main.tsx).
         embed: fileURLToPath(new URL('./embed/index.html', import.meta.url)),
+        // A live share link's read-only page, served at /share/<token> (src/share/ShareView.tsx), noindex.
+        share: fileURLToPath(new URL('./share/index.html', import.meta.url)),
         // The review cards' index, and the templates of each topic's and card's page (plugins/cardPages.ts).
         cardsIndex: fileURLToPath(new URL('./practice/cards/index.html', import.meta.url)),
         cardTopicPage: fileURLToPath(new URL('./practice/cards/_topic/index.html', import.meta.url)),
         cardPage: fileURLToPath(new URL('./practice/cards/_topic/_card/index.html', import.meta.url)),
+        // The sign-in page (src/auth/): email and password, its confirmation and reset links, noindex.
+        signin: fileURLToPath(new URL('./signin/index.html', import.meta.url)),
+        // The pricing page (src/pricing/), only in builds with paid plans (VITE_BILLING=true; docs/design/paid-plans.md P10).
+        ...(process.env.VITE_BILLING === 'true' ? { pricing: fileURLToPath(new URL('./pricing/index.html', import.meta.url)) } : {}),
       },
       output: { manualChunks },
     },

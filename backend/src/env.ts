@@ -7,7 +7,6 @@ export interface Env {
   PROFILE_LIMITER: RateLimit;
   STATS_LIMITER: RateLimit;
   IMPORT_LIMITER: RateLimit;
-  REVIEW_LIMITER: RateLimit;
   CARD_LIMITER: RateLimit;
   CHALLENGE_LIMITER: RateLimit;
   /** Game runs started, submitted or imported, and purchases, per user. */
@@ -22,6 +21,20 @@ export interface Env {
   EMAIL_LIMITER: RateLimit;
   /** The admin panel's sign-in and setup, per IP (src/adminAuth.ts). */
   ADMIN_LIMITER: RateLimit;
+  /** AI interviews (src/interviews.ts), per user: sessions started, turns, verdicts, and reads of sessions. */
+  INTERVIEW_START_LIMITER: RateLimit;
+  INTERVIEW_TURN_LIMITER: RateLimit;
+  INTERVIEW_FINISH_LIMITER: RateLimit;
+  INTERVIEW_READ_LIMITER: RateLimit;
+  /** Polar's webhook (src/billing.ts), per IP, before the signature is checked; and the bad signatures logged, one per IP a minute. */
+  WEBHOOK_LIMITER: RateLimit;
+  WEBHOOK_LOG_LIMITER: RateLimit;
+  /** Design partner (src/partner.ts), per user: sessions, turns, reads and change decisions. */
+  PARTNER_LIMITER: RateLimit;
+  /** Voice input's server speech-to-text (src/voice.ts), per user: one request per recorded chunk. */
+  VOICE_LIMITER: RateLimit;
+  /** Workers AI (wrangler.jsonc `ai`): Whisper for voice input (src/voice.ts, P39). Unset, the route answers 501. */
+  AI?: { run(model: string, input: Record<string, unknown>): Promise<unknown> };
   /** The deployed version's id, tag and time (wrangler.jsonc `version_metadata`), for the admin's health page. */
   CF_VERSION_METADATA?: WorkerVersionMetadata;
   /**
@@ -29,6 +42,12 @@ export interface Env {
    * reminders; only src/email.ts uses it. Unset, opting in answers 503.
    */
   EMAIL?: SendEmail;
+  /**
+   * Feedback screenshots (wrangler.jsonc `r2_buckets`, bucket proschi-feedback;
+   * src/feedback.ts), served to the admin only. Unset, messages can still be
+   * sent, without screenshots.
+   */
+  FEEDBACK_BUCKET?: R2Bucket;
   /** The built site (frontend/dist), served for every path outside /api and /auth. */
   ASSETS: Fetcher;
   /** `production` or `staging`; unset in local development. */
@@ -56,6 +75,62 @@ export interface Env {
    * passkey exists; unset, the admin cannot be set up.
    */
   ADMIN_SETUP_TOKEN?: string;
+  /**
+   * Billing through Polar (src/billing.ts; backend/README.md "Billing and
+   * credits"). Without the token, the webhook secret and the five product
+   * ids, checkout, the portal and the webhook answer 501.
+   */
+  POLAR_ACCESS_TOKEN?: string;
+  /** The webhook endpoint's secret, as Polar shows it (`polar_whs_…` or `whsec_…`). */
+  POLAR_WEBHOOK_SECRET?: string;
+  /** `sandbox` for Polar's sandbox (sandbox-api.polar.sh); anything else is production. */
+  POLAR_SERVER?: string;
+  /** Polar product ids of Pro and Max, monthly and yearly, and the 1,000-credit top-up. */
+  POLAR_PRODUCT_PRO_MONTHLY?: string;
+  POLAR_PRODUCT_PRO_YEARLY?: string;
+  POLAR_PRODUCT_MAX_MONTHLY?: string;
+  POLAR_PRODUCT_MAX_YEARLY?: string;
+  POLAR_PRODUCT_CREDITS_1000?: string;
+  /**
+   * EUR per USD for metering (src/meter.ts, P26): a model call costs the
+   * user 2x what it cost us, converted at this fixed rate. Unset, 0.95.
+   */
+  CREDITS_USD_EUR?: string;
+  /**
+   * The AI features (src/interviews.ts, src/review.ts, src/ai/client.ts).
+   * Without the key their routes answer 501 (docs/design/paid-plans.md P10).
+   */
+  ANTHROPIC_API_KEY?: string;
+  /** Cloudflare AI Gateway's Anthropic endpoint; the Claude API when unset. */
+  AI_GATEWAY_URL?: string;
+  /** An authenticated gateway's token, sent as `cf-aig-authorization`. */
+  AI_GATEWAY_TOKEN?: string;
+  /**
+   * Cloudflare Turnstile on email sign-up, sign-in and password reset
+   * (src/turnstile.ts): the widget's public site key (wrangler.jsonc `vars`)
+   * and the secret Siteverify checks tokens with. Without the secret the
+   * check is skipped (local development, tests).
+   */
+  TURNSTILE_SITE_KEY?: string;
+  TURNSTILE_SECRET_KEY?: string;
+  /**
+   * Admin campaigns (src/campaigns.ts): the most campaign emails sent a UTC
+   * day (unset: 500; the rest go out the next day), and the admin's own
+   * address, where "Send a test to me" goes (unset: no test sends).
+   */
+  CAMPAIGN_DAILY_CAP?: string;
+  ADMIN_EMAIL?: string;
+  /**
+   * The admin's Cloudflare usage page (src/cfUsage.ts): a read-only API token
+   * (Account Analytics Read; Billing Read optional) and the account id.
+   * Without both, GET /api/admin/cf-usage answers 501.
+   */
+  CF_API_TOKEN?: string;
+  CF_ACCOUNT_ID?: string;
+  /** Optional: the proschi.app zone id, to count emails sent (Email Service analytics are per zone). */
+  CF_ZONE_ID?: string;
+  /** `free` or `paid` (default): the Workers plan, when the token can't read the subscriptions. */
+  CF_PLAN?: string;
 }
 
 /** Whether SESSION_SECRET is set and long enough to sign with. */

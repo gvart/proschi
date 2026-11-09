@@ -35,6 +35,7 @@ export default function HelpMenu({ onTour, tourLabel = 'Take the tour', classNam
                 close();
                 setSheet(true);
               }}
+              onFeedback={close}
             />
           </Suspense>
         )}

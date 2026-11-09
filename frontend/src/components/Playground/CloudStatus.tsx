@@ -1,8 +1,10 @@
 import { Cloud, CloudOff, LogIn, LogOut, RefreshCw, Trash2, Upload } from 'lucide-react';
+import { confirm } from '../../design/dialogs';
 import { MenuItem } from './Menu';
+import UpgradeHint from './UpgradeHint';
 import { cloudLabel, type CloudState, type CloudSync } from './useCloudSync';
 
-const PROVIDER_LABEL = { github: 'GitHub', google: 'Google' } as const;
+const PROVIDER_LABEL = { github: 'GitHub', google: 'Google', email: 'Email' } as const;
 
 /** The small cloud by the diagram's title in the header: only when signed in with sync on. */
 export function CloudIcon({ state }: { state: CloudState }) {
@@ -21,6 +23,7 @@ export default function CloudSection({ cloud, close }: { cloud: CloudSync; close
         {cloudLabel(state)}
         {note && <span className="block">{note}</span>}
       </p>
+      <UpgradeHint state={state} className="mx-3 mb-1.5 text-xs" />
       {state.kind === 'signed-out' &&
         state.providers.map((provider) => (
           <MenuItem key={provider} icon={<LogIn size={14} />} onSelect={() => cloud.signIn(provider)}>
@@ -63,9 +66,9 @@ export default function CloudSection({ cloud, close }: { cloud: CloudSync; close
               </MenuItem>
               <MenuItem
                 icon={<Trash2 size={14} />}
-                onSelect={() => {
+                onSelect={async () => {
                   close();
-                  if (window.confirm('Delete every diagram saved in your account? The diagrams in this browser stay, and cloud sync stays off.')) void cloud.deleteCloudCopies();
+                  if (await confirm({ title: 'Delete every diagram saved in your account?', body: 'The diagrams in this browser stay, and cloud sync stays off.', confirmLabel: 'Delete cloud copies', tone: 'danger' })) void cloud.deleteCloudCopies();
                 }}
               >
                 Delete my cloud copies

@@ -1,6 +1,7 @@
+import { api } from '../services/api';
 import { loadJson, saveJson } from '../services/storage';
 import { DOCS_KEY, SYNC_KEY, readState } from './documents';
-import { forgetSynced, readStoredSync } from './sync';
+import { emptyMeta, forgetSynced, readStoredSync } from './sync';
 
 /**
  * Signing out from a page other than the editor (the practice account
@@ -29,4 +30,16 @@ export function removeSyncedFromBrowser(): number {
     // Storage unavailable: nothing was stored either.
   }
   return result.removed;
+}
+
+/**
+ * "Delete my cloud copies" from Settings, as the editor's File menu does it
+ * (cloudSync.ts): turns cloud sync off in this browser, deletes every
+ * diagram from the account (DELETE /api/me/documents) and forgets what was
+ * synced. The diagrams in this browser stay.
+ */
+export async function deleteCloudCopies(userId: string): Promise<void> {
+  saveJson(SYNC_KEY, { ...readStoredSync(loadJson<unknown>(SYNC_KEY, null)), off: true });
+  await api('/api/me/documents', { method: 'DELETE' });
+  saveJson(SYNC_KEY, { off: true, meta: emptyMeta(userId) });
 }

@@ -1,32 +1,55 @@
-/** The admin panel's tabs, and the address hash that names one (#/users/<id>). */
+/** The admin panel's pages, grouped as the sidebar shows them, and the address hash that names one (#/users/<id>). */
 
-export const TABS = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'health', label: 'Health' },
-  { id: 'users', label: 'Users' },
-  { id: 'shares', label: 'Short links' },
-  { id: 'events', label: 'Events' },
-  { id: 'audit', label: 'Audit log' },
-  { id: 'passkeys', label: 'Passkeys' },
+export const GROUPS = [
+  { label: 'Overview', items: [{ id: 'overview', label: 'Overview', description: 'Growth, revenue and AI at a glance, and what needs attention.' }] },
+  { label: 'People', items: [{ id: 'users', label: 'Users', description: 'Search accounts, open one, and moderate it.' }, { id: 'inbox', label: 'Inbox', description: 'Messages sent from the app: bugs, questions and proposals.' }] },
+  { label: 'Outreach', items: [{ id: 'campaigns', label: 'Campaigns', description: 'Give credits, email product news and show announcements in the app.' }] },
+  { label: 'Revenue', items: [{ id: 'billing', label: 'Billing', description: 'Pro accounts, pack orders and refunds. Amounts live in Polar.' }] },
+  { label: 'AI', items: [{ id: 'ai', label: 'AI usage', description: 'Interviews, reviews and what they cost over the last 30 days.' }] },
+  { label: 'Content', items: [{ id: 'links', label: 'Links', description: 'Short links and live share links: the user content other people see.' }] },
+  {
+    label: 'System',
+    items: [
+      { id: 'health', label: 'Health', description: 'The database, scheduled jobs, errors, email and configuration.' },
+      { id: 'cloudflare', label: 'Cloudflare usage', description: "What's left of the Cloudflare plan's quotas this period, and whether to upgrade." },
+      { id: 'events', label: 'Events', description: 'Errors, cron runs, sign-in failures and rate limits, kept 30 days.' },
+      { id: 'webhooks', label: 'Webhooks', description: "Polar's webhook deliveries and what was done with each, kept 90 days." },
+      { id: 'audit', label: 'Audit log', description: 'Every change made in the admin panel, kept 400 days.' },
+      { id: 'passkeys', label: 'Passkeys', description: 'The passkeys that can sign in here, and the admin sessions.' },
+    ],
+  },
 ] as const;
 
-export type TabId = (typeof TABS)[number]['id'];
+export type PageId = (typeof GROUPS)[number]['items'][number]['id'];
+
+export interface PageInfo {
+  id: PageId;
+  label: string;
+  description: string;
+}
+
+export const PAGES: readonly PageInfo[] = GROUPS.flatMap((g): readonly PageInfo[] => g.items);
+
+/** Hashes the panel used before the sidebar, still accepted: #/shares is now #/links. */
+const ALIASES: Record<string, PageId> = { shares: 'links' };
 
 export interface Route {
-  tab: TabId;
-  /** #/users/<id>: one account; #/events/<kind>: events of one kind. */
+  page: PageId;
+  /** #/users/<id>: one account; #/events/<kind>: events of one kind; #/overview/<days>: the time range. */
   param?: string;
 }
 
-/** The tab and its parameter from the address's hash (#/users/<id>). */
+/** The page and its parameter from the address's hash (#/users/<id>). */
 export function parseRoute(hash: string): Route {
-  const [tab, ...rest] = hash.replace(/^#\/?/, '').split('/');
-  const known = TABS.find((t) => t.id === tab);
-  if (!known) return { tab: 'overview' };
+  const [name, ...rest] = hash.replace(/^#\/?/, '').split('/');
+  const id = ALIASES[name] ?? PAGES.find((p) => p.id === name)?.id;
+  if (!id) return { page: 'overview' };
   const param = rest.join('/') ? decodeURIComponent(rest.join('/')) : undefined;
-  return { tab: known.id, ...(param ? { param } : {}) };
+  return { page: id, ...(param ? { param } : {}) };
 }
 
-export function routeHash({ tab, param }: Route): string {
-  return `#/${tab}${param ? `/${encodeURIComponent(param)}` : ''}`;
+export function routeHash({ page, param }: Route): string {
+  return `#/${page}${param ? `/${encodeURIComponent(param)}` : ''}`;
 }
+
+export const pageOf = (id: PageId) => PAGES.find((p) => p.id === id)!;

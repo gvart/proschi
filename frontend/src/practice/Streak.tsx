@@ -1,16 +1,13 @@
 import { useEffect, useRef, type ReactNode } from 'react';
-import { CalendarCheck, Flame, LogIn, Snowflake, X } from 'lucide-react';
+import { CalendarCheck, Flame, Snowflake, X } from 'lucide-react';
 import { GOAL_CHOICES, type DailyGoal, type Streak, type WeeklyRecap } from '../learn/streak';
 import { celebrate } from '../design/celebrate';
 import { announceCelebration } from './celebrating';
-import { eyebrow, primaryButton, toolButton } from '../components/Playground/ui';
-import { PROVIDER_LABEL } from './account';
-import type { Account } from './useAccount';
+import { eyebrow, toolButton } from '../components/Playground/ui';
 
 /**
  * The daily goal and streak on the page (src/learn/streak.ts): the streak
- * widget, the goal picker, the weekly recap and the sign-in invitation shown
- * instead of a streak when signed out.
+ * widget, the goal picker and the weekly recap.
  */
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -51,9 +48,9 @@ function GoalRing({ progress, done, children }: { progress: number; done: boolea
 
 /**
  * The streak at a glance: a flame and its length, a ring toward today's
- * goal and the freezes held. `compact` drops the goal line, for tight rows.
+ * goal and the freezes held.
  */
-export function StreakWidget({ streak, goal, compact = false }: { streak: Streak; goal: DailyGoal; compact?: boolean }) {
+export function StreakWidget({ streak, goal }: { streak: Streak; goal: DailyGoal }) {
   const lit = streak.current > 0 || streak.todayDone;
   return (
     <div role="group" aria-label="Daily streak" className="inline-flex max-w-full items-center gap-3 rounded-brutal border-bw-2 border-ink bg-surface px-3 py-2 shadow-brutal-sm">
@@ -64,9 +61,7 @@ export function StreakWidget({ streak, goal, compact = false }: { streak: Streak
         <p className="font-display text-lg font-extrabold leading-tight text-ink" data-streak={streak.current}>
           {streakLabel(streak.current)}
         </p>
-        {!compact && <p className="text-xs text-ink/75">{goalLabel(streak, goal)}</p>}
-        {/* The ring is drawn for the eye; this says the same for screen readers. */}
-        {compact && <span className="sr-only">{goalLabel(streak, goal)}</span>}
+        <p className="text-xs text-ink/75">{goalLabel(streak, goal)}</p>
       </div>
       {streak.freezes > 0 && (
         <span
@@ -81,6 +76,26 @@ export function StreakWidget({ streak, goal, compact = false }: { streak: Streak
   );
 }
 
+/** The streak as a slim chip for a row of links (the practice home, the hub's other sections): a flame, its length and the freezes held. */
+export function StreakChip({ streak, goal }: { streak: Streak; goal: DailyGoal }) {
+  const lit = streak.current > 0 || streak.todayDone;
+  return (
+    <div role="group" aria-label="Daily streak" className="inline-flex min-h-[32px] items-center gap-1.5 rounded-full border-bw-1 border-ink bg-surface px-2.5 py-0.5 text-sm font-bold text-ink">
+      <Flame size={14} aria-hidden="true" className={lit ? 'fill-pop-yellow text-ink' : 'text-muted'} />
+      <span data-streak={streak.current}>{streakLabel(streak.current)}</span>
+      {streak.todayDone && <span className="font-normal text-ink/75">· today done</span>}
+      {streak.freezes > 0 && (
+        <span className="inline-flex items-center gap-0.5 font-normal text-ink/75" title="A streak freeze covers a missed day. You earn one for every 7 days in a row, and hold up to 2.">
+          · <Snowflake size={12} aria-hidden="true" />
+          {streak.freezes}
+          <span className="sr-only"> {streak.freezes === 1 ? 'freeze' : 'freezes'}</span>
+        </span>
+      )}
+      <span className="sr-only">{goalLabel(streak, goal)}</span>
+    </div>
+  );
+}
+
 /** Picks the daily goal, cards a day; a solved problem, the daily challenge or a finished Arcade run meets any of them. */
 export function GoalPicker({ goal, onPick }: { goal: DailyGoal; onPick: (cards: number) => void }) {
   return (
@@ -88,45 +103,32 @@ export function GoalPicker({ goal, onPick }: { goal: DailyGoal; onPick: (cards: 
       <span id="goal-picker" className={eyebrow}>
         Daily goal
       </span>
-      <div role="radiogroup" aria-labelledby="goal-picker" className="inline-flex overflow-hidden rounded-sm border-bw-1 border-ink shadow-brutal-sm">
-        {GOAL_CHOICES.map((n) => {
-          const on = n === goal.reviews;
-          return (
-            <button
-              key={n}
-              type="button"
-              role="radio"
-              aria-checked={on}
-              aria-label={`${n} cards a day`}
-              onClick={() => onPick(n)}
-              className={`min-h-[36px] min-w-[44px] border-l-bw-1 border-ink px-2.5 text-sm font-bold tabular-nums first:border-l-0 ${on ? 'bg-ink text-paper' : 'bg-surface text-ink hover:bg-pop-yellow/30'}`}
-            >
-              {n}
-            </button>
-          );
-        })}
-      </div>
+      <GoalChoices goal={goal} onPick={onPick} labelledBy="goal-picker" />
       <span className="text-xs text-muted">cards a day, or a problem solved, the daily challenge or an Arcade run</span>
     </div>
   );
 }
 
-/** Signed out with accounts on: what a streak needs, and the way in. */
-export function StreakInvite({ account, compact = false }: { account: Account; compact?: boolean }) {
-  const providers = account.state.status === 'signed-out' ? account.state.providers : [];
+/** GoalPicker's choices alone, labelled by the element `labelledBy` names (the settings page has its own label). */
+export function GoalChoices({ goal, onPick, labelledBy }: { goal: DailyGoal; onPick: (cards: number) => void; labelledBy: string }) {
   return (
-    <div role="group" aria-label="Daily streak" className="inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-2 rounded-brutal border-bw-2 border-dashed border-ink/60 bg-surface px-3 py-2">
-      <Flame size={20} className="shrink-0 text-muted" aria-hidden="true" />
-      <p className="min-w-0 flex-1 text-sm text-ink">
-        <strong>Keep a daily streak.</strong>
-        {!compact && ' Sign in to set a daily goal, count your streak and keep it on every device.'}
-      </p>
-      {providers.slice(0, 1).map((p) => (
-        <button key={p} type="button" onClick={() => account.signIn(p)} className={`min-h-[40px] ${primaryButton}`}>
-          <LogIn size={14} aria-hidden="true" />
-          {providers.length > 1 ? 'Sign in' : `Sign in with ${PROVIDER_LABEL[p]}`}
-        </button>
-      ))}
+    <div role="radiogroup" aria-labelledby={labelledBy} className="inline-flex overflow-hidden rounded-sm border-bw-1 border-ink shadow-brutal-sm">
+      {GOAL_CHOICES.map((n) => {
+        const on = n === goal.reviews;
+        return (
+          <button
+            key={n}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            aria-label={`${n} cards a day`}
+            onClick={() => onPick(n)}
+            className={`min-h-[36px] min-w-[44px] border-l-bw-1 border-ink px-2.5 text-sm font-bold tabular-nums first:border-l-0 ${on ? 'bg-ink text-paper' : 'bg-surface text-ink hover:bg-pop-yellow/30'}`}
+          >
+            {n}
+          </button>
+        );
+      })}
     </div>
   );
 }

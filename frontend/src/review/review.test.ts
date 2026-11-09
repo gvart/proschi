@@ -1,10 +1,12 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { defaultEngine, nullEngine } from '../hld/engine';
 import { findProblem } from '../practice/catalog';
-import { MAX_REVIEW_SOURCE, parseDesignReview, reviewRequestProblem, type DesignReview } from './contract';
+import { mapResolver, parse } from '../dsl';
+import { MAX_REVIEW_IMPORTS, MAX_REVIEW_SOURCE, parseDesignReview, reviewRequestProblem, type DesignReview } from './contract';
+import { editorReviewInput } from './editor';
 import { practiceReviewInput } from './practice';
 import { buildReviewRequest } from './request';
-import { apiReviewer, defaultReviewer, ReviewUnavailableError, ruleReviewer, withFallback } from './reviewer';
+import { defaultReviewer, ruleReviewer } from './reviewer';
 
 const shortener = findProblem('url-shortener')!;
 
@@ -65,8 +67,25 @@ describe('review request', () => {
     ['bad nodes', { source: '', model: { nodes: [{ id: 1 }], edges: [], useCases: [], decisions: [], diagnostics: [] } }, /model\.nodes/],
     ['bad tests', { source: '', model: { nodes: [], edges: [], useCases: [], decisions: [], diagnostics: [] }, tests: { passed: 1 } }, /tests needs/],
     ['bad metrics', { source: '', model: { nodes: [], edges: [], useCases: [], decisions: [], diagnostics: [] }, metrics: { costUsd: 'a lot' } }, /metrics\.costUsd/],
+    ['a bad path', { source: '', path: 1 }, /path must be a string/],
+    ['imports that are not a map', { source: '', imports: ['a.proschi'] }, /imports must be an object/],
+    ['too many imports', { source: '', imports: Object.fromEntries(Array.from({ length: MAX_REVIEW_IMPORTS + 1 }, (_, i) => [`f${i}`, ''])) }, /imports must be an object/],
+    ['an import that is not text', { source: '', imports: { 'a.proschi': 1 } }, /each import/],
+    ['a long import', { source: '', imports: { 'a.proschi': 'x'.repeat(MAX_REVIEW_SOURCE + 1) } }, /source is too long/],
   ])('rejects %s', (_name, body, message) => {
     expect(reviewRequestProblem(body)).toMatch(message);
+  });
+
+  it('carries the editor’s path and the files its imports read', () => {
+    const files = { 'lib/shared.proschi': 'db "Orders" [PostgreSQL]\n' };
+    const source = 'import "lib/shared.proschi"\napi "API" [REST API]\napi -> db\n';
+    const parsed = parse(source, { path: 'shop.proschi', resolve: mapResolver(files) });
+    const request = buildReviewRequest(editorReviewInput(source, parsed, defaultEngine.analyze(parsed.diagram)!, [], { path: 'shop.proschi', imports: files }));
+    expect(request).toMatchObject({ path: 'shop.proschi', imports: files });
+    expect(request.model.nodes.map((n) => n.id)).toEqual(expect.arrayContaining(['api', 'db']));
+    expect(reviewRequestProblem(JSON.parse(JSON.stringify(request)))).toBeUndefined();
+    // No imports, no field.
+    expect(buildReviewRequest(editorReviewInput('', parse(''), defaultEngine.analyze(parse('').diagram)!, [], { imports: {} }))).not.toHaveProperty('imports');
   });
 });
 
@@ -93,48 +112,11 @@ describe('design review answers', () => {
 });
 
 describe('reviewers', () => {
-  afterEach(() => vi.unstubAllGlobals());
-
-  it('use the rule reviewer unless built with VITE_AI_REVIEW=true', async () => {
+  it('use the rule reviewer: the automatic review, from the simulation and the tests', async () => {
     expect(defaultReviewer).toBe(ruleReviewer);
-    expect(ruleReviewer).toMatchObject({ available: true, ai: false });
+    expect(ruleReviewer).toMatchObject({ available: true });
     const review = await ruleReviewer.review(buildReviewRequest(practiceReviewInput(shortener, shortener.starter, defaultEngine)));
     expect(review.by).toBe('rules');
     expect(review.issues.length).toBeGreaterThan(0);
-  });
-
-  it('fall back to the rules when the API has no review to give, and not when it fails', async () => {
-    const request = buildReviewRequest(practiceReviewInput(shortener, shortener.starter, defaultEngine));
-    const reviewer = withFallback(apiReviewer, ruleReviewer);
-    expect(reviewer).toMatchObject({ available: true, ai: true });
-    const answer = (status: number, body: unknown) => vi.fn(async () => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } }));
-
-    vi.stubGlobal('fetch', answer(501, { error: 'not_implemented' }));
-    await expect(reviewer.review(request)).resolves.toMatchObject({ by: 'rules' });
-    vi.stubGlobal('fetch', answer(404, { error: 'Not found' }));
-    await expect(reviewer.review(request)).resolves.toMatchObject({ by: 'rules' });
-    vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new TypeError('Failed to fetch'))));
-    await expect(reviewer.review(request)).resolves.toMatchObject({ by: 'rules' });
-
-    vi.stubGlobal('fetch', answer(429, { error: 'Too many reviews; wait a minute' }));
-    await expect(reviewer.review(request)).rejects.toThrow('Too many reviews');
-    vi.stubGlobal('fetch', answer(200, { summary: 'ok', strengths: [], issues: [], suggestions: [] }));
-    await expect(reviewer.review(request)).resolves.toEqual({ summary: 'ok', strengths: [], issues: [], suggestions: [] });
-  });
-
-  it('read the stub endpoint’s 501 as not available yet, and other failures as errors', async () => {
-    const request = buildReviewRequest(practiceReviewInput(shortener, shortener.starter, defaultEngine));
-    const answer = (status: number, body: unknown) => vi.fn(async () => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } }));
-
-    const notImplemented = answer(501, { error: 'not_implemented' });
-    vi.stubGlobal('fetch', notImplemented);
-    await expect(apiReviewer.review(request)).rejects.toBeInstanceOf(ReviewUnavailableError);
-    expect(notImplemented).toHaveBeenCalledWith('/api/review', expect.objectContaining({ method: 'POST', body: JSON.stringify(request) }));
-
-    vi.stubGlobal('fetch', answer(429, { error: 'Too many reviews; wait a minute' }));
-    await expect(apiReviewer.review(request)).rejects.toThrow('Too many reviews');
-
-    vi.stubGlobal('fetch', answer(200, { summary: 'ok', strengths: [], issues: [], suggestions: [] }));
-    await expect(apiReviewer.review(request)).resolves.toEqual({ summary: 'ok', strengths: [], issues: [], suggestions: [] });
   });
 });

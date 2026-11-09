@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { PLANS } from '../src/plans';
+import { FREE_LIMITS, PLANS } from '../src/plans';
 import { canonicalForm, type Version, type VersionMeta } from '../src/versions';
 import { call, resetDatabase, signedInUser } from './helpers';
 
@@ -171,7 +171,7 @@ describe('diagram versions', () => {
   });
 
   it("are limited per document by the account's plan, deleted ones not counted", async () => {
-    PLANS.team = { documents: 5, versionsPerDocument: 2, documentBytes: 64 * 1024 };
+    PLANS.team = { ...FREE_LIMITS, versionsPerDocument: 2 };
     const { id, token } = await signedInUser();
     await env.DB.prepare("UPDATE users SET plan = 'team' WHERE id = ?").bind(id).run();
     const v = await save(token, 'd', 'a');
@@ -293,7 +293,7 @@ describe('diagram versions', () => {
     await save(token, 'd', 'a');
     const bearer = 'bearer-token-for-versions';
     const { sha256 } = await import('../src/crypto');
-    await env.DB.prepare("INSERT INTO sessions (token_hash, user_id, expires_at, created_at, kind, family_id) VALUES (?, ?, 4000000000, 0, 'app_access', 'f')")
+    await env.DB.prepare("INSERT INTO sessions (token_hash, user_id, expires_at, created_at, kind, family_id, scopes) VALUES (?, ?, 4000000000, 0, 'app_access', 'f', 'profile:read documents:read documents:write')")
       .bind(await sha256(bearer), id)
       .run();
     expect((await call('/api/me/documents/d/versions', { method: 'POST', bearer, body: { tag: 'v1', documentVersion: 1 } })).status).toBe(201);

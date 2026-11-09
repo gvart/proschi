@@ -13,6 +13,7 @@ import { format } from '../dsl/format';
 import { APP_PATH, editorLink, exampleLink } from './links';
 import { FEATURED, featuredProblems, fillPracticePlaceholders, listingsFrom, practiceListHtml } from './practiceList';
 import { fillPrepPlaceholders, prepStagesHtml } from './prep';
+import { fillFlagBlocks, flagsFromEnv, type Flags } from './flags';
 import { ROADMAP, roadmapFor } from '../practice/roadmap';
 import prebuiltListings from 'virtual:practice-listings';
 import { DEMO_SCRIPT, DEMO_SOURCE, DEMO_USE_CASE, sourceAt } from '../components/Demo/demoScript';
@@ -294,5 +295,36 @@ describe('interview prep section', () => {
   it('escapes stage titles', () => {
     expect(prepStagesHtml([{ id: 'a', title: 'A <b> & "c"', problems: ['x'] }])).toContain('<span class="prep__stage-title">A &lt;b&gt; &amp; &quot;c&quot;</span>');
     expect(prepStagesHtml([{ id: 'a', title: 'A', problems: ['x'] }])).toContain('1 problem<');
+  });
+});
+
+describe('landing copy per build (flags.ts)', () => {
+  const closer = (flags: Flags) => {
+    const html = fillFlagBlocks(landingHtml, flags);
+    const start = html.indexOf('<section class="closer"');
+    return html.slice(start, html.indexOf('</section>', start));
+  };
+
+  it('promises the editor free, open source and without an account in every build, and nothing it lacks', () => {
+    const plain = closer({ accounts: false, billing: false });
+    expect(plain).toContain('No account to try.');
+    expect(plain).toContain('The editor and the simulation run in your browser.');
+    expect(plain).not.toMatch(/Sign in|sync|credits|Mock interview|pricing/i);
+    expect(fillFlagBlocks(landingHtml, { accounts: false, billing: false })).not.toContain('./pricing/');
+  });
+
+  it('adds sync with accounts, and the credits and the way to the plans with billing', () => {
+    expect(closer({ accounts: true, billing: false })).toContain('Sign in to sync your diagrams and practice progress across devices.');
+    expect(closer({ accounts: true, billing: false })).not.toMatch(/credits/);
+    const paid = closer({ accounts: true, billing: true });
+    expect(paid).toContain('Mock interviews and Design partner run on credits, and a free account comes with enough to try a mock interview.');
+    expect(paid).toContain('<a href="./pricing/">See plans</a>');
+    expect(fillFlagBlocks(landingHtml, { accounts: true, billing: true })).not.toContain('<!--if:');
+  });
+
+  it('billing needs accounts, as billingEnabled does; an unknown flag fails the build', () => {
+    expect(flagsFromEnv({ VITE_BILLING: 'true' })).toEqual({ accounts: false, billing: false });
+    expect(flagsFromEnv({ VITE_ACCOUNTS: 'true', VITE_BILLING: 'true' })).toEqual({ accounts: true, billing: true });
+    expect(() => fillFlagBlocks('<!--if:nope-->x<!--/if-->', { accounts: true, billing: true })).toThrow(/unknown flag/);
   });
 });

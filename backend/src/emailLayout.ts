@@ -36,8 +36,8 @@ export type Accent = 'yellow' | 'pink' | 'blue' | 'green' | 'red' | 'lilac';
 const ON: Record<Accent, string> = { yellow: COLORS.ink, pink: COLORS.ink, blue: '#ffffff', green: COLORS.ink, red: COLORS.ink, lilac: COLORS.ink };
 
 const DISPLAY = "'Bricolage Grotesque Variable','Bricolage Grotesque','Archivo',system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
-const SANS = "'Archivo',system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
-const MONO = "'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace";
+export const SANS = "'Archivo',system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
+export const MONO = "'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace";
 
 export const escapeHtml = (text: string) =>
   text.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -60,6 +60,8 @@ export interface EmailSpec {
   /** The big number (or emoji) of the email, with its label. */
   hero?: { value: string; label: string; note?: string };
   paragraphs: string[];
+  /** Body already rendered (src/campaignMarkdown.ts: escaped, inline styles), after the paragraphs, with its plain text. */
+  rich?: { html: string; text: string };
   /** Small tags under the text, e.g. the topics of the cards due. */
   chips?: { title: string; items: string[] };
   /** A grid of numbers, three a row. */
@@ -210,6 +212,7 @@ function emailHtml(spec: EmailSpec): string {
   const body: string[] = [];
   if (spec.hero) body.push(hero(spec.hero, spec.accent), '<div style="height:22px;line-height:22px;font-size:0;">&nbsp;</div>');
   spec.paragraphs.forEach((p, i) => body.push(para(p, i === spec.paragraphs.length - 1)));
+  if (spec.rich) body.push(spec.rich.html);
   if (spec.stats?.length) body.push('<div style="height:18px;line-height:18px;font-size:0;">&nbsp;</div>', stats(spec.stats));
   if (spec.chips?.items.length) body.push('<div style="height:16px;line-height:16px;font-size:0;">&nbsp;</div>', chips(spec.chips));
   body.push('<div style="height:24px;line-height:24px;font-size:0;">&nbsp;</div>', button(spec.cta, spec.accent));
@@ -282,6 +285,7 @@ function emailText(spec: EmailSpec): string {
   const out: string[] = [`PROSCHI  [${spec.badge}]`, `${spec.headline}\n${'='.repeat(Math.min(60, [...spec.headline].length))}`];
   if (spec.hero) out.push(`${spec.hero.value} ${spec.hero.label}${spec.hero.note ? `\n${spec.hero.note}` : ''}`);
   out.push(...spec.paragraphs);
+  if (spec.rich) out.push(spec.rich.text);
   if (spec.stats?.length) out.push(spec.stats.map((s) => `- ${s.label}: ${s.value}`).join('\n'));
   if (spec.chips?.items.length) out.push(`${spec.chips.title}: ${spec.chips.items.join(', ')}`);
   out.push(`>> ${spec.cta.label}: ${spec.cta.url}`);

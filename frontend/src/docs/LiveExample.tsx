@@ -11,6 +11,7 @@ import { analyze, runTests } from '../sim';
 import type { Edge, Node } from 'reactflow';
 import type { Lit } from './annotations';
 import './live.css';
+import Select from '../design/Select';
 
 interface LiveExampleProps {
   source: string;
@@ -107,19 +108,16 @@ export default function LiveExample({ source, siteRoot, imports, editorHref, ope
         {scenarios.length > 1 && (
           <label className="live__pick">
             <span className="live__pick-label">Scenario</span>
-            <select
-              value={selected}
-              onChange={(e) => {
-                setSelected(Number(e.target.value));
+            <Select
+              size="sm"
+              value={String(selected)}
+              onChange={(v) => {
+                setSelected(Number(v));
                 if (run > 0) setRun((n) => n + 1);
               }}
-            >
-              {scenarios.map((s, i) => (
-                <option key={s.key} value={i}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
+              options={scenarios.map((s, i) => ({ value: String(i), label: s.label }))}
+              className="max-w-full"
+            />
           </label>
         )}
         {scenarios.length === 1 && <span className="live__pick-label live__single">{current.label}</span>}

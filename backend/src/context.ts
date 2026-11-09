@@ -1,4 +1,5 @@
 import type { Env } from './env';
+import type { PUBLIC, TokenScope } from './scopes';
 
 /** One request's bindings, ids for the log, and what handlers add to the response. */
 export interface Ctx {
@@ -12,6 +13,8 @@ export interface Ctx {
   setCookies: string[];
   /** The signed-in user, once a handler has read the session; for the log. */
   userId?: string;
+  /** With a bearer token: the scope the route needs (src/scopes.ts), set by src/index.ts route before any handler; authenticate refuses a token without it. */
+  tokenScope?: TokenScope | typeof PUBLIC;
 }
 
 export function createContext(request: Request, env: Env, exec: ExecutionContext): Ctx {

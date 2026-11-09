@@ -16,6 +16,7 @@ export type EventKind =
   | 'blocked_sign_in'
   | 'cron'
   | 'reminder_failed'
+  | 'campaign_failed'
   | 'admin_sign_in'
   | 'admin_sign_in_failed'
   | 'admin_setup';

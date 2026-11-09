@@ -101,7 +101,7 @@
       "slug": "sharing",
       "title": "Sharing and embedding diagrams",
       "source": "SHARING.md",
-      "description": "Share a Proschi diagram as a link, as a short link with a preview image, or embed it read-only in a blog post, a wiki or docs with an iframe or oEmbed."
+      "description": "Share a Proschi diagram as a link, a short link with a preview image or a live, revocable share link, or embed it read-only in a blog post, a wiki or docs."
     },
     {
       "slug": "agents",
@@ -138,6 +138,12 @@
       "title": "Privacy",
       "source": "PRIVACY.md",
       "description": "What Proschi keeps in your browser, what an account stores on the server, what is logged and shared, and how to export or delete it."
+    },
+    {
+      "slug": "terms",
+      "title": "Terms",
+      "source": "TERMS.md",
+      "description": "The terms of the hosted Proschi service: the free plan, Pro, interview packs, payment through Polar, canceling, refunds and mock interviews."
     }
   ],
   "anchorRedirects": {
@@ -237,6 +243,7 @@
       "title": "About",
       "items": [
         { "page": "privacy" },
+        { "page": "terms" },
         { "href": "blog/", "label": "Blog" },
         { "href": "https://github.com/gvart/proschi/blob/main/CHANGELOG.md", "label": "Changelog" },
         { "href": "https://github.com/gvart/proschi", "label": "GitHub" }

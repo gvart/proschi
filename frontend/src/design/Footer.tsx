@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+import { bindFeedbackLinks } from '../feedback/links';
 import Wordmark from './Wordmark';
 import { FOOTER_COLUMNS, siteHref } from './site';
 
@@ -5,13 +7,14 @@ const GIANT = [...'proschi'];
 
 /** The site footer, the same on every page that has one (see Header for how static pages get it). */
 export default function Footer({ base }: { base: string }) {
+  useEffect(() => bindFeedbackLinks(), []);
   return (
     <footer className="ps-footer">
       <div className="ps-wrap ps-footer__grid">
         <div className="ps-footer__about">
           <Wordmark href={base} />
           <p className="ps-footer__tagline">Architecture diagrams as text, with request flows you can play.</p>
-          <p className="ps-footer__fine">Free and open source. No account needed: signed out, your diagrams never leave your browser.</p>
+          <p className="ps-footer__fine">Open source and free to start. The editor runs in your browser; signed out, your diagrams stay there.</p>
         </div>
         <nav className="ps-footer__nav" aria-label="Footer">
           {FOOTER_COLUMNS.map((column) => (
@@ -20,7 +23,7 @@ export default function Footer({ base }: { base: string }) {
               <ul>
                 {column.links.map((link) => (
                   <li key={link.label}>
-                    <a className="ps-footer__link" href={siteHref(base, link.href)}>
+                    <a className="ps-footer__link" href={siteHref(base, link.href)} data-feedback={link.feedback ? '' : undefined}>
                       {link.label}
                     </a>
                   </li>

@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "e2e": "playwright test",
-    "build:accounts": "VITE_ACCOUNTS=true vite build --outDir dist-accounts --emptyOutDir",
+    "build:accounts": "VITE_ACCOUNTS=true VITE_BILLING=true vite build --outDir dist-accounts --emptyOutDir",
     "layout:metrics": "LAYOUT_METRICS=1 vitest run src/dsl/layoutMetrics.test.ts",
     "e2e:build": "npm run build && npm run build:accounts && playwright test",
     "docs:screenshots": "playwright test --config e2e/screens.config.ts"

@@ -10,11 +10,23 @@ import { rejectName } from './moderation';
 import { findProblem, problemIds, verify, type Verdict } from './verify';
 import { exportGame } from './game';
 import { exportDocuments } from './documents';
+import { exportDocumentShares } from './documentShares';
 import { exportVersions } from './versions';
 import { clientDay as runDay, utcDay } from './activity';
 import { exportShares } from './shares';
 import { exportEmailPrefs } from './reminders';
+import { exportNews } from './campaigns';
+import { exportEmailSignIn } from './emailAuth';
 import { BOARD_METRICS, cacheKey } from './stats';
+import { exportBilling, exportBillingWebhooks, revokeOnDelete } from './billing';
+import { exportCredits, tombstoneStatements } from './credits';
+import { exportCharges } from './meter';
+import { exportRoadmapRecs } from './roadmap';
+import { exportInterviews } from './interviews';
+import { exportSoloInterviews } from './soloInterviews';
+import { exportPartnerSessions } from './partner';
+import { deleteFeedbackFiles, exportFeedback } from './feedback';
+import { parseScopes } from './scopes';
 
 /** The signed-in user's account and practice progress. */
 
@@ -60,6 +72,30 @@ function entryOf(row: Omit<ProgressRow, 'problem_id'>): ProgressEntry {
 
 const NO_STORE = { 'Cache-Control': 'no-store' };
 
+/** The practice page's learning goals (frontend/src/practice/hub/goal.ts GOALS), in its order. */
+export const PRACTICE_GOALS = ['solve', 'interview', 'habit'] as const;
+
+/** What the practice page is for, kept with the account (users.practice_goal, docs/design/paid-plans.md P43). */
+export interface PracticeGoal {
+  goals: (typeof PRACTICE_GOALS)[number][];
+  asked: boolean;
+  streak?: boolean;
+}
+
+/** `value` as a PracticeGoal, or undefined when it is not one: known goals only, each once. */
+function practiceGoalOf(value: unknown): PracticeGoal | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const { goals, asked, streak, ...rest } = value as Record<string, unknown>;
+  if (Object.keys(rest).length || !Array.isArray(goals) || typeof asked !== 'boolean') return undefined;
+  if (streak !== undefined && typeof streak !== 'boolean') return undefined;
+  if (goals.length > PRACTICE_GOALS.length || new Set(goals).size !== goals.length) return undefined;
+  if (!goals.every((g) => (PRACTICE_GOALS as readonly unknown[]).includes(g))) return undefined;
+  return { goals: PRACTICE_GOALS.filter((g) => goals.includes(g)), asked, ...(streak !== undefined ? { streak } : {}) };
+}
+
+/** The stored goal (JSON), or null without one. */
+const storedGoal = (text: unknown): PracticeGoal | null => (typeof text === 'string' ? (practiceGoalOf(JSON.parse(text)) ?? null) : null);
+
 /** GET /api/me */
 export async function getMe(request: Request, ctx: Ctx): Promise<Response> {
   const { DB } = ctx.env;
@@ -69,17 +105,23 @@ export async function getMe(request: Request, ctx: Ctx): Promise<Response> {
       'SELECT problem_id, runs, source, solved_at, solved_day, runs_to_solve, best_cost_usd, best_p99_ms FROM progress WHERE user_id = ? ORDER BY problem_id',
     ).bind(user.id),
     DB.prepare('SELECT provider FROM identities WHERE user_id = ? ORDER BY provider').bind(user.id),
-    // When the account was made: "member since" on the account page.
-    DB.prepare('SELECT created_at FROM users WHERE id = ?').bind(user.id),
+    // When the account was made: "member since" on the account page; and the practice page's goal.
+    DB.prepare('SELECT created_at, practice_goal FROM users WHERE id = ?').bind(user.id),
     // Lessons and guides read on any device (src/lessons.ts).
     DB.prepare('SELECT lesson_id FROM lesson_reads WHERE user_id = ? ORDER BY lesson_id').bind(user.id),
   ]);
   const progress: Record<string, ProgressEntry> = {};
   for (const row of rows.results as unknown as ProgressRow[]) progress[row.problem_id] = entryOf(row);
-  const createdAt = (account.results[0] as { created_at: number } | undefined)?.created_at;
+  const row = account.results[0] as { created_at: number; practice_goal: string | null } | undefined;
+  const createdAt = row?.created_at;
   return json(
     {
-      user: { ...user, providers: (identities.results as { provider: string }[]).map((r) => r.provider), ...(createdAt !== undefined ? { createdAt } : {}) },
+      user: {
+        ...user,
+        providers: (identities.results as { provider: string }[]).map((r) => r.provider),
+        ...(createdAt !== undefined ? { createdAt } : {}),
+        practiceGoal: storedGoal(row?.practice_goal),
+      },
       progress,
       lessons: (lessons.results as { lesson_id: string }[]).map((r) => r.lesson_id),
     },
@@ -88,7 +130,7 @@ export async function getMe(request: Request, ctx: Ctx): Promise<Response> {
   );
 }
 
-/** PATCH /api/me {displayName?, publicProfile?, dailyGoal?} */
+/** PATCH /api/me {displayName?, publicProfile?, dailyGoal?, practiceGoal?: {goals, asked, streak?}} */
 export async function updateMe(request: Request, ctx: Ctx): Promise<Response> {
   const user = await requireUser(request, ctx);
   await rateLimit(ctx.env.PROFILE_LIMITER, user.id, 'Too many account changes; wait a minute');
@@ -112,16 +154,26 @@ export async function updateMe(request: Request, ctx: Ctx): Promise<Response> {
     if (!isGoalChoice(body.dailyGoal)) throw new HttpError(400, `dailyGoal must be one of ${GOAL_CHOICES.join(', ')}`);
     dailyGoal = body.dailyGoal;
   }
-  await ctx.env.DB.prepare('UPDATE users SET display_name = ?, public_profile = ?, daily_goal = ? WHERE id = ?')
-    .bind(displayName, publicProfile ? 1 : 0, dailyGoal, user.id)
+  let practiceGoal: PracticeGoal | undefined;
+  if (body.practiceGoal !== undefined) {
+    practiceGoal = practiceGoalOf(body.practiceGoal);
+    if (!practiceGoal) throw new HttpError(400, `practiceGoal must be {goals, asked, streak?}, goals out of ${PRACTICE_GOALS.join(', ')}`);
+  }
+  await ctx.env.DB.prepare('UPDATE users SET display_name = ?, public_profile = ?, daily_goal = ?, practice_goal = COALESCE(?, practice_goal) WHERE id = ?')
+    .bind(displayName, publicProfile ? 1 : 0, dailyGoal, practiceGoal ? JSON.stringify(practiceGoal) : null, user.id)
     .run();
-  return json({ user: { id: user.id, displayName, publicProfile, dailyGoal } }, 200, NO_STORE);
+  return json({ user: { id: user.id, displayName, publicProfile, dailyGoal, ...(practiceGoal ? { practiceGoal } : {}) } }, 200, NO_STORE);
 }
 
-/** DELETE /api/me: the account, its identities, sessions (apps' tokens and sign-in codes too), progress, lessons read, card reviews, achievements, daily challenge attempts, game progress, short links, synced diagrams and their versions and the email reminders' address (ON DELETE CASCADE). */
+/** DELETE /api/me: the account, its identities, sessions (apps' tokens and sign-in codes too), progress, lessons read, interviews on your own, card reviews, achievements, daily challenge attempts, game progress, short links, synced diagrams with their versions and share links, and the email reminders' address (ON DELETE CASCADE). */
 export async function deleteMe(request: Request, ctx: Ctx): Promise<Response> {
   const user = await requireUser(request, ctx);
-  await ctx.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(user.id).run();
+  // A subscription still billing is revoked at Polar first; billing and credits go with the account (ON DELETE CASCADE).
+  await revokeOnDelete(ctx.env, user.id);
+  // Feedback screenshots are in R2, which the cascade below cannot reach.
+  await deleteFeedbackFiles(ctx.env, user.id);
+  // Only an HMAC of each identity and whether the trial was used stay, so signing up again doesn't give a new trial (src/credits.ts).
+  await ctx.env.DB.batch([...(await tombstoneStatements(ctx.env, user.id)), ctx.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(user.id)]);
   ctx.setCookies = [sessionCookie('', 0)];
   return new Response(null, { status: 204 });
 }
@@ -129,15 +181,19 @@ export async function deleteMe(request: Request, ctx: Ctx): Promise<Response> {
 /**
  * GET /api/me/export: everything stored about the user, as a JSON download.
  * Session tokens are stored only as hashes, and those stay out of it too.
+ *
+ * It is complete on purpose, data a paid feature gates included (every
+ * verdict off interview_history, for one): it is the user's right of access
+ * to their own data, not a feature (docs/design/paid-plans.md P23).
  */
 export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
   const { DB } = ctx.env;
   const user = await requireUser(request, ctx);
   await rateLimit(ctx.env.PROFILE_LIMITER, user.id, 'Too many account changes; wait a minute');
   const [account, identities, sessions, progress, cardReviews, cardStates, achievements, challenges] = await DB.batch([
-    DB.prepare('SELECT created_at, daily_goal, last_seen_day, plan FROM users WHERE id = ?').bind(user.id),
+    DB.prepare('SELECT created_at, daily_goal, practice_goal, last_seen_day, plan, comp_until FROM users WHERE id = ?').bind(user.id),
     DB.prepare('SELECT provider, subject FROM identities WHERE user_id = ? ORDER BY provider').bind(user.id),
-    DB.prepare('SELECT kind, created_at, expires_at, used_at FROM sessions WHERE user_id = ? ORDER BY created_at, rowid').bind(user.id),
+    DB.prepare('SELECT kind, created_at, expires_at, used_at, scopes FROM sessions WHERE user_id = ? ORDER BY created_at, rowid').bind(user.id),
     DB.prepare(
       `SELECT problem_id, runs, source, first_run_at, updated_at, solved_at, solved_day, runs_to_solve, best_cost_usd, best_p99_ms, best_cost_at, best_p99_at, sim_version, problem_version
        FROM progress WHERE user_id = ? ORDER BY problem_id`,
@@ -157,16 +213,21 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
       displayName: user.displayName,
       publicProfile: user.publicProfile,
       dailyGoal: (account.results[0] as Row).daily_goal,
+      // What the practice page is for (null until the account has one).
+      practiceGoal: storedGoal((account.results[0] as Row).practice_goal),
       createdAt: (account.results[0] as Row).created_at,
       lastSeenDay: (account.results[0] as Row).last_seen_day,
       plan: (account.results[0] as Row).plan,
+      // Pro given by the admin until then (Unix seconds); null without.
+      compUntil: (account.results[0] as Row).comp_until,
     },
     identities: (identities.results as Row[]).map((r) => ({ provider: r.provider, subject: r.subject })),
-    // kind: web (the site's cookie), app_access or app_refresh (an app's tokens; rotatedAt once a refresh token was used).
+    // kind: web (the site's cookie), app_access or app_refresh (an app's tokens, with their scopes; rotatedAt once a refresh token was used).
     sessions: (sessions.results as Row[]).map((r) => ({
       kind: r.kind,
       createdAt: r.created_at,
       expiresAt: r.expires_at,
+      ...(r.kind === 'web' ? {} : { scopes: parseScopes(r.scopes as string | null) }),
       ...(r.kind === 'app_refresh' ? { rotatedAt: r.used_at } : {}),
     })),
     progress: (progress.results as Row[]).map((r) => ({
@@ -223,14 +284,37 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
       lessonId: r.lesson_id,
       readAt: r.read_at,
     })),
+    // Mock interviews finished on your own, as the browser sent them.
+    soloInterviews: await exportSoloInterviews(DB, user.id),
     // Short links: the diagram of each; the preview image is at imageUrl.
     shares: await exportShares(DB, user.id, new URL(request.url).origin),
     // The editor's diagrams kept by cloud sync, with tombstones of deleted ones (kept 30 days).
     documents: await exportDocuments(DB, user.id),
     // Their tagged versions, with content; deleted ones as tombstones (tag and seq kept, content cleared).
     documentVersions: await exportVersions(DB, user.id),
+    // Live share links of those diagrams (Pro), revoked ones too.
+    documentShares: await exportDocumentShares(DB, user.id, new URL(request.url).origin),
     // Email reminders: the address and its settings; null without one.
     emailReminders: await exportEmailPrefs(DB, user.id),
+    emailSignIn: await exportEmailSignIn(DB, user.id),
+    // Product news (on or off), the GitHub or Google contact address, and the admin campaigns that reached the account.
+    news: await exportNews(DB, user.id),
+    // The Polar customer and subscription (no card data is ever stored); null before a purchase.
+    billing: await exportBilling(DB, user.id),
+    // Polar's webhook deliveries about this account in the last 90 days: when, the event type and what was done (no payload).
+    billingWebhooks: await exportBillingWebhooks(DB, user.id),
+    // The credit ledger: each grant, top-up, charge and revoke, and the admin's grants and revokes.
+    credits: await exportCredits(DB, user.id),
+    // What each paid action was charged, in credits.
+    creditCharges: await exportCharges(DB, user.id),
+    // AI interviews: each session with its verdict and, for 90 days, its transcript.
+    aiInterviews: await exportInterviews(DB, user.id),
+    // Design partner chats, each with its turns and proposed changes, for 90 days after its last turn.
+    partnerSessions: await exportPartnerSessions(ctx.env, user.id),
+    // The AI roadmap's picks (Pro): the next steps picked after an interview or a review, each with its reason.
+    roadmapRecs: await exportRoadmapRecs(DB, user.id),
+    // Messages sent with Send feedback, with their context and, if attached, the diagram (the screenshots' type and size; the operator's notes stay out).
+    feedback: await exportFeedback(DB, user.id),
   };
   return json(body, 200, { ...NO_STORE, 'Content-Disposition': 'attachment; filename="proschi-data.json"' });
 }

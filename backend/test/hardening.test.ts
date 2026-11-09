@@ -233,7 +233,7 @@ describe('data export', () => {
     const text = await response.text();
     expect(JSON.parse(text)).toEqual({
       exportedAt: expect.any(Number),
-      user: { id, displayName: 'Ada', publicProfile: false, dailyGoal: 10, createdAt: 0, lastSeenDay: new Date().toISOString().slice(0, 10), plan: 'free' },
+      user: { id, displayName: 'Ada', publicProfile: false, dailyGoal: 10, practiceGoal: null, createdAt: 0, lastSeenDay: new Date().toISOString().slice(0, 10), plan: 'free', compUntil: null },
       identities: [{ provider: 'github', subject: id }],
       sessions: [
         { kind: 'web', createdAt: 0, expiresAt: 4_000_000_000 },
@@ -263,10 +263,22 @@ describe('data export', () => {
       challengeAttempts: [],
       game: { meta: null, runs: [] },
       lessonReads: [],
+      soloInterviews: [],
       shares: [],
       documents: [],
       documentVersions: [],
+      documentShares: [],
       emailReminders: null,
+      emailSignIn: { login: null, signupCredits: null },
+      news: { productNews: { on: true, optedOutAt: null, via: null }, contactEmail: null, campaigns: [] },
+      billing: null,
+      billingWebhooks: [],
+      credits: [],
+      creditCharges: [],
+      roadmapRecs: [],
+      feedback: [],
+      aiInterviews: [],
+      partnerSessions: [],
     });
     expect(text).not.toContain(await sha256(token));
     expect(text).not.toContain(token);

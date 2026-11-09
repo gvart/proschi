@@ -11,15 +11,56 @@ import { test as base, expect, type Locator, type Page } from '@playwright/test'
 const ALLOWED_CONSOLE_ERRORS: RegExp[] = [
   // Signed out (build with accounts), GET /api/me answers 401 and the page reads that as signed out; Chromium logs every non-2xx load.
   /^Failed to load resource: the server responded with a status of 401 \(Unauthorized\) \(http:\/\/127\.0\.0\.1:\d+\/api\/me:0\)$/,
+  // The sign-in page's forms (signin.accounts.e2e.ts): a wrong password answers 401 and a used link 400, which the page shows as a message.
+  /^Failed to load resource: the server responded with a status of 40[01] \([^)]+\) \(http:\/\/127\.0\.0\.1:\d+\/auth\/email\/(login|confirm|reset):0\)$/,
+  // The admin's email preview is a sandboxed srcdoc iframe without scripts: the tests' own init scripts (addInitScript) are refused in it, as intended.
+  /^Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set\.( \(about:srcdoc:0\))?$/,
+  // The admin's Cloudflare usage page before it is set up (cfUsage.accounts.e2e.ts): 501, which the page shows as the setup steps.
+  /^Failed to load resource: the server responded with a status of 501 \(Not Implemented\) \(http:\/\/127\.0\.0\.1:\d+\/api\/admin\/cf-usage:0\)$/,
 ];
 
 /** The key src/onboarding/seen.ts keeps the first-run tours' "seen" flags in. */
 export const ONBOARDING_KEY = 'proschi.onboarding';
 
+/** The key src/practice/hub/goal.ts keeps what the visitor is on the practice page for in. */
+export const GOAL_KEY = 'proschi.practice.goal';
+
+/**
+ * Answers the practice home's "What are you here for?" before every load of
+ * `page`: a daily habit shows the streak and today's review, challenge and
+ * Arcade run; interview prep the roadmap's next step and the mock interview.
+ */
+export async function setPracticeGoal(page: Page, goals: ('solve' | 'interview' | 'habit')[]): Promise<void> {
+  await page.addInitScript(([key, value]) => window.localStorage.setItem(key, value), [GOAL_KEY, JSON.stringify({ goals, asked: true })] as const);
+}
+
+/** The menu of the practice hub's bar (src/practice/hub/tabs.ts HUB_GROUPS) holding each section; Problems and Progress are links on the bar itself. */
+const SECTION_MENU: Record<string, RegExp> = {
+  Roadmap: /^Interview/,
+  'Mock interview': /^Interview/,
+  'Review cards': /^More/,
+  'Daily challenge': /^More/,
+  Arcade: /^More/,
+};
+
+/** The practice hub's link to `section`, its menu opened first when it sits in one (on a phone the menus are named "Interview" and "More"). */
+export async function sectionLink(page: Page, section: string): Promise<Locator> {
+  const nav = page.getByRole('navigation', { name: 'Practice sections' });
+  const menu = SECTION_MENU[section];
+  if (menu) {
+    const button = nav.getByRole('button', { name: menu });
+    if ((await button.getAttribute('aria-expanded')) !== 'true') await button.click();
+  }
+  return nav.getByRole('link', { name: section, exact: true });
+}
+
 /** The key src/practice/progress.ts keeps the lessons read in. */
 export const LESSONS_KEY = 'proschi.lessons';
 
-export const test = base.extend<{ errors: string[]; onboarding: 'seen' | 'fresh'; onboardingSeen: void; lessons: 'skip' | 'fresh'; lessonsSkipped: void }>({
+/** The key prefix src/practice/stages/flow.ts keeps each problem's stage notes under. */
+export const STAGES_KEY = 'proschi.practice.stages.';
+
+export const test = base.extend<{ errors: string[]; onboarding: 'seen' | 'fresh'; onboardingSeen: void; lessons: 'skip' | 'fresh'; lessonsSkipped: void; stages: 'editor' | 'fresh'; stagesSkipped: void }>({
   /**
    * First-run tours would cover the pages most tests look at, so by default
    * every page starts with them marked as seen. Tests of the tours themselves
@@ -42,11 +83,11 @@ export const test = base.extend<{ errors: string[]; onboarding: 'seen' | 'fresh'
     { auto: true },
   ],
   /**
-   * A problem opens on its lesson until the lesson is read, which would put
-   * a page of reading in front of every test of the workspace. By default,
-   * opening `practice/#/<problem id>` (loaded or navigated to) marks that
-   * problem's lesson read just before the page reads it, so the workspace
-   * opens as for someone who has read it. Only the lesson of the problem
+   * Whether a lesson was read (it shows as read on the roadmap; no problem
+   * opens on its lesson first any more, P51/P52). By default, opening
+   * `practice/#/<problem id>` (loaded or navigated to) marks that
+   * problem's lesson read just before the page reads it, as for someone
+   * who has read it. Only the lesson of the problem
    * opened is marked; `#/<id>/lesson` and `#/roadmap/…` are left alone, and
    * so is every other lesson. Tests of the lesson stage use
    * `test.use({ lessons: 'fresh' })`.
@@ -73,6 +114,40 @@ export const test = base.extend<{ errors: string[]; onboarding: 'seen' | 'fresh'
           // Registered before the app's own listener, so it runs first.
           window.addEventListener('hashchange', markRead);
         }, LESSONS_KEY);
+      }
+      await use();
+    },
+    { auto: true },
+  ],
+  /**
+   * A problem is worked through in stages (Clarify, Estimate, Design,
+   * Wrap-up), and Design opens on the whiteboard. Most tests are about the
+   * full editor, so by default a problem opened (`#/<id>`, `#/<id>/lesson`
+   * or `#/roadmap/<id>`) whose stages were never touched opens on Design in
+   * the full editor, every stage reached, as for someone who has been through
+   * them. Tests of
+   * the stages use `test.use({ stages: 'fresh' })`.
+   */
+  stages: ['editor', { option: true }],
+  stagesSkipped: [
+    async ({ context, stages }, use) => {
+      if (stages === 'editor') {
+        await context.addInitScript((prefix) => {
+          const PAGES = new Set(['roadmap', 'review', 'progress', 'challenge', 'arcade', 'me', 'interview', 'guide']);
+          const skip = () => {
+            if (!window.location.pathname.includes('/practice/')) return;
+            const m = /^#\/(?:roadmap\/)?([a-z0-9-]+)(?:\/lesson)?$/.exec(window.location.hash);
+            const id = m?.[1];
+            if (!id || PAGES.has(id)) return;
+            try {
+              if (window.localStorage.getItem(prefix + id) === null) window.localStorage.setItem(prefix + id, JSON.stringify({ stage: 'design', reached: 'wrapup', editor: true, briefRead: true }));
+            } catch {
+              // Storage blocked: the stages show.
+            }
+          };
+          skip();
+          window.addEventListener('hashchange', skip);
+        }, STAGES_KEY);
       }
       await use();
     },
@@ -172,6 +247,37 @@ export async function mockClipboard(page: Page): Promise<void> {
   });
 }
 
+/** Answers the open confirm or prompt (src/design/dialogs.ts) with its button named `name`. */
+export async function answerDialog(page: Page, name: string): Promise<void> {
+  await page.locator('.ps-dialog').getByRole('button', { name, exact: true }).click();
+}
+
+/**
+ * The mock interview's set-up wizard (practice/interview/Setup.tsx): Continue
+ * until the screen `step` shows ('who', 'problem', 'length', 'talk' or
+ * 'review', the last one with Start). The screens before it keep their defaults.
+ */
+export async function toSetupStep(page: Page, step: 'who' | 'problem' | 'length' | 'talk' | 'review' = 'review'): Promise<Locator> {
+  const setup = page.getByTestId('interview-setup');
+  await expect(setup).toBeVisible();
+  for (let i = 0; i < 5; i++) {
+    const at = await setup.getAttribute('data-step');
+    if (at === step) break;
+    await setup.getByRole('button', { name: /^(Continue|Back to review)/ }).click();
+    await expect(setup).not.toHaveAttribute('data-step', at ?? '');
+  }
+  await expect(setup).toHaveAttribute('data-step', step);
+  return setup;
+}
+
+/** Loads the open problem's reference solution into the editor, saying yes to both confirms. */
+export async function loadReferenceSolution(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Show reference solution' }).click();
+  await answerDialog(page, 'Show solution');
+  await page.getByRole('button', { name: 'Load into the editor' }).click();
+  await answerDialog(page, 'Replace');
+}
+
 /** The last text copied since mockClipboard, or '' for none. */
 export function copiedText(page: Page): Promise<string> {
   return page.evaluate(() => (window as unknown as { __copied: string[] }).__copied.at(-1) ?? '');
@@ -195,4 +301,29 @@ export async function expectDiagramFitted(page: Page, bottomLimit = Infinity): P
       { message: 'diagram fitted inside the canvas' },
     )
     .toBe('fitted');
+}
+
+/**
+ * The component palette beside the canvas (a bottom sheet on phones), opened if it is not shown:
+ * it starts hidden, and a selection's settings take its place until the toggle brings it back.
+ */
+export async function componentPalette(page: Page): Promise<Locator> {
+  const toggle = page.getByRole('button', { name: 'Add component' });
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+  const palette = page.getByRole('region', { name: 'Components' });
+  await expect(palette).toBeVisible();
+  return palette;
+}
+
+/** Adds a component from the palette by searching for it; `name` is the palette entry. */
+export async function addFromPalette(page: Page, search: string, name: string): Promise<void> {
+  const palette = await componentPalette(page);
+  await palette.getByRole('searchbox', { name: 'Search components' }).fill(search);
+  await palette.getByRole('button', { name, exact: true }).click();
+}
+
+/** Opens one of the design system's selects (src/design/Select.tsx) and picks the option with this exact label. */
+export async function chooseOption(select: Locator, option: string): Promise<void> {
+  await select.click();
+  await select.page().getByRole('option', { name: option, exact: true }).click();
 }

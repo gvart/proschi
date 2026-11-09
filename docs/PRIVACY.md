@@ -2,12 +2,13 @@
 
 Short version: signed out, the editor never sends your diagrams anywhere
 unless you make a short link; signed in, it keeps them in your account
-(private, and you can turn that off). There are no analytics or tracking
+(private, and you can turn that off). Payments for Pro go through Polar,
+and mock interviews and Design partner chats are sent to an AI provider (Anthropic) only when you start one. There are no analytics or tracking
 scripts, no cookies for counting and nothing that follows you; the site only
 counts, per day, how often a few things happen (say, "the editor was opened
 412 times on 6 October"), with nothing about who. An account is optional (for
 practice, short links and keeping your diagrams across devices), and an email
-address is kept only if you ask for email reminders. The rest of this page
+address is kept only if you sign in with one or ask for email reminders. The rest of this page
 lists exactly what is kept, where, and for how long.
 
 ## In your browser
@@ -25,6 +26,11 @@ server. What they remember stays in your browser's storage on this device:
 | `proschi.practice` | Practice progress: per problem, your latest design, how many times you ran the tests and whether you solved it |
 | `proschi.practice.runs` | Per problem: how many test runs, the runs it took to solve it, and the monthly cost of your cheapest solving design and of the reference solution, for the badges on a copy of the site without accounts |
 | `proschi.practice.last` | The last practice problem you opened, for "Continue" on the practice page |
+| `proschi.practice.goal` | What you are on the practice page for (solving problems, interview prep, a daily habit), whether you answered or skipped that question, and whether you switched the daily streak on or off; signed in, a copy of what your account keeps |
+| `proschi.interview.<problem>` | Scripted interview mode in progress on a problem: the length, the phase, the time spent per phase, the questions asked, your estimates, the last test run and the self-review ticks; removed when you leave interview mode |
+| `proschi.interview.history` | The summaries of your last 50 finished scripted interviews (time per phase, questions, estimates, tests, self-review) |
+| `proschi.aiInterview.<problem>` | Signed in: the id of the mock interview open on a problem, so a reload resumes it; the interview itself is on the server, below |
+| `proschi.aiInterview.consent` | That you agreed once to what a mock interview sends to the AI provider |
 | `proschi.achievements` | Badges earned on a copy of the site without accounts: which, when, and when the page showed them to you |
 | `proschi.cards` | Daily review, on a copy of the site without accounts: every card review (which card, your rating, when, how long it took and your local date) |
 | `proschi.cards.outbox` | Daily review, signed in: reviews not yet sent to the server, kept until it answers |
@@ -110,8 +116,8 @@ a local build) never send anything.
 
 ## With a practice account
 
-On [proschi.app](https://proschi.app/practice/) you can sign in with GitHub or
-Google to keep practice progress and your diagrams across devices, see how
+On [proschi.app](https://proschi.app/practice/) you can sign in with GitHub,
+Google or an email address and password to keep practice progress and your diagrams across devices, see how
 others did and make short links to diagrams.
 Without signing in, nothing about you reaches the server (the usage counts
 above are about events, not about you).
@@ -121,8 +127,8 @@ above are about events, not about you).
 - Your account: the sign-in provider and the user id it gives Proschi, a
   display name (your GitHub login or Google first name, which you can
   change), whether you chose to appear on the leaderboard, when the
-  account was created, and its plan (everyone is on the free plan; it only
-  sets how much the account may keep).
+  account was created, and its plan (free or Pro; it sets how much the
+  account may keep and how many mock interviews it gets).
 - Sessions: a hash of each session's cookie, with when it started and when
   it expires. A session lasts 30 days and renews while you use it; expired
   ones are deleted daily.
@@ -131,7 +137,10 @@ above are about events, not about you).
   (an access token that lasts an hour and a refresh token that lasts 60
   days), with whether it is the site's cookie or which app token it is, when
   it was issued, when it expires and, for a refresh token, when it was
-  exchanged for new ones. Rotated refresh tokens are kept until they expire,
+  exchanged for new ones, and what the tokens may be used for (their
+  scopes: for the command line tool, reading your name and your synced
+  diagrams; never billing, credits, the AI features or account changes).
+  Settings lists these sign-ins with their scopes. Rotated refresh tokens are kept until they expire,
   to notice a stolen copy being used. During sign-in a hash of a one-time
   code, which the app exchanges for its tokens within 60 seconds, is kept
   with the app's address to return to (for the command line tool, the
@@ -150,7 +159,12 @@ above are about events, not about you).
   local date; and per card the schedule computed from them (when it is due
   next and how well you know it). Reviews made signed out stay in the page
   and are gone when you close it.
-- Your daily goal (cards a day). The daily streak and the weekly recap are
+- Your daily goal (cards a day), and what you are on the practice page for
+  (solving problems, interview prep, a daily habit; whether you answered or
+  skipped that question, and whether you switched the daily streak on or
+  off). Signed in, that answer is kept with your account instead of only in
+  this browser: the first time you sign in, the browser's answer is copied
+  to it if the account has none. The daily streak and the weekly recap are
   computed from your card reviews, solve dates, daily challenges and game
   runs (by the local date each was sent on, kept with them); nothing more is
   stored for them.
@@ -174,11 +188,12 @@ above are about events, not about you).
   profile or a leaderboard, and only you can read them. Deleting a diagram
   leaves a marker (its id, version and when) for 30 days, so your other
   devices delete their copy too; its text is removed at once. Your account
-  keeps at most 5 diagrams on the free plan, 64 KiB each; the others stay in your browser only, marked "This browser only" in
+  keeps at most 5 diagrams on the free plan, 64 KiB each (Pro: no practical limit, 512 KiB each); the others stay in your browser only, marked "This browser only" in
   the editor's list of diagrams, and are never lost. **Move to this browser
   only**, in a diagram's actions there, takes it out of your account (and
   your other devices) to free a slot. Turning sync off keeps the copies in
-  your account until you choose **Delete my cloud copies** in the File menu.
+  your account until you choose **Delete my cloud copies** in the File menu
+  or in Settings.
 
   **Shared computers.** The browser remembers which account its diagrams
   were synced with. When a different account signs in, the diagrams synced
@@ -217,15 +232,25 @@ above are about events, not about you).
   collected for them.
 - Only if you ask for email reminders: your email address and its settings
   ([Email reminders](#email-reminders), below).
+- Only if you sign in with an email address: that address, a hash of your
+  password, and when you confirmed the address ([Email sign-in](#email-sign-in),
+  below).
+- If you sign in with GitHub or Google: the verified email address they give,
+  as a contact address for account and product news email only
+  ([Product news](#product-news), below).
 - The last day (UTC date only, no time) you used your account, for counting
   how many people are active ([The site's operator](#the-sites-operator),
   below).
 
-**What is not stored**: your email address (unless you opt in to email
-reminders), your avatar, and the access
+**What is not stored**: your avatar, and the access
 tokens GitHub or Google hand over during sign-in (they are used once, to
-read your user id and name, and dropped). Proschi asks GitHub for no
-permissions beyond your public profile, and Google for `openid profile` only.
+read your user id, name and verified email address, and dropped). Proschi
+asks GitHub for your public profile and read-only access to your email
+addresses (`user:email`), and Google for `openid profile email`. The
+verified address is used for the [free sign-up credits' checks](#free-sign-up-credits)
+(only a one-way keyed hash of it is kept for those) and, since November
+2026, kept as your contact address ([Product news](#product-news)). It is
+never a way to sign in or to find your account.
 
 **Cookies**: `__Host-proschi_session` keeps you signed in (HttpOnly, sent
 only to proschi.app). `proschi_oauth` lives for ten minutes during sign-in to
@@ -279,12 +304,138 @@ nobody can tell whether you have an account. Its picture card stops being
 served at once too, but link previews that a chat app or social network
 already fetched are kept by them, beyond our control.
 
+## Plans, credits and payments
+
+Pro, Max and top-ups are paid through [Polar](https://polar.sh), the
+merchant of record: Polar runs the checkout and the billing portal on its
+own pages, charges your card, handles VAT and sends the invoices, under
+[its privacy policy](https://polar.sh/legal/privacy). Proschi never sees or
+stores your card, billing address or the email address you give Polar.
+
+**What Polar gets from Proschi**: your account's id (so a payment lands on
+the right account) and which product you chose. Nothing else is sent.
+
+**What is stored here**, once you buy something:
+
+- your Polar customer id and subscription id, the subscription's status
+  (active, canceled and so on), which plan (Pro or Max, monthly or yearly),
+  when the paid period ends, whether it is canceled at that date, and when
+  this was last updated;
+- your credits, as a ledger: the sign-up credits, each month's credits, each
+  top-up bought (with Polar's order id), and each charge with what it was for
+  (a mock interview, Design partner, a verdict, your next steps), its id, the
+  credits and whether it ran in Deep mode, with the time of each;
+- for every message Polar's webhook sends: its id, its type and when it
+  arrived, to apply it only once. It holds nothing about you.
+- a log of those messages for the site's operator, kept 90 days: when each
+  arrived, its id and type, what was done with it and the account it was
+  about; never its content.
+- if the operator gives you Pro for a while, or adds or takes back
+  credits (say, after a support request), the date the free Pro ends and
+  those credits in the ledger; the reason is kept in the operator's audit log.
+
+**What it is used for**: only to know your plan, renewal date and how many
+credits you have left. It is shown in **Plan & billing** on your account
+page, with your recent use.
+
+**How long**: as long as the account. Deleting the account cancels a
+subscription still running at Polar at once, then removes all of the above
+(the webhook log keeps its rows without your account id until they are 90
+days old; the list of applied message ids names no account). Polar keeps its own
+records of the payments, such as invoices, as the law requires of it.
+
+## Live share links (Pro)
+
+On Pro you can make a live share link to one of your synced diagrams.
+**What is stored**: a random token (the link's address), which diagram it
+opens, and when it was made and, once you revoke it, when. Anyone with the
+link sees the diagram as it is now, read-only, while you are on Pro;
+nothing about who opens it is kept. A revoked link stays as that row so its
+token is never reused. The links are in **Download my data**, and are
+deleted with the diagram or the account.
+
+## Mock interviews
+
+A mock interview (paid for in credits, on any plan) is started only by you, knowing it is sent to an AI provider:
+the problem, your diagram and everything you write or dictate in the
+interview are sent to Anthropic's Claude, through Cloudflare's AI Gateway,
+to ask the questions and write the hints and the verdict. The provider uses
+them only to answer, not to train its models.
+
+**What is stored**: the interview's transcript, kept 90 days and then
+deleted, and its verdict summary (pass or fail, and what went well and
+wrong per skill), kept for your interview history. Both are private, part
+of **Download my data**, and deleted with your account. A daily job deletes
+each transcript, and the design sent with it, once the interview is 90 days
+old; the verdict stays. On Pro, your next steps are picked after
+each verdict (below). Dictation, where
+your browser offers it, is done by the browser; Proschi receives only the
+text.
+
+## Design partner
+
+Signed in, **Design partner** (paid for in credits, on any plan) is a chat
+about your design, in the editor or on a practice problem, started only by
+you. Each message you send goes to the server with your design's source (in
+the editor, also the files it imports; on a practice problem, the problem's
+id). The server runs the simulation and the tests on it and sends your
+message, the design, those results, the problem and the chat's earlier
+messages to Anthropic's Claude, through Cloudflare's AI Gateway, to write the
+answer and any changes it proposes. The provider uses them only to answer,
+not to train its models.
+
+**What is stored**: each chat (where it was opened, and on a practice problem
+which one), its messages and the partner's answers, the changes it proposed
+with the server's check of each and whether you accepted or rejected it. A
+chat is private, part of **Download my data**, and deleted with your account;
+a daily job deletes it 90 days after its last message. What each message
+cost is in the credits ledger (above).
+
+## Your next steps (Pro)
+
+On Pro, after a mock interview's verdict, Proschi asks Anthropic's Claude to
+pick your next 3 steps. It sends the verdict, your weakest card
+topics, which roadmap problems you have solved and your mastery of each card
+topic. The provider uses them only to answer, not to train its models.
+
+**What is stored**: each set of picks (the problem or card topic ids, the
+reason for each, when, and the interview that prompted it; older picks made
+after a design review, a feature Design partner replaced, keep the reviewed
+problem instead). They are private, part of **Download my data**, and deleted with your
+account.
+
+## Feedback
+
+Signed in, **Send feedback** (in the help menu, the footer and Settings →
+Contact us) sends a message to the operator: a bug, a question, a proposal
+or anything else. Only you start it, and the dialog lists what goes with it
+before you send.
+
+**What is stored**: the type, the subject and message as you wrote them,
+your account (so the operator knows who wrote and can reply), and the
+context the dialog shows: the page's address without its query, your
+browser's user agent, the window size, your plan and the site's version.
+If you tick **Attach my current diagram**, its source; if you add
+screenshots (up to 3 PNG, JPEG or WebP images of 5 MB), those, stored
+privately in Cloudflare R2 where only the operator's admin panel can open
+them. Nothing is emailed and nothing is shared. The operator can mark a
+message new, in progress or done and keep an internal note on it.
+
+The operator answers, when one is needed, at your account's confirmed email
+address (your email sign-in, the address GitHub or Google gave, or your email
+reminders' address), if it has one. Your messages are in **Download my data** (the screenshots by type and
+size, not the operator's notes) and are deleted with your account,
+screenshots included; the operator can also delete one. You can send up to
+5 messages an hour and 20 a day.
+
 ## The site's operator
 
 Proschi has one operator, who signs in to an admin panel (`/admin/`) with a
 passkey. It reads the database directly, so the operator can see what the
 server stores about an account (listed above), with these limits: the email
-reminders' address is shown masked (`a***@example.com`), and session tokens
+reminders' address is shown masked (`a***@example.com`) except on a
+message you sent with Send feedback, where your confirmed address is shown
+so the operator can reply, and session tokens
 exist only as hashes. The panel shows aggregates (accounts, sign-ups, the
 usage counts) and, per account, the display name, sign-in providers and
 their user ids, when it joined and was last active (a date), its progress
@@ -313,6 +464,52 @@ What the panel keeps of its own:
   ids in a route are replaced by `:id`.
 - **The last active day** of each account (above): a date, written at most
   once a day, deleted with the account and part of **Download my data**.
+
+## Email sign-in
+
+You can sign up with an email address and a password instead of GitHub or
+Google. What is kept, besides the account above:
+
+- the address (lowercased), and a normalized form of it the checks below
+  compare (dots and `+tag` dropped for Gmail, `+tag` for other domains);
+- a hash of your password (PBKDF2-SHA256, 100,000 rounds, a random salt of
+  its own). The password itself is never stored or logged;
+- when you confirmed the address;
+- the confirmation and password reset links, as hashes, until a day or two
+  after they expire (a confirmation link works for 24 hours, a reset link
+  for an hour, each once). A reset signs you out everywhere else.
+- failed sign-ins, to slow down password guessing: a count per address and
+  per IP address, each stored as a one-way keyed hash (never the address
+  or the IP), forgotten after a day.
+
+The emails (the confirmation, the password reset, and a note when someone
+tries to sign up with an address that already has an account) come from
+`reminders@proschi.app` through Cloudflare Email Service. Sign-up, sign-in
+and password reset use [Cloudflare Turnstile](https://www.cloudflare.com/privacy/)
+to tell people from bots: it runs in your browser, and Proschi only checks
+its yes or no with Cloudflare.
+
+Unlinking the email sign-in in Settings (when the account has another
+sign-in) stops it working; deleting the account deletes all of it.
+
+## Free sign-up credits
+
+A new account gets free credits once it is confirmed (an email account
+after its confirmation link, a GitHub or Google account at once), at most
+once per person. So that throwaway accounts can't collect them, the server
+keeps:
+
+- for each sign-in identity it has checked (GitHub or Google and its user
+  id, and your normalized email address, also the verified one GitHub or
+  Google gives), a one-way keyed hash, which stays after the account is
+  deleted, so the same person doesn't get them twice;
+- a one-way keyed hash of the IP address an account signed up from, with
+  the time, for "at most 3 accounts a week from one IP"; deleted after 7
+  days. The IP itself is never stored;
+- for each account, whether it got the credits and why not (for example a
+  disposable email domain).
+
+An account that doesn't get them works as usual and can buy credits.
 
 ## Email reminders
 
@@ -352,23 +549,68 @@ your account page and deleting your account. Changing the address replaces
 the old one, which then needs confirming again. Log lines of the hourly
 reminder run hold your user id, never the address, when a send fails.
 
+## Product news
+
+Now and then (a few times a year) Proschi emails account holders about new
+features, and may show the same news once on the practice page, sometimes
+with a gift of credits. The operator writes and sends these from the admin
+panel; every send is in its audit log with a reason.
+
+**Who gets the email**: accounts with a confirmed email sign-in address, or
+the verified address GitHub or Google gave at your latest sign-in with them,
+unless you turned product news off. The address you gave for
+[email reminders](#email-reminders) is never used for it. Emails about your
+account (confirmations, password resets, receipts) are not product news and
+are not affected.
+
+**What is stored**:
+
+- the contact address from GitHub or Google (one per account, replaced at
+  each sign-in with them, with which provider gave it and when);
+- whether you turned product news off, when, and how (in Settings, or with
+  the link in an email);
+- per campaign that reached your account: whether its credits were given,
+  whether the email was sent, failed or skipped (and why: turned off, or no
+  confirmed address), and when the announcement was shown, dismissed or its
+  button clicked.
+
+**How to stop it**: switch off **Product news** in Settings › Notifications,
+or use **Stop product news** at the bottom of any of these emails (also
+offered by your mail app as a one-click "Unsubscribe"; it works signed out).
+Once off, no product news email is sent to you. The announcement on the
+practice page goes away when you dismiss it. All of it is part of
+**Download my data** and is deleted with your account. The emails are sent
+through Cloudflare Email Service and carry no tracking pixels or tracked
+links.
+
 ## Your controls
 
 In Settings on the practice page (`#/me`, from the account menu):
 
 - **Download my data** saves everything stored about you as JSON, your
-  synced diagrams and their versions included, every session with its kind (the site or an
+  synced diagrams and their versions included, your live share links, your
+  plan (and any free Pro the operator gave), subscription, Polar webhook log entries, interview credits, mock interviews with the picks for your next steps, Design partner chats, the messages you sent with Send feedback, every session with its kind (the site or an
   app) but never the token hashes; short links come with their diagrams and
-  the address of each preview, and email reminders with their address and
-  settings (the unsubscribe secret stays out).
-- **Delete my cloud copies**, in the editor's File menu once cloud sync
-  is off, removes every diagram from your account, their versions with
-  them; those in your browser stay. A single version can be deleted on its
+  the address of each preview, email reminders with their address and
+  settings (the unsubscribe secret stays out), and product news: whether it is
+  on, the contact address, and the campaigns that reached you.
+- **Delete my cloud copies**, in Settings or in the editor's File menu once
+  cloud sync is off, removes every diagram from your account, their versions
+  with them, and turns cloud sync off in that browser; those in your browser
+  stay. A single version can be deleted on its
   own.
 - **Delete account** removes your account, sessions (apps' too), progress, card
   reviews, daily challenge results, badges, game progress, short links,
-  synced diagrams and their versions, and the email reminders' address from the server at once;
+  synced diagrams and their versions and live share links, the email reminders' address, the
+  contact address and product news settings, the
+  billing data, interview credits, mock interviews and the picks for your next steps, and your feedback messages with their screenshots from the server at once (a Pro
+  subscription is canceled at Polar first);
   the progress and diagrams in your browser stay.
+  Only a one-way keyed hash of each sign-in identity (GitHub or Google and
+  its user id, or your normalized email address) stays, with whether the free trial interview was used, so a
+  new account with that identity doesn't get the trial again, and the keyed
+  hashes the [free sign-up credits' checks](#free-sign-up-credits) keep;
+  nothing else about the account is kept.
   The database's point-in-time recovery history (Cloudflare D1 Time Travel)
   still holds them for up to 30 days, after which they are gone.
 - **Sign out everywhere** ends every session, on every device, signed-in

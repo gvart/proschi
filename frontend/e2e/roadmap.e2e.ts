@@ -1,5 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
-import { expect, test, waitForCanvas } from './fixtures';
+import { expect, loadReferenceSolution, sectionLink, test, waitForCanvas } from './fixtures';
 
 /** A stage of the roadmap, by its title. */
 const stage = (page: Page, title: string) => page.getByRole('listitem', { name: new RegExp(`^Stage \\d+: ${title}$`) });
@@ -10,7 +10,7 @@ const challenges = (scope: Locator) => scope.getByRole('link', { name: /^(?!Read
 test.describe('interview prep roadmap', () => {
   test('opens one problem at a time and unlocks the next after a solve', async ({ page }) => {
     await page.goto('practice/');
-    await page.getByRole('navigation', { name: 'Practice sections' }).getByRole('link', { name: 'Roadmap' }).click();
+    await (await sectionLink(page, 'Roadmap')).click();
     await expect(page).toHaveURL(/#\/roadmap$/);
     await expect(page).toHaveTitle('Interview prep roadmap · Proschi practice');
     await expect(page.getByRole('heading', { level: 1, name: 'Interview prep roadmap' })).toBeVisible();
@@ -29,21 +29,21 @@ test.describe('interview prep roadmap', () => {
     await expect(pastebinStep).toContainText('Solve URL Shortener first');
     await expect(challenges(stage(page, 'Caching and the edge'))).toHaveCount(0);
 
-    // Start opens the first problem with the roadmap's banner.
-    await progress(page).getByRole('link', { name: 'Start: Hello, Proschi' }).click();
+    // The guide is read first: until it is read, the primary button leads to it and the first problem is a smaller link.
+    await expect(progress(page).getByRole('link', { name: /^Read first: How to approach/ })).toHaveAttribute('href', '#/roadmap/approach');
+    await expect(progress(page).getByRole('link', { name: 'Start: Hello, Proschi' })).toHaveCount(0);
+    // The first problem is still open: it opens with the roadmap's banner.
+    await progress(page).getByRole('link', { name: 'or start Hello, Proschi' }).click();
     await expect(page).toHaveURL(/#\/roadmap\/hello-proschi$/);
     const banner = page.getByRole('region', { name: 'Roadmap' });
     await expect(banner).toContainText(/Stage 1 of \d+: Foundations · 1 of \d+/);
     await expect(banner.getByRole('link', { name: /Next in roadmap/ })).toHaveCount(0);
-    // A step is a lesson first, then the challenge.
-    await expect(page.getByRole('article', { name: 'Lesson' })).toBeVisible();
-    await page.getByRole('button', { name: 'Start the challenge' }).first().click();
+    // A step opens on its stage (here Design, by the stages fixture), not its lesson (P52).
+    await expect(page.getByRole('article', { name: 'Lesson' })).toHaveCount(0);
     await waitForCanvas(page);
 
     // Solve it with the reference solution (both steps ask for confirmation).
-    page.on('dialog', (dialog) => dialog.accept());
-    await page.getByRole('button', { name: 'Show reference solution' }).click();
-    await page.getByRole('button', { name: 'Load into the editor' }).click();
+    await loadReferenceSolution(page);
     await page.getByRole('button', { name: 'Run tests' }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Solved.' })).toBeVisible();
 
@@ -81,7 +81,7 @@ test.describe('interview prep roadmap', () => {
 
     // The guide stays open.
     await page.goto('practice/#/roadmap');
-    await expect(page.getByRole('link', { name: /Read first/ })).toHaveAttribute('href', '#/roadmap/approach');
+    await expect(page.getByRole('link', { name: /Read first/ }).first()).toHaveAttribute('href', '#/roadmap/approach');
 
     // A locked challenge's address shows the roadmap with what unlocks it.
     await page.goto('practice/#/roadmap/pastebin');

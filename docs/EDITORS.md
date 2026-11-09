@@ -427,7 +427,9 @@ then the total cost, latency percentiles per use case and scenario, and
 single points of failure. `--format json` prints the whole analysis.
 
 In the web editor, the **Results** tab lists failing checks first, each with
-its hint, then the analysis and **Review my design**. Links with
+its hint, then the analysis and **Review my design**. The review is
+automatic, written from the simulation and the tests. For a deeper read,
+ask **Design partner** (Ctrl/Cmd+J), paid in credits. Links with
 `?view=results` open on that tab, and `?view=hld` on the HLD. In the
 language server, failing requirements and tests are warnings on their
 lines, and hovering a node shows its load and cost.

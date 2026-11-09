@@ -2,6 +2,7 @@ import { useEffect, useImperativeHandle, useMemo, useRef, type Ref } from 'react
 import { basicSetup } from 'codemirror';
 import { EditorView, keymap } from '@codemirror/view';
 import { Compartment, EditorState, type Extension } from '@codemirror/state';
+import { isolateHistory, redo as redoCommand, undo as undoCommand } from '@codemirror/commands';
 import { autocompletion } from '@codemirror/autocomplete';
 import { lintGutter, setDiagnostics } from '@codemirror/lint';
 import type { Diagnostic } from '../../dsl';
@@ -17,6 +18,12 @@ export interface CodeEditorHandle {
   select: (line: number, col: number, length: number, focus?: boolean) => void;
   /** Formats the document (also Shift+Alt+F), keeping the cursor at the same code. */
   format: () => void;
+  /** Replaces the document with `next` as one undo step of its own (an accepted Design partner change). */
+  replace: (next: string) => void;
+  /** Undoes the last step, as Ctrl+Z does; false when there was nothing to undo. */
+  undo: () => boolean;
+  /** Redoes the last undone step, as Ctrl+Shift+Z does; false when there was nothing to redo. */
+  redo: () => boolean;
 }
 
 interface CodeEditorProps {
@@ -48,6 +55,19 @@ function formatDocument(view: EditorView): boolean {
     view.dispatch({ changes: { from: 0, to: before.length, insert: after }, selection: { anchor }, scrollIntoView: true, userEvent: 'format' });
   }
   return true;
+}
+
+/** The change from `current` to `next` as only their differing middle, so the cursor and undo history survive it. */
+function middleChange(current: string, next: string) {
+  let start = 0;
+  while (start < current.length && start < next.length && current[start] === next[start]) start++;
+  let endCurrent = current.length;
+  let endNext = next.length;
+  while (endCurrent > start && endNext > start && current[endCurrent - 1] === next[endNext - 1]) {
+    endCurrent--;
+    endNext--;
+  }
+  return { from: start, to: endCurrent, insert: next.slice(start, endNext) };
 }
 
 const readOnlyState = (readOnly: boolean) => [EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)];
@@ -103,17 +123,9 @@ export default function CodeEditor({ value, onChange, diagnostics, nodeIds, tech
     const view = viewRef.current;
     const current = view?.state.doc.toString();
     if (!view || current === undefined || current === value) return;
-    // Replace only the changed middle so the cursor and undo history survive canvas edits.
-    let start = 0;
-    while (start < current.length && start < value.length && current[start] === value[start]) start++;
-    let endCurrent = current.length;
-    let endValue = value.length;
-    while (endCurrent > start && endValue > start && current[endCurrent - 1] === value[endValue - 1]) {
-      endCurrent--;
-      endValue--;
-    }
-    // Not the reader's edit: no change filter (a page's locked lines) may refuse it.
-    view.dispatch({ changes: { from: start, to: endCurrent, insert: value.slice(start, endValue) }, filter: false });
+    // Not the reader's edit: no change filter (a page's locked lines) may refuse it. Isolated, so a
+    // canvas edit is one undo step of its own and never joins the typing next to it.
+    view.dispatch({ changes: middleChange(current, value), filter: false, annotations: isolateHistory.of('full') });
   }, [value]);
 
   useEffect(() => {
@@ -154,6 +166,21 @@ export default function CodeEditor({ value, onChange, diagnostics, nodeIds, tech
       if (!view) return;
       formatDocument(view);
       view.focus();
+    },
+    replace(next) {
+      const view = viewRef.current;
+      const current = view?.state.doc.toString();
+      if (!view || current === undefined || current === next) return;
+      // Isolated, so neither the typing before nor after joins it: one Ctrl+Z takes back exactly this.
+      view.dispatch({ changes: middleChange(current, next), filter: false, userEvent: 'partner', annotations: isolateHistory.of('full'), scrollIntoView: true });
+    },
+    undo() {
+      const view = viewRef.current;
+      return view ? undoCommand(view) : false;
+    },
+    redo() {
+      const view = viewRef.current;
+      return view ? redoCommand(view) : false;
     },
   }));
 

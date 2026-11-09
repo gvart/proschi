@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
-import { canvasNodes, codeEditor, editorText, expect, test, waitForCanvas } from './fixtures';
+import { canvasNodes, chooseOption, codeEditor, editorText, expect, loadReferenceSolution, test, waitForCanvas } from './fixtures';
 
 const problemList = (page: Page) => page.getByRole('main').getByRole('list').first();
 
@@ -33,13 +33,14 @@ test.describe('practice', () => {
     await page.goto('practice/');
     await page.getByRole('button', { name: 'Filters' }).click();
     const company = page.getByRole('combobox', { name: 'Company' });
-    await expect(company.getByRole('option', { name: 'Twitter' })).toHaveCount(1);
-    await company.selectOption('Twitter');
+    await company.click();
+    await expect(page.getByRole('option', { name: 'Twitter' })).toHaveCount(1);
+    await page.getByRole('option', { name: 'Twitter' }).click();
     const links = problemList(page).getByRole('link');
     await expect(links.filter({ hasText: 'Snowflake IDs' })).toHaveCount(1);
     await expect(links.filter({ hasText: 'URL Shortener' })).toHaveCount(0);
     for (const link of await links.all()) await expect(link.locator('[data-company="Twitter"]')).toHaveCount(1);
-    await company.selectOption('');
+    await chooseOption(company, 'All companies');
     await expect(links.filter({ hasText: 'URL Shortener' })).toHaveCount(1);
   });
 
@@ -66,8 +67,8 @@ test.describe('practice', () => {
       await expect(panel).toBeVisible();
       await expect(panel).toHaveAttribute('id', (await button.getAttribute('aria-controls'))!);
       await expect(page.getByRole('combobox', { name: 'Difficulty' })).toBeFocused();
-      await page.getByRole('combobox', { name: 'Difficulty' }).selectOption('easy');
-      await page.getByRole('combobox', { name: 'Status' }).selectOption('todo');
+      await chooseOption(page.getByRole('combobox', { name: 'Difficulty' }), 'Easy');
+      await chooseOption(page.getByRole('combobox', { name: 'Status' }), 'To do');
       await page.keyboard.press('Escape');
       await expect(panel).toBeHidden();
       await expect(button).toBeFocused();
@@ -187,9 +188,7 @@ test.describe('practice', () => {
     await expect(page.getByText('Solved.')).toBeHidden();
 
     // Load the reference solution through the UI; both steps ask for confirmation.
-    page.on('dialog', (dialog) => dialog.accept());
-    await page.getByRole('button', { name: 'Show reference solution' }).click();
-    await page.getByRole('button', { name: 'Load into the editor' }).click();
+    await loadReferenceSolution(page);
     await expect(passedCount(page)).toContainText('edited since');
     await run.click();
     await expect(page.getByRole('status').filter({ hasText: 'Solved.' })).toBeVisible();
@@ -263,9 +262,7 @@ test.describe('practice', () => {
     }
     await expect(page.getByRole('region', { name: 'Common mistake' })).toHaveCount(0);
 
-    page.on('dialog', (dialog) => dialog.accept());
-    await page.getByRole('button', { name: 'Show reference solution' }).click();
-    await page.getByRole('button', { name: 'Load into the editor' }).click();
+    await loadReferenceSolution(page);
     await run.click();
     await expect(page.getByRole('status').filter({ hasText: 'Solved.' })).toBeVisible();
     await expect(passedCount(page)).toHaveText(/^6 \/ 6 passed$/);
@@ -276,7 +273,7 @@ test.describe('practice', () => {
 test.describe('practice on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
-  test('shows the tabbed layout, with the lesson a button away', async ({ page }) => {
+  test('shows the tabbed layout, with the lesson one tap away in the tab bar', async ({ page }) => {
     await page.goto('practice/#/url-shortener');
     const tabs = page.getByRole('tablist', { name: 'View', exact: true });
     await expect(tabs.getByRole('tab')).toHaveText(['Problem', 'Code', 'Diagram', 'Tests']);
@@ -296,13 +293,13 @@ test.describe('practice on a phone', () => {
     await expect(page.getByRole('button', { name: 'Run tests' })).toBeVisible();
     await expect(canvasNodes(page)).toHaveCount(0);
 
-    // The lesson opens over the tabs, full width, and closes back to the same tab.
-    await page.getByRole('button', { name: 'Lesson', exact: true }).click();
-    const drawer = page.getByRole('dialog', { name: 'Lesson' });
-    await expect(drawer.getByRole('article', { name: 'Lesson' })).toBeVisible();
-    expect((await drawer.boundingBox())!.width).toBeGreaterThanOrEqual(389);
-    await drawer.getByRole('button', { name: 'Close the lesson' }).click();
-    await expect(drawer).toHaveCount(0);
+    // A problem from the list has no stages (P51): the lesson opens in a drawer from the tab bar, and closing it leads back to the same tab.
+    await expect(page.getByRole('navigation', { name: 'Stages' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Lesson' }).click();
+    const lesson = page.getByRole('dialog', { name: 'Lesson' });
+    await expect(lesson).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(lesson).toBeHidden();
     await expect(tabs.getByRole('tab', { name: 'Tests' })).toHaveAttribute('aria-selected', 'true');
   });
 });

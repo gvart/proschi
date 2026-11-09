@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ApiError } from '../services/api';
 
 /** Loading and changing data in the admin panel's tabs. */
@@ -65,4 +65,28 @@ export function useAction(after?: () => void): { run: (action: () => Promise<unk
     [after],
   );
   return { run, busy, error, clear: () => setError(undefined) };
+}
+
+export type SortDir = 'asc' | 'desc';
+
+/** Sorts `rows` by the column picked with SortHeader; `keys` gives each column's value. */
+export function useSort<T, K extends string>(rows: T[], keys: Record<K, (row: T) => string | number | null>, initial: { key: NoInfer<K>; dir: SortDir }) {
+  const [sort, setSort] = useState(initial);
+  const sorted = useMemo(() => {
+    const value = keys[sort.key];
+    const factor = sort.dir === 'asc' ? 1 : -1;
+    return [...rows].sort((a, b) => {
+      const x = value(a);
+      const y = value(b);
+      if (x === y) return 0;
+      if (x === null) return 1;
+      if (y === null) return -1;
+      return (typeof x === 'string' && typeof y === 'string' ? x.localeCompare(y, undefined, { sensitivity: 'base' }) : x < y ? -1 : 1) * factor;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, sort]);
+  const toggle = (key: K) => setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: initial.dir }));
+  /** SortHeader's props for a column. */
+  const by = (key: K) => ({ active: sort.key === key, dir: sort.dir, onSort: () => toggle(key) });
+  return { rows: sorted, sort, toggle, by };
 }

@@ -41,6 +41,10 @@ interface LessonProps {
   label?: string;
   /** Called once the end of the text comes into view: the lesson counts as read. */
   onRead?: () => void;
+  /** The start button's label; "Start the challenge" by default. */
+  startLabel?: string;
+  /** Also at the top (a page with its own bar of actions has it there). */
+  startAtTop?: boolean;
 }
 
 /** Calls `onRead` once `end` scrolls into view (never without IntersectionObserver). */
@@ -62,7 +66,7 @@ function useReadToEnd(end: RefObject<HTMLElement | null>, onRead?: () => void) {
 }
 
 /** A problem's lesson (lesson.md): the concepts first, then the way into the challenge. */
-export default function LessonView({ source, onStart, tocAlways = false, large = false, label = 'Lesson', onRead }: LessonProps) {
+export default function LessonView({ source, onStart, tocAlways = false, large = false, label = 'Lesson', onRead, startLabel = 'Start the challenge', startAtTop = true }: LessonProps) {
   const blocks = useMemo(() => parseMarkdown(source), [source]);
   const minutes = useMemo(() => readingMinutes(source), [source]);
   const article = useRef<HTMLElement>(null);
@@ -70,7 +74,7 @@ export default function LessonView({ source, onStart, tocAlways = false, large =
   useReadToEnd(end, onRead);
   const start = onStart && (
     <button type="button" onClick={onStart} className={primaryButton}>
-      Start the challenge
+      {startLabel}
       <ArrowRight size={14} />
     </button>
   );
@@ -82,7 +86,7 @@ export default function LessonView({ source, onStart, tocAlways = false, large =
           <span className={eyebrow}>{label}</span>
           <span className="tabular-nums">· {minutes} min read</span>
         </p>
-        {start && <span className="ml-auto">{start}</span>}
+        {start && startAtTop && <span className="ml-auto">{start}</span>}
       </header>
       <LessonToc blocks={blocks} root={article} className={tocAlways ? '' : 'hidden md:block'} />
       <Markdown source={source} blocks={blocks} large={large} />

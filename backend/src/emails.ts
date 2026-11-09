@@ -1,4 +1,5 @@
 import type { DailyGoal, Streak, WeeklyRecap } from '../../frontend/src/learn/streak';
+import { fill, renderMarkdown, type Values } from './campaignMarkdown';
 import { renderEmail, type EmailSpec } from './emailLayout';
 
 /**
@@ -185,6 +186,94 @@ export function reminderEmail(
       links: [
         { label: 'Change which emails you get', url: `${origin}/practice/#/me` },
         { label: 'Unsubscribe from all Proschi emails', url: opts.unsubscribeUrl },
+      ],
+    },
+  });
+}
+
+// --- Email sign-in (src/emailAuth.ts) -------------------------------------
+
+const ACCOUNT_WHY = "You got this because someone entered this address on Proschi's sign-in page. If that wasn't you, ignore this email: nothing changes without the link.";
+
+/** After signing up with email and password: `link` opens the sign-in page, which confirms the address. */
+export function signupConfirmEmail(link: string): RenderedEmail {
+  return render({
+    subject: 'Confirm your Proschi account',
+    accent: 'blue',
+    preheader: 'One click confirms your address and finishes your account. The link works for 24 hours.',
+    badge: '✉ Confirm your address',
+    headline: 'Confirm your email address',
+    paragraphs: ['Thanks for signing up to Proschi. Confirm this is your address to finish setting up your account and get your free sign-up credits.'],
+    cta: { label: 'Confirm my address', url: link },
+    after: ['The link works for 24 hours and only once.'],
+    kernel: 'Kernel is holding the door open. It would like you to come in before the warm air gets out. 🐾',
+    footer: { why: ACCOUNT_WHY, links: [] },
+  });
+}
+
+/** Someone signed up with an address that already has an account: no new account, a way back in instead. */
+export function alreadyRegisteredEmail(signInLink: string, resetLink: string): RenderedEmail {
+  return render({
+    subject: 'You already have a Proschi account',
+    accent: 'lilac',
+    preheader: 'Someone tried to sign up with this address. Sign in, or reset your password if you forgot it.',
+    badge: '👋 Welcome back',
+    headline: 'You already have an account',
+    paragraphs: ['Someone tried to sign up to Proschi with this address, but it already has an account. Sign in instead, or set a new password if you forgot it.'],
+    cta: { label: 'Sign in', url: signInLink },
+    secondary: { label: 'Reset my password', url: resetLink },
+    after: ['The reset link works for one hour and only once.'],
+    kernel: 'Kernel found a duplicate key. It refused the insert and is sending you the existing row instead.',
+    footer: { why: ACCOUNT_WHY, links: [] },
+  });
+}
+
+/** A password reset: `link` opens the sign-in page's form for a new password. */
+export function passwordResetEmail(link: string): RenderedEmail {
+  return render({
+    subject: 'Reset your Proschi password',
+    accent: 'pink',
+    preheader: 'Set a new password. The link works for one hour and signs you out everywhere else.',
+    badge: '🔑 Password reset',
+    headline: 'Reset your password',
+    paragraphs: ['Someone asked to reset the password of the Proschi account with this address. Set a new one with the button below. It signs you out on every other device.'],
+    cta: { label: 'Set a new password', url: link },
+    after: ['The link works for one hour and only once. If you did not ask for it, ignore this email: your password stays the same.'],
+    kernel: 'Kernel rotated the keys and shredded the old ones. Pick something it cannot guess, which is most things.',
+    footer: { why: ACCOUNT_WHY, links: [] },
+  });
+}
+
+// --- Product news (src/campaigns.ts) ----------------------------------------
+
+/**
+ * A campaign's email: `subject` (also the headline) and the Markdown `body`
+ * with their placeholders filled in from `values`, the campaign's button,
+ * and the "Stop product news" link in the footer.
+ */
+export function newsEmail(
+  subject: string,
+  body: string,
+  values: Values,
+  opts: { origin: string; unsubscribeUrl: string; link?: { label: string; url: string } },
+): RenderedEmail {
+  const rich = renderMarkdown(body, values);
+  const filled = fill(subject, values).replace(/[\r\n]+/g, ' ');
+  return render({
+    subject: filled,
+    accent: 'yellow',
+    preheader: rich.text.replace(/\s+/g, ' ').slice(0, 140),
+    badge: '📣 Product news',
+    headline: filled,
+    paragraphs: [],
+    rich,
+    cta: opts.link ?? { label: 'Open Proschi', url: `${opts.origin}/practice/` },
+    kernel: 'Kernel read the release notes twice and approved the change. It would like a treat for the review.',
+    footer: {
+      why: 'You got this because you have a Proschi account and product news is on. We send it rarely.',
+      links: [
+        { label: 'Email settings', url: `${opts.origin}/practice/#/me` },
+        { label: 'Stop product news', url: opts.unsubscribeUrl },
       ],
     },
   });

@@ -1,8 +1,10 @@
+import { RefreshCw } from 'lucide-react';
 import { useState } from 'react';
 import { listAudit, listEvents, type AppEvent, type AuditEntry } from './api';
 import { formatDateTime, humanize } from './format';
 import { useLoad } from './hooks';
-import { ErrorNote, LevelBadge, Loading, Section } from './ui';
+import { Empty, ErrorNote, LevelBadge, PageHeader, SearchBox, Section, Skeleton } from './ui';
+import Select from '../design/Select';
 
 /** App events (errors, cron runs, sign-in failures, rate limits), newest first, filtered by kind and level. */
 export function EventsTab({ kind, onKind, onSignedOut }: { kind: string; onKind: (kind: string) => void; onSignedOut: () => void }) {
@@ -12,52 +14,63 @@ export function EventsTab({ kind, onKind, onSignedOut }: { kind: string; onKind:
   const events = useLoad(() => listEvents({ kind, level, before: cursor }), [kind, level, cursor], onSignedOut);
   const reset = () => setBefore([]);
   return (
-    <Section
-      title="App events"
-      actions={
-        <button type="button" className="ps-btn ps-btn--secondary ps-btn--sm" onClick={events.reload} disabled={events.loading}>
-          Refresh
-        </button>
-      }
-    >
-      <div className="adm-toolbar">
-        <select className="adm-input" aria-label="Kind" value={kind} onChange={(e) => (onKind(e.target.value), reset())}>
-          <option value="">All kinds</option>
-          {(events.data?.kinds ?? []).map((k) => (
-            <option key={k.kind} value={k.kind}>
-              {humanize(k.kind)} ({k.n})
-            </option>
-          ))}
-          {kind && !events.data?.kinds.some((k) => k.kind === kind) && <option value={kind}>{humanize(kind)} (0)</option>}
-        </select>
-        <select className="adm-input" aria-label="Level" value={level} onChange={(e) => (setLevel(e.target.value), reset())}>
-          <option value="">All levels</option>
-          <option value="error">Errors</option>
-          <option value="warn">Warnings</option>
-          <option value="info">Info</option>
-        </select>
-      </div>
-      <ErrorNote>{events.error}</ErrorNote>
-      {!events.data ? (
-        !events.error && <Loading what="events" />
-      ) : events.data.events.length === 0 ? (
-        <p className="adm-muted">No events. They are kept for 30 days.</p>
-      ) : (
-        <>
-          <ol className="adm-events">
-            {events.data.events.map((e) => (
-              <EventRow key={e.id} event={e} />
-            ))}
-          </ol>
-          <Older
-            hasPrevious={before.length > 0}
-            next={events.data.next}
-            onNewer={() => setBefore((b) => b.slice(0, -1))}
-            onOlder={(id) => setBefore((b) => [...b, id])}
+    <>
+      <PageHeader
+        page="events"
+        actions={
+          <button type="button" className="ps-btn ps-btn--secondary ps-btn--sm" onClick={events.reload} disabled={events.loading}>
+            <RefreshCw size={14} aria-hidden="true" /> Refresh
+          </button>
+        }
+      />
+      <Section title="App events">
+        <div className="adm-toolbar">
+          <Select
+            size="sm"
+            aria-label="Kind"
+            value={kind}
+            onChange={(v) => (onKind(v), reset())}
+            options={[
+              { value: '', label: 'All kinds' },
+              ...(events.data?.kinds ?? []).map((k) => ({ value: k.kind, label: `${humanize(k.kind)} (${k.n})` })),
+              ...(kind && !events.data?.kinds.some((k) => k.kind === kind) ? [{ value: kind, label: `${humanize(kind)} (0)` }] : []),
+            ]}
           />
-        </>
-      )}
-    </Section>
+          <Select
+            size="sm"
+            aria-label="Level"
+            value={level}
+            onChange={(v) => (setLevel(v), reset())}
+            options={[
+              { value: '', label: 'All levels' },
+              { value: 'error', label: 'Errors' },
+              { value: 'warn', label: 'Warnings' },
+              { value: 'info', label: 'Info' },
+            ]}
+          />
+        </div>
+        <ErrorNote>{events.error}</ErrorNote>
+        {!events.data ? (
+          !events.error && <Skeleton what="events" />
+        ) : events.data.events.length === 0 ? (
+          <Empty>{kind || level ? 'No events of this kind or level.' : 'No events.'} They are kept for 30 days.</Empty>
+        ) : (
+          <>
+            <ol className="adm-events">
+              {events.data.events.map((e) => (
+                <EventRow key={e.id} event={e} />
+              ))}
+            </ol>
+            <Older
+              hasPrevious={before.length > 0}
+              next={events.data.next}
+              onNewer={() => setBefore((b) => b.slice(0, -1))}
+              onOlder={(id) => setBefore((b) => [...b, id])}
+            />
+          </>
+        )}
+      </Section>
+    </>
   );
 }
 
@@ -108,36 +121,50 @@ export function AuditTab({ onOpenUser, onSignedOut }: { onOpenUser: (id: string)
   const [before, setBefore] = useState<number[]>([]);
   const cursor = before.at(-1);
   const audit = useLoad(() => listAudit(cursor), [cursor], onSignedOut);
+  const [filter, setFilter] = useState('');
+  const needle = filter.toLowerCase();
+  // Filters the page that is loaded: the action, its target and detail, and the passkey.
+  const entries = (audit.data?.entries ?? []).filter(
+    (a) => !needle || [a.action, humanize(a.action), a.target ?? '', a.passkey ?? '', a.detail ? JSON.stringify(a.detail) : ''].some((text) => text.toLowerCase().includes(needle)),
+  );
   return (
-    <Section title="Audit log">
-      <ErrorNote>{audit.error}</ErrorNote>
-      {!audit.data ? (
-        !audit.error && <Loading what="the audit log" />
-      ) : audit.data.entries.length === 0 ? (
-        <p className="adm-muted">Nothing yet.</p>
-      ) : (
-        <>
-          <div className="adm-scroll">
-            <table className="adm-table">
-              <thead>
-                <tr>
-                  <th scope="col">When</th>
-                  <th scope="col">Action</th>
-                  <th scope="col">Target</th>
-                  <th scope="col">Passkey</th>
-                </tr>
-              </thead>
-              <tbody>
-                {audit.data.entries.map((a) => (
-                  <AuditRow key={a.id} entry={a} onOpenUser={onOpenUser} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <Older hasPrevious={before.length > 0} next={audit.data.next} onNewer={() => setBefore((b) => b.slice(0, -1))} onOlder={(id) => setBefore((b) => [...b, id])} />
-        </>
-      )}
-    </Section>
+    <>
+      <PageHeader page="audit" />
+      <Section title="Entries">
+        <div className="adm-toolbar">
+          <SearchBox value={filter} onChange={setFilter} label="Filter the audit log" placeholder="Action, account id, reason or passkey" />
+        </div>
+        <ErrorNote>{audit.error}</ErrorNote>
+        {!audit.data ? (
+          !audit.error && <Skeleton what="the audit log" />
+        ) : audit.data.entries.length === 0 ? (
+          <Empty>No admin actions yet.</Empty>
+        ) : entries.length === 0 ? (
+          <Empty>Nothing on this page matches “{filter}”.</Empty>
+        ) : (
+          <>
+            <div className="adm-scroll">
+              <table className="adm-table">
+                <thead>
+                  <tr>
+                    <th scope="col">When</th>
+                    <th scope="col">Action</th>
+                    <th scope="col">Target</th>
+                    <th scope="col">Passkey</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {entries.map((a) => (
+                    <AuditRow key={a.id} entry={a} onOpenUser={onOpenUser} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <Older hasPrevious={before.length > 0} next={audit.data.next} onNewer={() => setBefore((b) => b.slice(0, -1))} onOlder={(id) => setBefore((b) => [...b, id])} />
+          </>
+        )}
+      </Section>
+    </>
   );
 }
 

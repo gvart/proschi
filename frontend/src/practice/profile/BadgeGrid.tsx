@@ -28,7 +28,18 @@ function buttonLabel(b: ProfileBadge): string {
   return `${b.title}: locked${b.progress ? `, ${progressText(b)}` : ''}`;
 }
 
-export default function BadgeGrid({ badges, label = 'Badges', headingLevel = 2 }: { badges: ProfileBadge[]; label?: string; headingLevel?: 2 | 3 }) {
+export default function BadgeGrid({
+  badges,
+  label = 'Badges',
+  headingLevel = 2,
+  of = badges.length,
+}: {
+  badges: ProfileBadge[];
+  label?: string;
+  headingLevel?: 2 | 3;
+  /** How many badges there are, when `badges` shows only some (the progress page's earned ones). */
+  of?: number;
+}) {
   const [open, setOpen] = useState<string>();
   const ids = useId();
   const detailId = `${ids}-detail`;
@@ -52,7 +63,7 @@ export default function BadgeGrid({ badges, label = 'Badges', headingLevel = 2 }
           {label}
         </Heading>
         <p className="text-sm tabular-nums text-muted">
-          {earned} of {badges.length} earned
+          {earned} of {of} earned
         </p>
       </div>
       <ul className="mt-3 flex flex-wrap gap-2" data-testid="badge-grid">

@@ -23,6 +23,19 @@
   X-Robots-Tag: noindex, nofollow
   Cache-Control: no-store
 
+# A live share link's page (src/share/): private, so never indexed, and its token never sent on in a Referer.
+/share/*
+  X-Robots-Tag: noindex, nofollow
+  ! Referrer-Policy
+  Referrer-Policy: no-referrer
+
+# The sign-in page (src/auth/): never indexed, and its email links' token never sent on in a Referer.
+/signin/*
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-store
+  ! Referrer-Policy
+  Referrer-Policy: no-referrer
+
 # Vite names these by content hash, so they never change.
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
