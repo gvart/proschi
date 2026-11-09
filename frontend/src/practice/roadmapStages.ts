@@ -39,7 +39,7 @@ export const ROADMAP: RoadmapStage[] = [
     id: 'caching',
     title: 'Caching and the edge',
     why: 'Most systems are read-heavy, and the cheapest request is the one answered before it reaches the database. Learn where a cache or CDN goes and what happens on a miss.',
-    problems: ['rate-limiter', 'search-autocomplete', 'cdn-tiered-cache'],
+    problems: ['rate-limiter', 'load-shedding', 'search-autocomplete', 'cdn-tiered-cache'],
   },
   {
     id: 'partitioning',
