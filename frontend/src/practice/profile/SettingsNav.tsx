@@ -11,6 +11,11 @@ import { sectionAnchor, type SectionId } from './settingsSections';
 
 /** A section counts as current once its top passes under the sticky header. */
 const CURRENT_LINE = 160;
+/**
+ * ...and stops being current once less than this much of it is left below that line, so the next section, by
+ * then most of the view, takes over. Below the shortest section's height, so a jump to one still marks it.
+ */
+const LEFT_OF_IT = 120;
 
 function useCurrentSection(ids: SectionId[]): [SectionId | undefined, (id: SectionId) => void] {
   const [current, setCurrent] = useState<SectionId | undefined>(ids[0]);
@@ -22,9 +27,13 @@ function useCurrentSection(ids: SectionId[]): [SectionId | undefined, (id: Secti
       frame = 0;
       const atBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4;
       let found = list[0];
+      let passed = false;
       for (const id of list) {
-        const el = document.getElementById(sectionAnchor(id));
-        if (el && el.getBoundingClientRect().top <= CURRENT_LINE) found = id;
+        const box = document.getElementById(sectionAnchor(id))?.getBoundingClientRect();
+        if (!box) continue;
+        if (box.top <= CURRENT_LINE || passed) found = id;
+        if (box.top > CURRENT_LINE) break;
+        passed = box.bottom < CURRENT_LINE + LEFT_OF_IT;
       }
       setCurrent(atBottom && window.scrollY > 0 ? list[list.length - 1] : found);
     };
