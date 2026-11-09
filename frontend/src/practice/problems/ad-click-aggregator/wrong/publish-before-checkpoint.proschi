@@ -1,0 +1,70 @@
+# expect-fail: Aggregates are committed only after a checkpoint
+# mistake: Publishing aggregates before the checkpoint that covers them
+# explain: Each window's record is written to Kafka as committed the moment the window closes. If the job crashes before its next checkpoint, it restarts from the previous one, replays the same events and publishes their aggregates a second time, so Pinot and the budget see them twice. Write the records in a Kafka transaction and commit it only after the checkpoint is stored.
+# lesson: exactly-once-checkpoints-and-transactions
+# cards: ad-click-aggregator-transactional-sink, checkpointed-state, offset-commit-timing
+# Plain produces instead of a transaction; the checkpoint only snapshots the state.
+import "problem.proschi"
+
+lb          "Load Balancer"         [AWS Load Balancer] x2 @edge
+ingest      "Ad Event Ingest"       [Go]                x16 @ingest
+events      "Mobile Ad Events"      [Kafka]             x3 @ingest
+flink       "Aggregation Job"       [Java]              x16 @stream
+checkpoints "Checkpoint Store"      [Object Storage]    x2 @stream
+aggregates  "Ad Aggregates"         [Kafka]             x2 @stream
+pinot       "Apache Pinot"          [Data Warehouse]    x3 @olap
+reports     "Advertiser Report API" [REST API]          x3 @olap
+
+app        -> lb
+advertiser -> lb
+lb         -> ingest
+lb         -> reports
+ingest     -> events
+events     -> flink
+flink      -> checkpoints
+flink      -> aggregates
+aggregates -> pinot
+aggregates -> budget
+reports    -> pinot
+
+usecase "Record event" {
+  app     -> lb     : POST /ad-events
+  lb      -> ingest : POST /ad-events
+  ingest  -> events : PRODUCE mobile-ad-events
+  events --> ingest : ack
+  ingest --> lb     : 202
+  lb     --> app    : 202
+}
+
+usecase "Aggregate events" {
+  events -> flink : AdEvent
+}
+
+usecase "Publish aggregates" {
+  flink       -> aggregates : PRODUCE ad-aggregates, committed at once
+  aggregates --> flink      : ack
+}
+
+usecase "Checkpoint" {
+  flink        -> checkpoints : PUT state
+  checkpoints --> flink       : ok
+}
+
+usecase "Load aggregates" {
+  aggregates -> pinot : INSERT ad_aggregates
+}
+
+usecase "Update budget" {
+  aggregates -> budget : AdAggregate
+  budget     -> ledger : UPDATE spend
+  ledger    --> budget : 1 row
+}
+
+usecase "View report" {
+  advertiser -> lb         : GET /campaigns/c_42/report
+  lb         -> reports    : GET /campaigns/c_42/report
+  reports    -> pinot      : SELECT SUM(clicks) GROUP BY day
+  pinot     --> reports    : rows
+  reports   --> lb         : 200
+  lb        --> advertiser : 200
+}

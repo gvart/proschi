@@ -1,0 +1,76 @@
+# expect-fail: Recording an event only appends it to Kafka
+# expect-fail: p99 of Record event < 60 ms
+# mistake: Incrementing counters while the app waits
+# explain: The ingest service adds every click and impression to a per-ad counter row in a database before it answers, so 20k writes a second land on a store that takes 5k, and every app request waits for them. A retry after a timeout also adds the same click twice. Only append the event to Kafka in the request and count it in the stream.
+# lesson: append-first-count-later
+# cards: queue-load-levelling, pre-aggregate-counts, at-least-once-needs-idempotency
+# The ingest tier updates a counter row per event, then produces to Kafka.
+import "problem.proschi"
+
+lb          "Load Balancer"         [AWS Load Balancer] x2 @edge
+ingest      "Ad Event Ingest"       [Go]                x16 @ingest "Increments the ad's counter, then appends the event"
+counters    "Ad Counters"           [PostgreSQL]        x2 @ingest "One row per ad and minute"
+events      "Mobile Ad Events"      [Kafka]             x3 @ingest
+flink       "Aggregation Job"       [Java]              x16 @stream
+checkpoints "Checkpoint Store"      [Object Storage]    x2 @stream
+aggregates  "Ad Aggregates"         [Kafka]             x2 @stream
+pinot       "Apache Pinot"          [Data Warehouse]    x3 @olap
+reports     "Advertiser Report API" [REST API]          x3 @olap
+
+app        -> lb
+advertiser -> lb
+lb         -> ingest
+lb         -> reports
+ingest     -> counters
+ingest     -> events
+events     -> flink
+flink      -> checkpoints
+flink      -> aggregates
+aggregates -> pinot
+aggregates -> budget
+reports    -> pinot
+
+usecase "Record event" {
+  app        -> lb       : POST /ad-events
+  lb         -> ingest   : POST /ad-events
+  ingest     -> counters : UPDATE ad_minute SET clicks = clicks + 1
+  counters  --> ingest   : 1 row
+  ingest     -> events   : PRODUCE mobile-ad-events
+  events    --> ingest   : ack
+  ingest    --> lb       : 202
+  lb        --> app      : 202
+}
+
+usecase "Aggregate events" {
+  events -> flink : AdEvent
+}
+
+usecase "Publish aggregates" {
+  flink       -> aggregates : PRODUCE ad-aggregates
+  aggregates --> flink      : ack, uncommitted
+}
+
+usecase "Checkpoint" {
+  flink        -> checkpoints : PUT state
+  checkpoints --> flink       : ok
+  flink        -> aggregates  : COMMIT transaction
+}
+
+usecase "Load aggregates" {
+  aggregates -> pinot : UPSERT by recordUuid
+}
+
+usecase "Update budget" {
+  aggregates -> budget : AdAggregate
+  budget     -> ledger : INSERT ON CONFLICT DO NOTHING
+  ledger    --> budget : 1 row
+}
+
+usecase "View report" {
+  advertiser -> lb         : GET /campaigns/c_42/report
+  lb         -> reports    : GET /campaigns/c_42/report
+  reports    -> pinot      : SELECT SUM(clicks) GROUP BY day
+  pinot     --> reports    : rows
+  reports   --> lb         : 200
+  lb        --> advertiser : 200
+}

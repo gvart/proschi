@@ -4,6 +4,7 @@
 ack-after-store
 active-active-vs-active-passive
 activity-bitmaps
+ad-click-aggregator-transactional-sink
 anycast
 api-gateway-scope
 api-gateway-session-cache
