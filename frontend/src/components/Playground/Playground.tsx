@@ -38,7 +38,7 @@ import { toFlowEdges } from '../../dsl/layout';
 import { withEdgeStyles } from '../../dsl/toCanvas';
 import { useAutoLayout } from '../Diagram/useDiagramLayout';
 import { loadJson, saveJson } from '../../services/storage';
-import { BOTTLENECK_FROM, criticalPathOf, edgeOverlays, type SimOverlay } from '../../sim/overlay';
+import { BOTTLENECK_FROM, criticalPathOf, type SimOverlay } from '../../sim/overlay';
 import { FIRST_RUN_SOURCE, exampleFromSearch, withoutExample } from '../../playground/exampleLink';
 import {
   BLANK_SOURCE,
@@ -66,7 +66,9 @@ import { filesResolver, importableFiles, teamFileOf, usedImports, type TeamFile 
 import { LONG_LINK_MESSAGE, LONG_LINK_SHORTEN_MESSAGE, decodeShareLink, encodeShareHash, isLongLink, readShareLink, shareUrl, type PlaybackTarget } from '../../playground/share';
 import { applyMerge, backupFileName, buildBackup, mergeSummary, planMerge, readBackup } from '../../playground/backup';
 import { loadProgress, mergeProgress, saveProgress } from '../../practice/progress';
-import { addConnection, addNode, addWhatIf, clearPosition, clearPositions, copyNodes, duplicateNodes, pasteNodes, removeConnections, removeNode, renameNode, retargetConnection, scaleTraffic, setNodePosition, uniqueId, type PasteOptions } from '../../dsl/edit';
+import { addConnection, addNode, addWhatIf, removeConnections, removeNode, renameNode, scaleTraffic, uniqueId } from '../../dsl/edit';
+import { useCanvasEdits } from '../Diagram/useCanvasEdits';
+import { useOverlayOn, withEdgeLoads } from '../Diagram/canvasShared';
 import { EmptyCanvas } from '../Diagram/CanvasEditing';
 import { isShortcutsKey } from '../Diagram/canvasEditState';
 import ShortcutsDialog from './ShortcutsDialog';
@@ -438,10 +440,9 @@ export default function Playground() {
 
   const [nodes, setNodes] = useState<Node[]>([]);
   /** "Overlay: load": the analysis drawn on the diagram, for documents with a traffic block; on until turned off. */
-  const [overlayOn, setOverlayOn] = useState(() => loadJson<boolean>(OVERLAY_KEY, true) !== false);
+  const [overlayOn, flipOverlay] = useOverlayOn(OVERLAY_KEY);
   const toggleOverlay = () => {
-    setOverlayOn(!overlayOn);
-    saveJson(OVERLAY_KEY, !overlayOn);
+    flipOverlay();
     // Turning it on is a look at the simulation; being on by default is not.
     if (!overlayOn) track('simulation_run', { once: 'session' });
   };
@@ -497,11 +498,7 @@ export default function Playground() {
   const systemActions = useMemo<SystemActions>(() => ({ open: systems.open, toggle: systems.toggle }), [systems.open, systems.toggle]);
   const [edges, setEdges] = useState<Edge[]>([]);
   /** The edges with what they carry while the overlay is on (not while a use case plays over them). */
-  const shownEdges = useMemo(() => {
-    if (!overlay || playing) return edges;
-    const loads = edgeOverlays(edges, overlay);
-    return edges.map((e) => (loads[e.id] ? { ...e, data: { ...(e.data ?? {}), overlay: loads[e.id] } } : e));
-  }, [edges, overlay, playing]);
+  const shownEdges = useMemo(() => withEdgeLoads(edges, playing ? undefined : overlay), [edges, overlay, playing]);
   /** A node picked in Results, to select and zoom to on the canvas; `n` makes picking it again count. */
   const [focusRequest, setFocusRequest] = useState<{ id: string; n: number } | null>(null);
   const focusOnCanvas = (id: string) => {
@@ -824,11 +821,6 @@ export default function Playground() {
     if (!playing) startPlaying();
   };
 
-  const moveNodes = (moved: { id: string; position: { x: number; y: number } }[]) => {
-    const own = moved.filter((n) => !importedNodes.has(n.id));
-    if (own.length > 0) editSource((src) => own.reduce((acc, n) => setNodePosition(acc, n.id, n.position), src));
-  };
-
   const renameFromCanvas = (id: string, name: string) => {
     const file = importedNodes.get(id);
     if (file) setNotice(`'${id}' is declared in ${file}; rename it there.`);
@@ -846,57 +838,7 @@ export default function Playground() {
     editSource((src) => addNode(src, { id, name: tech, tech, position }).source);
     return id;
   };
-  /** What Ctrl/Cmd+C on the canvas copied (see copyNodes), and how often it was pasted since, so each paste lands a step further. */
-  const canvasClipboard = useRef<{ text: string; pastes: number } | null>(null);
-  const copyFromCanvas = (ids: string[]) => {
-    const text = copyNodes(source, ids.filter((id) => !importedNodes.has(id)));
-    if (!text) return setNotice('Groups, systems and imported components are copied in the code.');
-    canvasClipboard.current = { text, pastes: 0 };
-    // Also as text, to paste into the code or another app; the canvas pastes its own copy.
-    navigator.clipboard?.writeText(text).catch(() => undefined);
-    const count = parse(text).diagram.nodes.length;
-    setNotice(`Copied ${count === 1 ? 'a component' : `${count} components`}; ${MOD_KEY}+V pastes.`);
-  };
-  /** Applies a paste in one edit and returns the new nodes' ids, so the canvas selects them. */
-  const addOnCanvas = (paste: (src: string, options: PasteOptions) => { source: string; ids: string[] }, step: number) => {
-    if (systems.focusFile) {
-      setNotice(`This is the design in ${systems.focusFile}; add components there.`);
-      return undefined;
-    }
-    const options = { taken: [...importedNodes.keys()], offset: { x: 40 * step, y: 40 * step } };
-    const { ids } = paste(source, options);
-    if (ids.length > 0) editSource((src) => paste(src, options).source);
-    return ids;
-  };
-  const pasteFromCanvas = () => {
-    const clip = canvasClipboard.current;
-    if (!clip) return undefined;
-    clip.pastes++;
-    return addOnCanvas((src, options) => pasteNodes(src, clip.text, options), clip.pastes);
-  };
-  const duplicateFromCanvas = (ids: string[]) => {
-    const own = ids.filter((id) => !importedNodes.has(id));
-    const added = addOnCanvas((src, options) => duplicateNodes(src, own, options), 1);
-    if (added?.length === 0) setNotice('Groups, systems and imported components are duplicated in the code.');
-    return added;
-  };
-  const reconnectFromCanvas = (edgeId: string, from: string, to: string) => {
-    const edge = shown.edges.find((e) => e.id === edgeId);
-    if (!edge) return;
-    if (systems.focusFile || edge.loc.file || importedNodes.has(from) || importedNodes.has(to)) {
-      return setNotice(`Declared in ${systems.focusFile ?? edge.loc.file ?? importedNodes.get(from) ?? importedNodes.get(to)}; connect it there.`);
-    }
-    // Edge ids count duplicates across every file; the text edit needs this document's own id.
-    const rootId = parse(source).diagram.edges.find((r) => r.loc.line === edge.loc.line)?.id;
-    if (!rootId) return;
-    const result = retargetConnection(source, rootId, from, to);
-    if (result.error !== undefined) return setNotice(result.error);
-    editSource((src) => retargetConnection(src, rootId, from, to).source ?? src);
-  };
-  const unpinFromCanvas = (id: string) => {
-    if (importedNodes.has(id)) return setNotice(`'${id}' is declared in ${importedNodes.get(id)}; unpin it there.`);
-    editSource((src) => clearPosition(src, id));
-  };
+  const canvasEdits = useCanvasEdits({ source, diagram: shown, apply: editSource, imported: importedNodes, onNotice: setNotice, lockedIn: systems.focusFile });
   const locOf = (id: string) => shown.nodes.find((n) => n.id === id)?.loc ?? shown.edges.find((e) => e.id === id)?.loc;
   /** Selects a node's or a connection's text in the code pane (on a phone, switching to it). */
   const jumpToCode = (id: string) => {
@@ -1503,7 +1445,7 @@ export default function Playground() {
                           title={shown.title}
                           hasPinnedNodes={!systems.focusFile && shown.nodes.some((n) => n.position)}
                           importedNodes={importedNodes}
-                          onMoveNodes={moveNodes}
+                          onMoveNodes={canvasEdits.move}
                           onConnectNodes={connectNodes}
                           onRenameNode={renameFromCanvas}
                           onAddNode={addFromCanvas}
@@ -1518,13 +1460,14 @@ export default function Playground() {
                           focusInbound={systems.focusInbound}
                           onCrumb={systems.goTo}
                           onOpenSystem={(id) => (summaries.get(id)?.linked ? systems.open(id) : setNotice(`'${id}' is declared without a design; add from "file" to its block to open it.`))}
-                          onResetLayout={() => editSource(clearPositions)}
+                          onResetLayout={canvasEdits.resetLayout}
                           onDelete={deleteFromCanvas}
-                          onCopyNodes={copyFromCanvas}
-                          onPasteNodes={pasteFromCanvas}
-                          onDuplicateNodes={duplicateFromCanvas}
-                          onReconnect={reconnectFromCanvas}
-                          onUnpinNode={unpinFromCanvas}
+                          onCopyNodes={canvasEdits.copy}
+                          onPasteNodes={canvasEdits.paste}
+                          onDuplicateNodes={canvasEdits.duplicate}
+                          onReconnect={canvasEdits.reconnect}
+                          onUnpinNode={canvasEdits.unpin}
+                          flows={systems.focusFile ? undefined : { source, diagram, onChange: (next) => editSource(() => next) }}
                           onJumpToCode={jumpToCode}
                           onSelectionLink={linkSelection}
                           linked={linkedIds}
