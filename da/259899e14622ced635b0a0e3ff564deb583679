@@ -1,0 +1,24 @@
+frontend/e2e/editor.e2e.ts
+  s_f355061868c346::t_e99911e9b1276b 205-206,209
+frontend/src/components/Playground/loadHints.ts
+  s_f355061868c346::t_47f4c37565ea42 1-26,29,31-64
+  s_f355061868c346::t_5e67e4ba6575bc 27-28,30
+frontend/src/components/Playground/Playground.tsx
+  s_f355061868c346::t_6babebc7549438 117,408-409,1219
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "da259899e14622ced635b0a0e3ff564deb583679",
+  "prompts": {},
+  "sessions": {
+    "s_f355061868c346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd556674-4248-429d-bf5c-2b361bc86c62",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
