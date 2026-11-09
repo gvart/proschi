@@ -1,13 +1,16 @@
 import { api, ApiError } from '../../services/api';
 import { roadmapHref } from '../roadmap';
 import type { Skill } from '../modes/ai/api';
+import type { SoloResults } from '../../learn/soloInterview';
 import topics from '../cards/tags.json';
 
 /**
  * Interview history and the AI roadmap's picks (backend/src/interviews.ts
- * interviewHistory, backend/src/roadmap.ts; docs/design/paid-plans.md P1,
- * P9, P10). Both are Pro on the server: history answers every session to
- * Pro and the latest only to other plans; the picks answer 402 off Pro.
+ * interviewHistory, backend/src/soloInterviews.ts soloInterviewHistory,
+ * backend/src/roadmap.ts; docs/design/paid-plans.md P1, P9, P10, P53). All
+ * are Pro on the server: history answers every session to
+ * Pro and the latest only to other plans; the picks and the interviews on
+ * your own answer 402 off Pro.
  * Without the AI key (501) the page hides them and keeps the roadmap's own
  * order.
  */
@@ -60,6 +63,21 @@ async function answer<T>(call: () => Promise<T>): Promise<Answer<T>> {
 }
 
 export const getHistory = (): Promise<Answer<History>> => answer(() => api<History>('/api/interviews/history'));
+
+/** An interview on your own as the account keeps it (backend/src/soloInterviews.ts soloInterviewHistory). */
+export interface KeptSolo {
+  problem: string;
+  startedAt: number;
+  durationMin: number;
+  totalMs: number;
+  reachedDesign: boolean;
+  drew: boolean;
+  solved: boolean;
+  results?: SoloResults;
+}
+
+/** The account's interviews on your own, newest first: Pro (`upgrade` off it). */
+export const getSoloHistory = (): Promise<Answer<{ sessions: KeptSolo[] }>> => answer(() => api<{ sessions: KeptSolo[] }>('/api/me/interviews/solo'));
 
 /**
  * The newest picks, or (with `interview`) the picks made after that

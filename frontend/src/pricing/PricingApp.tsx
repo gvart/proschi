@@ -180,7 +180,7 @@ export function Pricing({ account, plan, estimates }: { account: Account; plan?:
             />
           }
           value={<Value credits={PLAN_CREDITS.pro} when="a month" creditsWhen="a month" estimates={estimates} />}
-          items={['Everything in Free', 'Every verdict kept, and how each skill trends', 'Your next steps, picked after each interview', 'Unlimited diagrams and versions', 'Private, revocable share links']}
+          items={['Everything in Free', 'Every verdict kept, and how each skill trends, on your own too', 'Your next steps, picked after each interview', 'Unlimited diagrams and versions', 'Private, revocable share links']}
           footer={planAction('pro')}
         />
         <PlanCard
@@ -197,7 +197,7 @@ export function Pricing({ account, plan, estimates }: { account: Account; plan?:
             />
           }
           value={<Value credits={PLAN_CREDITS.max} when="a month" creditsWhen="a month" estimates={estimates} />}
-          items={['Everything in Pro', 'Deep verdict: the strongest model grades you, at its price', 'A printable interview report, saved as PDF', 'Deep mode for Design partner too']}
+          items={['Everything in Pro', 'Deep verdict: the strongest model grades you, at its price', 'A printable interview report, on your own too, saved as PDF', 'Deep mode for Design partner too']}
           footer={planAction('max')}
         />
       </div>

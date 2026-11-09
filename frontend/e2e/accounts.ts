@@ -91,6 +91,8 @@ export async function mockSignedIn(page: Page, me: Me = SIGNED_IN): Promise<void
     [/^\/api\/interviews$/, { interviews: [] }],
     // The progress page's interview history and the roadmap's AI picks: none yet (history.accounts.e2e.ts mocks real ones).
     [/^\/api\/interviews\/history$/, { full: false, total: 0, sessions: [] }],
+    // The account's interviews on your own (Pro): none yet (history.accounts.e2e.ts mocks real ones).
+    [/^\/api\/me\/interviews\/solo$/, { sessions: [] }],
     [/^\/api\/roadmap\/next$/, { next: null }],
   ];
   await page.route(

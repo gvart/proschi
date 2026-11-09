@@ -1,6 +1,6 @@
 import { mockSignedIn } from './accounts';
 import { expect, test } from './fixtures';
-import { FREE, mockHistory, PRO, SESSIONS } from './history';
+import { FREE, MAX, mockHistory, mockSolo, PRO, SESSIONS } from './history';
 
 /**
  * Interview history on the progress page and the AI roadmap's "Next for you"
@@ -61,6 +61,70 @@ test.describe('Interview history', () => {
     const upgrade = history.getByTestId('history-upgrade');
     await expect(upgrade).toContainText('5 earlier interviews are kept.');
     await expect(upgrade.getByRole('link', { name: 'Upgrade to Pro' })).toHaveAttribute('href', '../pricing/');
+  });
+});
+
+test.describe('Interviews on your own', () => {
+  const SHOTS = process.env.HISTORY_SHOTS;
+
+  test('Pro: the account’s sessions join this browser’s, with the trend per skill, and no report', async ({ page }) => {
+    await mockSignedIn(page, PRO);
+    const asked = await mockSolo(page);
+    await page.goto('practice/#/progress');
+
+    const solo = page.getByRole('region', { name: 'Interviews on your own' });
+    const rows = solo.getByTestId('solo-list').getByRole('listitem');
+    // Two from this browser and one from another device; the pastebin one is in both and shows once.
+    await expect(rows).toHaveCount(3);
+    await expect(rows.nth(0)).toContainText('URL Shortener');
+    await expect(rows.nth(0)).toContainText('Solved on time');
+    await expect(rows.nth(1)).toContainText('Over time');
+    await expect(rows.nth(2)).toContainText('Rate Limiter');
+
+    const trends = solo.getByTestId('solo-trends');
+    await expect(trends.getByRole('figure')).toHaveCount(4);
+    await expect(trends.getByTestId('trend-requirements')).toHaveText('5/5');
+    await expect(trends.getByTestId('trend-design')).toHaveText('5/5');
+    await expect(trends.getByText('Up from 2')).toHaveCount(2);
+    await expect(trends.getByTestId('trend-communication')).toHaveCount(0);
+    await expect(solo.getByTestId('solo-report')).toHaveCount(0);
+    await expect(solo.getByTestId('solo-upgrade')).toHaveCount(0);
+    expect(asked).toContain('GET');
+    if (SHOTS) await solo.screenshot({ path: `${SHOTS}/solo-pro.png` });
+  });
+
+  test('Max: each session opens as a printable report', async ({ page }) => {
+    await mockSignedIn(page, MAX);
+    await mockSolo(page);
+    await page.goto('practice/#/progress');
+
+    const solo = page.getByRole('region', { name: 'Interviews on your own' });
+    await expect(solo.getByTestId('solo-report')).toHaveCount(3);
+    await solo.getByRole('button', { name: /Print the report of Pastebin/ }).click();
+    const report = page.getByRole('dialog', { name: 'Interview report' });
+    await expect(report.getByRole('heading', { level: 1, name: 'Pastebin' })).toBeVisible();
+    await expect(report.getByTestId('report-result')).toHaveText('Over time');
+    await expect(report.getByText('45 min planned, 50 min used')).toBeVisible();
+    await expect(report.getByRole('row', { name: /Design/ }).first()).toContainText('4/5');
+    await expect(report.getByTestId('report-done')).toContainText('4 of 6 pass');
+    await expect(report.getByRole('button', { name: 'Print or save as PDF' })).toBeEnabled();
+    if (SHOTS) await page.screenshot({ path: `${SHOTS}/solo-report.png` });
+    await page.keyboard.press('Escape');
+    await expect(report).toHaveCount(0);
+  });
+
+  test('free: this browser’s sessions only, and the way to Pro', async ({ page }) => {
+    await mockSignedIn(page, FREE);
+    const asked = await mockSolo(page);
+    await page.goto('practice/#/progress');
+
+    const solo = page.getByRole('region', { name: 'Interviews on your own' });
+    await expect(solo.getByTestId('solo-list').getByRole('listitem')).toHaveCount(2);
+    await expect(solo.getByTestId('solo-trends')).toHaveCount(0);
+    await expect(solo.getByTestId('solo-report')).toHaveCount(0);
+    await expect(solo.getByTestId('solo-upgrade').getByRole('link', { name: 'Upgrade to Pro' })).toHaveAttribute('href', '../pricing/');
+    expect(asked).not.toContain('GET');
+    if (SHOTS) await solo.screenshot({ path: `${SHOTS}/solo-free.png` });
   });
 });
 
