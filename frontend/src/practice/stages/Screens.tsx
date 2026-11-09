@@ -22,7 +22,7 @@ import '../interview/room.css';
 
 type Update = (update: (n: StageNotes) => StageNotes) => void;
 
-const stageEyebrow = (n: number, label: string) => `Stage ${n} of 5 · ${label}`;
+const stageEyebrow = (n: number, label: string) => `Step ${n} of 5 · ${label}`;
 
 function Notes({ label, hint, value, onChange, placeholder, rows = 6 }: { label: string; hint?: ReactNode; value: string; onChange: (v: string) => void; placeholder: string; rows?: number }) {
   const id = useId();

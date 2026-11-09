@@ -27,7 +27,7 @@ test.describe('lessons', () => {
     await expect(page.getByRole('button', { name: 'Show the test results' })).toHaveAttribute('aria-expanded', 'false');
 
     // The lesson is the first stage in the rail: a page of its own, nothing of the workspace.
-    await page.getByRole('navigation', { name: 'Stages' }).getByRole('button', { name: 'Lesson' }).click();
+    await page.getByRole('navigation', { name: 'Steps' }).getByRole('button', { name: 'Lesson' }).click();
     await expect(lesson).toBeVisible();
     await expect(lesson.getByRole('heading', { level: 2, name: "What you'll learn" })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Run tests' })).toHaveCount(0);
@@ -51,7 +51,7 @@ test.describe('lessons', () => {
   test('from the roadmap a problem opens on its stage, with the lesson in the rail', async ({ page }) => {
     await page.goto('practice/#/roadmap/url-shortener');
     await expect(page.getByRole('heading', { level: 2, name: 'Functional requirements' })).toBeVisible();
-    await page.getByRole('navigation', { name: 'Stages' }).getByRole('button', { name: 'Lesson' }).click();
+    await page.getByRole('navigation', { name: 'Steps' }).getByRole('button', { name: 'Lesson' }).click();
     await expect(page.getByRole('article', { name: 'Lesson' }).getByRole('heading', { level: 2, name: 'Concepts' })).toBeVisible();
     // A ```proschi block in the lesson is highlighted.
     await expect(page.locator('pre[data-lang="proschi"] .font-bold').first()).toBeAttached();
@@ -80,7 +80,7 @@ test.describe('lessons', () => {
 
   test('what was revealed in the lesson survives leaving it and coming back', async ({ page }) => {
     await page.goto('practice/#/roadmap/url-shortener');
-    const open = page.getByRole('navigation', { name: 'Stages' }).getByRole('button', { name: 'Lesson' });
+    const open = page.getByRole('navigation', { name: 'Steps' }).getByRole('button', { name: 'Lesson' });
     await open.click();
     const drawer = page.getByRole('article', { name: 'Lesson' });
     const dive = drawer.locator('details[data-block="deepdive"]').first();
@@ -119,7 +119,7 @@ test.describe('lessons', () => {
     const stage = page.getByRole('listitem', { name: /^Stage 1: / });
     await expect(stage).toContainText(/0 \/ \d+ lessons read/);
     await stage.getByRole('link', { name: /Hello, Proschi/ }).click();
-    await page.getByRole('navigation', { name: 'Stages' }).getByRole('button', { name: 'Lesson' }).click();
+    await page.getByRole('navigation', { name: 'Steps' }).getByRole('button', { name: 'Lesson' }).click();
     await page.getByRole('article', { name: 'Lesson' }).getByRole('button', { name: 'Continue: Design' }).click();
     await page.goto('practice/#/roadmap');
     await expect(stage).toContainText(/1 \/ \d+ lessons read/);
@@ -176,7 +176,7 @@ test.describe('lessons', () => {
       await expect(page.getByRole('tab', { name: 'Problem' })).toBeVisible();
       // Every tab fits, the last one included, and the stages' rail with the lesson above them.
       await expect(page.getByRole('tab', { name: 'Tests' })).toBeInViewport({ ratio: 0.99 });
-      await expect(page.getByRole('navigation', { name: 'Stages' }).getByRole('button', { name: 'Lesson' })).toBeInViewport({ ratio: 0.99 });
+      await expect(page.getByRole('navigation', { name: 'Steps' }).getByRole('button', { name: 'Lesson' })).toBeInViewport({ ratio: 0.99 });
       expect(await noPageScroll()).toBe(true);
 
       for (const path of ['practice/url-shortener/', 'practice/approach/', 'practice/#/roadmap/approach']) {

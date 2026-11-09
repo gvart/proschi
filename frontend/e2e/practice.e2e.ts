@@ -294,7 +294,7 @@ test.describe('practice on a phone', () => {
     await expect(canvasNodes(page)).toHaveCount(0);
 
     // A problem from the list has no stages (P51): the lesson opens in a drawer from the tab bar, and closing it leads back to the same tab.
-    await expect(page.getByRole('navigation', { name: 'Stages' })).toHaveCount(0);
+    await expect(page.getByRole('navigation', { name: 'Steps' })).toHaveCount(0);
     await page.getByRole('button', { name: 'Lesson' }).click();
     const lesson = page.getByRole('dialog', { name: 'Lesson' });
     await expect(lesson).toBeVisible();

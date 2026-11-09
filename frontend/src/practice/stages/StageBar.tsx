@@ -36,7 +36,7 @@ export default function StageBar({ notes, shown, hasLesson, onOpen, next, tools,
   const reachedAt = stageAt(notes.reached);
   return (
     <div className="flex min-h-12 shrink-0 items-center gap-2 border-b-bw-1 border-ink bg-surface px-2 sm:px-3" data-testid="stage-bar">
-      <nav aria-label="Stages" className="min-w-0 flex-1 overflow-x-auto">
+      <nav aria-label="Steps" className="min-w-0 flex-1 overflow-x-auto">
         <ol className="flex items-center gap-1">
           {stages.map((s, i) => {
             const on = s.id === shown;
@@ -53,7 +53,7 @@ export default function StageBar({ notes, shown, hasLesson, onOpen, next, tools,
                   disabled={!open}
                   aria-current={on ? 'step' : undefined}
                   aria-label={s.label}
-                  title={open ? s.label : `${s.label}: after the stages before it`}
+                  title={open ? s.label : `${s.label}: after the steps before it`}
                   className={`flex min-h-[32px] items-center gap-1 whitespace-nowrap rounded-full border-bw-1 px-2.5 py-0.5 text-xs font-semibold disabled:cursor-default ${look}`}
                 >
                   {done ? <Check size={11} aria-hidden="true" /> : <span className="font-mono">{i + 1}</span>}

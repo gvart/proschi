@@ -113,7 +113,7 @@ test.describe('mock interview set-up', () => {
     await expect(page.getByRole('radio', { name: 'Surprise me' })).toHaveAttribute('aria-checked', 'true');
 
     await page.goto('practice/#/roadmap/url-shortener');
-    await page.getByRole('navigation', { name: 'Stages' }).getByRole('button', { name: 'Wrap-up' }).click();
+    await page.getByRole('navigation', { name: 'Steps' }).getByRole('button', { name: 'Wrap-up' }).click();
     const link = page.getByRole('link', { name: /Practice this as a mock interview/ });
     await expect(link).toHaveAttribute('href', '#/interview?problem=url-shortener');
     await link.click();

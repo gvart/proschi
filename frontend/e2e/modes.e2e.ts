@@ -22,7 +22,7 @@ test.describe('practice modes', () => {
     await page.goto('practice/#/roadmap/url-shortener');
     await expect(page.getByRole('heading', { level: 2, name: 'Scale' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Interview mode' })).toHaveCount(0);
-    await page.getByRole('navigation', { name: 'Stages' }).getByRole('button', { name: 'Wrap-up' }).click();
+    await page.getByRole('navigation', { name: 'Steps' }).getByRole('button', { name: 'Wrap-up' }).click();
     await expect(page.getByRole('link', { name: /Practice this as a mock interview/ })).toHaveAttribute('href', '#/interview?problem=url-shortener');
   });
 
