@@ -9,6 +9,13 @@ deployed from `main` and ships with the same changes. From 0.12.0 on,
 [release-please](https://github.com/googleapis/release-please) writes each
 section from the conventional commit titles of the merged pull requests.
 
+## [0.16.0](https://github.com/gvart/proschi/compare/tooling-v0.15.1...tooling-v0.16.0) (2026-11-09)
+
+
+### Added
+
+* paid plans on metered credits, mock interviews, Design partner, email sign-up, campaigns and feedback ([#182](https://github.com/gvart/proschi/issues/182)) ([fab4f20](https://github.com/gvart/proschi/commit/fab4f209ec5cc9a3ad75da7b4f634f5605a9a420))
+
 ## [0.15.1](https://github.com/gvart/proschi/compare/tooling-v0.15.0...tooling-v0.15.1) (2026-11-02)
 
 
