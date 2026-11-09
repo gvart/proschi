@@ -4668,8 +4668,9 @@ function trafficFor(diagram, options = {}, warnings = []) {
     const access = accessIn(diagram);
     for (const u of diagram.useCases) {
       if (diagram.traffic?.some((e) => e.mix?.length && findUseCase(diagram, e.useCase) === u)) continue;
-      const miss = missFactors(u, hits, (id) => kinds.get(id), (step) => access(step) === "read");
-      if (miss.size) traffic.set(u.id, { ...traffic.get(u.id), miss });
+      const lookups = cacheLookups(u, hits, (id) => kinds.get(id), (step) => access(step) === "read");
+      const miss = missFactors(lookups);
+      if (miss.size) traffic.set(u.id, { ...traffic.get(u.id), miss, lookups });
     }
   }
   const failed = options.failed;
@@ -4704,23 +4705,48 @@ function hitRatesOf(diagram, options) {
   return hits;
 }
 var BACKING_STORES = ["database", "search", "analytics", "storage"];
-function missFactors(useCase, hits, kindOf2, isRead) {
-  const factors = /* @__PURE__ */ new Map();
-  for (const s of useCase.scenarios) {
+function cacheLookups(useCase, hits, kindOf2, isRead) {
+  return useCase.scenarios.map((s) => {
+    const lookups = [];
     s.steps.forEach((lookup, i) => {
       const hit = hits.get(lookup.toServiceId);
       if (hit === void 0 || lookup.failed || !isRead(lookup)) return;
       const caller = lookup.fromServiceId;
       const reached = /* @__PURE__ */ new Set([lookup.toServiceId]);
+      const miss = /* @__PURE__ */ new Set();
       for (const step of s.steps.slice(i + 1)) {
+        const fill2 = miss.size > 0 && step.fromServiceId === caller && step.toServiceId === lookup.toServiceId && !isRead(step);
         const fallsThrough = reached.has(step.fromServiceId) || step.fromServiceId === caller && isRead(step) && BACKING_STORES.includes(kindOf2(step.toServiceId));
+        if (fill2) miss.add(step);
         if (!fallsThrough || step.toServiceId === caller) continue;
         reached.add(step.toServiceId);
-        factors.set(step, (factors.get(step) ?? 1) * (1 - Math.min(100, Math.max(0, hit)) / 100));
+        miss.add(step);
       }
+      if (miss.size) lookups.push({ hit: Math.min(100, Math.max(0, hit)) / 100, miss });
     });
-  }
+    return lookups;
+  });
+}
+function missFactors(lookups) {
+  const factors = /* @__PURE__ */ new Map();
+  for (const l of lookups.flat()) for (const step of l.miss) factors.set(step, (factors.get(step) ?? 1) * (1 - l.hit));
   return factors;
+}
+function cacheVariants(hops, lookups) {
+  const out = [];
+  const n = Math.min(lookups.length, 10);
+  for (let mask = 0; mask < 1 << n; mask++) {
+    let share = 1;
+    const skipped = /* @__PURE__ */ new Set();
+    for (let k = 0; k < n; k++) {
+      const hit = mask >> k & 1;
+      share *= hit ? lookups[k].hit : 1 - lookups[k].hit;
+      if (hit) for (const step of lookups[k].miss) skipped.add(step);
+    }
+    if (share <= 0) continue;
+    out.push({ share, hops: hops.map((part) => part.filter((h2) => !skipped.has(h2.step))).filter((part) => part.length) });
+  }
+  return out;
 }
 function averageTraffic(traffic) {
   if (![...traffic.values()].some((t) => t.average !== void 0)) return traffic;
@@ -4733,7 +4759,7 @@ function forEachStepRate(diagram, traffic, visit) {
     u.scenarios.forEach((s, i) => {
       const rate = rps * (shares[i] ?? 0);
       if (rate > 0) {
-        for (const step of s.steps) if (!step.failed) visit(step, miss?.has(step) ? rate * miss.get(step) : rate);
+        for (const step of s.steps) if (!step.failed) visit(step, miss?.has(step) ? rate * miss.get(step) : rate, u);
       }
     });
   }
@@ -4979,7 +5005,18 @@ function analyze(diagram, options = {}) {
     )
   });
   const useCases = diagram.useCases.map((u) => {
-    const { rps, shares, stranded, average } = traffic.get(u.id);
+    const { rps, shares, stranded, average, lookups } = traffic.get(u.id);
+    if (lookups) {
+      const { scenarios: scenarios2, percentiles: percentiles2, tailScenario: tailScenario2 } = cachedLatency(u, shares, lookups, pathOf, new Set(options.percentiles ?? PERCENTILES2));
+      const writes2 = mainWrites(u, shares, (step) => access(step) === "write");
+      const availabilityOf2 = (id) => {
+        const n = nodeById.get(id);
+        if (!n && systems) return systemAvailability(u, id, systems.availability);
+        return !n ? 1 : writes2.has(id) ? n.writeAvailability : n.availability;
+      };
+      const availability3 = useCaseAvailability(u, shares, availabilityOf2) * (1 - (stranded ?? 0));
+      return { id: u.id, name: u.name, rps, ...average !== void 0 ? { avgRps: rps * average } : {}, scenarios: scenarios2, percentiles: percentiles2, tailScenario: tailScenario2, availability: availability3 };
+    }
     const paths = u.scenarios.map((s) => pathOf(criticalPath(u, s)));
     const scenarios = u.scenarios.map((s, i) => ({
       id: s.id,
@@ -5018,6 +5055,27 @@ function analyze(diagram, options = {}) {
     warnings,
     ...systems ? { systems: systems.systems } : {}
   };
+}
+function cachedLatency(u, shares, lookups, pathOf, wanted) {
+  const variants = u.scenarios.map((s, i) => cacheVariants(criticalPath(u, s), lookups[i] ?? []).map((v) => ({ share: v.share, path: pathOf(v.hops) })));
+  const scenarios = u.scenarios.map((s, i) => ({
+    id: s.id,
+    name: s.name,
+    share: shares[i] ?? 0,
+    meanMs: variants[i].reduce((sum, v) => sum + v.share * pathMean(v.path), 0),
+    percentiles: Object.fromEntries(PERCENTILES2.map((q) => [PERCENTILE_KEYS[q], mixtureQuantile(variants[i], q / 100)]))
+  }));
+  const weighted = variants.flatMap((vs, i) => vs.map((v) => ({ share: (shares[i] ?? 0) * v.share, path: v.path })));
+  const percentiles = Object.fromEntries(PERCENTILES2.map((q) => [PERCENTILE_KEYS[q], wanted.has(q) ? mixtureQuantile(weighted, q / 100) : NaN]));
+  const tailScenario = Object.fromEntries(
+    PERCENTILES2.map((q) => {
+      if (!wanted.has(q)) return [PERCENTILE_KEYS[q], 0];
+      const t = percentiles[PERCENTILE_KEYS[q]];
+      const above = variants.map((vs, i) => (shares[i] ?? 0) > 0 ? vs.reduce((sum, v) => sum + (shares[i] ?? 0) * v.share * (1 - pathCdf(v.path, t * (1 - 1e-9))), 0) : -1);
+      return [PERCENTILE_KEYS[q], Math.max(0, above.indexOf(Math.max(...above)))];
+    })
+  );
+  return { scenarios, percentiles, tailScenario };
 }
 function systemAvailability(u, id, availability2) {
   let result = 1;

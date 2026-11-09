@@ -48,9 +48,9 @@
         </p>
         <p>
           A cache with a hit rate (<code>capacity { cache hit 90% }</code>) passes on only its misses: after a
-          read of it, the caller's reads from a store behind it and the calls the cache makes itself take
-          <code>1 − hit</code> of the rate, unless the use case already splits hits and misses with a
-          <code>mix</code>. Only load changes; latency stays that of the whole path.
+          read of it, the caller's reads from a store behind it, the calls the cache makes itself and the
+          caller's fill of the cache take <code>1 − hit</code> of the rate, unless the use case already splits
+          hits and misses with a <code>mix</code>. Latency follows too: see the percentiles below.
         </p>
         <p>
           With <code>peak</code> (<code>"Read" 20k rps peak x3</code>), <var>R</var> is the peak, 60k: load,
@@ -187,6 +187,11 @@ hop(n) = base + C × base ÷ (c (1 − ρ))
         <p>
           A use case's percentile mixes its scenarios by their shares. With 10% cache misses, p99 is close to the
           miss path's p90, and it moves smoothly as a share grows.
+        </p>
+        <p>
+          A cache's <code>hit</code> rate is mixed the same way: each scenario becomes a hit variant, without the
+          miss path, and a miss variant, weighted by the hit rate. The percentiles are those of an explicit
+          <code>alt "Hit"</code> and <code>alt "Miss"</code> with a <code>mix</code> of the same shares.
         </p>
       </div>
       <div class="figure">
@@ -717,8 +722,8 @@ traffic {
         <th scope="row">Cache hit rate <span class="tag">either way</span></th>
         <td>
           The hit rate is what <code>hit</code> or <code>mix</code> says. Warm-up and eviction are not modelled, so
-          try the cold case in a what-if (<code>cache hit 40%</code>). A <code>hit</code> rate changes load, not
-          latency: every request is timed as a miss.
+          try the cold case in a what-if (<code>cache hit 40%</code>). Hits and misses are independent, by the
+          rate, with no correlation between keys.
         </td>
       </tr>
       <tr>

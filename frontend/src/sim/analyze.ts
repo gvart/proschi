@@ -192,8 +192,10 @@ export interface UseCaseTraffic {
   shares: number[];
   /** `peak` traffic: the average as a fraction of `rps` (the peak), 0..1. Absent for a flat rate. */
   average?: number;
-  /** Steps on a cache's miss path, with the share of the rate that reaches them (`1 − hit`, see `missFactors`). Absent without hit rates. */
+  /** Steps on a cache's miss path, with the share of the rate that reaches them (`1 − hit`, see `cacheLookups`). Absent without hit rates. */
   miss?: Map<DiagramStep, number>;
+  /** Each scenario's reads of caches with a hit rate (aligned with `useCase.scenarios`), for the hit and miss latency mixture. Absent without hit rates. */
+  lookups?: CacheLookup[][];
   /** With failed nodes: the share of requests whose scenario needs a failed node and has no fallback, 0..1. Absent otherwise. */
   stranded?: number;
 }
@@ -252,8 +254,9 @@ export function trafficFor(diagram: Diagram, options: AnalyzeOptions = {}, warni
     for (const u of diagram.useCases) {
       // A use case that splits its traffic over scenarios models hits and misses itself: the mix wins.
       if (diagram.traffic?.some((e) => e.mix?.length && findUseCase(diagram, e.useCase) === u)) continue;
-      const miss = missFactors(u, hits, (id) => kinds.get(id), (step) => access(step) === 'read');
-      if (miss.size) traffic.set(u.id, { ...traffic.get(u.id)!, miss });
+      const lookups = cacheLookups(u, hits, (id) => kinds.get(id), (step) => access(step) === 'read');
+      const miss = missFactors(lookups);
+      if (miss.size) traffic.set(u.id, { ...traffic.get(u.id)!, miss, lookups });
     }
   }
   const failed = options.failed;
@@ -294,35 +297,89 @@ function hitRatesOf(diagram: Diagram, options: AnalyzeOptions): Map<string, numb
 /** Kinds a cache-aside miss falls through to: the stores behind a cache. */
 const BACKING_STORES: readonly Kind[] = ['database', 'search', 'analytics', 'storage'];
 
+/** One read of a cache with a hit rate: the hit rate, 0..1, and the steps only a miss takes. */
+export interface CacheLookup {
+  hit: number;
+  miss: Set<DiagramStep>;
+}
+
 /**
- * The miss path of every read of a cache with a hit rate, in each scenario of
+ * The miss path of every read of a cache with a hit rate, per scenario of
  * `useCase`: later steps sent by the cache itself (read-through, a CDN's
  * origin fetch), later reads by the caller from a backing store (cache-aside),
- * and the steps those nodes send in turn. Each such step gets `1 − hit` of
- * the rate; behind two caches, the product.
+ * the steps those nodes send in turn, and the caller's write back to the
+ * cache once it has missed (the fill).
  */
-export function missFactors(
+export function cacheLookups(
   useCase: DiagramUseCase,
   hits: ReadonlyMap<string, number>,
   kindOf: (id: string) => Kind | undefined,
   isRead: (step: DiagramStep) => boolean,
-): Map<DiagramStep, number> {
-  const factors = new Map<DiagramStep, number>();
-  for (const s of useCase.scenarios) {
+): CacheLookup[][] {
+  return useCase.scenarios.map((s) => {
+    const lookups: CacheLookup[] = [];
     s.steps.forEach((lookup, i) => {
       const hit = hits.get(lookup.toServiceId);
       if (hit === undefined || lookup.failed || !isRead(lookup)) return;
       const caller = lookup.fromServiceId;
       const reached = new Set([lookup.toServiceId]);
+      const miss = new Set<DiagramStep>();
       for (const step of s.steps.slice(i + 1)) {
+        const fill = miss.size > 0 && step.fromServiceId === caller && step.toServiceId === lookup.toServiceId && !isRead(step);
         const fallsThrough = reached.has(step.fromServiceId) || (step.fromServiceId === caller && isRead(step) && BACKING_STORES.includes(kindOf(step.toServiceId)!));
+        if (fill) miss.add(step);
         if (!fallsThrough || step.toServiceId === caller) continue;
         reached.add(step.toServiceId);
-        factors.set(step, (factors.get(step) ?? 1) * (1 - Math.min(100, Math.max(0, hit)) / 100));
+        miss.add(step);
       }
+      if (miss.size) lookups.push({ hit: Math.min(100, Math.max(0, hit)) / 100, miss });
     });
-  }
+    return lookups;
+  });
+}
+
+/** The share of the rate each miss-path step gets: `1 − hit`, and behind two caches the product. */
+export function missFactors(lookups: CacheLookup[][]): Map<DiagramStep, number> {
+  const factors = new Map<DiagramStep, number>();
+  for (const l of lookups.flat()) for (const step of l.miss) factors.set(step, (factors.get(step) ?? 1) * (1 - l.hit));
   return factors;
+}
+
+/**
+ * A scenario's paths under its cache reads: every combination of hits and
+ * misses (independent, by each cache's hit rate), the steps of a hit's miss
+ * path left out. Combinations of probability 0 are dropped.
+ */
+export function cacheVariants(hops: Hop[][], lookups: CacheLookup[]): { share: number; hops: Hop[][] }[] {
+  const out: { share: number; hops: Hop[][] }[] = [];
+  const n = Math.min(lookups.length, 10);
+  for (let mask = 0; mask < 1 << n; mask++) {
+    let share = 1;
+    const skipped = new Set<DiagramStep>();
+    for (let k = 0; k < n; k++) {
+      const hit = (mask >> k) & 1;
+      share *= hit ? lookups[k].hit : 1 - lookups[k].hit;
+      if (hit) for (const step of lookups[k].miss) skipped.add(step);
+    }
+    if (share <= 0) continue;
+    out.push({ share, hops: hops.map((part) => part.filter((h) => !skipped.has(h.step))).filter((part) => part.length) });
+  }
+  return out;
+}
+
+/**
+ * Requests per second each use case sends each node (fan-out and cache
+ * misses included, failed calls not): by node id, then use case name. The
+ * same rates `computeLoad` adds up.
+ */
+export function loadByUseCase(diagram: Diagram, traffic: Map<string, UseCaseTraffic>): Map<string, Map<string, number>> {
+  const loadBy = new Map<string, Map<string, number>>();
+  forEachStepRate(diagram, traffic, (step, rate, u) => {
+    const byUseCase = loadBy.get(step.toServiceId) ?? new Map<string, number>();
+    byUseCase.set(u.name, (byUseCase.get(u.name) ?? 0) + rate * multiplierOf(step));
+    loadBy.set(step.toServiceId, byUseCase);
+  });
+  return loadBy;
 }
 
 /**
@@ -351,12 +408,12 @@ export interface Load {
  * target is down in that scenario, so it receives nothing, and nothing is
  * sent back.
  */
-export function forEachStepRate(diagram: Diagram, traffic: Map<string, UseCaseTraffic>, visit: (step: DiagramStep, rate: number) => void) {
+export function forEachStepRate(diagram: Diagram, traffic: Map<string, UseCaseTraffic>, visit: (step: DiagramStep, rate: number, useCase: DiagramUseCase) => void) {
   for (const u of diagram.useCases) {
     const { rps, shares, miss } = traffic.get(u.id) ?? { rps: 0, shares: [] };
     u.scenarios.forEach((s, i) => {
       const rate = rps * (shares[i] ?? 0);
-      if (rate > 0) for (const step of s.steps) if (!step.failed) visit(step, miss?.has(step) ? rate * miss.get(step)! : rate);
+      if (rate > 0) for (const step of s.steps) if (!step.failed) visit(step, miss?.has(step) ? rate * miss.get(step)! : rate, u);
     });
   }
 }
@@ -765,7 +822,18 @@ export function analyze(diagram: Diagram, options: AnalyzeOptions = {}): Analysi
   });
 
   const useCases: UseCaseAnalysis[] = diagram.useCases.map((u) => {
-    const { rps, shares, stranded, average } = traffic.get(u.id)!;
+    const { rps, shares, stranded, average, lookups } = traffic.get(u.id)!;
+    if (lookups) {
+      const { scenarios, percentiles, tailScenario } = cachedLatency(u, shares, lookups, pathOf, new Set(options.percentiles ?? PERCENTILES));
+      const writes = mainWrites(u, shares, (step) => access(step) === 'write');
+      const availabilityOf = (id: string) => {
+        const n = nodeById.get(id);
+        if (!n && systems) return systemAvailability(u, id, systems.availability);
+        return !n ? 1 : writes.has(id) ? n.writeAvailability : n.availability;
+      };
+      const availability = useCaseAvailability(u, shares, availabilityOf) * (1 - (stranded ?? 0));
+      return { id: u.id, name: u.name, rps, ...(average !== undefined ? { avgRps: rps * average } : {}), scenarios, percentiles, tailScenario, availability };
+    }
     const paths = u.scenarios.map((s) => pathOf(criticalPath(u, s)));
     const scenarios: ScenarioAnalysis[] = u.scenarios.map((s, i) => ({
       id: s.id,
@@ -805,6 +873,40 @@ export function analyze(diagram: Diagram, options: AnalyzeOptions = {}): Analysi
     warnings,
     ...(systems ? { systems: systems.systems } : {}),
   };
+}
+
+/**
+ * Latency of a use case whose scenarios read caches with a hit rate: each
+ * scenario is the mixture of its hit and miss variants (`cacheVariants`), and
+ * the use case the mixture of all of them weighted by scenario share, exactly
+ * as an explicit `alt` per variant with a `mix` would be.
+ */
+function cachedLatency(
+  u: DiagramUseCase,
+  shares: number[],
+  lookups: CacheLookup[][],
+  pathOf: (hops: Hop[][]) => PathModel,
+  wanted: Set<Percentile>,
+): Pick<UseCaseAnalysis, 'scenarios' | 'percentiles' | 'tailScenario'> {
+  const variants = u.scenarios.map((s, i) => cacheVariants(criticalPath(u, s), lookups[i] ?? []).map((v) => ({ share: v.share, path: pathOf(v.hops) })));
+  const scenarios: ScenarioAnalysis[] = u.scenarios.map((s, i) => ({
+    id: s.id,
+    name: s.name,
+    share: shares[i] ?? 0,
+    meanMs: variants[i].reduce((sum, v) => sum + v.share * pathMean(v.path), 0),
+    percentiles: Object.fromEntries(PERCENTILES.map((q) => [PERCENTILE_KEYS[q], mixtureQuantile(variants[i], q / 100)])) as Percentiles,
+  }));
+  const weighted = variants.flatMap((vs, i) => vs.map((v) => ({ share: (shares[i] ?? 0) * v.share, path: v.path })));
+  const percentiles = Object.fromEntries(PERCENTILES.map((q) => [PERCENTILE_KEYS[q], wanted.has(q) ? mixtureQuantile(weighted, q / 100) : NaN])) as Percentiles;
+  const tailScenario = Object.fromEntries(
+    PERCENTILES.map((q) => {
+      if (!wanted.has(q)) return [PERCENTILE_KEYS[q], 0];
+      const t = percentiles[PERCENTILE_KEYS[q]];
+      const above = variants.map((vs, i) => ((shares[i] ?? 0) > 0 ? vs.reduce((sum, v) => sum + (shares[i] ?? 0) * v.share * (1 - pathCdf(v.path, t * (1 - 1e-9))), 0) : -1));
+      return [PERCENTILE_KEYS[q], Math.max(0, above.indexOf(Math.max(...above)))];
+    }),
+  ) as UseCaseAnalysis['tailScenario'];
+  return { scenarios, percentiles, tailScenario };
 }
 
 /** A system's availability for a use case: the weakest entry point the use case enters (1 when it is not a simulated system). */

@@ -48,9 +48,50 @@ describe('cache hit rate', () => {
     const hit = loads(aside('capacity {\n  cache hit 90%\n}'));
     expect(plain.load.db).toBe(1000);
     expect(hit.load.db).toBeCloseTo(100, 9);
-    // The lookup and the API are unchanged; the cache fill is a write, not a backing store read.
+    // The lookup and the API are unchanged; the cache fill only follows a miss.
     expect(hit.load.api).toBe(1000);
-    expect(hit.load.cache).toBe(plain.load.cache);
+    expect(plain.load.cache).toBe(2000);
+    expect(hit.load.cache).toBeCloseTo(1100, 9);
+  });
+
+  it('mixes hit and miss latency exactly as an explicit alt with a mix of the same shape', () => {
+    const implicit = analyze(parse(aside('capacity {\n  cache hit 90%\n}')).diagram);
+    const explicit = analyze(
+      parse(`
+user  [Browser]
+api   [REST API] x4
+cache [Redis]
+db    [PostgreSQL]
+user -> api
+api -> cache
+api -> db
+usecase "Read" {
+  user -> api : GET /item
+  alt "Hit" {
+    api -> cache : GET item
+  } alt "Miss" {
+    api -> cache : GET item
+    api -> db : SELECT item
+    api -> cache : SET item
+  }
+  api --> user : 200
+}
+traffic {
+  "Read" 1k rps mix "Hit" 90%, "Miss" 10%
+}`).diagram,
+    );
+    const [i] = implicit.useCases;
+    const [e] = explicit.useCases;
+    for (const key of Object.keys(e.percentiles) as (keyof typeof e.percentiles)[]) expect(i.percentiles[key]).toBeCloseTo(e.percentiles[key], 6);
+    expect(i.scenarios[0].meanMs).toBeCloseTo(e.scenarios[0].share * e.scenarios[0].meanMs + e.scenarios[1].share * e.scenarios[1].meanMs, 6);
+    // p50 sits near the hit path, the tail out on the miss path.
+    const [hitPath, missPath] = e.scenarios.map((s) => s.percentiles);
+    expect(i.percentiles.p50 - hitPath.p50).toBeLessThan(missPath.p50 - i.percentiles.p50);
+    expect(i.percentiles.p999).toBeGreaterThan(hitPath.p999);
+    // Without a hit rate, the same diagram takes the whole path every time.
+    const plain = analyze(parse(aside()).diagram).useCases[0];
+    expect(plain.percentiles.p50).toBeGreaterThan(i.percentiles.p50);
+    expect(i.availability).toBe(plain.availability);
   });
 
   it('follows a read-through cache and a CDN origin fetch, and multiplies two caches', () => {

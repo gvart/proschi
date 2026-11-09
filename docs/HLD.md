@@ -296,13 +296,15 @@ whatif "Cold cache" {
   or object storage), the calls the cache makes itself (a read-through
   cache, a CDN fetching from its origin), and whatever those calls lead to.
   Each takes `1 − hit` of the rate, and behind two caches the product.
-- **Writes are not discounted.** Filling the cache after a miss, as `SET
-  product` above, is a write and keeps the full rate.
+- **Filling the cache is part of the miss.** The caller's write back to the
+  same cache after a miss, as `SET product` above, also takes `1 − hit`.
+  Other writes keep the full rate.
 - **A mix wins.** A use case that splits hits and misses into
   [scenarios](SCENARIOS.md) with a traffic `mix`, like the URL shortener at
   the top, is left to its mix, and an info diagnostic says so.
-- **Only load changes.** Latency is still that of the whole path, a miss.
-  For p50 on hits and p99 on misses, write them as scenarios with a mix.
+- **Latency mixes hits and misses.** A hit skips its miss path, so p50
+  follows the hit path and the tail the misses: the same percentiles as a
+  `Cache hit` and a `Cache miss` scenario with a 90/10 mix.
 - A rate over 100% is an error, and `hit` on a node that is not a cache or
   CDN is a warning. `cache hit 40%` in a [what-if](TESTS.md#what-ifs) tries
   another rate.
