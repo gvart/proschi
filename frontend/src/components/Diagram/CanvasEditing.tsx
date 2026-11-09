@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { Blocks, Cable, Code2, Copy, Pencil, PinOff, Settings2, Trash2, Workflow, X } from 'lucide-react';
+import { Blocks, Cable, Code2, Copy, Pencil, PinOff, Power, PowerOff, Settings2, Trash2, Workflow, X } from 'lucide-react';
 import { MenuItem } from '../Playground/Menu';
 import { MOD_KEY } from '../Playground/modKey';
 import { iconButton, toolButton } from '../Playground/ui';
@@ -157,6 +157,9 @@ export interface CanvasMenuActions {
   onConnect?: () => void;
   onUnpin?: () => void;
   onJumpToCode?: () => void;
+  /** Takes the node down in the live what-if, or brings it back up (`down`). */
+  onSimulateDown?: () => void;
+  down?: boolean;
 }
 
 /** The right-click menu of a node or connection: its settings, the actions given, and Delete. */
@@ -219,6 +222,7 @@ export function CanvasMenu({
       {item(<Cable size={14} />, 'Connect to…', actions.onConnect)}
       {item(<PinOff size={14} />, 'Unpin position', actions.onUnpin)}
       {item(<Code2 size={14} />, 'Jump to code', actions.onJumpToCode)}
+      {item(actions.down ? <Power size={14} /> : <PowerOff size={14} />, actions.down ? 'Bring back up' : 'Simulate down', actions.onSimulateDown)}
       <div className="my-1 border-t border-ink/10" />
       {item(<Trash2 size={14} />, <>Delete {hint('Del')}</>, onDelete)}
     </div>

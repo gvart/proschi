@@ -737,3 +737,63 @@ export function removeScenario(source: string, useCase: string, name: string): E
   } else lines.splice(branch.line - 1, branch.endLine - branch.line + 1);
   return { source: lines.join('\n') };
 }
+
+// ---------------------------------------------------------------------------
+// What-ifs from the canvas (docs/design/paid-plans.md P57): the traffic slider
+// and "Simulate down" are saved as a `whatif` block, or written to the
+// traffic block itself.
+
+/** What a what-if saved from the canvas changes: use cases' traffic multiplied, nodes down. */
+export interface NewWhatIf {
+  traffic?: { useCase: string; multiply: number }[];
+  fail?: string[];
+}
+
+/** `3`, `1.5`, `0.75`: at most two decimals, no trailing zeros. */
+const decimal = (n: number) => String(Number(n.toFixed(2)));
+
+/**
+ * Appends `whatif "Name" { traffic "UC" x3 … fail id … }` at the end of the
+ * text. A name already taken gets ` (2)`, ` (3)`…; the name used comes back.
+ */
+export function addWhatIf(source: string, name: string, changes: NewWhatIf): { source: string; name: string } {
+  const taken = new Set((parse(source).diagram.whatifs ?? []).map((w) => w.name));
+  const base = cleanText(name) || 'What-if';
+  let unique = base;
+  for (let n = 2; taken.has(unique); n++) unique = `${base} (${n})`;
+  const lines = [
+    `whatif ${quote(unique)} {`,
+    ...(changes.traffic ?? []).map((t) => `  traffic ${quote(t.useCase)} x${decimal(t.multiply)}`),
+    ...(changes.fail ?? []).map((id) => `  fail ${id}`),
+    '}',
+  ];
+  const trimmed = source.replace(/\s+$/, '');
+  return { source: `${trimmed}${trimmed ? '\n\n' : ''}${lines.join('\n')}\n`, name: unique };
+}
+
+/** `300k rps`, `1.5m rps`, `40 rps`. */
+export function rateText(rps: number): string {
+  if (rps >= 1e6) return `${decimal(rps / 1e6)}m rps`;
+  if (rps >= 1e3) return `${decimal(rps / 1e3)}k rps`;
+  return `${decimal(rps)} rps`;
+}
+
+/**
+ * Multiplies the rate of every line of this file's `traffic` block by
+ * `factor`, rewriting it in rps (`100k rps` × 3 is `300k rps`). A line whose
+ * rate is not a plain quantity is left as it is.
+ */
+export function scaleTraffic(source: string, factor: number): string {
+  const lines = source.split('\n');
+  for (const entry of parse(source).diagram.traffic ?? []) {
+    if (entry.loc.file) continue;
+    const text = lines[entry.loc.line - 1];
+    if (text === undefined) continue;
+    const { tokens } = tokenizeLine(text, entry.loc.line);
+    const at = tokens.findIndex((t) => t.kind === 'string' && t.value === entry.useCase);
+    const rate = at === -1 ? undefined : tokens[at + 1];
+    if (rate?.kind !== 'quantity' && rate?.kind !== 'number') continue;
+    lines[entry.loc.line - 1] = text.slice(0, rate.col - 1) + rateText(entry.rps * factor) + text.slice(end(rate));
+  }
+  return lines.join('\n');
+}

@@ -15,6 +15,12 @@ interface ResultsPanelProps {
   review?: ReactNode;
   /** Selects a node on the canvas and zooms to it. */
   onFocusNode?: (id: string) => void;
+  /** What the what-if on (components/WhatIf) does, first. */
+  whatIf?: ReactNode;
+  /** The saved what-ifs and the sweep, after the analysis. */
+  whatIfs?: ReactNode;
+  /** A tab sits on the pane's right edge (Design partner): the content keeps clear of it. */
+  edgeTab?: boolean;
 }
 
 /**
@@ -22,11 +28,12 @@ interface ResultsPanelProps {
  * folded away; then the analysis (load, latency, availability and cost per
  * node) and the design review.
  */
-export default function ResultsPanel({ diagram, analysis, results, onSelect, review, onFocusNode }: ResultsPanelProps) {
+export default function ResultsPanel({ diagram, analysis, results, onSelect, review, onFocusNode, whatIf, whatIfs, edgeTab }: ResultsPanelProps) {
   const hasTraffic = (diagram.traffic ?? []).length > 0;
   return (
     <div className="h-full overflow-y-auto bg-surface">
-      <div className="max-w-4xl mx-auto px-4 py-4 space-y-6 text-sm">
+      <div className={`max-w-4xl mx-auto py-4 space-y-6 text-sm ${edgeTab ? 'pl-4 pr-12' : 'px-4'}`}>
+        {whatIf}
         <Checks results={results} onSelect={onSelect} />
         {hasTraffic ? (
           <AnalysisBody diagram={diagram} analysis={analysis} results={results} onSelect={onSelect} onFocusNode={onFocusNode} />
@@ -35,6 +42,7 @@ export default function ResultsPanel({ diagram, analysis, results, onSelect, rev
             <NoTraffic />
           </section>
         )}
+        {whatIfs}
         {review && (
           <section className="rounded-md border border-ink/15">
             <h2 className="px-3 pt-2 font-semibold text-ink">Review</h2>

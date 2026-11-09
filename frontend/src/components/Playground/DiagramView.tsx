@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import ReactFlow, { Background, BackgroundVariant, ControlButton, Controls, MiniMap, Panel, applyEdgeChanges, applyNodeChanges, getNodesBounds, getViewportForBounds, useReactFlow, useStoreApi } from 'reactflow';
 import type { Edge, EdgeChange, Node, NodeChange } from 'reactflow';
 import { ArrowLeft, ChevronRight, Gauge, LayoutGrid, Map as MapIcon, Pencil, Trash2 } from 'lucide-react';
@@ -68,6 +68,12 @@ export interface DiagramViewProps {
   /** The document has traffic to simulate, so the overlay can be turned on. */
   canOverlay: boolean;
   onToggleOverlay: () => void;
+  /** The live what-if's pill (components/WhatIf), beside the overlay toggle while the overlay is on. */
+  whatIfControl?: ReactNode;
+  /** Right-click → Simulate down: takes a node down in the live what-if, or brings it back up. */
+  onSimulateDown?: (id: string) => void;
+  /** The nodes simulated down. */
+  downIds?: readonly string[];
   /** A node picked elsewhere (Results), to select and zoom to; a new `n` asks again. */
   focusRequest?: { id: string; n: number } | null;
   onResetLayout: () => void;
@@ -138,6 +144,9 @@ export default function DiagramView({
   overlay,
   canOverlay,
   onToggleOverlay,
+  whatIfControl,
+  onSimulateDown,
+  downIds,
   focusRequest,
   onResetLayout,
   onDelete,
@@ -363,6 +372,15 @@ export default function DiagramView({
       onConnect: node.kind === 'component' || node.kind === 'system' ? () => setFinder({ connectFrom: node.id }) : undefined,
       onUnpin: own && node.position ? () => onUnpinNode(node.id) : undefined,
       onJumpToCode: () => onJumpToCode(node.id),
+      // The settings would cover the what-if card, so they close.
+      onSimulateDown:
+        onSimulateDown && node.kind === 'component' && crumbs.length === 1
+          ? () => {
+              setClosedSettings(node.id);
+              onSimulateDown(node.id);
+            }
+          : undefined,
+      down: downIds?.includes(node.id),
     };
   };
 
@@ -504,6 +522,9 @@ export default function DiagramView({
       onEdit={onEdit}
       onDelete={deleteSelection}
       onClose={() => setClosedSettings(single.id)}
+      // A long press does not open the right-click menu on every touch screen, so phones get Simulate down here.
+      onSimulateDown={phone && onSimulateDown && selectedNode?.kind === 'component' && crumbs.length === 1 ? () => onSimulateDown(selectedNode.id) : undefined}
+      down={!!selectedNode && !!downIds?.includes(selectedNode.id)}
     />
   );
 
@@ -695,6 +716,7 @@ export default function DiagramView({
           <Panel position="top-right" className="flex flex-col items-end gap-2">
             {!playing && (
               <div className="flex items-center gap-1">
+                {overlay && whatIfControl}
                 {canOverlay && (
                   <button
                     type="button"

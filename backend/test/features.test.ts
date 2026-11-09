@@ -64,6 +64,7 @@ describe('features', () => {
       data_export: { ok: false, reason: 'needs_pro' },
       certificate: { ok: false, reason: 'needs_pro' },
       pro_exports: { ok: false, reason: 'needs_pro' },
+      saved_whatifs: { ok: false, reason: 'needs_pro' },
     });
     await setPlan(id, 'pro');
     // Pro has every feature but Max's.

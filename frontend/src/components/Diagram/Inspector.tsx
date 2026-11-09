@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from 'react';
-import { Minus, Plus, Trash2, X } from 'lucide-react';
+import { Minus, Plus, Power, PowerOff, Trash2, X } from 'lucide-react';
 import { componentCatalog } from '../../catalog/componentCatalog';
 import { isDataStore, kindOf } from '../../dsl/kinds';
 import {
@@ -40,6 +40,9 @@ interface InspectorProps {
   /** Deletes the node or connection from the text. */
   onDelete: () => void;
   onClose: () => void;
+  /** Takes the node down in the live what-if, or brings it back up (`down`): the right-click menu's item, for touch screens. */
+  onSimulateDown?: () => void;
+  down?: boolean;
 }
 
 const TECHS = componentCatalog.filter((c) => c.type !== 'group').map((c) => c.techStack);
@@ -56,7 +59,7 @@ const CAPACITY_ROWS: { part: CapacityPart; label: string; unit: string; storeOnl
  * The settings of the selected node or connection. Every change is a small
  * edit of the text, which stays the source of truth.
  */
-export default function Inspector({ node, edge, capacity, importedFrom, system, problemCapacity = false, docked = false, onEdit, onDelete, onClose }: InspectorProps) {
+export default function Inspector({ node, edge, capacity, importedFrom, system, problemCapacity = false, docked = false, onEdit, onDelete, onClose, onSimulateDown, down = false }: InspectorProps) {
   const title = node ? node.name : edge ? `${edge.source} → ${edge.target}` : '';
   const readOnly = importedFrom !== undefined;
   return (
@@ -67,6 +70,11 @@ export default function Inspector({ node, edge, capacity, importedFrom, system, 
     >
       <div className="flex items-center gap-2 border-b border-ink/15 py-1 pl-3 pr-1">
         <h2 className="min-w-0 flex-1 truncate text-sm font-bold text-ink">{title}</h2>
+        {onSimulateDown && (
+          <button type="button" aria-label={down ? `Bring ${title} back up` : `Simulate ${title} down`} aria-pressed={down} title={down ? 'Bring back up' : 'Simulate down'} onClick={onSimulateDown} className={iconButton}>
+            {down ? <Power size={16} /> : <PowerOff size={16} />}
+          </button>
+        )}
         <button
           type="button"
           aria-label={`Delete ${title}`}
