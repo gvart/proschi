@@ -1,0 +1,54 @@
+frontend/src/practice/hub/recentMistakes.ts
+  s_f355061868c346::t_ddfe9d7ae4f979 1,4,9-12,23-24,32-40,48-61,63,65,67-125
+backend/src/mistakes.ts
+  s_f355061868c346::t_b7c4d5952f9633 1-102
+backend/migrations/0037_practice_mistakes.sql
+  s_f355061868c346::t_0be160fd9a115f 1-18
+backend/test/mistakes.test.ts
+  s_f355061868c346::t_cf5f733152db61 1-80
+frontend/e2e/accounts.ts
+  s_f355061868c346::t_83946c25702d18 96-97
+backend/src/progress.ts
+  s_f355061868c346::t_89cae72b453d8a 27,172,296-297
+backend/README.md
+  s_f355061868c346::t_08cf6513ec23a1 157-158
+  s_f355061868c346::t_49b12e570242a8 149-150
+backend/src/scopes.ts
+  s_f355061868c346::t_08cf6513ec23a1 69-70
+frontend/src/practice/hub/learnerInput.ts
+  s_f355061868c346::t_83946c25702d18 7,13-14,16,29
+backend/test/hardening.test.ts
+  s_f355061868c346::t_756123906ad68e 267
+frontend/e2e/mistakes.accounts.e2e.ts
+  s_f355061868c346::t_2e3bc1b1067bc3 58-59
+  s_f355061868c346::t_eec08fb1bdbab1 1-57,60-68
+docs/PRIVACY.md
+  s_f355061868c346::t_08cf6513ec23a1 29,159-165
+frontend/src/practice/hub/RuleSteps.tsx
+  s_f355061868c346::t_83946c25702d18 8,15,58-59,63,70
+backend/src/index.ts
+  s_f355061868c346::t_89cae72b453d8a 72,126,315-316
+frontend/src/practice/PracticeApp.tsx
+  s_f355061868c346::t_83946c25702d18 44,176-177,199-201
+  s_f355061868c346::t_408e378172f156 202
+frontend/src/practice/MistakePanel.tsx
+  s_f355061868c346::t_83946c25702d18 55,57-58
+frontend/src/practice/hub/recentMistakes.test.ts
+  s_f355061868c346::t_caec47a5b34a00 2-8,14-17,20,22,29-75
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8c37c8a5c7bd829d800dafa74f5469ff4b063bb5",
+  "prompts": {},
+  "sessions": {
+    "s_f355061868c346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd556674-4248-429d-bf5c-2b361bc86c62",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
