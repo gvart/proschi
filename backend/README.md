@@ -599,6 +599,14 @@ Both are Pro (docs/design/paid-plans.md P1, P9) and need `ANTHROPIC_API_KEY`
   `{error: "plan_required"}` off Pro.
 - **`GET /api/interviews`** lists every session for the start screen; off
   Pro only the latest finished one keeps its verdict.
+- **`GET /api/me/interviews/solo`** (P53): `{sessions: [{problem,
+  startedAt, durationMin, totalMs, reachedDesign, drew, solved,
+  results?}]}`, the interviews on your own kept for the account, newest
+  first (up to 200), each with what it did when the browser sent it
+  (`results`, `frontend/src/learn/soloInterview.ts`), for the trend per
+  skill and the report on every device. Pro (`interview_history`); 401
+  signed out, 402 `{error: "plan_required"}` off Pro. No model call, so it
+  answers without `ANTHROPIC_API_KEY` too.
 
 How it works (`src/roadmap.ts`, `src/ai/roadmap.ts`):
 
@@ -1383,7 +1391,8 @@ sign-up flow grants them. Reload the page afterwards.
 - **Design partner**: the **Design partner** button in the editor (`/app/`)
   or on a problem (Ctrl/Cmd+J). Each turn is charged in credits.
 - **History**: the account menu → **Your progress** (`/practice/#/progress`):
-  every finished AI interview's verdict and the skill trends.
+  every finished AI interview's verdict and the skill trends, and those of
+  the interviews on your own.
 - **Next for you**: on the roadmap (`/practice/#/roadmap`) and under a
   verdict, a few seconds after a Pro interview's verdict.
 - **Live share links**: in the editor (`/app/`), signed in with the diagram

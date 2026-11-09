@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
-import { mockSignedIn } from './accounts';
+import { mockSignedIn, SIGNED_IN } from './accounts';
 import { expect, test, toSetupStep } from './fixtures';
+import { FREE, MAX, mockSolo } from './history';
 
 /**
  * The build with accounts but no paid plans (`npm run build:accounts-free`,
@@ -13,8 +14,8 @@ const SHOTS = process.env.BILLING_SHOTS;
 const METERED = /^\/api\/(partner|credits|voice|roadmap\/next|interviews\/(?!history))/;
 
 /** Signs in and records every metered API call (a call is a failure: nothing may ask for one). */
-async function open(page: Page) {
-  await mockSignedIn(page);
+async function open(page: Page, me = SIGNED_IN) {
+  await mockSignedIn(page, me);
   const metered: string[] = [];
   page.on('request', (r) => {
     const { pathname } = new URL(r.url());
@@ -108,4 +109,33 @@ test('the roadmap and the progress page have no "Your next steps", report or cre
   await expect(page.getByText('Your next steps')).toHaveCount(0);
   await expect(page.getByTestId('verdict-report')).toHaveCount(0);
   expect(metered).toEqual([]);
+});
+
+test.describe('interviews on your own, which cost nothing to run', () => {
+  test('an account on Max set by hand keeps the trend per skill and the report', async ({ page }) => {
+    const metered = await open(page, MAX);
+    await mockSolo(page);
+    await page.goto('practice/#/progress');
+    const solo = page.getByRole('region', { name: 'Interviews on your own' });
+    await expect(solo.getByTestId('solo-trends').getByRole('figure')).toHaveCount(4);
+    await expect(solo.getByTestId('solo-report')).toHaveCount(3);
+    await expect(solo.getByTestId('solo-upgrade')).toHaveCount(0);
+    if (SHOTS) await solo.screenshot({ path: `${SHOTS}/solo-max.png` });
+    expect(metered).toEqual([]);
+  });
+
+  test('a free account sees this browser’s sessions, with no trend, report or way to Pro', async ({ page }) => {
+    const metered = await open(page, FREE);
+    const asked = await mockSolo(page);
+    await page.goto('practice/#/progress');
+    const solo = page.getByRole('region', { name: 'Interviews on your own' });
+    await expect(solo.getByTestId('solo-list').getByRole('listitem')).toHaveCount(2);
+    await expect(solo.getByTestId('solo-trends')).toHaveCount(0);
+    await expect(solo.getByTestId('solo-report')).toHaveCount(0);
+    await expect(solo.getByTestId('solo-upgrade')).toHaveCount(0);
+    await expect(page.getByText('Upgrade to Pro')).toHaveCount(0);
+    expect(asked).not.toContain('GET');
+    if (SHOTS) await solo.screenshot({ path: `${SHOTS}/solo-free.png` });
+    expect(metered).toEqual([]);
+  });
 });

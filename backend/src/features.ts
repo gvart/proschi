@@ -19,7 +19,7 @@ export type { FeatureAccess, FeatureId, FeatureReason } from '../../frontend/src
  */
 export const FEATURES: Readonly<Record<FeatureId, { plans: readonly Plan[]; description: string }>> = {
   ai_interview: { plans: ['free', 'pro', 'max'], description: 'Mock interviews are on every plan; the credits decide how many' },
-  interview_history: { plans: ['pro', 'max'], description: 'Every mock interview verdict and the trend per skill are part of Pro; other plans see the latest verdict' },
+  interview_history: { plans: ['pro', 'max'], description: 'Every mock interview verdict and the trend per skill, with the interviewer or on your own, are part of Pro; other plans see the latest verdict' },
   ai_roadmap: { plans: ['pro', 'max'], description: 'Your next steps are part of Pro' },
   share_links: { plans: ['pro', 'max'], description: 'Live share links are part of Pro' },
   design_partner: { plans: ['free', 'pro', 'max'], description: 'Design partner is for every signed-in account; the credits decide how much' },

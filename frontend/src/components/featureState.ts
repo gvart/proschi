@@ -27,8 +27,14 @@ const UNKNOWN: FeatureState = { ok: false, loading: false };
 
 const BILLING_OFF: FeatureState = { ok: false, reason: 'billing_off', loading: false };
 
-/** The features that spend credits (Claude or Whisper): hidden, whatever the server says, in a build without paid plans. */
-const METERED: ReadonlySet<FeatureId> = new Set<FeatureId>(['ai_interview', 'interview_history', 'ai_roadmap', 'design_partner', 'deep_mode', 'interview_report']);
+/**
+ * The features that spend credits (Claude or Whisper): hidden, whatever the
+ * server says, in a build without paid plans. The rest (share_links,
+ * interview_history, interview_report) cost nothing to run and follow the
+ * server there too: on for an account on Pro or Max, off without a hint
+ * otherwise (P53).
+ */
+const METERED: ReadonlySet<FeatureId> = new Set<FeatureId>(['ai_interview', 'ai_roadmap', 'design_partner', 'deep_mode']);
 
 export type FeatureLookup = (id: FeatureId) => FeatureState;
 

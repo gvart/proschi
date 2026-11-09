@@ -552,3 +552,26 @@ id; don't rewrite old ones.
   as the first stage in the stage bar, and its own address
   (`practice/#/roadmap/<id>/lesson`, the roadmap's "Read the lesson"
   links) still opens on it.
+- **P53. History and the report cover interviews on your own, and cost
+  nothing to run.** `interview_history` (Pro) and `interview_report` (Max)
+  spend no credits, so they leave the page's metered set
+  (`components/featureState.ts`): a build without paid plans follows the
+  server for them as for `share_links` (on for an account on Pro or Max set
+  by hand, off with no way to Pro otherwise); the credit-spending features
+  stay hidden there. The browser now sends what an interview on your own
+  did (`results`: time per phase, questions, estimates, the last check run,
+  self-review; `learn/soloInterview.ts`) with each session; the server
+  keeps it (`solo_interviews.results`, migration 0033), fills it in once
+  for a session kept without it, and answers the account's sessions to Pro
+  (`GET /api/me/interviews/solo`, 402 otherwise). **Scores**: an interview
+  on your own gets a score per skill on the verdict's 1 to 5 scale, read
+  from what it did: requirements from the good questions asked of those
+  there are, estimation from the estimates in range, design from the
+  checks passing (1 with none run), trade-offs from the self-review ticked;
+  communication has none, since nobody listened. Only the sessions that
+  count (P48) are on the trend. **Pro** sees those scores over time
+  (SkillTrends, four panels) and the account's sessions from every device
+  joined to the browser's; other plans keep the browser's list, with the
+  way to Pro where paid plans are on. **Max** opens any session with its
+  results as a printable report (the AI report's sheet, made in the
+  browser), from the progress page and the interview's result.
