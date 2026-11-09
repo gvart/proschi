@@ -15,6 +15,7 @@ import { drewOn, sendSoloInterviews, soloSummaryCounts } from './record';
 import ResultProgress from './ResultProgress';
 import { roomHref, setupHref } from './links';
 import { playCue } from './sounds';
+import { billingEnabled } from '../../services/billing';
 import Setup from './Setup';
 import Result from './Result';
 import MockRoom from './MockRoom';
@@ -90,7 +91,7 @@ function Interview({ problem, engine, header, achievements, signedIn }: { proble
     const read = parseInterview(problem.interview);
     return read.issues.length === 0 ? read.interview : undefined;
   }, [problem.interview]);
-  const [mockId] = useState(() => loadActive(problem.id));
+  const [mockId] = useState(() => (billingEnabled ? loadActive(problem.id) : undefined));
   const [session, setSession] = useState<InterviewSession | undefined>(() => (mockId ? undefined : loadSession(problem.id)));
   const [verdict, setVerdict] = useState<AiInterview>();
   const dispatch = useCallback((a: InterviewAction) => setSession((s) => s && interviewReducer(s, a)), []);

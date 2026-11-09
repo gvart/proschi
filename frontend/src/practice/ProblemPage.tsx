@@ -18,6 +18,7 @@ import ReviewPanel from '../review/ReviewPanel';
 import { practiceReviewInput } from '../review/practice';
 import { AssistedTag, CompanyBadge, DifficultyBadge, StatusIcon } from './Badges';
 import { markLessonRead, sourceOf, statusOf, withAssisted, withRun, withSource, type Progress } from './progress';
+import { billingEnabled } from '../services/billing';
 import PartnerButton from '../partner/PartnerButton';
 import { usePartnerShortcut } from '../partner/shortcut';
 import PartnerDock from '../partner/PartnerDock';
@@ -342,7 +343,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   };
 
   // Design partner (src/partner): coaches on this problem (P29, P30); the interview room has none.
-  const hasPartner = account.state.status !== 'off';
+  const hasPartner = billingEnabled && account.state.status !== 'off';
   const [partnerOpen, setPartnerOpen] = useState(false);
   const togglePartner = useCallback(() => setPartnerOpen((o) => !o), []);
   const closePartner = useCallback(() => setPartnerOpen(false), []);

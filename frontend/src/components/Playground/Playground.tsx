@@ -106,6 +106,7 @@ import { downloadBlob, downloadText, exportImage, fileNameFor, renderPreviewPng 
 import { MAX_PREVIEW_BYTES, createShare, embedSnippet, embedUrl, fetchShare, shareIdFromSearch } from '../../services/shares';
 import { ApiError } from '../../services/api';
 import { FeaturesContext, showsUpgrade, useFeatures } from '../featureState';
+import { billingEnabled } from '../../services/billing';
 import PartnerButton from '../../partner/PartnerButton';
 import { usePartnerShortcut } from '../../partner/shortcut';
 import PartnerDock from '../../partner/PartnerDock';
@@ -579,7 +580,7 @@ export default function Playground() {
   const shareLinks = features('share_links');
 
   // Design partner (src/partner): on builds with accounts, beside the panes or as a sheet on phones.
-  const hasPartner = account.state.status !== 'off';
+  const hasPartner = billingEnabled && account.state.status !== 'off';
   const [partnerOpen, setPartnerOpen] = useState(false);
   const phone = useIsPhone();
   const togglePartner = useCallback(() => setPartnerOpen((o) => !o), []);
