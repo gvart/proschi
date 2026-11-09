@@ -1,11 +1,9 @@
 import deck from 'virtual:practice-cards';
 import { NEW_PER_DAY, overview } from '../../learn/review';
-import type { Account } from '../useAccount';
-import { useTodayCards } from './todayCards';
+import type { TodayCards } from './todayCards';
 
 /** How many cards daily review has for today: those due and the new ones today's allowance still lets in. */
-function useDueCount(account: Account): number | undefined {
-  const today = useTodayCards(account);
+function dueCount(today: TodayCards | undefined): number | undefined {
   if (!today) return undefined;
   const { loaded, signedOut } = today;
   const stats = overview(deck.cards, loaded.states, deck.topics, { now: Math.floor(Date.now() / 1000), deck: signedOut ? 'sample' : undefined });
@@ -13,8 +11,8 @@ function useDueCount(account: Account): number | undefined {
 }
 
 /** The cards for today, for the Review chip: "9 due", or "all done" when caught up; "…" while counting. */
-export default function DueCards({ account }: { account: Account }) {
-  const count = useDueCount(account);
+export default function DueCards({ today }: { today: TodayCards | undefined }) {
+  const count = dueCount(today);
   if (count === undefined) return <span className="text-muted">…</span>;
   return (
     <span data-testid="today-due" className="tabular-nums">

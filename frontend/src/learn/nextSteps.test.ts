@@ -80,6 +80,11 @@ describe('rule-based next steps', () => {
     expect(kinds({ exclude: ['kv', 'cache'], limit: 10 })).toEqual(['practise:feed', 'practise:url-shortener']);
   });
 
+  it('leaves out the kinds asked, before the limit', () => {
+    const input = { ...base, due: { total: 3, byTopic: { caching: 3 } }, challengeDone: false, attempted: ['chat'], limit: 3 };
+    expect(nextSteps({ ...input, omit: ['review', 'challenge'] }).map((s) => s.key)).toEqual(['practise:kv', 'practise:url-shortener', 'finish:chat']);
+  });
+
   it('is deterministic and empty with nothing to do', () => {
     const input = { ...base, due: { total: 3, byTopic: { caching: 1, sharding: 1 } }, challengeDone: false };
     expect(nextSteps(input)).toEqual(nextSteps(input));

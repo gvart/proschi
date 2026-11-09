@@ -34,6 +34,17 @@ test.describe('Your next steps', () => {
     await expect(page).toHaveURL(/#\/challenge$/);
   });
 
+  test('with the daily habit line, the home leaves today’s challenge and review to its chips', async ({ page }) => {
+    await withProgress(page);
+    await page.addInitScript(() => localStorage.setItem('proschi.practice.goal', JSON.stringify({ goals: ['habit'], asked: true })));
+    await page.goto('practice/');
+    await expect(page.getByRole('navigation', { name: 'Also today' }).getByRole('link', { name: /Challenge/ })).toBeVisible();
+    const steps = page.getByRole('region', { name: 'Your next steps' }).getByRole('link');
+    await expect(steps.first()).toContainText('Retry Pastebin');
+    await expect(steps.filter({ hasText: 'daily challenge' })).toHaveCount(0);
+    await expect(page.getByTestId('next-steps').locator('[data-kind="review"]')).toHaveCount(0);
+  });
+
   test('the roadmap shows them without the AI picks', async ({ page }) => {
     await withProgress(page);
     await page.goto('practice/#/roadmap');

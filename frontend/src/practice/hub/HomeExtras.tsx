@@ -6,6 +6,7 @@ import type { Account } from '../useAccount';
 import type { ContinueTarget } from './continue';
 import { GOALS, setGoal, wantsInterview, wantsStreak, type Goal, type GoalState } from './goal';
 import NextSteps from './NextSteps';
+import { useTodayCards, type TodayCards } from './todayCards';
 import { mockInterviewHref } from './tabs';
 import { useChallengeStatus, useDailyRunStatus, type Played } from './todayStatus';
 
@@ -21,13 +22,16 @@ import { useChallengeStatus, useDailyRunStatus, type Played } from './todayStatu
  * - for a daily habit (or the streak switched on), one line with the streak
  *   and today's review, challenge and Arcade run;
  * - once something was started, "Your next steps" (RuleSteps.tsx): up to
- *   three things to do next, each with its reason, never the Continue problem.
+ *   three things to do next, each with its reason, never the Continue problem,
+ *   nor (with the habit line) today's review or challenge.
  *
  * Solving problems, or no answer, adds nothing else but the Continue line and the next steps.
  */
 
 // The due count needs the whole deck: loaded after the line shows.
 const DueCards = lazy(() => import('./DueCards'));
+
+const HABIT_KINDS = ['review', 'challenge'] as const;
 
 const GOAL_ICON: Record<Goal, LucideIcon> = { solve: ListChecks, interview: Briefcase, habit: Flame };
 const GOAL_ABOUT: Record<Goal, string> = {
@@ -62,16 +66,23 @@ export default function HomeExtras({
   const interview = wantsInterview(goal);
   const nextId = next?.id;
   const exclude = useMemo(() => (nextId ? [nextId] : undefined), [nextId]);
+  const habit = wantsStreak(goal);
+  const showSteps = !!steps && Object.keys(steps.progress).length > 0;
+  // One load of the card states (one request signed in) for the Review chip and the next steps.
+  const cards = useTodayCards(account, habit || showSteps);
   return (
     <>
       {ask && <GoalPrompt goal={goal} />}
       {(next || interview) && <ContinueLine next={next} title={nextTitle} interview={interview} />}
-      {wantsStreak(goal) && <HabitLine account={account} streak={streak} />}
-      {steps && Object.keys(steps.progress).length > 0 && (
+      {habit && <HabitLine account={account} streak={streak} cards={cards} />}
+      {steps && showSteps && cards && (
         <NextSteps
           account={account}
           {...steps}
+          cards={cards}
           exclude={exclude}
+          // The habit line offers today's review and challenge already.
+          omit={habit ? HABIT_KINDS : undefined}
           limit={3}
           render={(list) =>
             list && (
@@ -219,7 +230,7 @@ function PlayedNote({ played }: { played: Played }) {
 }
 
 /** The daily habit's line: the streak, then today's review, challenge and Arcade run. */
-function HabitLine({ account, streak }: { account: Account; streak?: ReactNode }) {
+function HabitLine({ account, streak, cards }: { account: Account; streak?: ReactNode; cards?: TodayCards }) {
   const challenge = useChallengeStatus(account);
   const daily = useDailyRunStatus(account);
   return (
@@ -228,7 +239,7 @@ function HabitLine({ account, streak }: { account: Account; streak?: ReactNode }
       <nav aria-label="Also today" className="flex flex-wrap gap-2">
         <Chip href="#/review" icon={Layers} label="Review">
           <Suspense fallback={<span className="text-muted">…</span>}>
-            <DueCards account={account} />
+            <DueCards today={cards} />
           </Suspense>
         </Chip>
         <Chip href="#/challenge" icon={Zap} label="Challenge">

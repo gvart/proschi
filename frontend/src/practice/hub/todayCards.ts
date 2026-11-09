@@ -9,13 +9,16 @@ import { accountStore, localStore, memoryStore, type CardStore, type Loaded } fr
  * the server signed in, nothing kept signed out (the free sample deck).
  * Undefined while loading, or when the store cannot be read.
  */
-export function useTodayCards(account: Account): { loaded: Loaded; signedOut: boolean } | undefined {
+export type TodayCards = { loaded: Loaded; signedOut: boolean };
+
+/** `enabled` false loads nothing, e.g. when a parent already loaded them. */
+export function useTodayCards(account: Account, enabled = true): TodayCards | undefined {
   const { state } = account;
   const userId = state.status === 'signed-in' ? state.user.id : undefined;
   const signedOut = state.status === 'signed-out';
   const store = useMemo<CardStore | undefined>(
-    () => (state.status === 'off' ? localStore() : signedOut ? memoryStore() : userId ? accountStore(userId) : undefined),
-    [state.status, signedOut, userId],
+    () => (!enabled ? undefined : state.status === 'off' ? localStore() : signedOut ? memoryStore() : userId ? accountStore(userId) : undefined),
+    [enabled, state.status, signedOut, userId],
   );
   const [loaded, setLoaded] = useState<Loaded>();
   useEffect(() => {

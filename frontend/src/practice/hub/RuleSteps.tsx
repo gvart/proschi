@@ -7,7 +7,7 @@ import { nextSteps, type NextStep, type NextStepKind } from '../../learn/nextSte
 import { overview } from '../../learn/review';
 import type { Progress } from '../progress';
 import type { Account } from '../useAccount';
-import { useTodayCards } from './todayCards';
+import { useTodayCards, type TodayCards } from './todayCards';
 import { loadMistakes } from './recentMistakes';
 import { useChallengeStatus } from './todayStatus';
 
@@ -30,6 +30,10 @@ export interface RuleStepsProps {
   /** Problems shown elsewhere on the page, e.g. by Continue. */
   exclude?: readonly string[];
   limit?: number;
+  /** Kinds the page already offers (learn/nextSteps.ts `omit`). */
+  omit?: readonly NextStepKind[];
+  /** The card states when the page loaded them already (one load, one request); else loaded here. */
+  cards?: TodayCards;
   /** Places the list (null without steps). */
   render: (list: ReactNode | null) => ReactNode;
 }
@@ -49,8 +53,9 @@ const KIND: Record<NextStepKind, { label: string; icon: LucideIcon }> = {
   finish: { label: 'Problem', icon: Play },
 };
 
-export default function RuleSteps({ account, progress, skills, streak, exclude, limit, render }: RuleStepsProps) {
-  const today = useTodayCards(account);
+export default function RuleSteps({ account, progress, skills, streak, exclude, limit, omit, cards, render }: RuleStepsProps) {
+  const own = useTodayCards(account, !cards);
+  const today = cards ?? own;
   const challenge = useChallengeStatus(account);
   const challengeKnown = challenge.status === 'ready' || challenge.status === 'unknown';
   const steps = useMemo(() => {
@@ -72,9 +77,10 @@ export default function RuleSteps({ account, progress, skills, streak, exclude, 
       challengeDone: challenge.status === 'ready' ? challenge.played : undefined,
       streak,
       exclude,
+      omit,
       limit,
     });
-  }, [today, challengeKnown, challenge, progress, skills, streak, exclude, limit]);
+  }, [today, challengeKnown, challenge, progress, skills, streak, exclude, omit, limit]);
   if (!steps) return null;
   return render(steps.length ? <StepList steps={steps} /> : null);
 }

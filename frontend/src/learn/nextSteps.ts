@@ -22,7 +22,8 @@ import { percent } from './mastery';
  *              easiest, one already started first, then list order.
  *   finish     the first problem started but not solved (and not retried).
  *
- * The list is cut at `limit` (DEFAULT_LIMIT). Problems never repeat.
+ * Kinds in `omit` are left out, then the list is cut at `limit`
+ * (DEFAULT_LIMIT). Problems never repeat.
  */
 
 export type NextStepKind = 'retry' | 'review' | 'challenge' | 'practise' | 'finish';
@@ -47,6 +48,8 @@ export interface NextStepsInput {
   streak?: number;
   /** Problems not to suggest, e.g. shown elsewhere already or planned for another day. */
   exclude?: readonly string[];
+  /** Kinds of steps not to suggest, e.g. those the page already offers. */
+  omit?: readonly NextStepKind[];
   limit?: number;
 }
 
@@ -162,5 +165,6 @@ export function nextSteps(input: NextStepsInput): NextStep[] {
     steps.push({ kind: 'finish', key: `finish:${started.id}`, problem: started.id, title: `Finish ${started.title}`, reason: 'You started this design; a few more runs may solve it.', minutes: MINUTES[started.difficulty] });
   }
 
-  return steps.slice(0, limit);
+  const omit = new Set(input.omit);
+  return steps.filter((s) => !omit.has(s.kind)).slice(0, limit);
 }
