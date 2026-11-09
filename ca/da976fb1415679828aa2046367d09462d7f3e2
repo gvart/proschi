@@ -1,0 +1,33 @@
+tooling/src/schema.ts
+  s_f355061868c346::t_536fec919ec8ac 302
+tooling/src/simulation.ts
+  s_f355061868c346::t_f9a876a4f70a36 44-45,254,261
+tooling/grammar/proschi.tmLanguage.json
+  s_f355061868c346::t_536fec919ec8ac 348,350
+docs/TESTS.md
+  s_f355061868c346::t_37e1844bac3906 187,199-200
+docs/EDITORS.md
+  s_f355061868c346::t_37e1844bac3906 430
+docs/GRAMMAR.md
+  s_f355061868c346::t_37e1844bac3906 72,84
+tooling/test/grammar.test.ts
+  s_f355061868c346::t_95c2f1d39bc662 195
+tooling/test/simulation.test.ts
+  s_f355061868c346::t_71e72c6e4336c2 313,348-349,353-355,359
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cada976fb1415679828aa2046367d09462d7f3e2",
+  "prompts": {},
+  "sessions": {
+    "s_f355061868c346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd556674-4248-429d-bf5c-2b361bc86c62",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
