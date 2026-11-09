@@ -13,6 +13,7 @@ them.
 - Completion for keywords, node ids, the 108 tech stacks, `capacity` parts and
   the use case and scenario names in quotes
 - Rename (*F2*) of node ids, use cases and scenarios, with their references
+  in every `.proschi` file of the workspace that imports them
 - Quick fixes: add a missing connection or a traffic line, fix a tech stack,
   remove a repeated capacity part, and apply the `x2` or `shards N` a failing
   requirement suggests
