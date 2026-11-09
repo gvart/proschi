@@ -1,0 +1,58 @@
+frontend/src/practice/problems/config-push/solution.proschi
+  s_248f83f833fb51::t_7b443013f48e0f 17
+  s_248f83f833fb51::t_36e2172525c5fa 1-16,18-52
+frontend/src/practice/problems/config-push/starter.proschi
+  s_248f83f833fb51::t_2c5f92c8757619 1-10
+frontend/src/practice/roadmapStages.ts
+  s_248f83f833fb51::t_8c69f9a76f688e 60
+frontend/src/practice/problems/config-push/wrong/root-sends-to-every-edge.proschi
+  s_248f83f833fb51::t_7b443013f48e0f 10-11
+  s_248f83f833fb51::t_9a8bc498d0a1d2 1-9,12-32
+frontend/src/practice/problems/config-push/problem.md
+  s_248f83f833fb51::t_523197aa21e622 3
+  s_248f83f833fb51::t_d41437aa199feb 1-2,4-109
+frontend/src/practice/cards/estimation/config-push-fan-out-bandwidth.md
+  s_248f83f833fb51::t_9a6979d2cf144b 16-18
+  s_248f83f833fb51::t_9a417a1d8b0597 1-15
+frontend/src/practice/problems/config-push/interview.md
+  s_248f83f833fb51::t_8ccc30395c51e2 1-77
+frontend/src/practice/problems/config-push/given.proschi
+  s_248f83f833fb51::t_4d6cf32cd82798 1-2,5-45
+  s_248f83f833fb51::t_7b443013f48e0f 3-4
+frontend/src/practice/problems/config-push/wrong/wait-for-every-edge.proschi
+  s_248f83f833fb51::t_bc7dfb59d337ec 1-34
+frontend/src/practice/problems/config-push/wrong/single-root.proschi
+  s_248f83f833fb51::t_2c87f1941be3a1 1-35
+frontend/src/practice/problems/config-push/wrong/read-the-central-store.proschi
+  s_248f83f833fb51::t_7b443013f48e0f 10-11
+  s_248f83f833fb51::t_d7b7dbdc806acd 1-9,12-30
+frontend/src/practice/problems/config-push/lesson.md
+  s_248f83f833fb51::t_5f72b374884dfc 171
+  s_248f83f833fb51::t_d6a58cc4b13602 1-30,32-75,77-152,154-158,160-170,172-197
+  s_248f83f833fb51::t_bf7a256a377d9b 76
+  s_248f83f833fb51::t_1d9ecc1ac9988f 31
+  s_248f83f833fb51::t_644908734b3fe9 153
+  s_248f83f833fb51::t_a79d406e4573be 159
+frontend/src/practice/cards/replication/config-push-single-writer.md
+  s_248f83f833fb51::t_abb820b8c76629 1-14
+frontend/src/practice/cards/availability/config-push-local-reads.md
+  s_248f83f833fb51::t_5a09cf06a79eac 1-21
+frontend/src/practice/cards/ids.lock
+  s_248f83f833fb51::t_0dea49a33d6156 53-55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4f15b28fae955ca32344707b44b976b30dc5a1bb",
+  "prompts": {},
+  "sessions": {
+    "s_248f83f833fb51": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2d46bc96-3c9a-4511-a065-8673803644a9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
