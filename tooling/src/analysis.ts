@@ -628,6 +628,12 @@ function symbolAt(analysis: Analysis, pos: Position): { symbol: RenameSymbol; ra
   return { symbol: { kind: 'node', id: hit.node.id }, range: hit.range, placeholder: hit.node.id, file: hit.node.implicit ? undefined : hit.node.loc.file };
 }
 
+/** The node, constant, use case or scenario at `pos` and the file that declares it (undefined: this document), for searching other files. */
+export function symbolTarget(analysis: Analysis, pos: Position): { symbol: RenameSymbol; file?: string } | null {
+  const found = symbolAt(analysis, pos);
+  return found && { symbol: found.symbol, file: found.file };
+}
+
 /** Where a rename at `pos` applies, or null when nothing renameable is there. */
 export function renameTarget(analysis: Analysis, pos: Position): { range: Range; placeholder: string } | null {
   const found = symbolAt(analysis, pos);

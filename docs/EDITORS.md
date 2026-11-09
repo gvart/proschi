@@ -27,9 +27,11 @@ Rename (F2 in most editors) changes every use of the name: steps,
 connections, `capacity`, `traffic` and `mix`, requirements, tests,
 `whatif` traffic, and the `expose … -> "Use case"` of a system whose team
 file declares the use case. It also changes the file that declares the name,
-and the files that import it. The language server has no index of the
-workspace, so it only finds importing files that are open in the editor.
-Open them before you rename.
+and every `.proschi` file in the workspace that imports it or names it as a
+system's `from` file, open or not. Find references searches the same files.
+Files from git, https and cloud imports are never changed. In a workspace
+with more than 2,000 `.proschi` files, rename and find references search
+only the open documents, and the editor says so.
 - **The command line** (`proschi`): checks, formats, renders and tests files
   in CI and pre-commit hooks.
 
