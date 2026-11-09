@@ -6,7 +6,7 @@ import { findProblem } from './verify';
 
 /**
  * Known mistakes a failed run matched on a practice problem
- * (frontend/src/practice/mistakes.ts, migrations/0037_practice_mistakes.sql):
+ * (frontend/src/practice/mistakes.ts, migrations/0036_practice_mistakes.sql):
  * the browser keeps them (practice/hub/recentMistakes.ts) and, signed in,
  * sends them here, so "Your next steps" (learn/nextSteps.ts) offers "Retry
  * <problem>" on every device. One row per problem and mistake, the newest
