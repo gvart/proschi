@@ -505,7 +505,7 @@ export default function DiagramView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coverKey, fitKey]);
   // No animated fit: d3-zoom reads the pane size on the transition's first tick, and a pane hidden by
-  // then (phone Code/Diagram tabs) is 0×0, which interpolates the viewport to NaN. Nodes already glide via settle.
+  // then (phone Code/Preview tabs) is 0×0, which interpolates the viewport to NaN. Nodes already glide via settle.
   // The exception: playback, the splitter and the palette resize a pane that stays shown, and there the diagram glides to its new fit.
   // Below the top bar's buttons, tools and folded legend too, so no node of the fit sits under them.
   const barInset = useTopBarInset(wrapperRef, `${nodes.length > 0}:${playing}:${crumbs.length}:${canOverlay}:${!!overlay}:${hasPinnedNodes}:${!!diagram.legend}`);

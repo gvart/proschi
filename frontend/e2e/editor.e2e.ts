@@ -427,11 +427,11 @@ test.describe('editor on a phone', () => {
     await expect(codeEditor(page)).toContainText('title "Hello Proschi"');
   });
 
-  test('Code and Diagram tabs switch panes; a link opens on the Diagram', async ({ page }) => {
+  test('Code and Preview tabs switch panes; a link opens on the Preview', async ({ page }) => {
     await page.goto('app/?example=ecommerce');
     const panes = page.getByRole('tablist', { name: 'View', exact: true });
     const codeTab = panes.getByRole('tab', { name: /Code/ });
-    const diagramTab = panes.getByRole('tab', { name: /Diagram/ });
+    const diagramTab = panes.getByRole('tab', { name: /Preview/ });
     await expect(diagramTab).toHaveAttribute('aria-selected', 'true');
     await waitForCanvas(page, DEFAULT_NODES);
     await expect(codeEditor(page)).toHaveCount(0);
@@ -456,12 +456,12 @@ test.describe('editor on a phone', () => {
     // Edit while the canvas is hidden, then come back: the pane only gets its size again after it is shown.
     await panes.getByRole('tab', { name: /Code/ }).click();
     await appendCode(page, '\nwide "A Node With A Rather Long Name" [Redis]\norders -> wide\n');
-    await panes.getByRole('tab', { name: /Diagram/ }).click();
+    await panes.getByRole('tab', { name: /Preview/ }).click();
     await expect(canvasNodes(page).filter({ hasText: 'A Node With A Rather Long Name' })).toBeVisible();
     await expectDiagramFitted(page);
     // Just switching tabs keeps it fitted too.
     await panes.getByRole('tab', { name: /Code/ }).click();
-    await panes.getByRole('tab', { name: /Diagram/ }).click();
+    await panes.getByRole('tab', { name: /Preview/ }).click();
     await waitForCanvas(page, DEFAULT_NODES);
     await expectDiagramFitted(page);
   });
