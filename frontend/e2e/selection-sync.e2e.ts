@@ -23,6 +23,7 @@ async function newDiagram(page: Page, code: string, nodes: number) {
 
 /** Waits until the canvas stops moving: the layout, its glide and any fit are done. */
 async function settled(page: Page) {
+  await expect(page.locator('[data-layout-busy]')).toHaveCount(0);
   let last = '';
   await expect
     .poll(async () => {
@@ -143,7 +144,7 @@ test.describe('selection sync', () => {
     const zoom = await scale();
     await clickLine(page, target === 'Cache' ? 'cache "Cache"' : 'db "Orders DB"');
     await expect.poll(() => inside(target)).toBe(true);
-    expect(await scale()).toBeCloseTo(zoom, 1);
+    expect(await scale()).toBeCloseTo(zoom, 3);
   });
   test('a ringed node under the settings card is panned clear of it, at the same zoom', async ({ page }) => {
     await newDiagram(page, PINNED, 3);
@@ -163,7 +164,8 @@ test.describe('selection sync', () => {
     await clickLine(page, 'cache "Cache"');
     await expect(node(page, 'Cache')).toHaveClass(/pc-linked/);
     await expect.poll(clear).toBe(true);
-    expect(await scale()).toBeCloseTo(zoom, 1);
+    await settled(page);
+    expect(await scale()).toBeCloseTo(zoom, 3);
   });
 });
 

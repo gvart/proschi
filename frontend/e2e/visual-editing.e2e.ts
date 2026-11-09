@@ -23,6 +23,8 @@ const node = (page: Page, name: string) => canvasNodes(page).filter({ hasText: n
 
 /** Waits until the canvas stops moving nodes around (layout runs after every edit). */
 async function layoutSettled(page: Page) {
+  // A layout on its way (ELK can take a while to load, the nodes waiting on a provisional grid) first.
+  await expect(page.locator('[data-layout-busy]')).toHaveCount(0);
   let last = '';
   await expect
     .poll(async () => {
@@ -36,6 +38,8 @@ async function layoutSettled(page: Page) {
 
 /** Drags from the bottom (source) dot of one node to the top (target) dot of another. */
 async function connect(page: Page, from: string, to: string) {
+  // Drawn only once the new text is parsed, which starts its layout.
+  await expect(node(page, to)).toBeVisible();
   await layoutSettled(page);
   const source = (await node(page, from).locator('.react-flow__handle.source').boundingBox())!;
   const target = (await node(page, to).locator('.react-flow__handle.target').boundingBox())!;
