@@ -1,0 +1,21 @@
+frontend/src/components/Playground/DiagramView.tsx
+  s_f355061868c346::t_2a6376b7e67f5d 163,253-254,256-257,259-268,272-278,651
+frontend/e2e/selection-sync.e2e.ts
+  s_f355061868c346::t_dee644cf0131a0 148-167
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "be29eed2e1d9709b3c78b4fff86dd8379ed0f7d7",
+  "prompts": {},
+  "sessions": {
+    "s_f355061868c346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd556674-4248-429d-bf5c-2b361bc86c62",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
