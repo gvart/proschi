@@ -1,0 +1,45 @@
+frontend/src/practice/cards/availability/multi-region-failover-headroom.md
+  s_248f83f833fb51::t_05d5062e56073e 1-28
+frontend/src/practice/problems/multi-region-active-active/wrong/sized-for-half.proschi
+  s_248f83f833fb51::t_05d5062e56073e 1-114
+frontend/src/practice/problems/multi-region-active-active/wrong/standby-region.proschi
+  s_248f83f833fb51::t_05d5062e56073e 1-113
+frontend/src/practice/problems/multi-region-active-active/given.proschi
+  s_248f83f833fb51::t_05d5062e56073e 1-57
+frontend/src/practice/problems/multi-region-active-active/lesson.md
+  s_248f83f833fb51::t_05d5062e56073e 1-183
+frontend/src/practice/problems/multi-region-active-active/wrong/synchronous-replication.proschi
+  s_248f83f833fb51::t_05d5062e56073e 1-113
+frontend/src/practice/problems/multi-region-active-active/problem.md
+  s_248f83f833fb51::t_05d5062e56073e 1-133
+frontend/src/practice/cards/caching/multi-region-cache-invalidation.md
+  s_248f83f833fb51::t_05d5062e56073e 1-24
+frontend/src/practice/roadmapStages.ts
+  s_248f83f833fb51::t_05d5062e56073e 78
+frontend/src/practice/problems/multi-region-active-active/interview.md
+  s_248f83f833fb51::t_05d5062e56073e 1-83
+frontend/src/practice/problems/multi-region-active-active/solution.proschi
+  s_248f83f833fb51::t_05d5062e56073e 1-129
+frontend/src/practice/problems/multi-region-active-active/starter.proschi
+  s_248f83f833fb51::t_05d5062e56073e 1-31
+frontend/src/practice/problems/multi-region-active-active/wrong/one-database.proschi
+  s_248f83f833fb51::t_05d5062e56073e 1-109
+frontend/src/practice/cards/ids.lock
+  s_248f83f833fb51::t_82ba03ad03e6c6 184-185
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e1da33ab378e380a2d73cf6711dd395eec3010f4",
+  "prompts": {},
+  "sessions": {
+    "s_248f83f833fb51": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2d46bc96-3c9a-4511-a065-8673803644a9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
