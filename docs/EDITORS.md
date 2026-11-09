@@ -425,6 +425,7 @@ has the syntax.
 ```sh
 proschi test docs/                 # every *.proschi below docs/
 proschi analyze shortener.proschi  # the capacity table
+proschi diff before.proschi after.proschi  # what a change does
 ```
 
 `proschi test` follows imports, prints each result with a hint for failures,
@@ -441,6 +442,30 @@ A file with [what-ifs](TESTS.md#what-ifs) also gets a summary of them;
 summary; both exit with 1 when a what-if fails its requirements. `--sweep "Use case" 10k..500k` analyses that use case across the
 range and prints where each node saturates and the highest rate at which
 the requirements still hold.
+
+`proschi diff before.proschi after.proschi` compares two designs. It prints
+what changed, as [`proschi versions diff`](VERSIONS.md#6-read-versions-from-the-command-line)
+does, then what the change does in the simulation: cost, the worst p99 and
+the lowest availability before and after, each marked `better` or `worse`,
+the same per use case with traffic, the requirements and tests that flipped
+between pass and fail, and the nodes whose utilisation moved by 10 points or
+more:
+
+```text
+Simulation
+  Cost          $600/mo  →  $1,250/mo  +$650/mo  worse
+  Worst p99     59.9 ms  →  38.2 ms              better
+  Availability  99.947%  →  99.89%               worse
+  Checks: 0 of 2 pass → 2 of 2 pass
+
+Checks that changed
+  p99 of Order status < 50 ms  fail  →  pass  ✓ now passes  better
+  survive failure of db        fail  →  pass  ✓ now passes  better
+```
+
+`--json` prints `summary`, `diff` and `delta` (`total`, `useCases`,
+`checks`, `checkChanges` and `utilization`) for scripts. It exits with 0
+whatever changed, and with 2 for a wrong argument.
 
 In the web editor, the **Results** tab lists failing checks first, each with
 its hint, then the analysis and **Review my design**. The review is
