@@ -44,7 +44,7 @@
     "POLAR_PRODUCT_MAX_YEARLY": "3846113c-e9c6-4efb-84b7-2f1d61cdbff9",
     "POLAR_PRODUCT_CREDITS_1000": "2809daaa-b4e9-4d0f-88b7-b0b390de465f",
     // Turnstile is on only with this and the TURNSTILE_SECRET_KEY secret.
-    "TURNSTILE_SITE_KEY": "0x4AAAAAAF5Qf326lE4XwTI"
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAF5Qf326lE4XwTIO"
   },
   "d1_databases": [
     {
