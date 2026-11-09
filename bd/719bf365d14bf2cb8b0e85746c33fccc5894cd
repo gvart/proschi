@@ -1,0 +1,83 @@
+backend/test/features.test.ts
+  s_f355061868c346::t_06741b9cd587d3 67
+docs/design/paid-plans.md
+  s_f355061868c346::t_5d6a3946bbb158 647-666
+frontend/src/components/Feature.test.tsx
+  s_f355061868c346::t_5899a5134fccd1 149,155,171
+frontend/src/components/WhatIf/WhatIfResults.tsx
+  s_f355061868c346::t_ccff67d9200dda 1-3,5-90,92-193,195-233,235-246,248-250,253-254,256-260,262-291
+  s_f355061868c346::t_f1a0eae92e76d2 4,91,194
+  s_f355061868c346::t_3fcc91a4f9ae8b 234,247,251-252,255,261
+frontend/src/components/Diagram/CanvasEditing.tsx
+  s_f355061868c346::t_2783c78e74fd31 2,160-162,225
+frontend/src/services/featureContract.ts
+  s_f355061868c346::t_06741b9cd587d3 9
+frontend/e2e/accounts.ts
+  s_f355061868c346::t_06741b9cd587d3 32
+frontend/src/dsl/edit.ts
+  s_f355061868c346::t_95e40229fcb068 740-799
+frontend/src/pricing/PricingApp.tsx
+  s_f355061868c346::t_b158a54f1997a9 183
+frontend/src/components/Analysis/useSimulation.ts
+  s_f355061868c346::t_40c586bbd8bd55 9
+  s_f355061868c346::t_16044eb3d51baf 3,10-18
+frontend/src/components/WhatIf/whatIf.test.ts
+  s_f355061868c346::t_9b97e885f3c7a2 1-81
+frontend/src/components/Playground/Playground.tsx
+  s_f355061868c346::t_d14577889a7096 68,77-80,323-330
+  s_f355061868c346::t_56c908d10dae5a 472-475,1491
+  s_f355061868c346::t_97e7ecafe8ece0 457-471,476-484,1450-1451,1455,1466-1467,1490,1492-1496
+frontend/e2e/whatif.e2e.ts
+  s_f355061868c346::t_633730cd81c3c6 1-41,43-79,81-148
+  s_f355061868c346::t_2d657972770cd5 42,80
+frontend/e2e/whatif.accounts.e2e.ts
+  s_f355061868c346::t_73d5ffb92bc7b4 1-70
+frontend/src/sim/overlay.test.ts
+  s_f355061868c346::t_8a5cf981b787b3 30-49
+frontend/e2e/whatif.free.e2e.ts
+  s_f355061868c346::t_0f79d950a7731e 1-28
+frontend/src/components/WhatIf/whatIf.ts
+  s_f355061868c346::t_13e6ecebf52241 1-99
+frontend/src/components/Analysis/ResultsPanel.tsx
+  s_f355061868c346::t_afb56b1d1c5f52 18-21,29,34,43
+frontend/src/components/WhatIf/WhatIfControl.tsx
+  s_f355061868c346::t_68a81304fd1a9a 140,145
+  s_f355061868c346::t_8f6e47e7b3f909 73-75
+  s_f355061868c346::t_a1991d5289c7ad 1-72,76-117,127-139,141-144,146-171
+  s_f355061868c346::t_ced88d33fde01e 118-126
+frontend/src/components/featureState.ts
+  s_f355061868c346::t_5899a5134fccd1 34,36
+frontend/src/dsl/editWhatIf.test.ts
+  s_f355061868c346::t_997ddde9447952 1-15,17-44,46,48-61
+  s_f355061868c346::t_0d93b5964b4413 45
+  s_f355061868c346::t_15b4dc4ba96b0c 16,47
+frontend/src/sim/overlay.ts
+  s_f355061868c346::t_59cef1dab75360 117,120,126,129-131
+  s_f355061868c346::t_6878394cf0d86d 91-99,101-107
+  s_f355061868c346::t_be6298fe46be69 2,100
+  s_f355061868c346::t_e9eac9804db062 90
+frontend/src/components/Playground/DiagramView.tsx
+  s_f355061868c346::t_353a1882b99473 1,71-76,147-149,374,733
+  s_f355061868c346::t_6c6582037a6e10 366-373
+backend/src/features.ts
+  s_f355061868c346::t_06741b9cd587d3 33
+frontend/e2e/whatif.ts
+  s_f355061868c346::t_c266a75b395fce 1-45,47-50
+  s_f355061868c346::t_2d657972770cd5 46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bd719bf365d14bf2cb8b0e85746c33fccc5894cd",
+  "prompts": {},
+  "sessions": {
+    "s_f355061868c346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd556674-4248-429d-bf5c-2b361bc86c62",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
