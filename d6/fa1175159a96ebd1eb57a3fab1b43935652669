@@ -1,0 +1,71 @@
+frontend/src/dsl/diff.ts
+  s_f355061868c346::t_b75df8a2ae8f7f 196
+tooling/src/schema.ts
+  s_f355061868c346::t_d84792d9671b9d 261-272
+tooling/test/model-upgrades.test.ts
+  s_f355061868c346::t_658a7acc009923 1-91
+frontend/src/docs/model.html
+  s_f355061868c346::t_9ae331b8724a1d 291-295,297-299,763-768
+  s_f355061868c346::t_ead249c5854205 769
+tooling/src/simulation.ts
+  s_f355061868c346::t_c38724399eb822 9,392,412-417
+  s_f355061868c346::t_4a896e9119bbc2 418-419
+tooling/src/proschi.ts
+  s_f355061868c346::t_9a12dd5467eca2 34
+tooling/schema/proschi-diagram.schema.json
+  s_f355061868c346::t_57ef5fac026963 1224-1264
+frontend/src/review/request.ts
+  s_f355061868c346::t_b75df8a2ae8f7f 94
+frontend/src/components/Playground/proschiLanguage.ts
+  s_f355061868c346::t_ee1053ba3ef699 44
+frontend/src/sim/index.ts
+  s_f355061868c346::t_b75df8a2ae8f7f 16
+frontend/src/dsl/parser.ts
+  s_f355061868c346::t_bfb35b302fd3e7 15,1660
+  s_f355061868c346::t_3e65eca50785d4 1656-1659,1661-1664,1672-1707
+  s_f355061868c346::t_106f8f89a75f4a 1708
+frontend/src/dsl/types.ts
+  s_f355061868c346::t_b30704b12043aa 370-378
+frontend/src/components/Analysis/AnalysisPanel.tsx
+  s_f355061868c346::t_1d36bef06bd002 3,144
+  s_f355061868c346::t_68d2599dfd90f4 145
+frontend/src/components/Analysis/CostBreakdown.tsx
+  s_f355061868c346::t_b35c2a90cf37c6 1-71
+tooling/src/analysis.ts
+  s_f355061868c346::t_75f5ba27605a77 769
+  s_f355061868c346::t_9a12dd5467eca2 8,270-273,357-380,724-725,747-768,770-773
+  s_f355061868c346::t_c0f99fca2f678c 774
+docs/GRAMMAR.md
+  s_f355061868c346::t_0e59a921590642 52-53
+docs/TESTS.md
+  s_f355061868c346::t_245c334fdf63d7 124-125,130-131
+  s_f355061868c346::t_0e59a921590642 68,79,84-123,126-129,132-139
+  s_f355061868c346::t_ba9a49f1ac0367 140
+tooling/test/schema.test.ts
+  s_f355061868c346::t_57ef5fac026963 54-61
+tooling/grammar/proschi.tmLanguage.json
+  s_f355061868c346::t_ee1053ba3ef699 418-423,476
+frontend/src/sim/tests.ts
+  s_f355061868c346::t_b75df8a2ae8f7f 1,40,207,223,519-532
+  s_f355061868c346::t_fb8c36dbf4ac6e 533-534
+frontend/src/sim/costScope.test.ts
+  s_f355061868c346::t_bd1afe2a5f97cd 1-98
+frontend/src/sim/cost.ts
+  s_f355061868c346::t_dd1946044145e2 1-87
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d6fa1175159a96ebd1eb57a3fab1b43935652669",
+  "prompts": {},
+  "sessions": {
+    "s_f355061868c346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd556674-4248-429d-bf5c-2b361bc86c62",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
