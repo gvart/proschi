@@ -1,0 +1,44 @@
+frontend/.gitignore
+  s_e17b87e0a1b3ca::t_14515c69208b9b 13
+frontend/src/practice/interview/Setup.tsx
+  s_e17b87e0a1b3ca::t_0c22b9c24ac301 57
+frontend/package.json
+  s_e17b87e0a1b3ca::t_14515c69208b9b 14,16
+CLAUDE.md
+  s_e17b87e0a1b3ca::t_14515c69208b9b 25
+.github/workflows/site.yml
+  s_e17b87e0a1b3ca::t_14515c69208b9b 74-75
+frontend/src/components/Playground/Playground.tsx
+  s_e17b87e0a1b3ca::t_55c736133dc881 109
+  s_e17b87e0a1b3ca::t_542ab47da5b19d 583
+frontend/eslint.config.js
+  s_e17b87e0a1b3ca::t_14515c69208b9b 12
+frontend/e2e/billingOff.free.e2e.ts
+  s_e17b87e0a1b3ca::t_672dcb9025d2da 1-111
+frontend/src/practice/ProblemPage.tsx
+  s_e17b87e0a1b3ca::t_55c736133dc881 21
+  s_e17b87e0a1b3ca::t_542ab47da5b19d 346
+frontend/src/practice/interview/InterviewRoute.tsx
+  s_e17b87e0a1b3ca::t_f1828b20395c39 18,94
+frontend/playwright.config.ts
+  s_e17b87e0a1b3ca::t_14515c69208b9b 16-18,28-31,57,75-85,100-102
+  s_e17b87e0a1b3ca::t_faeb4506657e9d 103-105
+frontend/src/components/featureState.ts
+  s_e17b87e0a1b3ca::t_70b66448f2855a 28-32,62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "66b0adf1422f48bf7ec0c20e7cd83a92cd069241",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
