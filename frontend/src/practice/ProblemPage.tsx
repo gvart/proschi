@@ -587,6 +587,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
         paletteKey="proschi.practice.palette"
         flows
         phone={phone}
+        simulate={engine.available ? engine.analyze : undefined}
       />
       {nodes.length === 0 && <EmptyCanvas />}
       {checksOpen && run && (
@@ -1043,6 +1044,7 @@ function DiagramPane({ diagram, nodes, edges, fitKey, layoutBusy, engine, onSele
             paletteKey="proschi.practice.palette"
             flows
             phone={phone}
+            simulate={engine.available ? engine.analyze : undefined}
           />
         )}
         {nodes.length === 0 && tab === 'diagram' && <EmptyCanvas />}
