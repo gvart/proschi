@@ -2,10 +2,15 @@ import { describe, expect, it } from 'vitest';
 import {
   addConnection,
   addNode,
+  clearPosition,
   clearPositions,
+  copyNodes,
+  duplicateNodes,
+  pasteNodes,
   removeConnections,
   removeNode,
   renameNode,
+  retargetConnection,
   setCapacity,
   setDescription,
   setEdgeLabel,
@@ -285,5 +290,81 @@ describe('setSize', () => {
     expect(parse(big).diagram.capacity?.[0].size).toBe('L');
     expect(setSize(big, 'db', 'M')).toContain('  db size M\n');
     expect(setSize(big, 'db', null)).toBe('db [PostgreSQL]\ncapacity {\n}\n');
+  });
+});
+
+describe('clearPosition', () => {
+  it('removes one node’s pos and leaves the others', () => {
+    expect(clearPosition('a [Redis] pos 1,2 @t\nb pos 3,4', 'a')).toBe('a [Redis] @t\nb pos 3,4');
+  });
+
+  it('leaves a node without pos as it is', () => {
+    expect(clearPosition('a [Redis]', 'a')).toBe('a [Redis]');
+  });
+});
+
+describe('retargetConnection', () => {
+  const src = 'api\ndb\ncache\napi -> db .planned : reads';
+
+  it('moves the target, keeping the tag and the label', () => {
+    expect(retargetConnection(src, 'api->db', 'api', 'cache')).toEqual({ source: 'api\ndb\ncache\napi -> cache .planned : reads' });
+  });
+
+  it('moves the source', () => {
+    expect(retargetConnection(src, 'api->db', 'cache', 'db')).toEqual({ source: 'api\ndb\ncache\ncache -> db .planned : reads' });
+  });
+
+  it('keeps the arrow and a multi-line payload', () => {
+    expect(retargetConnection('a\nb\nc\na ->> b : {\n  "x": 1\n}', 'a->b', 'a', 'c').source).toBe('a\nb\nc\na ->> c : {\n  "x": 1\n}');
+  });
+
+  it('refuses a loop or a connection that is already there', () => {
+    expect(retargetConnection(src, 'api->db', 'api', 'api').error).toMatch(/one component to another/);
+    expect(retargetConnection(`${src}\napi -> cache`, 'api->db', 'api', 'cache').error).toMatch(/already connected/);
+  });
+
+  it('leaves an unknown connection alone', () => {
+    expect(retargetConnection(src, 'x->y', 'api', 'cache')).toEqual({ source: src });
+  });
+});
+
+describe('copy, paste and duplicate', () => {
+  const src = 'api "API" [REST API] @web\ndb [PostgreSQL] pos 100,200\ncache [Redis]\napi -> db : reads\napi -> cache\n\nusecase "Read" {\n  api -> db\n}\n';
+
+  it('copies the nodes and only the connections between them', () => {
+    expect(copyNodes(src, ['api', 'db'])).toBe('api "API" [REST API] @web\ndb [PostgreSQL] pos 100,200\napi -> db : reads\n');
+  });
+
+  it('copies a node that only connections declare as its bare id', () => {
+    expect(copyNodes('a -> b', ['a', 'b'])).toBe('a\nb\na -> b\n');
+  });
+
+  it('pastes with fresh ids, renamed connections and pinned nodes moved, before the use cases', () => {
+    const { source, ids } = pasteNodes(src, copyNodes(src, ['api', 'db']));
+    expect(ids).toEqual(['api2', 'db2']);
+    expect(source).toBe(
+      'api "API" [REST API] @web\ndb [PostgreSQL] pos 100,200\ncache [Redis]\napi -> db : reads\napi -> cache\n' +
+        'api2 "API" [REST API] @web\ndb2 [PostgreSQL] pos 140,240\napi2 -> db2 : reads\n\nusecase "Read" {\n  api -> db\n}\n',
+    );
+    expect(parse(source).diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+  });
+
+  it('keeps the ids when pasting into a diagram that does not use them', () => {
+    expect(pasteNodes('x', 'api\ndb\napi -> db\n', { offset: { x: 0, y: 0 } })).toEqual({ source: 'x\napi\ndb\napi -> db\n', ids: ['api', 'db'] });
+  });
+
+  it('counts on from a numbered id and avoids taken ids', () => {
+    expect(pasteNodes('api\napi2', 'api2\n', { taken: ['api3'] }).ids).toEqual(['api4']);
+  });
+
+  it('duplicates in one edit, payloads included', () => {
+    const { source, ids } = duplicateNodes('a\nb\na -> b : {\n  "x": 1\n}', ['a', 'b']);
+    expect(ids).toEqual(['a2', 'b2']);
+    expect(source).toBe('a\nb\na -> b : {\n  "x": 1\n}\na2\nb2\na2 -> b2 : {\n  "x": 1\n}\n');
+  });
+
+  it('leaves groups and systems out', () => {
+    expect(copyNodes('group g {\n  a\n}', ['g', 'a'])).toBe('a\n');
+    expect(duplicateNodes('group g {\n}', ['g'])).toEqual({ source: 'group g {\n}', ids: [] });
   });
 });

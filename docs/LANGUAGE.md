@@ -65,6 +65,7 @@ parts, except in a tech stack such as `[Redis]`, where they are literal.
 | Scenario | `alt "Name" [when "condition"] { … }` | use case, scenario | [Scenarios](SCENARIOS.md) |
 | Parallel steps | `par { … }` | use case, scenario | [Parallel steps](SCENARIOS.md#parallel-steps) |
 | Import | `import "infra.proschi"` | top level | [Imports](IMPORTS.md) |
+| Constant | `let peak = 120k rps`, used as `$peak` | top level | [Constants](HLD.md#constants) |
 | System | `system id ["Name"] [@team] … { … }` | top level, group | [The system block](SYSTEMS.md#the-system-block) |
 | Traffic | `traffic { … }` | top level | [Traffic](HLD.md#traffic) |
 | Capacity | `capacity { … }` | top level | [Capacity](HLD.md#capacity) |
@@ -72,6 +73,7 @@ parts, except in a tech stack such as `[Redis]`, where they are literal.
 | Decision | `decision "Title" { … }` | top level | [Decisions](HLD.md#decisions) |
 | Requirements | `requirements { … }` | top level | [Requirements](TESTS.md#requirements) |
 | Test | `test "Name" { … }` | top level | [Tests](TESTS.md#tests) |
+| What-if | `whatif "Name" { … }` | top level | [What-ifs](TESTS.md#what-ifs) |
 | Comment | `# …` | anywhere | To the end of the line. A `#` inside quotes or a JSON payload is text, and so is a hex color after `color`. |
 
 The [grammar](GRAMMAR.md) has every statement in EBNF.

@@ -349,7 +349,7 @@ describe('paid routes', () => {
     expect(plan.plan).toBe('pro');
     expect(plan.limits.documents).toBeNull();
     expect(plan.credits.monthly.allowance).toBe(800);
-    expect(Object.entries(plan.features).filter(([, f]) => !f.ok).map(([id]) => id)).toEqual(['deep_mode', 'interview_report']);
+    expect(Object.entries(plan.features).filter(([, f]) => !f.ok).map(([id]) => id)).toEqual(['deep_mode', 'interview_report', 'interview_plan', 'certificate']);
     const expired = await account('expired', 'cookie');
     expect(((await (await send(expired, 'GET', '/api/me/plan')).json()) as { plan: string }).plan).toBe('free');
   });

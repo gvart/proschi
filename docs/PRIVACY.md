@@ -26,6 +26,8 @@ server. What they remember stays in your browser's storage on this device:
 | `proschi.practice` | Practice progress: per problem, your latest design, how many times you ran the tests and whether you solved it |
 | `proschi.practice.runs` | Per problem: how many test runs, the runs it took to solve it, and the monthly cost of your cheapest solving design and of the reference solution, for the badges on a copy of the site without accounts |
 | `proschi.practice.last` | The last practice problem you opened, for "Continue" on the practice page |
+| `proschi.practice.mistakes` | The known mistake your last failed test run matched, per problem (its title and when), for "Your next steps" on the practice page |
+| `proschi.practice.plan` | The interview-date plan (Max): your interview date, the minutes a day, the day you set it, the last day's list and what you ticked by hand; signed in, the date and minutes are a copy of what your account keeps |
 | `proschi.practice.goal` | What you are on the practice page for (solving problems, interview prep, a daily habit), whether you answered or skipped that question, and whether you switched the daily streak on or off; signed in, a copy of what your account keeps |
 | `proschi.interview.<problem>` | Scripted interview mode in progress on a problem: the length, the phase, the time spent per phase, the questions asked, your estimates, the last test run and the self-review ticks; removed when you leave interview mode |
 | `proschi.interview.history` | The summaries of your last 50 finished scripted interviews (time per phase, questions, estimates, tests, self-review) |
@@ -232,6 +234,11 @@ above are about events, not about you).
   collected for them.
 - Only if you ask for email reminders: your email address and its settings
   ([Email reminders](#email-reminders), below).
+- Only if you make an interview-date plan on Max: the interview date, the
+  minutes a day, the day you set it, and today's list as your browser last
+  made it (each item's title and whether it is done), for the evening
+  reminder. Removing the plan on the roadmap deletes it, and it is in
+  **Download my data**.
 - Only if you sign in with an email address: that address, a hash of your
   password, and when you confirmed the address ([Email sign-in](#email-sign-in),
   below).
@@ -303,6 +310,16 @@ its address then answers "not found", the same as an address no user has, so
 nobody can tell whether you have an account. Its picture card stops being
 served at once too, but link previews that a chat app or social network
 already fetched are kept by them, beyond our control.
+
+**Your mastery certificate** (Max): turning it on in Settings › Exports &
+certificate makes a public page at a random address
+(`proschi.app/c/<certificate id>`, not your user id), with a link preview,
+that shows your display name, your level and XP, your interview-ready score,
+your mastery of each topic in whole percent, the problems you solved (which
+ones, never your designs), your longest streak and the day it was first
+turned on. It is read from your progress each time it is opened. Turning it
+off, or a plan without it, makes the address answer "not found" at once; it
+comes back at the same address when you turn it on again.
 
 ## Plans, credits and payments
 
@@ -524,7 +541,8 @@ follow the confirmation link sent to the address (it works for two days).
 - your browser's time zone (such as `Europe/Berlin`), read when you enter the
   address, so reminders arrive in your evening and the recap on Monday
   morning;
-- which reminders you want: streak at risk, cards due, weekly recap;
+- which reminders you want: streak at risk, cards due, weekly recap (an
+  interview-date plan on Max is named in the evening ones);
 - a random secret for the unsubscribe link in each email;
 - the last reminder sent: your local date, the time and which kind (for the
   one-a-day limit), how many were sent in a row with no practice in between,
@@ -534,7 +552,9 @@ follow the confirmation link sent to the address (it works for two days).
 **What it is used for**: only to send these reminders, at most one a day:
 your streak would end today and today's goal isn't met (in your evening),
 5 or more review cards are due (in your evening, when no streak reminder was
-sent), and last week's recap (Monday morning). Whether one is due is worked
+sent), what is left on your interview-date plan's list today (Max, in your
+evening, when neither of those was sent; they name it too), and last week's
+recap (Monday morning). Whether one is due is worked
 out from the practice data above, at the time. After three reminders in a
 row with no practice in between, they pause (the third email says so) until
 you resume them on your account page. Your address is never shown to anyone,

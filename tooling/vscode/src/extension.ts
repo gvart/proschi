@@ -17,6 +17,8 @@ export async function activate(context: ExtensionContext) {
       { scheme: 'file', language: 'proschi' },
       { scheme: 'untitled', language: 'proschi' },
     ],
+    // Sends proschi.inlayHints.enabled and proschi.codeLens.enabled to the server, now and on change.
+    synchronize: { configurationSection: 'proschi' },
   };
   client = new LanguageClient('proschi', 'Proschi', serverOptions, clientOptions);
   await client.start();

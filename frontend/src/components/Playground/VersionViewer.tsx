@@ -10,6 +10,7 @@ import { useDiagramLayout } from '../Diagram/useDiagramLayout';
 import CodeEditor from './CodeEditor';
 import { eyebrow, outlineButton, primaryButton, subBar } from './ui';
 import Select from '../../design/Select';
+import VersionDelta from './VersionDelta';
 
 /** A side of a comparison: a version's tag, or DRAFT for the diagram being edited. */
 const DRAFT = '';
@@ -246,7 +247,7 @@ export default function VersionViewer({ docId, fileName, versions, mode, onMode,
       ) : (
         <div className="flex min-h-0 flex-1 flex-col md:grid md:grid-cols-[minmax(18rem,24rem)_minmax(0,1fr)]">
           <aside className="min-h-0 overflow-y-auto p-4 max-md:order-2 max-md:flex-1 md:border-r-bw-1 md:border-ink" aria-label="Changes">
-            {diff && numbers ? <Summary diff={diff} numbers={numbers} base={label(mode.base)} target={label(mode.target)} /> : <p className="text-sm text-muted">{errorOf ?? 'Loading…'}</p>}
+            {diff && numbers && base && target ? <Summary diff={diff} numbers={numbers} sides={{ base, target }} base={label(mode.base)} target={label(mode.target)} /> : <p className="text-sm text-muted">{errorOf ?? 'Loading…'}</p>}
           </aside>
           <div className="flex min-h-[45%] flex-1 flex-col max-md:order-1 max-md:border-b-bw-1 max-md:border-ink">{canvas}</div>
         </div>
@@ -255,7 +256,19 @@ export default function VersionViewer({ docId, fileName, versions, mode, onMode,
   );
 }
 
-function Summary({ diff, numbers, base, target }: { diff: DiagramDiff; numbers: { base: [string, string][]; target: [string, string][] }; base: string; target: string }) {
+function Summary({
+  diff,
+  numbers,
+  sides,
+  base,
+  target,
+}: {
+  diff: DiagramDiff;
+  numbers: { base: [string, string][]; target: [string, string][] };
+  sides: { base: Diagram; target: Diagram };
+  base: string;
+  target: string;
+}) {
   const counts = summarizeDiff(diff).total;
   const sections = DIFF_SECTIONS.filter((s) => {
     const d = diff[s];
@@ -264,32 +277,40 @@ function Summary({ diff, numbers, base, target }: { diff: DiagramDiff; numbers: 
   const none = sections.length === 0 && diff.diagram.length === 0;
   return (
     <div className="grid gap-5">
-      <section>
-        <h3 className={eyebrow}>Simulation</h3>
-        <table className="mt-1.5 w-full text-sm tabular-nums">
-          <thead>
-            <tr className="text-left text-xs text-muted">
-              <th className="py-1 font-semibold" />
-              <th className="py-1 font-mono font-semibold">{base}</th>
-              <th className="py-1 font-mono font-semibold">{target}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {numbers.target.map(([name, after], i) => {
-              const before = numbers.base[i][1];
-              return (
-                <tr key={name} className="border-t border-ink/10">
-                  <th scope="row" className="py-1 pr-2 text-left font-semibold">
-                    {name}
-                  </th>
-                  <td className="py-1 pr-2 text-muted">{before}</td>
-                  <td className={`py-1 ${before !== after ? 'font-bold' : 'text-muted'}`}>{after}</td>
+      <VersionDelta
+        base={sides.base}
+        target={sides.target}
+        baseLabel={base}
+        targetLabel={target}
+        plain={
+          <section>
+            <h3 className={eyebrow}>Simulation</h3>
+            <table className="mt-1.5 w-full text-sm tabular-nums">
+              <thead>
+                <tr className="text-left text-xs text-muted">
+                  <th className="py-1 font-semibold" />
+                  <th className="py-1 font-mono font-semibold">{base}</th>
+                  <th className="py-1 font-mono font-semibold">{target}</th>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </section>
+              </thead>
+              <tbody>
+                {numbers.target.map(([name, after], i) => {
+                  const before = numbers.base[i][1];
+                  return (
+                    <tr key={name} className="border-t border-ink/10">
+                      <th scope="row" className="py-1 pr-2 text-left font-semibold">
+                        {name}
+                      </th>
+                      <td className="py-1 pr-2 text-muted">{before}</td>
+                      <td className={`py-1 ${before !== after ? 'font-bold' : 'text-muted'}`}>{after}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </section>
+        }
+      />
 
       <section>
         <h3 className={eyebrow}>Changes</h3>

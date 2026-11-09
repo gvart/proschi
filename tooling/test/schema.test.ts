@@ -34,6 +34,57 @@ describe('JSON Schema', () => {
     expect(validate(result), JSON.stringify(validate.errors, null, 2)).toBe(true);
   });
 
+  it('describes whatif blocks', () => {
+    const source = 'api [REST API]\nusecase "U" {\n  api -> api : x\n}\nwhatif "W" {\n  traffic "U" x3\n  fail api\n  api x2\n}\nwhatif "V" {\n  traffic "U" 5k rps\n}';
+    const result = JSON.parse(JSON.stringify(parse(source)));
+    expect(result.diagram.whatifs).toHaveLength(2);
+    expect(validate(result), JSON.stringify(validate.errors, null, 2)).toBe(true);
+  });
+
+  it('describes constants', () => {
+    const source = 'let peak = 2k rps\nlet n = 2\napi [REST API] x$n\nusecase "U" {\n  api -> api : x\n}\ntraffic {\n  "U" $peak\n}';
+    const result = JSON.parse(JSON.stringify(parse(source)));
+    expect(result.diagram.constants).toHaveLength(2);
+    const peak = JSON.parse(JSON.stringify(parse(source.replace('"U" $peak', '"U" $peak peak x3'))));
+    expect(peak.diagram.traffic[0]).toMatchObject({ rps: 6000, avgRps: 2000 });
+    expect(validate(peak), JSON.stringify(validate.errors, null, 2)).toBe(true);
+    expect(validate(result), JSON.stringify(validate.errors, null, 2)).toBe(true);
+  });
+
+  it('describes error rates and retries, in capacity and what-ifs', () => {
+    const source = 'api [REST API]\npay [Go]\napi -> pay\ncapacity {\n  pay errors 2% retries 3\n}\nwhatif "Bad deploy" {\n  pay errors 20%\n}';
+    const result = JSON.parse(JSON.stringify(parse(source)));
+    expect(result.diagram.capacity[0]).toMatchObject({ errorPercent: 2, retries: 3 });
+    expect(result.diagram.whatifs[0].changes[0]).toMatchObject({ kind: 'errors', percent: 20 });
+    expect(validate(result), JSON.stringify(validate.errors, null, 2)).toBe(true);
+  });
+
+  it('describes queue drain rates and lag requirements', () => {
+    const source = 'api [REST API]\nq [Kafka]\napi -> q\nusecase "U" {\n  api ->> q : publish\n}\ncapacity {\n  q drain 5k rps\n}\nrequirements {\n  lag "U" < 30s\n}';
+    const result = JSON.parse(JSON.stringify(parse(source)));
+    expect(result.diagram.capacity[0]).toMatchObject({ drainRps: 5000 });
+    expect(result.diagram.requirements[0]).toMatchObject({ kind: 'lag', useCase: 'U', maxMs: 30000 });
+    expect(validate(result), JSON.stringify(validate.errors, null, 2)).toBe(true);
+  });
+
+  it('describes scoped budgets', () => {
+    const source =
+      'group g {\n  api [REST API] @Pay .hot\n}\nlegend {\n  hot "Hot" red\n}\nrequirements {\n  cost @Pay <= 500 usd/month\n  cost .hot <= 5 usd/month\n  cost group g <= 1k usd/month\n}';
+    const result = JSON.parse(JSON.stringify(parse(source)));
+    expect(result.diagram.requirements.map((r: { scope: unknown }) => r.scope)).toEqual([{ team: 'Pay' }, { tag: 'hot' }, { group: 'g' }]);
+    expect(validate(result), JSON.stringify(validate.errors, null, 2)).toBe(true);
+  });
+
+  it('describes cache hit rates, in capacity and what-ifs, and info diagnostics', () => {
+    const source =
+      'api [REST API]\ncache [Redis]\napi -> cache\nusecase "U" {\n  api -> cache : GET\n}\ntraffic {\n  "U" 1k rps mix "U" 100%\n}\ncapacity {\n  cache hit 90%\n}\nwhatif "Cold" {\n  cache hit 40%\n}';
+    const result = JSON.parse(JSON.stringify(parse(source)));
+    expect(result.diagram.capacity[0].hitPercent).toBe(90);
+    expect(result.diagram.whatifs[0].changes[0]).toMatchObject({ kind: 'hit', percent: 40 });
+    expect(result.diagnostics.map((d: { severity: string }) => d.severity)).toEqual(['info']);
+    expect(validate(result), JSON.stringify(validate.errors, null, 2)).toBe(true);
+  });
+
   it('describes every requirement, assertion and selector', () => {
     const source = [
       'title "T" "Summary"',

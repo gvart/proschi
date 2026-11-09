@@ -552,3 +552,115 @@ id; don't rewrite old ones.
   as the first stage in the stage bar, and its own address
   (`practice/#/roadmap/<id>/lesson`, the roadmap's "Read the lesson"
   links) still opens on it.
+- **P53. History and the report cover interviews on your own, and cost
+  nothing to run.** `interview_history` (Pro) and `interview_report` (Max)
+  spend no credits, so they leave the page's metered set
+  (`components/featureState.ts`): a build without paid plans follows the
+  server for them as for `share_links` (on for an account on Pro or Max set
+  by hand, off with no way to Pro otherwise); the credit-spending features
+  stay hidden there. The browser now sends what an interview on your own
+  did (`results`: time per phase, questions, estimates, the last check run,
+  self-review; `learn/soloInterview.ts`) with each session; the server
+  keeps it (`solo_interviews.results`, migration 0033), fills it in once
+  for a session kept without it, and answers the account's sessions to Pro
+  (`GET /api/me/interviews/solo`, 402 otherwise). **Scores**: an interview
+  on your own gets a score per skill on the verdict's 1 to 5 scale, read
+  from what it did: requirements from the good questions asked of those
+  there are, estimation from the estimates in range, design from the
+  checks passing (1 with none run), trade-offs from the self-review ticked;
+  communication has none, since nobody listened. Only the sessions that
+  count (P48) are on the trend. **Pro** sees those scores over time
+  (SkillTrends, four panels) and the account's sessions from every device
+  joined to the browser's; other plans keep the browser's list, with the
+  way to Pro where paid plans are on. **Max** opens any session with its
+  results as a printable report (the AI report's sheet, made in the
+  browser), from the progress page and the interview's result.
+- **P54. Design diff with simulation deltas is Pro.** Comparing two versions
+  (or a version and the draft) shows every plan the structural diff and the
+  plain numbers side by side, as before. Pro (`design_diff`) also sees what
+  the change does (`sim/delta.ts` `designDelta`): cost, the worst p99 and the
+  lowest availability before and after, marked green when better and red
+  when worse, the same per use case with traffic, the requirements, systems
+  and tests that flipped between pass and fail, and the nodes whose
+  utilisation moved by ten points or more. It runs in the browser and spends
+  no credits, so it is not metered (`components/featureState.ts`): a build
+  without paid plans follows the server as for `share_links`. Where paid
+  plans are on, other plans see a locked teaser with no numbers in it and the
+  way to Pro. Prices stay the same; the pricing page lists it under Pro. The
+  command line (`proschi diff`, `proschi versions diff`) prints the same
+  deltas ungated: it is local and open source.
+- **P55. An interview-date plan for Max, built in the browser.** On the
+  roadmap, `interview_plan` (Max) takes an interview date (tomorrow to 180
+  days ahead) and minutes a day (45 by default) and lays out every day to
+  it (`learn/interviewPlan.ts`, pure): the days from the day it was set
+  split into **learn** (the rest), **mock** (about 30%, at most 10 days),
+  **review** (about 20%, at most 5) and a **rest** day before the
+  interview. Learn days fill the minutes with the due cards, then the
+  rule-based next steps' problems for the weakest skills (`nextSteps.ts`),
+  then the roadmap's next unsolved ones (a problem counts 20, 35 or 45
+  minutes by difficulty, so an hour is the cards and one or two problems;
+  the tutorial is never planned); a mock day is an interview on your
+  own on an unsolved medium or hard problem of a weak skill, a new one each
+  day; review days are the due cards and two topics' cards, weakest first.
+  Only today is built from real state, later days as if each planned
+  problem were solved; today's list is fixed once made, and its items tick
+  off from what was done (a solve, the cards reviewed, a topic's card
+  reviewed, an interview on your own that counts; the rest day's recap by
+  hand). It re-flows: a new day starts with the last list's problems still
+  unsolved (at most two), and the phases keep their dates. It costs nothing
+  to run, so it is not metered: a build without paid plans follows the
+  server, like `interview_report` (P53); other plans see a short teaser
+  with the way to Max where paid plans are on. The account keeps the date,
+  minutes and start, and today's list as titles with done
+  (`interview_plans`, migration 0034; `GET`/`PUT`/`DELETE
+  /api/me/interview-plan`, the first two Max); the account's plan wins on
+  another browser. With email reminders on, the evening reminder names
+  what is left on today's list, and a Max account with something left and
+  no streak or cards reminder gets a plan reminder of its own (none on the
+  interview day). Prices stay the same.
+- **P56. Export and proof cost nothing to run.** Three features join the
+  plans, none of them metered (`components/featureState.ts`), so a build
+  without paid plans follows the server for them as for P53: on for an
+  account on Pro or Max set by hand, left out with no way to a plan
+  otherwise; where paid plans are on, each shows as the way to its plan.
+  **`data_export` (Pro)**: the learning data alone, for a spreadsheet
+  (`GET /api/me/export?view=progress`, 402 otherwise; level, mastery per
+  topic, streaks, every problem with its solve and best designs, the
+  verdicts' pass and scores, interviews on your own and card states), as
+  JSON or, made in the browser, a zip of CSV files. The full export stays
+  on every plan (P23). **`pro_exports` (Pro)**: PNG at 3× from the Export
+  menu (2× stays every plan's), the HLD as PDF (its HTML page, with print
+  styles, printed by the browser) and embeds without Proschi's branding:
+  one switch per account (`users.embed_branding`, migration 0035), which
+  the short link's answer reports (`branding: false`) only while the
+  owner's plan has the feature, so a lapsed plan shows the branding again.
+  Hash embeds have no owner and keep it. **`certificate` (Max)**: a public
+  page at `/c/<id>` (a random id, not the user id; `certificates`,
+  migration 0035) with an Open Graph card (`backend/src/og.ts`), drawn
+  from the account's progress at each visit, so it can't say what the
+  account hasn't done. It shows the level and XP, readiness, mastery per
+  topic, problems solved, the longest streak, the issue date (first turned
+  on) and the id; its owner gets LinkedIn's add-certification link and
+  everyone a print layout (one landscape A4). Off, or a plan without it,
+  answers 404 at once; on again, the same id. Turning it on needs Max,
+  turning it off any plan.
+- **P57. Asking "what if" is free; keeping and sweeping what-ifs is Pro.**
+  Every plan, signed in or not, gets the editor's live what-if: with the
+  load overlay on, a slider multiplies all traffic from ×0.5 to ×10, and
+  "Simulate down" in a node's right-click menu takes it down (several at
+  once). Neither edits the text: the analysis runs again with
+  `AnalyzeOptions.trafficRps` and `failed` (`sim/whatif.ts`), and the canvas,
+  the bottleneck and Results show it under a what-if badge with a reset.
+  "Save as what-if" writes it as a `whatif` block and "Write to traffic"
+  scales the traffic block's rates (`dsl/edit.ts` `addWhatIf`,
+  `scaleTraffic`), each one undoable step; the language stays free on every
+  plan. **`saved_whatifs` (Pro)**: Results lists the document's `whatif`
+  blocks with pass or fail and their p99, availability and cost against the
+  design as written, and picking one previews it on the canvas; a Sweep runs
+  `sweep` on a use case from half to ten times its traffic and shows the
+  highest rate that passes and where each node saturates. Everything runs in
+  the browser and spends no credits, so it is not metered
+  (`components/featureState.ts`): a build without paid plans follows the
+  server as for P54. Where paid plans are on, other plans see the blocks'
+  names with a locked teaser and the way to Pro. Prices stay the same; the
+  pricing page lists it under Pro.

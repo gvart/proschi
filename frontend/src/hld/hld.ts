@@ -56,6 +56,8 @@ export interface FlowTestRow {
 export interface TrafficRow {
   useCase: string;
   rps: number;
+  /** `peak`: the average rate, while `rps` is the peak. */
+  avgRps?: number;
   mix: { scenario: string; share: number }[];
 }
 
@@ -212,6 +214,7 @@ const REQUIREMENT_CATEGORY: Record<Requirement['kind'], TestResult['category']> 
   durable: 'durability',
   survive: 'resilience',
   cost: 'cost',
+  lag: 'latency',
 };
 
 /** An assertion as it is written in a `test` block. */
@@ -339,7 +342,7 @@ export function hld(diagram: Diagram, analysis?: Analysis, tests: TestResult[] =
   }
 
   // 3. Capacity estimates
-  const traffic: TrafficRow[] = (diagram.traffic ?? []).map((t) => ({ useCase: t.useCase, rps: t.rps, mix: t.mix ?? [] }));
+  const traffic: TrafficRow[] = (diagram.traffic ?? []).map((t) => ({ useCase: t.useCase, rps: t.rps, ...(t.avgRps !== undefined ? { avgRps: t.avgRps } : {}), mix: t.mix ?? [] }));
   const load: LoadRow[] = (analysis?.nodes ?? [])
     .filter((n) => n.kind !== 'client')
     .map((n) => ({
@@ -469,6 +472,12 @@ export function formatRps(rps: number): string {
   if (rps >= 1e6) return `${formatNumber(Number((rps / 1e6).toFixed(2)))}M rps`;
   if (rps >= 1e3) return `${formatNumber(Number((rps / 1e3).toFixed(2)))}k rps`;
   return `${formatNumber(Number(rps.toFixed(2)))} rps`;
+}
+
+/** A traffic line's rate: `20k rps`, or with a peak `avg 20k · peak 60k rps`. */
+export function formatTraffic(rps: number, avgRps?: number): string {
+  if (avgRps === undefined || avgRps === rps) return formatRps(rps);
+  return `avg ${formatRps(avgRps).replace(/ rps$/, '')} · peak ${formatRps(rps)}`;
 }
 
 export const formatMs = (ms: number) => `${ms >= 100 ? Math.round(ms) : formatNumber(Number(ms.toFixed(1)))} ms`;

@@ -1,7 +1,7 @@
 import { useEffect, useImperativeHandle, useMemo, useRef, type Ref } from 'react';
 import { basicSetup } from 'codemirror';
-import { EditorView, keymap } from '@codemirror/view';
-import { Compartment, EditorState, type Extension } from '@codemirror/state';
+import { Decoration, EditorView, keymap, type DecorationSet } from '@codemirror/view';
+import { Compartment, EditorState, StateEffect, StateField, type Extension } from '@codemirror/state';
 import { isolateHistory, redo as redoCommand, undo as undoCommand } from '@codemirror/commands';
 import { autocompletion } from '@codemirror/autocomplete';
 import { lintGutter, setDiagnostics } from '@codemirror/lint';
@@ -24,6 +24,10 @@ export interface CodeEditorHandle {
   undo: () => boolean;
   /** Redoes the last undone step, as Ctrl+Shift+Z does; false when there was nothing to redo. */
   redo: () => boolean;
+  /** Marks these lines (1-based) as linked to the canvas selection; an empty list clears them. */
+  linkLines: (lines: number[]) => void;
+  /** The editor has the keyboard focus. */
+  hasFocus: () => boolean;
 }
 
 interface CodeEditorProps {
@@ -45,6 +49,8 @@ interface CodeEditorProps {
   theme?: Extension;
   /** More extensions for this editor, e.g. decorations; can change later. */
   extensions?: Extension;
+  /** The cursor's line (1-based) while the editor has the focus: when it moves, the text changes or the editor is focused. */
+  onCursor?: (line: number) => void;
 }
 
 function formatDocument(view: EditorView): boolean {
@@ -70,9 +76,30 @@ function middleChange(current: string, next: string) {
   return { from: start, to: endCurrent, insert: next.slice(start, endNext) };
 }
 
+const setLinkedLines = StateEffect.define<number[]>();
+const linkedLine = Decoration.line({ class: 'cm-linkedLine' });
+/** The declarations of what is selected on the canvas, shaded; they follow the text as it is edited. */
+const linkedLines = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(lines, tr) {
+    let next = lines.map(tr.changes);
+    for (const effect of tr.effects) {
+      if (!effect.is(setLinkedLines)) continue;
+      const wanted = [...new Set(effect.value)].filter((l) => l >= 1 && l <= tr.state.doc.lines).sort((a, b) => a - b);
+      next = Decoration.set(wanted.map((l) => linkedLine.range(tr.state.doc.line(l).from)));
+    }
+    return next;
+  },
+  provide: (field) => EditorView.decorations.from(field),
+});
+const linkedLineTheme = EditorView.baseTheme({
+  '&light .cm-linkedLine': { backgroundColor: 'rgb(61 90 254 / 0.1)', boxShadow: 'inset 3px 0 0 rgb(61 90 254 / 0.7)' },
+  '&dark .cm-linkedLine': { backgroundColor: 'rgb(140 155 255 / 0.14)', boxShadow: 'inset 3px 0 0 rgb(140 155 255 / 0.8)' },
+});
+
 const readOnlyState = (readOnly: boolean) => [EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)];
 
-export default function CodeEditor({ value, onChange, diagnostics, nodeIds, techs, ref, readOnly = false, autoFocus = false, theme, extensions }: CodeEditorProps) {
+export default function CodeEditor({ value, onChange, diagnostics, nodeIds, techs, ref, readOnly = false, autoFocus = false, theme, extensions, onCursor }: CodeEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const mode = useEditorTheme();
@@ -80,11 +107,13 @@ export default function CodeEditor({ value, onChange, diagnostics, nodeIds, tech
   // Parts that can change after the editor is created.
   const [readOnlyConf, themeConf, extraConf] = useMemo(() => [new Compartment(), new Compartment(), new Compartment()], []);
   const onChangeRef = useRef(onChange);
+  const onCursorRef = useRef(onCursor);
   const nodeIdsRef = useRef(nodeIds);
   const techsRef = useRef(techs);
 
   useEffect(() => {
     onChangeRef.current = onChange;
+    onCursorRef.current = onCursor;
     nodeIdsRef.current = nodeIds;
     techsRef.current = techs;
   });
@@ -106,8 +135,14 @@ export default function CodeEditor({ value, onChange, diagnostics, nodeIds, tech
           readOnlyConf.of(readOnlyState(readOnly)),
           themeConf.of(look),
           extraConf.of(extensions ?? []),
+          linkedLines,
+          linkedLineTheme,
           EditorView.updateListener.of((update) => {
             if (update.docChanged) onChangeRef.current(update.state.doc.toString());
+            // Only the reader's own cursor: a selection made from the canvas lands while the canvas has the focus.
+            if (update.view.hasFocus && (update.selectionSet || update.docChanged || update.focusChanged)) {
+              onCursorRef.current?.(update.state.doc.lineAt(update.state.selection.main.head).number);
+            }
           }),
         ],
       }),
@@ -181,6 +216,12 @@ export default function CodeEditor({ value, onChange, diagnostics, nodeIds, tech
     redo() {
       const view = viewRef.current;
       return view ? redoCommand(view) : false;
+    },
+    linkLines(lines) {
+      viewRef.current?.dispatch({ effects: setLinkedLines.of(lines) });
+    },
+    hasFocus() {
+      return viewRef.current?.hasFocus ?? false;
     },
   }));
 

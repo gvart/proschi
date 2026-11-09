@@ -46,12 +46,30 @@
           Steps after the response count too, so a queue's consumer carries load the user never waits for. A use
           case without a traffic line adds no load.
         </p>
+        <p>
+          A cache with a hit rate (<code>capacity { cache hit 90% }</code>) passes on only its misses: after a
+          read of it, the caller's reads from a store behind it, the calls the cache makes itself and the
+          caller's fill of the cache take <code>1 − hit</code> of the rate, unless the use case already splits
+          hits and misses with a <code>mix</code>. Latency follows too: see the percentiles below.
+        </p>
+        <p>
+          A node with an error rate and retries (<code>capacity { pay errors 2% retries 3 }</code>) gets each call
+          again when it fails: <code>1 + e + … + e^retries</code> calls a request. Only the node itself takes them;
+          what it calls is not repeated.
+        </p>
+        <p>
+          With <code>peak</code> (<code>"Read" 20k rps peak x3</code>), <var>R</var> is the peak, 60k: load,
+          utilisation, latency and requirements are all taken at the busiest hour. Only egress is costed at the
+          average, 20k (rule 1.8).
+        </p>
       </div>
       <pre class="formula" tabindex="0"><code>load(n) = Σ  R(U) × share(s) × N(step)
           over every request step to n that is not -x
           in every scenario s of every use case
 
-N(step) = the x&lt;N&gt; fan-out, 1 without one</code></pre>
+N(step) = the x&lt;N&gt; fan-out, 1 without one,
+          times 1 − hit on a cache's miss path,
+          times Σ e^k for k = 0..retries to a node with errors</code></pre>
     </li>
 
     <li class="rule" id="reads-writes">
@@ -121,6 +139,12 @@ write capacity = writes × shards              single-primary
           store queue for its one primary.
         </p>
         <p>
+          A queue or broker with consumers (<code>capacity { events drain 5k rps }</code>) queues messages the
+          same way, with the consumers as one server that drains at that rate: below it, a message waits
+          <code>ρ ÷ (drain − inflow)</code>, the consumer lag; above it, the backlog grows by the difference every
+          second.
+        </p>
+        <p>
           One server gives the classic <code>1 ÷ (1 − ρ)</code> slowdown. A pool waits much less: at 50%, one
           server waits half the time, four servers <span data-pin="const|wait@4@50">17%</span>. ρ is capped at
           <span data-pin="const|queueCap">95%</span> here, so a saturated node is at most
@@ -130,7 +154,10 @@ write capacity = writes × shards              single-primary
       <div class="figure">
         <pre class="formula" tabindex="0"><code>C      = Erlang C(c, ρ)              ρ capped at 0.95
 hop(n) = base + C × base ÷ (c (1 − ρ))
-       = base ÷ (1 − ρ)                 for c = 1</code></pre>
+       = base ÷ (1 − ρ)                 for c = 1
+
+lag(q)     = ρ ÷ (drain − inflow)       ρ = inflow ÷ drain &lt; 1
+backlog(q) = (inflow − drain) × 3600    messages an hour, inflow ≥ drain</code></pre>
         <div class="mini-scroll" tabindex="0"><table class="mini">
           <caption class="visually-hidden">Slowdown over the idle latency by utilisation</caption>
           <thead><tr><th scope="col">ρ</th><th scope="col">10%</th><th scope="col">50%</th><th scope="col">70%</th><th scope="col">90%</th><th scope="col">≥ 95%</th></tr></thead>
@@ -175,6 +202,16 @@ hop(n) = base + C × base ÷ (c (1 − ρ))
         <p>
           A use case's percentile mixes its scenarios by their shares. With 10% cache misses, p99 is close to the
           miss path's p90, and it moves smoothly as a share grows.
+        </p>
+        <p>
+          A cache's <code>hit</code> rate is mixed the same way: each scenario becomes a hit variant, without the
+          miss path, and a miss variant, weighted by the hit rate. The percentiles are those of an explicit
+          <code>alt "Hit"</code> and <code>alt "Miss"</code> with a <code>mix</code> of the same shares.
+        </p>
+        <p>
+          Retries split the path the same way: a hop to a node with error rate <var>e</var> takes
+          <var>k</var> + 1 attempts with probability <code>e^k (1 − e)</code>, every attempt with
+          <code>e^retries</code>, and each attempt costs the whole hop again, with no backoff.
         </p>
       </div>
       <div class="figure">
@@ -252,6 +289,10 @@ egress cost     = egress GB × price of the node that sends it</code></pre>
           A fallback is a success scenario that calls the node with <code>-x</code> before the entry response and
           finishes without a successful synchronous call to it. Load does not affect availability.
         </p>
+        <p>
+          An error rate (<code>errors 2%</code>) fails that share of calls to a node that is up. With
+          <code>retries</code>, a call fails only when every attempt does.
+        </p>
       </div>
       <pre class="formula" tabindex="0"><code>A(n)       = 1 − (1 − a(n))^replicas
 A_write(n) = 1 − (1 − a(n)) × 0.1      single-primary, 2+ replicas
@@ -259,7 +300,8 @@ A_write(n) = 1 − (1 − a(n)) × 0.1      single-primary, 2+ replicas
 
 A(U) = Π over nodes n on the main path of
          A(n), or A_write(n) when the main path writes to it
-         1 − (1 − A(n)) × (1 − A(fallback))     with a fallback</code></pre>
+         1 − (1 − A(n)) × (1 − A(fallback))     with a fallback
+       × (1 − e(n)^(retries + 1))               with an error rate</code></pre>
     </li>
 
     <li class="rule" id="cost">
@@ -268,9 +310,18 @@ A(U) = Π over nodes n on the main path of
         <p>
           Each instance costs a flat monthly price from its profile, whatever its load, plus egress, for a 30-day
           month. Clients, DNS and external systems cost nothing. There are no instance sizes or per-request prices.
+          Egress follows the average rate of a traffic line with <code>peak</code>, since the month is mostly not
+          the peak hour.
+        </p>
+        <p>
+          The cost splits by owner: a node counts whole for its team (<code>@Payments</code>), for every group it is
+          inside and for its tag and its groups' tags. A budget such as <code>cost @Payments &lt;= 500 usd/month</code>
+          checks one of those sums.
         </p>
       </div>
-      <pre class="formula" tabindex="0"><code>cost = Σ over nodes  replicas × shards × cost(n) + egress cost(n)</code></pre>
+      <pre class="formula" tabindex="0"><code>cost      = Σ over nodes  replicas × shards × cost(n) + egress cost(n)
+cost(@T)  = Σ over nodes owned by T   the same
+cost(g)   = Σ over nodes inside group g   the same</code></pre>
     </li>
 
     <li class="rule" id="failures">
@@ -287,11 +338,19 @@ A(U) = Π over nodes n on the main path of
           The Results tab lists single-replica nodes that a use case needs without a fallback as
           <em>single points of failure</em>.
         </p>
+        <p>
+          A <code>whatif</code> block's <code>fail &lt;node&gt;</code> takes the whole node down: its availability is
+          0, and each scenario that needs it hands its share of traffic to the use case's fallback scenarios for
+          it, in proportion to their own shares (equally when they have none). A scenario without a fallback keeps
+          its share, and that share of the use case's requests fails: its availability is multiplied by what is
+          left. Latency, load and cost then follow from the new shares.
+        </p>
       </div>
       <dl class="facts">
         <div><dt>x2+</dt><dd>with one replica fewer, the node does not saturate and the latency limits still hold</dd></div>
         <div><dt>x1</dt><dd>every use case that needs it has a fallback scenario</dd></div>
         <div><dt>Skipped</dt><dd>clients, external systems, DNS, notes</dd></div>
+        <div><dt>fail n</dt><dd>traffic moves to fallbacks; without one, that share fails</dd></div>
       </dl>
     </li>
 
@@ -645,7 +704,9 @@ traffic {
         <td>
           A saturated node passes its full load on, and its latency stops at
           <span data-pin="const|maxSlowdown">20×</span>. Real queues grow, time out and push retries upstream. Kept
-          on purpose: throttling would hide the next bottleneck behind the first.
+          on purpose: throttling would hide the next bottleneck behind the first. Retries you declare add their
+          load at the error rate you give, and a hot node with retries gets a retry storm warning, but the error
+          rate does not rise by itself as the node saturates.
         </td>
       </tr>
       <tr>
@@ -684,16 +745,28 @@ traffic {
         <td>A hop costs the target's latency only: no round trip, no cross-zone or cross-region distance, no packet loss.</td>
       </tr>
       <tr>
-        <th scope="row">Retries and thundering herds <span class="tag tag--opt">optimistic</span></th>
-        <td>A failed call costs one timeout. Retry storms and a cold cache stampeding the database do not exist.</td>
+        <th scope="row">Retry storms and thundering herds <span class="tag tag--opt">optimistic</span></th>
+        <td>
+          Retries (<code>errors 2% retries 3</code>) add load, latency and availability at a fixed error rate,
+          with no backoff, jitter or retry budget. The error rate does not grow with saturation, so a retry storm
+          is only a warning on a hot node, and a cold cache stampeding the database does not exist.
+        </td>
       </tr>
       <tr>
         <th scope="row">Partial and grey failures <span class="tag tag--opt">optimistic</span></th>
-        <td>Nodes are up or down. A slow replica or a dependency failing 2% of calls is only representable as a scenario you write.</td>
+        <td>
+          A share of failing calls is an <code>errors</code> rate, independent per call. A slow replica, errors
+          that come in bursts or affect some keys only, and timeouts that differ from error responses are not
+          modelled.
+        </td>
       </tr>
       <tr>
         <th scope="row">Cache hit rate <span class="tag">either way</span></th>
-        <td>The hit rate is whatever <code>mix</code> says. Warm-up and eviction are not modelled, so write the cold case as its own scenario.</td>
+        <td>
+          The hit rate is what <code>hit</code> or <code>mix</code> says. Warm-up and eviction are not modelled, so
+          try the cold case in a what-if (<code>cache hit 40%</code>). Hits and misses are independent, by the
+          rate, with no correlation between keys.
+        </td>
       </tr>
       <tr>
         <th scope="row">Hot keys and skew <span class="tag tag--opt">optimistic</span></th>
@@ -701,7 +774,10 @@ traffic {
       </tr>
       <tr>
         <th scope="row">Traffic shape and autoscaling <span class="tag tag--opt">optimistic</span></th>
-        <td>Traffic is one constant rate and replica counts are fixed. Enter your peak rate, not your average.</td>
+        <td>
+          Traffic is one rate per use case, or an average and a peak (<code>peak x3</code>): the design is sized for
+          the peak and billed for the average. Replica counts are fixed, so there is no autoscaling between the two.
+        </td>
       </tr>
       <tr>
         <th scope="row">Contention and per-request work <span class="tag">either way</span></th>
@@ -709,7 +785,11 @@ traffic {
       </tr>
       <tr>
         <th scope="row">Queues and consumers <span class="tag">either way</span></th>
-        <td>Backlog, consumer lag, ordering, redelivery and dead letters are out of scope. A queue is a node that takes writes.</td>
+        <td>
+          With a <code>drain</code> rate, a queue has a backlog or a consumer lag at the analysed rate. A backlog
+          that builds at the peak and empties overnight, consumers that scale with the backlog, ordering,
+          redelivery and dead letters are not modelled. Without one, a queue is a node that takes writes.
+        </td>
       </tr>
       <tr>
         <th scope="row">Time and consistency <span class="tag">either way</span></th>
@@ -718,6 +798,13 @@ traffic {
       <tr>
         <th scope="row">Third-party limits <span class="tag tag--opt">optimistic</span></th>
         <td>External systems are free, take 1k requests a second per replica and never rate-limit you.</td>
+      </tr>
+      <tr>
+        <th scope="row">Shared costs <span class="tag">either way</span></th>
+        <td>
+          A node counts whole for its one team. A database two teams share, a platform team's charge-back or a
+          split by usage are not modelled; give the node the team that pays for it.
+        </td>
       </tr>
       <tr>
         <th scope="row">Real cloud pricing <span class="tag">either way</span></th>

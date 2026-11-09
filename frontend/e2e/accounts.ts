@@ -29,7 +29,7 @@ export function featuresFor(plan: string | undefined): Record<string, { ok: bool
   const pro = plan === 'pro' || plan === 'max';
   const paid = pro ? { ok: true } : { ok: false, reason: 'needs_pro' };
   const max = plan === 'max' ? { ok: true } : { ok: false, reason: 'needs_pro' };
-  return { ai_interview: { ok: true }, interview_history: paid, ai_roadmap: paid, share_links: paid, design_partner: { ok: true }, deep_mode: max, interview_report: max };
+  return { ai_interview: { ok: true }, interview_history: paid, ai_roadmap: paid, share_links: paid, design_partner: { ok: true }, deep_mode: max, interview_report: max, design_diff: paid, interview_plan: max, data_export: paid, certificate: max, pro_exports: paid, saved_whatifs: paid };
 }
 
 /** GET /api/credits/estimates as the server answers it with the default prices. */
@@ -91,7 +91,12 @@ export async function mockSignedIn(page: Page, me: Me = SIGNED_IN): Promise<void
     [/^\/api\/interviews$/, { interviews: [] }],
     // The progress page's interview history and the roadmap's AI picks: none yet (history.accounts.e2e.ts mocks real ones).
     [/^\/api\/interviews\/history$/, { full: false, total: 0, sessions: [] }],
+    // The account's interviews on your own (Pro): none yet (history.accounts.e2e.ts mocks real ones).
+    [/^\/api\/me\/interviews\/solo$/, { sessions: [] }],
     [/^\/api\/roadmap\/next$/, { next: null }],
+    // Settings › Exports & certificate on Pro and Max: branding on, no certificate yet (exports.accounts.e2e.ts mocks real ones).
+    [/^\/api\/me\/embeds$/, { branding: true }],
+    [/^\/api\/me\/certificate$/, { certificate: null }],
   ];
   await page.route(
     (url) => /^\/(api|auth)\//.test(url.pathname),

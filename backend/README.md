@@ -148,6 +148,10 @@ instead ([Mobile apps](#mobile-apps)), and so does the `proschi` CLI
 | `PATCH /api/me {displayName?, publicProfile?, dailyGoal?, practiceGoal?}` | `publicProfile: true` shows the user on the leaderboards, with a public profile; `dailyGoal` is cards a day, 5, 10 (the default), 20 or 30; `practiceGoal` is what the practice page is for, `{goals: ['solve' \| 'interview' \| 'habit'], asked, streak?}` (null in `GET /api/me` until set; docs/design/paid-plans.md P43) |
 | `DELETE /api/me` | Deletes the account, its sessions and app tokens, its progress, its card reviews, its daily challenge attempts, its achievements, its game progress and runs, its short links, its synced diagrams and their versions and its email reminders' address |
 | `GET /api/me/export` | Everything stored about the user, as `proschi-data.json`; `sessions` lists each with its `kind` (`web`, `app_access` or `app_refresh`) and an app token's `scopes`, never the token hashes; `challengeAttempts` the daily challenge attempts; `game` the game progress and runs; `shares` the short links, with their diagrams and each preview's `imageUrl`; `documents` the synced diagrams, tombstones included; `documentVersions` their versions with content (deleted ones with `deletedAt` and the content cleared); `user.plan` the plan; `emailReminders` the reminders' address and settings (null without one; the unsubscribe secret left out) |
+| `GET /api/me/export?view=progress` | Pro (`data_export`, else 402): the learning data alone, as `proschi-progress.json`: `level`, `readiness`, `streak`, `mastery` per topic, every catalog problem with its solve, runs and best designs, the verdicts' `passed` and `scores`, `soloInterviews` and `cards`; times as ISO 8601 (src/progressExport.ts). The page turns it into CSV files |
+| `GET /api/me/certificate`, `PUT {public}` | The mastery certificate (src/certificates.ts): `{certificate: {id, public, issuedAt} \| null}`. `public: true` needs Max (`certificate`, else 402) and keeps the id of an earlier one; `false` works on any plan |
+| `GET /api/certificates/<id>` | A certificate, public: name, issue date, level, XP, readiness, mastery per topic (strongest first), problems solved and the longest streak, read now. 404 when off, on a plan without it, or for no such id; `no-store` |
+| `GET /api/me/embeds`, `PUT {branding}` | Whether the account's short-link embeds show Proschi's branding; `false` needs Pro (`pro_exports`, else 402). `GET /api/shares/<id>` answers `branding: false` only while the owner's plan has it |
 | `GET /api/me/activity?day=YYYY-MM-DD` | With `day` the client's local date: `{day, goal: {reviews, solves}, days: [{day, reviews, newCards, solves, challenges?, runs?}], streak: {current, longest, freezes, frozen, todayDone, today, todayProgress}, recap: {start, end, reviews, newCards, solves, challenges, runs, goalDays, streak}}`. A day with a daily challenge sent (`challenges`) or a game run submitted (`runs`, never imported ones) meets the goal whatever the cards. `days` covers the last 400 days (days without activity left out), `streak` is as of `day` and `recap` is the Monday–Sunday week before `day`'s |
 | `POST /api/me/import {items: [{problemId, source, solved}]}` | The browser's progress on first sign-in, as imported runs; unknown problems are skipped |
 | `GET /api/me/achievements?day=YYYY-MM-DD` | `day` (optional) is the client's local date, for the longest streak as `GET /api/me/activity` counts it. `{achievements: [{id, title, description, icon, tier?, rule, current, target, earned, earnedAt?, unseen}], skills: {readiness, topics: [{topic, mastery}], weakest: [<topic id>]}, stats: {reviews, mastered, longestStreak, estimateStreak, solved}}`: every badge with its progress, mastery and readiness from 0 to 1; stores the badges earned for the first time |
@@ -187,6 +191,7 @@ instead ([Mobile apps](#mobile-apps)), and so does the `proschi` CLI
 | `GET /api/users/<id>/profile` | A public profile, only of a user who opted in (`public_profile = 1`); otherwise 404, the same as an unknown id. `{id, displayName, memberSince, solved: [{id, difficulty}], streak: {current, longest}, challenge: {current, longest, best} | null, readiness, topics: [{topic, mastery}], badges: [{id, earnedAt}]}`: shares in whole percent from 0 to 1, times at the start of a UTC day. `challenge` is the daily challenge streak in days and the best score, null before a first challenge. Never designs, the daily goal, review counts or logs, challenge answers, sign-ins or sessions (docs/PRIVACY.md). Rate limited per IP (`STATS_LIMITER`), not cached, and stores nothing |
 | `GET /u/<id>` | Outside the API: the profile's page at an address of its own, for links people share. The built practice page (`/practice/`) with a `<base href="/practice/">`, the profile's `<title>`, description, canonical address, `robots: index, follow` and Open Graph tags (`og:image` is the card below, `?v=` its hash), and a plain summary (name, problems solved, badges) in `#root` that the page replaces; the page then moves itself to `#/u/<id>`. Only for a user who opted in, else the site's 404 page (`X-Robots-Tag: noindex`), the same as for an unknown id. `no-store`, rate limited like the JSON profile. Without a built site, a plain page with the same head |
 | `GET /u/<id>.png` | The profile's Open Graph card, a 1200×630 PNG of the display name, problems solved, streak, badges and readiness ([Open Graph images](#open-graph-images)); the query is ignored. 404 like the page. `Cache-Control: public, no-cache` with an `ETag` of the card's contents, so a turned-off profile's card stops at once |
+| `GET /c/<id>`, `GET /c/<id>.png` | A mastery certificate's page and Open Graph card, as for `/u/<id>`; the page moves itself to `#/c/<id>`. 404 like `GET /api/certificates/<id>` |
 | `GET /api/cards/state?day=YYYY-MM-DD` | `{states: {<card id>: {version, due, stability, difficulty, reps, lapses, lastReview}}, today?: {reviews, new}}`: the user's card states; with `day` (the client's local date), that day's reviews and new cards |
 | `POST /api/cards/reviews {reviews: [{id, cardId, version, rating, reviewedAt, durationMs, day}]}` | Up to 200 reviews (`rating` 1 again to 4 easy, `reviewedAt` Unix seconds). Idempotent by `id`. Answers `{accepted, skipped: [{id, cardId, reason}], states}`: reviews of unknown cards or versions, dated in the future or far from `day`, are skipped; `states` are the reviewed cards' new states |
 | `GET /api/challenge/today` | `{day, cardIds, endsAt, maxScore}`: the day's cards (UTC date) in the order to show them, and when the next challenge starts (Unix seconds); signed in, also `attempt` (null before playing), `streak: {current, longest, todayDone}` and `best`, the best score of any day (null before a first challenge) |
@@ -599,6 +604,14 @@ Both are Pro (docs/design/paid-plans.md P1, P9) and need `ANTHROPIC_API_KEY`
   `{error: "plan_required"}` off Pro.
 - **`GET /api/interviews`** lists every session for the start screen; off
   Pro only the latest finished one keeps its verdict.
+- **`GET /api/me/interviews/solo`** (P53): `{sessions: [{problem,
+  startedAt, durationMin, totalMs, reachedDesign, drew, solved,
+  results?}]}`, the interviews on your own kept for the account, newest
+  first (up to 200), each with what it did when the browser sent it
+  (`results`, `frontend/src/learn/soloInterview.ts`), for the trend per
+  skill and the report on every device. Pro (`interview_history`); 401
+  signed out, 402 `{error: "plan_required"}` off Pro. No model call, so it
+  answers without `ANTHROPIC_API_KEY` too.
 
 How it works (`src/roadmap.ts`, `src/ai/roadmap.ts`):
 
@@ -755,7 +768,10 @@ is in [docs/PRIVACY.md](../docs/PRIVACY.md#email-reminders)):
   `GET /api/me/activity`). At most 500 emails a run.
 - **What.** 19:xx local: *streak at risk* (current streak at least 1 and
   today's goal not met), else *cards due* (at least 5 cards with `due_at`
-  passed in `card_state`). Monday 09:xx local: the *weekly recap* of last week
+  passed in `card_state`), else, for a Max account with an interview-date
+  plan (`interview_plans`, `src/interviewPlan.ts`), the *plan* reminder
+  while today's list has something left or was not made today (none on the
+  interview day); the first two name what is left on the plan too. Monday 09:xx local: the *weekly recap* of last week
   (skipped when it is empty).
 - **Caps.** At most one email per user per local day, whatever the kind
   (`last_sent_day`). A reminder sent with no practice (card review, test run,
@@ -1383,7 +1399,8 @@ sign-up flow grants them. Reload the page afterwards.
 - **Design partner**: the **Design partner** button in the editor (`/app/`)
   or on a problem (Ctrl/Cmd+J). Each turn is charged in credits.
 - **History**: the account menu → **Your progress** (`/practice/#/progress`):
-  every finished AI interview's verdict and the skill trends.
+  every finished AI interview's verdict and the skill trends, and those of
+  the interviews on your own.
 - **Next for you**: on the roadmap (`/practice/#/roadmap`) and under a
   verdict, a few seconds after a Pro interview's verdict.
 - **Live share links**: in the editor (`/app/`), signed in with the diagram

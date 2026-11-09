@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyze, complete, definition, hover, outline, quickFix, references, semanticTokens, toRange, type TextEdit } from '../src/analysis';
+import { analyze, complete, cursorFixes, definition, hover, outline, quickFix, references, rename, renameEdits, renameTarget, semanticTokens, testQuickFix, toRange, type RenameResult, type TextEdit } from '../src/analysis';
 
 const doc = `title "Shop"
 
@@ -198,6 +198,385 @@ describe('analysis', () => {
       [5, 'owned', 'node'],
       [5, '.owned', 'tag'],
     ]);
+  });
+});
+
+const hld = `api [REST API]
+db [PostgreSQL]
+cache [Redis]
+user -> api
+api -> cache
+api -> db
+
+usecase "Redirect" {
+  user -> api : GET /code
+  alt "Cache hit" {
+    api -> cache : GET code
+  } alt "Cache miss" {
+    api -> db : SELECT url
+  }
+}
+
+usecase "Shorten" {
+  user -> api : POST /urls
+  api -> db : INSERT url
+}
+
+traffic {
+  "Redirect" 1k rps mix "Cache hit" 90%, "Cache miss" 10%
+}
+
+requirements {
+  p99 "Redirect" scenario "Cache miss" < 100ms
+  durable "Shorten"
+}
+
+capacity {
+  db 20k rps
+}
+
+test "Flows" {
+  "Redirect" has scenario "Cache hit"
+  in "Shorten" api calls db
+}
+`;
+const h = analyze(hld);
+const hl = (text: string, from = 0) => hld.split('\n').findIndex((l, i) => i >= from && l.includes(text));
+/** The position of the first character of `text` (or `at` characters into it) on the first line with it. */
+const at = (text: string, offset = 0) => ({ line: hl(text), character: hld.split('\n')[hl(text)].indexOf(text) + offset });
+
+function applyEdits(text: string, edits: TextEdit[]): string {
+  return [...edits].sort((x, y) => y.range.start.line - x.range.start.line || y.range.start.character - x.range.start.character).reduce(applyEdit, text);
+}
+
+describe('peak traffic', () => {
+  const src = 'user [Browser]\napi [REST API] x4\nuser -> api\nusecase "Read" {\n  user -> api : GET /\n}\ntraffic {\n  "Read" 2k rps peak x3\n}\n';
+  const p = analyze(src);
+
+  it('hovers a traffic line with the average and the peak, and node loads at the peak', () => {
+    const markdown = hover(p, { line: 7, character: 4 })?.markdown ?? '';
+    expect(markdown.split('\n')[0]).toBe('**Read** · avg 2k · peak 6k rps');
+    expect(markdown).toContain('taken at the peak');
+    expect(hover(p, { line: 1, character: 1 })?.markdown).toContain('Load 6k rps of 8k rps at the peak (75% utilised');
+  });
+
+  it('completes peak and mix after the rate, and mix after the peak', () => {
+    const at = (line: string) => complete(analyze(src.replace('"Read" 2k rps peak x3', line)), { line: 7, character: line.length + 2 }).map((i) => i.label);
+    expect(at('"Read" 2k rps ')).toEqual(['peak', 'mix']);
+    expect(at('"Read" 2k rps peak x3 ')).toEqual(['mix']);
+  });
+});
+
+describe('cache hit rate', () => {
+  const src = 'api [REST API]\ncache [Redis]\ndb [PostgreSQL]\napi -> cache\napi -> db\nusecase "Read" {\n  api -> cache : GET\n  api -> db : SELECT\n}\ntraffic {\n  "Read" 1k rps\n}\ncapacity {\n  cache hit 90%\n}\n';
+  const c = analyze(src);
+
+  it('hovers the cache with its hit rate, and the store with the miss load', () => {
+    expect(c.diagnostics).toEqual([]);
+    expect(hover(c, { line: 1, character: 1 })?.markdown).toContain('Hit rate 90%: what it misses, 10% of reads, goes on to the backing store');
+    expect(hover(c, { line: 2, character: 1 })?.markdown).toContain('Load 100 rps of');
+  });
+
+  it('completes hit among the capacity parts', () => {
+    const typing = analyze(src.replace('  cache hit 90%', '  cache '));
+    expect(complete(typing, { line: 13, character: 8 }).map((i) => i.label)).toContain('hit');
+  });
+});
+
+describe('constants', () => {
+  const src = 'let peak = 120k rps\nlet n = 3\napi [REST API] x$n\ndb [PostgreSQL]\napi -> db\nusecase "Read" {\n  api -> db\n}\ntraffic {\n  "Read" $peak\n}\nwhatif "Big" {\n  db x$n\n}\n';
+  const c = analyze(src);
+  const pos = (line: number, character: number) => ({ line, character });
+
+  it('parses cleanly', () => {
+    expect(c.diagnostics).toEqual([]);
+  });
+
+  it('hovers with the value, on a use and on the definition', () => {
+    expect(hover(c, pos(9, 10))?.markdown).toBe('**$peak** = `120k rps`\n\nConstant, a rate');
+    expect(hover(c, pos(9, 10))?.range).toEqual({ start: pos(9, 10), end: pos(9, 14) });
+    expect(hover(c, pos(0, 5))?.markdown).toContain('`120k rps`');
+    expect(hover(c, pos(2, 17))?.markdown).toBe('**$n** = `3`\n\nConstant, a plain number');
+  });
+
+  it('goes to the definition and lists the references', () => {
+    expect(definition(c, pos(9, 11))).toEqual({ start: pos(0, 4), end: pos(0, 8) });
+    expect(references(c, pos(12, 8))).toEqual([
+      { start: pos(1, 4), end: pos(1, 5) },
+      { start: pos(2, 17), end: pos(2, 18) },
+      { start: pos(12, 7), end: pos(12, 8) },
+    ]);
+  });
+
+  it('renames the definition and every use', () => {
+    expect(renameTarget(c, pos(9, 11))).toEqual({ range: { start: pos(9, 10), end: pos(9, 14) }, placeholder: 'peak' });
+    const renamed = applyEdits(src, (rename(c, pos(2, 17), 'replicas') as RenameResult).edits);
+    expect(renamed).toContain('let replicas = 3');
+    expect(renamed).toContain('api [REST API] x$replicas');
+    expect(renamed).toContain('  db x$replicas');
+    expect(analyze(renamed).diagnostics).toEqual([]);
+    expect(rename(c, pos(2, 17), 'peak')).toEqual({ error: "There is already a constant '$peak'" });
+    expect(rename(c, pos(2, 17), 'a b')).toEqual({ error: "'a b' is not a constant name; use letters, digits and _" });
+  });
+
+  it('completes names after $, and marks constants as semantic tokens', () => {
+    const typing = analyze(src.replace('"Read" $peak', '"Read" $'));
+    expect(complete(typing, pos(9, 10)).map((i) => [i.label, i.detail])).toEqual([
+      ['peak', '120k rps · a rate'],
+      ['n', '3 · a plain number'],
+    ]);
+    const tokens = semanticTokens(c)
+      .filter((t) => t.kind === 'constant')
+      .map((t) => [t.line, src.split('\n')[t.line].substr(t.character, t.length)]);
+    expect(tokens).toEqual([
+      [0, 'peak'],
+      [1, 'n'],
+      [2, 'x$n'],
+      [9, '$peak'],
+      [12, 'x$n'],
+    ]);
+  });
+});
+
+describe('rename', () => {
+  it('renames a node id everywhere it is used as a node, but not in strings or labels', () => {
+    expect(renameTarget(h, at('db [PostgreSQL]', 1))).toEqual({ range: { start: { line: 1, character: 0 }, end: { line: 1, character: 2 } }, placeholder: 'db' });
+    const result = rename(h, at('db [PostgreSQL]'), 'store') as RenameResult;
+    const renamed = applyEdits(hld, result.edits);
+    expect(renamed).toContain('store [PostgreSQL]');
+    expect(renamed).toContain('api -> store : SELECT url');
+    expect(renamed).toContain('  store 20k rps');
+    expect(renamed).toContain('in "Shorten" api calls store');
+    expect(renamed).not.toMatch(/\bdb\b/);
+    expect(analyze(renamed).diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+  });
+
+  it('rejects a node id that is invalid or taken', () => {
+    expect(rename(h, at('db [PostgreSQL]'), 'my db')).toEqual({ error: "'my db' is not a node id; use letters, digits and _" });
+    expect(rename(h, at('db [PostgreSQL]'), 'cache')).toEqual({ error: "There is already a node 'cache'" });
+  });
+
+  it('renames a use case in its header, traffic, requirements and tests', () => {
+    const target = renameTarget(h, at('"Shorten" api calls', 3));
+    expect(target).toEqual({ range: { start: { line: hl('in "Shorten"'), character: 6 }, end: { line: hl('in "Shorten"'), character: 13 } }, placeholder: 'Shorten' });
+    const result = rename(h, at('"Shorten" api calls', 3), 'Shorten URL') as RenameResult;
+    expect(result.edits).toHaveLength(3);
+    const renamed = applyEdits(hld, result.edits);
+    expect(renamed).toContain('usecase "Shorten URL" {');
+    expect(renamed).toContain('durable "Shorten URL"');
+    expect(renamed).toContain('in "Shorten URL" api calls db');
+
+    const redirect = applyEdits(hld, (rename(h, at('usecase "Redirect"', 10), 'Go') as RenameResult).edits);
+    expect(redirect).toContain('usecase "Go" {');
+    expect(redirect).toContain('  "Go" 1k rps mix "Cache hit" 90%');
+    expect(redirect).toContain('p99 "Go" scenario "Cache miss"');
+    expect(redirect).toContain('  "Go" has scenario "Cache hit"');
+    expect(analyze(redirect).diagnostics).toEqual([]);
+    expect(rename(h, at('usecase "Redirect"', 10), 'Shorten')).toEqual({ error: 'There is already a use case named "Shorten"' });
+    expect(rename(h, at('usecase "Redirect"', 10), 'a"b')).toMatchObject({ error: expect.stringContaining('cannot be a name') });
+  });
+
+  it("renames a scenario in its alt header and where its use case's traffic, requirements and tests name it", () => {
+    const fromMix = applyEdits(hld, (rename(h, at('"Cache miss" 10%', 2), 'Miss') as RenameResult).edits);
+    expect(fromMix).toContain('} alt "Miss" {');
+    expect(fromMix).toContain('mix "Cache hit" 90%, "Miss" 10%');
+    expect(fromMix).toContain('scenario "Miss" < 100ms');
+    expect(fromMix).toContain('alt "Cache hit" {');
+
+    const fromHeader = applyEdits(hld, (rename(h, at('alt "Cache hit"', 6), 'Hit') as RenameResult).edits);
+    expect(fromHeader).toContain('alt "Hit" {');
+    expect(fromHeader).toContain('mix "Hit" 90%');
+    expect(fromHeader).toContain('has scenario "Hit"');
+    expect(analyze(fromHeader).diagnostics).toEqual([]);
+  });
+
+  it('renames an outer alt inside the full names of its nested scenarios', () => {
+    const src = 'usecase "U" {\n  a -> b\n  alt "A" {\n    alt "X" {\n      b -> c\n    } alt "Y" {\n      b -> d\n    }\n  } alt "B" {\n    b -> e\n  }\n}\ntraffic {\n  "U" 1 rps mix "A › X" 50%, "A › Y" 25%, "B" 25%\n}\n';
+    const s = analyze(src);
+    const pos = { line: 2, character: 8 };
+    expect(renameTarget(s, pos)?.placeholder).toBe('A');
+    const renamed = applyEdits(src, (rename(s, pos, 'Outer') as RenameResult).edits);
+    expect(renamed).toContain('alt "Outer" {');
+    expect(renamed).toContain('mix "Outer › X" 50%, "Outer › Y" 25%, "B" 25%');
+    // A nested name renames only that segment.
+    const inner = applyEdits(src, (rename(s, { line: 13, character: 21 }, 'Z') as RenameResult).edits);
+    expect(inner).toContain('alt "Z" {');
+    expect(inner).toContain('"A › Z" 50%, "A › Y" 25%');
+  });
+
+  it('points at the imported file that declares a node', () => {
+    const src = 'import "infra.proschi"\nusecase "U" {\n  web -> api : GET\n}\n';
+    const s = analyze(src, { resolve: () => ({ path: '/p/infra.proschi', source: 'api [REST API]\n' }) });
+    const result = rename(s, { line: 2, character: 10 }, 'gateway') as RenameResult;
+    expect(result.edits).toEqual([{ range: { start: { line: 2, character: 9 }, end: { line: 2, character: 12 } }, newText: 'gateway' }]);
+    expect(result).toMatchObject({ symbol: { kind: 'node', id: 'api' }, declaredIn: '/p/infra.proschi' });
+    // A document that declares a node of that id itself has a different node.
+    expect(renameEdits(analyze('api [Go]\n'), result.symbol, 'gateway', '/p/infra.proschi')).toEqual([]);
+    expect(renameEdits(analyze('api [Go]\n'), result.symbol, 'gateway')).toHaveLength(1);
+  });
+
+  it("renames a team use case from a system's expose line", () => {
+    const team = 'api [REST API]\nusecase "Place order" {\n  api -> api : POST\n}\n';
+    const src = 'system orders "Orders" {\n  from "orders.proschi"\n  expose api "Orders API" -> "Place order"\n}\n';
+    const s = analyze(src, { resolve: (p) => (p === 'orders.proschi' ? { path: '/p/orders.proschi', source: team } : undefined) });
+    const pos = { line: 2, character: 32 };
+    expect(renameTarget(s, pos)?.placeholder).toBe('Place order');
+    const result = rename(s, pos, 'Order') as RenameResult;
+    expect(result).toMatchObject({ symbol: { kind: 'usecase', name: 'Place order' }, declaredIn: '/p/orders.proschi' });
+    expect(applyEdits(src, result.edits)).toContain('expose api "Orders API" -> "Order"');
+    // In the team file itself, the header.
+    expect(applyEdits(team, renameEdits(analyze(team), result.symbol, 'Order'))).toContain('usecase "Order" {');
+    // As a use case of this document, nothing here.
+    expect(renameEdits(s, result.symbol, 'Order')).toEqual([]);
+  });
+
+  it('renames a use case in what-if traffic', () => {
+    const src = 'a [Actor]\nb [REST API]\na -> b\nusecase "U" {\n  a -> b\n}\ntraffic {\n  "U" 1k rps\n}\nwhatif "Spike" {\n  traffic "U" x10\n  fail b\n}\n';
+    const s = analyze(src);
+    expect(s.diagnostics).toEqual([]);
+    const renamed = applyEdits(src, (rename(s, { line: 3, character: 10 }, 'Read') as RenameResult).edits);
+    expect(renamed).toContain('  traffic "Read" x10');
+    expect(renamed).toContain('whatif "Spike" {');
+    expect(analyze(renamed).diagnostics).toEqual([]);
+    // Completed there too.
+    const typing = src.replace('traffic "U" x10', 'traffic "');
+    expect(complete(analyze(typing), { line: 10, character: 11 }).map((i) => i.label)).toEqual(['U']);
+  });
+
+  it('has nothing to rename on keywords, labels and free strings', () => {
+    expect(renameTarget(h, at('usecase "Redirect"', 2))).toBeNull();
+    expect(renameTarget(h, at('GET code', 1))).toBeNull();
+    expect(renameTarget(h, at('test "Flows"', 7))).toBeNull();
+    expect(rename(h, at('test "Flows"', 7), 'x')).toBeNull();
+  });
+});
+
+describe('completion of names and capacity parts', () => {
+  const labels = (src: string, line: number, character: number) => complete(analyze(src), { line, character }).map((i) => i.label);
+
+  it('completes use case names in traffic, requirements and test assertions', () => {
+    const items = complete(analyze(hld.replace('traffic {\n', 'traffic {\n  "\n')), { line: hl('traffic {') + 1, character: 3 });
+    expect(items.map((i) => [i.label, i.kind, i.insertText])).toEqual([
+      ['Redirect', 'usecase', 'Redirect"'],
+      ['Shorten', 'usecase', 'Shorten"'],
+    ]);
+    expect(items[0].range).toEqual({ start: { line: hl('traffic {') + 1, character: 3 }, end: { line: hl('traffic {') + 1, character: 3 } });
+    // A closing quote already there is not doubled.
+    expect(complete(analyze(hld.replace('durable "Shorten"', 'durable "Sh"')), { line: hl('durable'), character: 13 })[1]).toMatchObject({ label: 'Shorten', insertText: 'Shorten' });
+    expect(labels(hld.replace('durable "Shorten"', 'p99 "'), hl('durable'), 7)).toEqual(['Redirect', 'Shorten']);
+    expect(labels(hld.replace('in "Shorten" api calls db', 'in "'), hl('in "'), 6)).toEqual(['Redirect', 'Shorten']);
+    // Not in the quotes of a decision or a label.
+    expect(complete(analyze('decision "'), { line: 0, character: 10 })).toEqual([]);
+  });
+
+  it('completes scenario names after mix, scenario and has scenario', () => {
+    const mix = hld.replace('mix "Cache hit" 90%, "Cache miss" 10%', 'mix "Cache hit" 90%, "');
+    expect(labels(mix, hl('mix'), mix.split('\n')[hl('mix')].length)).toEqual(['Cache hit', 'Cache miss']);
+    const first = hld.replace('mix "Cache hit" 90%, "Cache miss" 10%', 'mix "');
+    expect(labels(first, hl('mix'), first.split('\n')[hl('mix')].length)).toEqual(['Cache hit', 'Cache miss']);
+    expect(labels(hld, hl('scenario "Cache miss"'), hld.split('\n')[hl('scenario "Cache miss"')].indexOf('Cache miss'))).toEqual(['Cache hit', 'Cache miss']);
+    expect(labels(hld, hl('has scenario'), hld.split('\n')[hl('has scenario')].indexOf('Cache hit'))).toEqual(['Cache hit', 'Cache miss']);
+    // A use case without alts has no scenario names to offer.
+    expect(labels(hld.replace('"Redirect" has scenario', '"Shorten" has scenario'), hl('has scenario'), 27)).toEqual([]);
+  });
+
+  it('completes capacity parts after a node id, and node ids at the start of a line', () => {
+    const src = 'db [PostgreSQL]\ncapacity {\n  db 20k rps \n  \n  db size \n}\n';
+    const parts = labels(src, 2, 13);
+    expect(parts).toEqual(expect.arrayContaining(['latency', 'shards', 'size', 'durable', 'consistency', 'timeout']));
+    expect(parts).not.toContain('rps');
+    expect(complete(analyze(src), { line: 2, character: 13 }).find((i) => i.label === 'latency')).toMatchObject({ kind: 'keyword', snippet: 'latency ${1:5ms}' });
+    expect(labels(src, 3, 2)).toEqual(['db']);
+    expect(labels(src, 4, 10)).toEqual(['S', 'M', 'L']);
+    expect(labels('db [PostgreSQL]\ncapacity {\n  db latency 5ms \n}', 2, 18)).not.toContain('latency');
+    // Still while the block has no closing brace.
+    expect(labels('db [PostgreSQL]\ncapacity {\n  db ', 2, 5)).toContain('shards');
+  });
+});
+
+describe('quick fixes for capacity, traffic and failed requirements', () => {
+  it('removes a capacity part given twice', () => {
+    const src = 'db [PostgreSQL]\ncapacity {\n  db 20k rps latency 4ms latency 5 ms durable\n}\n';
+    const b = analyze(src);
+    const error = b.diagnostics.find((d) => d.message.includes('given twice'))!;
+    expect(error.message).toBe("Latency is given twice for 'db'");
+    const fix = quickFix(b, error.message, toRange(error))!;
+    expect(fix.title).toBe("Remove the repeated 'latency 5 ms'");
+    expect(applyEdit(src, fix.edit)).toBe(src.replace(' latency 5 ms', ''));
+    expect(analyze(applyEdit(src, fix.edit)).diagnostics).toEqual([]);
+
+    const rate = 'db [PostgreSQL]\ncapacity {\n  db 20k rps 30k rps\n}\n';
+    const r = analyze(rate);
+    const again = r.diagnostics.find((d) => d.message.includes('given twice'))!;
+    expect(applyEdit(rate, quickFix(r, again.message, toRange(again))!.edit)).toBe(rate.replace(' 30k rps', ''));
+  });
+
+  it('adds a traffic line for a use case that has none, into the block or a new one', () => {
+    const [fix] = cursorFixes(h, { start: { line: hl('usecase "Shorten"'), character: 3 }, end: { line: hl('usecase "Shorten"'), character: 3 } });
+    expect(fix.title).toBe('Add a traffic line for "Shorten"');
+    const added = applyEdit(hld, fix.edit);
+    expect(added).toContain('  "Redirect" 1k rps mix "Cache hit" 90%, "Cache miss" 10%\n  "Shorten" 100 rps\n}');
+    expect(analyze(added).diagram.traffic?.map((t) => t.useCase)).toEqual(['Redirect', 'Shorten']);
+    // A use case with traffic, or a line that is not a use case header, has nothing to add.
+    expect(cursorFixes(h, { start: { line: hl('usecase "Redirect"'), character: 0 }, end: { line: hl('usecase "Redirect"'), character: 0 } })).toEqual([]);
+    expect(cursorFixes(h, { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } })).toEqual([]);
+
+    const bare = 'usecase "Read" {\n  a -> b\n}';
+    const [first] = cursorFixes(analyze(bare), { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } });
+    expect(applyEdit(bare, first.edit)).toBe(`${bare}\n\ntraffic {\n  "Read" 100 rps\n}\n`);
+  });
+
+  const ITEMS = `client [Actor]
+api [REST API]
+db [PostgreSQL]
+client -> api
+api -> db
+usecase "Read" {
+  client -> api : GET /items
+  api -> db : SELECT item
+  api --> client : 200
+}
+traffic {
+  "Read" 1k rps
+}
+requirements {
+  survive any node failure
+}
+`;
+
+  it('adds x2 to a single point of failure that survive names', () => {
+    const b = analyze(ITEMS);
+    const fix = testQuickFix(b, { start: { line: 14, character: 2 }, end: { line: 14, character: 26 } })!;
+    expect(fix.title).toBe("Add x2 to 'api'");
+    expect(applyEdit(ITEMS, fix.edit)).toContain('api [REST API] x2\n');
+    // Not on another line.
+    expect(testQuickFix(b, { start: { line: 13, character: 0 }, end: { line: 13, character: 1 } })).toBeNull();
+  });
+
+  it('adds the shards the saturation hint computes to the capacity block', () => {
+    const src = `client [Actor]
+api [REST API] x40
+db [PostgreSQL] x3
+client -> api
+api -> db
+usecase "Write" {
+  client -> api : POST /items
+  api -> db : INSERT item
+  api --> client : 201
+}
+traffic {
+  "Write" 6k rps
+}
+requirements {
+  p99 "Write" < 1000ms
+}
+`;
+    const b = analyze(src);
+    const fix = testQuickFix(b, { start: { line: 14, character: 2 }, end: { line: 14, character: 5 } })!;
+    expect(fix.title).toBe("Add shards 2 to the capacity of 'db'");
+    const fixed = applyEdit(src, fix.edit);
+    expect(fixed).toContain('capacity {\n  db shards 2\n}');
+    expect(analyze(fixed).diagram.capacity).toEqual([expect.objectContaining({ node: 'db', shards: 2 })]);
   });
 });
 

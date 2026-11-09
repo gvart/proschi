@@ -4,12 +4,14 @@
  * thin adapter around it, so the CLI, the language server and the web editor
  * can never disagree about what is valid.
  */
-export { DID_YOU_MEAN, parse } from '../../frontend/src/dsl/parser';
-export { addConnection } from '../../frontend/src/dsl/edit';
+export { DID_YOU_MEAN, kindName, parse } from '../../frontend/src/dsl/parser';
+export { addConnection, setCapacity, setReplicas } from '../../frontend/src/dsl/edit';
+export { tokenizeLine } from '../../frontend/src/dsl/lexer';
 export { format } from '../../frontend/src/dsl/format';
 export { examples } from '../../frontend/src/dsl/examples';
 export { componentCatalog } from '../../frontend/src/catalog/componentCatalog';
 export type {
+  Constant,
   Diagnostic,
   Diagram,
   DiagramImport,
@@ -29,22 +31,39 @@ export { EXPORT_CSP, buildHld, toHtml as hldToHtml, toMarkdown as hldToMarkdown,
 // `analyze` is the editor's simulation; tooling's own analysis.ts has an `analyze` for documents.
 export {
   analyze as simulate,
+  costBreakdown,
+  requirementFixes,
   runTests,
   formatAvailability,
+  formatCount,
+  formatDuration,
+  formatQueue,
   formatMs,
   formatPercent,
   formatRps,
+  formatTraffic,
   formatUsd,
   HOT,
   type Analysis as SimAnalysis,
   type NodeAnalysis,
   type TestResult,
+  findWhatIf,
+  headlineOf,
+  runWhatIf,
+  runWhatIfs,
+  sweep,
+  type SweepResult,
+  type WhatIfResult,
 } from '../../frontend/src/sim';
+export { deltaRows, designDelta, type DeltaRow, type DesignDelta } from '../../frontend/src/sim/delta';
+export { findUseCase } from '../../frontend/src/sim/flow';
+export { parseQuantity } from '../../frontend/src/dsl/quantity';
 
 /** Keywords that start a statement, with a one-line hint for completion lists. */
 export const KEYWORDS: { label: string; detail: string; snippet: string }[] = [
   { label: 'title', detail: 'Document title', snippet: 'title "$1"' },
   { label: 'import', detail: 'import "file.proschi" (top level)', snippet: 'import "${1:file.proschi}"' },
+  { label: 'let', detail: 'A constant, used as $name: let peak = 120k rps (top level)', snippet: 'let ${1:name} = ${2:100 rps}' },
   { label: 'group', detail: 'group id "Name" [Style] { … }', snippet: 'group ${1:id} "${2:Name}" {\n\t$0\n}' },
   { label: 'usecase', detail: 'usecase "Name" { steps }', snippet: 'usecase "${1:Name}" {\n\t$0\n}' },
   { label: 'par', detail: 'Steps that run in parallel', snippet: 'par {\n\t$0\n}' },
@@ -60,6 +79,7 @@ export const KEYWORDS: { label: string; detail: string; snippet: string }[] = [
   { label: 'entity', detail: 'entity Name in store { fields }', snippet: 'entity ${1:Name} in ${2:store} {\n\t${3:id} ${4:uuid} key$0\n}' },
   { label: 'decision', detail: 'A design decision with its reasons', snippet: 'decision "${1:Title}" {\n\tbecause "${2:reason}"$0\n}' },
   { label: 'test', detail: 'Flow assertions: "Use case" calls any cache', snippet: 'test "${1:Name}" {\n\t$0\n}' },
+  { label: 'whatif', detail: 'A variant to simulate: traffic "Use case" x3, fail node, node x4', snippet: 'whatif "${1:Name}" {\n\ttraffic "${2:Use case}" ${3:x3}$0\n}' },
 ];
 
 /** Assertion forms offered at the start of a line inside a `test` block (docs/TESTS.md, "Tests"). */
@@ -80,4 +100,25 @@ export const ASSERTIONS: { label: string; detail: string; snippet: string }[] = 
   { label: 'in "Use case" node calls node', detail: 'A step of the use case is sent by one node to the other', snippet: 'in "${1:Use case}" ${2:node} calls ${3:node}' },
   { label: 'no path from … to …', detail: 'No chain of connections links the nodes', snippet: 'no path from ${1:node} to ${2:node}' },
   { label: 'node has replicas >=', detail: 'Minimum replica count', snippet: '${1:node} has replicas >= ${2:2}' },
+];
+
+/** Parts offered after the node id of a `capacity` line (docs/HLD.md, "Capacity"). */
+export const CAPACITY_PARTS: { label: string; detail: string; snippet: string }[] = [
+  { label: 'reads', detail: 'Read capacity per replica', snippet: 'reads ${1:10k rps}' },
+  { label: 'writes', detail: 'Write capacity per replica', snippet: 'writes ${1:2k rps}' },
+  { label: 'shards', detail: 'Number of shards (data stores)', snippet: 'shards ${1:4}' },
+  { label: 'size', detail: 'Instance size: S, M or L', snippet: 'size ${1|S,M,L|}' },
+  { label: 'latency', detail: 'Latency per call', snippet: 'latency ${1:5ms}' },
+  { label: 'availability', detail: 'Availability', snippet: 'availability ${1:99.95%}' },
+  { label: 'cost', detail: 'Monthly cost', snippet: 'cost ${1:400} usd/month' },
+  { label: 'durable', detail: 'A write there survives a crash', snippet: 'durable' },
+  { label: 'volatile', detail: 'A write there is lost in a crash', snippet: 'volatile' },
+  { label: 'consistency', detail: 'strong or eventual (data stores)', snippet: 'consistency ${1|strong,eventual|}' },
+  { label: 'bandwidth', detail: 'Network bandwidth, for transfer time', snippet: 'bandwidth ${1:500} MB/s' },
+  { label: 'egress', detail: 'Price per GB sent out', snippet: 'egress ${1:0.05} usd/GB' },
+  { label: 'timeout', detail: 'What a failed call to the node costs', snippet: 'timeout ${1:300ms}' },
+  { label: 'hit', detail: 'Cache hit rate: the miss path takes the rest', snippet: 'hit ${1:90%}' },
+  { label: 'errors', detail: 'Share of calls that fail (a partial failure)', snippet: 'errors ${1:2%}' },
+  { label: 'retries', detail: 'Times a caller tries a failed call again (0 to 5)', snippet: 'retries ${1:3}' },
+  { label: 'drain', detail: 'How fast consumers take messages off a queue', snippet: 'drain ${1:5k rps}' },
 ];

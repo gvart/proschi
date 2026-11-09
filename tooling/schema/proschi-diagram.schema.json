@@ -46,7 +46,8 @@
             "entity",
             "decision",
             "test",
-            "legend"
+            "legend",
+            "whatif"
           ]
         },
         "start": {
@@ -101,7 +102,8 @@
         "severity": {
           "enum": [
             "error",
-            "warning"
+            "warning",
+            "info"
           ]
         },
         "message": {
@@ -223,6 +225,20 @@
             "$ref": "#/$defs/test"
           },
           "description": "`test` blocks of flow assertions."
+        },
+        "whatifs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/whatif"
+          },
+          "description": "`whatif` blocks: variants of the design to simulate."
+        },
+        "constants": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/constant"
+          },
+          "description": "`let name = value` constants, in order. Their uses are already replaced by their values."
         },
         "legend": {
           "type": "array",
@@ -1043,7 +1059,12 @@
         "rps": {
           "type": "number",
           "minimum": 0,
-          "description": "Requests per second."
+          "description": "Requests per second the design is loaded with: the peak when `peak` is written."
+        },
+        "avgRps": {
+          "type": "number",
+          "minimum": 0,
+          "description": "`peak x3` or `peak 60k rps`: the average rate (the one written first), which egress is costed at. Left out for a flat rate."
         },
         "mix": {
           "type": "array",
@@ -1200,6 +1221,47 @@
             "maxUsdPerMonth": {
               "type": "number"
             },
+            "scope": {
+              "description": "Left out: the whole design. `@Payments`: the nodes the team owns; `.edge`: the nodes with the tag or inside a group with it; `group checkout`: the nodes inside the group.",
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "team": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "team"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "tag": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "tag"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "group": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "group"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
             "loc": {
               "$ref": "#/$defs/loc"
             }
@@ -1207,6 +1269,31 @@
           "required": [
             "kind",
             "maxUsdPerMonth",
+            "loc"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "lag"
+            },
+            "useCase": {
+              "type": "string"
+            },
+            "maxMs": {
+              "type": "number",
+              "description": "The longest a message may wait in the queues the use case sends to."
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "useCase",
+            "maxMs",
             "loc"
           ],
           "additionalProperties": false
@@ -1280,6 +1367,28 @@
           "type": "number",
           "minimum": 0,
           "description": "`timeout`: what a failed call (`-x`) to the node costs, in milliseconds."
+        },
+        "hitPercent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "`hit`: the share of reads a cache answers itself; the miss path takes the rest."
+        },
+        "errorPercent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "`errors`: the share of calls to the node that fail with an error."
+        },
+        "retries": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5,
+          "description": "`retries`: how many times a caller tries a failed call again."
+        },
+        "drainRps": {
+          "type": "number",
+          "description": "`drain`: how fast the consumers of a queue or broker take messages off it, in rps."
         },
         "loc": {
           "$ref": "#/$defs/loc"
@@ -1407,6 +1516,200 @@
         "loc"
       ],
       "additionalProperties": false
+    },
+    "whatif": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "changes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/whatifChange"
+          }
+        },
+        "loc": {
+          "$ref": "#/$defs/loc"
+        }
+      },
+      "required": [
+        "name",
+        "changes",
+        "loc"
+      ],
+      "additionalProperties": false
+    },
+    "constant": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "number",
+          "description": "The value after unit normalisation: rates in rps, durations in ms."
+        },
+        "unit": {
+          "enum": [
+            "rps",
+            "ms",
+            "%",
+            "usd/month",
+            "MBps",
+            "usd/GB"
+          ],
+          "description": "Left out for a plain number."
+        },
+        "text": {
+          "type": "string",
+          "description": "The value as written, e.g. `120k rps`."
+        },
+        "loc": {
+          "$ref": "#/$defs/loc",
+          "description": "The name in its `let` line."
+        }
+      },
+      "required": [
+        "name",
+        "value",
+        "text",
+        "loc"
+      ],
+      "additionalProperties": false
+    },
+    "whatifChange": {
+      "description": "One line of a whatif block.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "traffic"
+            },
+            "useCase": {
+              "type": "string"
+            },
+            "multiply": {
+              "type": "number",
+              "minimum": 0,
+              "description": "`x3`, `x1.5`: multiplies the rate."
+            },
+            "rps": {
+              "type": "number",
+              "description": "`50k rps`: sets the rate."
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "useCase",
+            "loc"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "fail"
+            },
+            "node": {
+              "type": "string"
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "node",
+            "loc"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "replicas"
+            },
+            "node": {
+              "type": "string"
+            },
+            "replicas": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "node",
+            "replicas",
+            "loc"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "hit"
+            },
+            "node": {
+              "type": "string"
+            },
+            "percent": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "`cache hit 40%`: the hit rate under this what-if."
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "node",
+            "percent",
+            "loc"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "errors"
+            },
+            "node": {
+              "type": "string"
+            },
+            "percent": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "`pay errors 20%`: the error rate under this what-if."
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "node",
+            "percent",
+            "loc"
+          ],
+          "additionalProperties": false
+        }
+      ]
     },
     "assertion": {
       "description": "One assertion line of a test.",

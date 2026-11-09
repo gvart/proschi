@@ -1,6 +1,6 @@
 import { useMemo, type ReactNode } from 'react';
 import type { Edge, Node } from 'reactflow';
-import { AlertTriangle, CheckCircle2, Download, MinusCircle, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Download, FileText, MinusCircle, Sparkles, XCircle } from 'lucide-react';
 import type { Diagram } from '../../dsl';
 import { buildSequence, findScenario, sequenceMessages } from '../../dsl/sequence';
 import {
@@ -16,6 +16,7 @@ import {
   formatMs,
   formatPercent,
   formatRps,
+  formatTraffic,
   formatUsd,
   overviewFacts,
   responseText,
@@ -30,13 +31,34 @@ import {
   type TestResult,
 } from '../../hld';
 import { downloadText, fileNameFor } from '../Playground/exportDiagram';
+import { showsUpgrade, useFeature } from '../featureState';
+import { track } from '../../services/metrics';
+import { pricingHref } from '../../services/billing';
 import DiagramCanvas from '../Diagram/DiagramCanvas';
 
 /**
  * The generated high-level design of the current document, as React
  * components (docs/design/hld-and-practice.md §4), with downloads as Markdown
- * (Mermaid diagrams) and as a self-contained HTML page.
+ * (Mermaid diagrams) and as a self-contained HTML page, and on Pro
+ * (pro_exports) as a PDF: that page, printed by the browser.
  */
+
+/** Prints `html` from a hidden frame: the browser's dialog, where "Save as PDF" makes the file. Nothing runs on a server. */
+function printHtml(html: string): void {
+  track('export');
+  const frame = document.createElement('iframe');
+  frame.setAttribute('aria-hidden', 'true');
+  frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+  frame.onload = () => {
+    const win = frame.contentWindow;
+    if (!win) return;
+    win.addEventListener('afterprint', () => frame.remove(), { once: true });
+    win.focus();
+    win.print();
+  };
+  frame.srcdoc = html;
+  document.body.appendChild(frame);
+}
 
 interface HldViewProps {
   diagram: Diagram;
@@ -52,6 +74,7 @@ interface HldViewProps {
 }
 
 export default function HldView({ diagram, nodes, edges, analysis, results, engine = defaultEngine, onOpenResults }: HldViewProps) {
+  const pro = useFeature('pro_exports');
   const doc = useMemo(() => (analysis ? hld(diagram, analysis, results) : buildHld(diagram, engine)), [diagram, analysis, results, engine]);
   const hasChecks = doc.sections.some((s) => s.kind === 'requirements' && (s.nonFunctional.length > 0 || s.flowTests.length > 0));
 
@@ -79,6 +102,27 @@ export default function HldView({ diagram, nodes, edges, analysis, results, engi
           <Download size={14} />
           HTML
         </button>
+        {pro.ok ? (
+          <button
+            onClick={() => printHtml(toHtml(doc))}
+            title="Print the design document, or save it as PDF"
+            className="inline-flex items-center gap-1.5 text-sm px-2.5 py-1.5 rounded-md border border-ink/30 text-ink/85 hover:bg-ink/5"
+          >
+            <FileText size={14} />
+            PDF
+          </button>
+        ) : (
+          showsUpgrade(pro) && (
+            <a
+              href={pricingHref('../')}
+              title="The design document as PDF is part of Pro"
+              className="inline-flex items-center gap-1.5 text-sm px-2.5 py-1.5 rounded-md border border-ink/30 text-ink/70 hover:bg-ink/5"
+            >
+              <Sparkles size={14} />
+              PDF · Pro
+            </a>
+          )
+        )}
       </div>
 
       <article className="max-w-4xl mx-auto px-4 py-6 text-sm text-ink">
@@ -195,7 +239,7 @@ function SectionBody({ doc, section: s, nodes, edges }: { doc: HldDocument; sect
           {s.traffic.length > 0 && (
             <>
               <H3>Traffic</H3>
-              <Table head={['Use case', 'Rate', 'Mix']} rows={s.traffic.map((t) => [t.useCase, formatRps(t.rps), t.mix.map((m) => `${m.scenario} ${formatPercent(m.share)}`).join(', ')])} />
+              <Table head={['Use case', 'Rate', 'Mix']} rows={s.traffic.map((t) => [t.useCase, formatTraffic(t.rps, t.avgRps), t.mix.map((m) => `${m.scenario} ${formatPercent(m.share)}`).join(', ')])} />
             </>
           )}
           {s.load.length > 0 && (

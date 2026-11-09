@@ -30,7 +30,7 @@ const PATH = /^\/u\/([A-Za-z0-9-]{1,64})(\.png)?\/?$/;
 /** Bump to draw every profile card again (a new layout). */
 const CARD_VERSION = 1;
 
-const escapeHtml = (text: string) =>
+export const escapeHtml = (text: string) =>
   text.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -59,7 +59,9 @@ export function profileDescription(profile: PublicProfile): string {
   return `${parts.join(' · ')} on Proschi, the system design practice site with automatic tests.`;
 }
 
-interface Meta {
+export interface Meta {
+  /** og:type; `profile` by default. */
+  type?: string;
   title: string;
   description: string;
   url: string;
@@ -67,7 +69,7 @@ interface Meta {
   imageAlt: string;
 }
 
-function headTags(meta: Meta): string {
+export function headTags(meta: Meta): string {
   const m = {
     title: escapeHtml(meta.title),
     description: escapeHtml(meta.description),
@@ -80,7 +82,7 @@ function headTags(meta: Meta): string {
     `<meta name="description" content="${m.description}" />`,
     `<link rel="canonical" href="${m.url}" />`,
     `<meta name="robots" content="index, follow" />`,
-    `<meta property="og:type" content="profile" />`,
+    `<meta property="og:type" content="${escapeHtml(meta.type ?? 'profile')}" />`,
     `<meta property="og:site_name" content="Proschi" />`,
     `<meta property="og:title" content="${m.title}" />`,
     `<meta property="og:description" content="${m.description}" />`,
@@ -111,7 +113,7 @@ function summaryHtml(profile: PublicProfile, description: string): string {
 }
 
 /** The response headers of the site's pages (frontend/public/_headers), which the API's do not suit. */
-function pageHeaders(contentType: string, extra: Record<string, string> = {}): Headers {
+export function pageHeaders(contentType: string, extra: Record<string, string> = {}): Headers {
   return new Headers({
     'Content-Type': contentType,
     'Strict-Transport-Security': 'max-age=63072000; includeSubDomains',
@@ -125,7 +127,7 @@ function pageHeaders(contentType: string, extra: Record<string, string> = {}): H
 }
 
 /** A page of its own when the built practice page is not there (the Worker's tests, a broken deploy). */
-function standalonePage(head: string, body: string): string {
+export function standalonePage(head: string, body: string): string {
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -162,7 +164,7 @@ export function rewritePracticePage(page: Response, head: string, summary: strin
   return rewriter.transform(new Response(page.body, { status: 200, headers }));
 }
 
-async function notFoundPage(request: Request, ctx: Ctx): Promise<Response> {
+export async function notFoundPage(request: Request, ctx: Ctx): Promise<Response> {
   const headers = pageHeaders('text/html; charset=utf-8', { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' });
   try {
     const page = await ctx.env.ASSETS.fetch(new Request(new URL('/404.html', request.url)));
@@ -212,25 +214,33 @@ async function profilePage(request: Request, ctx: Ctx, profile: PublicProfile, h
 }
 
 /** Rendered images, kept in this data centre's cache under the card's hash (the URL is never seen by clients). */
-const cacheKey = (origin: string, id: string, hash: string) => new Request(`${origin}/u/${encodeURIComponent(id)}.png?card=${hash}`);
+const cacheKey = (origin: string, path: string, hash: string) => new Request(`${origin}${path}.png?card=${hash}`);
 
-async function profileImage(request: Request, ctx: Ctx, id: string, card: ProfileCard, hash: string): Promise<Response> {
-  // Revalidated every time (ETag), so an image stops being served as soon as the profile is turned off.
+function profileImage(request: Request, ctx: Ctx, id: string, card: ProfileCard, hash: string): Promise<Response> {
+  return serveCardImage(request, ctx, `/u/${encodeURIComponent(id)}`, hash, () => renderProfileCard(card));
+}
+
+/**
+ * An Open Graph card at `<path>.png` (src/og.ts), named by `hash`: revalidated
+ * every time (ETag), so an image stops being served as soon as its page is
+ * turned off, and drawn once per data centre and hash.
+ */
+export async function serveCardImage(request: Request, ctx: Ctx, path: string, hash: string, render: () => Promise<Uint8Array>): Promise<Response> {
   const etag = `"${hash}"`;
   const headers = pageHeaders('image/png', { 'Cache-Control': 'public, no-cache', ETag: etag, 'Cross-Origin-Resource-Policy': 'cross-origin' });
   if ((request.headers.get('If-None-Match') ?? '').split(/\s*,\s*/).includes(etag)) return new Response(null, { status: 304, headers });
 
-  const key = cacheKey(new URL(request.url).origin, id, hash);
+  const key = cacheKey(new URL(request.url).origin, path, hash);
   const cache = await caches.open('og');
   const hit = await cache.match(key);
   if (hit) return new Response(request.method === 'HEAD' ? null : hit.body, { status: 200, headers });
 
   let png: Uint8Array;
   try {
-    png = await renderProfileCard(card);
+    png = await render();
   } catch (e) {
     // The site's own image instead of none; the next request tries again.
-    log('error', 'Profile card failed to render', { requestId: ctx.requestId, error: errorText(e) });
+    log('error', 'Card image failed to render', { requestId: ctx.requestId, path, error: errorText(e) });
     return Response.redirect(new URL('/og.png', request.url).toString(), 302);
   }
   ctx.exec.waitUntil(cache.put(key, new Response(png, { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=604800' } })));

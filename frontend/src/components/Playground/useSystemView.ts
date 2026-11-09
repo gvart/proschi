@@ -94,7 +94,7 @@ export function useSystemView(doc: string, diagram: Diagram, analysis: Analysis,
       for (const [id, o] of Object.entries(inner.nodes)) nodes[`${node.id}.${id}`] = o;
       for (const f of inner.flows) flows.push({ ...f, from: `${node.id}.${f.from}`, to: `${node.id}.${f.to}` });
     }
-    return { nodes, flows };
+    return { ...base, nodes, flows };
   }, [shown, scope, analysis, pathOf, focused]);
 
   return {

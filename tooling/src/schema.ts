@@ -52,7 +52,7 @@ export function diagramSchema() {
     $defs: {
       block: object(
         {
-          kind: { enum: ['traffic', 'requirements', 'capacity', 'entity', 'decision', 'test', 'legend'] },
+          kind: { enum: ['traffic', 'requirements', 'capacity', 'entity', 'decision', 'test', 'legend', 'whatif'] },
           start: { type: 'integer', minimum: 1, description: "1-based line of the block's opening line." },
           end: { type: 'integer', minimum: 1, description: "1-based line of its closing `}`." },
         },
@@ -65,7 +65,7 @@ export function diagramSchema() {
       ),
       diagnostic: object(
         {
-          severity: { enum: ['error', 'warning'] },
+          severity: { enum: ['error', 'warning', 'info'] },
           message: str,
           line: { type: 'integer', minimum: 1 },
           col: { type: 'integer', minimum: 1 },
@@ -92,6 +92,8 @@ export function diagramSchema() {
           entities: array('entity', '`entity` blocks: the data model.'),
           decisions: array('decision', '`decision` statements.'),
           tests: array('test', '`test` blocks of flow assertions.'),
+          whatifs: array('whatif', '`whatif` blocks: variants of the design to simulate.'),
+          constants: array('constant', '`let name = value` constants, in order. Their uses are already replaced by their values.'),
           legend: array('legendEntry', 'Entries of the `legend` block, in order.'),
           layout: object(
             {
@@ -228,7 +230,8 @@ export function diagramSchema() {
       traffic: object(
         {
           useCase: str,
-          rps: { ...num, minimum: 0, description: 'Requests per second.' },
+          rps: { ...num, minimum: 0, description: 'Requests per second the design is loaded with: the peak when `peak` is written.' },
+          avgRps: { ...num, minimum: 0, description: '`peak x3` or `peak 60k rps`: the average rate (the one written first), which egress is costed at. Left out for a flat rate.' },
           mix: {
             type: 'array',
             description: 'Shares of the use case traffic per scenario, as fractions that add up to 1. Without a mix, all traffic goes to the first scenario.',
@@ -255,7 +258,22 @@ export function diagramSchema() {
           availability: object({ kind: { const: 'availability' }, useCase: str, minPercent: percent, loc }, ['kind', 'minPercent', 'loc']),
           durable: object({ kind: { const: 'durable' }, useCase: str, loc }, ['kind', 'useCase', 'loc']),
           survive: object({ kind: { const: 'survive' }, target: { oneOf: [{ const: 'any' }, selector] }, loc }, ['kind', 'target', 'loc']),
-          cost: object({ kind: { const: 'cost' }, maxUsdPerMonth: num, loc }, ['kind', 'maxUsdPerMonth', 'loc']),
+          cost: object(
+            {
+              kind: { const: 'cost' },
+              maxUsdPerMonth: num,
+              scope: {
+                description: 'Left out: the whole design. `@Payments`: the nodes the team owns; `.edge`: the nodes with the tag or inside a group with it; `group checkout`: the nodes inside the group.',
+                oneOf: [object({ team: str }, ['team']), object({ tag: str }, ['tag']), object({ group: str }, ['group'])],
+              },
+              loc,
+            },
+            ['kind', 'maxUsdPerMonth', 'loc'],
+          ),
+          lag: object(
+            { kind: { const: 'lag' }, useCase: str, maxMs: { ...num, description: 'The longest a message may wait in the queues the use case sends to.' }, loc },
+            ['kind', 'useCase', 'maxMs', 'loc'],
+          ),
         } satisfies Record<Requirement['kind'], unknown>),
       },
       capacity: object(
@@ -274,6 +292,10 @@ export function diagramSchema() {
           bandwidthMBps: { ...num, exclusiveMinimum: 0, description: '`bandwidth`: megabytes per second per replica.' },
           egressUsdPerGb: { ...num, minimum: 0, description: '`egress`: price of data the node sends to clients and third parties (internet egress), in USD per GB.' },
           timeoutMs: { ...num, minimum: 0, description: '`timeout`: what a failed call (`-x`) to the node costs, in milliseconds.' },
+          hitPercent: { ...percent, description: '`hit`: the share of reads a cache answers itself; the miss path takes the rest.' },
+          errorPercent: { ...percent, description: '`errors`: the share of calls to the node that fail with an error.' },
+          retries: { type: 'integer', minimum: 0, maximum: 5, description: '`retries`: how many times a caller tries a failed call again.' },
+          drainRps: { ...num, description: '`drain`: how fast the consumers of a queue or broker take messages off it, in rps.' },
           loc,
         },
         ['node', 'loc'],
@@ -293,6 +315,30 @@ export function diagramSchema() {
         ['title', 'rejected', 'loc'],
       ),
       test: object({ name: str, assertions: array('assertion'), loc }, ['name', 'assertions', 'loc']),
+      whatif: object({ name: str, changes: array('whatifChange'), loc }, ['name', 'changes', 'loc']),
+      constant: object(
+        {
+          name: str,
+          value: { ...num, description: 'The value after unit normalisation: rates in rps, durations in ms.' },
+          unit: { enum: ['rps', 'ms', '%', 'usd/month', 'MBps', 'usd/GB'], description: 'Left out for a plain number.' },
+          text: { ...str, description: 'The value as written, e.g. `120k rps`.' },
+          loc: { ...loc, description: 'The name in its `let` line.' },
+        },
+        ['name', 'value', 'text', 'loc'],
+      ),
+      whatifChange: {
+        description: 'One line of a whatif block.',
+        oneOf: [
+          object(
+            { kind: { const: 'traffic' }, useCase: str, multiply: { type: 'number', minimum: 0, description: '`x3`, `x1.5`: multiplies the rate.' }, rps: { ...num, description: '`50k rps`: sets the rate.' }, loc },
+            ['kind', 'useCase', 'loc'],
+          ),
+          object({ kind: { const: 'fail' }, node: str, loc }, ['kind', 'node', 'loc']),
+          object({ kind: { const: 'replicas' }, node: str, replicas: { type: 'integer', minimum: 1 }, loc }, ['kind', 'node', 'replicas', 'loc']),
+          object({ kind: { const: 'hit' }, node: str, percent: { ...percent, description: '`cache hit 40%`: the hit rate under this what-if.' }, loc }, ['kind', 'node', 'percent', 'loc']),
+          object({ kind: { const: 'errors' }, node: str, percent: { ...percent, description: '`pay errors 20%`: the error rate under this what-if.' }, loc }, ['kind', 'node', 'percent', 'loc']),
+        ],
+      },
       assertion: {
         description: 'One assertion line of a test.',
         oneOf: Object.values({

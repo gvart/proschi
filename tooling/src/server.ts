@@ -1,17 +1,22 @@
 /**
  * Proschi language server (LSP over stdio). Any editor with an LSP client
  * gets the same diagnostics as the web editor, plus completion, hover,
- * go-to-definition, references, an outline, formatting and links on import
- * paths, and failing requirements and tests as warnings (source `proschi-test`). Imports resolve from disk relative to the document, preferring the
+ * go-to-definition, references, rename, an outline, formatting and links on import
+ * paths, failing requirements and tests as warnings (source `proschi-test`),
+ * and simulation results as inlay hints (after nodes) and code lenses (above
+ * use cases, what-ifs and requirements). Imports resolve from disk relative to the document, preferring the
  * text of open (possibly unsaved) documents, confined to the project root;
  * git and https imports come from the cache of `proschi imports sync`.
  */
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   CodeActionKind,
+  CodeLensRefreshRequest,
   CompletionItemKind,
   DiagnosticSeverity,
   InsertTextFormat,
+  ResponseError,
+  ErrorCodes,
   MarkupKind,
   ProposedFeatures,
   SymbolKind,
@@ -20,11 +25,33 @@ import {
   createConnection,
   type CodeAction,
   type DocumentSymbol,
+  type TextEdit as LspTextEdit,
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
-import { statSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
+import { isAbsolute } from 'node:path';
 import { openApiDiagnostics, watchedFiles } from './openapi/config';
-import { analyze, complete, declaration, hover, outline, quickFix, references, semanticTokens, toRange, type Analysis, type OutlineSymbol, type TokenKind } from './analysis';
+import {
+  analyze,
+  codeLenses,
+  complete,
+  cursorFixes,
+  declaration,
+  hover,
+  inlayHints,
+  outline,
+  quickFix,
+  references,
+  rename,
+  renameEdits,
+  renameTarget,
+  semanticTokens,
+  testQuickFix,
+  toRange,
+  type Analysis,
+  type OutlineSymbol,
+  type TokenKind,
+} from './analysis';
 import { fileResolver, importLinks, ownDiagnostics } from './imports';
 import { format } from './proschi';
 import { testDiagnostics } from './simulation';
@@ -66,38 +93,63 @@ function analysisOf(doc: TextDocument): Analysis {
 function publishDependents(uri: string) {
   const path = pathOf(uri);
   if (!path) return;
+  let changed = false;
   for (const doc of documents.all()) {
     if (doc.uri === uri || !cache.get(doc.uri)?.files.has(path)) continue;
     cache.delete(doc.uri);
     validate(doc);
+    changed = true;
   }
+  // Their hints and lenses show numbers that depend on the imported file.
+  if (changed) refreshResults();
 }
 
+/** `proschi.inlayHints.enabled` and `proschi.codeLens.enabled`; both on until the client says otherwise. */
+let show = { inlayHints: true, codeLens: true };
+let canRefresh = { inlayHints: false, codeLens: false };
+
+function refreshResults() {
+  if (canRefresh.inlayHints) void connection.languages.inlayHint.refresh().catch(() => undefined);
+  if (canRefresh.codeLens) void connection.sendRequest(CodeLensRefreshRequest.type).catch(() => undefined);
+}
+
+connection.onDidChangeConfiguration(({ settings }) => {
+  const own = (settings as { proschi?: { inlayHints?: { enabled?: unknown }; codeLens?: { enabled?: unknown } } } | null)?.proschi;
+  show = { inlayHints: own?.inlayHints?.enabled !== false, codeLens: own?.codeLens?.enabled !== false };
+  refreshResults();
+});
+
 // Standard token types, so every theme colours them: node ids, tech stacks, teams, legend tags.
-const TOKEN_TYPE: Record<TokenKind, string> = { node: 'variable', tech: 'type', team: 'decorator', tag: 'enumMember' };
+const TOKEN_TYPE: Record<TokenKind, string> = { node: 'variable', tech: 'type', team: 'decorator', tag: 'enumMember', constant: 'parameter' };
 const TOKEN_TYPES = Object.values(TOKEN_TYPE);
 
-connection.onInitialize(() => ({
-  capabilities: {
-    textDocumentSync: TextDocumentSyncKind.Incremental,
-    completionProvider: { triggerCharacters: ['[', ' '] },
-    hoverProvider: true,
-    definitionProvider: true,
-    referencesProvider: true,
-    documentSymbolProvider: true,
-    documentLinkProvider: { resolveProvider: false },
-    documentFormattingProvider: true,
-    codeActionProvider: { codeActionKinds: [CodeActionKind.QuickFix] },
-    semanticTokensProvider: { legend: { tokenTypes: TOKEN_TYPES, tokenModifiers: [] }, full: true },
-  },
-  serverInfo: { name: 'proschi-language-server', version: typeof PROSCHI_VERSION === 'string' ? PROSCHI_VERSION : 'dev' },
-}));
+connection.onInitialize(({ capabilities: client }) => {
+  canRefresh = { inlayHints: !!client.workspace?.inlayHint?.refreshSupport, codeLens: !!client.workspace?.codeLens?.refreshSupport };
+  return {
+    capabilities: {
+      textDocumentSync: TextDocumentSyncKind.Incremental,
+      completionProvider: { triggerCharacters: ['[', ' ', '"', '$'] },
+      hoverProvider: true,
+      definitionProvider: true,
+      referencesProvider: true,
+      renameProvider: { prepareProvider: true },
+      documentSymbolProvider: true,
+      documentLinkProvider: { resolveProvider: false },
+      documentFormattingProvider: true,
+      codeActionProvider: { codeActionKinds: [CodeActionKind.QuickFix] },
+      semanticTokensProvider: { legend: { tokenTypes: TOKEN_TYPES, tokenModifiers: [] }, full: true },
+      inlayHintProvider: true,
+      codeLensProvider: { resolveProvider: false },
+    },
+    serverInfo: { name: 'proschi-language-server', version: typeof PROSCHI_VERSION === 'string' ? PROSCHI_VERSION : 'dev' },
+  };
+});
 
 function validate(document: TextDocument) {
   const analysis = analysisOf(document);
   const toLsp = (source: string) => (d: Analysis['diagnostics'][number]) => ({
     range: toRange(d),
-    severity: d.severity === 'error' ? DiagnosticSeverity.Error : DiagnosticSeverity.Warning,
+    severity: d.severity === 'error' ? DiagnosticSeverity.Error : d.severity === 'info' ? DiagnosticSeverity.Information : DiagnosticSeverity.Warning,
     source,
     message: d.message,
   });
@@ -175,7 +227,14 @@ const withDoc =
     return doc ? fn(analysisOf(doc), params) : fallback;
   };
 
-const COMPLETION_KIND = { keyword: CompletionItemKind.Keyword, node: CompletionItemKind.Variable, tech: CompletionItemKind.Class };
+const COMPLETION_KIND = {
+  keyword: CompletionItemKind.Keyword,
+  node: CompletionItemKind.Variable,
+  tech: CompletionItemKind.Class,
+  usecase: CompletionItemKind.Function,
+  scenario: CompletionItemKind.Event,
+  constant: CompletionItemKind.Constant,
+};
 
 connection.onCompletion(
   withDoc([], (analysis, { position }) =>
@@ -215,6 +274,42 @@ connection.onReferences((params) => {
   return references(analysisOf(doc), params.position).map((range) => ({ uri: params.textDocument.uri, range }));
 });
 
+connection.onPrepareRename(withDoc(null, (analysis, { position }) => renameTarget(analysis, position)));
+
+/**
+ * Renames in the document, in the file that declares the symbol when that is
+ * another file on disk, and in every open document that imports that file
+ * (or has it as a system's team file). Files that are not open are not
+ * searched: the server has no index of the workspace.
+ */
+connection.onRenameRequest((params) => {
+  const doc = documents.get(params.textDocument.uri);
+  if (!doc) return null;
+  const result = rename(analysisOf(doc), params.position, params.newName);
+  if (!result) return null;
+  if ('error' in result) throw new ResponseError(ErrorCodes.InvalidParams, result.error);
+  const changes: Record<string, LspTextEdit[]> = { [params.textDocument.uri]: result.edits };
+  const declared = result.declaredIn;
+  // Remote imports (git, https) come from the sync cache and are not edited.
+  if (declared !== undefined && !isAbsolute(declared)) return { changes };
+  const home = declared ?? pathOf(params.textDocument.uri);
+  if (declared) {
+    const open = documents.all().find((d) => pathOf(d.uri) === declared);
+    const there = open ? analysisOf(open) : analyze(readFileSync(declared, 'utf8'), { path: declared, resolve: fileResolver({ entry: declared, read: openText }) });
+    changes[uriOf(declared)] = renameEdits(there, result.symbol, params.newName);
+  }
+  if (!home) return { changes };
+  for (const other of documents.all()) {
+    if (other.uri in changes || pathOf(other.uri) === home) continue;
+    const analysis = analysisOf(other);
+    const uses = (analysis.result.imports ?? []).some((i) => i.resolved === home) || (analysis.diagram.systems ?? []).some((s) => s.resolved === home);
+    if (!uses) continue;
+    const edits = renameEdits(analysis, result.symbol, params.newName, home);
+    if (edits.length) changes[other.uri] = edits;
+  }
+  return { changes };
+});
+
 const SYMBOL_KIND: Record<OutlineSymbol['kind'], SymbolKind> = {
   node: SymbolKind.Object,
   group: SymbolKind.Namespace,
@@ -251,9 +346,12 @@ connection.onCodeAction((params) => {
   if (!doc) return [];
   const analysis = analysisOf(doc);
   const actions: CodeAction[] = [];
+  if (params.context.only && !params.context.only.some((k) => CodeActionKind.QuickFix.startsWith(k))) return [];
   for (const diagnostic of params.context.diagnostics) {
-    if (diagnostic.source !== 'proschi') continue;
-    const fix = typeof diagnostic.message === 'string' && quickFix(analysis, diagnostic.message, diagnostic.range);
+    const fix =
+      diagnostic.source === 'proschi'
+        ? typeof diagnostic.message === 'string' && quickFix(analysis, diagnostic.message, diagnostic.range)
+        : diagnostic.source === 'proschi-test' && testQuickFix(analysis, diagnostic.range);
     if (!fix) continue;
     actions.push({
       title: fix.title,
@@ -263,7 +361,41 @@ connection.onCodeAction((params) => {
       edit: { changes: { [params.textDocument.uri]: [fix.edit] } },
     });
   }
+  for (const fix of cursorFixes(analysis, params.range)) {
+    actions.push({ title: fix.title, kind: CodeActionKind.QuickFix, edit: { changes: { [params.textDocument.uri]: [fix.edit] } } });
+  }
   return actions;
+});
+
+/** The simulation must never take the editor down with it: no hints or lenses when it fails. */
+function simulated<T>(fn: () => T[]): T[] {
+  try {
+    return fn();
+  } catch (e) {
+    connection.console.error(`Simulation failed: ${String(e)}`);
+    return [];
+  }
+}
+
+// `62% · $400/mo` after each node; a saturated node says so in its label.
+connection.languages.inlayHint.on((params) => {
+  const doc = documents.get(params.textDocument.uri);
+  if (!doc || !show.inlayHints) return [];
+  return simulated(() =>
+    inlayHints(analysisOf(doc), params.range).map((h) => ({
+      position: h.position,
+      label: h.label,
+      paddingLeft: true,
+      ...(h.tooltip ? { tooltip: { kind: MarkupKind.Markdown, value: h.tooltip } } : {}),
+    })),
+  );
+});
+
+// Results only: the lenses carry no command to run.
+connection.onCodeLens((params) => {
+  const doc = documents.get(params.textDocument.uri);
+  if (!doc || !show.codeLens) return [];
+  return simulated(() => codeLenses(analysisOf(doc)).map((l) => ({ range: l.range, command: { title: l.title, command: '' } })));
 });
 
 // Each token as [deltaLine, deltaStart, length, type, modifiers], relative to the previous one.

@@ -18,3 +18,14 @@ export function heatText(u: number | undefined, down = false): 'warm' | 'accent'
   if (down || u === undefined || u < 0.4) return undefined;
   return u < 0.7 ? 'warm' : 'accent';
 }
+
+/**
+ * A connection's colour on the same scale as `heat`, for the node it feeds:
+ * undefined (the plain edge colour) below 40%, then yellow, pink and red.
+ */
+export function heatStroke(u: number | undefined, saturated = false): string | undefined {
+  if (saturated || (u !== undefined && u >= 1)) return 'rgb(var(--c-fail))';
+  if (u === undefined || u < 0.4) return undefined;
+  if (u < 0.9) return 'rgb(var(--c-yellow))';
+  return 'rgb(var(--c-pink))';
+}

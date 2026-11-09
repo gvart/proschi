@@ -17,6 +17,8 @@ const ALLOWED_CONSOLE_ERRORS: RegExp[] = [
   /^Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set\.( \(about:srcdoc:0\))?$/,
   // The admin's Cloudflare usage page before it is set up (cfUsage.accounts.e2e.ts): 501, which the page shows as the setup steps.
   /^Failed to load resource: the server responded with a status of 501 \(Not Implemented\) \(http:\/\/127\.0\.0\.1:\d+\/api\/admin\/cf-usage:0\)$/,
+  // A certificate turned off, or no such id (exports.accounts.e2e.ts): 404, which the page shows as "No certificate here".
+  /^Failed to load resource: the server responded with a status of 404 \(Not Found\) \(http:\/\/127\.0\.0\.1:\d+\/api\/certificates\/[\w-]+:0\)$/,
 ];
 
 /** The key src/onboarding/seen.ts keeps the first-run tours' "seen" flags in. */
@@ -182,6 +184,24 @@ export const test = base.extend<{ errors: string[]; onboarding: 'seen' | 'fresh'
 
 export { expect };
 
+const MAC_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+
+/**
+ * How a test adds a canvas node to the selection on this host. React Flow
+ * picks its key from the page's user agent (Cmd on a Mac, Ctrl elsewhere),
+ * and a Mac host turns Ctrl+click into a right-click, so on a Mac the browser
+ * passes for one and Cmd+clicks; elsewhere it keeps its own user agent and
+ * Ctrl+clicks. Pass `userAgent` to `test.use` in specs that use multiSelectClick.
+ */
+export function multiSelectSetup(platform: string = process.platform): { userAgent?: string; modifier: 'Meta' | 'Control' } {
+  return platform === 'darwin' ? { userAgent: MAC_USER_AGENT, modifier: 'Meta' } : { modifier: 'Control' };
+}
+
+/** Adds `node` to the canvas selection, as Cmd/Ctrl+click does (see multiSelectSetup). */
+export async function multiSelectClick(node: Locator): Promise<void> {
+  await node.click({ modifiers: [multiSelectSetup().modifier] });
+}
+
 /** The React Flow nodes on the visible canvas. */
 export function canvasNodes(page: Page): Locator {
   return page.locator('.react-flow__node:visible');
@@ -326,4 +346,25 @@ export async function addFromPalette(page: Page, search: string, name: string): 
 export async function chooseOption(select: Locator, option: string): Promise<void> {
   await select.click();
   await select.page().getByRole('option', { name: option, exact: true }).click();
+}
+
+/**
+ * No node of the canvas lies under its top bar (CanvasTopBar): the editing buttons, the overlay tools and the
+ * folded load legend. Like whatif.e2e.ts's toolbar check, for the whole bar.
+ */
+export async function expectTopBarClear(page: Page): Promise<void> {
+  const parts = await page.locator('[data-canvas-topbar]:visible').evaluate((bar) =>
+    Array.from(bar.children).flatMap((group) =>
+      (group.matches('[data-topbar-right]') ? Array.from(group.children) : [group]).map(
+        (part) => ((part.matches('.pc-load-legend') && part.querySelector('summary')) || part).getBoundingClientRect().toJSON() as DOMRect,
+      ),
+    ),
+  );
+  const nodes = await canvasNodes(page).evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON() as DOMRect));
+  for (const bar of parts) {
+    for (const box of nodes) {
+      const overlaps = box.left < bar.right && box.right > bar.left && box.top < bar.bottom && box.bottom > bar.top;
+      expect(overlaps, `a node at ${JSON.stringify(box)} under the top bar at ${JSON.stringify(bar)}`).toBe(false);
+    }
+  }
 }

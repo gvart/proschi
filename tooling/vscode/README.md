@@ -10,7 +10,16 @@ them.
 
 - Syntax highlighting for `.proschi` files
 - The same errors and warnings as the web editor, as you type
-- Completion for keywords, node ids and the 108 tech stacks
+- Completion for keywords, node ids, the 108 tech stacks, `capacity` parts and
+  the use case and scenario names in quotes
+- Rename (*F2*) of node ids, use cases and scenarios, with their references
+- Quick fixes: add a missing connection or a traffic line, fix a tech stack,
+  remove a repeated capacity part, and apply the `x2` or `shards N` a failing
+  requirement suggests
+- Simulation results in the code: utilisation and monthly cost after each
+  node (`62% · $400/mo`), `p99 38 ms ✓` above each use case, and results
+  above `whatif` and `requirements` blocks. Turn them off with
+  `proschi.inlayHints.enabled` and `proschi.codeLens.enabled`
 - Hover, go to definition, find references and an outline of groups, use cases
   and scenarios
 - Formatting (*Format Document*), the same layout as `proschi fmt`

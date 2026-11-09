@@ -7,6 +7,7 @@ import PaneLoading from '../components/PaneLoading';
 import ProblemList from './ProblemList';
 import Roadmap, { RoadmapBanner } from './RoadmapView';
 import NextForYou from './history/NextForYou';
+import InterviewPlan from './plan/InterviewPlan';
 import { verdictIdOf } from './history/api';
 import { FeaturesContext, useFeatures } from '../components/featureState';
 import { ROADMAP, roadmapAccess, roadmapFor, roadmapHref, roadmapState, roadmapTarget, routeLock } from './roadmap';
@@ -35,6 +36,7 @@ import { asksGoal, mergeAccountGoal, onGoalChange, useGoal, wantsInterview, want
 import { hubTabOf, type HubTab } from './hub/tabs';
 import { continueTarget, loadLastProblem, saveLastProblem } from './hub/continue';
 import { profileIdOf } from './profile/profile';
+import { certificateIdOf } from './certificate/route';
 import { track } from '../services/metrics';
 import { setupHref } from './interview/links';
 import { sendSoloInterviews } from './interview/record';
@@ -59,6 +61,7 @@ const ProgressRoute = lazy(loadProgressCode);
 // The account and settings page; public profiles, with the cards' topics.
 const AccountRoute = lazy(() => import('./profile/AccountRoute'));
 const PublicProfileRoute = lazy(() => import('./profile/PublicProfileRoute'));
+const CertificateRoute = lazy(() => import('./certificate/CertificateRoute'));
 // The mock interview: the set-up, the room (editor, canvas, simulation) and the result.
 const InterviewRoute = lazy(() => import('./interview/InterviewRoute'));
 
@@ -77,6 +80,8 @@ function PageLoading({ label }: { label: string }) {
 
 /** The roadmap's stages with the problems this build has. */
 const roadmap = roadmapFor(ROADMAP, problems.map((p) => p.id));
+/** The roadmap's problems in order, for the interview-date plan. */
+const roadmapOrder = roadmap.flatMap((s) => s.problems);
 
 /** The roadmap's "Read first" article. */
 const firstGuide = GUIDES[0] && { ...GUIDES[0], minutes: guideMinutes[GUIDES[0].id] };
@@ -88,7 +93,7 @@ const firstGuide = GUIDES[0] && { ...GUIDES[0], minutes: guideMinutes[GUIDES[0].
  * `#/review` daily review (`#/review/<topic>` one topic of it), `#/arcade` the
  * system design game (`#/arcade/daily` on today's daily run), `#/challenge`
  * the daily challenge, `#/progress` progress (level, skills, badges, streak),
- * `#/me` the account and settings page and `#/u/<user id>` a public profile; hash routes work under
+ * `#/me` the account and settings page, `#/u/<user id>` a public profile and `#/c/<id>` a mastery certificate; hash routes work under
  * any sub-path. The list (with what the visitor's goal adds above it,
  * hub/HomeExtras.tsx), the roadmap, review, challenge, Arcade and progress
  * pages are the practice hub's sections (hub/tabs.ts). useHashRoute (hashRoute.ts) reads it, and scrolls to the
@@ -214,7 +219,8 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   const onMe = route === 'me';
   const onInterview = route === 'interview' || route.startsWith('interview/');
   const profileId = profileIdOf(route);
-  const onProfile = onMe || profileId !== undefined;
+  const certificateId = certificateIdOf(route);
+  const onProfile = onMe || profileId !== undefined || certificateId !== undefined;
   /** A page other than the list or a problem. */
   const onPage = onRoadmap || !!guide || onReview || onProgress || onChallenge || onArcade || onProfile || onInterview;
   const lessonRoute = fromRoadmap ? !!target?.lesson : route.endsWith('/lesson');
@@ -250,6 +256,12 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   // A new page checks for new badges (signed in, at most every few seconds).
   useEffect(() => refreshAchievements(), [route, refreshAchievements]);
   const unseen = achievements.state.status === 'ready' ? achievements.state.answer.achievements.filter((a) => a.unseen) : [];
+  // The free "Your next steps" (hub/RuleSteps.tsx), on the home and the roadmap: the skill map once known, else computed from the cards and solves.
+  const stepsData = {
+    progress,
+    skills: achievements.state.status === 'ready' ? achievements.state.answer.skills.topics : undefined,
+    streak: ready ? summarize(ready).streak.current : undefined,
+  };
   useEffect(() => {
     // The review, challenge, progress and profile pages name themselves.
     if (onReview || onProgress || onChallenge || onArcade || onProfile || onInterview) return;
@@ -335,7 +347,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
                 progress={progress}
                 stats={stats}
                 meta={<GoalSummary goal={goal} />}
-                top={<HomeExtras goal={goal} ask={asksGoal(goal, account.state.status, announcement)} account={account} next={next} nextTitle={next && problems.find((p) => p.id === next.id)?.title} streak={streak} />}
+                top={<HomeExtras goal={goal} ask={asksGoal(goal, account.state.status, announcement)} account={account} next={next} nextTitle={next && problems.find((p) => p.id === next.id)?.title} streak={streak} steps={stepsData} />}
               >
                 {leaderboard && <LeaderboardPanel leaderboard={leaderboard} />}
               </ProblemList>
@@ -371,13 +383,22 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
                 guide={firstGuide}
                 locked={target && lock && lock.kind !== 'open' ? { id: target.id, lock } : undefined}
                 read={lessonsReadIds}
-                nextForYou={<NextForYou problemTitle={(id) => problems.find((p) => p.id === id)?.title} />}
+                nextForYou={
+                  <>
+                    <InterviewPlan account={account} progress={progress} skills={stepsData.skills} roadmap={roadmapOrder} />
+                    <NextForYou problemTitle={(id) => problems.find((p) => p.id === id)?.title} steps={{ account, ...stepsData }} />
+                  </>
+                }
               />
             )}
           </PracticeHub>
         ) : onMe ? (
           <Suspense fallback={<PageLoading label="Loading your settings…" />}>
             <AccountRoute account={account} activity={activity} />
+          </Suspense>
+        ) : certificateId !== undefined ? (
+          <Suspense fallback={<PageLoading label="Loading the certificate…" />}>
+            <CertificateRoute id={certificateId} signedIn={account.state.status === 'signed-in'} />
           </Suspense>
         ) : (
           profileId !== undefined && (

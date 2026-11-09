@@ -13,6 +13,8 @@ proschi fmt docs/                   # format files in place (--check: only repor
 proschi render checkout.proschi --out diagrams   # SVG diagrams (also --format md|html|hld-md|hld-html)
 proschi test docs/                  # run requirements and tests (exit 1 on a failure)
 proschi analyze shortener.proschi   # load, latency, availability and cost per node
+proschi analyze --sweep "Redirect" 10k..500k shortener.proschi   # where it saturates, how far requirements hold
+proschi diff before.proschi after.proschi   # what changed, and what it does to cost, p99 and the checks
 proschi import mermaid arch.mmd     # Mermaid flowchart/sequence diagram to Proschi (also: import openapi spec.yaml)
 proschi problem check               # validate practice problem folders (see docs/PRACTICE.md)
 proschi problem new seat-map        # scaffold a practice problem
@@ -34,7 +36,9 @@ JSON payloads), mapped in a `proschi.json` or with `--openapi`: see
 
 `test` runs the `requirements { … }` and `test "…" { … }` blocks of each file
 against a capacity model of its `traffic { … }` (`--format text|github|json`);
-`analyze` prints that model as a table (`--format text|json`). The language
+`analyze` prints that model as a table (`--format text|json`), runs the
+file's `whatif` blocks (`--whatif "Name"|all`) and sweeps a use case's
+traffic over a range (`--sweep "Use case" 10k..500k [--steps n]`). The language
 server reports failing requirements and tests as warnings and adds load to
 node hovers. The model and its default numbers:
 [Simulation and tests](https://github.com/gvart/proschi/blob/main/docs/EDITORS.md#simulation-and-tests).
@@ -76,7 +80,8 @@ the sign-in.
 `proschi versions diff <name> <base-tag> [<target-tag>|<file.proschi>]` what
 changed from one to another (default: latest) or to a local file: nodes,
 edges, use cases, scenarios, requirements, traffic, capacity and systems,
-with `--json` for scripts. They only read the account. `--base <url>` points
+then the simulation deltas that `proschi diff` prints, with `--json` for
+scripts. They only read the account. `--base <url>` points
 `login`, `logout`, `whoami`, `versions` and `imports sync` at another site
 (https, or http://localhost for development).
 

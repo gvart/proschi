@@ -68,10 +68,12 @@ import { assertSameOrigin, bearerToken, errorResponse, HttpError, json, withSecu
 import { errorText, log } from './log';
 import { deleteMe, exportMe, getMe, importProgress, recordRun, updateMe } from './progress';
 import { postLessonsRead } from './lessons';
-import { postSoloInterviews } from './soloInterviews';
+import { postSoloInterviews, soloInterviewHistory } from './soloInterviews';
+import { deleteInterviewPlan, getInterviewPlan, putInterviewPlan } from './interviewPlan';
 import { confirmEmail, confirmPage, deleteEmail, getEmailPrefs, patchEmail, putEmail, unsubscribe, unsubscribePage } from './reminders';
 import { getPublicProfile } from './profile';
 import { servePublicProfile } from './profilePage';
+import { getCertificate, getEmbeds, getMyCertificate, putEmbeds, putMyCertificate, serveCertificate } from './certificates';
 import { createShare, deleteShare, getShare, listShares, oembed, shareImage, sharePage } from './shares';
 import { getLeaderboard, getProblemLeaderboard, getProblemStats, getStats } from './stats';
 import { createVersion, deleteVersion, getVersion, listVersions, resolveVersion } from './versions';
@@ -102,6 +104,10 @@ import { deleteFeedback, getFeedback, getFeedbackFile, listFeedback, patchFeedba
  *   PATCH  /api/me {displayName?, publicProfile?, dailyGoal?}
  *   DELETE /api/me
  *   GET    /api/me/export                   everything stored about the user, as a download
+ *   GET    /api/me/export?view=progress     the learning data alone, for a spreadsheet: Pro (402 plan_required; src/progressExport.ts)
+ *   GET    /api/me/certificate, PUT {public}   the mastery certificate: on is Max (402), off any plan (src/certificates.ts)
+ *   GET    /api/certificates/<id>           a certificate, public (404 when off)
+ *   GET    /api/me/embeds, PUT {branding}   Proschi's branding on the account's embeds: hiding it is Pro (402)
  *   GET    /api/me/activity?day=YYYY-MM-DD  daily goal, streak, weekly recap and each day's activity
  *   GET    /api/me/email                    email reminders: the address and settings ({email: null} without one)
  *   PUT    /api/me/email {email, timeZone, streak?, cards?, recap?}   sets the address (a new one gets a confirmation email)
@@ -115,6 +121,10 @@ import { deleteFeedback, getFeedback, getFeedbackFile, listFeedback, patchFeedba
  *   POST   /api/me/import {items}           the browser's progress, on first sign-in
  *   POST   /api/me/lessons {ids}            lessons and roadmap guides read
  *   POST   /api/me/interviews/solo {sessions}   mock interviews finished on your own (src/soloInterviews.ts)
+ *   GET    /api/me/interviews/solo          those kept, newest first, with what each did: Pro (402 plan_required)
+ *   GET    /api/me/interview-plan           the interview-date plan's date and minutes: Max (402 plan_required; src/interviewPlan.ts)
+ *   PUT    /api/me/interview-plan {date, minutes, start, today?}   sets it, with today's list for the reminder: Max
+ *   DELETE /api/me/interview-plan           removes it
  *   GET    /api/me/achievements?day=        every badge with its progress, and the skill map (stores newly earned badges)
  *   POST   /api/me/achievements/seen {ids?} marks earned badges as celebrated
  *   GET    /api/me/documents?since=<ms>     the editor's synced diagrams changed since (tombstones too), {documents, cursor}
@@ -278,6 +288,11 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('PATCH', 'api', 'me')) return updateMe(request, ctx);
   if (is('DELETE', 'api', 'me')) return deleteMe(request, ctx);
   if (is('GET', 'api', 'me', 'export')) return exportMe(request, ctx);
+  if (is('GET', 'api', 'me', 'certificate')) return getMyCertificate(request, ctx);
+  if (is('PUT', 'api', 'me', 'certificate')) return putMyCertificate(request, ctx);
+  if (is('GET', 'api', 'certificates', '*')) return getCertificate(ctx, parts[2]);
+  if (is('GET', 'api', 'me', 'embeds')) return getEmbeds(request, ctx);
+  if (is('PUT', 'api', 'me', 'embeds')) return putEmbeds(request, ctx);
   if (is('GET', 'api', 'me', 'activity')) return getActivity(request, ctx);
   if (is('GET', 'api', 'me', 'email')) return getEmailPrefs(request, ctx);
   if (is('PUT', 'api', 'me', 'email')) return putEmail(request, ctx);
@@ -294,6 +309,10 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('POST', 'api', 'me', 'import')) return importProgress(request, ctx);
   if (is('POST', 'api', 'me', 'lessons')) return postLessonsRead(request, ctx);
   if (is('POST', 'api', 'me', 'interviews', 'solo')) return postSoloInterviews(request, ctx);
+  if (is('GET', 'api', 'me', 'interviews', 'solo')) return soloInterviewHistory(request, ctx);
+  if (is('GET', 'api', 'me', 'interview-plan')) return getInterviewPlan(request, ctx);
+  if (is('PUT', 'api', 'me', 'interview-plan')) return putInterviewPlan(request, ctx);
+  if (is('DELETE', 'api', 'me', 'interview-plan')) return deleteInterviewPlan(request, ctx);
   if (is('GET', 'api', 'me', 'achievements')) return getAchievements(request, ctx);
   if (is('POST', 'api', 'me', 'achievements', 'seen')) return markAchievementsSeen(request, ctx);
   if (is('GET', 'api', 'me', 'documents')) return listDocuments(request, ctx);
@@ -427,7 +446,7 @@ export default {
     const { pathname } = new URL(request.url);
     // A live share link: the share page, which loads the diagram with GET /api/share/<token>.
     if ((request.method === 'GET' || request.method === 'HEAD') && /^\/share\/[A-Za-z0-9_-]{22}$/.test(pathname)) return shareViewPage(request, env.ASSETS);
-    const page = pathname.startsWith('/u/');
+    const page = pathname.startsWith('/u/') || pathname.startsWith('/c/');
     if (!page && !/^\/(api|auth|s)(\/|$)/.test(pathname)) return env.ASSETS.fetch(request);
     const started = Date.now();
     const ctx = createContext(request, env, exec);
@@ -437,7 +456,7 @@ export default {
     let pageResponse = false;
     try {
       if (page) {
-        response = await servePublicProfile(request, ctx);
+        response = await (pathname.startsWith('/c/') ? serveCertificate(request, ctx) : servePublicProfile(request, ctx));
         pageResponse = true;
       } else response = await route(request, ctx, pathname);
     } catch (e) {

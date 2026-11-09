@@ -11,7 +11,8 @@
  * `proschi import mermaid|openapi` converts other formats to Proschi (see importCommand.ts).
  * `proschi imports sync` fetches git, https and cloud imports into the cache and proschi.lock (see sync.ts).
  * `proschi login|logout|whoami` signs in to the account (see login.ts);
- * `proschi versions list|diff` reads a diagram's saved versions (see versions.ts).
+ * `proschi versions list|diff` reads a diagram's saved versions (see versions.ts);
+ * `proschi diff` compares two files, with the simulation's deltas (see designDiff.ts).
  */
 import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -30,6 +31,7 @@ import { IMPORT_HELP, IMPORT_USAGE, runImport } from './importCommand';
 import { IMPORTS_HELP, IMPORTS_USAGE, runImports } from './sync';
 import { LOGIN_HELP, LOGIN_USAGE, runAuth } from './login';
 import { VERSIONS_HELP, VERSIONS_USAGE, runVersions } from './versions';
+import { DIFF_HELP, DIFF_USAGE, runDiff } from './designDiff';
 
 declare const PROSCHI_VERSION: string;
 const VERSION = typeof PROSCHI_VERSION === 'string' ? PROSCHI_VERSION : 'dev';
@@ -49,6 +51,7 @@ ${IMPORT_USAGE}
 ${IMPORTS_USAGE}
 ${LOGIN_USAGE}
 ${VERSIONS_USAGE}
+${DIFF_USAGE}
   proschi --version
 
 check   Reports errors and warnings. Directories are searched for *.proschi files.
@@ -70,7 +73,8 @@ ${SHARE_HELP}
 ${IMPORT_HELP}
 ${IMPORTS_HELP}
 ${LOGIN_HELP}
-${VERSIONS_HELP}`;
+${VERSIONS_HELP}
+${DIFF_HELP}`;
 
 export interface CheckResult {
   file: string;
@@ -101,7 +105,7 @@ export function format(results: CheckResult[], style: 'text' | 'github' | 'json'
   for (const { file, diagnostics } of results) {
     for (const d of diagnostics) {
       if (style === 'github') {
-        const level = d.severity === 'error' ? 'error' : 'warning';
+        const level = d.severity === 'error' ? 'error' : d.severity === 'info' ? 'notice' : 'warning';
         lines.push(`::${level} file=${file},line=${d.line},col=${d.col},title=proschi::${d.message.replace(/%/g, '%25').replace(/\r?\n/g, '%0A')}`);
       } else {
         lines.push(`${file}:${d.line}:${d.col}: ${d.severity}: ${d.message}`);
@@ -151,6 +155,7 @@ export function run(argv: string[], out: (s: string) => void = console.log, err:
   if (command === 'imports') return runImports(rest, collectFiles, out, err);
   if (command === 'login' || command === 'logout' || command === 'whoami') return runAuth(command, rest, out, err);
   if (command === 'versions') return runVersions(rest, out, err);
+  if (command === 'diff') return runDiff(rest, out, err);
 
   if (command === 'check') {
     let strict = false;
@@ -194,7 +199,7 @@ export function run(argv: string[], out: (s: string) => void = console.log, err:
     const results = checkFiles(files, (file, diagram) => openApiDiagnostics(file, diagram, specs));
     const text = format(results, style);
     if (text) out(text);
-    const failed = results.some((r) => r.diagnostics.some((d) => d.severity === 'error' || strict));
+    const failed = results.some((r) => r.diagnostics.some((d) => d.severity === 'error' || (strict && d.severity === 'warning')));
     return failed ? 1 : 0;
   }
 

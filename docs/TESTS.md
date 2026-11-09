@@ -65,6 +65,8 @@ requirements {
   survive any node failure
   survive failure of cache    # a node id, [Tech], or any <kind>
   cost <= 3000 usd/month
+  cost @Payments <= 500 usd/month   # a team, .tag or group id
+  lag "Place order" < 30s           # queues with a drain rate
 }
 ```
 
@@ -75,9 +77,68 @@ requirements {
 | Durability: `durable "U"` | Every success scenario writes to a durable store, synchronously, before the first request is answered. |
 | Failures: `survive any node failure` | After losing any one node instance, nothing saturates and every latency target that held still holds. `survive failure of` a [selector](#selectors-and-kinds) checks only those nodes. |
 | Budget: `cost <= 3000 usd/month` | Replicas plus egress cost at most that much. |
+| Lag: `lag "U" < 30s` | The queues U sends to that have a [drain rate](HLD.md#queue-backlog-and-lag) keep up, and a message waits less than that in the slowest of them. |
+| Scoped budget: `cost @Payments <= 500 usd/month` | The nodes the team owns cost at most that much. `cost .edge` covers the nodes with the tag, and the nodes inside a group with it; `cost group checkout` the nodes inside the group. See [budgets per team](#budgets-per-team-group-or-tag). |
 
 Requirements need [traffic](HLD.md#traffic): a use case without traffic is
 not measured.
+
+### Budgets per team, group or tag
+
+A total budget says what the design may cost. A scoped one says who pays:
+the team that owns a node (`@Payments` after its name), a legend tag, or a
+group. The *Results* tab splits the cost the same three ways, and
+`proschi analyze` prints a line for each.
+
+```proschi
+title "Checkout"
+
+legend {
+  edge "At the edge" blue
+}
+
+user [Browser]
+group checkout "Checkout" .edge {
+  api "Checkout API" [REST API] @Payments x3
+  pay "Payments"     [Go]       @Payments x2
+}
+db    "Orders"   [PostgreSQL] @Data x2
+cache "Sessions" [Redis]
+
+user -> api
+api  -> pay
+api  -> cache
+pay  -> db
+
+usecase "Pay" {
+  user -> api   : POST /checkout
+  api  -> cache : GET session
+  api  -> pay   : charge
+  pay  -> db    : INSERT payment
+  api --> user  : 201
+}
+
+traffic {
+  "Pay" 500 rps
+}
+
+requirements {
+  cost @Payments <= 400 usd/month
+  cost group checkout <= 600 usd/month
+  cost <= 1500 usd/month
+}
+```
+
+> **Try it:** the Payments budget fails: its five replicas cost $500, over
+> its $400. Change `x3` on `api` to `x2` and it fits.
+
+- A node counts for its own team, for every group it is inside (nested
+  groups too), and for its own tag and its groups' tags. A node with no team
+  is listed as *No team*.
+- A budget that covers no node is a warning: an unknown team, tag or group.
+  Write the team as `@Payments`, without quotes.
+- Hover a team in an editor with the language server to see what it owns
+  and costs, and whether it is within its budget.
 
 ## Tests
 
@@ -118,6 +179,104 @@ An assertion that starts with a use case is about steps that reach X; one
 that starts with a selector is about the sender. Order is sequence order,
 requests and responses interleaved. Unknown names and empty tests are
 warnings, and two tests with one name are an error.
+
+## What-ifs
+
+A `whatif` block is a variant of the design: more traffic, a node down, or
+other replica counts. Each one is analysed on its own and checked against
+the same requirements, so you can ask "does it hold on launch day?" without
+editing the design. The design itself is analysed exactly as before.
+
+```proschi
+title "Paste bin"
+
+user  "Visitor"    [Browser]
+api   "Paste API"  [REST API]   x4
+cache "Hot pastes" [Redis]      x2
+db    "Pastes"     [PostgreSQL] x2
+
+user -> api   : HTTPS
+api  -> cache : RESP
+api  -> db    : SQL
+
+usecase "Read paste" {
+  user -> api : GET /p/{id}
+  alt "Hit" {
+    api -> cache : GET paste
+    api --> user : 200
+  } alt "Miss" {
+    api -> cache : GET paste
+    api -> db    : SELECT paste
+    api --> user : 200
+  } alt "Cache down" {
+    api -x cache : GET paste
+    api -> db    : SELECT paste
+    api --> user : 200
+  }
+}
+
+traffic {
+  "Read paste" 2k rps mix "Hit" 80%, "Miss" 20%, "Cache down" 0%
+}
+
+capacity {
+  cache timeout 50ms
+}
+
+requirements {
+  p99 "Read paste" < 200ms
+  availability >= 99.9%
+}
+
+whatif "Launch day" {
+  traffic "Read paste" x3
+}
+whatif "Cache outage" {
+  fail cache
+}
+whatif "Database outage" {
+  fail db
+}
+```
+
+> **Try it:** run `proschi analyze --whatif all paste.proschi`. The cache
+> outage passes, because "Cache down" takes the traffic. The database outage
+> fails: the misses, 20% of reads, have no fallback.
+
+| Line | What it changes |
+|---|---|
+| `traffic "U" x3` | Multiplies the use case's rate from the `traffic` block; `x1.5` and `x0.5` work too. Scenario shares stay. |
+| `traffic "U" 50k rps` | Sets the use case's rate, also for a use case without traffic. |
+| `fail n` | Takes node `n` down. Its availability is 0. The traffic of each scenario that needs `n` moves to the use case's [fallback scenarios](SCENARIOS.md#error-paths-and-conditions) for it, the ones that call it with `-x` and still complete. Without a fallback, that share of requests fails. |
+| `n x4` | Runs `n` with that many replicas, for capacity, availability and cost. |
+| `cache hit 40%` | Sets the [hit rate](HLD.md#cache-hit-rate) of a cache, such as a cold one after a restart. |
+| `pay errors 20%` | Sets the [error rate](HLD.md#retries-and-partial-failure) of a node, such as after a bad deploy. Its `retries` stay. |
+
+[Constants](HLD.md#constants) work here too: `traffic "U" $rate`,
+`traffic "U" x$factor` and `n x$fleet`.
+
+A what-if passes when every requirement holds under it. Test blocks don't
+count, because they check request flows and not numbers. Unknown use cases
+and nodes are warnings, and two what-ifs with one name are an error.
+
+On the command line, `proschi analyze` adds a summary of the what-ifs to its
+table: whether the requirements hold, the worst p99, the lowest
+availability and the cost. `--whatif "Name"` prints the whole table under
+one what-if, with each requirement's result. With `--whatif`, the command
+exits with 1 when a what-if it runs fails, so CI can gate on it.
+
+`--sweep` finds how far the design scales:
+
+```sh
+proschi analyze --sweep "Read paste" 1k..20k paste.proschi
+```
+
+It analyses the use case at ten rates across the range (`--steps` sets how
+many) and prints p99, availability, cost and what saturates at each. Then it
+prints the rate at which each node saturates and the highest rate at which
+the requirements still hold. For the paste bin, the API saturates at 8k rps
+and the p99 limit breaks just before, at 7.5k rps. Add `--whatif "Name"` to
+sweep under a what-if.
 
 ## Selectors and kinds
 

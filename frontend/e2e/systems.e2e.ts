@@ -55,6 +55,9 @@ test.describe('team systems in the editor', () => {
 
     await expect(status(page, 'Order Processing')).toHaveText('Saturated');
     await expect(box(page, 'Order Processing').locator('.pc-system')).toHaveAttribute('data-status', 'over');
+    // The load overlay (on: the document has traffic) rings it as a bottleneck, and tints the connection into it.
+    await expect(box(page, 'Order Processing').locator('.pc-system')).toHaveAttribute('data-bottleneck', 'true');
+    await expect(page.locator('.pc-edge-casing').first()).toBeAttached();
     await expect(box(page, 'Order Processing')).toContainText(/2k \/ 1\.2k rps/);
     // The other teams still hold.
     await expect(status(page, 'Frontend')).toHaveText('OK');
@@ -122,7 +125,8 @@ test.describe('team systems in the editor', () => {
   });
 
   test('the load overlay moves its dots along the drawn connections', async ({ page }) => {
-    await page.getByRole('button', { name: 'Overlay: load' }).click();
+    // On by default: the document has traffic.
+    await expect(page.getByRole('button', { name: 'Overlay: load' })).toHaveAttribute('aria-pressed', 'true');
     await layoutSettled(page);
     // Every drawn dot pixel of the particle canvas lies on a connection's line, even one routed around a corner.
     const offPath = () =>
@@ -180,10 +184,11 @@ test.describe('team systems in the editor', () => {
     // The header's controls keep clear of the frame's border.
     const frameBox = (await frame.locator('.pc-group').boundingBox())!;
     const collapse = (await frame.getByRole('button', { name: 'Collapse Order Processing' }).boundingBox())!;
-    expect(collapse.x + collapse.width).toBeLessThanOrEqual(frameBox.x + frameBox.width - 8);
-    expect(collapse.y).toBeGreaterThanOrEqual(frameBox.y + 8);
-    // With the load overlay on, its members show their load like any node.
-    await page.getByRole('button', { name: 'Overlay: load' }).click();
+    // 8px at 100%, scaled with the canvas's zoom (the fit keeps the diagram below the top bar, so it can be under 1).
+    const zoom = Math.min(1, Number((await page.locator('.react-flow__viewport:visible').getAttribute('style'))?.match(/scale\(([\d.]+)\)/)?.[1] ?? 1));
+    expect(collapse.x + collapse.width).toBeLessThanOrEqual(frameBox.x + frameBox.width - 8 * zoom);
+    expect(collapse.y).toBeGreaterThanOrEqual(frameBox.y + 8 * zoom);
+    // With the load overlay on (the default), its members show their load like any node.
     await expect(page.locator('.react-flow__node', { hasText: 'Orders DB' }).locator('.pc-node[data-load]')).toBeVisible();
     await expect(page.locator('.react-flow__node', { hasText: 'Orders DB' })).toContainText(/\d+%/);
     await page.getByRole('button', { name: 'Overlay: load' }).click();
@@ -231,7 +236,7 @@ test.describe('team systems on a busy org', () => {
     await layoutSettled(page);
     await box(page, 'Order Processing').dblclick();
     await expect(breadcrumb(page).locator('[aria-current="page"]')).toHaveText('Order Processing');
-    await page.getByRole('button', { name: 'Overlay: load' }).click();
+    await expect(page.getByRole('button', { name: 'Overlay: load' })).toHaveAttribute('aria-pressed', 'true');
     const db = page.locator('.react-flow__node', { hasText: 'Orders DB' }).locator('.pc-node');
     await expect(db).toHaveAttribute('data-heat', 'accent');
     // The dark text drawn on accents, not the theme's light ink or its muted grey.

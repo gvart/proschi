@@ -1,7 +1,10 @@
-import { AlertTriangle, Info, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, Info, LocateFixed, ShieldAlert } from 'lucide-react';
 import type { Diagram, SourceLoc } from '../../dsl';
+import CostBreakdown from './CostBreakdown';
 import ModelLink from './ModelLink';
-import { HOT, formatAvailability, formatMs, formatPercent, formatRps, formatUsd, type Analysis, type NodeAnalysis, type TestResult } from '../../sim';
+import Queues from './Queues';
+import { HOT, formatAvailability, formatMs, formatPercent, formatRps, formatTraffic, formatUsd, type Analysis, type NodeAnalysis, type TestResult } from '../../sim';
+import { BOTTLENECK_FROM, busiestOf } from '../../sim/overlay';
 import { systemSummaries } from '../Canvas/systemSummary';
 
 interface AnalysisPanelProps {
@@ -11,6 +14,8 @@ interface AnalysisPanelProps {
   onSelect: (loc: SourceLoc) => void;
   /** The test results, for who to ask about a system that cannot take its load. */
   results?: TestResult[];
+  /** Selects a node on the canvas and zooms to it (the editor). */
+  onFocusNode?: (id: string) => void;
 }
 
 const PERCENTILES = ['p50', 'p95', 'p99', 'p999'] as const;
@@ -29,10 +34,12 @@ export default function AnalysisPanel(props: AnalysisPanelProps) {
 }
 
 /** The analysis itself, for a document with traffic: headline numbers, nodes, use cases and single points of failure. */
-export function AnalysisBody({ diagram, analysis, onSelect, results }: AnalysisPanelProps) {
+export function AnalysisBody({ diagram, analysis, onSelect, results, onFocusNode }: AnalysisPanelProps) {
   const byId = new Map(diagram.nodes.map((n) => [n.id, n]));
   const nodes = analysis.nodes.filter((n) => n.kind !== 'client' && n.kind !== 'other');
-  const saturated = nodes.filter((n) => n.saturated).length;
+  // A queue whose consumers fall behind counts too: its backlog grows, as its red badge on the canvas shows.
+  const saturated = nodes.filter((n) => n.saturated || (n.queue !== undefined && n.queue.utilization >= 1)).length;
+  const busiest = busiestOf(analysis);
 
   return (
     <>
@@ -46,6 +53,8 @@ export function AnalysisBody({ diagram, analysis, onSelect, results }: AnalysisP
         <Stat label="Single points of failure" value={String(analysis.singlePointsOfFailure.length)} tone={analysis.singlePointsOfFailure.length ? 'warn' : 'good'} />
         <Stat label="Use cases with traffic" value={String(analysis.useCases.filter((u) => u.rps > 0).length)} />
       </div>
+
+      {busiest && <Busiest node={busiest} onFocusNode={onFocusNode} />}
 
       {analysis.warnings.length > 0 && (
         <ul className="space-y-1">
@@ -91,8 +100,10 @@ export function AnalysisBody({ diagram, analysis, onSelect, results }: AnalysisP
                           {node && !node.implicit ? node.techStack : n.kind} · {n.kind}
                           {n.durable ? ' · durable' : ''}
                           {n.consistency ? ` · ${n.consistency}` : ''}
+                          {n.retry ? ` · ${formatPercent(n.retry.errorRate)} errors${n.retry.retries ? `, ${n.retry.retries} ${n.retry.retries === 1 ? 'retry' : 'retries'}` : ''}` : ''}
                         </span>
                       </button>
+                      {onFocusNode && <ShowOnCanvas id={n.id} onFocusNode={onFocusNode} />}
                     </td>
                     <td className="py-1.5 pr-3 text-ink/85 whitespace-nowrap">
                       {splitsReadsAndWrites(n) ? (
@@ -133,6 +144,10 @@ export function AnalysisBody({ diagram, analysis, onSelect, results }: AnalysisP
         </div>
       </section>
 
+      <Queues analysis={analysis} />
+
+      <CostBreakdown diagram={diagram} analysis={analysis} />
+
       <section>
         <h2 className="mb-1 font-semibold text-ink">Use cases</h2>
         <p className="mb-2 text-xs text-muted">
@@ -144,7 +159,7 @@ export function AnalysisBody({ diagram, analysis, onSelect, results }: AnalysisP
             <div key={u.id} className="rounded-md border border-ink/15">
               <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 px-3 py-2 bg-paper border-b border-ink/15">
                 <span className="font-medium text-ink">{u.name}</span>
-                <span className="text-muted tabular-nums">{u.rps > 0 ? formatRps(u.rps) : 'no traffic'}</span>
+                <span className="text-muted tabular-nums">{u.rps > 0 ? formatTraffic(u.rps, u.avgRps) : 'no traffic'}</span>
                 <span className="text-muted tabular-nums">availability {formatAvailability(u.availability)}</span>
                 <span className="ml-auto flex gap-3 tabular-nums">
                   {PERCENTILES.map((p) => (
@@ -200,7 +215,7 @@ export function AnalysisBody({ diagram, analysis, onSelect, results }: AnalysisP
 }
 
 /** Per system (docs/design/team-systems-and-imports.md): what it is sent against what its design takes, and whether it holds its promise. */
-function Systems({ diagram, analysis, results, onSelect }: Required<AnalysisPanelProps>) {
+function Systems({ diagram, analysis, results, onSelect }: Required<Omit<AnalysisPanelProps, 'onFocusNode'>>) {
   const summaries = systemSummaries(diagram, analysis, results, diagram, '');
   return (
     <section aria-labelledby="analysis-systems">
@@ -259,6 +274,43 @@ function Systems({ diagram, analysis, results, onSelect }: Required<AnalysisPane
         </table>
       </div>
     </section>
+  );
+}
+
+/** The busiest node, which gives way first, with how much more traffic it takes: a bottleneck from 70%. */
+function Busiest({ node, onFocusNode }: { node: NodeAnalysis; onFocusNode?: (id: string) => void }) {
+  const u = node.utilization;
+  const bottleneck = node.saturated || u >= BOTTLENECK_FROM;
+  const headroom = u >= 1 ? 'past its capacity: requests are dropped' : `${(Math.floor((1 / u) * 10) / 10).toFixed(1)}× headroom before it saturates`;
+  return (
+    <p className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-ink/15 px-3 py-2 text-ink/85">
+      <span className={`rounded-sm px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${bottleneck ? 'bg-fail text-on-accent' : 'bg-ink/10 text-ink'}`}>
+        {bottleneck ? 'Bottleneck' : 'Busiest'}
+      </span>
+      <span>
+        <span className="font-medium text-ink">{node.id}</span> at {formatPercent(u)}: {headroom}.
+      </span>
+      {onFocusNode && (
+        <button type="button" onClick={() => onFocusNode(node.id)} className="ml-auto inline-flex items-center gap-1 rounded-sm px-2 py-1 text-xs font-semibold text-ink hover:bg-ink/10">
+          <LocateFixed size={13} aria-hidden="true" />
+          Show on canvas
+        </button>
+      )}
+    </p>
+  );
+}
+
+function ShowOnCanvas({ id, onFocusNode }: { id: string; onFocusNode: (id: string) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onFocusNode(id)}
+      aria-label={`Show ${id} on the canvas`}
+      title="Show on the canvas"
+      className="ml-1 inline-grid h-6 w-6 place-items-center rounded-sm align-top text-muted hover:bg-ink/10 hover:text-ink"
+    >
+      <LocateFixed size={13} aria-hidden="true" />
+    </button>
   );
 }
 

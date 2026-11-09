@@ -1,9 +1,20 @@
 import { useState } from 'react';
 import { SKILL_LABEL, SKILLS, type Skill } from '../modes/ai/api';
-import { formatDay, type HistorySession } from './api';
+import { formatDay } from './api';
+
+/** A session on the trend: a verdict's (HistorySession), or one on your own scored by what it did (P53). */
+export interface TrendSession<S extends Skill = Skill> {
+  id: string;
+  problem: string;
+  startedAt: number;
+  scores: Record<S, number>;
+  /** How it ended, named when hovered: "Pass" or "Not yet a pass" from `passed` without it. */
+  outcome?: string;
+  passed?: boolean;
+}
 
 /**
- * The score per skill over the AI interviews, as small multiples: one panel
+ * The score per skill over the mock interviews, as small multiples: one panel
  * per skill (the five never share an axis, so they never tangle), each a
  * 2px line over the sessions in time order on the same 1 to 5 scale, drawn
  * in SVG with the theme's colours like the skill map. Hovering or focusing a
@@ -21,7 +32,7 @@ const TICKS = [1, 3, 5];
 const x = (i: number, n: number) => (n <= 1 ? W / 2 : PAD_X + ((W - 2 * PAD_X) * i) / (n - 1));
 const y = (score: number) => PAD_TOP + ((5 - score) / 4) * (H - PAD_TOP - PAD_BOTTOM);
 
-function Panel({ skill, sessions, active, onActive }: { skill: Skill; sessions: HistorySession[]; active?: number; onActive: (i: number | undefined) => void }) {
+function Panel<S extends Skill>({ skill, sessions, active, onActive }: { skill: S; sessions: TrendSession<S>[]; active?: number; onActive: (i: number | undefined) => void }) {
   const n = sessions.length;
   const points = sessions.map((s, i) => [x(i, n), y(s.scores[skill])] as const);
   const latest = sessions[n - 1].scores[skill];
@@ -62,7 +73,8 @@ function Panel({ skill, sessions, active, onActive }: { skill: Skill; sessions: 
   );
 }
 
-export default function SkillTrends({ sessions, problemTitle }: { sessions: HistorySession[]; problemTitle: (id: string) => string }) {
+/** `skills`: the panels, every skill by default (an interview on your own has no communication score). */
+export default function SkillTrends<S extends Skill = Skill>({ sessions, problemTitle, skills = SKILLS as readonly Skill[] as readonly S[] }: { sessions: TrendSession<S>[]; problemTitle: (id: string) => string; skills?: readonly S[] }) {
   /** Oldest first, left to right. */
   const ordered = [...sessions].sort((a, b) => a.startedAt - b.startedAt);
   const [active, setActive] = useState<number>();
@@ -70,8 +82,8 @@ export default function SkillTrends({ sessions, problemTitle }: { sessions: Hist
   const current = active !== undefined ? ordered[active] : undefined;
   return (
     <div data-testid="skill-trends">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-        {SKILLS.map((s) => (
+      <div className={`grid grid-cols-2 gap-2 ${skills.length === 4 ? 'sm:grid-cols-4' : 'sm:grid-cols-3 lg:grid-cols-5'}`}>
+        {skills.map((s) => (
           <Panel key={s} skill={s} sessions={ordered} active={active} onActive={setActive} />
         ))}
       </div>
@@ -81,7 +93,7 @@ export default function SkillTrends({ sessions, problemTitle }: { sessions: Hist
             <span className="font-semibold text-ink">
               {formatDay(current.startedAt)} · {problemTitle(current.problem)}
             </span>{' '}
-            · {current.passed ? 'Pass' : 'Not yet a pass'}
+            · {current.outcome ?? (current.passed ? 'Pass' : 'Not yet a pass')}
           </>
         ) : (
           `Scores out of 5 across your last ${ordered.length} ${ordered.length === 1 ? 'interview' : 'interviews'}, oldest on the left. Hover to see a session.`
@@ -92,7 +104,7 @@ export default function SkillTrends({ sessions, problemTitle }: { sessions: Hist
         <thead>
           <tr>
             <th scope="col">Interview</th>
-            {SKILLS.map((s) => (
+            {skills.map((s) => (
               <th key={s} scope="col">
                 {SKILL_LABEL[s]}
               </th>
@@ -105,7 +117,7 @@ export default function SkillTrends({ sessions, problemTitle }: { sessions: Hist
               <th scope="row">
                 {formatDay(r.startedAt)}, {problemTitle(r.problem)}
               </th>
-              {SKILLS.map((s) => (
+              {skills.map((s) => (
                 <td key={s}>{r.scores[s]}</td>
               ))}
             </tr>

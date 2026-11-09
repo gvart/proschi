@@ -64,3 +64,76 @@ export async function mockHistory(page: Page, history: { full: boolean; total: n
   );
   return asked;
 }
+
+export const MAX = { ...SIGNED_IN, user: { ...SIGNED_IN.user, plan: 'max' } };
+
+const MIN = 60_000;
+const phases = (design: number) => ({ clarify: 4 * MIN, estimate: 4 * MIN, design: design * MIN, wrapup: 2 * MIN });
+
+/** Two interviews on your own kept in this browser (modes/store.ts InterviewSummary), the newest solved on time. */
+export const SOLO_LOCAL = [
+  {
+    problem: 'pastebin',
+    startedAt: Date.UTC(2026, 10, 1),
+    durationMin: 45,
+    totalMs: 50 * MIN,
+    overtime: true,
+    phases: phases(40),
+    questions: { asked: 4, good: 2, weak: 2, goodTotal: 4 },
+    estimates: { answered: 2, correct: 1, total: 2, factors: [1, 3] },
+    tests: { passed: 4, total: 6, solved: false },
+    checklist: { checked: 2, total: 4 },
+    drew: true,
+  },
+  {
+    problem: 'url-shortener',
+    startedAt: Date.UTC(2026, 10, 6),
+    durationMin: 45,
+    totalMs: 40 * MIN,
+    overtime: false,
+    phases: phases(30),
+    questions: { asked: 4, good: 4, weak: 0, goodTotal: 4 },
+    estimates: { answered: 2, correct: 2, total: 2, factors: [1, 1.1] },
+    tests: { passed: 6, total: 6, solved: true },
+    checklist: { checked: 4, total: 4 },
+    drew: true,
+  },
+];
+
+/** The account's interviews on your own (GET /api/me/interviews/solo): the pastebin one again, and an older one from another device. */
+export const SOLO_KEPT = [
+  {
+    problem: 'pastebin',
+    startedAt: Date.UTC(2026, 10, 1),
+    durationMin: 45,
+    totalMs: 50 * MIN,
+    reachedDesign: true,
+    drew: true,
+    solved: false,
+    results: { phases: phases(40), questions: { asked: 4, good: 2, weak: 2, goodTotal: 4 }, estimates: { answered: 2, correct: 1, total: 2 }, tests: { passed: 4, total: 6 }, checklist: { checked: 2, total: 4 } },
+  },
+  {
+    problem: 'rate-limiter',
+    startedAt: Date.UTC(2026, 9, 20),
+    durationMin: 30,
+    totalMs: 28 * MIN,
+    reachedDesign: true,
+    drew: true,
+    solved: false,
+    results: { phases: phases(18), questions: { asked: 2, good: 1, weak: 1, goodTotal: 4 }, estimates: { answered: 1, correct: 0, total: 2 }, checklist: { checked: 1, total: 4 } },
+  },
+];
+
+/** Puts SOLO_LOCAL in this browser and answers the account's (SOLO_KEPT); returns the method of each call to /api/me/interviews/solo. Register after mockSignedIn. */
+export async function mockSolo(page: Page): Promise<string[]> {
+  await page.addInitScript((history) => localStorage.setItem('proschi.interview.history', JSON.stringify(history)), SOLO_LOCAL);
+  const asked: string[] = [];
+  await page.route(
+    (url) => url.pathname === '/api/me/interviews/solo',
+    (route) => {
+      asked.push(route.request().method());
+      return route.fulfill({ json: route.request().method() === 'GET' ? { sessions: SOLO_KEPT } : { added: 0 } });
+    },
+  );
+  return asked;
+}

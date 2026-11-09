@@ -193,7 +193,9 @@ export function requirementKey(r: Requirement): string {
     case 'survive':
       return `survive ${canonical(r.target)}`;
     case 'cost':
-      return 'cost';
+      return r.scope ? `cost ${'team' in r.scope ? `@${r.scope.team}` : 'tag' in r.scope ? `.${r.scope.tag}` : `group ${r.scope.group}`}` : 'cost';
+    case 'lag':
+      return `lag ${r.useCase}`;
   }
 }
 
@@ -205,6 +207,8 @@ function requirementFields(r: Requirement): Record<string, unknown> {
       return { minPercent: r.minPercent };
     case 'cost':
       return { maxUsdPerMonth: r.maxUsdPerMonth };
+    case 'lag':
+      return { maxMs: r.maxMs };
     default:
       return {};
   }
@@ -225,7 +229,7 @@ export function diffDiagrams(before: Diagram, after: Diagram): DiagramDiff {
     useCases: diffBy(before.useCases, after.useCases, (u) => u.id, useCaseFields),
     scenarios: diffBy(scenariosOf(before), scenariosOf(after), (s) => `${s.useCase}/${s.scenario.id}`, scenarioFields),
     requirements: diffBy(before.requirements ?? [], after.requirements ?? [], requirementKey, requirementFields),
-    traffic: diffBy(before.traffic ?? [], after.traffic ?? [], (t) => t.useCase, (t) => ({ rps: t.rps, mix: t.mix })),
+    traffic: diffBy(before.traffic ?? [], after.traffic ?? [], (t) => t.useCase, (t) => ({ rps: t.rps, ...(t.avgRps !== undefined ? { avgRps: t.avgRps } : {}), mix: t.mix })),
     capacity: diffBy(before.capacity ?? [], after.capacity ?? [], (c) => c.node, withoutLoc),
     systems: diffBy(before.systems ?? [], after.systems ?? [], (s) => s.id, systemFields),
   };

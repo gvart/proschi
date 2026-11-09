@@ -1,25 +1,15 @@
-import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import ReactFlow, {
-  Background,
-  BackgroundVariant,
-  Controls,
-  Panel,
-  ReactFlowProvider,
-  applyEdgeChanges,
-  applyNodeChanges,
-  useReactFlow,
-} from 'reactflow';
-import type { Edge, EdgeChange, Node, NodeChange } from 'reactflow';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { ReactFlowProvider } from 'reactflow';
+import type { Edge, Node } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { confirm, copyFallback, notify, prompt } from '../../design/dialogs';
-import { useToastClearance } from '../../design/toastClearance';
+import { confirm, copyFallback } from '../../design/dialogs';
 import { Group, Panel as SplitPanel, Separator, type Layout } from 'react-resizable-panels';
 import {
   AlignLeft,
   ArrowLeft,
-  ChevronRight,
   AlertCircle,
   AlertTriangle,
+  Info,
   BookOpen,
   Check,
   CheckCircle2,
@@ -33,27 +23,22 @@ import {
   List,
   Play,
   Route,
-  Trash2,
   Upload,
   Code2,
-  Pencil,
-  Gauge,
   Network,
   ArchiveRestore,
   Import,
   RefreshCw,
   History,
   PanelLeft,
-  PanelLeftOpen,
   Search,
 } from 'lucide-react';
 import { examples, parse, type Diagnostic, type DiagramScenario, type DiagramUseCase, type SourceLoc } from '../../dsl';
 import { toFlowEdges } from '../../dsl/layout';
 import { withEdgeStyles } from '../../dsl/toCanvas';
-import Legend from '../Canvas/Legend';
 import { useAutoLayout } from '../Diagram/useDiagramLayout';
-import { FIT_VIEW_OPTIONS, useFitOnChange } from '../Diagram/useFitOnChange';
 import { loadJson, saveJson } from '../../services/storage';
+import { BOTTLENECK_FROM, criticalPathOf, type SimOverlay } from '../../sim/overlay';
 import { FIRST_RUN_SOURCE, exampleFromSearch, withoutExample } from '../../playground/exampleLink';
 import {
   BLANK_SOURCE,
@@ -81,28 +66,25 @@ import { filesResolver, importableFiles, teamFileOf, usedImports, type TeamFile 
 import { LONG_LINK_MESSAGE, LONG_LINK_SHORTEN_MESSAGE, decodeShareLink, encodeShareHash, isLongLink, readShareLink, shareUrl, type PlaybackTarget } from '../../playground/share';
 import { applyMerge, backupFileName, buildBackup, mergeSummary, planMerge, readBackup } from '../../playground/backup';
 import { loadProgress, mergeProgress, saveProgress } from '../../practice/progress';
-import { addConnection, addNode, clearPositions, removeConnections, removeNode, renameNode, setNodePosition, uniqueId } from '../../dsl/edit';
-import type { Diagram } from '../../dsl/types';
-import { TECH_DRAG_TYPE } from '../Diagram/Palette';
-import { CanvasMenu, ConnectHint, EmptyCanvas, PaletteDock, PaletteToggle, type CanvasMenuState } from '../Diagram/CanvasEditing';
-import { historyKey, useConnectHint, usePaletteOpen } from '../Diagram/canvasEditState';
-import Inspector from '../Diagram/Inspector';
-import FlowParticles from '../Overlay/FlowParticles';
-import type { SimOverlay } from '../../sim/overlay';
-import ComponentNode from '../Canvas/ComponentNode';
-import GroupNode from '../Canvas/GroupNode';
-import SystemNode from '../Canvas/SystemNode';
-import TextNode from '../Canvas/TextNode';
-import { SystemActionsContext, type SystemActions, type SystemNodeData } from '../Canvas/systemActions';
+import { addConnection, addNode, addWhatIf, removeConnections, removeNode, renameNode, scaleTraffic, uniqueId } from '../../dsl/edit';
+import { useCanvasEdits } from '../Diagram/useCanvasEdits';
+import { useOverlayOn, withEdgeLoads } from '../Diagram/canvasShared';
+import { EmptyCanvas } from '../Diagram/CanvasEditing';
+import { isShortcutsKey } from '../Diagram/canvasEditState';
+import ShortcutsDialog from './ShortcutsDialog';
+import { SystemActionsContext, type SystemActions } from '../Canvas/systemActions';
 import { useSystemView, type Crumb } from './useSystemView';
 import PaneLoading from '../PaneLoading';
 import ViewTabs from '../Analysis/ViewTabs';
 import { parseView, type View } from '../Analysis/view';
-import { useSimulation } from '../Analysis/useSimulation';
+import { useSimulation, useWhatIfSimulation } from '../Analysis/useSimulation';
+import WhatIfControl from '../WhatIf/WhatIfControl';
+import { SavedWhatIfs, WhatIfImpact } from '../WhatIf/WhatIfResults';
+import { isActive, liveChanges, liveOptions, NO_WHATIF, toggleFailed, whatIfLabel, type LiveWhatIf } from '../WhatIf/whatIf';
 import { editorReviewInput } from '../../review/editor';
 import CodeEditor, { type CodeEditorHandle } from './CodeEditor';
 import Menu, { MenuItem } from './Menu';
-import { downloadBlob, downloadText, exportImage, fileNameFor, renderPreviewPng } from './exportDiagram';
+import { downloadBlob, downloadText, renderPreviewPng } from './exportDiagram';
 import { MAX_PREVIEW_BYTES, createShare, embedSnippet, embedUrl, fetchShare, shareIdFromSearch } from '../../services/shares';
 import { ApiError } from '../../services/api';
 import { FeaturesContext, showsUpgrade, useFeatures } from '../featureState';
@@ -114,6 +96,7 @@ import { useIsPhone } from '../../onboarding/layout';
 import { useAccount } from '../../practice/useAccount';
 import AccountMenu from '../../practice/AccountMenu';
 import { track } from '../../services/metrics';
+import type { SystemSummary } from '../Canvas/systemSummary';
 import Banner, { type BannerMessage } from './Banner';
 import ExportMenu from './ExportMenu';
 import { useZenMode } from './useZenMode';
@@ -122,6 +105,9 @@ import { ZenButton, ZenCollapse, ZenStatus } from './Zen';
 import EditorZone from './EditorZone';
 import CloudSection, { CloudIcon } from './CloudStatus';
 import FileSidebar, { type FileActions } from './FileSidebar';
+import FilesRail from './FilesRail';
+import { MOD_KEY } from './modKey';
+import DiagramView, { type ImageRequest } from './DiagramView';
 import QuickOpen from './QuickOpen';
 import { addDocIn, brokenImports, docsInFolder, duplicateDoc, folderOf, moveDoc, removeFolder, renameFolder } from '../../playground/folders';
 import { useCloudSync } from './useCloudSync';
@@ -136,10 +122,9 @@ import HelpMenu from '../../onboarding/HelpMenu';
 import Header from '../../design/Header';
 import { markSeen, startMode, type StartMode } from '../../onboarding/seen';
 import type { CoverBand } from '../../onboarding/Tour';
-import type { FitInset } from '../Diagram/useFitOnChange';
-import { PlaybackMiniMap, UseCasePlayback } from '../UseCases/UseCasePlayback';
-import { PLAYBACK_EDGE_TYPES, type PlaybackView } from '../UseCases/playbackView';
+import { UseCasePlayback } from '../UseCases/UseCasePlayback';
 import { useFeedbackDiagram } from '../../feedback/diagram';
+import { loadHints } from './loadHints';
 
 // Panes that are not visible at start load on first use.
 const HldView = lazy(() => import('../Hld/HldView'));
@@ -158,22 +143,34 @@ const TourHint = lazy(() => import('../../onboarding/TourHint'));
 const StarterCard = lazy(() => import('../../onboarding/StarterCard'));
 
 const noop = () => {};
+
+/**
+ * A collapsed system box carries its team design's load: its busiest node's
+ * utilisation (the stub's, for a stub), so the edges into it take that colour
+ * and the box is ringed as a bottleneck from 70% or once saturated.
+ */
+function withSystemBoxes(overlay: SimOverlay, summaries: ReadonlyMap<string, SystemSummary>): SimOverlay {
+  const nodes = { ...overlay.nodes };
+  for (const [id, s] of summaries) {
+    if (nodes[id] || s.status === 'unsimulated' || s.status === 'idle') continue;
+    const saturated = s.utilization >= 1;
+    nodes[id] = { utilization: s.utilization, saturated, ...(saturated || s.utilization >= BOTTLENECK_FROM ? { bottleneck: true } : {}) };
+  }
+  return { ...overlay, nodes };
+}
 const LEGACY_SOURCE_KEY = 'proschi.playground.source';
 /** The splitter's position between the code and diagram panes. */
 const SPLIT_KEY = 'proschi.playground.split';
 const PARSE_DELAY_MS = 150;
+/** How long the cursor rests before the canvas marks what its line declares. */
+const CURSOR_DELAY_MS = 120;
+const NO_IDS: string[] = [];
 /** Whether the diagrams sidebar is pinned open, on wider screens; until it is set, from this width on. */
 const FILES_KEY = 'proschi.playground.files';
 const FILES_PINNED_FROM = 1440;
-const MOD_KEY = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl';
+/** "Overlay: load", on unless this viewer turned it off (false). */
+const OVERLAY_KEY = 'proschi.playground.overlay';
 const VIEW_LABEL: Record<View, string> = { diagram: 'Diagram', results: 'Results', hld: 'HLD' };
-
-const nodeTypes = {
-  componentNode: ComponentNode,
-  groupNode: GroupNode,
-  systemNode: SystemNode,
-  textNode: TextNode,
-};
 
 function loadInitialState(): DocumentState {
   // A share link wins over `?example=`: once an example is edited, the address bar holds the edits.
@@ -268,6 +265,8 @@ export default function Playground() {
   const [filesPeek, setFilesPeek] = useState(false);
   const [drawer, setDrawer] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const closeShortcuts = useCallback(() => setShowShortcuts(false), []);
   const [showShortLinks, setShowShortLinks] = useState(false);
   /** The short link made for a document and its imports, so asking again reuses it. */
   const shortLinkRef = useRef<{ key: string; id: string; url: string } | null>(null);
@@ -324,7 +323,14 @@ export default function Playground() {
     [parsedSource, rootPath, importableKey, cloudErrorsKey, cloudRefs.loading],
   );
   const { diagram, diagnostics } = parsed;
-  const simulation = useSimulation(diagram);
+  const baseSimulation = useSimulation(diagram);
+  /** The live what-if (components/WhatIf): view state of this document, which the text never sees until saved. */
+  const [whatIfState, setWhatIfState] = useState<{ doc: string; whatIf: LiveWhatIf }>({ doc: current.id, whatIf: NO_WHATIF });
+  const whatIf = whatIfState.doc === current.id ? whatIfState.whatIf : NO_WHATIF;
+  const setWhatIf = useCallback((next: LiveWhatIf) => setWhatIfState({ doc: current.id, whatIf: next }), [current.id]);
+  const whatIfOptions = useMemo(() => liveOptions(diagram, whatIf), [diagram, whatIf]);
+  /** The analysis the canvas and Results show: the design as written, or under the what-if. */
+  const simulation = useWhatIfSimulation(diagram, baseSimulation, whatIfOptions);
   /** What the canvas shows of the document's systems: collapsed, expanded in place, or navigated into. */
   const systems = useSystemView(current.id, diagram, simulation.analysis, simulation.results);
   const { shown } = systems;
@@ -433,11 +439,53 @@ export default function Playground() {
   }, [source, playbackKey, importsKey]);
 
   const [nodes, setNodes] = useState<Node[]>([]);
-  /** "Overlay: load": the analysis drawn on the diagram, for documents with a traffic block. */
-  const [overlayOn, setOverlayOn] = useState(false);
+  /** "Overlay: load": the analysis drawn on the diagram, for documents with a traffic block; on until turned off. */
+  const [overlayOn, flipOverlay] = useOverlayOn(OVERLAY_KEY);
+  const toggleOverlay = () => {
+    flipOverlay();
+    // Turning it on is a look at the simulation; being on by default is not.
+    if (!overlayOn) track('simulation_run', { once: 'session' });
+  };
   const canOverlay = (shown.traffic?.length ?? 0) > 0;
   const { overlayOf, summaries } = systems;
-  const overlay = useMemo(() => (overlayOn && canOverlay ? overlayOf() : undefined), [overlayOn, canOverlay, overlayOf]);
+  const overlay = useMemo(() => {
+    if (!overlayOn || !canOverlay) return undefined;
+    const base = withSystemBoxes(overlayOf(), summaries);
+    // The p99 path of the use case picked for playback, else of the busiest one.
+    if (selectedUseCaseId === undefined) return base;
+    const critical = criticalPathOf(shown, systems.analysis, selectedUseCaseId) ?? base.critical;
+    return { ...base, critical };
+  }, [overlayOn, canOverlay, overlayOf, summaries, selectedUseCaseId, shown, systems.analysis]);
+  /** Right-click → Simulate down: the node down (or up again) in the live what-if, with the overlay on to show it. */
+  const simulateDown = (id: string) => {
+    setWhatIf(toggleFailed(whatIf, id));
+    if (!overlayOn) toggleOverlay();
+  };
+  /** Previews a saved what-if (Pro) on the canvas; none goes back to the design as written. */
+  const previewWhatIf = (name: string | undefined) => {
+    setWhatIf(name === undefined ? NO_WHATIF : { ...NO_WHATIF, saved: name });
+    if (name === undefined) return;
+    if (!overlayOn) toggleOverlay();
+    setView('diagram');
+    setMobilePane('diagram');
+  };
+  const saveWhatIf = () => {
+    if (!isActive(whatIf) || whatIf.saved !== undefined) return;
+    const name = whatIfLabel(diagram, whatIf);
+    const changes = liveChanges(diagram, whatIf);
+    editSource((s) => addWhatIf(s, name, changes).source);
+    setNotice(`Saved as what-if "${addWhatIf(source, name, changes).name}" at the end of the code.`);
+  };
+  /** Multiplies the traffic block's rates by the slider's, which then goes back to ×1. */
+  const writeTraffic = () => {
+    const factor = whatIf.multiplier;
+    if (factor === 1) return;
+    editSource((s) => scaleTraffic(s, factor));
+    setWhatIf({ multiplier: 1, failed: whatIf.failed });
+    setNotice(`Traffic multiplied by ${Number(factor.toFixed(2))} in the code.`);
+  };
+  /** With the overlay on, `62% · $400/mo` after each node line in the code too. */
+  const codeHints = useMemo(() => (overlay ? loadHints(diagram, simulation.analysis) : undefined), [overlay, diagram, simulation.analysis]);
   const shownNodes = useMemo(
     () =>
       nodes.map((n) => {
@@ -449,11 +497,24 @@ export default function Playground() {
   );
   const systemActions = useMemo<SystemActions>(() => ({ open: systems.open, toggle: systems.toggle }), [systems.open, systems.toggle]);
   const [edges, setEdges] = useState<Edge[]>([]);
+  /** The edges with what they carry while the overlay is on (not while a use case plays over them). */
+  const shownEdges = useMemo(() => withEdgeLoads(edges, playing ? undefined : overlay), [edges, overlay, playing]);
+  /** A node picked in Results, to select and zoom to on the canvas; `n` makes picking it again count. */
+  const [focusRequest, setFocusRequest] = useState<{ id: string; n: number } | null>(null);
+  const focusOnCanvas = (id: string) => {
+    setFocusRequest((r) => ({ id, n: (r?.n ?? 0) + 1 }));
+    setView('diagram');
+    setMobilePane('diagram');
+  };
+  // Done with once the canvas is left: coming back to it later does not zoom to the node again.
+  useEffect(() => {
+    if (view !== 'diagram') setFocusRequest(null);
+  }, [view]);
 
   // Usage counts: the first look at the simulation's numbers (the Results or
   // HLD tab, or the load overlay) and at the tests (Results), once per session each.
   useEffect(() => {
-    if (view === 'results' || view === 'hld' || (overlayOn && canOverlay)) track('simulation_run', { once: 'session' });
+    if (view === 'results' || view === 'hld') track('simulation_run', { once: 'session' });
     if (view === 'results') track('test_run', { once: 'session', key: 'test_run:editor' });
   }, [view, overlayOn, canOverlay]);
 
@@ -521,7 +582,7 @@ export default function Playground() {
     setBanner({ tone: 'warning', message: `${names}${broken.length > 3 ? ` and ${broken.length - 3} more` : ''} ${broken.length === 1 ? 'has an import that no longer finds its file' : 'have imports that no longer find their files'}; update the import lines.` });
   };
 
-  // Ctrl/Cmd+P: go to a diagram (instead of printing the page); Escape closes the phone drawer.
+  // Ctrl/Cmd+P: go to a diagram (instead of printing the page); `?` outside fields: the shortcuts; Escape closes the phone drawer.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -531,6 +592,10 @@ export default function Playground() {
       if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'p') {
         e.preventDefault();
         setQuickOpen(true);
+      }
+      if (isShortcutsKey(e)) {
+        e.preventDefault();
+        setShowShortcuts(true);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -743,22 +808,17 @@ export default function Playground() {
 
   /** An image of the diagram asked for in the Export menu; the canvas makes it once it is on screen. */
   const [imageRequest, setImageRequest] = useState<ImageRequest | null>(null);
-  const requestImage = (format: ImageRequest['format']) => {
+  const requestImage = (format: ImageRequest['format'], scale?: ImageRequest['scale']) => {
     stopPlaying();
     setView('diagram');
     setMobilePane('diagram');
-    setImageRequest({ format });
+    setImageRequest({ format, scale });
   };
 
   const pickScenario = (id: string) => {
     setSelectedScenarioId(id);
     setInitialStep(undefined);
     if (!playing) startPlaying();
-  };
-
-  const moveNodes = (moved: { id: string; position: { x: number; y: number } }[]) => {
-    const own = moved.filter((n) => !importedNodes.has(n.id));
-    if (own.length > 0) editSource((src) => own.reduce((acc, n) => setNodePosition(acc, n.id, n.position), src));
   };
 
   const renameFromCanvas = (id: string, name: string) => {
@@ -777,6 +837,48 @@ export default function Playground() {
     const id = uniqueId(source, tech, importedNodes.keys());
     editSource((src) => addNode(src, { id, name: tech, tech, position }).source);
     return id;
+  };
+  const canvasEdits = useCanvasEdits({ source, diagram: shown, apply: editSource, imported: importedNodes, onNotice: setNotice, lockedIn: systems.focusFile });
+  const locOf = (id: string) => shown.nodes.find((n) => n.id === id)?.loc ?? shown.edges.find((e) => e.id === id)?.loc;
+  /** Selects a node's or a connection's text in the code pane (on a phone, switching to it). */
+  const jumpToCode = (id: string) => {
+    const loc = locOf(id);
+    if (!loc) return;
+    setMobilePane('code');
+    if (loc.file !== undefined || team) return selectDiagnostic(loc);
+    // After the code pane is shown, so the editor can take the focus.
+    requestAnimationFrame(() => editorRef.current?.select(loc.line, loc.col, loc.length, true));
+  };
+  /** The cursor's line in the code pane, once it rests; its file is the team file when that is shown. */
+  const [cursorAt, setCursorAt] = useState<{ file?: string; line: number } | null>(null);
+  const cursorTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const followCursor = (file: string | undefined, line: number) => {
+    clearTimeout(cursorTimer.current);
+    cursorTimer.current = setTimeout(() => setCursorAt((prev) => (prev && prev.file === file && prev.line === line ? prev : { file, line })), CURSOR_DELAY_MS);
+  };
+  useEffect(() => () => clearTimeout(cursorTimer.current), []);
+  /** What the cursor's line declares, marked on the canvas; nothing while playing, or until the text typed is parsed. */
+  const linkedIds = useMemo(() => {
+    if (!cursorAt || playing || cursorAt.file !== team?.path || (!team && source !== parsedSource)) return NO_IDS;
+    const here = (loc: SourceLoc) => loc.file === cursorAt.file && loc.line === cursorAt.line;
+    const ids = [...shown.nodes.filter((n) => here(n.loc)).map((n) => n.id), ...shown.edges.filter((e) => here(e.loc)).map((e) => e.id)];
+    return ids.length > 0 ? ids : NO_IDS;
+  }, [cursorAt, playing, team, source, parsedSource, shown]);
+  /**
+   * A canvas selection shown in the code pane: one item's declaration is selected and scrolled to,
+   * several are shaded. The canvas keeps the focus (and its keys), and the pane stays as it is on a phone.
+   */
+  const linkSelection = (ids: string[]) => {
+    const editor = team ? teamEditorRef.current : editorRef.current;
+    // While the reader is in the code, the canvas follows it, not the other way round.
+    if (!editor || editor.hasFocus()) return;
+    if (ids.length > 0) setCursorAt(null);
+    const locs = ids.flatMap((id) => {
+      const loc = locOf(id);
+      return loc && loc.file === team?.path ? [loc] : [];
+    });
+    editor.linkLines(locs.map((l) => l.line));
+    if (ids.length === 1 && locs.length === 1) editor.select(locs[0].line, locs[0].col, locs[0].length, false);
   };
   const undoCanvas = useCallback(() => void editorRef.current?.undo(), []);
   const redoCanvas = useCallback(() => void editorRef.current?.redo(), []);
@@ -1017,6 +1119,7 @@ export default function Playground() {
             setTourRun((n) => n + 1);
             setTour('tour');
           }}
+          onShortcuts={() => setShowShortcuts(true)}
         />
         <input
           ref={fileInputRef}
@@ -1247,7 +1350,7 @@ export default function Playground() {
             {team && <TeamFileBar team={team} up={systems.crumbs[systems.crumbs.length - 2]} onBack={systems.goTo} />}
             {/* Hidden, not unmounted, while a team file is shown, so the document keeps its cursor and undo history. */}
             <div className="flex-1 min-h-0" hidden={!!team}>
-              <CodeEditor ref={editorRef} value={source} onChange={typeSource} diagnostics={rootDiagnostics} nodeIds={nodeIds} />
+              <CodeEditor ref={editorRef} value={source} onChange={typeSource} diagnostics={rootDiagnostics} nodeIds={nodeIds} extensions={codeHints} onCursor={(line) => followCursor(undefined, line)} />
             </div>
             {team && (
               <div className="flex-1 min-h-0">
@@ -1259,6 +1362,7 @@ export default function Playground() {
                   readOnly={!!team.readOnly}
                   diagnostics={teamDiagnostics}
                   nodeIds={shown.nodes.map((n) => n.id)}
+                  onCursor={(line) => followCursor(team.path, line)}
                 />
               </div>
             )}
@@ -1285,10 +1389,14 @@ export default function Playground() {
                     analysis={simulation.analysis}
                     results={simulation.results}
                     onSelect={selectDiagnostic}
+                    onFocusNode={focusOnCanvas}
+                    whatIf={whatIfOptions && <WhatIfImpact label={whatIfLabel(diagram, whatIf)} base={baseSimulation} now={simulation} onReset={() => setWhatIf(NO_WHATIF)} />}
+                    edgeTab={hasPartner && !phone}
+                    whatIfs={<SavedWhatIfs diagram={diagram} previewing={whatIf.saved} onPreview={previewWhatIf} useCaseId={selectedUseCaseId} />}
                     review={
                       <ReviewPanel
                         source={source}
-                        input={() => editorReviewInput(parsedSource, parsed, simulation.analysis, simulation.results, { path: rootPath, imports })}
+                        input={() => editorReviewInput(parsedSource, parsed, baseSimulation.analysis, baseSimulation.results, { path: rootPath, imports })}
                         onSelect={selectDiagnostic}
                         onOpenPartner={hasPartner ? () => setPartnerOpen(true) : undefined}
                       />
@@ -1299,8 +1407,8 @@ export default function Playground() {
                     diagram={diagram}
                     nodes={nodes}
                     edges={edges}
-                    analysis={simulation.analysis}
-                    results={simulation.results}
+                    analysis={baseSimulation.analysis}
+                    results={baseSimulation.results}
                     onOpenResults={() => setView('results')}
                   />
                 ) : (
@@ -1308,7 +1416,7 @@ export default function Playground() {
                   <UseCasePlayback
                     useCase={playing ? playedUseCase : undefined}
                     nodes={shownNodes}
-                    edges={edges}
+                    edges={shownEdges}
                     onBack={stopPlaying}
                     initialStep={initialStep}
                     onStepChange={setPlayStep}
@@ -1322,14 +1430,22 @@ export default function Playground() {
                           playback={pv}
                           overlay={overlay}
                           canOverlay={canOverlay}
-                          onToggleOverlay={() => setOverlayOn((on) => !on)}
+                          onToggleOverlay={toggleOverlay}
+                          whatIfControl={
+                            systems.crumbs.length === 1 && (
+                              <WhatIfControl diagram={diagram} whatIf={whatIf} onChange={setWhatIf} onSave={saveWhatIf} onWriteTraffic={writeTraffic} phone={phone} />
+                            )
+                          }
+                          onSimulateDown={canOverlay ? simulateDown : undefined}
+                          downIds={whatIf.failed}
+                          focusRequest={focusRequest}
                           edges={pv.edges}
                           onNodesChange={setNodes}
                           onEdgesChange={setEdges}
                           title={shown.title}
                           hasPinnedNodes={!systems.focusFile && shown.nodes.some((n) => n.position)}
                           importedNodes={importedNodes}
-                          onMoveNodes={moveNodes}
+                          onMoveNodes={canvasEdits.move}
                           onConnectNodes={connectNodes}
                           onRenameNode={renameFromCanvas}
                           onAddNode={addFromCanvas}
@@ -1344,8 +1460,17 @@ export default function Playground() {
                           focusInbound={systems.focusInbound}
                           onCrumb={systems.goTo}
                           onOpenSystem={(id) => (summaries.get(id)?.linked ? systems.open(id) : setNotice(`'${id}' is declared without a design; add from "file" to its block to open it.`))}
-                          onResetLayout={() => editSource(clearPositions)}
+                          onResetLayout={canvasEdits.resetLayout}
                           onDelete={deleteFromCanvas}
+                          onCopyNodes={canvasEdits.copy}
+                          onPasteNodes={canvasEdits.paste}
+                          onDuplicateNodes={canvasEdits.duplicate}
+                          onReconnect={canvasEdits.reconnect}
+                          onUnpinNode={canvasEdits.unpin}
+                          flows={systems.focusFile ? undefined : { source, diagram, onChange: (next) => editSource(() => next) }}
+                          onJumpToCode={jumpToCode}
+                          onSelectionLink={linkSelection}
+                          linked={linkedIds}
                           fitKey={`${mobilePane}:${layoutSettled}`}
                           layoutBusy={layoutBusy}
                         glideKey={String(splitMoves)}
@@ -1413,6 +1538,8 @@ export default function Playground() {
           onClose={() => setQuickOpen(false)}
         />
       )}
+
+      {showShortcuts && <ShortcutsDialog partner={hasPartner} onClose={closeShortcuts} />}
 
       {showExamples && (
         <Suspense fallback={<PaneLoading overlay />}>
@@ -1587,554 +1714,6 @@ function ScenarioBar({ useCase, current, onPick }: ScenarioBarProps) {
   );
 }
 
-interface ImageRequest {
-  format: 'png' | 'svg';
-}
-
-interface DiagramViewProps {
-  nodes: Node[];
-  edges: Edge[];
-  onNodesChange: (update: (nodes: Node[]) => Node[]) => void;
-  onEdgesChange: (update: (edges: Edge[]) => Edge[]) => void;
-  title?: string;
-  hasPinnedNodes: boolean;
-  onMoveNodes: (moved: { id: string; position: { x: number; y: number } }[]) => void;
-  onConnectNodes: (from: string, to: string) => void;
-  onRenameNode: (id: string, name: string) => void;
-  /** Adds a component from the palette, at a canvas position when it was dropped; returns its id, if it was added. */
-  onAddNode: (techStack: string, position?: { x: number; y: number }) => string | undefined;
-  /** Applies an inspector edit to the text. */
-  onEdit: (edit: (source: string) => string) => void;
-  /** Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z on the canvas: the code editor's undo and redo, where every canvas edit is one step. */
-  onUndo: () => void;
-  onRedo: () => void;
-  /** Phones add components from a bottom sheet instead of the docked palette. */
-  phone: boolean;
-  /** The parsed diagram, for the inspector. */
-  diagram: Diagram;
-  /** The simulation drawn on the canvas, when "Overlay: load" is on. */
-  overlay?: SimOverlay;
-  /** The document has traffic to simulate, so the overlay can be turned on. */
-  canOverlay: boolean;
-  onToggleOverlay: () => void;
-  onResetLayout: () => void;
-  onDelete: (nodeIds: string[], edgeIds: string[]) => void;
-  /** Changes when the view becomes visible again, so it can re-fit. */
-  fitKey: string;
-  /** A layout is on its way (ELK, then the glide): `data-layout-busy` on the canvas, which the e2e tests wait out. */
-  layoutBusy: boolean;
-  /** Changes when the pane was resized in place (the splitter), so it can glide to a new fit. */
-  glideKey: string;
-  /** An image to export (the Export menu in the header), made once the nodes are drawn. */
-  imageRequest: ImageRequest | null;
-  onImageDone: () => void;
-  /** Nodes declared in imported files (id → file); they cannot be moved here. */
-  importedNodes: Map<string, string>;
-  /** A short message shown over the canvas, e.g. why an edit was refused. */
-  notice: string | null;
-  onNotice: (message: string) => void;
-  /** A band of the screen covered by a floating card; fitting keeps the diagram clear of it. */
-  cover?: CoverBand | null;
-  /** The use case playing over the diagram, if any; the canvas is read-only meanwhile. */
-  playback: PlaybackView;
-  /** Where the canvas is among the document's systems, top first; one crumb at the top. */
-  crumbs: Crumb[];
-  /** The team file shown when navigated into a system; the canvas cannot edit it. */
-  focusFile?: string;
-  /** The team file cannot be edited in the code pane (it came with a link, or from a remote source). */
-  focusReadOnly?: boolean;
-  /** What the rest of the document sends into the design navigated into. */
-  focusInbound?: string;
-  onCrumb: (path: string) => void;
-  /** Navigates into a system box (double-click). */
-  onOpenSystem: (id: string) => void;
-}
-
-/** Renders the parsed diagram. Canvas edits are written back to the text, which stays the source of truth. */
-function DiagramView({
-  nodes,
-  edges,
-  onNodesChange,
-  onEdgesChange,
-  title,
-  hasPinnedNodes,
-  onMoveNodes,
-  onConnectNodes,
-  onRenameNode,
-  onAddNode,
-  onEdit,
-  onUndo,
-  onRedo,
-  phone,
-  diagram,
-  overlay,
-  canOverlay,
-  onToggleOverlay,
-  onResetLayout,
-  onDelete,
-  fitKey,
-  layoutBusy,
-  glideKey,
-  imageRequest,
-  onImageDone,
-  importedNodes,
-  notice,
-  onNotice,
-  cover,
-  playback,
-  crumbs,
-  focusFile,
-  focusReadOnly,
-  focusInbound,
-  onCrumb,
-  onOpenSystem,
-}: DiagramViewProps) {
-  const playing = playback.active;
-  const { getNodes, screenToFlowPosition } = useReactFlow();
-  const [selection, setSelection] = useState<{ nodes: Node[]; edges: Edge[] }>({ nodes: [], edges: [] });
-  // Rename and Delete stay clear of the toasts.
-  const clearToasts = useToastClearance();
-  // The palette: docked beside the canvas on wider screens (remembered), a sheet on phones.
-  const [docked, setDocked] = usePaletteOpen('proschi.canvas.palette');
-  const [sheet, setSheet] = useState(false);
-  const [paletteFocus, setPaletteFocus] = useState(false);
-  const canAdd = !playing && crumbs.length === 1;
-  const paletteOpen = canAdd && (phone ? sheet : docked);
-  const togglePalette = () => {
-    setPaletteFocus(!paletteOpen);
-    if (phone) setSheet(!sheet);
-    else setDocked(!docked);
-  };
-  const closePalette = () => (phone ? setSheet(false) : setDocked(false));
-  const [menu, setMenu] = useState<CanvasMenuState | null>(null);
-  const closeMenu = useCallback(() => setMenu(null), []);
-  const [hintSeen, dismissHint] = useConnectHint();
-  /** A component just added, selected once the layout draws it. */
-  const [pendingSelect, setPendingSelect] = useState<string | null>(null);
-  /** The node or connection whose settings were closed, so they stay closed until something else is selected. */
-  const [closedSettings, setClosedSettings] = useState<string | null>(null);
-  const single = selection.nodes.length + selection.edges.length === 1 ? (selection.nodes[0] ?? selection.edges[0]) : undefined;
-  const selectedNode = selection.nodes.length === 1 ? diagram.nodes.find((n) => n.id === selection.nodes[0].id) : undefined;
-  const selectedEdge = selection.edges.length === 1 ? diagram.edges.find((e) => e.id === selection.edges[0].id) : undefined;
-  const showSettings = !playing && single !== undefined && single.id !== closedSettings && (selectedNode !== undefined || selectedEdge !== undefined);
-  const selectionCount = selection.nodes.length + selection.edges.length;
-  const hasSelection = !playing && selectionCount > 0;
-  const singleNode = selection.nodes.length === 1 && selection.edges.length === 0 ? selection.nodes[0] : undefined;
-  const dragStartRef = useRef(new Map<string, { x: number; y: number }>());
-
-  /**
-   * A dropped component is selected, so its settings open; one clicked in the palette is not, so
-   * the palette stays for the next one. A phone's sheet closes on a tap, and selects it too.
-   */
-  const addComponent = (tech: string, position?: { x: number; y: number }) => {
-    const id = onAddNode(tech, position);
-    if (id && (position || phone)) setPendingSelect(id);
-  };
-  /** Selects only `id` (a node or a connection), as a click would. */
-  const selectOnly = useCallback(
-    (id: string) => {
-      onNodesChange((current) => current.map((n) => (!!n.selected === (n.id === id) ? n : { ...n, selected: n.id === id })));
-      onEdgesChange((current) => current.map((e) => (!!e.selected === (e.id === id) ? e : { ...e, selected: e.id === id })));
-    },
-    [onNodesChange, onEdgesChange],
-  );
-  useEffect(() => {
-    if (!pendingSelect || !nodes.some((n) => n.id === pendingSelect)) return;
-    selectOnly(pendingSelect);
-    setPendingSelect(null);
-  }, [nodes, pendingSelect, selectOnly]);
-
-  // React Flow re-sends the selection when this handler changes, so it must be stable
-  // and must not store an equal selection again.
-  const handleSelectionChange = useCallback(({ nodes: selectedNodes, edges: selectedEdges }: { nodes: Node[]; edges: Edge[] }) => {
-    setSelection((current) => {
-      const same =
-        current.nodes.map((n) => n.id).join('|') === selectedNodes.map((n) => n.id).join('|') &&
-        current.edges.map((e) => e.id).join('|') === selectedEdges.map((e) => e.id).join('|');
-      return same ? current : { nodes: selectedNodes, edges: selectedEdges };
-    });
-  }, []);
-
-  const promptRename = async (node: Node) => {
-    // Ask the parent straight away, which explains why a node from an imported file cannot be renamed.
-    if (importedNodes.has(node.id)) return onRenameNode(node.id, '');
-    const name = await prompt({ title: 'Rename', label: 'Display name', defaultValue: node.data?.name ?? node.id, confirmLabel: 'Rename' });
-    if (name !== null) onRenameNode(node.id, name);
-  };
-
-  const deleteSelection = () => {
-    if (playing || (selection.nodes.length === 0 && selection.edges.length === 0)) return;
-    onDelete(
-      selection.nodes.map((n) => n.id),
-      selection.edges.map((e) => e.id).filter((id) => !id.startsWith('step:')),
-    );
-  };
-  const wrapperRef = useRef<HTMLDivElement>(null);
-
-  // The canvas may have just been opened for the export (from another tab, the
-  // code pane on a phone, or playback): wait until it is shown and its nodes are measured.
-  useEffect(() => {
-    if (!imageRequest) return;
-    let cancelled = false;
-    let frame = 0;
-    const tick = async () => {
-      if (cancelled) return;
-      const viewport = wrapperRef.current?.querySelector<HTMLElement>('.react-flow__viewport');
-      const drawn = getNodes();
-      const ready = !!viewport && viewport.getClientRects().length > 0 && drawn.length > 0 && drawn.every((n) => n.width && n.height);
-      if (!ready && frame++ < 120) {
-        requestAnimationFrame(() => void tick());
-        return;
-      }
-      try {
-        if (!ready || !viewport) throw new Error('the diagram is not on screen');
-        const legend = wrapperRef.current?.querySelector<HTMLElement>('.pc-legend') ?? undefined;
-        await exportImage(imageRequest.format, drawn, viewport, fileNameFor(title, imageRequest.format), legend);
-      } catch (error) {
-        console.error('Export failed:', error);
-        notify({ title: 'Sorry, the image could not be exported.', tone: 'danger' });
-      } finally {
-        if (!cancelled) onImageDone();
-      }
-    };
-    requestAnimationFrame(() => void tick());
-    return () => {
-      cancelled = true;
-    };
-    // Once per request.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [imageRequest]);
-  // Re-fit once nodes are measured after being added or removed, not on every drag.
-  // The part of the canvas a covering band hides, measured after layout.
-  const [inset, setInset] = useState<FitInset | undefined>(undefined);
-  const coverKey = cover ? `${cover.top}:${cover.bottom}` : '';
-  useLayoutEffect(() => {
-    const rect = wrapperRef.current?.getBoundingClientRect();
-    if (!cover || !rect || rect.height === 0) return setInset(undefined);
-    // A card docked low hides the bottom of the canvas, one docked high its top.
-    const low = cover.top + cover.bottom > rect.top + rect.bottom;
-    const top = low ? 0 : Math.max(0, cover.bottom - rect.top);
-    const bottom = low ? Math.max(0, rect.bottom - cover.top) : 0;
-    setInset((prev) => (prev?.top === top && prev?.bottom === bottom ? prev : { top, bottom }));
-    // coverKey captures cover by value; fitKey changes when the pane is shown again.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [coverKey, fitKey]);
-  // No animated fit: d3-zoom reads the pane size on the transition's first tick, and a pane hidden by
-  // then (phone Code/Diagram tabs) is 0×0, which interpolates the viewport to NaN. Nodes already glide via settle.
-  // The exception: playback, the splitter and the palette resize a pane that stays shown, and there the diagram glides to its new fit.
-  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { wrapper: wrapperRef, inset, glide: `${playing ? 'playing' : ''}:${glideKey}:${paletteOpen}` });
-
-  const handleEdgesChange = useCallback(
-    (changes: EdgeChange[]) => onEdgesChange((current) => applyEdgeChanges(changes, current)),
-    [onEdgesChange],
-  );
-
-  const handleNodesChange = useCallback(
-    (changes: NodeChange[]) => onNodesChange((current) => applyNodeChanges(changes, current)),
-    [onNodesChange],
-  );
-
-  // With the palette docked, the settings take its place beside the canvas instead of covering the diagram.
-  const dockSettings = showSettings && paletteOpen && !phone;
-  const inspector = showSettings && (
-    <Inspector
-      key={single.id}
-      node={selectedNode}
-      edge={selectedNode ? undefined : selectedEdge}
-      capacity={selectedNode ? diagram.capacity?.find((c) => c.node === selectedNode.id) : undefined}
-      importedFrom={selectedNode ? importedNodes.get(selectedNode.id) : selectedEdge?.loc.file}
-      system={selectedNode ? (nodes.find((n) => n.id === selectedNode.id)?.data as SystemNodeData | undefined)?.system : undefined}
-      docked={dockSettings}
-      onEdit={onEdit}
-      onDelete={deleteSelection}
-      onClose={() => setClosedSettings(single.id)}
-    />
-  );
-
-  return (
-    <div
-      className="flex h-full"
-      onKeyDown={(e) => {
-        const step = playing ? null : historyKey(e);
-        if (!step) return;
-        e.preventDefault();
-        if (step === 'undo') onUndo();
-        else onRedo();
-      }}
-    >
-    <PaletteDock open={paletteOpen} phone={phone} focus={paletteFocus} onAdd={(tech) => addComponent(tech)} onClose={closePalette} settings={dockSettings ? inspector : undefined} />
-    <div
-      ref={wrapperRef}
-      // Focusable, so the keys above work after a drop from the palette.
-      tabIndex={-1}
-      className={`relative h-full min-w-0 flex-1 outline-hidden ${playing ? '' : 'pc-editable'}`}
-      data-layout-busy={layoutBusy || undefined}
-      onDragOver={(e) => {
-        if (!e.dataTransfer.types.includes(TECH_DRAG_TYPE)) return;
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'copy';
-      }}
-      onDrop={(e) => {
-        const tech = e.dataTransfer.getData(TECH_DRAG_TYPE);
-        if (!tech || playing) return;
-        e.preventDefault();
-        e.currentTarget.focus();
-        addComponent(tech, screenToFlowPosition({ x: e.clientX, y: e.clientY }));
-      }}
-      onKeyDown={(e) => {
-        const target = e.target as HTMLElement;
-        if ((e.key === 'Delete' || e.key === 'Backspace') && !target.closest('input, textarea, [contenteditable]')) {
-          e.preventDefault();
-          deleteSelection();
-          // The deleted item had the focus; keep it on the canvas so Ctrl+Z still works.
-          wrapperRef.current?.focus({ preventScroll: true });
-        }
-      }}
-    >
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        edgeTypes={PLAYBACK_EDGE_TYPES}
-        // Playing a use case shows it over this canvas, read-only.
-        nodesDraggable={!playing}
-        nodesConnectable={!playing}
-        elementsSelectable={!playing}
-        onNodesChange={handleNodesChange}
-        onEdgesChange={handleEdgesChange}
-        onNodeDragStart={(_event, _node, dragged) => {
-          dragStartRef.current = new Map(dragged.map((n) => [n.id, { ...n.position }]));
-        }}
-        onNodeDragStop={(_event, _node, dragged) => {
-          // A click is a drag that never moved; only real moves are written to the text.
-          const moved = dragged.filter((n) => {
-            const start = dragStartRef.current.get(n.id);
-            return !start || Math.abs(start.x - n.position.x) > 1 || Math.abs(start.y - n.position.y) > 1;
-          });
-          // Nodes from imported files snap back: their text is in another file.
-          const locked = moved.filter((n) => importedNodes.has(n.id));
-          if (locked.length > 0) {
-            const back = new Map(locked.map((n) => [n.id, dragStartRef.current.get(n.id)]));
-            onNodesChange((current) => current.map((n) => {
-              const start = back.get(n.id);
-              return start ? { ...n, position: start } : n;
-            }));
-            onNotice(`'${locked[0].id}' is declared in ${importedNodes.get(locked[0].id)}; move it there.`);
-          }
-          if (moved.length > locked.length) onMoveNodes(moved.map((n) => ({ id: n.id, position: n.position })));
-        }}
-        onConnect={(connection) => {
-          if (!connection.source || !connection.target) return;
-          dismissHint();
-          onConnectNodes(connection.source, connection.target);
-        }}
-        onNodeContextMenu={(event, node) => {
-          if (playing) return;
-          event.preventDefault();
-          selectOnly(node.id);
-          setClosedSettings(null);
-          setMenu({ x: event.clientX, y: event.clientY, label: node.data?.name ?? node.id });
-        }}
-        onEdgeContextMenu={(event, edge) => {
-          if (playing || edge.id.startsWith('step:')) return;
-          event.preventDefault();
-          selectOnly(edge.id);
-          setClosedSettings(null);
-          setMenu({ x: event.clientX, y: event.clientY, label: `${edge.source} → ${edge.target}` });
-        }}
-        // A system box opens its team design; renaming it stays in its settings and the selection bar.
-        onNodeDoubleClick={(_event, node) => {
-          if (playing) return;
-          if (node.type === 'systemNode' || node.data?.system) onOpenSystem(node.id);
-          else promptRename(node);
-        }}
-        onSelectionChange={handleSelectionChange}
-        // Deleting goes through the text; React Flow's own delete would only hide the node until the next render.
-        deleteKeyCode={null}
-        zoomOnDoubleClick={false}
-        fitView
-        fitViewOptions={FIT_VIEW_OPTIONS}
-        minZoom={0.1}
-        proOptions={{ hideAttribution: true }}
-      >
-        <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-        {overlay && !playing && <FlowParticles flows={overlay.flows} nodes={overlay.nodes} />}
-        <Controls showInteractive={false} />
-        {playing && <PlaybackMiniMap view={playback} />}
-        {!playing && crumbs.length > 1 && (
-          <Panel position="top-left">
-            <Breadcrumbs crumbs={crumbs} file={focusFile} readOnly={focusReadOnly} inbound={focusInbound} onPick={onCrumb} />
-          </Panel>
-        )}
-        {canAdd && (
-          <Panel position="top-left">
-            {/* While the settings stand in for the palette, the button brings the palette back. */}
-            <PaletteToggle open={paletteOpen && !dockSettings} onToggle={() => (dockSettings ? setClosedSettings(single.id) : togglePalette())} />
-          </Panel>
-        )}
-        {canAdd && !hintSeen && nodes.length >= 2 && edges.length === 0 && (
-          <Panel position="top-center" className="max-md:!top-12">
-            <ConnectHint onDismiss={dismissHint} />
-          </Panel>
-        )}
-        {/* With the settings card open, Delete is in its header; this bar covers several items or a closed card. */}
-        {(notice || (hasSelection && !showSettings)) && (
-          <Panel position="bottom-center" className="flex flex-col items-center gap-2">
-            {notice && (
-              <p role="status" className="rounded-sm border-bw-1 border-ink bg-ink px-3 py-1.5 text-xs font-semibold text-paper shadow-brutal-sm">
-                {notice}
-              </p>
-            )}
-            {hasSelection && !showSettings && (
-              <div ref={clearToasts} role="toolbar" aria-label="Selection" className="flex items-center gap-1 rounded-full border-bw-1 border-ink bg-surface py-1 pl-4 pr-1 shadow-brutal-sm">
-                <span className="max-w-[10rem] truncate pr-1 text-sm font-semibold text-ink">
-                  {singleNode ? (singleNode.data?.name ?? singleNode.id) : `${selectionCount} selected`}
-                </span>
-                {singleNode && (
-                  <button
-                    type="button"
-                    onClick={() => promptRename(singleNode)}
-                    className="inline-flex items-center gap-1 rounded-full px-3 py-2 text-sm font-semibold text-ink hover:bg-ink/10"
-                  >
-                    <Pencil size={14} />
-                    Rename
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={deleteSelection}
-                  className="inline-flex items-center gap-1 rounded-full px-3 py-2 text-sm font-semibold text-red-700 dark:text-red-300 hover:bg-fail/10"
-                >
-                  <Trash2 size={14} />
-                  Delete
-                </button>
-              </div>
-            )}
-          </Panel>
-        )}
-        {nodes.length > 0 && !playing && !(hasSelection && !showSettings) && (
-          <Panel position="bottom-right" className="hidden md:block text-xs text-muted bg-paper/85 rounded-sm px-2 py-1">
-            Drag to pin · select to edit · drag dot to dot to connect · right-click for more
-          </Panel>
-        )}
-        {nodes.length > 0 && (!playing || diagram.legend) && (
-          <Panel position="top-right" className="flex flex-col items-end gap-2">
-            {!playing && (
-              <div className="flex items-center gap-1">
-                {canOverlay && (
-                  <button
-                    type="button"
-                    onClick={onToggleOverlay}
-                    aria-pressed={overlay !== undefined}
-                    title="Show how busy each node is and the requests flowing, at the traffic block's rates"
-                    className={`${toolButton} aria-pressed:border-ink aria-pressed:bg-pop-yellow aria-pressed:text-on-accent aria-pressed:shadow-brutal-sm`}
-                  >
-                    <Gauge size={16} />
-                    <span className="whitespace-nowrap">
-                      <span className="hidden sm:inline">Overlay: </span>load
-                    </span>
-                  </button>
-                )}
-                {hasPinnedNodes && (
-                  <button
-                    onClick={onResetLayout}
-                    title="Remove every pos x,y and lay the diagram out automatically"
-                    className={toolButton}
-                  >
-                    <LayoutGrid size={16} />
-                    Auto-layout
-                  </button>
-                )}
-              </div>
-            )}
-            {diagram.legend && <Legend entries={diagram.legend} />}
-          </Panel>
-        )}
-      </ReactFlow>
-      {showSettings && !dockSettings && (
-        <div className="pointer-events-none absolute inset-x-2 bottom-2 z-10 flex max-h-[55%] max-md:[[data-keyboard]_&]:max-h-[calc(100%-1rem)] md:inset-x-auto md:bottom-auto md:right-2 md:top-14 md:max-h-[calc(100%-4.5rem)] md:w-72">
-          {inspector}
-        </div>
-      )}
-      {menu && <CanvasMenu menu={menu} onSettings={() => setClosedSettings(null)} onDelete={deleteSelection} onClose={closeMenu} />}
-    </div>
-    </div>
-  );
-}
-
-/** Where the canvas is among the document's systems (Drone startup › Order Processing), with the way back. */
-function Breadcrumbs({ crumbs, file, readOnly, inbound, onPick }: { crumbs: Crumb[]; file?: string; readOnly?: boolean; inbound?: string; onPick: (path: string) => void }) {
-  const up = crumbs[crumbs.length - 2];
-  return (
-    <nav aria-label="Breadcrumb" className="flex max-w-[min(calc(100vw-7rem),36rem)] flex-col rounded-sm border-bw-1 border-ink bg-surface py-1 pl-1 pr-3 shadow-brutal-sm">
-      <div className="flex min-w-0 items-center gap-1">
-        <button type="button" onClick={() => onPick(up.path)} aria-label={`Back to ${up.name}`} title={`Back to ${up.name}`} className={`${iconButton} !h-7 !w-7`}>
-          <ArrowLeft size={15} />
-        </button>
-        <ol className="flex min-w-0 items-center gap-1 text-sm">
-          {crumbs.map((c, i) => {
-            const last = i === crumbs.length - 1;
-            return (
-              <li key={c.path} className={`flex items-center gap-1 ${last ? 'min-w-0' : 'flex-none max-sm:[&:not(:first-child)]:hidden'}`}>
-                {i > 0 && <ChevronRight size={14} className="flex-none text-muted" aria-hidden="true" />}
-                {last ? (
-                  <span aria-current="page" className="truncate font-bold text-ink">
-                    {c.name}
-                  </span>
-                ) : (
-                  <button type="button" onClick={() => onPick(c.path)} className="max-w-[10rem] truncate rounded-sm px-1 font-semibold text-ink/75 underline-offset-2 hover:text-ink hover:underline">
-                    {c.name}
-                  </button>
-                )}
-              </li>
-            );
-          })}
-        </ol>
-        {file && (
-          <span className="ml-2 hidden flex-none font-mono text-xs text-muted md:inline" title={readOnly ? 'This design is in its own file, which cannot be edited here' : 'This design is in its own file, open in the code pane'}>
-            {file}
-            {readOnly && ' · read-only'}
-          </span>
-        )}
-      </div>
-      {inbound && (
-        <span className="min-w-0 truncate pb-0.5 pl-9 text-xs font-semibold text-ink/75" title="The load shown includes what the rest of the document sends into this design">
-          {inbound}
-        </span>
-      )}
-    </nav>
-  );
-}
-
-/** The folded diagrams sidebar: open it, jump to a diagram (Ctrl/Cmd+P), start one, and the open diagram's name. */
-function FilesRail({ title, cloud, onShow, onQuickOpen, onCreate }: { title: string; cloud: { state: Parameters<typeof CloudIcon>[0]['state'] }; onShow: () => void; onQuickOpen: () => void; onCreate: () => void }) {
-  const rail = 'p-1.5 rounded-sm text-muted hover:text-ink hover:bg-ink/10';
-  return (
-    <nav aria-label="Diagrams rail" className="max-md:hidden shrink-0 flex w-10 flex-col items-center gap-1 border-r-bw-1 border-ink bg-surface py-2">
-      <button type="button" aria-label="Show sidebar" title="Show the diagrams" onClick={onShow} className={rail}>
-        <PanelLeftOpen size={16} />
-      </button>
-      <button type="button" aria-label="Go to diagram" title={`Go to diagram (${MOD_KEY}+P)`} onClick={onQuickOpen} className={rail}>
-        <Search size={16} />
-      </button>
-      <button type="button" aria-label="New diagram" title="New diagram" onClick={onCreate} className={rail}>
-        <FilePlus size={16} />
-      </button>
-      <span className="my-1 h-px w-5 bg-ink/15" aria-hidden="true" />
-      <CloudIcon state={cloud.state} />
-      <button
-        type="button"
-        onClick={onShow}
-        title={title}
-        aria-label={`Open diagram: ${title}`}
-        className="mt-1 min-h-0 flex-1 overflow-hidden rounded-sm px-1 py-1.5 text-xs font-semibold text-ink/75 hover:bg-ink/10 hover:text-ink"
-      >
-        <span className="block max-h-full truncate [writing-mode:vertical-rl] rotate-180">{title}</span>
-      </button>
-    </nav>
-  );
-}
-
 /** Above the code pane while it shows a team file: which file, whether it can be edited here, and the way back. */
 function TeamFileBar({ team, up, onBack }: { team: TeamFile; up: Crumb; onBack: (path: string) => void }) {
   return (
@@ -2176,6 +1755,8 @@ function DiagnosticsPanel({ diagnostics, onSelect }: DiagnosticsPanelProps) {
           <button onClick={() => onSelect(d)} className="w-full flex items-start gap-2 px-3 py-1.5 text-left hover:bg-ink/10">
             {d.severity === 'error' ? (
               <AlertCircle size={14} className="text-fail shrink-0 mt-px" />
+            ) : d.severity === 'info' ? (
+              <Info size={14} className="text-muted shrink-0 mt-px" />
             ) : (
               <AlertTriangle size={14} className="text-pop-yellow shrink-0 mt-px" />
             )}

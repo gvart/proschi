@@ -3,6 +3,8 @@ import { fileMap } from '../../frontend/src/playground/sanitize';
 import { requireUser } from './auth';
 import type { Ctx } from './context';
 import { now } from './env';
+import { can } from './features';
+import { effectivePlan } from './plans';
 import { HttpError, json, rateLimit, readJson } from './http';
 
 /**
@@ -142,20 +144,28 @@ interface ShareRow {
   image_width: number | null;
   image_height: number | null;
   created_at: number;
+  /** The owner's: their plan, and whether their embeds show Proschi's branding (src/certificates.ts putEmbeds). */
+  plan: string;
+  comp_until: number | null;
+  embed_branding: number;
 }
 
 /** A short link, unless its owner is blocked (src/admin.ts): then it answers as if deleted. */
 async function findShare(ctx: Ctx, id: string): Promise<ShareRow | null> {
   if (!SHARE_ID.test(id)) return null;
   return ctx.env.DB.prepare(
-    `SELECT s.id, s.title, s.source, s.imports, s.image IS NOT NULL AS has_image, s.image_width, s.image_height, s.created_at
+    `SELECT s.id, s.title, s.source, s.imports, s.image IS NOT NULL AS has_image, s.image_width, s.image_height, s.created_at, u.plan, u.comp_until, u.embed_branding
      FROM shares s JOIN users u ON u.id = s.user_id WHERE s.id = ? AND u.blocked_at IS NULL`,
   )
     .bind(id)
     .first<ShareRow>();
 }
 
-/** GET /api/shares/<id>: no sign-in needed; the owner is not named. */
+/**
+ * GET /api/shares/<id>: no sign-in needed; the owner is not named.
+ * `branding: false` when the owner turned Proschi's branding off for their
+ * embeds and their plan has `pro_exports` (the embed page then leaves it out).
+ */
 export async function getShare(ctx: Ctx, id: string): Promise<Response> {
   const row = await findShare(ctx, id);
   if (!row) throw new HttpError(404, 'No such short link; it may have been deleted');
@@ -167,6 +177,7 @@ export async function getShare(ctx: Ctx, id: string): Promise<Response> {
       ...(row.imports ? { imports: JSON.parse(row.imports) as Record<string, string> } : {}),
       hasImage: row.has_image === 1,
       createdAt: row.created_at,
+      ...(row.embed_branding === 0 && can({ plan: effectivePlan(row.plan, row.comp_until) }, 'pro_exports', ctx.env).ok ? { branding: false } : {}),
     },
     200,
     { 'Cache-Control': SHORT_CACHE },

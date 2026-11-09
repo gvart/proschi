@@ -124,6 +124,19 @@ describe('TextMate grammar', () => {
     expect(scopeOf(lines, '#2')).toBe('string.quoted.double.json.proschi');
   });
 
+  it('scopes budgets, retries, drain rates and lag in section blocks', () => {
+    const lines = tokenize(
+      ['requirements {', '  cost @Payments <= 500 usd/month', '  cost .edge <= 5 usd/month', '  cost group checkout <= 5 usd/month', '  lag "Pay" < 30s', '}', 'capacity {', '  pay errors 2% retries 3', '  events drain 5k rps', '}'].join('\n'),
+    );
+    expect(scopeOf([lines[1]], '@Payments')).toBe('entity.other.attribute-name.team.proschi');
+    expect(scopeOf([lines[2]], '.edge')).toBe('entity.other.attribute-name.tag.proschi');
+    expect(scopeOf([lines[3]], 'group')).toBe('keyword.other.proschi');
+    expect(scopeOf([lines[4]], 'lag')).toBe('keyword.other.proschi');
+    expect(scopeOf([lines[7]], 'errors')).toBe('keyword.other.proschi');
+    expect(scopeOf([lines[7]], 'retries')).toBe('keyword.other.proschi');
+    expect(scopeOf([lines[8]], 'drain')).toBe('keyword.other.proschi');
+  });
+
   it('scopes section blocks: header keywords, section words, quantities and operators', () => {
     const lines = tokenize(
       [
@@ -189,6 +202,34 @@ describe('TextMate grammar', () => {
       ['next', 'variable.other.node.proschi'],
       ['[Redis]', 'entity.name.type.tech.proschi'],
     ]);
+  });
+
+  it('scopes whatif blocks', () => {
+    const lines = tokenize('whatif "Peak" {\n  traffic "Read" x1.5\n  fail cache\n  db x4\n}');
+    expect(lines[0][0]).toEqual(['whatif', 'keyword.control.proschi']);
+    expect(lines[1].map(([, s]) => s)).toEqual(['keyword.other.proschi', 'punctuation.definition.string.begin.proschi', 'string.quoted.double.proschi', 'punctuation.definition.string.end.proschi', 'constant.numeric.replicas.proschi']);
+    expect(lines[2]).toEqual([
+      ['fail', 'keyword.other.proschi'],
+      ['cache', 'variable.other.node.proschi'],
+    ]);
+    expect(lines[3]).toEqual([
+      ['db', 'variable.other.node.proschi'],
+      ['x4', 'constant.numeric.replicas.proschi'],
+    ]);
+  });
+
+  it('scopes constants: the let line and each use', () => {
+    const lines = tokenize('let peak = 120k rps # busiest hour\napi [REST API] x$n\ntraffic {\n  "Read" $peak\n}\nwhatif "W" {\n  db x$n\n}');
+    expect(lines[0]).toEqual([
+      ['let', 'keyword.other.let.proschi'],
+      ['peak', 'variable.other.constant.proschi'],
+      ['=', 'keyword.operator.assignment.proschi'],
+      ['120k rps', 'constant.numeric.proschi'],
+      ['# busiest hour', 'comment.line.number-sign.proschi'],
+    ]);
+    expect(lines[1][2]).toEqual(['x$n', 'variable.other.constant.proschi']);
+    expect(lines[3][3]).toEqual(['$peak', 'variable.other.constant.proschi']);
+    expect(lines[6][1]).toEqual(['x$n', 'variable.other.constant.proschi']);
   });
 
   it('scopes color, critical, tags and the legend block', () => {

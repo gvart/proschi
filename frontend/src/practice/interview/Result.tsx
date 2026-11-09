@@ -1,12 +1,16 @@
-import type { ReactNode } from 'react';
-import { Dices, RotateCcw } from 'lucide-react';
-import { eyebrow, outlineButton, primaryButton } from '../../components/Playground/ui';
+import { lazy, Suspense, useCallback, useState, type ReactNode } from 'react';
+import { Dices, Printer, RotateCcw } from 'lucide-react';
+import { eyebrow, outlineButton, primaryButton, toolButton } from '../../components/Playground/ui';
+import { useFeature } from '../../components/featureState';
+import { fromSummary } from '../history/solo';
 import { VerdictView } from '../modes/ai/VerdictView';
 import type { AiInterview } from '../modes/ai/api';
 import { PHASES, formatClock, type InterviewSummary } from '../modes/session';
 import type { Problem } from '../types';
 import { StepTrail } from './Setup';
 import { setupHref } from './links';
+
+const SoloReport = lazy(() => import('../history/SoloReport'));
 
 /**
  * Step 3 of the mock interview (P45): the verdict of a mock interview, or the
@@ -53,9 +57,14 @@ export default function Result(props: ResultProps) {
   );
 }
 
-/** An interview on your own: the time per phase, the questions, estimates, checks and self-review. */
+/** An interview on your own: the time per phase, the questions, estimates, checks and self-review; with interview_report (Max), its printable report. */
 function Summary({ summary, children }: { summary: InterviewSummary; children: ReactNode }) {
   const { questions, estimates, tests, checklist } = summary;
+  const report = useFeature('interview_report');
+  const [printing, setPrinting] = useState(false);
+  const closeReport = useCallback(() => setPrinting(false), []);
+  const record = fromSummary(summary);
+  const printable = record.results ? { ...record, results: record.results } : undefined;
   const rows: [string, ReactNode][] = [
     ['Questions', `${questions.asked} asked: ${questions.good} good (of ${questions.goodTotal}), ${questions.weak} weak`],
     ['Estimates', `${estimates.correct} of ${estimates.total} in range${estimates.answered < estimates.total ? `, ${estimates.total - estimates.answered} not answered` : ''}`],
@@ -64,7 +73,20 @@ function Summary({ summary, children }: { summary: InterviewSummary; children: R
   ];
   return (
     <section aria-label="Interview summary" className="space-y-5 px-4 py-4">
-      <h2 className="font-display text-lg font-bold text-ink">Interview summary</h2>
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="font-display text-lg font-bold text-ink">Interview summary</h2>
+        {report.ok && printable && (
+          <button type="button" onClick={() => setPrinting(true)} className={`ml-auto ${toolButton}`} data-testid="summary-report" title="A printable report of this interview; save it as a PDF from the print dialog">
+            <Printer size={14} aria-hidden="true" />
+            Print report
+          </button>
+        )}
+      </div>
+      {printing && printable && (
+        <Suspense fallback={null}>
+          <SoloReport record={printable} onClose={closeReport} />
+        </Suspense>
+      )}
       <div className="grid gap-5 sm:grid-cols-2">
         <table className="w-full text-sm">
           <caption className={`${eyebrow} pb-1 text-left`}>Time per phase</caption>

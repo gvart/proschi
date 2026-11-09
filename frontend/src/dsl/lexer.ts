@@ -9,7 +9,8 @@ export type TokenKind =
   | 'label'   // everything after ':' on an edge/step line
   | 'number'  // 120, -40
   | 'quantity' // 50ms, 99.9%, 100k rps, 2.5: a number with a fraction or a unit (see quantity.ts)
-  | 'op'      // < <= > >=
+  | 'op'      // < <= > >= =
+  | 'const'   // $peak, x$n: a constant's use, value as written (with the $ and any x)
   | 'tag'     // .planned: a legend entry, value without the dot
   | 'hex'     // #3b82f6 right after `color`, value with the '#'
   | 'comma'
@@ -121,6 +122,19 @@ export function tokenizeLine(text: string, line: number): { tokens: Token[]; dia
       continue;
     }
 
+    if (ch === '=') {
+      tokens.push({ kind: 'op', value: '=', col: start + 1, length: 1 });
+      i++;
+      continue;
+    }
+
+    if (ch === '$' && IDENT_START.test(text[i + 1] ?? '')) {
+      i++;
+      while (i < text.length && IDENT_PART.test(text[i])) i++;
+      tokens.push({ kind: 'const', value: text.slice(start, i), col: start + 1, length: i - start });
+      continue;
+    }
+
     if (ch === '<' || ch === '>') {
       const value = text[i + 1] === '=' ? ch + '=' : ch;
       tokens.push({ kind: 'op', value, col: start + 1, length: value.length });
@@ -138,6 +152,18 @@ export function tokenizeLine(text: string, line: number): { tokens: Token[]; dia
 
     if (IDENT_START.test(ch)) {
       while (i < text.length && IDENT_PART.test(text[i])) i++;
+      // `x$n`: replicas or a multiplier given by a constant, one token.
+      if (i === start + 1 && ch === 'x' && text[i] === '$' && IDENT_START.test(text[i + 1] ?? '')) {
+        i += 2;
+        while (i < text.length && IDENT_PART.test(text[i])) i++;
+        tokens.push({ kind: 'const', value: text.slice(start, i), col: start + 1, length: i - start });
+        continue;
+      }
+      // `x1.5`: a fractional multiplier (a what-if's traffic) is one token; `.5` was never valid on its own.
+      if (/^x\d+$/.test(text.slice(start, i)) && text[i] === '.' && DIGIT.test(text[i + 1] ?? '')) {
+        i++;
+        while (i < text.length && DIGIT.test(text[i])) i++;
+      }
       tokens.push({ kind: 'ident', value: text.slice(start, i), col: start + 1, length: i - start });
       continue;
     }
