@@ -1,0 +1,32 @@
+docs/EDITORS.md
+  s_f355061868c346::t_6bc823d0823475 428-432
+docs/GRAMMAR.md
+  s_f355061868c346::t_0fce8625e987af 15,71-74,117
+docs/TESTS.md
+  s_f355061868c346::t_09bbfcc652e7eb 122-188,190-213
+  s_f355061868c346::t_b86a691527efbd 189
+frontend/src/docs/model.html
+  s_f355061868c346::t_7f21bb24f3fc9e 290-296,302
+docs/LANGUAGE.md
+  s_f355061868c346::t_b86a691527efbd 75
+docs/site.json
+  s_f355061868c346::t_b86a691527efbd 80
+tooling/README.md
+  s_f355061868c346::t_6bc823d0823475 16,38-40
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "394feee270b64d90fe4889fa530f11c5dd8455ae",
+  "prompts": {},
+  "sessions": {
+    "s_f355061868c346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd556674-4248-429d-bf5c-2b361bc86c62",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
