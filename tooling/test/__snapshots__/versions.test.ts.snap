@@ -23,5 +23,10 @@ Scenarios
       steps:
         + api -> cache : reserve stock
 
-2 added, 2 removed, 4 changed"
+2 added, 2 removed, 4 changed
+
+Simulation
+  Cost          $600/mo  →  $850/mo  +$250/mo  worse
+  Worst p99     42 ms    →  44.8 ms            worse
+  Availability  100%     →  100%"
 `;

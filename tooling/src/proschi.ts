@@ -49,6 +49,7 @@ export {
   type SweepResult,
   type WhatIfResult,
 } from '../../frontend/src/sim';
+export { deltaRows, designDelta, type DeltaRow, type DesignDelta } from '../../frontend/src/sim/delta';
 export { parseQuantity } from '../../frontend/src/dsl/quantity';
 
 /** Keywords that start a statement, with a one-line hint for completion lists. */
