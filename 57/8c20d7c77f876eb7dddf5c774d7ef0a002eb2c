@@ -1,0 +1,45 @@
+tooling/src/schema.ts
+  s_f355061868c346::t_05391e5dd6de51 55,95,297-308
+tooling/schema/proschi-diagram.schema.json
+  s_f355061868c346::t_0f9f9e6ad0190f 49-50,228-234,1419-1520
+tooling/test/grammar.test.ts
+  s_f355061868c346::t_9749725c52a949 194-207
+tooling/test/schema.test.ts
+  s_f355061868c346::t_073367e878a47d 37-41
+  s_f355061868c346::t_5096c5b5390777 35-36
+tooling/src/proschi.ts
+  s_f355061868c346::t_6ee26bd0a09a51 42,44-48,50,71
+  s_f355061868c346::t_e5ad497c44df19 43
+plugin/hooks/register.js
+  s_f355061868c346::t_394f5b54c1fdf6 1351,1398-1399,1516-1519,2304,2325-2326,2857-2941,3457,4423-4453,4650,4666-4667,4679,4683-4684,4707,4734-4735,4789,4968
+tooling/src/simulation.ts
+  s_f355061868c346::t_66f72db3e138f7 14-16,18-19,21,27,29
+  s_f355061868c346::t_3d536d254b6a6a 34
+  s_f355061868c346::t_4826c68c02abde 153-204,206-208,222-296,298-334
+  s_f355061868c346::t_9f41399d9a649b 41-49
+  s_f355061868c346::t_22d61a474b74c7 297
+plugin/hooks/layout.cjs
+  s_f355061868c346::t_394f5b54c1fdf6 1-3,5-9,18,20-22,24-34
+tooling/grammar/proschi.tmLanguage.json
+  s_f355061868c346::t_36dcef07489466 353,355,386-388,432
+tooling/test/simulation.test.ts
+  s_f355061868c346::t_46f9741cd26e95 303-322,324-338,340-372,380-404
+  s_f355061868c346::t_73931f37d59398 339,373-379
+  s_f355061868c346::t_7cf4e73f8e37d1 323
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "578c20d7c77f876eb7dddf5c774d7ef0a002eb2c",
+  "prompts": {},
+  "sessions": {
+    "s_f355061868c346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd556674-4248-429d-bf5c-2b361bc86c62",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
