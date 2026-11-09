@@ -68,7 +68,7 @@ per-use LLM cost), and improve the language and the visual editor.
   verify: tooling tests. depends on: none
 
 ### Iteration 4: what-if and diff
-- [ ] **4.1 T3 What-if language**: a `whatif "Name" { traffic "X" x3; fail cache; db x4 }`
+- [x] **4.1 T3 What-if language**: a `whatif "Name" { traffic "X" x3; fail cache; db x4 }`
   block that is parsed, formatted, simulated (`AnalyzeOptions`) and checked against
   `requirements`. The CLI gets `proschi analyze --whatif` and `--sweep "UC" 10k..500k`
   (prints where each node saturates and the max rps that still passes).
