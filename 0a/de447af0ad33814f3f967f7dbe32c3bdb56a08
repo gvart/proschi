@@ -1,0 +1,20 @@
+frontend/e2e/canvas-parity.e2e.ts
+  s_f355061868c346::t_a76a7dd1ba0b69 68
+  s_f355061868c346::t_2b73625dcbb35b 1-67,69-177
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0ade447af0ad33814f3f967f7dbe32c3bdb56a08",
+  "prompts": {},
+  "sessions": {
+    "s_f355061868c346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd556674-4248-429d-bf5c-2b361bc86c62",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
