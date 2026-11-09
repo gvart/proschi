@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import ReactFlow, { Background, BackgroundVariant, ControlButton, Controls, MiniMap, Panel, applyEdgeChanges, applyNodeChanges, useReactFlow } from 'reactflow';
 import type { Edge, EdgeChange, Node, NodeChange } from 'reactflow';
 import { ArrowLeft, ChevronRight, Gauge, LayoutGrid, Map as MapIcon, Pencil, Trash2 } from 'lucide-react';
@@ -77,6 +77,10 @@ export interface DiagramViewProps {
   onUnpinNode: (id: string) => void;
   /** Shows a node's or a connection's text in the code pane. */
   onJumpToCode: (id: string) => void;
+  /** The canvas selection changed (outside playback): the ids of its nodes and connections, to show their text. */
+  onSelectionLink: (ids: string[]) => void;
+  /** What the code pane's cursor sits on: marked on the canvas, apart from the selection. */
+  linked: string[];
   /** Changes when the view becomes visible again, so it can re-fit. */
   fitKey: string;
   /** A layout is on its way (ELK, then the glide): `data-layout-busy` on the canvas, which the e2e tests wait out. */
@@ -136,6 +140,8 @@ export default function DiagramView({
   onReconnect,
   onUnpinNode,
   onJumpToCode,
+  onSelectionLink,
+  linked,
   fitKey,
   layoutBusy,
   glideKey,
@@ -154,7 +160,7 @@ export default function DiagramView({
   onOpenSystem,
 }: DiagramViewProps) {
   const playing = playback.active;
-  const { getNodes, screenToFlowPosition, fitView } = useReactFlow();
+  const { getNode, getNodes, getViewport, screenToFlowPosition, fitView, setCenter } = useReactFlow();
   const [selection, setSelection] = useState<{ nodes: Node[]; edges: Edge[] }>({ nodes: [], edges: [] });
   // Rename and Delete stay clear of the toasts.
   const clearToasts = useToastClearance();
@@ -223,6 +229,41 @@ export default function DiagramView({
     });
   }, []);
 
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  // The selection, shown in the code pane. Playback selects nothing, so it is left out.
+  const selectionKey = [...selection.nodes, ...selection.edges].map((item) => item.id).join('\n');
+  useEffect(() => {
+    if (!playing) onSelectionLink(selectionKey ? selectionKey.split('\n') : []);
+    // Once per selection; the handler is a new function on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectionKey, playing]);
+
+  // What the code's cursor sits on wears a ring of its own (pc-linked in canvas.css), the selection untouched.
+  const linkedKey = linked.join('\n');
+  const linkedIds = useMemo(() => new Set(linkedKey ? linkedKey.split('\n') : []), [linkedKey]);
+  const linkedClass = (className: string | undefined) => (className ? `${className} pc-linked` : 'pc-linked');
+  const drawnNodes = useMemo(
+    () => (linkedIds.size === 0 ? nodes : nodes.map((n) => (linkedIds.has(n.id) ? { ...n, className: linkedClass(n.className) } : n))),
+    [nodes, linkedIds],
+  );
+  const drawnEdges = useMemo(
+    () => (linkedIds.size === 0 ? edges : edges.map((e) => (linkedIds.has(e.id) ? { ...e, className: linkedClass(e.className) } : e))),
+    [edges, linkedIds],
+  );
+  // A linked node out of sight is brought into view: a short pan at the same zoom.
+  useEffect(() => {
+    const rect = wrapperRef.current?.getBoundingClientRect();
+    const node = [...linkedIds].map((id) => getNode(id)).find((n) => n?.width && n.height);
+    if (!node || !rect || rect.width === 0) return;
+    const { x, y, zoom } = getViewport();
+    const at = node.positionAbsolute ?? node.position;
+    const center = { x: at.x + node.width! / 2, y: at.y + node.height! / 2 };
+    const screenX = center.x * zoom + x;
+    const screenY = center.y * zoom + y;
+    if (screenX >= 0 && screenX <= rect.width && screenY >= 0 && screenY <= rect.height) return;
+    void setCenter(center.x, center.y, { zoom, duration: 300 });
+  }, [linkedIds, getNode, getViewport, setCenter]);
+
   const promptRename = async (node: Node) => {
     // Ask the parent straight away, which explains why a node from an imported file cannot be renamed.
     if (importedNodes.has(node.id)) return onRenameNode(node.id, '');
@@ -237,7 +278,6 @@ export default function DiagramView({
       selection.edges.map((e) => e.id).filter((id) => !id.startsWith('step:')),
     );
   };
-  const wrapperRef = useRef<HTMLDivElement>(null);
 
   const duplicate = (ids: string[]) => {
     const added = onDuplicateNodes(ids);
@@ -420,8 +460,8 @@ export default function DiagramView({
       }}
     >
       <ReactFlow
-        nodes={nodes}
-        edges={edges}
+        nodes={drawnNodes}
+        edges={drawnEdges}
         nodeTypes={nodeTypes}
         edgeTypes={PLAYBACK_EDGE_TYPES}
         // Playing a use case shows it over this canvas, read-only.
