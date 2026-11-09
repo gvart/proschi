@@ -176,11 +176,11 @@ test.describe('selection sync on a phone', () => {
   test('selecting on the Diagram pane does not switch to the Code pane', async ({ page }) => {
     await page.goto('./');
     await page.goto((await page.locator('a[data-example="url-shortener"]').getAttribute('href'))!);
-    await page.getByRole('tab', { name: 'Diagram' }).first().click();
+    await page.getByRole('tab', { name: 'Preview' }).click();
     await page.locator('.react-flow__node').first().click();
     await expect(page.getByRole('region', { name: /settings$/ })).toBeVisible();
     await page.waitForTimeout(300);
-    await expect(page.getByRole('tab', { name: 'Diagram' }).first()).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('tab', { name: 'Preview' })).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('.cm-content:visible')).toHaveCount(0);
   });
 });

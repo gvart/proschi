@@ -24,6 +24,7 @@ import { exportCharges } from './meter';
 import { exportRoadmapRecs } from './roadmap';
 import { exportInterviews } from './interviews';
 import { exportSoloInterviews } from './soloInterviews';
+import { exportMistakes } from './mistakes';
 import { exportInterviewPlan } from './interviewPlan';
 import { getProgressExport } from './progressExport';
 import { exportCertificate } from './certificates';
@@ -168,7 +169,7 @@ export async function updateMe(request: Request, ctx: Ctx): Promise<Response> {
   return json({ user: { id: user.id, displayName, publicProfile, dailyGoal, ...(practiceGoal ? { practiceGoal } : {}) } }, 200, NO_STORE);
 }
 
-/** DELETE /api/me: the account, its identities, sessions (apps' tokens and sign-in codes too), progress, lessons read, interviews on your own, card reviews, achievements, daily challenge attempts, game progress, short links, synced diagrams with their versions and share links, and the email reminders' address (ON DELETE CASCADE). */
+/** DELETE /api/me: the account, its identities, sessions (apps' tokens and sign-in codes too), progress, lessons read, interviews on your own, practice mistakes, card reviews, achievements, daily challenge attempts, game progress, short links, synced diagrams with their versions and share links, and the email reminders' address (ON DELETE CASCADE). */
 export async function deleteMe(request: Request, ctx: Ctx): Promise<Response> {
   const user = await requireUser(request, ctx);
   // A subscription still billing is revoked at Polar first; billing and credits go with the account (ON DELETE CASCADE).
@@ -292,6 +293,8 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
     })),
     // Mock interviews finished on your own, as the browser sent them.
     soloInterviews: await exportSoloInterviews(DB, user.id),
+    // Known mistakes failed practice runs matched, the newest per problem and mistake.
+    practiceMistakes: await exportMistakes(DB, user.id),
     interviewPlan: await exportInterviewPlan(DB, user.id),
     // The mastery certificate (Max) and whether embeds show Proschi's branding (Pro).
     ...(await exportCertificate(ctx.env, user.id)),

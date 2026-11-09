@@ -126,7 +126,7 @@ function Picks({ problemTitle, steps }: { problemTitle: (id: string) => string |
     return (
       <RuleSection
         steps={steps}
-        footer={picks.missed ? <NoNewPicks /> : <p className="mt-3 text-sm text-ink/80">After your next mock interview, Pro picks your next 3 steps, each with the reason it was picked.</p>}
+        footer={picks.missed ? <NoNewPicks /> : <p className="mt-3 text-sm text-ink/80">After your next mock interview, your next 3 steps are picked for you here, each with the reason it was picked.</p>}
       />
     );
   }

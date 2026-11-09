@@ -93,6 +93,8 @@ export async function mockSignedIn(page: Page, me: Me = SIGNED_IN): Promise<void
     [/^\/api\/interviews\/history$/, { full: false, total: 0, sessions: [] }],
     // The account's interviews on your own (Pro): none yet (history.accounts.e2e.ts mocks real ones).
     [/^\/api\/me\/interviews\/solo$/, { sessions: [] }],
+    // Known mistakes kept with the account: none yet (mistakes.accounts.e2e.ts syncs real ones).
+    [/^\/api\/me\/mistakes$/, { mistakes: [] }],
     [/^\/api\/roadmap\/next$/, { next: null }],
     // Settings › Exports & certificate on Pro and Max: branding on, no certificate yet (exports.accounts.e2e.ts mocks real ones).
     [/^\/api\/me\/embeds$/, { branding: true }],

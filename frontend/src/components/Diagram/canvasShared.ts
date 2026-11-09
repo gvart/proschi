@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { createContext, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import type { Edge, Node, NodeDragHandler } from 'reactflow';
 import { loadJson, saveJson } from '../../services/storage';
 import { edgeOverlays, type SimOverlay } from '../../sim/overlay';
@@ -105,8 +105,8 @@ export function useNarrow(ref: RefObject<HTMLElement | null>, below = NARROW_PAN
 
 /**
  * How far the canvas's top bar (CanvasTopBar) reaches into the pane `ref`, in pixels with a small gap, so a fit
- * keeps the diagram below its buttons and tools. The load legend counts folded (its one line), so opening it
- * does not move the diagram. Measured again when `contents` (what the bar shows) changes, and as the pane or
+ * keeps the diagram below its buttons and tools. The load legend counts folded (its one line) and an open popover
+ * (the what-if card) not at all, so opening either does not move the diagram. Measured again when `contents` (what the bar shows) changes, and as the pane or
  * the bar resizes (the bar wraps in a narrow pane).
  */
 export function useTopBarInset(ref: RefObject<HTMLElement | null>, contents: string): number {
@@ -136,10 +136,25 @@ function barBottom(pane: HTMLElement, bar: HTMLElement | null): number {
   const top = pane.getBoundingClientRect().top;
   let bottom = top;
   for (const group of bar ? Array.from(bar.children) : []) {
+    /** How far an open popover pushed the parts below it down. */
+    let shift = 0;
     for (const part of group.matches('[data-topbar-right]') ? Array.from(group.children) : [group]) {
+      // A popover open in the bar (the what-if card) is passing, like an open legend: it does not move the diagram,
+      // so neither it nor the room it takes from the legend under it counts.
+      if (part.matches('[data-topbar-popover]')) {
+        const next = part.nextElementSibling;
+        if (part.childElementCount > 0 && next) shift = next.getBoundingClientRect().top - part.getBoundingClientRect().top;
+        continue;
+      }
       const box = ((part.matches('.pc-load-legend') && part.querySelector('summary')) || part).getBoundingClientRect();
-      if (box.height > 0) bottom = Math.max(bottom, box.bottom);
+      if (box.height > 0) bottom = Math.max(bottom, box.bottom - shift);
     }
   }
   return bottom > top ? Math.round(bottom - top + 8) : 0;
 }
+
+/**
+ * Where a popover of the top-right tools (the what-if card) opens: a slot between the tools and the load legend,
+ * so the legend moves down under the card instead of the card covering it.
+ */
+export const ToolsPopoverSlot = createContext<HTMLElement | null>(null);

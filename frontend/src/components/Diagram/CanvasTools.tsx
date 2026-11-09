@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { ControlButton, MiniMap, Panel } from 'reactflow';
 import { Gauge, LayoutGrid, Map as MapIcon } from 'lucide-react';
 import { CANVAS_EDGE } from '../../utils/canvasColors';
@@ -7,6 +7,7 @@ import type { LegendEntry } from '../../dsl/types';
 import Legend from '../Canvas/Legend';
 import LoadLegend from '../Overlay/LoadLegend';
 import { toolButton } from '../Playground/ui';
+import { ToolsPopoverSlot } from './canvasShared';
 
 /**
  * The canvas controls both editable canvases share (the editor's DiagramView
@@ -34,8 +35,9 @@ interface OverlayToolsProps {
 
 /** The canvas's top-right corner: the overlay toggle and Auto-layout, then the load legend and the diagram's own legend. */
 export function OverlayTools({ overlay, canOverlay, onToggleOverlay, whatIfControl, pinned, onResetLayout, hideTools, phone, narrow, legend }: OverlayToolsProps) {
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
   return (
-    <>
+    <ToolsPopoverSlot.Provider value={slot}>
       {!hideTools && (
         <div className="flex items-center gap-1">
           {overlay && whatIfControl}
@@ -61,9 +63,11 @@ export function OverlayTools({ overlay, canOverlay, onToggleOverlay, whatIfContr
           )}
         </div>
       )}
+      {/* Empty (and hidden) until a popover opens in it. */}
+      {overlay && !hideTools && <div ref={setSlot} data-topbar-popover className="empty:hidden" />}
       {overlay && !hideTools && <LoadLegend critical={overlay.critical} folded={phone || !!narrow} />}
       {legend && <Legend entries={legend} />}
-    </>
+    </ToolsPopoverSlot.Provider>
   );
 }
 

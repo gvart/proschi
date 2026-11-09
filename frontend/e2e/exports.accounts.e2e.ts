@@ -128,6 +128,27 @@ test.describe('Settings › Exports & certificate', () => {
     await expect(section.getByRole('switch', { name: 'Mastery certificate' })).toHaveCount(0);
   });
 
+  test('Pro: a refused switch moves back and says why in words, never a bare status', async ({ page, errors }) => {
+    await mockSignedIn(page, PRO);
+    await mockExports(page);
+    let answer: { status: number; json: unknown } = { status: 500, json: { error: 'Internal error' } };
+    await page.route(/\/api\/me\/embeds$/, (route) => (route.request().method() === 'PUT' ? route.fulfill(answer) : route.fallback()));
+    await page.goto('practice/#/me');
+    const section = page.getByRole('region', { name: 'Exports & certificate' });
+    const hide = section.getByRole('switch', { name: 'Embeds without Proschi branding' });
+
+    await hide.click();
+    await expect(section.getByRole('alert')).toHaveText('Proschi could not do this just now; try again in a minute.');
+    await expect(hide).not.toBeChecked();
+
+    answer = { status: 402, json: { error: 'plan_required', feature: 'pro_exports' } };
+    await hide.click();
+    await expect(section.getByRole('alert')).toHaveText('This is part of Pro, and your account is not on it now.');
+    await expect(hide).not.toBeChecked();
+    // Chromium logs both refusals, which the row has shown in words.
+    for (let i = errors.length - 1; i >= 0; i--) if (/status of (402|500) .*\/api\/me\/embeds:0\)$/.test(errors[i])) errors.splice(i, 1);
+  });
+
   test('Max: turning the certificate on gives its page, LinkedIn and a share', async ({ page }) => {
     await mockSignedIn(page, MAX);
     const writes = await mockExports(page);

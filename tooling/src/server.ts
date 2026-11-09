@@ -18,13 +18,18 @@ import {
   ResponseError,
   ErrorCodes,
   MarkupKind,
+  MessageType,
+  DidChangeWatchedFilesNotification,
+  FileChangeType,
   ProposedFeatures,
+  ShowMessageNotification,
   SymbolKind,
   TextDocumentSyncKind,
   TextDocuments,
   createConnection,
   type CodeAction,
   type DocumentSymbol,
+  type Location,
   type TextEdit as LspTextEdit,
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
@@ -46,15 +51,18 @@ import {
   renameEdits,
   renameTarget,
   semanticTokens,
+  symbolTarget,
   testQuickFix,
   toRange,
   type Analysis,
   type OutlineSymbol,
+  type RenameSymbol,
   type TokenKind,
 } from './analysis';
 import { fileResolver, importLinks, ownDiagnostics } from './imports';
 import { format } from './proschi';
 import { testDiagnostics } from './simulation';
+import { MAX_INDEXED_FILES, WorkspaceIndex } from './workspaceIndex';
 
 declare const PROSCHI_VERSION: string;
 
@@ -123,7 +131,14 @@ connection.onDidChangeConfiguration(({ settings }) => {
 const TOKEN_TYPE: Record<TokenKind, string> = { node: 'variable', tech: 'type', team: 'decorator', tag: 'enumMember', constant: 'parameter' };
 const TOKEN_TYPES = Object.values(TOKEN_TYPE);
 
-connection.onInitialize(({ capabilities: client }) => {
+/** The `.proschi` files of the workspace folders, scanned on the first rename or references request. */
+let workspace = new WorkspaceIndex([]);
+let watchFiles = false;
+
+connection.onInitialize(({ capabilities: client, workspaceFolders, rootUri, rootPath }) => {
+  const roots = workspaceFolders?.length ? workspaceFolders.map((f) => pathOf(f.uri)) : [rootUri ? pathOf(rootUri) : (rootPath ?? undefined)];
+  workspace = new WorkspaceIndex(roots.filter((r): r is string => !!r));
+  watchFiles = !!client.workspace?.didChangeWatchedFiles?.dynamicRegistration;
   canRefresh = { inlayHints: !!client.workspace?.inlayHint?.refreshSupport, codeLens: !!client.workspace?.codeLens?.refreshSupport };
   return {
     capabilities: {
@@ -143,6 +158,17 @@ connection.onInitialize(({ capabilities: client }) => {
     },
     serverInfo: { name: 'proschi-language-server', version: typeof PROSCHI_VERSION === 'string' ? PROSCHI_VERSION : 'dev' },
   };
+});
+
+connection.onInitialized(() => {
+  if (watchFiles) void connection.client.register(DidChangeWatchedFilesNotification.type, { watchers: [{ globPattern: '**/*.proschi' }] }).catch(() => undefined);
+});
+
+connection.onDidChangeWatchedFiles(({ changes }) => {
+  for (const change of changes) {
+    const path = pathOf(change.uri);
+    if (path) workspace.changed(path, change.type === FileChangeType.Deleted);
+  }
 });
 
 function validate(document: TextDocument) {
@@ -268,46 +294,89 @@ connection.onDocumentLinks((params) => {
   return doc ? importLinks(analysisOf(doc).result).map(({ range, target }) => ({ range, target: uriOf(target) })) : [];
 });
 
+/** The analysis of the file at `path`: its open document, else its text on disk (undefined when unreadable). */
+function analysisAt(path: string): { uri: string; analysis: Analysis } | undefined {
+  const open = documents.all().find((d) => pathOf(d.uri) === path);
+  if (open) return { uri: open.uri, analysis: analysisOf(open) };
+  let text: string;
+  try {
+    text = readFileSync(path, 'utf8');
+  } catch {
+    return undefined;
+  }
+  return { uri: uriOf(path), analysis: analyze(text, { path, resolve: fileResolver({ entry: path, read: openText }) }) };
+}
+
+let warnedOverCap = false;
+
+/**
+ * The edits renaming `symbol` declared in `declared` (undefined: in `uri`)
+ * everywhere outside `uri`: the declaring file, and every workspace file or
+ * open document that imports it or has it as a system's team file, directly
+ * or through other files. Unopened files are edited from their text on disk.
+ * Remote declaring files (git, https, cloud) are not edited.
+ */
+function editsElsewhere(uri: string, symbol: RenameSymbol, newName: string, declared: string | undefined): Record<string, LspTextEdit[]> {
+  const changes: Record<string, LspTextEdit[]> = {};
+  if (declared !== undefined && !isAbsolute(declared)) return changes;
+  const self = pathOf(uri);
+  const home = declared ?? self;
+  if (declared) {
+    const there = analysisAt(declared);
+    const edits = there ? renameEdits(there.analysis, symbol, newName) : [];
+    if (there && edits.length) changes[there.uri] = edits;
+  }
+  if (!home) return changes;
+  if (workspace.overCap && !warnedOverCap) {
+    warnedOverCap = true;
+    // A notification: not every client answers the showMessage request.
+    void connection.sendNotification(ShowMessageNotification.type, {
+      type: MessageType.Warning,
+      message: `Proschi: the workspace has more than ${MAX_INDEXED_FILES} .proschi files, so rename and find references only search the open documents.`,
+    });
+  }
+  const candidates = new Set([...workspace.dependents(home), ...documents.all().flatMap((d) => pathOf(d.uri) ?? [])]);
+  for (const path of candidates) {
+    if (path === home || path === self) continue;
+    const found = analysisAt(path);
+    if (!found || found.uri in changes) continue;
+    const { analysis } = found;
+    const uses = (analysis.result.imports ?? []).some((i) => i.resolved === home) || (analysis.diagram.systems ?? []).some((s) => s.resolved === home);
+    if (!uses) continue;
+    const edits = renameEdits(analysis, symbol, newName, home);
+    if (edits.length) changes[found.uri] = edits;
+  }
+  return changes;
+}
+
+const toLocations = (changes: Record<string, LspTextEdit[]>): Location[] => Object.entries(changes).flatMap(([uri, edits]) => edits.map(({ range }) => ({ uri, range })));
+
+/** Uses in the document, in the file that declares the symbol, and in every workspace file that uses that file. */
 connection.onReferences((params) => {
   const doc = documents.get(params.textDocument.uri);
   if (!doc) return [];
-  return references(analysisOf(doc), params.position).map((range) => ({ uri: params.textDocument.uri, range }));
+  const analysis = analysisOf(doc);
+  const target = symbolTarget(analysis, params.position);
+  if (!target) return [];
+  const own =
+    target.symbol.kind === 'node' || target.symbol.kind === 'constant'
+      ? references(analysis, params.position)
+      : renameEdits(analysis, target.symbol, '', target.file).map((e) => e.range);
+  return [...own.map((range) => ({ uri: doc.uri, range })), ...toLocations(editsElsewhere(doc.uri, target.symbol, '', target.file))];
 });
 
 connection.onPrepareRename(withDoc(null, (analysis, { position }) => renameTarget(analysis, position)));
 
-/**
- * Renames in the document, in the file that declares the symbol when that is
- * another file on disk, and in every open document that imports that file
- * (or has it as a system's team file). Files that are not open are not
- * searched: the server has no index of the workspace.
- */
+/** Renames in the document and, through editsElsewhere, in every other workspace file that uses the symbol. */
 connection.onRenameRequest((params) => {
   const doc = documents.get(params.textDocument.uri);
   if (!doc) return null;
   const result = rename(analysisOf(doc), params.position, params.newName);
   if (!result) return null;
   if ('error' in result) throw new ResponseError(ErrorCodes.InvalidParams, result.error);
-  const changes: Record<string, LspTextEdit[]> = { [params.textDocument.uri]: result.edits };
-  const declared = result.declaredIn;
-  // Remote imports (git, https) come from the sync cache and are not edited.
-  if (declared !== undefined && !isAbsolute(declared)) return { changes };
-  const home = declared ?? pathOf(params.textDocument.uri);
-  if (declared) {
-    const open = documents.all().find((d) => pathOf(d.uri) === declared);
-    const there = open ? analysisOf(open) : analyze(readFileSync(declared, 'utf8'), { path: declared, resolve: fileResolver({ entry: declared, read: openText }) });
-    changes[uriOf(declared)] = renameEdits(there, result.symbol, params.newName);
-  }
-  if (!home) return { changes };
-  for (const other of documents.all()) {
-    if (other.uri in changes || pathOf(other.uri) === home) continue;
-    const analysis = analysisOf(other);
-    const uses = (analysis.result.imports ?? []).some((i) => i.resolved === home) || (analysis.diagram.systems ?? []).some((s) => s.resolved === home);
-    if (!uses) continue;
-    const edits = renameEdits(analysis, result.symbol, params.newName, home);
-    if (edits.length) changes[other.uri] = edits;
-  }
-  return { changes };
+  // A constant is written with `$` but its name has none, as in the document's own edits.
+  const newName = result.symbol.kind === 'constant' ? params.newName.replace(/^\$/, '') : params.newName;
+  return { changes: { [params.textDocument.uri]: result.edits, ...editsElsewhere(params.textDocument.uri, result.symbol, newName, result.declaredIn) } };
 });
 
 const SYMBOL_KIND: Record<OutlineSymbol['kind'], SymbolKind> = {

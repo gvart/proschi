@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { answerDialog, appendCode, canvasNodes, codeEditor, editorText, expect, expectTopBarClear, test, waitForCanvas } from './fixtures';
+import { answerDialog, appendCode, canvasNodes, chooseOption, codeEditor, editorText, expect, expectTopBarClear, test, waitForCanvas } from './fixtures';
 
 /**
  * The practice canvas and the editor's behave the same (6.1): the practice
@@ -162,9 +162,28 @@ test.describe('the editor canvas', () => {
 
     await page.getByRole('button', { name: 'Flows' }).click();
     const flows = page.getByRole('region', { name: 'Flows' });
-    await flows.getByPlaceholder('e.g. Place order').fill('Browse');
-    await flows.getByRole('button', { name: 'Add use case' }).click();
+    // One use case select, whose last option turns it into a name field: Escape goes back, Enter adds.
+    const picker = flows.getByRole('combobox', { name: 'Use case' });
+    await chooseOption(picker, '+ New use case…');
+    const name = flows.getByRole('textbox', { name: 'New use case' });
+    await expect(name).toBeFocused();
+    await name.press('Escape');
+    await expect(picker).toBeFocused();
+    await chooseOption(picker, '+ New use case…');
+    await name.fill('Browse');
+    await name.press('Enter');
     await expect.poll(() => editorText(page)).toContain('usecase "Browse"');
+    await expect(picker).toHaveText(/Browse/);
+    await chooseOption(picker, '+ New use case…');
+    await name.fill('Search');
+    await name.press('Enter');
+    await expect.poll(() => editorText(page)).toContain('usecase "Search"');
+    // The builder and the top bar's picker show the same use case, either way.
+    const topBar = page.getByTitle(/^Use case: the flow Play runs/);
+    await expect(topBar).toHaveAttribute('data-value', 'search');
+    await chooseOption(topBar, 'Browse');
+    await expect(picker).toHaveAttribute('data-value', 'browse');
+    await expect(flows.getByRole('region', { name: 'Use case Browse' })).toBeVisible();
     await flows.getByRole('button', { name: 'Add a step' }).click();
     const step = flows.getByRole('form', { name: 'New step' });
     await expect(step.getByRole('status')).toHaveText('Click the component the step starts at.');

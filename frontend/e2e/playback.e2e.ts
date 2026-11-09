@@ -125,7 +125,7 @@ test.describe('editor panes', () => {
     await tabs.getByRole('tab', { name: 'Code' }).click();
     await expect(codeEditor(page)).toBeVisible();
     await expect(page.locator('#pane-panel-diagram')).toBeHidden();
-    await tabs.getByRole('tab', { name: /Diagram/ }).click();
+    await tabs.getByRole('tab', { name: /Preview/ }).click();
     await expect(page.locator('#pane-panel-diagram')).toBeVisible();
     await expect(page.locator('#pane-panel-code')).toBeHidden();
     const pane = (await page.locator('#pane-panel-diagram').boundingBox())!;

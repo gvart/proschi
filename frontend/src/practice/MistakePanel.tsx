@@ -52,9 +52,10 @@ export default function MistakePanel({ problem, engine, results, onLesson }: Mis
   const key = match ? `${match.design}:${cards.map((c) => c.id).join(',')}` : undefined;
   // Kept for "Your next steps" (hub/recentMistakes.ts): retry it.
   const matched = match?.mistake.title;
+  const design = match?.design;
   useEffect(() => {
-    if (matched) recordMistake(problem.id, matched);
-  }, [problem.id, matched]);
+    if (matched) recordMistake(problem.id, matched, design);
+  }, [problem.id, matched, design]);
 
   if (!match) return null;
   const topicTitle = (id: string) => deck?.topics.find((t) => t.id === id)?.title ?? id;
