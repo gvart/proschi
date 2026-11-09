@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { answerDialog, appendCode, canvasNodes, codeEditor, editorText, expect, test, waitForCanvas } from './fixtures';
+import { answerDialog, appendCode, canvasNodes, codeEditor, editorText, expect, expectTopBarClear, test, waitForCanvas } from './fixtures';
 
 /**
  * The practice canvas and the editor's behave the same (6.1): the practice
@@ -44,8 +44,18 @@ test.describe('the practice canvas', () => {
     await openProblem(page);
     const toggle = page.getByRole('button', { name: 'Overlay: load' });
     await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    // The pane is narrow: the legend starts folded, and the diagram fits below the whole top bar.
+    const legend = page.getByRole('group', { name: 'Load legend' });
+    await expect(legend).toBeVisible();
+    await expect(legend).not.toHaveAttribute('open', '');
+    await expectTopBarClear(page);
+    // Opened by hand, it stays open.
+    await legend.locator('summary').click();
     await expect(page.getByText('Bottleneck: at 70% or more')).toBeVisible();
     await expect(page.locator('.pc-edge-load').first()).toContainText('rps');
+    await page.reload();
+    await waitForCanvas(page, 2);
+    await expect(page.getByRole('group', { name: 'Load legend' })).toHaveAttribute('open', '');
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-pressed', 'false');
     await expect(page.locator('.pc-edge-load')).toHaveCount(0);
@@ -173,5 +183,26 @@ test.describe('the editor canvas', () => {
     await page.getByRole('button', { name: 'Add component' }).click();
     await expect(flows).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Components' })).toBeVisible();
+  });
+
+  test('with Flows open the canvas is narrow: the legend folds, no node sits under the top bar, the hint shortens clear of the controls', async ({ page }) => {
+    await page.goto('app/');
+    await waitForCanvas(page, 3);
+    await layoutSettled(page);
+    const legend = page.getByRole('group', { name: 'Load legend' });
+    await expect(legend).toHaveAttribute('open', '');
+    await expectTopBarClear(page);
+
+    await page.getByRole('button', { name: 'Flows' }).click();
+    await expect(page.getByRole('region', { name: 'Flows' })).toBeVisible();
+    await expect(legend).not.toHaveAttribute('open', '');
+    // After the diagram glides to its new fit.
+    await page.waitForTimeout(600);
+    await layoutSettled(page);
+    await expectTopBarClear(page);
+    const hint = page.getByText('? for shortcuts', { exact: true });
+    await expect(hint).toBeVisible();
+    const [h, c] = [(await hint.boundingBox())!, (await page.locator('.react-flow__controls:visible').boundingBox())!];
+    expect(h.x > c.x + c.width || h.y > c.y + c.height || h.y + h.height < c.y).toBe(true);
   });
 });

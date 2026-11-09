@@ -329,3 +329,24 @@ export async function chooseOption(select: Locator, option: string): Promise<voi
   await select.click();
   await select.page().getByRole('option', { name: option, exact: true }).click();
 }
+
+/**
+ * No node of the canvas lies under its top bar (CanvasTopBar): the editing buttons, the overlay tools and the
+ * folded load legend. Like whatif.e2e.ts's toolbar check, for the whole bar.
+ */
+export async function expectTopBarClear(page: Page): Promise<void> {
+  const parts = await page.locator('[data-canvas-topbar]:visible').evaluate((bar) =>
+    Array.from(bar.children).flatMap((group) =>
+      (group.matches('[data-topbar-right]') ? Array.from(group.children) : [group]).map(
+        (part) => ((part.matches('.pc-load-legend') && part.querySelector('summary')) || part).getBoundingClientRect().toJSON() as DOMRect,
+      ),
+    ),
+  );
+  const nodes = await canvasNodes(page).evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON() as DOMRect));
+  for (const bar of parts) {
+    for (const box of nodes) {
+      const overlaps = box.left < bar.right && box.right > bar.left && box.top < bar.bottom && box.bottom > bar.top;
+      expect(overlaps, `a node at ${JSON.stringify(box)} under the top bar at ${JSON.stringify(bar)}`).toBe(false);
+    }
+  }
+}

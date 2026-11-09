@@ -184,8 +184,10 @@ test.describe('team systems in the editor', () => {
     // The header's controls keep clear of the frame's border.
     const frameBox = (await frame.locator('.pc-group').boundingBox())!;
     const collapse = (await frame.getByRole('button', { name: 'Collapse Order Processing' }).boundingBox())!;
-    expect(collapse.x + collapse.width).toBeLessThanOrEqual(frameBox.x + frameBox.width - 8);
-    expect(collapse.y).toBeGreaterThanOrEqual(frameBox.y + 8);
+    // 8px at 100%, scaled with the canvas's zoom (the fit keeps the diagram below the top bar, so it can be under 1).
+    const zoom = Math.min(1, Number((await page.locator('.react-flow__viewport:visible').getAttribute('style'))?.match(/scale\(([\d.]+)\)/)?.[1] ?? 1));
+    expect(collapse.x + collapse.width).toBeLessThanOrEqual(frameBox.x + frameBox.width - 8 * zoom);
+    expect(collapse.y).toBeGreaterThanOrEqual(frameBox.y + 8 * zoom);
     // With the load overlay on (the default), its members show their load like any node.
     await expect(page.locator('.react-flow__node', { hasText: 'Orders DB' }).locator('.pc-node[data-load]')).toBeVisible();
     await expect(page.locator('.react-flow__node', { hasText: 'Orders DB' })).toContainText(/\d+%/);
