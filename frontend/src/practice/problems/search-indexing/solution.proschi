@@ -1,0 +1,102 @@
+import "problem.proschi"
+
+menuapi   "Menu API"       [REST API]      x3 @write "Saves merchant edits and publishes a change event for each"
+changes   "Change Events"  [Kafka]         x3 @write "Store and menu changes by id, and the ETL's rows: the only way into the index"
+indexer   "Indexer"        [Worker]        x10 @write "Flink jobs: assemble the full document, buffer it, flush bulk requests"
+search    "Search Cluster" [Elasticsearch] x3 @read "The store and menu index: 3 shards, each with a primary and 2 replicas"
+searchapi "Search API"     [REST API]      x8 @read "Answers search queries from the index only"
+
+capacity {
+  search shards 3
+}
+
+merchant  -> menuapi   : HTTPS
+menuapi   -> db        : SQL
+menuapi   -> changes   : produce
+changes   -> indexer   : consume
+indexer   -> db        : SQL, read-only
+indexer   -> search    : _bulk
+loader    -> changes   : produce
+diner     -> searchapi : HTTPS
+searchapi -> search    : _search
+
+entity Store in db "A store with its menu and items, owned by the merchant" {
+  storeId int key
+  name    string
+  cuisine string
+  hours   json
+  menu    json
+}
+
+entity StoreDocument in search "One store flattened for search: names, dishes, tags and ranking scores" {
+  storeId int key
+  name    string
+  dishes  json
+  tags    json
+  score   float
+}
+
+entity ChangeEvent in changes "A change to one store, by id only" {
+  storeId   int key
+  kind      string
+  changedAt time
+}
+
+decision "Separate the read path from the write path" {
+  because "Diners only ever query the search cluster, and merchants only ever write the database; the stream between them is the only link, so a burst of edits or a backfill never queues in front of a query"
+  rejected "Search the database directly" "Text search over stores and menus is not what PostgreSQL is built for, and every query would compete with merchant writes on the source of truth"
+}
+decision "Index from a change stream, not inside the edit" {
+  because "The edit commits to PostgreSQL and publishes an event; indexing happens seconds later, so a slow or busy search cluster never slows a merchant down"
+  rejected "Write to Elasticsearch in the edit request" "The edit waits for the index, and an edit that saved but failed to index leaves the two out of step"
+  rejected "Rebuild the index with a nightly batch job" "Changes take hours to show, and a full rebuild of every store hammers both the database and the cluster"
+}
+decision "Events carry ids; the indexer reads the current state" because "An event that only says 'store 812 changed' cannot go stale: the indexer always assembles the latest version, and replaying old events is harmless"
+decision "Flush bulk requests" {
+  because "One _bulk request with about 100 documents costs the cluster a fraction of 100 single writes, which keeps indexing load far below query load"
+  rejected "One index request per change" "12k writes a second would cost almost as much cluster as the queries"
+}
+decision "3 shards, each with 2 replicas" because "Shards split the index into pieces a node can hold; replicas copy each shard so queries spread over more nodes and losing one node loses no shard"
+
+usecase "Search" "A diner searches for stores and dishes" {
+  diner      -> searchapi : GET /search?q=tacos&lat=37.77&lng=-122.42
+  searchapi  -> search    : match "tacos" near the diner, open now
+  search    --> searchapi : top 50 stores
+  searchapi --> diner     : 200 results
+}
+
+usecase "Edit menu" "A merchant changes a menu item" {
+  merchant -> menuapi  : PUT /stores/812/items/5510 {"price": 11.5}
+  menuapi  -> db       : UPDATE item 5510 of store 812
+  db      --> menuapi  : committed
+  menuapi ->> changes  : PUBLISH StoreChanged store 812
+  menuapi --> merchant : 200
+}
+
+usecase "Index change" "The indexer turns one change event into a fresh search document" {
+  changes -> indexer : StoreChanged store 812
+  indexer -> db      : SELECT store 812 with its menu and items
+  db     --> indexer : current rows
+
+  alt "Buffered" when "the bulk buffer has room" {
+    indexer --> changes : document added to the bulk buffer
+  } alt "Flush" when "the buffer holds 100 documents or a second has passed" {
+    indexer  -> search  : UPSERT 100 documents with one _bulk request
+    search  --> indexer : per-document results
+    indexer --> changes : commit offsets
+  }
+}
+
+usecase "Backfill" "The nightly ETL's scores and tags reach the index, throttled" {
+  loader   -> changes : PUBLISH ScoreUpdated item 5510
+  changes --> loader  : ack
+  changes  -> indexer : ScoreUpdated item 5510, with its new score
+
+  alt "Buffered" when "the bulk buffer has room" {
+    indexer --> changes : document added to the bulk buffer
+  } alt "Flush" when "the buffer holds 100 documents or a second has passed" {
+    indexer  -> search  : UPSERT 100 partial documents with one _bulk request
+    search  --> indexer : per-document results
+    indexer --> changes : commit offsets
+  }
+}

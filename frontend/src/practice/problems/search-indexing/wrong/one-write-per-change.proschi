@@ -1,0 +1,60 @@
+# expect-fail: Documents are written to the index in bulk
+# mistake: Sending every change to the search cluster as its own write
+# explain: 12k single-document writes a second land on the same nodes that answer queries, more than the queries themselves, so query latency climbs and losing a node saturates the cluster. Buffering documents and flushing one bulk request per hundred cuts indexing load to about 1% of that.
+# lesson: bulk-writes
+# cards: search-indexing-bulk-requests, queue-load-levelling, replicas-do-not-scale-writes
+# The indexer writes each document as soon as it is assembled: one index request per change and per ETL row.
+import "problem.proschi"
+
+menuapi   "Menu API"       [REST API]      x3 @write "Saves merchant edits and publishes a change event for each"
+changes   "Change Events"  [Kafka]         x3 @write "Store and menu changes by id, and the ETL's rows"
+indexer   "Indexer"        [Worker]        x10 @write "Flink jobs: assemble a document and index it at once"
+search    "Search Cluster" [Elasticsearch] x3 @read "3 shards, each with a primary and 2 replicas"
+searchapi "Search API"     [REST API]      x8 @read "Answers search queries from the index only"
+
+capacity {
+  search shards 3
+}
+
+merchant  -> menuapi   : HTTPS
+menuapi   -> db        : SQL
+menuapi   -> changes   : produce
+changes   -> indexer   : consume
+indexer   -> db        : SQL, read-only
+indexer   -> search    : index
+loader    -> changes   : produce
+diner     -> searchapi : HTTPS
+searchapi -> search    : _search
+
+usecase "Search" "A diner searches for stores and dishes" {
+  diner      -> searchapi : GET /search?q=tacos
+  searchapi  -> search    : match "tacos" near the diner, open now
+  search    --> searchapi : top 50 stores
+  searchapi --> diner     : 200 results
+}
+
+usecase "Edit menu" "A merchant changes a menu item" {
+  merchant -> menuapi  : PUT /stores/812/items/5510 {"price": 11.5}
+  menuapi  -> db       : UPDATE item 5510 of store 812
+  db      --> menuapi  : committed
+  menuapi ->> changes  : PUBLISH StoreChanged store 812
+  menuapi --> merchant : 200
+}
+
+usecase "Index change" "The indexer writes each change to the index on its own" {
+  changes  -> indexer : StoreChanged store 812
+  indexer  -> db      : SELECT store 812 with its menu and items
+  db      --> indexer : current rows
+  indexer  -> search  : UPSERT document for store 812
+  search  --> indexer : indexed
+  indexer --> changes : commit offset
+}
+
+usecase "Backfill" "Each ETL row is written to the index on its own" {
+  loader   -> changes : PUBLISH ScoreUpdated item 5510
+  changes --> loader  : ack
+  changes  -> indexer : ScoreUpdated item 5510, with its new score
+  indexer  -> search  : UPSERT score of item 5510
+  search  --> indexer : indexed
+  indexer --> changes : commit offset
+}
