@@ -1,0 +1,45 @@
+tooling/test/server-simulation.test.ts
+  s_f355061868c346::t_578f12d7cc063c 121-142
+tooling/vscode/README.md
+  s_f355061868c346::t_541f64f348e17a 19-22
+tooling/vscode/package.json
+  s_f355061868c346::t_8221d2b1cdd22e 72-86
+tooling/src/simulation.ts
+  s_f355061868c346::t_d7bf02bd14bde2 280,409,424,438-462
+tooling/src/proschi.ts
+  s_f355061868c346::t_fb9ec7618abef9 52
+docs/EDITORS.md
+  s_f355061868c346::t_983174cfe2f80d 23-24
+  s_f355061868c346::t_541f64f348e17a 36-49
+  s_f355061868c346::t_6d6c7792389f4a 50
+tooling/vscode/src/extension.ts
+  s_f355061868c346::t_8221d2b1cdd22e 20-21
+tooling/src/server.ts
+  s_f355061868c346::t_d066f19317b32e 14,36,41,96,101,103-104,107-121,126-128,145-146,369-398
+  s_f355061868c346::t_3f108386c8c1a3 129-144
+  s_f355061868c346::t_0d22c1d811bc4b 5-7
+  s_f355061868c346::t_11de554db9bea8 399
+tooling/test/results.test.ts
+  s_f355061868c346::t_eeb6716ec99e87 4-5,24,30-54,56-79,81-82
+  s_f355061868c346::t_4c90fef56bba60 55
+  s_f355061868c346::t_97399826efe2d5 1-3,6-23,25-29,80,83-84
+tooling/src/analysis.ts
+  s_f355061868c346::t_fb9ec7618abef9 8-12,25,787-806,808-811,820-883
+  s_f355061868c346::t_4c90fef56bba60 807,812-819
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3b89725d7e5ea7cf3105f93ad8bd7fd5eeaeca8d",
+  "prompts": {},
+  "sessions": {
+    "s_f355061868c346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd556674-4248-429d-bf5c-2b361bc86c62",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
