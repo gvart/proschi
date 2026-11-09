@@ -1,0 +1,53 @@
+frontend/src/practice/problems/recommendations/problem.md
+  s_248f83f833fb51::t_298e0e67b1aabe 1-2,4-133
+  s_248f83f833fb51::t_400bc39415faa5 3
+frontend/src/practice/problems/recommendations/wrong/heavy-model-on-every-candidate.proschi
+  s_248f83f833fb51::t_43fbdf23606013 1-45
+frontend/src/practice/cards/estimation/recommendations-ranking-funnel.md
+  s_248f83f833fb51::t_384020ebbb7cad 1-27
+frontend/src/practice/problems/recommendations/wrong/funnel-that-never-narrows.proschi
+  s_248f83f833fb51::t_8187ffc3150c5f 1-52
+frontend/src/practice/problems/recommendations/wrong/features-from-the-warehouse.proschi
+  s_248f83f833fb51::t_94c0c2344b82a6 1-50
+frontend/src/practice/problems/recommendations/solution.proschi
+  s_248f83f833fb51::t_1a58455a7c9b8b 1-2,10-64,70
+  s_248f83f833fb51::t_27532f07de1a3e 3-9,65-69
+frontend/src/practice/cards/estimation/recommendations-heavy-model-load.md
+  s_248f83f833fb51::t_8e04ce07b1d2de 1-22
+frontend/src/practice/cards/caching/recommendations-precomputed-features.md
+  s_248f83f833fb51::t_9ba957fd1f7a50 1-27
+frontend/src/practice/problems/recommendations/interview.md
+  s_248f83f833fb51::t_d9620a45552c4a 1-77
+frontend/src/practice/problems/recommendations/wrong/same-size-pool-for-every-model.proschi
+  s_248f83f833fb51::t_448ce9fe9f24d7 1-53
+frontend/src/practice/problems/recommendations/lesson.md
+  s_248f83f833fb51::t_7931d9883959bc 72
+  s_248f83f833fb51::t_162501cc06d417 48
+  s_248f83f833fb51::t_51ef4483e92d68 1-47,49-71,73-140
+frontend/src/practice/problems/recommendations/given.proschi
+  s_248f83f833fb51::t_27532f07de1a3e 3,5
+  s_248f83f833fb51::t_88d814fb713b98 4,19
+  s_248f83f833fb51::t_0eddddb18e5ba5 1-2,6-18,20-42
+frontend/src/practice/problems/recommendations/starter.proschi
+  s_248f83f833fb51::t_d4223504b17ad9 1-13
+frontend/src/practice/cards/ids.lock
+  s_248f83f833fb51::t_496b6ca1dc0f67 231-233
+frontend/src/practice/roadmapStages.ts
+  s_248f83f833fb51::t_3bb33fecb85771 78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "12f7d7a55b70e9d676ddac98ac5c67a3f77e0b32",
+  "prompts": {},
+  "sessions": {
+    "s_248f83f833fb51": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2d46bc96-3c9a-4511-a065-8673803644a9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
