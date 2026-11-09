@@ -4,8 +4,10 @@
 ack-after-store
 active-active-vs-active-passive
 activity-bitmaps
+ad-click-aggregator-transactional-sink
 anycast
 api-gateway-scope
+api-gateway-session-cache
 async-failover-loss
 at-least-once-needs-idempotency
 authn-vs-authz
@@ -49,6 +51,9 @@ competing-consumers
 composite-index-prefix
 concurrent-idempotency-keys
 conditional-stock-update
+config-push-fan-out-bandwidth
+config-push-local-reads
+config-push-single-writer
 connection-draining
 connection-pool-size
 connection-pooler
@@ -75,6 +80,8 @@ delete-on-write
 delivery-receipts
 denormalization
 disk-vs-app-replication
+distributed-cron-scheduler-only-enqueues
+distributed-cron-skip-overlapping-runs
 dns-resolution-path
 dns-ttl-tradeoff
 durability-is-not-backup
@@ -150,6 +157,7 @@ lfu-weakness
 linearizability
 littles-law-concurrency
 load-shedding
+load-shedding-at-the-gateway
 log-compaction
 log-volume-per-day
 log-vs-queue
@@ -161,6 +169,9 @@ low-selectivity-index
 lru-vs-lfu-scan
 lsm-fast-reads
 lsm-write-path
+media-processing-generate-once
+media-processing-separate-pools
+media-processing-upload-never-waits
 merkle-tree
 message-ordering
 metadata-vs-content
@@ -170,9 +181,14 @@ metrics-logs-traces
 monotonic-reads
 mtls-between-services
 multi-leader-conflicts
+multi-region-cache-invalidation
+multi-region-failover-headroom
 multipart-upload
 mvcc
 n-plus-one-queries
+nearby-search-balance-by-load
+nearby-search-move-between-geoshards
+nearby-search-shards-per-search
 negative-caching
 never-reject-an-add
 new-connection-latency
@@ -216,9 +232,14 @@ rate-limit-response
 read-committed-anomaly
 read-qps-from-write-ratio
 read-repair
+read-replicas-pool-size
+read-replicas-stable-pick
 read-write-ratio-first
 read-your-writes
 rebalance-effects
+recommendations-heavy-model-load
+recommendations-precomputed-features
+recommendations-ranking-funnel
 reconnect-storm
 red-and-use
 redis-vs-memcached
@@ -238,6 +259,8 @@ saga-orchestration-vs-choreography
 saga-over-2pc
 scale-on-message-age
 scatter-gather
+search-indexing-bulk-requests
+search-indexing-shards-vs-replicas
 seconds-in-a-day
 seconds-in-a-month
 secret-rotation

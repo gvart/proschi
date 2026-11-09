@@ -1,0 +1,13 @@
+import "problem.proschi"
+
+# Add candidate retrieval with its embedding index, the feature store, the
+# three ranking passes (light, medium, heavy) and the use cases
+# "Load Explore" and "Refresh features".
+explore "Explore API" [gRPC] x2
+
+user -> explore : HTTPS
+
+usecase "Load Explore" {
+  user     -> explore : GET /explore
+  explore --> user    : 200 page of 25 posts
+}

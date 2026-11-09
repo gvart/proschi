@@ -1,0 +1,32 @@
+# expect-fail: p99 of Change config < 100 ms
+# expect-fail: Changes reach the edge through the main nodes
+# mistake: The root sending every change to every data center itself
+# explain: With no tier in between, the root sends 200 copies of each 2 KB change: 400 MB/s at 1k changes a second, twice what two root nodes carry, so the root saturates and the writes that go through it slow down. Put main nodes between the root and the edge: the root sends a copy to each of them, and they feed the data centers.
+# lesson: a-fan-out-tree
+# cards: config-push-fan-out-bandwidth, fanout-write-amplification
+# No main nodes: the root replicates straight to all 200 data centers.
+import "problem.proschi"
+
+api  "Config API" [REST API]        x2 @core "Takes configuration changes"
+root "Root"       [Key-Value Store] x2 @core "Where every write lands"
+
+customer -> api   : HTTPS
+api      -> root  : writes
+root     -> local : replication log
+visitor  -> edge  : HTTPS
+edge     -> local : LMDB read
+
+usecase "Serve request" {
+  visitor -> edge    : GET /
+  edge    -> local   : x3 GET settings
+  local  --> edge    : values
+  edge   --> visitor : 200
+}
+
+usecase "Change config" {
+  customer -> api      : PUT /zones/{id}/settings
+  api      -> root     : SET key
+  root    --> api      : seq 1024
+  api     --> customer : 200
+  root    ->> local    : ~2KB x200 APPEND log entry 1024
+}

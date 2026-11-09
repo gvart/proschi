@@ -1,0 +1,129 @@
+import "problem.proschi"
+
+eastZuul  "Zuul, US-East"         [API Gateway] x3 @east "Edge gateway of US-East-1: routes, and sheds load when the region is overrun"
+eastApi   "Playback API, US-East" [Service]     x7 @east "Stateless: any instance serves any member, so it can absorb the other region's members"
+eastCache "EVCache, US-East"      [Memcached]   x2 @east "Memcached in front of Cassandra; filled by local reads only"
+eastDb    "Cassandra, US-East"    [Cassandra]   x2 @east "Every member's data; written at LOCAL_QUORUM, replicated to US-West asynchronously"
+
+westZuul  "Zuul, US-West"         [API Gateway] x3 @west "Edge gateway of US-West-2: routes, and sheds load when the region is overrun"
+westApi   "Playback API, US-West" [Service]     x7 @west "Stateless: any instance serves any member, so it can absorb the other region's members"
+westCache "EVCache, US-West"      [Memcached]   x2 @west "Memcached in front of Cassandra; filled by local reads only"
+westDb    "Cassandra, US-West"    [Cassandra]   x2 @west "Every member's data; written at LOCAL_QUORUM, replicated to US-East asynchronously"
+
+viewer   -> dns       : resolve api.netflix.com
+viewer   -> eastZuul  : HTTPS
+viewer   -> westZuul  : HTTPS
+eastZuul -> eastApi   : HTTP
+westZuul -> westApi   : HTTP
+eastApi  -> eastCache : memcached
+westApi  -> westCache : memcached
+eastApi  -> eastDb    : CQL
+westApi  -> westDb    : CQL
+eastDb   -> westDb    : async replication
+westDb   -> eastDb    : async replication
+eastApi  -> westCache : invalidate (via SQS)
+westApi  -> eastCache : invalidate (via SQS)
+
+entity Bookmark in eastDb "Where a member stopped watching; one copy per region, kept in step by replication" {
+  member_id  uuid key
+  video_id   int  key
+  position_s int
+  updated_at time
+}
+
+decision "Active-active across two US regions" {
+  because "A bad deploy or a broken dependency can take out a whole region; with both regions serving, members of the failed one are moved by DNS to a region that is already running and warm"
+  rejected "Active-passive with a standby region" "The standby serves nothing, so nobody knows it works until the day it is needed, and its caches are empty"
+  rejected "One region, more Availability Zones" "Zones protect against a data centre failing, not against a bad change rolled out to the whole region"
+}
+decision "Each region sized for all the traffic" {
+  because "On failover the surviving region takes its own members and the other region's: 8k browse requests and 2k writes a second, with a colder cache"
+  rejected "Size each region for its half" "Fine every day, and saturated on the one day the design exists for"
+}
+decision "Replicate asynchronously" {
+  because "A write is acknowledged once the local Cassandra quorum has it; waiting for the other region would put a cross-country round trip, and that region's health, on every write"
+  rejected "Write to both regions before answering" "Every write waits on the other region, and fails when the link between them does"
+}
+decision "Invalidate the other region's cache" because "EVCache is not replicated; a write sends a delete for the key to the other region (via SQS), and the next read there falls through to Cassandra"
+decision "DNS steers members" because "Geo-directional records send each part of North America to one region; failover moves a Route53 CNAME instead of reconfiguring territories"
+
+usecase "Browse" "A member opens the home screen; read from the local region only" {
+  viewer -> dns : resolve api.netflix.com
+  alt "East" when "member in the eastern half" {
+    viewer   -> eastZuul : GET /home
+    eastZuul -> eastApi  : GET /home
+    alt "Hit" {
+      eastApi -> eastCache : GET member rows
+    } alt "Miss" when "not in US-East EVCache" {
+      eastApi -> eastCache : GET member rows
+      eastApi -> eastDb    : SELECT at LOCAL_QUORUM
+      eastApi -> eastCache : SET member rows
+    }
+    eastApi  --> eastZuul : 200
+    eastZuul --> viewer   : 200 home screen
+  } alt "West" when "member in the western half" {
+    viewer   -> westZuul : GET /home
+    westZuul -> westApi  : GET /home
+    alt "Hit" {
+      westApi -> westCache : GET member rows
+    } alt "Miss" when "not in US-West EVCache" {
+      westApi -> westCache : GET member rows
+      westApi -> westDb    : SELECT at LOCAL_QUORUM
+      westApi -> westCache : SET member rows
+    }
+    westApi  --> westZuul : 200
+    westZuul --> viewer   : 200 home screen
+  }
+}
+
+usecase "Save progress" "The player saves where the member stopped; acknowledged by the local region" {
+  viewer -> dns : resolve api.netflix.com
+  alt "East" {
+    viewer    -> eastZuul  : PUT /bookmark
+    eastZuul  -> eastApi   : PUT /bookmark
+    eastApi   -> eastDb    : INSERT bookmark at LOCAL_QUORUM
+    eastApi   -> eastCache : DELETE bookmark
+    eastApi  --> eastZuul  : 204
+    eastZuul --> viewer    : 204
+    eastDb   ->> westDb    : replicate bookmark
+    eastApi  ->> westCache : DELETE bookmark (via SQS)
+  } alt "West" {
+    viewer    -> westZuul  : PUT /bookmark
+    westZuul  -> westApi   : PUT /bookmark
+    westApi   -> westDb    : INSERT bookmark at LOCAL_QUORUM
+    westApi   -> westCache : DELETE bookmark
+    westApi  --> westZuul  : 204
+    westZuul --> viewer    : 204
+    westDb   ->> eastDb    : replicate bookmark
+    westApi  ->> eastCache : DELETE bookmark (via SQS)
+  }
+}
+
+usecase "Browse in failover" "One region is evacuated: DNS sends all its members to the other" {
+  viewer -> dns : resolve api.netflix.com
+  alt "East evacuated" when "US-East is failed over" {
+    viewer   -> westZuul : GET /home
+    westZuul -> westApi  : GET /home
+    alt "Hit" {
+      westApi -> westCache : GET member rows
+    } alt "Miss" when "an eastern member, not yet in US-West EVCache" {
+      westApi -> westCache : GET member rows
+      westApi -> westDb    : SELECT at LOCAL_QUORUM
+      westApi -> westCache : SET member rows
+    }
+    westApi  --> westZuul : 200
+    westZuul --> viewer   : 200 home screen
+  } alt "West evacuated" when "US-West is failed over" {
+    viewer   -> eastZuul : GET /home
+    eastZuul -> eastApi  : GET /home
+    alt "Hit" {
+      eastApi -> eastCache : GET member rows
+    } alt "Miss" when "a western member, not yet in US-East EVCache" {
+      eastApi -> eastCache : GET member rows
+      eastApi -> eastDb    : SELECT at LOCAL_QUORUM
+      eastApi -> eastCache : SET member rows
+    }
+    eastApi  --> eastZuul : 200
+    eastZuul --> viewer   : 200 home screen
+  }
+}

@@ -1,0 +1,108 @@
+import "problem.proschi"
+
+api         "Upload API"        [REST API]       x3 @files "Stores the uploaded file and enqueues its pre-warm job"
+jobs        "Pre-warm Jobs"     [Message Queue]  x2 @processing "One job per uploaded file"
+riviera     "Coordinator"       [Service]        x3 @processing "Checks for stored outputs, composes the work and dispatches each step to its worker pool"
+thumbnailer "Thumbnail Workers" [Worker]         x15 @processing "Render 160x160 thumbnails, the only transformation they run"
+previewer   "Preview Workers"   [Worker]         x24 @processing "Convert documents to PDF and render the pages as images"
+derived     "Derived Outputs"   [Object Storage] x4 @serving "Thumbnails and preview pages, generated once, keyed by file version"
+cdn         "CDN"               [CDN]            x2 @serving "Serves thumbnails and preview pages close to the user"
+
+user    -> api         : HTTPS
+user    -> cdn         : HTTPS
+api     -> originals   : PUT
+api     -> jobs        : enqueue
+jobs    -> riviera     : consume
+riviera -> originals   : GET
+riviera -> thumbnailer : dispatch
+riviera -> previewer   : dispatch
+riviera -> derived     : PUT / GET
+cdn     -> derived     : origin fetch
+cdn     -> riviera     : preview origin
+
+entity Output in derived "One derived output of one file version" {
+  fileId    string key
+  revision  int    key
+  kind      string key
+  createdAt time
+}
+
+decision "Pre-warm in the background" {
+  because "The upload answers once the file is stored; the thumbnail and preview are made from a queue, so slow transformations never hold the upload"
+  rejected "Render thumbnails and previews inside the upload" "Every upload would wait seconds for preview workers, and a busy worker pool would fail uploads"
+}
+decision "Generate once, serve many times" {
+  because "Each output is stored the first time it is made and served from the CDN after that, so 50k thumbnail views a second never reach a worker"
+  rejected "Transform on every view" "Every edge miss would run a worker: tens of times the worker fleet, and seconds of latency on a view"
+}
+decision "One worker pool per transformation" {
+  because "Thumbnails take 50 ms and previews 500 ms; separate pools are sized and scaled for their own rate, and a backlog of previews never delays thumbnails"
+  rejected "One pool for every transformation" "Cheap thumbnails queue behind expensive document conversions, and the pool cannot be sized for either"
+}
+decision "Pre-warm previews only for files likely to be opened" because "Preview work is the expensive part; files unlikely to be previewed get a thumbnail only, and the rare preview of one is generated while the user waits"
+
+usecase "Upload file" "A user uploads a file" {
+  user       -> api       : POST /files
+  api        -> originals : PUT file
+  originals --> api       : stored
+  api       ->> jobs      : ENQUEUE pre-warm file 42 rev 7
+  api       --> user      : 201 {"fileId": 42}
+}
+
+usecase "Pre-warm" "A coordinator generates a new file's outputs from the queue" {
+  jobs       -> riviera   : pre-warm file 42 rev 7
+  riviera    -> originals : GET file 42 rev 7
+  originals --> riviera   : file
+
+  alt "Thumbnail and preview" when "the file is likely to be previewed" {
+    riviera      -> thumbnailer : RENDER thumbnail 160x160
+    thumbnailer --> riviera     : thumbnail
+    riviera      -> previewer   : CONVERT to PDF, RENDER pages
+    previewer   --> riviera     : page images
+    riviera      -> derived     : PUT thumbnail and preview pages
+  } alt "Thumbnail only" when "the file is unlikely to be previewed" {
+    riviera      -> thumbnailer : RENDER thumbnail 160x160
+    thumbnailer --> riviera     : thumbnail
+    riviera      -> derived     : PUT thumbnail
+  }
+  derived --> riviera : stored
+  riviera --> jobs    : ack
+}
+
+usecase "View thumbnail" "A user's file list shows a thumbnail" {
+  user -> cdn : GET /thumb/42/7/160x160
+
+  alt "Edge hit" when "the thumbnail is cached at the edge" {
+    cdn --> user : 200 thumbnail
+  } alt "Edge miss" when "the edge has not seen it yet" {
+    cdn      -> derived : GET thumb/42/7/160x160
+    derived --> cdn     : thumbnail
+    cdn     --> user    : 200 thumbnail
+  }
+}
+
+usecase "Open preview" "A user opens a file's preview" {
+  user -> cdn : GET /preview/42/7/page/1
+
+  alt "Edge hit" when "the page is cached at the edge" {
+    cdn --> user : 200 page image
+  } alt "Pre-warmed" when "the preview was generated in the background" {
+    cdn      -> riviera : GET preview 42 rev 7 page 1
+    riviera  -> derived : GET preview/42/7/1
+    derived --> riviera : page image
+    riviera --> cdn     : page image
+    cdn     --> user    : 200 page image
+  } alt "Generated on view" when "the preview was not pre-warmed" {
+    cdn        -> riviera   : GET preview 42 rev 7 page 1
+    riviera    -> derived   : GET preview/42/7/1
+    derived   --> riviera   : not found
+    riviera    -> originals : GET file 42 rev 7
+    originals --> riviera   : file
+    riviera    -> previewer : CONVERT to PDF, RENDER pages
+    previewer --> riviera   : page images
+    riviera    -> derived   : PUT preview pages
+    derived   --> riviera   : stored
+    riviera   --> cdn       : page image
+    cdn       --> user      : 200 page image
+  }
+}

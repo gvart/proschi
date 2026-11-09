@@ -1,0 +1,48 @@
+# expect-fail: p99 of Run script < 110 ms
+# expect-fail: survive any node failure
+# mistake: A worker pool sized for the average rate, not the top of the minute
+# explain: Runs are not spread evenly: most cron strings fire at the start of a minute, so the pool must take the peak of 200 runs a second, not the 50 a second of the whole minute. At 10 runs a second per worker that is 20 workers at full load; add headroom and one spare, about 30.
+# lesson: sizing-the-worker-pool
+# cards: workers-needed, servers-for-peak-load, littles-law-concurrency
+# Workers sized for the minute's average (50 runs a second), so the burst at the top of the minute saturates them.
+import "problem.proschi"
+
+scheduler "Scheduled Job Conductor" [Go]    x2 @cron "Parses the cron strings; the elected leader enqueues due runs, the other pod stands by"
+jobs      "Job Queue"               [Kafka] x3 @jobs "Durable queue of script runs"
+workers   "Job Workers"             [Go]    x8 @jobs "Run one script per job"
+runs      "Script Runs"             [MySQL] x2 @cron "One row per run"
+
+clock     -> scheduler : minute tick
+scheduler -> runs      : SQL
+scheduler -> jobs      : produce
+jobs      -> workers   : consume
+workers   -> runs      : SQL
+workers   -> backend   : the script's work
+
+usecase "Fire" "The leader finds a due script and hands its run to the job queue" {
+  clock     -> scheduler : tick 09:00, nightly-report is due
+  scheduler -> runs      : SELECT active runs WHERE script = 'nightly-report'
+
+  alt "Enqueued" when "no run of the script is enqueued or in progress" {
+    runs      --> scheduler : none
+    scheduler  -> runs      : INSERT run state = enqueued
+    runs      --> scheduler : run 5521
+    scheduler  -> jobs      : ENQUEUE run 5521
+    jobs      --> scheduler : ack
+    scheduler --> clock     : enqueued
+  } alt "Already running" when "the previous run has not finished yet" {
+    runs      --> scheduler : run 5490 in progress
+    scheduler --> clock     : skipped
+  }
+}
+
+usecase "Run script" "A worker takes a run from the queue and executes the script" {
+  jobs     -> workers : run 5521 nightly-report
+  workers  -> runs    : UPDATE run 5521 SET state = in_progress
+  runs    --> workers : ok
+  workers  -> backend : run nightly-report
+  backend --> workers : done
+  workers  -> runs    : UPDATE run 5521 SET state = done
+  runs    --> workers : ok
+  workers --> jobs    : ack
+}

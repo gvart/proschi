@@ -1,0 +1,48 @@
+# expect-fail: Playback is never shed
+# mistake: Shedding without looking at priority
+# explain: One limit for all traffic drops a play request as readily as a log upload, so members see playback errors while logs still get through. Give every request a priority at the gateway and shed the lowest first: logs and background requests, then progress markers, and playback never.
+# lesson: priority-buckets
+# cards: load-shedding, graceful-degradation
+# Zuul has one concurrency limit for all traffic: when it is reached, a play request is shed like any other.
+import "problem.proschi"
+
+zuul "Zuul" [API Gateway] x4 @edge "One concurrency limit for every request"
+
+device -> zuul : HTTPS
+zuul   -> api  : HTTP
+
+usecase "Start playback" "A member presses play" {
+  device -> zuul : POST /playback/start
+
+  alt "Served" when "Zuul is under its concurrency limit" {
+    zuul  -> api    : POST /playback/start
+    api  --> zuul   : 200 {"manifest": "..."}
+    zuul --> device : 200 {"manifest": "..."}
+  } alt "Shed" when "Zuul is over its concurrency limit" {
+    zuul --> device : 503
+  }
+}
+
+usecase "Save progress" "The app saves a pause or stop marker" {
+  device -> zuul : PUT /progress
+
+  alt "Served" when "Zuul is under its concurrency limit" {
+    zuul  -> api    : PUT /progress
+    api  --> zuul   : 204
+    zuul --> device : 204
+  } alt "Shed" when "Zuul is over its concurrency limit" {
+    zuul --> device : 503
+  }
+}
+
+usecase "Send logs" "The app uploads logs and background data" {
+  device -> zuul : POST /logs
+
+  alt "Served" when "Zuul is under its concurrency limit" {
+    zuul  -> api    : POST /logs
+    api  --> zuul   : 202
+    zuul --> device : 202
+  } alt "Shed" when "Zuul is over its concurrency limit" {
+    zuul --> device : 503
+  }
+}

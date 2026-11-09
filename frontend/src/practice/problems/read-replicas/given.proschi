@@ -1,0 +1,45 @@
+title "Read Replicas" "Scales a read-heavy MySQL database with a pool of replicas behind ProxySQL"
+
+app     "Shopify App"   [Actor]   "Shopify's application servers: the client of this problem"
+proxy   "ProxySQL"      [Service] x3 @data "Routes each query to a MySQL server; the app never sees the topology"
+primary "MySQL Primary" [MySQL]   x2 @data "Takes every write; a standby replica is ready to take over"
+
+capacity {
+  proxy 50k rps latency 1ms cost 100 usd/month
+}
+
+traffic {
+  "Read catalog" 60k rps
+  "Place order"  3k rps
+  "Check order"  2k rps
+}
+
+requirements {
+  p99 "Read catalog" < 40ms
+  p99 "Place order" < 80ms
+  p99 "Check order" < 80ms
+  availability >= 99.95%
+  durable "Place order"
+  survive any node failure
+  cost <= 3400 usd/month
+}
+
+test "Queries go through ProxySQL" {
+  "Read catalog" starts at app
+  "Place order" starts at app
+  "Check order" starts at app
+  "Read catalog" calls proxy before any database
+  "Place order" calls proxy before any database
+  "Check order" calls proxy before any database
+  no path from app to any database
+}
+
+test "Catalog reads go to the replicas" {
+  "Read catalog" every scenario calls any database
+  "Read catalog" never calls primary
+}
+
+test "Writes and time-sensitive reads go to the primary" {
+  "Place order" writes primary before responding
+  "Check order" every scenario calls primary
+}

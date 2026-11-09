@@ -1,0 +1,69 @@
+title "Ad Click Aggregator" "Counts every ad impression and click exactly once, for advertiser dashboards and budgets"
+
+app        "Uber Eats App"     [Actor]      "Reports an event for every ad shown (impression) and tapped (click)"
+advertiser "Advertiser"        [Actor]      "A restaurant's ads dashboard: impressions, clicks and spend per campaign"
+budget     "Ad Budget Service" [REST API]   x2 @billing "Spends each campaign's budget and paces its ads; already exists"
+ledger     "Budget Ledger"     [PostgreSQL] x2 @billing "Spend per campaign, and every record UUID already applied; already exists"
+
+budget -> ledger : SQL
+
+traffic {
+  "Record event"       20k rps
+  "Aggregate events"   20k rps
+  "Publish aggregates" 500 rps
+  "Checkpoint"         1 rps
+  "Load aggregates"    500 rps
+  "Update budget"      500 rps
+  "View report"        1k rps
+}
+
+requirements {
+  p99 "Record event" < 60ms
+  p99 "Aggregate events" < 50ms
+  p99 "Update budget" < 100ms
+  p99 "View report" < 150ms
+  availability "Record event" >= 99.95%
+  availability "View report" >= 99.9%
+  durable "Record event"
+  durable "Publish aggregates"
+  survive any node failure
+  cost <= 9000 usd/month
+}
+
+capacity {
+  pinot reads 2k rps writes 2k rps latency 20ms cost 600 usd/month
+}
+
+test "Recording an event only appends it to Kafka" {
+  "Record event" starts at app
+  "Record event" writes events before responding
+  "Record event" never calls any database or any analytics or budget
+  "Record event" responds 2xx
+}
+
+test "Events are aggregated in the stream, in memory" {
+  "Aggregate events" starts at events
+  "Aggregate events" never calls any database or any analytics or budget
+}
+
+test "Aggregates are committed only after a checkpoint" {
+  "Publish aggregates" writes aggregates before responding
+  "Checkpoint" calls any storage before aggregates
+  "Checkpoint" calls aggregates after any storage
+}
+
+test "Pinot and the budget read only committed aggregates" {
+  "Load aggregates" starts at aggregates
+  "Load aggregates" calls pinot
+  "Update budget" starts at aggregates
+  "Update budget" calls budget
+  no path from events to pinot
+  no path from events to budget
+}
+
+test "Dashboards query aggregates in Pinot, never raw events" {
+  "View report" starts at advertiser
+  "View report" calls any service before pinot
+  "View report" never calls events
+  no path from advertiser to pinot
+}

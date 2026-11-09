@@ -1,0 +1,34 @@
+# expect-fail: A change is written once, then copied in the background
+# mistake: Making the customer wait until every data center has the change
+# explain: The API answers only after the main nodes and all 200 data centers have applied the change, so the slowest data center sets every write's latency and one that is unreachable blocks the write. Answer once the root has the change durably, and copy it down the tree asynchronously (->>).
+# lesson: write-once-copy-in-the-background
+# cards: fan-out-tail-latency, sync-vs-async-replication
+# The fan-out happens inside the request.
+import "problem.proschi"
+
+api   "Config API" [REST API]        x2 @core "Takes configuration changes"
+root  "Root"       [Key-Value Store] x2 @core "Where every write lands"
+mains "Main Nodes" [Key-Value Store] x6 @core "Copy the log from the root"
+
+customer -> api   : HTTPS
+api      -> root  : writes
+root     -> mains : replication log
+mains    -> local : replication log
+visitor  -> edge  : HTTPS
+edge     -> local : LMDB read
+
+usecase "Serve request" {
+  visitor -> edge    : GET /
+  edge    -> local   : x3 GET settings
+  local  --> edge    : values
+  edge   --> visitor : 200
+}
+
+usecase "Change config" {
+  customer -> api      : PUT /zones/{id}/settings
+  api      -> root     : SET key
+  root     -> mains    : ~2KB x6 APPEND log entry 1024
+  mains    -> local    : ~2KB x200 APPEND log entry 1024
+  root    --> api      : applied everywhere
+  api     --> customer : 200
+}

@@ -1,0 +1,11 @@
+import "problem.proschi"
+
+# Add the edge: a load balancer, the gateway pool and a cache of sessions in
+# front of the auth service, then the use cases "Get fare estimate",
+# "Request trip" and "Get rider profile" with their scenarios.
+rider -> pricing
+
+usecase "Get fare estimate" {
+  rider    -> pricing : GET /v1/fare-estimate
+  pricing --> rider   : 200 fare
+}

@@ -1,0 +1,70 @@
+import "problem.proschi"
+
+explore    "Explore API"         [gRPC]          x3 @serving "Runs the funnel for one request: candidates, features, three ranking passes"
+retrieval  "Candidate Retrieval" [Service]       x3 @serving "Finds the user's seed accounts, their nearest neighbours, and samples 500 eligible posts"
+embeddings "Account Embeddings"  [Search Engine] x2 @serving "Nearest-neighbour index over account embeddings, rebuilt offline"
+features   "Feature Store"       [Redis]         x2 @serving "Precomputed per-post and per-user features, read in one batch per request"
+light      "First-pass Ranker"   [gRPC]          x8 @ranking "Distilled model with few features: 500 candidates down to 150"
+medium     "Second-pass Ranker"  [gRPC]          x10 @ranking "Lightweight neural network with dense features: 150 down to 50"
+heavy      "Final Ranker"        [gRPC]          x15 @ranking "Deep multi-task network with dense and sparse features: 50 down to 25"
+
+user      -> explore    : HTTPS
+explore   -> retrieval  : gRPC
+retrieval -> embeddings : KNN query
+explore   -> features   : MGET
+explore   -> light      : gRPC
+explore   -> medium     : gRPC
+explore   -> heavy      : gRPC
+pipeline  -> warehouse  : SQL
+pipeline  -> features   : bulk load
+pipeline  -> embeddings : bulk load
+
+entity AccountEmbedding in embeddings "An account as a vector, so similar accounts are near each other" {
+  accountId int key
+  vector    json
+}
+
+entity PostFeatures in features "What the rankers know about a post and its author, computed offline" {
+  mediaId    int key
+  authorId   int
+  dense      json
+  sparse     json
+  computedAt time
+}
+
+decision "A funnel of ranking passes" {
+  because "Each pass is cheaper per item than the next and passes on only its best: 500 items cost the distilled model 500 scores, while the deep model scores only 50, so the expensive model's load is a tenth of what scoring every candidate would cost"
+  rejected "Score every candidate with the best model" "500 items per request at 5k items a second per machine needs about 140 machines, far over the budget"
+  rejected "One model of medium cost for everything" "Cheaper, but it ranks the final page with less information than the deep model"
+}
+decision "Features precomputed, read from an online store" {
+  because "Features come from hours of logged interactions; the offline pipeline computes them in batches and loads them into Redis, so a request reads them in about a millisecond"
+  rejected "Compute or read features from the warehouse per request" "A warehouse query takes about half a second and serves a few hundred a second, more than the whole latency budget"
+}
+decision "Retrieval narrows millions of posts to 500 with an index" because "A nearest-neighbour lookup on account embeddings finds similar accounts without scoring any post; their posts, filtered for eligibility, become the candidates"
+decision "One pool per model, sized by its own cost" because "The three models differ 20x in cost per item and see different numbers of items, so each pool is sized from items per request times requests, at about 60 to 70% busy"
+
+usecase "Load Explore" "A user opens Explore and gets 25 ranked posts" {
+  user        -> explore    : GET /explore
+  explore     -> retrieval  : GET candidates for the user
+  retrieval   -> embeddings : KNN accounts near the user's seed accounts
+  embeddings --> retrieval  : similar accounts
+  retrieval  --> explore    : 500 eligible posts from those accounts
+  explore     -> features   : MGET features of 500 posts and of the user
+  features   --> explore    : features
+  explore     -> light      : x500 SCORE with the distilled model
+  light      --> explore    : best 150
+  explore     -> medium     : x150 SCORE with the lightweight network
+  medium     --> explore    : best 50
+  explore     -> heavy      : x50 SCORE with the deep network
+  heavy      --> explore    : best 25, ordered by expected value
+  explore    --> user       : 200 page of 25 posts
+}
+
+usecase "Refresh features" "The offline pipeline loads fresh features and embeddings in batches" {
+  pipeline    -> warehouse  : SELECT a batch of recent interactions
+  warehouse  --> pipeline   : rows
+  pipeline    -> features   : UPSERT features of a batch of posts
+  pipeline    -> embeddings : UPSERT a batch of account embeddings
+  embeddings --> pipeline   : ok
+}

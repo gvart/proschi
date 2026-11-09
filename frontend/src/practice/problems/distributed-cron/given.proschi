@@ -1,0 +1,50 @@
+title "Distributed Cron" "Runs every cron script on time with no single box to lose"
+
+clock   "Clock"         [Actor]   "The minute tick: every script whose cron string matches the current minute is due"
+backend "Slack Systems" [Service] x4 "The databases and APIs the scripts work on; already exist"
+
+capacity {
+  workers 10 rps
+  backend 100k rps cost 0 usd/month
+}
+
+traffic {
+  "Fire"       200 rps mix "Enqueued" 99%, "Already running" 1%
+  "Run script" 200 rps
+}
+
+requirements {
+  p99 "Fire" < 100ms
+  p99 "Run script" < 110ms
+  availability "Fire" >= 99.9%
+  survive any node failure
+  cost <= 5500 usd/month
+}
+
+test "The scheduler only enqueues" {
+  "Fire" starts at clock
+  "Fire" calls scheduler before any queue
+  "Fire" scenario "Enqueued" writes any queue before responding
+  "Fire" never calls backend
+  "Fire" never calls workers
+  no path from scheduler to backend
+}
+
+test "Scripts run on the worker pool" {
+  "Run script" starts at any queue
+  "Run script" calls workers
+  in "Run script" workers calls backend
+}
+
+test "Every run is recorded before it is enqueued" {
+  "Fire" calls any database before any queue
+  "Fire" scenario "Enqueued" writes any database before responding
+  "Fire" scenario "Already running" never calls any queue
+  "Fire" never calls any cache
+  "Run script" calls any database before backend
+  "Run script" calls any database after backend
+}
+
+test "A standby scheduler is ready to take over" {
+  scheduler has replicas >= 2
+}

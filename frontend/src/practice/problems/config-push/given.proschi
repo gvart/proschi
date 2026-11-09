@@ -1,0 +1,45 @@
+title "Config Distribution" "Writes each configuration change once, fans it out through a replication tree, and reads it locally on every edge server"
+
+visitor  "Visitor"            [Actor]           "Anyone on the Internet sending a request to a site behind the CDN"
+customer "Customer"           [Actor]           "A customer changing their settings in the dashboard or the API"
+edge     "Edge Servers"       [Service]         x200 @edge "The servers that answer visitors; one replica stands for one data center's servers"
+local    "Local Config Store" [Key-Value Store] x200 @edge "The LMDB file on each edge server's own disk; one replica stands for one data center's copies"
+
+capacity {
+  edge  10k rps latency 2ms cost 0 usd/month
+  local reads 50k rps writes 5k rps latency 0.1ms cost 0 usd/month
+}
+
+traffic {
+  "Serve request" 1m rps
+  "Change config" 1k rps
+}
+
+requirements {
+  p99 "Serve request" < 20ms
+  p99 "Change config" < 100ms
+  availability >= 99.99%
+  durable "Change config"
+  survive any node failure
+  survive failure of root
+  cost <= 5000 usd/month
+}
+
+test "Edge requests read the local copy" {
+  "Serve request" starts at visitor
+  "Serve request" every scenario calls local
+  "Serve request" never calls root
+  "Serve request" never calls mains
+}
+
+test "A change is written once, then copied in the background" {
+  "Change config" starts at customer
+  "Change config" writes root before responding
+  "Change config" never waits for mains or local
+}
+
+test "Changes reach the edge through the main nodes" {
+  root calls mains
+  mains calls local
+  no path from root to local
+}

@@ -1,0 +1,16 @@
+import "problem.proschi"
+
+# Add the search cluster, the API in front of it, the change stream, the
+# indexers and the use cases "Search", "Edit menu", "Index change" and
+# "Backfill".
+api "Store API" [REST API] x2
+
+diner -> api
+api   -> db
+
+usecase "Search" {
+  diner -> api   : GET /search?q=tacos
+  api   -> db    : SELECT stores WHERE name ILIKE '%tacos%'
+  db   --> api   : rows
+  api  --> diner : 200 results
+}

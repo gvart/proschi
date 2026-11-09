@@ -1,0 +1,66 @@
+# expect-fail: p99 of Recommend < 150 ms
+# mistake: Geoshards of equal area instead of equal load
+# explain: Cutting the map into equal squares puts a whole dense city into one geoshard: it takes 40% of the searches while rural geoshards sit idle, so its copies saturate and every search there slows down.
+# explain: Group S2 cells by load (users and searches), so a dense metro is split into several small geoshards and a sparse region shares one.
+# lesson: geoshards-balanced-by-load
+# cards: nearby-search-balance-by-load, hot-partition-key, quadtree-vs-geohash
+# The map is cut into equal-area geoshards: the city is one of them, and the spare shards go to empty land.
+import "problem.proschi"
+
+api      "Recommendations API" [REST API]      x8 @serve "Takes searches and location updates"
+router   "Geo Router"          [Service]       x6 @serve "Maps the search circle to geoshards, fans out and merges"
+metro    "Metro Geoshard"      [Elasticsearch] x3 @index "One equal-area geoshard that holds the whole city"
+regional "Regional Geoshards"  [Elasticsearch] x3 @index "Equal-area geoshards for everywhere else: 6 geoshards"
+changes  "Location Changes"    [Kafka]         x3 @write "Location changes, partitioned by user id"
+indexer  "Geo Indexer"         [Worker]        x4 @write "Updates the geoshard that owns the user's cell"
+
+capacity {
+  metro    shards 1
+  regional shards 6
+}
+
+app     -> api      : HTTPS
+api     -> router   : gRPC
+api     -> profiles : write location
+api     -> changes  : produce
+router  -> metro    : _search
+router  -> regional : _search
+changes -> indexer  : consume
+indexer -> metro    : index, delete
+indexer -> regional : index, delete
+
+usecase "Recommend" "A user opens the app and gets people within their search radius" {
+  app -> api    : GET /recs?radius=50mi
+  api -> router : Search(lat 40.73, lng -73.99, radius 50mi, age 25-35)
+
+  alt "Dense metro" {
+    router -> metro : x3 _search users in the covering S2 cells
+  } alt "Elsewhere" {
+    router -> regional : x3 _search users in the covering S2 cells
+  }
+
+  router --> api : merged candidates
+  api    --> app : 200 recommendations
+}
+
+usecase "Update location" "The app reports where the user is now" {
+  app      -> api      : PUT /me/location {"lat": 40.73, "lng": -73.99}
+  api      -> profiles : UPDATE user 7731 SET lat, lng, cellId
+  api     ->> changes  : PUBLISH LocationChanged user 7731
+  api     --> app      : 204
+}
+
+usecase "Index location" "The indexer puts the user in the geoshard that owns their S2 cell" {
+  changes -> indexer : LocationChanged user 7731
+
+  alt "Dense metro" {
+    indexer -> metro : UPSERT user 7731
+  } alt "Elsewhere" {
+    indexer -> regional : UPSERT user 7731
+  } alt "Moved geoshard" {
+    indexer -> regional : DELETE user 7731 from the old geoshard
+    indexer -> metro    : UPSERT user 7731 into the new geoshard
+  }
+
+  indexer --> changes : commit offset
+}

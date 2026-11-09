@@ -1,0 +1,35 @@
+# expect-fail: survive failure of root
+# expect-fail: availability of every use case ≥ 99.99%
+# mistake: A single root node
+# explain: Every change goes through the root, so with one node, losing it stops every customer's configuration changes until it is repaired, and Change config falls under 99.99%. The edge keeps serving from its local copies, but nothing new reaches it. Run the root as a primary and a secondary (x2).
+# lesson: the-root-single-writer-replicated
+# cards: config-push-single-writer, three-replicas-parallel
+# The tree is right, but its top is one machine.
+import "problem.proschi"
+
+api   "Config API" [REST API]        x2 @core "Takes configuration changes"
+root  "Root"       [Key-Value Store] x1 @core "Where every write lands"
+mains "Main Nodes" [Key-Value Store] x6 @core "Copy the log from the root"
+
+customer -> api   : HTTPS
+api      -> root  : writes
+root     -> mains : replication log
+mains    -> local : replication log
+visitor  -> edge  : HTTPS
+edge     -> local : LMDB read
+
+usecase "Serve request" {
+  visitor -> edge    : GET /
+  edge    -> local   : x3 GET settings
+  local  --> edge    : values
+  edge   --> visitor : 200
+}
+
+usecase "Change config" {
+  customer -> api      : PUT /zones/{id}/settings
+  api      -> root     : SET key
+  root    --> api      : seq 1024
+  api     --> customer : 200
+  root    ->> mains    : ~2KB x6 APPEND log entry 1024
+  mains   ->> local    : ~2KB x200 APPEND log entry 1024
+}

@@ -1,0 +1,52 @@
+import "problem.proschi"
+
+api   "Config API" [REST API]        x2 @core "Takes configuration changes from the dashboard and the API"
+root  "Root"       [Key-Value Store] x2 @core "The top of the tree, where every write lands: a primary and a secondary"
+mains "Main Nodes" [Key-Value Store] x6 @core "Copy the log from the root and feed the edge data centers, so the root sends each change only a few times"
+
+customer -> api   : HTTPS
+api      -> root  : writes
+root     -> mains : replication log
+mains    -> local : replication log
+visitor  -> edge  : HTTPS
+edge     -> local : LMDB read
+
+entity Setting in root "One key-value pair of a customer's configuration, copied to every edge" {
+  key   string key
+  value string
+  seq   int    index
+}
+
+decision "Read configuration from a local copy" {
+  because "A million requests a second each read configuration three times: only a store on the edge server's own disk answers 3M reads in microseconds and keeps answering when the core is unreachable"
+  rejected "Read the central store on every request" "3M reads a second from 200 data centers would need over a hundred central replicas, and every request would wait on a link to the core and fail with it"
+}
+decision "A tree of main nodes between the root and the edge" {
+  because "The root sends each change to six main nodes, about 12 MB/s; the main nodes send the 400 MB/s that reaches 200 data centers"
+  rejected "The root sends to every data center" "200 copies of every 2 KB change is 400 MB/s, twice what two root nodes carry"
+}
+decision "Six main nodes" {
+  because "About 412 MB/s of replication traffic at 100 MB/s per node: six run at 69% and five carry it with one down"
+  rejected "Five main nodes" "Losing one leaves four at over 100%"
+}
+decision "Answer once the root has the change" {
+  because "The write is durable on the root; copying to 200 data centers takes longer and must not hold the customer's request"
+  rejected "Wait until every edge has applied it" "The slowest of 200 data centers would decide every write's latency, and one unreachable data center would block it"
+}
+decision "Root with a primary and a secondary" because "Every write goes through the root: alone, losing it stops every configuration change"
+
+usecase "Serve request" "An edge server answers a visitor, reading the site's settings from its own disk" {
+  visitor -> edge    : GET /
+  edge    -> local   : x3 GET settings
+  local  --> edge    : values
+  edge   --> visitor : 200
+}
+
+usecase "Change config" "A customer changes a setting; the change reaches every data center in the background" {
+  customer -> api      : PUT /zones/{id}/settings
+  api      -> root     : SET key
+  root    --> api      : seq 1024
+  api     --> customer : 200
+  root    ->> mains    : ~2KB x6 APPEND log entry 1024
+  mains   ->> local    : ~2KB x200 APPEND log entry 1024
+}
