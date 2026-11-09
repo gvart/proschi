@@ -1,0 +1,21 @@
+docs/impl/feature-expansion.md
+  s_f355061868c346::t_09844d347f959c 42
+plugin/hooks/register.js
+  s_f355061868c346::t_9b600902a7a029 4790,4895,4907-4908,4938,4942-4943,4948-4949,4953-4956,5054-5055,5063-5064,5075-5076,5087
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "99cd52fd50ae188eedd0d5e1b54b4d41ed1b35c4",
+  "prompts": {},
+  "sessions": {
+    "s_f355061868c346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd556674-4248-429d-bf5c-2b361bc86c62",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
