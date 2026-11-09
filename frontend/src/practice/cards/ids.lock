@@ -75,6 +75,8 @@ delete-on-write
 delivery-receipts
 denormalization
 disk-vs-app-replication
+distributed-cron-scheduler-only-enqueues
+distributed-cron-skip-overlapping-runs
 dns-resolution-path
 dns-ttl-tradeoff
 durability-is-not-backup

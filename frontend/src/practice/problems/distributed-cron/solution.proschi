@@ -1,0 +1,65 @@
+import "problem.proschi"
+
+scheduler "Scheduled Job Conductor" [Go]    x2 @cron "Parses the cron strings; the elected leader enqueues due runs, the other pod stands by"
+jobs      "Job Queue"               [Kafka] x3 @jobs "Durable queue of script runs, one topic for cron scripts"
+workers   "Job Workers"             [Go]    x30 @jobs "Run one script per job"
+runs      "Script Runs"             [MySQL] x2 @cron "Vitess table: one row per run, enqueued, in progress or done"
+
+clock     -> scheduler : minute tick
+scheduler -> runs      : SQL
+scheduler -> jobs      : produce
+jobs      -> workers   : consume
+workers   -> runs      : SQL
+workers   -> backend   : the script's work
+
+entity Run in runs "One execution of one cron script" {
+  runId      int key
+  script     string
+  state      string
+  enqueuedAt time
+  startedAt  time
+  finishedAt time
+  error      string
+}
+
+decision "The scheduler only enqueues" {
+  because "Running scripts takes CPU and memory for minutes to an hour; the scheduler hands each run to the job queue and stays small, so the leader is never too busy to fire the next minute"
+  rejected "One big cron box that schedules and runs everything" "Every script stops when that box is lost, and it must keep growing with the scripts"
+}
+decision "Leader election with a standby" {
+  because "Two pods run; Kubernetes leader election lets one fire, and the standby takes over within seconds if the leader dies"
+  rejected "Several schedulers firing in parallel" "Each due script would be enqueued once per scheduler unless they coordinate"
+}
+decision "Record every run before enqueueing it" {
+  because "A row per run, indexed by script name, lets the scheduler skip a script whose previous run is still enqueued or in progress, and gives engineers a page with every run's state and errors"
+  rejected "A lock file on the machine" "A flock only works when every run is on one machine"
+}
+decision "Reuse the job queue and its workers" because "The job queue already runs billions of jobs a day; one job per script run means nothing new to operate"
+
+usecase "Fire" "The leader finds a due script and hands its run to the job queue" {
+  clock     -> scheduler : tick 09:00, nightly-report is due
+  scheduler -> runs      : SELECT active runs WHERE script = 'nightly-report'
+
+  alt "Enqueued" when "no run of the script is enqueued or in progress" {
+    runs      --> scheduler : none
+    scheduler  -> runs      : INSERT run state = enqueued
+    runs      --> scheduler : run 5521
+    scheduler  -> jobs      : ENQUEUE run 5521
+    jobs      --> scheduler : ack
+    scheduler --> clock     : enqueued
+  } alt "Already running" when "the previous run has not finished yet" {
+    runs      --> scheduler : run 5490 in progress
+    scheduler --> clock     : skipped
+  }
+}
+
+usecase "Run script" "A worker takes a run from the queue and executes the script" {
+  jobs     -> workers : run 5521 nightly-report
+  workers  -> runs    : UPDATE run 5521 SET state = in_progress
+  runs    --> workers : ok
+  workers  -> backend : run nightly-report
+  backend --> workers : done
+  workers  -> runs    : UPDATE run 5521 SET state = done
+  runs    --> workers : ok
+  workers --> jobs    : ack
+}

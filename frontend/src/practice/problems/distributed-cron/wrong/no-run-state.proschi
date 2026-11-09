@@ -1,0 +1,37 @@
+# expect-fail: Every run is recorded before it is enqueued
+# mistake: Enqueueing due scripts without recording their runs
+# explain: With no record of which runs are enqueued or in progress, the scheduler enqueues a slow script again every time it is due, so two copies run at once, and nobody can see whether last night's run finished or failed. Write a row per run in a durable database, check it before enqueueing, and let the worker update it as the run starts and ends.
+# lesson: tracking-runs-in-a-database
+# cards: distributed-cron-skip-overlapping-runs, at-least-once-needs-idempotency, durability-is-not-backup
+# A standby scheduler, a queue and a worker pool, but no run-state table: the scheduler enqueues whatever is due, every time.
+import "problem.proschi"
+
+scheduler "Scheduled Job Conductor" [Go]    x2 @cron "Parses the cron strings; the elected leader enqueues due runs"
+jobs      "Job Queue"               [Kafka] x3 @jobs "Durable queue of script runs"
+workers   "Job Workers"             [Go]    x30 @jobs "Run one script per job"
+
+clock     -> scheduler : minute tick
+scheduler -> jobs      : produce
+jobs      -> workers   : consume
+workers   -> backend   : the script's work
+
+usecase "Fire" "The leader hands every due script to the job queue" {
+  clock -> scheduler : tick 09:00, nightly-report is due
+
+  alt "Enqueued" when "the script is due" {
+    scheduler  -> jobs      : ENQUEUE nightly-report
+    jobs      --> scheduler : ack
+    scheduler --> clock     : enqueued
+  } alt "Already running" when "the previous run has not finished yet" {
+    scheduler  -> jobs      : ENQUEUE nightly-report
+    jobs      --> scheduler : ack
+    scheduler --> clock     : enqueued again
+  }
+}
+
+usecase "Run script" "A worker takes a run from the queue and executes the script" {
+  jobs     -> workers : run nightly-report
+  workers  -> backend : run nightly-report
+  backend --> workers : done
+  workers --> jobs    : ack
+}
