@@ -12,6 +12,7 @@ import type {
   Assertion,
   BlockSpan,
   CapacityOverride,
+  Constant,
   Decision,
   Diagnostic,
   Diagram,
@@ -158,7 +159,7 @@ const UNIT_EXAMPLES: Record<Quantity['unit'], string> = {
   MBps: 'a bandwidth, e.g. 500 MB/s or 1 GB/s',
   'usd/GB': 'a price per gigabyte, e.g. 0.05 usd/GB',
 };
-const CAPACITY_PARTS = 'a rate, reads, writes, shards, size, latency, availability, cost, durable or volatile, consistency, bandwidth, egress or timeout';
+const CAPACITY_PARTS = 'a rate, reads, writes, shards, size, latency, availability, cost, durable or volatile, consistency, bandwidth, egress, timeout or hit';
 const ASSERTION_HELP =
   'Expected an assertion: "Use case" calls <node>, "Use case" writes <node> before responding, <node> calls <node>, no path from <node> to <node>, <node> has replicas >= 2, …';
 const ASSERTION_VERBS = 'calls, every scenario calls, never calls, never waits for, writes, responds, starts at, has scenario or handles failure of';
@@ -257,6 +258,8 @@ class Parser {
   private readonly decisions: Decision[] = [];
   private readonly tests: FlowTest[] = [];
   private readonly whatifs: WhatIf[] = [];
+  /** `let` constants by name, from every file read so far. */
+  private readonly constants = new Map<string, Constant>();
   private readonly blocks: BlockSpan[] = [];
   private readonly legend: LegendEntry[] = [];
   private readonly layout: LayoutHints = {};
@@ -313,6 +316,7 @@ class Parser {
       ...(Object.keys(this.layout).length ? { layout: this.layout } : {}),
       ...(this.systems.length ? { systems: this.systems } : {}),
       ...(this.whatifs.length ? { whatifs: this.whatifs } : {}),
+      ...(this.constants.size ? { constants: [...this.constants.values()] } : {}),
     };
 
     const order = (d: Diagnostic) => this.fileOrder.get(d.file) ?? 0;
@@ -327,6 +331,11 @@ class Parser {
 
   /** Reads the current file's lines and reports blocks it leaves open. */
   private parseFile() {
+    // Constants first, so a file may use one above its `let` line.
+    this.lines.forEach((text, index) => {
+      const { tokens, diagnostics } = tokenizeLine(text, index + 1);
+      if (isLet(tokens) && diagnostics.length === 0) this.defineConstant(tokens, index + 1);
+    });
     for (let i = 0; i < this.lines.length; i++) {
       i = this.parseLine(i);
     }
@@ -363,8 +372,14 @@ class Parser {
     const [first, second, third] = tokens;
     const loc = (t: Token): SourceLoc => this.locOf(t, line);
 
-    // Inside traffic, requirements, … every line follows the block's own rules.
     const top = this.top();
+    // `let` lines were read before the file (defineConstant); only their place is checked here.
+    if (isLet(tokens) && !(top?.kind === 'section' && top.skipped !== undefined)) {
+      if (top) this.error('Define constants at the top level, not inside a block', loc(first));
+      return index;
+    }
+
+    // Inside traffic, requirements, … every line follows the block's own rules.
     if (top?.kind === 'section') {
       if (top.skipped !== undefined) {
         // A skipped alt: follow its inner blocks so its own `}` ends it.
@@ -842,7 +857,7 @@ class Parser {
   private readStub(stub: SystemStub, tokens: Token[], from: number, to: number, line: number) {
     for (let i = from; i < to; ) {
       const t = tokens[i];
-      if (t.kind === 'quantity' || t.kind === 'number') {
+      if (t.kind === 'quantity' || t.kind === 'number' || isConstUse(t)) {
         const rps = this.quantityOf(t, 'rps', t, line);
         if (rps === undefined) return;
         stub.rps = rps;
@@ -1140,6 +1155,10 @@ class Parser {
           this.error('A node needs at least one replica: x1, x2, …', this.locOf(t, line));
           return;
         }
+        node.replicas = replicas;
+      } else if (t.kind === 'const') {
+        const replicas = this.replicasOf(t, line, 'A node needs a whole number of replicas, at least 1: x1, x2, …');
+        if (replicas === undefined) return;
         node.replicas = replicas;
       } else if (t.kind === 'label' || t.kind === 'arrow') {
         this.error(`Expected '${idToken.value} -> target' for a connection`, this.locOf(t, line));
@@ -1456,8 +1475,33 @@ class Parser {
     if (rps === undefined) return;
     const entry: TrafficEntry = { useCase: name.value, rps, loc: this.lineLoc(tokens, line) };
 
-    const shares: { scenario: string; share: number; loc: SourceLoc }[] = [];
     let i = 2;
+    // `peak x3` or `peak 60k rps`: the rate is the average, and the design is loaded with the peak.
+    if (isWord(tokens[i], 'peak')) {
+      const word = tokens[i];
+      const value = tokens[i + 1];
+      let peak: number | undefined;
+      if (value?.kind === 'ident' && MULTIPLIER.test(value.value)) peak = rps * Number(MULTIPLIER.exec(value.value)![1]);
+      else if (value?.kind === 'const' && value.value.startsWith('x')) {
+        const factor = this.countOf(value, line);
+        if (factor === undefined) return;
+        peak = rps * factor;
+      } else if (value?.kind === 'quantity' || value?.kind === 'number' || isConstUse(value)) peak = this.quantityOf(value, 'rps', word, line);
+      else {
+        this.error(`Expected the peak after peak, as a multiple of the average (peak x3) or a rate (peak 60k rps)${value ? `, not ${describe(value)}` : ''}`, this.locOf(value ?? word, line));
+        return;
+      }
+      if (peak === undefined) return;
+      if (peak < rps) {
+        this.error(`The peak cannot be below the average, ${rps.toLocaleString('en-US')} rps`, this.locOf(value, line));
+        return;
+      }
+      entry.avgRps = rps;
+      entry.rps = Number(peak.toPrecision(12));
+      i += 2;
+    }
+
+    const shares: { scenario: string; share: number; loc: SourceLoc }[] = [];
     if (tokens[i]) {
       const mix = tokens[i++];
       if (!isWord(mix, 'mix')) {
@@ -1628,10 +1672,11 @@ class Parser {
     }
     const override: CapacityOverride = { node: id.value, loc: this.lineLoc(tokens, line) };
     const seen = new Set<string>();
+    let hitLoc: SourceLoc | undefined;
     for (let i = 1; i < tokens.length; ) {
       const t = tokens[i];
       let part: string;
-      if (t.kind === 'quantity' || t.kind === 'number') {
+      if (t.kind === 'quantity' || t.kind === 'number' || isConstUse(t)) {
         part = 'rate';
         const rps = this.quantityOf(t, 'rps', t, line);
         if (rps === undefined) return;
@@ -1646,6 +1691,18 @@ class Parser {
         else if (part === 'timeout') override.timeoutMs = value;
         else if (part === 'availability') override.availability = value;
         else override.costUsd = value;
+        i += 2;
+      } else if (isWord(t, 'hit')) {
+        // The cache hit rate, which derives the load on the miss path.
+        part = 'hit';
+        const value = this.quantityOf(tokens[i + 1], '%', t, line);
+        if (value === undefined) return;
+        if (value > 100) {
+          this.error('A hit rate cannot be more than 100%', this.locOf(tokens[i + 1], line));
+          return;
+        }
+        override.hitPercent = value;
+        hitLoc = this.locOf(t, line);
         i += 2;
       } else if (isWord(t, 'durable') || isWord(t, 'volatile')) {
         part = 'durable or volatile';
@@ -1662,11 +1719,13 @@ class Parser {
       } else if (isWord(t, 'shards')) {
         part = 'shards';
         const n = tokens[i + 1];
-        if (n?.kind !== 'number' || Number(n.value) < 1) {
+        const shards = isConstUse(n) ? this.countOf(n!, line) : n?.kind === 'number' ? Number(n.value) : NaN;
+        if (shards === undefined) return;
+        if (!Number.isInteger(shards) || shards < 1) {
           this.error('Expected a whole number of shards, at least 1, e.g. shards 4', this.locOf(n ?? t, line));
           return;
         }
-        override.shards = Number(n.value);
+        override.shards = shards;
         i += 2;
       } else if (isWord(t, 'size')) {
         part = 'size';
@@ -1737,7 +1796,24 @@ class Parser {
       const storeOnly = ['shards', 'consistency'].filter((p) => seen.has(p));
       if (storeOnly.length && !isDataStore(kindOf(node)))
         this.warning(`'${id.value}' is not a data store (${DATA_STORE_KINDS.join(', ')}); ${storeOnly.join(' and ')} only apply to data stores`, idLoc);
+      if (hitLoc) this.checkHitRate(node, override.hitPercent!, hitLoc);
     });
+  }
+
+  /**
+   * A hit rate on something that is not a cache is a warning. A use case
+   * whose traffic `mix` splits it into scenarios already models hits and
+   * misses itself: the mix applies to it, and an info says so.
+   */
+  private checkHitRate(node: DiagramNode, percent: number, loc: SourceLoc) {
+    const kind = kindOf(node);
+    if (kind !== 'cache' && kind !== 'cdn') this.warning(`'${node.id}' is not a cache or CDN; a hit rate only means something for one`, loc);
+    for (const entry of this.traffic) {
+      if (!entry.mix?.length) continue;
+      const useCase = this.built.find((u) => u.name === entry.useCase);
+      if (!useCase?.scenarios.some((s) => s.steps.some((step) => step.toServiceId === node.id))) continue;
+      this.info(`"${useCase.name}" splits its traffic into scenarios with mix, so its mix decides the hits and misses of '${node.id}', not the ${percent}% hit rate`, loc);
+    }
   }
 
   /** `entity Url [in db] ["description"] {` */
@@ -1914,7 +1990,7 @@ class Parser {
   private parseWhatIfLine(whatif: WhatIf, tokens: Token[], line: number) {
     const [first, second, third] = tokens;
     const loc = this.lineLoc(tokens, line);
-    const help = 'Expected a what-if change: traffic "Use case" x3, traffic "Use case" 50k rps, fail <node> or <node> x4';
+    const help = 'Expected a what-if change: traffic "Use case" x3, traffic "Use case" 50k rps, fail <node>, <node> x4 or <node> hit 40%';
     const checkNode = (id: Token) => {
       const idLoc = this.locOf(id, line);
       this.deferred.push(() => {
@@ -1922,9 +1998,13 @@ class Parser {
       });
     };
     // `<node> x4` first, so a node may be called fail or traffic.
-    if (first.kind === 'ident' && second?.kind === 'ident' && REPLICAS.test(second.value)) {
+    if (first.kind === 'ident' && ((second?.kind === 'ident' && REPLICAS.test(second.value)) || second?.kind === 'const')) {
       if (!this.expectEnd(tokens, 2, line)) return;
-      const replicas = Number(REPLICAS.exec(second.value)![1]);
+      const replicas =
+        second.kind === 'const'
+          ? this.replicasOf(second, line, 'A what-if needs a whole number of replicas, at least x1; to take a node down, write fail <node>')
+          : Number(REPLICAS.exec(second.value)![1]);
+      if (replicas === undefined) return;
       if (replicas < 1) {
         this.error('A what-if needs at least one replica, x1; to take a node down, write fail <node>', this.locOf(second, line));
         return;
@@ -1939,6 +2019,22 @@ class Parser {
     }
     if (first.kind === 'ident' && second?.kind === 'ident' && MULTIPLIER.test(second.value)) {
       this.error(`Replicas are a whole number, e.g. ${first.value} x4`, this.locOf(second, line));
+      return;
+    }
+    // `<node> hit 40%`: a colder (or warmer) cache.
+    if (first.kind === 'ident' && isWord(second, 'hit') && tokens.length > 2) {
+      const percent = this.quantityOf(third, '%', second, line);
+      if (percent === undefined || !this.expectEnd(tokens, 3, line)) return;
+      if (percent > 100) {
+        this.error('A hit rate cannot be more than 100%', this.locOf(third, line));
+        return;
+      }
+      if (whatif.changes.some((c) => c.kind === 'hit' && c.node === first.value)) {
+        this.error(`The hit rate of '${first.value}' is set twice in this what-if`, this.locOf(first, line));
+        return;
+      }
+      checkNode(first);
+      whatif.changes.push({ kind: 'hit', node: first.value, percent, loc });
       return;
     }
     if (isWord(first, 'fail')) {
@@ -1963,6 +2059,10 @@ class Parser {
       let change: WhatIf['changes'][number];
       if (third?.kind === 'ident' && MULTIPLIER.test(third.value)) {
         const multiply = Number(MULTIPLIER.exec(third.value)![1]);
+        change = { kind: 'traffic', useCase: second.value, multiply, loc };
+      } else if (third?.kind === 'const' && third.value.startsWith('x')) {
+        const multiply = this.countOf(third, line);
+        if (multiply === undefined) return;
         change = { kind: 'traffic', useCase: second.value, multiply, loc };
       } else {
         const rps = this.quantityOf(third, 'rps', second, line);
@@ -2230,6 +2330,15 @@ class Parser {
   /** The value of a quantity token in `unit`, or undefined after reporting what is wrong. `after` locates a missing token. */
   private quantityOf(token: Token | undefined, unit: Quantity['unit'], after: Token, line: number): number | undefined {
     const expected = UNIT_EXAMPLES[unit];
+    if (isConstUse(token)) {
+      const c = this.constantOf(token!, line);
+      if (!c) return undefined;
+      if (c.unit !== unit) {
+        this.error(`'${token!.value}' is ${c.text}, ${kindName(c.unit)}; expected ${expected}`, this.locOf(token, line));
+        return undefined;
+      }
+      return c.value;
+    }
     if (token?.kind !== 'quantity' && token?.kind !== 'number') {
       this.error(`Expected ${expected}${token ? `, not ${describe(token)}` : ''}`, this.locOf(token ?? after, line));
       return undefined;
@@ -2247,6 +2356,65 @@ class Parser {
       return undefined;
     }
     return q.value;
+  }
+
+  /** `let name = value`, read before the rest of its file. */
+  private defineConstant(tokens: Token[], line: number) {
+    const [, name, eq, value] = tokens;
+    if (value?.kind !== 'quantity' && value?.kind !== 'number') {
+      this.error(`Expected a number or quantity after =, e.g. let ${name.value} = 120k rps${value ? `, not ${describe(value)}` : ''}`, this.locOf(value ?? eq, line));
+      return;
+    }
+    if (!this.expectEnd(tokens, 4, line)) return;
+    const text = this.lines[line - 1].slice(value.col - 1, value.col - 1 + value.length);
+    const q = parseQuantity(text);
+    if ('error' in q) {
+      this.error(q.error, this.locOf(value, line));
+      return;
+    }
+    const loc = this.locOf(name, line);
+    const first = this.constants.get(name.value);
+    if (first) {
+      this.error(`Constant '${name.value}' is defined twice (first ${this.where(first.loc, loc)})`, loc);
+      return;
+    }
+    this.constants.set(name.value, { name: name.value, value: q.value, ...(q.unit ? { unit: q.unit } : {}), text: text.replace(/[ \t]+/g, ' '), loc });
+  }
+
+  /** The constant `$name` or `x$name` names, or undefined after reporting that there is none. */
+  private constantOf(token: Token, line: number): Constant | undefined {
+    const name = token.value.replace(/^x?\$/, '');
+    const found = this.constants.get(name);
+    if (found) return found;
+    const near = [...this.constants.keys()].find((k) => editDistance(k, name) <= 2);
+    this.error(`Unknown constant '$${name}'${near ? `; did you mean '$${near}'?` : `; define it with let ${name} = …`}`, this.locOf(token, line));
+    return undefined;
+  }
+
+  /** The value of a constant used as a count (`x$n`, `shards $n`): a plain number. */
+  private countOf(token: Token, line: number): number | undefined {
+    const c = this.constantOf(token, line);
+    if (!c) return undefined;
+    if (c.unit !== undefined) {
+      this.error(`'${token.value}' needs a plain number, as in let ${c.name} = 3; '$${c.name}' is ${c.text}, ${kindName(c.unit)}`, this.locOf(token, line));
+      return undefined;
+    }
+    return c.value;
+  }
+
+  /** `x$n` after a node: its replicas, a whole number of at least 1. */
+  private replicasOf(token: Token, line: number, wrong: string): number | undefined {
+    if (!token.value.startsWith('x')) {
+      this.error(`Write x${token.value} for replicas`, this.locOf(token, line));
+      return undefined;
+    }
+    const n = this.countOf(token, line);
+    if (n === undefined) return undefined;
+    if (!Number.isInteger(n) || n < 1) {
+      this.error(`${wrong} ('${token.value}' is ${n})`, this.locOf(token, line));
+      return undefined;
+    }
+    return n;
   }
 
   private expectOp(tokens: Token[], i: number, ops: string[], example: string, line: number): boolean {
@@ -2496,6 +2664,13 @@ class Parser {
     this.error(message, loc);
   }
 
+  private info(message: string, loc: SourceLoc) {
+    const key = `info\n${loc.file ?? ''}\n${loc.line}\n${loc.col}\n${message}`;
+    if (this.warned.has(key)) return;
+    this.warned.add(key);
+    this.diagnostics.push({ severity: 'info', message, ...loc });
+  }
+
   private warning(message: string, loc: SourceLoc) {
     // Steps shared by several scenarios are checked once per scenario; report each problem once.
     // A Set, not a scan of every diagnostic: many warnings made the scan quadratic.
@@ -2566,6 +2741,30 @@ interface StyleParts {
 function findUseCaseIn(diagram: Diagram, name: string): DiagramUseCase | undefined {
   const lower = name.toLowerCase();
   return diagram.useCases.find((u) => u.name === name) ?? diagram.useCases.find((u) => u.name.toLowerCase() === lower) ?? diagram.useCases.find((u) => u.id === name);
+}
+
+/** `let name = …`: the shape of a constant's definition (a node may still be called let). */
+function isLet(tokens: Token[]): boolean {
+  return isWord(tokens[0], 'let') && tokens[1]?.kind === 'ident' && tokens[2]?.kind === 'op' && tokens[2].value === '=';
+}
+
+/** `$name` where a quantity goes (not `x$name`, a count). */
+function isConstUse(token: Token | undefined): boolean {
+  return token?.kind === 'const' && token.value.startsWith('$');
+}
+
+const KIND_NAMES: Record<Quantity['unit'], string> = {
+  rps: 'a rate',
+  ms: 'a duration',
+  '%': 'a percentage',
+  'usd/month': 'a monthly cost',
+  MBps: 'a bandwidth',
+  'usd/GB': 'an egress price',
+};
+
+/** What kind of value a constant is, for messages. */
+export function kindName(unit: Quantity['unit'] | undefined): string {
+  return unit ? KIND_NAMES[unit] : 'a plain number';
 }
 
 function isWord(token: Token | undefined, word: string): boolean {

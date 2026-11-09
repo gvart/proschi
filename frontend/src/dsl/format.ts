@@ -175,7 +175,7 @@ function classify(lines: string[]): Entry[] {
     }
 
     const oneLineDecision = first.value === 'decision' && second?.kind === 'string' && third?.kind === 'ident' && third.value === 'because';
-    if (!inSection && first.kind === 'ident' && !KEYWORDS.has(first.value) && !oneLineDecision && !isLayoutHint(tokens) && tokens.slice(1).every((t) => ['string', 'tech', 'team', 'ident', 'number', 'comma', 'tag', 'hex'].includes(t.kind))) {
+    if (!inSection && first.kind === 'ident' && !KEYWORDS.has(first.value) && !oneLineDecision && !isLayoutHint(tokens) && tokens.slice(1).every((t) => ['string', 'tech', 'team', 'ident', 'number', 'comma', 'tag', 'hex', 'const'].includes(t.kind))) {
       let k = 1;
       const take = (kind: Token['kind']) => (tokens[k]?.kind === kind ? source(raw, tokens[k++]) : '');
       const cells: NodeEntry['cells'] = [first.value, take('string'), take('tech'), take('team'), join(raw, tokens.slice(k))];
@@ -235,7 +235,7 @@ function sectionCells(section: Section, raw: string, tokens: Token[]): string[] 
   const rest = (from: number) => (tokens.length > from ? [join(raw, tokens.slice(from))] : []);
   switch (section) {
     case 'traffic':
-      return first.kind === 'string' && (second?.kind === 'quantity' || second?.kind === 'number') ? [source(raw, first), source(raw, second), ...rest(2)] : undefined;
+      return first.kind === 'string' && (second?.kind === 'quantity' || second?.kind === 'number' || second?.kind === 'const') ? [source(raw, first), source(raw, second), ...rest(2)] : undefined;
     case 'capacity':
       return first.kind === 'ident' && tokens.length > 1 ? [first.value, ...rest(1)] : undefined;
     case 'entity':

@@ -9,12 +9,15 @@ import {
   formatAvailability,
   formatMs,
   formatPercent,
+  formatTraffic,
   formatUsd,
+  kindName,
   parse,
   requirementFixes,
   setCapacity,
   setReplicas,
   tokenizeLine,
+  type Constant,
   type Diagnostic,
   type Diagram,
   type DiagramNode,
@@ -99,7 +102,7 @@ function payloadLines(lines: string[]): boolean[] {
   });
 }
 
-export type TokenKind = 'node' | 'tech' | 'team' | 'tag';
+export type TokenKind = 'node' | 'tech' | 'team' | 'tag' | 'constant';
 
 export interface Token {
   line: number;
@@ -112,12 +115,13 @@ export interface Token {
 // becomes a token; arrows so the `x` of `-x` is not taken for a node; a hex color after
 // `color` so it is not read as a comment.
 const TOKEN =
-  /"(?:[^"\\]|\\.)*"?|(?<=\bcolor\s+)#[0-9a-fA-F]{3,6}(?![A-Za-z0-9_])|#.*|:.*|->>|-->|->|-x(?![A-Za-z0-9_])|\[[^\]\n]*\]|@[A-Za-z0-9_-]+|\.[A-Za-z_][A-Za-z0-9_]*|[A-Za-z_][A-Za-z0-9_]*/g;
+  /"(?:[^"\\]|\\.)*"?|(?<=\bcolor\s+)#[0-9a-fA-F]{3,6}(?![A-Za-z0-9_])|#.*|:.*|->>|-->|->|-x(?![A-Za-z0-9_])|\[[^\]\n]*\]|@[A-Za-z0-9_-]+|\.[A-Za-z_][A-Za-z0-9_]*|x?\$[A-Za-z_][A-Za-z0-9_]*|[A-Za-z_][A-Za-z0-9_]*/g;
 
 /**
  * Semantic tokens for what the TextMate grammar cannot tell apart: node ids
  * (only declared or implicit nodes), tech stacks (`[PostgreSQL]`), teams (`@orders`),
- * and legend tags (`.planned`, and the entry ids of the legend block).
+ * legend tags (`.planned`, and the entry ids of the legend block), and
+ * constants (`$peak`, `x$n` and the name in `let peak = …`).
  */
 export function semanticTokens(analysis: Analysis): Token[] {
   const nodes = new Set(analysis.diagram.nodes.map((n) => n.id));
@@ -127,13 +131,18 @@ export function semanticTokens(analysis: Analysis): Token[] {
   const entryAt = new Map(legend.filter((e) => e.loc.file === undefined).map((e) => [e.loc.line - 1, e.loc.col - 1]));
   const payload = payloadLines(analysis.lines);
   const out: Token[] = [];
+  const constants = new Set((analysis.diagram.constants ?? []).map((c) => c.name));
   analysis.lines.forEach((text, line) => {
     if (payload[line]) return;
+    const definition = LET.exec(text);
+    if (definition && constants.has(definition[2])) out.push({ line, character: definition[1].length, length: definition[2].length, kind: 'constant' });
     for (const m of text.matchAll(TOKEN)) {
       const word = m[0];
       const at = m.index ?? 0;
       const kind: TokenKind | null =
-        word[0] === '['
+        /^x?\$/.test(word)
+          ? 'constant'
+          : word[0] === '['
           ? 'tech'
           : word[0] === '@'
             ? 'team'
@@ -141,10 +150,55 @@ export function semanticTokens(analysis: Analysis): Token[] {
               ? tags.has(word.slice(1)) ? 'tag' : null
               : entryAt.get(line) === at
                 ? 'tag'
-                : /^[A-Za-z_]/.test(word) && nodes.has(word)
+                : /^[A-Za-z_]/.test(word) && nodes.has(word) && !(definition && at === definition[1].length)
                   ? 'node'
                   : null;
       if (kind) out.push({ line, character: at, length: word.length, kind });
+    }
+  });
+  return out;
+}
+
+/** `let name =`: the start of a constant's definition, and its name. */
+const LET = /^(\s*let\s+)([A-Za-z_][A-Za-z0-9_]*)\s*=/;
+
+/**
+ * The constant at `pos`: a `$name` or `x$name` use, or the name of a `let`
+ * line, with the range of the name alone (no `$` or `x$`).
+ */
+export function constantAt(analysis: Analysis, pos: Position): { constant: Constant; range: Range } | null {
+  const line = analysis.lines[pos.line] ?? '';
+  if (insidePayload(analysis.lines, pos.line)) return null;
+  const at = (start: number, name: string) => {
+    const constant = (analysis.diagram.constants ?? []).find((c) => c.name === name);
+    if (!constant || pos.character < start - 1 || pos.character > start + name.length) return null;
+    return { constant, range: { start: { line: pos.line, character: start }, end: { line: pos.line, character: start + name.length } } };
+  };
+  const definition = LET.exec(line);
+  if (definition) {
+    const found = at(definition[1].length, definition[2]);
+    if (found) return found;
+  }
+  for (const t of tokenizeLine(line, pos.line + 1).tokens) {
+    if (t.kind !== 'const') continue;
+    const name = t.value.replace(/^x?\$/, '');
+    const found = at(t.col - 1 + t.length - name.length, name);
+    if (found) return found;
+  }
+  return null;
+}
+
+/** Every place constant `name` is written in this document: its `let` name and each use (the name alone). */
+function constantRefs(analysis: Analysis, name: string): Range[] {
+  const out: Range[] = [];
+  const payload = payloadLines(analysis.lines);
+  const range = (line: number, character: number) => ({ start: { line, character }, end: { line, character: character + name.length } });
+  analysis.lines.forEach((text, line) => {
+    if (payload[line]) return;
+    const definition = LET.exec(text);
+    if (definition?.[2] === name) out.push(range(line, definition[1].length));
+    for (const t of tokenizeLine(text, line + 1).tokens) {
+      if (t.kind === 'const' && t.value.replace(/^x?\$/, '') === name) out.push(range(line, t.col - 1 + t.length - name.length));
     }
   });
   return out;
@@ -161,7 +215,7 @@ function labelStart(text: string): number {
   return -1;
 }
 
-export type CompletionKind = 'keyword' | 'node' | 'tech' | 'usecase' | 'scenario';
+export type CompletionKind = 'keyword' | 'node' | 'tech' | 'usecase' | 'scenario' | 'constant';
 
 export interface CompletionItem {
   label: string;
@@ -206,11 +260,17 @@ export function complete(analysis: Analysis, pos: Position): CompletionItem[] {
   const names = quotedNames(analysis, pos);
   if (names) return names;
   if (inLabel(before)) return [];
+  const constant = before.match(/x?\$(\w*)$/);
+  if (constant) {
+    const range = { start: { line: pos.line, character: pos.character - constant[1].length }, end: pos };
+    return (analysis.diagram.constants ?? []).map((c) => ({ label: c.name, kind: 'constant' as const, detail: `${c.text} · ${kindName(c.unit)}`, range }));
+  }
 
   const word = before.match(/[A-Za-z_]\w*$/)?.[0] ?? '';
   const range = { start: { line: pos.line, character: pos.character - word.length }, end: pos };
   const atLineStart = /^\s*(\}\s*)?$/.test(before.slice(0, before.length - word.length));
   if (sectionAt(analysis, pos.line) === 'capacity') return capacityCompletions(analysis, before.slice(0, before.length - word.length), range);
+  if (sectionAt(analysis, pos.line) === 'traffic') return trafficCompletions(before.slice(0, before.length - word.length), range);
   // `when` is only valid right after an alt name: alt "Not found" when "…" {
   if (/^\s*(\}\s*)?alt\s+"[^"]*"\s+$/.test(before.slice(0, before.length - word.length))) {
     return [{ label: 'when', kind: 'keyword', detail: 'Condition of this scenario', snippet: 'when "${1:condition}" {\n\t$0\n}', range }];
@@ -284,9 +344,21 @@ function capacityCompletions(analysis: Analysis, head: string, range: Range): Co
   if (/^\s*$/.test(head)) return analysis.diagram.nodes.map((n) => ({ label: n.id, kind: 'node', detail: describeNode(n), range }));
   const value = head.match(/\b(size|consistency)\s+$/)?.[1];
   if (value) return (value === 'size' ? ['S', 'M', 'L'] : ['strong', 'eventual']).map((label) => ({ label, kind: 'keyword', range }));
-  if (/\b(latency|availability|cost|timeout|reads|writes|shards|bandwidth|egress)\s+$/.test(head)) return [];
+  if (/\b(latency|availability|cost|timeout|reads|writes|shards|bandwidth|egress|hit)\s+$/.test(head)) return [];
   const used = new Set(head.trim().split(/\s+/));
   return CAPACITY_PARTS.filter((p) => !used.has(p.label)).map((p) => ({ label: p.label, kind: 'keyword', detail: p.detail, snippet: p.snippet, range }));
+}
+
+const RATE = String.raw`\S+(?:\s+(?:rps|rpm|rpd))?`;
+const AFTER_RATE = new RegExp(String.raw`^\s*"[^"]*"\s+${RATE}\s+$`);
+const AFTER_PEAK = new RegExp(String.raw`^\s*"[^"]*"\s+${RATE}\s+peak\s+${RATE}\s+$`);
+
+/** After a traffic line's rate: `peak` and `mix`; after its peak: `mix`. */
+function trafficCompletions(head: string, range: Range): CompletionItem[] {
+  const peak: CompletionItem = { label: 'peak', kind: 'keyword', detail: 'The peak, as a multiple of this average rate', snippet: 'peak x${1:3}', range };
+  const mix: CompletionItem = { label: 'mix', kind: 'keyword', detail: 'Shares of the scenarios', snippet: 'mix "${1:Scenario}" ${2:90%}', range };
+  if (AFTER_RATE.test(head)) return [peak, mix];
+  return AFTER_PEAK.test(head) ? [mix] : [];
 }
 
 type SectionKind = NonNullable<ParseResult['blocks']>[number]['kind'];
@@ -342,6 +414,8 @@ export function nodeAt(analysis: Analysis, pos: Position): { node: DiagramNode; 
 
 /** Where a node is declared, in this document or (with `file`) an imported one; implicit nodes have no declaration. */
 export function declaration(analysis: Analysis, pos: Position): { file?: string; range: Range } | null {
+  const constant = constantAt(analysis, pos);
+  if (constant) return { file: constant.constant.loc.file, range: toRange(constant.constant.loc) };
   const hit = nodeAt(analysis, pos);
   if (!hit || hit.node.implicit) return null;
   return { file: hit.node.loc.file, range: toRange(hit.node.loc) };
@@ -355,6 +429,8 @@ export function definition(analysis: Analysis, pos: Position): Range | null {
 
 /** Every place a node id is used as a node: its declaration, connections and steps. */
 export function references(analysis: Analysis, pos: Position): Range[] {
+  const constant = constantAt(analysis, pos);
+  if (constant) return constantRefs(analysis, constant.constant.name);
   const hit = nodeAt(analysis, pos);
   return hit ? referencesTo(analysis, hit.node.id) : [];
 }
@@ -489,7 +565,11 @@ function nameAt(analysis: Analysis, pos: Position): { ref: NameRef; index: numbe
 }
 
 /** What a rename changes: a node id, a use case name, or a scenario (its alt names up to the renamed one). */
-export type RenameSymbol = { kind: 'node'; id: string } | { kind: 'usecase'; name: string } | { kind: 'scenario'; useCase: string; path: string[] };
+export type RenameSymbol =
+  | { kind: 'node'; id: string }
+  | { kind: 'usecase'; name: string }
+  | { kind: 'scenario'; useCase: string; path: string[] }
+  | { kind: 'constant'; name: string };
 
 /**
  * The symbol at `pos`, the range a rename replaces, and the file that
@@ -497,6 +577,11 @@ export type RenameSymbol = { kind: 'node'; id: string } | { kind: 'usecase'; nam
  * declared anywhere, like an implicit node).
  */
 function symbolAt(analysis: Analysis, pos: Position): { symbol: RenameSymbol; range: Range; placeholder: string; file?: string } | null {
+  const constant = constantAt(analysis, pos);
+  if (constant) {
+    const c = constant.constant;
+    return { symbol: { kind: 'constant', name: c.name }, range: constant.range, placeholder: c.name, file: c.loc.file };
+  }
   const name = nameAt(analysis, pos);
   if (name) {
     const { ref, index, range } = name;
@@ -527,6 +612,11 @@ export function renameTarget(analysis: Analysis, pos: Position): { range: Range;
  * `expose … -> "…"` of a system whose team file is `file` follows it.
  */
 export function renameEdits(analysis: Analysis, symbol: RenameSymbol, newName: string, file?: string): TextEdit[] {
+  if (symbol.kind === 'constant') {
+    const constant = (analysis.diagram.constants ?? []).find((c) => c.name === symbol.name);
+    if (!constant || constant.loc.file !== file) return [];
+    return constantRefs(analysis, symbol.name).map((range) => ({ range, newText: newName }));
+  }
   if (symbol.kind === 'node') {
     const node = analysis.diagram.nodes.find((n) => n.id === symbol.id);
     if (!node || (node.implicit ? file !== undefined : node.loc.file !== file)) return [];
@@ -570,6 +660,12 @@ export function rename(analysis: Analysis, pos: Position, newName: string): Rena
   if (symbol.kind === 'node') {
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(newName)) return { error: `'${newName}' is not a node id; use letters, digits and _` };
     if (newName !== symbol.id && analysis.diagram.nodes.some((n) => n.id === newName)) return { error: `There is already a node '${newName}'` };
+  } else if (symbol.kind === 'constant') {
+    const name = newName.replace(/^\$/, '');
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) return { error: `'${newName}' is not a constant name; use letters, digits and _` };
+    if (name !== symbol.name && (analysis.diagram.constants ?? []).some((c) => c.name === name)) return { error: `There is already a constant '$${name}'` };
+    const edits = renameEdits(analysis, symbol, name, file);
+    return file === undefined ? { symbol, edits } : { symbol, edits, declaredIn: file };
   } else {
     if (!newName.trim() || /["\\\n]/.test(newName) || newName.includes(' › ')) return { error: `'${newName}' cannot be a name; leave out quotes, backslashes and ' › '` };
     if (symbol.kind === 'usecase' && newName !== symbol.name && analysis.diagram.useCases.some((u) => u.name === newName)) return { error: `There is already a use case named "${newName}"` };
@@ -580,6 +676,22 @@ export function rename(analysis: Analysis, pos: Position, newName: string): Rena
 
 /** Markdown hover text for the node under the cursor. */
 export function hover(analysis: Analysis, pos: Position): { markdown: string; range: Range } | null {
+  const constant = constantAt(analysis, pos);
+  if (constant) {
+    const c = constant.constant;
+    const lines = [`**$${c.name}** = \`${c.text}\``, '', `Constant, ${kindName(c.unit)}`];
+    if (c.loc.file) lines.push('', `_Defined in ${c.loc.file.split(/[\\/]/).pop()}_`);
+    return { markdown: lines.join('\n'), range: constant.range };
+  }
+  const name = nameAt(analysis, pos);
+  if (name?.ref.kind === 'usecase' && sectionAt(analysis, pos.line) === 'traffic') {
+    const u = simulationOf(analysis.diagram).useCases.find((x) => x.name === name.ref.useCase);
+    if (!u) return null;
+    const lines = [`**${u.name}** · ${formatTraffic(u.rps, u.avgRps)}`];
+    if (u.avgRps !== undefined) lines.push('', 'Capacity, latency and requirements are taken at the peak, egress cost at the average.');
+    if (Number.isFinite(u.percentiles.p99)) lines.push('', `p99 ${formatMs(u.percentiles.p99)} · availability ${formatAvailability(u.availability)}`);
+    return { markdown: lines.join('\n'), range: name.range };
+  }
   const hit = nodeAt(analysis, pos);
   if (!hit) return null;
   const n = hit.node;

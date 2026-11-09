@@ -10,6 +10,7 @@ import {
   formatMs,
   formatPercent,
   formatRps,
+  formatTraffic,
   formatUsd,
   findWhatIf,
   headlineOf,
@@ -301,7 +302,13 @@ function whatIfSummary(diagram: Diagram, all: WhatIfResult[]): string[] {
 /** `proschi analyze --whatif <name>`: its changes, the capacity table under it, and its requirement results. */
 function whatIfReport(diagram: Diagram, w: WhatIfResult, file: string): string {
   const changes = (findWhatIf(diagram, w.name)?.changes ?? []).map((c) =>
-    c.kind === 'traffic' ? `traffic "${c.useCase}" ${c.rps !== undefined ? formatRps(c.rps) : `x${c.multiply}`}` : c.kind === 'fail' ? `fail ${c.node}` : `${c.node} x${c.replicas}`,
+    c.kind === 'traffic'
+      ? `traffic "${c.useCase}" ${c.rps !== undefined ? formatRps(c.rps) : `x${c.multiply}`}`
+      : c.kind === 'fail'
+        ? `fail ${c.node}`
+        : c.kind === 'hit'
+          ? `${c.node} hit ${c.percent}%`
+          : `${c.node} x${c.replicas}`,
   );
   const lines = [`What-if "${w.name}": ${changes.join(', ') || 'no changes'}`, '', capacityReport(diagram, w.analysis, file), ''];
   const reqs = w.results.filter((r) => !r.id.startsWith('test:'));
@@ -387,7 +394,7 @@ export function capacityReport(diagram: Diagram, analysis: SimAnalysis, file: st
   if (analysis.useCases.length) {
     const rows = [['Use case', 'Traffic', 'p50', 'p95', 'p99', 'p99.9', 'Availability']];
     for (const u of analysis.useCases) {
-      rows.push([u.name, u.rps > 0 ? formatRps(u.rps) : '-', ...(['p50', 'p95', 'p99', 'p999'] as const).map((p) => formatMs(u.percentiles[p])), formatAvailability(u.availability)]);
+      rows.push([u.name, u.rps > 0 ? formatTraffic(u.rps, u.avgRps) : '-', ...(['p50', 'p95', 'p99', 'p999'] as const).map((p) => formatMs(u.percentiles[p])), formatAvailability(u.availability)]);
       if (u.scenarios.length > 1) {
         for (const s of u.scenarios) rows.push([`  ${s.name}`, formatPercent(s.share), formatMs(s.percentiles.p50), formatMs(s.percentiles.p95), formatMs(s.percentiles.p99), formatMs(s.percentiles.p999), '']);
       }
@@ -421,17 +428,21 @@ export function testDiagnostics(diagram: Diagram): Diagnostic[] {
 /** Load, utilisation and latency of a node, for hovers; only when the document has traffic. */
 export function nodeSimulation(diagram: Diagram, nodeId: string): string | undefined {
   if ((diagram.traffic ?? []).length === 0) return undefined;
-  const n = simulationOf(diagram).nodes.find((x) => x.id === nodeId);
+  const sim = simulationOf(diagram);
+  const n = sim.nodes.find((x) => x.id === nodeId);
   if (!n || n.kind === 'client' || n.kind === 'other') return undefined;
+  const peak = sim.useCases.some((u) => u.avgRps !== undefined) ? ' at the peak' : '';
   const state = n.saturated ? ' — **saturated**' : n.utilization > HOT ? ' — hot' : '';
   const split =
     n.readLoadRps > 0 && n.writeLoadRps > 0
       ? [`Reads ${formatRps(n.readLoadRps)} of ${formatRps(n.readCapacityRps)} (${formatPercent(n.readUtilization)}) · writes ${formatRps(n.writeLoadRps)} of ${formatRps(n.writeCapacityRps)} (${formatPercent(n.writeUtilization)})`]
       : [];
+  const hit = diagram.capacity?.find((c) => c.node === nodeId)?.hitPercent;
   const egress = n.egressGbPerMonth > 0 ? ` (${formatUsd(n.egressUsd).replace('/month', '')} of it egress, ${formatGb(n.egressGbPerMonth)})` : '';
   return [
-    `Load ${formatRps(n.loadRps)} of ${formatRps(n.capacityRps)} (${formatPercent(n.utilization)} utilised${state})`,
+    `Load ${formatRps(n.loadRps)} of ${formatRps(n.capacityRps)}${peak} (${formatPercent(n.utilization)} utilised${state})`,
     ...split,
+    ...(hit !== undefined ? [`Hit rate ${hit}%: what it misses, ${Number((100 - hit).toFixed(6))}% of reads, goes on to the backing store`] : []),
     `Latency ${formatMs(n.latencyMs)} per call · availability ${formatAvailability(n.availability)} · ${formatUsd(n.costUsd)}${n.replicas > 1 ? ` for ${n.replicas} replicas` : ''}${egress}`,
   ].join('  \n');
 }

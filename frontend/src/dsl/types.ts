@@ -42,7 +42,8 @@ export interface SourceLoc {
   file?: string;
 }
 
-export type Severity = 'error' | 'warning';
+/** `info` explains a choice the parser or simulation made, such as which of two cache models applies. */
+export type Severity = 'error' | 'warning' | 'info';
 
 export interface Diagnostic extends SourceLoc {
   severity: Severity;
@@ -223,6 +224,24 @@ export interface Diagram {
   systems?: DiagramSystem[];
   /** `whatif "Name" { … }` blocks, in order; absent when there are none. */
   whatifs?: WhatIf[];
+  /** `let name = value` constants, in order; absent when there are none. Their uses are already replaced by their values. */
+  constants?: Constant[];
+}
+
+/**
+ * `let peak = 120k rps`: a named quantity, used as `$peak` wherever a
+ * quantity of its kind goes, or as `x$n` for replicas and multipliers.
+ */
+export interface Constant {
+  name: string;
+  /** The value after unit normalisation, like any quantity (`2s` is 2000). */
+  value: number;
+  /** Absent for a plain number (`let n = 3`). */
+  unit?: Quantity['unit'];
+  /** The value as written, e.g. `120k rps`. */
+  text: string;
+  /** The name in its `let` line. */
+  loc: SourceLoc;
 }
 
 /** One line of a `whatif` block. */
@@ -232,7 +251,9 @@ export type WhatIfChange =
   /** `fail db`: the node is down. */
   | { kind: 'fail'; node: string; loc: SourceLoc }
   /** `db x4`: the node runs this many replicas. */
-  | { kind: 'replicas'; node: string; replicas: number; loc: SourceLoc };
+  | { kind: 'replicas'; node: string; replicas: number; loc: SourceLoc }
+  /** `cache hit 40%`: the cache's hit rate (0..100), e.g. a cold cache. */
+  | { kind: 'hit'; node: string; percent: number; loc: SourceLoc };
 
 /** `whatif "Black Friday" { traffic "Checkout" x3; fail cache; db x4 }`: a variant of the design to simulate. */
 export interface WhatIf {
@@ -326,7 +347,14 @@ export type Selector =
 /** `"Redirect" 100k rps mix "Cache hit" 90%, "Cache miss" 10%`; shares are fractions 0..1. */
 export interface TrafficEntry {
   useCase: string;
+  /** The rate the design is loaded with: the peak when `peak` is written, else the one rate. */
   rps: number;
+  /**
+   * `"Read" 20k rps peak x3` (or `peak 60k rps`): the average rate, 20k, while
+   * `rps` is the peak, 60k. Capacity, latency and requirements are taken at
+   * the peak, egress cost at the average. Absent for a flat rate.
+   */
+  avgRps?: number;
   mix?: { scenario: string; share: number }[];
   loc: SourceLoc;
 }
@@ -364,6 +392,12 @@ export interface CapacityOverride {
   timeoutMs?: number;
   /** `size S|M|L`: an instance size that scales the tech's default capacity and cost (sim/profiles.ts `SIZES`). */
   size?: InstanceSize;
+  /**
+   * `hit 90%`, 0..100: the share of reads a cache answers itself. Steps after
+   * a read of it that go on to a backing store take (1 − hit) of the load,
+   * unless the use case splits hits and misses with a traffic `mix`.
+   */
+  hitPercent?: number;
   loc: SourceLoc;
 }
 

@@ -25,6 +25,10 @@ const LEGEND_HEADER = /^\s*legend\s*\{\s*(?:#.*)?$/;
 const HTTP_METHOD = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b/;
 /** `direction right`, `layout ordered`: layout hints, statements of their own (any other use of the words is a node id). */
 const LAYOUT_HINT = /^\s*(?:direction\s+(?:down|right|up|left)|layout\s+ordered)\s*(?:#.*)?$/;
+/** `let name = value`: a constant's definition (any other use of `let` is a node id). */
+const LET_LINE = /^\s*let\s+[A-Za-z_]\w*\s*=/;
+/** `$peak`, or `x$n` for replicas and multipliers: a constant's use. */
+const CONSTANT = /^x?\$[A-Za-z_]\w*/;
 /** `when` is a keyword only right after an alt name: `alt "Name" when "condition" {`. */
 const AFTER_ALT_NAME = /^\s*(\}\s*)?alt\s+("(?:[^"\\]|\\.)*"|\w+)\s+$/;
 
@@ -37,7 +41,7 @@ export const SECTION_HEADER = new RegExp(
 export const ONE_LINE_DECISION = new RegExp(`^\\s*decision\\s+${STRING}\\s+because\\b`);
 /** Words with a meaning inside section blocks (docs/HLD.md). */
 const SECTION_WORDS =
-  /^(traffic|requirements|capacity|entity|decision|test|whatif|fail|mix|durable|volatile|survive|because|rejected|calls|before|after|never|every|waits|for|starts|at|or|responds|writes|reads|responding|handles|failure|path|replicas|any|strong|eventual|store|in|scenario|latency|availability|cost|shards|consistency|bandwidth|egress|timeout|no|from|to|has|of|node|key|index|unique|optional|p50|p90|p95|p99|p999)\b/;
+  /^(traffic|requirements|capacity|entity|decision|test|whatif|fail|mix|peak|hit|durable|volatile|survive|because|rejected|calls|before|after|never|every|waits|for|starts|at|or|responds|writes|reads|responding|handles|failure|path|replicas|any|strong|eventual|store|in|scenario|latency|availability|cost|shards|consistency|bandwidth|egress|timeout|no|from|to|has|of|node|key|index|unique|optional|p50|p90|p95|p99|p999)\b/;
 /** A number with an optional fraction and unit, attached or one space away: 120, 2.5, 50ms, 100k rps, 99.9 %. */
 const QUANTITY = /^-?\d+(?:\.\d+)?(?:[A-Za-z]+(?:\/[A-Za-z]+)?|%)?(?: (?:rps|rpm|rpd|ms|s|usd\/month|usd\/GB|MB\/s|GB\/s)\b| %)?/;
 /** `x200` (fan-out) and `~2MB` (payload size) at the start of a step label (§7.3). */
@@ -89,6 +93,11 @@ export const proschiStreamParser: StreamParser<LexState> = {
     if (stream.match(/^\[[^\]]*\]?/)) return 'typeName';
     if (stream.match(/^@[\w-]*/)) return 'attributeName';
     if (stream.match(/^(->>|-->|->|-x(?!\w))/)) return 'operator';
+    if (stream.match(CONSTANT)) return 'atom';
+    if (LET_LINE.test(stream.string)) {
+      if (stream.pos === stream.string.search(/\S/) && stream.match(/^let\b/)) return 'keyword';
+      if (stream.eat('=')) return 'operator';
+    }
     if (stream.match(QUANTITY)) return 'number';
     if (stream.match(/^[<>]=?/)) return 'operator';
     if ((afterColor || (state.inLegend && stream.string.slice(0, stream.pos).trim())) && stream.match(COLOR_NAME)) return 'atom';
@@ -140,6 +149,7 @@ const techOptions: Completion[] = componentCatalog.flatMap((c) => [
 const keywordOptions: Completion[] = [
   { label: 'title', type: 'keyword', apply: 'title "', detail: 'document title' },
   { label: 'import', type: 'keyword', apply: 'import "', detail: 'import "file.proschi"' },
+  snippetCompletion('let ${name} = ${100 rps}', { label: 'let', type: 'keyword', detail: 'a constant, used as $name' }),
   { label: 'group', type: 'keyword', detail: 'group id "Name" { … }' },
   { label: 'usecase', type: 'keyword', apply: 'usecase "', detail: 'usecase "Name" { … }' },
   { label: 'par', type: 'keyword', apply: 'par {', detail: 'parallel steps' },

@@ -249,6 +249,95 @@ function applyEdits(text: string, edits: TextEdit[]): string {
   return [...edits].sort((x, y) => y.range.start.line - x.range.start.line || y.range.start.character - x.range.start.character).reduce(applyEdit, text);
 }
 
+describe('peak traffic', () => {
+  const src = 'user [Browser]\napi [REST API] x4\nuser -> api\nusecase "Read" {\n  user -> api : GET /\n}\ntraffic {\n  "Read" 2k rps peak x3\n}\n';
+  const p = analyze(src);
+
+  it('hovers a traffic line with the average and the peak, and node loads at the peak', () => {
+    const markdown = hover(p, { line: 7, character: 4 })?.markdown ?? '';
+    expect(markdown.split('\n')[0]).toBe('**Read** · avg 2k · peak 6k rps');
+    expect(markdown).toContain('taken at the peak');
+    expect(hover(p, { line: 1, character: 1 })?.markdown).toContain('Load 6k rps of 8k rps at the peak (75% utilised');
+  });
+
+  it('completes peak and mix after the rate, and mix after the peak', () => {
+    const at = (line: string) => complete(analyze(src.replace('"Read" 2k rps peak x3', line)), { line: 7, character: line.length + 2 }).map((i) => i.label);
+    expect(at('"Read" 2k rps ')).toEqual(['peak', 'mix']);
+    expect(at('"Read" 2k rps peak x3 ')).toEqual(['mix']);
+  });
+});
+
+describe('cache hit rate', () => {
+  const src = 'api [REST API]\ncache [Redis]\ndb [PostgreSQL]\napi -> cache\napi -> db\nusecase "Read" {\n  api -> cache : GET\n  api -> db : SELECT\n}\ntraffic {\n  "Read" 1k rps\n}\ncapacity {\n  cache hit 90%\n}\n';
+  const c = analyze(src);
+
+  it('hovers the cache with its hit rate, and the store with the miss load', () => {
+    expect(c.diagnostics).toEqual([]);
+    expect(hover(c, { line: 1, character: 1 })?.markdown).toContain('Hit rate 90%: what it misses, 10% of reads, goes on to the backing store');
+    expect(hover(c, { line: 2, character: 1 })?.markdown).toContain('Load 100 rps of');
+  });
+
+  it('completes hit among the capacity parts', () => {
+    const typing = analyze(src.replace('  cache hit 90%', '  cache '));
+    expect(complete(typing, { line: 13, character: 8 }).map((i) => i.label)).toContain('hit');
+  });
+});
+
+describe('constants', () => {
+  const src = 'let peak = 120k rps\nlet n = 3\napi [REST API] x$n\ndb [PostgreSQL]\napi -> db\nusecase "Read" {\n  api -> db\n}\ntraffic {\n  "Read" $peak\n}\nwhatif "Big" {\n  db x$n\n}\n';
+  const c = analyze(src);
+  const pos = (line: number, character: number) => ({ line, character });
+
+  it('parses cleanly', () => {
+    expect(c.diagnostics).toEqual([]);
+  });
+
+  it('hovers with the value, on a use and on the definition', () => {
+    expect(hover(c, pos(9, 10))?.markdown).toBe('**$peak** = `120k rps`\n\nConstant, a rate');
+    expect(hover(c, pos(9, 10))?.range).toEqual({ start: pos(9, 10), end: pos(9, 14) });
+    expect(hover(c, pos(0, 5))?.markdown).toContain('`120k rps`');
+    expect(hover(c, pos(2, 17))?.markdown).toBe('**$n** = `3`\n\nConstant, a plain number');
+  });
+
+  it('goes to the definition and lists the references', () => {
+    expect(definition(c, pos(9, 11))).toEqual({ start: pos(0, 4), end: pos(0, 8) });
+    expect(references(c, pos(12, 8))).toEqual([
+      { start: pos(1, 4), end: pos(1, 5) },
+      { start: pos(2, 17), end: pos(2, 18) },
+      { start: pos(12, 7), end: pos(12, 8) },
+    ]);
+  });
+
+  it('renames the definition and every use', () => {
+    expect(renameTarget(c, pos(9, 11))).toEqual({ range: { start: pos(9, 10), end: pos(9, 14) }, placeholder: 'peak' });
+    const renamed = applyEdits(src, (rename(c, pos(2, 17), 'replicas') as RenameResult).edits);
+    expect(renamed).toContain('let replicas = 3');
+    expect(renamed).toContain('api [REST API] x$replicas');
+    expect(renamed).toContain('  db x$replicas');
+    expect(analyze(renamed).diagnostics).toEqual([]);
+    expect(rename(c, pos(2, 17), 'peak')).toEqual({ error: "There is already a constant '$peak'" });
+    expect(rename(c, pos(2, 17), 'a b')).toEqual({ error: "'a b' is not a constant name; use letters, digits and _" });
+  });
+
+  it('completes names after $, and marks constants as semantic tokens', () => {
+    const typing = analyze(src.replace('"Read" $peak', '"Read" $'));
+    expect(complete(typing, pos(9, 10)).map((i) => [i.label, i.detail])).toEqual([
+      ['peak', '120k rps · a rate'],
+      ['n', '3 · a plain number'],
+    ]);
+    const tokens = semanticTokens(c)
+      .filter((t) => t.kind === 'constant')
+      .map((t) => [t.line, src.split('\n')[t.line].substr(t.character, t.length)]);
+    expect(tokens).toEqual([
+      [0, 'peak'],
+      [1, 'n'],
+      [2, 'x$n'],
+      [9, '$peak'],
+      [12, 'x$n'],
+    ]);
+  });
+});
+
 describe('rename', () => {
   it('renames a node id everywhere it is used as a node, but not in strings or labels', () => {
     expect(renameTarget(h, at('db [PostgreSQL]', 1))).toEqual({ range: { start: { line: 1, character: 0 }, end: { line: 1, character: 2 } }, placeholder: 'db' });

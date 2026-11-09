@@ -146,6 +146,19 @@ describe('section highlighting', () => {
     expect(lines[2][0]).toEqual(['x3', 'variableName']);
   });
 
+  it('highlights constants: the let line and each use', () => {
+    const lines = highlightDoc('let peak = 120k rps\nlet [REST API]\napi [REST API] x$n\ntraffic {\n  "Read" $peak\n}');
+    expect(lines[0]).toEqual([
+      ['let', 'keyword'],
+      ['peak', 'variableName'],
+      ['=', 'operator'],
+      ['120k rps', 'number'],
+    ]);
+    expect(lines[1][0]).toEqual(['let', 'variableName']);
+    expect(styleOf(lines, 2, 'x$n')).toBe('atom');
+    expect(styleOf(lines, 4, '$peak')).toBe('atom');
+  });
+
   it('highlights the v2 words, units and label prefixes', () => {
     const lines = highlightDoc(
       [

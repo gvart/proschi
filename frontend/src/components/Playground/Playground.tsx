@@ -9,6 +9,7 @@ import {
   ArrowLeft,
   AlertCircle,
   AlertTriangle,
+  Info,
   BookOpen,
   Check,
   CheckCircle2,
@@ -1811,6 +1812,8 @@ function DiagnosticsPanel({ diagnostics, onSelect }: DiagnosticsPanelProps) {
           <button onClick={() => onSelect(d)} className="w-full flex items-start gap-2 px-3 py-1.5 text-left hover:bg-ink/10">
             {d.severity === 'error' ? (
               <AlertCircle size={14} className="text-fail shrink-0 mt-px" />
+            ) : d.severity === 'info' ? (
+              <Info size={14} className="text-muted shrink-0 mt-px" />
             ) : (
               <AlertTriangle size={14} className="text-pop-yellow shrink-0 mt-px" />
             )}

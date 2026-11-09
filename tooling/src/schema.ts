@@ -65,7 +65,7 @@ export function diagramSchema() {
       ),
       diagnostic: object(
         {
-          severity: { enum: ['error', 'warning'] },
+          severity: { enum: ['error', 'warning', 'info'] },
           message: str,
           line: { type: 'integer', minimum: 1 },
           col: { type: 'integer', minimum: 1 },
@@ -93,6 +93,7 @@ export function diagramSchema() {
           decisions: array('decision', '`decision` statements.'),
           tests: array('test', '`test` blocks of flow assertions.'),
           whatifs: array('whatif', '`whatif` blocks: variants of the design to simulate.'),
+          constants: array('constant', '`let name = value` constants, in order. Their uses are already replaced by their values.'),
           legend: array('legendEntry', 'Entries of the `legend` block, in order.'),
           layout: object(
             {
@@ -229,7 +230,8 @@ export function diagramSchema() {
       traffic: object(
         {
           useCase: str,
-          rps: { ...num, minimum: 0, description: 'Requests per second.' },
+          rps: { ...num, minimum: 0, description: 'Requests per second the design is loaded with: the peak when `peak` is written.' },
+          avgRps: { ...num, minimum: 0, description: '`peak x3` or `peak 60k rps`: the average rate (the one written first), which egress is costed at. Left out for a flat rate.' },
           mix: {
             type: 'array',
             description: 'Shares of the use case traffic per scenario, as fractions that add up to 1. Without a mix, all traffic goes to the first scenario.',
@@ -275,6 +277,7 @@ export function diagramSchema() {
           bandwidthMBps: { ...num, exclusiveMinimum: 0, description: '`bandwidth`: megabytes per second per replica.' },
           egressUsdPerGb: { ...num, minimum: 0, description: '`egress`: price of data the node sends to clients and third parties (internet egress), in USD per GB.' },
           timeoutMs: { ...num, minimum: 0, description: '`timeout`: what a failed call (`-x`) to the node costs, in milliseconds.' },
+          hitPercent: { ...percent, description: '`hit`: the share of reads a cache answers itself; the miss path takes the rest.' },
           loc,
         },
         ['node', 'loc'],
@@ -295,6 +298,16 @@ export function diagramSchema() {
       ),
       test: object({ name: str, assertions: array('assertion'), loc }, ['name', 'assertions', 'loc']),
       whatif: object({ name: str, changes: array('whatifChange'), loc }, ['name', 'changes', 'loc']),
+      constant: object(
+        {
+          name: str,
+          value: { ...num, description: 'The value after unit normalisation: rates in rps, durations in ms.' },
+          unit: { enum: ['rps', 'ms', '%', 'usd/month', 'MBps', 'usd/GB'], description: 'Left out for a plain number.' },
+          text: { ...str, description: 'The value as written, e.g. `120k rps`.' },
+          loc: { ...loc, description: 'The name in its `let` line.' },
+        },
+        ['name', 'value', 'text', 'loc'],
+      ),
       whatifChange: {
         description: 'One line of a whatif block.',
         oneOf: [
@@ -304,6 +317,7 @@ export function diagramSchema() {
           ),
           object({ kind: { const: 'fail' }, node: str, loc }, ['kind', 'node', 'loc']),
           object({ kind: { const: 'replicas' }, node: str, replicas: { type: 'integer', minimum: 1 }, loc }, ['kind', 'node', 'replicas', 'loc']),
+          object({ kind: { const: 'hit' }, node: str, percent: { ...percent, description: '`cache hit 40%`: the hit rate under this what-if.' }, loc }, ['kind', 'node', 'percent', 'loc']),
         ],
       },
       assertion: {

@@ -46,12 +46,24 @@
           Steps after the response count too, so a queue's consumer carries load the user never waits for. A use
           case without a traffic line adds no load.
         </p>
+        <p>
+          A cache with a hit rate (<code>capacity { cache hit 90% }</code>) passes on only its misses: after a
+          read of it, the caller's reads from a store behind it, the calls the cache makes itself and the
+          caller's fill of the cache take <code>1 − hit</code> of the rate, unless the use case already splits
+          hits and misses with a <code>mix</code>. Latency follows too: see the percentiles below.
+        </p>
+        <p>
+          With <code>peak</code> (<code>"Read" 20k rps peak x3</code>), <var>R</var> is the peak, 60k: load,
+          utilisation, latency and requirements are all taken at the busiest hour. Only egress is costed at the
+          average, 20k (rule 1.8).
+        </p>
       </div>
       <pre class="formula" tabindex="0"><code>load(n) = Σ  R(U) × share(s) × N(step)
           over every request step to n that is not -x
           in every scenario s of every use case
 
-N(step) = the x&lt;N&gt; fan-out, 1 without one</code></pre>
+N(step) = the x&lt;N&gt; fan-out, 1 without one,
+          times 1 − hit on a cache's miss path</code></pre>
     </li>
 
     <li class="rule" id="reads-writes">
@@ -176,6 +188,11 @@ hop(n) = base + C × base ÷ (c (1 − ρ))
           A use case's percentile mixes its scenarios by their shares. With 10% cache misses, p99 is close to the
           miss path's p90, and it moves smoothly as a share grows.
         </p>
+        <p>
+          A cache's <code>hit</code> rate is mixed the same way: each scenario becomes a hit variant, without the
+          miss path, and a miss variant, weighted by the hit rate. The percentiles are those of an explicit
+          <code>alt "Hit"</code> and <code>alt "Miss"</code> with a <code>mix</code> of the same shares.
+        </p>
       </div>
       <div class="figure">
         <pre class="formula" tabindex="0"><code>item   = fixed + Exp(tail)
@@ -268,6 +285,8 @@ A(U) = Π over nodes n on the main path of
         <p>
           Each instance costs a flat monthly price from its profile, whatever its load, plus egress, for a 30-day
           month. Clients, DNS and external systems cost nothing. There are no instance sizes or per-request prices.
+          Egress follows the average rate of a traffic line with <code>peak</code>, since the month is mostly not
+          the peak hour.
         </p>
       </div>
       <pre class="formula" tabindex="0"><code>cost = Σ over nodes  replicas × shards × cost(n) + egress cost(n)</code></pre>
@@ -701,7 +720,11 @@ traffic {
       </tr>
       <tr>
         <th scope="row">Cache hit rate <span class="tag">either way</span></th>
-        <td>The hit rate is whatever <code>mix</code> says. Warm-up and eviction are not modelled, so write the cold case as its own scenario.</td>
+        <td>
+          The hit rate is what <code>hit</code> or <code>mix</code> says. Warm-up and eviction are not modelled, so
+          try the cold case in a what-if (<code>cache hit 40%</code>). Hits and misses are independent, by the
+          rate, with no correlation between keys.
+        </td>
       </tr>
       <tr>
         <th scope="row">Hot keys and skew <span class="tag tag--opt">optimistic</span></th>
@@ -709,7 +732,10 @@ traffic {
       </tr>
       <tr>
         <th scope="row">Traffic shape and autoscaling <span class="tag tag--opt">optimistic</span></th>
-        <td>Traffic is one constant rate and replica counts are fixed. Enter your peak rate, not your average.</td>
+        <td>
+          Traffic is one rate per use case, or an average and a peak (<code>peak x3</code>): the design is sized for
+          the peak and billed for the average. Replica counts are fixed, so there is no autoscaling between the two.
+        </td>
       </tr>
       <tr>
         <th scope="row">Contention and per-request work <span class="tag">either way</span></th>

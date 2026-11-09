@@ -102,7 +102,8 @@
         "severity": {
           "enum": [
             "error",
-            "warning"
+            "warning",
+            "info"
           ]
         },
         "message": {
@@ -231,6 +232,13 @@
             "$ref": "#/$defs/whatif"
           },
           "description": "`whatif` blocks: variants of the design to simulate."
+        },
+        "constants": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/constant"
+          },
+          "description": "`let name = value` constants, in order. Their uses are already replaced by their values."
         },
         "legend": {
           "type": "array",
@@ -1051,7 +1059,12 @@
         "rps": {
           "type": "number",
           "minimum": 0,
-          "description": "Requests per second."
+          "description": "Requests per second the design is loaded with: the peak when `peak` is written."
+        },
+        "avgRps": {
+          "type": "number",
+          "minimum": 0,
+          "description": "`peak x3` or `peak 60k rps`: the average rate (the one written first), which egress is costed at. Left out for a flat rate."
         },
         "mix": {
           "type": "array",
@@ -1289,6 +1302,12 @@
           "minimum": 0,
           "description": "`timeout`: what a failed call (`-x`) to the node costs, in milliseconds."
         },
+        "hitPercent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "`hit`: the share of reads a cache answers itself; the miss path takes the rest."
+        },
         "loc": {
           "$ref": "#/$defs/loc"
         }
@@ -1439,6 +1458,44 @@
       ],
       "additionalProperties": false
     },
+    "constant": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "number",
+          "description": "The value after unit normalisation: rates in rps, durations in ms."
+        },
+        "unit": {
+          "enum": [
+            "rps",
+            "ms",
+            "%",
+            "usd/month",
+            "MBps",
+            "usd/GB"
+          ],
+          "description": "Left out for a plain number."
+        },
+        "text": {
+          "type": "string",
+          "description": "The value as written, e.g. `120k rps`."
+        },
+        "loc": {
+          "$ref": "#/$defs/loc",
+          "description": "The name in its `let` line."
+        }
+      },
+      "required": [
+        "name",
+        "value",
+        "text",
+        "loc"
+      ],
+      "additionalProperties": false
+    },
     "whatifChange": {
       "description": "One line of a whatif block.",
       "oneOf": [
@@ -1512,6 +1569,33 @@
             "kind",
             "node",
             "replicas",
+            "loc"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "hit"
+            },
+            "node": {
+              "type": "string"
+            },
+            "percent": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "`cache hit 40%`: the hit rate under this what-if."
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "node",
+            "percent",
             "loc"
           ],
           "additionalProperties": false

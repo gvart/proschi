@@ -860,6 +860,17 @@ function tokenizeLine(text, line) {
       tokens.push({ kind, value, col: start2 + 1, length: i - start2 });
       continue;
     }
+    if (ch === "=") {
+      tokens.push({ kind: "op", value: "=", col: start2 + 1, length: 1 });
+      i++;
+      continue;
+    }
+    if (ch === "$" && IDENT_START.test(text[i + 1] ?? "")) {
+      i++;
+      while (i < text.length && IDENT_PART.test(text[i])) i++;
+      tokens.push({ kind: "const", value: text.slice(start2, i), col: start2 + 1, length: i - start2 });
+      continue;
+    }
     if (ch === "<" || ch === ">") {
       const value = text[i + 1] === "=" ? ch + "=" : ch;
       tokens.push({ kind: "op", value, col: start2 + 1, length: value.length });
@@ -875,6 +886,12 @@ function tokenizeLine(text, line) {
     }
     if (IDENT_START.test(ch)) {
       while (i < text.length && IDENT_PART.test(text[i])) i++;
+      if (i === start2 + 1 && ch === "x" && text[i] === "$" && IDENT_START.test(text[i + 1] ?? "")) {
+        i += 2;
+        while (i < text.length && IDENT_PART.test(text[i])) i++;
+        tokens.push({ kind: "const", value: text.slice(start2, i), col: start2 + 1, length: i - start2 });
+        continue;
+      }
       if (/^x\d+$/.test(text.slice(start2, i)) && text[i] === "." && DIGIT.test(text[i + 1] ?? "")) {
         i++;
         while (i < text.length && DIGIT.test(text[i])) i++;
@@ -1287,7 +1304,7 @@ var UNIT_EXAMPLES = {
   MBps: "a bandwidth, e.g. 500 MB/s or 1 GB/s",
   "usd/GB": "a price per gigabyte, e.g. 0.05 usd/GB"
 };
-var CAPACITY_PARTS = "a rate, reads, writes, shards, size, latency, availability, cost, durable or volatile, consistency, bandwidth, egress or timeout";
+var CAPACITY_PARTS = "a rate, reads, writes, shards, size, latency, availability, cost, durable or volatile, consistency, bandwidth, egress, timeout or hit";
 var ASSERTION_HELP = 'Expected an assertion: "Use case" calls <node>, "Use case" writes <node> before responding, <node> calls <node>, no path from <node> to <node>, <node> has replicas >= 2, \u2026';
 var ASSERTION_VERBS = "calls, every scenario calls, never calls, never waits for, writes, responds, starts at, has scenario or handles failure of";
 var GENERIC_TECH = {
@@ -1354,6 +1371,8 @@ var Parser = class _Parser {
   decisions = [];
   tests = [];
   whatifs = [];
+  /** `let` constants by name, from every file read so far. */
+  constants = /* @__PURE__ */ new Map();
   blocks = [];
   legend = [];
   layout = {};
@@ -1401,7 +1420,8 @@ var Parser = class _Parser {
       ...this.legend.length ? { legend: this.legend } : {},
       ...Object.keys(this.layout).length ? { layout: this.layout } : {},
       ...this.systems.length ? { systems: this.systems } : {},
-      ...this.whatifs.length ? { whatifs: this.whatifs } : {}
+      ...this.whatifs.length ? { whatifs: this.whatifs } : {},
+      ...this.constants.size ? { constants: [...this.constants.values()] } : {}
     };
     const order = (d) => this.fileOrder.get(d.file) ?? 0;
     this.diagnostics.sort((a, b) => order(a) - order(b) || a.line - b.line || a.col - b.col);
@@ -1414,6 +1434,10 @@ var Parser = class _Parser {
   }
   /** Reads the current file's lines and reports blocks it leaves open. */
   parseFile() {
+    this.lines.forEach((text, index) => {
+      const { tokens, diagnostics } = tokenizeLine(text, index + 1);
+      if (isLet(tokens) && diagnostics.length === 0) this.defineConstant(tokens, index + 1);
+    });
     for (let i = 0; i < this.lines.length; i++) {
       i = this.parseLine(i);
     }
@@ -1433,6 +1457,10 @@ var Parser = class _Parser {
     const [first, second, third] = tokens;
     const loc = (t) => this.locOf(t, line);
     const top = this.top();
+    if (isLet(tokens) && !(top?.kind === "section" && top.skipped !== void 0)) {
+      if (top) this.error("Define constants at the top level, not inside a block", loc(first));
+      return index;
+    }
     if (top?.kind === "section") {
       if (top.skipped !== void 0) {
         const opens = tokens[tokens.length - 1].kind === "lbrace";
@@ -1879,7 +1907,7 @@ var Parser = class _Parser {
   readStub(stub, tokens, from, to, line) {
     for (let i = from; i < to; ) {
       const t = tokens[i];
-      if (t.kind === "quantity" || t.kind === "number") {
+      if (t.kind === "quantity" || t.kind === "number" || isConstUse(t)) {
         const rps = this.quantityOf(t, "rps", t, line);
         if (rps === void 0) return;
         stub.rps = rps;
@@ -2153,6 +2181,10 @@ var Parser = class _Parser {
           this.error("A node needs at least one replica: x1, x2, \u2026", this.locOf(t, line));
           return;
         }
+        node.replicas = replicas;
+      } else if (t.kind === "const") {
+        const replicas = this.replicasOf(t, line, "A node needs a whole number of replicas, at least 1: x1, x2, \u2026");
+        if (replicas === void 0) return;
         node.replicas = replicas;
       } else if (t.kind === "label" || t.kind === "arrow") {
         this.error(`Expected '${idToken.value} -> target' for a connection`, this.locOf(t, line));
@@ -2445,8 +2477,31 @@ var Parser = class _Parser {
     const rps = this.quantityOf(rate, "rps", name, line);
     if (rps === void 0) return;
     const entry = { useCase: name.value, rps, loc: this.lineLoc(tokens, line) };
-    const shares = [];
     let i = 2;
+    if (isWord(tokens[i], "peak")) {
+      const word = tokens[i];
+      const value = tokens[i + 1];
+      let peak;
+      if (value?.kind === "ident" && MULTIPLIER.test(value.value)) peak = rps * Number(MULTIPLIER.exec(value.value)[1]);
+      else if (value?.kind === "const" && value.value.startsWith("x")) {
+        const factor = this.countOf(value, line);
+        if (factor === void 0) return;
+        peak = rps * factor;
+      } else if (value?.kind === "quantity" || value?.kind === "number" || isConstUse(value)) peak = this.quantityOf(value, "rps", word, line);
+      else {
+        this.error(`Expected the peak after peak, as a multiple of the average (peak x3) or a rate (peak 60k rps)${value ? `, not ${describe(value)}` : ""}`, this.locOf(value ?? word, line));
+        return;
+      }
+      if (peak === void 0) return;
+      if (peak < rps) {
+        this.error(`The peak cannot be below the average, ${rps.toLocaleString("en-US")} rps`, this.locOf(value, line));
+        return;
+      }
+      entry.avgRps = rps;
+      entry.rps = Number(peak.toPrecision(12));
+      i += 2;
+    }
+    const shares = [];
     if (tokens[i]) {
       const mix = tokens[i++];
       if (!isWord(mix, "mix")) {
@@ -2609,10 +2664,11 @@ var Parser = class _Parser {
     }
     const override = { node: id.value, loc: this.lineLoc(tokens, line) };
     const seen = /* @__PURE__ */ new Set();
+    let hitLoc;
     for (let i = 1; i < tokens.length; ) {
       const t = tokens[i];
       let part;
-      if (t.kind === "quantity" || t.kind === "number") {
+      if (t.kind === "quantity" || t.kind === "number" || isConstUse(t)) {
         part = "rate";
         const rps = this.quantityOf(t, "rps", t, line);
         if (rps === void 0) return;
@@ -2628,6 +2684,17 @@ var Parser = class _Parser {
         else if (part === "availability") override.availability = value;
         else override.costUsd = value;
         i += 2;
+      } else if (isWord(t, "hit")) {
+        part = "hit";
+        const value = this.quantityOf(tokens[i + 1], "%", t, line);
+        if (value === void 0) return;
+        if (value > 100) {
+          this.error("A hit rate cannot be more than 100%", this.locOf(tokens[i + 1], line));
+          return;
+        }
+        override.hitPercent = value;
+        hitLoc = this.locOf(t, line);
+        i += 2;
       } else if (isWord(t, "durable") || isWord(t, "volatile")) {
         part = "durable or volatile";
         override.durable = t.value === "durable";
@@ -2642,11 +2709,13 @@ var Parser = class _Parser {
       } else if (isWord(t, "shards")) {
         part = "shards";
         const n = tokens[i + 1];
-        if (n?.kind !== "number" || Number(n.value) < 1) {
+        const shards = isConstUse(n) ? this.countOf(n, line) : n?.kind === "number" ? Number(n.value) : NaN;
+        if (shards === void 0) return;
+        if (!Number.isInteger(shards) || shards < 1) {
           this.error("Expected a whole number of shards, at least 1, e.g. shards 4", this.locOf(n ?? t, line));
           return;
         }
-        override.shards = Number(n.value);
+        override.shards = shards;
         i += 2;
       } else if (isWord(t, "size")) {
         part = "size";
@@ -2713,7 +2782,23 @@ var Parser = class _Parser {
       const storeOnly = ["shards", "consistency"].filter((p) => seen.has(p));
       if (storeOnly.length && !isDataStore(kindOf(node)))
         this.warning(`'${id.value}' is not a data store (${DATA_STORE_KINDS.join(", ")}); ${storeOnly.join(" and ")} only apply to data stores`, idLoc);
+      if (hitLoc) this.checkHitRate(node, override.hitPercent, hitLoc);
     });
+  }
+  /**
+   * A hit rate on something that is not a cache is a warning. A use case
+   * whose traffic `mix` splits it into scenarios already models hits and
+   * misses itself: the mix applies to it, and an info says so.
+   */
+  checkHitRate(node, percent, loc) {
+    const kind = kindOf(node);
+    if (kind !== "cache" && kind !== "cdn") this.warning(`'${node.id}' is not a cache or CDN; a hit rate only means something for one`, loc);
+    for (const entry of this.traffic) {
+      if (!entry.mix?.length) continue;
+      const useCase = this.built.find((u) => u.name === entry.useCase);
+      if (!useCase?.scenarios.some((s) => s.steps.some((step) => step.toServiceId === node.id))) continue;
+      this.info(`"${useCase.name}" splits its traffic into scenarios with mix, so its mix decides the hits and misses of '${node.id}', not the ${percent}% hit rate`, loc);
+    }
   }
   /** `entity Url [in db] ["description"] {` */
   parseEntity(tokens, line) {
@@ -2882,16 +2967,17 @@ var Parser = class _Parser {
   parseWhatIfLine(whatif, tokens, line) {
     const [first, second, third] = tokens;
     const loc = this.lineLoc(tokens, line);
-    const help = 'Expected a what-if change: traffic "Use case" x3, traffic "Use case" 50k rps, fail <node> or <node> x4';
+    const help = 'Expected a what-if change: traffic "Use case" x3, traffic "Use case" 50k rps, fail <node>, <node> x4 or <node> hit 40%';
     const checkNode = (id) => {
       const idLoc = this.locOf(id, line);
       this.deferred.push(() => {
         if (!this.nodes.has(id.value)) this.warning(`Unknown node '${id.value}' in what-if`, idLoc);
       });
     };
-    if (first.kind === "ident" && second?.kind === "ident" && REPLICAS.test(second.value)) {
+    if (first.kind === "ident" && (second?.kind === "ident" && REPLICAS.test(second.value) || second?.kind === "const")) {
       if (!this.expectEnd(tokens, 2, line)) return;
-      const replicas = Number(REPLICAS.exec(second.value)[1]);
+      const replicas = second.kind === "const" ? this.replicasOf(second, line, "A what-if needs a whole number of replicas, at least x1; to take a node down, write fail <node>") : Number(REPLICAS.exec(second.value)[1]);
+      if (replicas === void 0) return;
       if (replicas < 1) {
         this.error("A what-if needs at least one replica, x1; to take a node down, write fail <node>", this.locOf(second, line));
         return;
@@ -2906,6 +2992,21 @@ var Parser = class _Parser {
     }
     if (first.kind === "ident" && second?.kind === "ident" && MULTIPLIER.test(second.value)) {
       this.error(`Replicas are a whole number, e.g. ${first.value} x4`, this.locOf(second, line));
+      return;
+    }
+    if (first.kind === "ident" && isWord(second, "hit") && tokens.length > 2) {
+      const percent = this.quantityOf(third, "%", second, line);
+      if (percent === void 0 || !this.expectEnd(tokens, 3, line)) return;
+      if (percent > 100) {
+        this.error("A hit rate cannot be more than 100%", this.locOf(third, line));
+        return;
+      }
+      if (whatif.changes.some((c) => c.kind === "hit" && c.node === first.value)) {
+        this.error(`The hit rate of '${first.value}' is set twice in this what-if`, this.locOf(first, line));
+        return;
+      }
+      checkNode(first);
+      whatif.changes.push({ kind: "hit", node: first.value, percent, loc });
       return;
     }
     if (isWord(first, "fail")) {
@@ -2930,6 +3031,10 @@ var Parser = class _Parser {
       let change;
       if (third?.kind === "ident" && MULTIPLIER.test(third.value)) {
         const multiply = Number(MULTIPLIER.exec(third.value)[1]);
+        change = { kind: "traffic", useCase: second.value, multiply, loc };
+      } else if (third?.kind === "const" && third.value.startsWith("x")) {
+        const multiply = this.countOf(third, line);
+        if (multiply === void 0) return;
         change = { kind: "traffic", useCase: second.value, multiply, loc };
       } else {
         const rps = this.quantityOf(third, "rps", second, line);
@@ -3179,6 +3284,15 @@ var Parser = class _Parser {
   /** The value of a quantity token in `unit`, or undefined after reporting what is wrong. `after` locates a missing token. */
   quantityOf(token, unit, after2, line) {
     const expected = UNIT_EXAMPLES[unit];
+    if (isConstUse(token)) {
+      const c = this.constantOf(token, line);
+      if (!c) return void 0;
+      if (c.unit !== unit) {
+        this.error(`'${token.value}' is ${c.text}, ${kindName(c.unit)}; expected ${expected}`, this.locOf(token, line));
+        return void 0;
+      }
+      return c.value;
+    }
     if (token?.kind !== "quantity" && token?.kind !== "number") {
       this.error(`Expected ${expected}${token ? `, not ${describe(token)}` : ""}`, this.locOf(token ?? after2, line));
       return void 0;
@@ -3195,6 +3309,61 @@ var Parser = class _Parser {
       return void 0;
     }
     return q.value;
+  }
+  /** `let name = value`, read before the rest of its file. */
+  defineConstant(tokens, line) {
+    const [, name, eq, value] = tokens;
+    if (value?.kind !== "quantity" && value?.kind !== "number") {
+      this.error(`Expected a number or quantity after =, e.g. let ${name.value} = 120k rps${value ? `, not ${describe(value)}` : ""}`, this.locOf(value ?? eq, line));
+      return;
+    }
+    if (!this.expectEnd(tokens, 4, line)) return;
+    const text = this.lines[line - 1].slice(value.col - 1, value.col - 1 + value.length);
+    const q = parseQuantity(text);
+    if ("error" in q) {
+      this.error(q.error, this.locOf(value, line));
+      return;
+    }
+    const loc = this.locOf(name, line);
+    const first = this.constants.get(name.value);
+    if (first) {
+      this.error(`Constant '${name.value}' is defined twice (first ${this.where(first.loc, loc)})`, loc);
+      return;
+    }
+    this.constants.set(name.value, { name: name.value, value: q.value, ...q.unit ? { unit: q.unit } : {}, text: text.replace(/[ \t]+/g, " "), loc });
+  }
+  /** The constant `$name` or `x$name` names, or undefined after reporting that there is none. */
+  constantOf(token, line) {
+    const name = token.value.replace(/^x?\$/, "");
+    const found = this.constants.get(name);
+    if (found) return found;
+    const near = [...this.constants.keys()].find((k) => editDistance2(k, name) <= 2);
+    this.error(`Unknown constant '$${name}'${near ? `; did you mean '$${near}'?` : `; define it with let ${name} = \u2026`}`, this.locOf(token, line));
+    return void 0;
+  }
+  /** The value of a constant used as a count (`x$n`, `shards $n`): a plain number. */
+  countOf(token, line) {
+    const c = this.constantOf(token, line);
+    if (!c) return void 0;
+    if (c.unit !== void 0) {
+      this.error(`'${token.value}' needs a plain number, as in let ${c.name} = 3; '$${c.name}' is ${c.text}, ${kindName(c.unit)}`, this.locOf(token, line));
+      return void 0;
+    }
+    return c.value;
+  }
+  /** `x$n` after a node: its replicas, a whole number of at least 1. */
+  replicasOf(token, line, wrong) {
+    if (!token.value.startsWith("x")) {
+      this.error(`Write x${token.value} for replicas`, this.locOf(token, line));
+      return void 0;
+    }
+    const n = this.countOf(token, line);
+    if (n === void 0) return void 0;
+    if (!Number.isInteger(n) || n < 1) {
+      this.error(`${wrong} ('${token.value}' is ${n})`, this.locOf(token, line));
+      return void 0;
+    }
+    return n;
   }
   expectOp(tokens, i, ops, example, line) {
     const t = tokens[i];
@@ -3416,6 +3585,16 @@ ${message}`;
     this.warned.add(key);
     this.error(message, loc);
   }
+  info(message, loc) {
+    const key = `info
+${loc.file ?? ""}
+${loc.line}
+${loc.col}
+${message}`;
+    if (this.warned.has(key)) return;
+    this.warned.add(key);
+    this.diagnostics.push({ severity: "info", message, ...loc });
+  }
   warning(message, loc) {
     const key = `${loc.file ?? ""}
 ${loc.line}
@@ -3454,6 +3633,23 @@ function expand(items) {
 function findUseCaseIn(diagram, name) {
   const lower = name.toLowerCase();
   return diagram.useCases.find((u) => u.name === name) ?? diagram.useCases.find((u) => u.name.toLowerCase() === lower) ?? diagram.useCases.find((u) => u.id === name);
+}
+function isLet(tokens) {
+  return isWord(tokens[0], "let") && tokens[1]?.kind === "ident" && tokens[2]?.kind === "op" && tokens[2].value === "=";
+}
+function isConstUse(token) {
+  return token?.kind === "const" && token.value.startsWith("$");
+}
+var KIND_NAMES = {
+  rps: "a rate",
+  ms: "a duration",
+  "%": "a percentage",
+  "usd/month": "a monthly cost",
+  MBps: "a bandwidth",
+  "usd/GB": "an egress price"
+};
+function kindName(unit) {
+  return unit ? KIND_NAMES[unit] : "a plain number";
 }
 function isWord(token, word) {
   return token?.kind === "ident" && token.value === word;
@@ -4072,17 +4268,47 @@ function flowsOf(diagram, traffic) {
   }
   return [...flows.values()];
 }
+var works = (n) => Number.isFinite(n.capacityRps) && n.kind !== "client";
 function analysisOverlay(diagram, analysis) {
   const nodes = {};
+  const bottlenecks = new Set(bottlenecksOf(analysis));
+  const latency2 = /* @__PURE__ */ new Map();
   for (const n of analysis.nodes) {
-    const works = Number.isFinite(n.capacityRps) && n.kind !== "client";
+    latency2.set(n.id, n.latencyMs);
     nodes[n.id] = {
-      ...works ? { utilization: n.utilization, saturated: n.saturated } : {},
+      ...works(n) ? { utilization: n.utilization, saturated: n.saturated } : {},
       ...n.replicas > 1 ? { replicas: n.replicas } : {},
-      ...n.shards > 1 ? { shards: n.shards } : {}
+      ...n.shards > 1 ? { shards: n.shards } : {},
+      ...bottlenecks.has(n.id) ? { bottleneck: true } : {}
     };
   }
-  return { nodes, flows: flowsOf(diagram, diagram.traffic ?? []) };
+  const flows = flowsOf(diagram, diagram.traffic ?? []).map((f) => latency2.has(f.to) ? { ...f, latencyMs: latency2.get(f.to) } : f);
+  const critical = criticalPathOf(diagram, analysis);
+  return { nodes, flows, ...critical ? { critical } : {} };
+}
+var BOTTLENECK_FROM = 0.7;
+function bottlenecksOf(analysis) {
+  return analysis.nodes.filter((n) => works(n) && (n.saturated || n.utilization >= BOTTLENECK_FROM)).map((n) => n.id);
+}
+function criticalPathOf(diagram, analysis, useCase) {
+  const live = analysis.useCases.filter((u2) => u2.rps > 0);
+  const picked = useCase === void 0 ? void 0 : live.find((u2) => u2.id === useCase || u2.name === useCase);
+  const result = picked ?? live.reduce((best, u2) => !best || u2.rps > best.rps ? u2 : best, void 0);
+  if (!result) return void 0;
+  const u = diagram.useCases.find((d) => d.id === result.id) ?? findUseCase(diagram, result.name);
+  const scenario = u?.scenarios[result.tailScenario.p99] ?? u?.scenarios[0];
+  const entry = scenario?.steps[0];
+  if (!u || !scenario || !entry) return void 0;
+  const hops = criticalPath(u, scenario).flat();
+  const nodes = [entry.fromServiceId];
+  for (const h2 of hops) if (!nodes.includes(h2.target)) nodes.push(h2.target);
+  return {
+    useCase: u.name,
+    scenario: scenario.name,
+    p99Ms: result.percentiles.p99,
+    nodes,
+    links: hops.map((h2) => ({ from: h2.step.fromServiceId, to: h2.step.toServiceId }))
+  };
 }
 
 // ../frontend/src/sim/systems.ts
@@ -4425,7 +4651,8 @@ function resolveTraffic(diagram, warnings = []) {
       if (Math.abs(total - 1) > 1e-6) warnings.push(`Traffic mix of "${useCase.name}" adds up to ${formatPercent(total)}; shares are scaled to 100%`);
       for (let i = 0; i < shares.length; i++) shares[i] /= total;
     }
-    result.set(useCase.id, { rps: entry.rps, shares: useCase.scenarios.length ? shares : [] });
+    const average = entry.avgRps === void 0 ? void 0 : entry.rps > 0 ? entry.avgRps / entry.rps : 1;
+    result.set(useCase.id, { rps: entry.rps, shares: useCase.scenarios.length ? shares : [], ...average !== void 0 ? { average } : {} });
   }
   return result;
 }
@@ -4434,6 +4661,17 @@ function trafficFor(diagram, options = {}, warnings = []) {
   for (const [id, rps] of options.trafficRps ?? []) {
     const t = traffic.get(id);
     if (t) t.rps = Math.max(0, rps);
+  }
+  const hits = hitRatesOf(diagram, options);
+  if (hits.size) {
+    const kinds = new Map(diagram.nodes.map((n) => [n.id, kindOf(n)]));
+    const access = accessIn(diagram);
+    for (const u of diagram.useCases) {
+      if (diagram.traffic?.some((e) => e.mix?.length && findUseCase(diagram, e.useCase) === u)) continue;
+      const lookups = cacheLookups(u, hits, (id) => kinds.get(id), (step) => access(step) === "read");
+      const miss = missFactors(lookups);
+      if (miss.size) traffic.set(u.id, { ...traffic.get(u.id), miss, lookups });
+    }
   }
   const failed = options.failed;
   if (!failed?.size) return traffic;
@@ -4460,14 +4698,68 @@ function trafficFor(diagram, options = {}, warnings = []) {
   }
   return traffic;
 }
+function hitRatesOf(diagram, options) {
+  const hits = /* @__PURE__ */ new Map();
+  for (const o of diagram.capacity ?? []) if (o.hitPercent !== void 0) hits.set(o.node, o.hitPercent);
+  for (const [id, percent] of options.hitRates ?? []) hits.set(id, percent);
+  return hits;
+}
+var BACKING_STORES = ["database", "search", "analytics", "storage"];
+function cacheLookups(useCase, hits, kindOf2, isRead) {
+  return useCase.scenarios.map((s) => {
+    const lookups = [];
+    s.steps.forEach((lookup, i) => {
+      const hit = hits.get(lookup.toServiceId);
+      if (hit === void 0 || lookup.failed || !isRead(lookup)) return;
+      const caller = lookup.fromServiceId;
+      const reached = /* @__PURE__ */ new Set([lookup.toServiceId]);
+      const miss = /* @__PURE__ */ new Set();
+      for (const step of s.steps.slice(i + 1)) {
+        const fill2 = miss.size > 0 && step.fromServiceId === caller && step.toServiceId === lookup.toServiceId && !isRead(step);
+        const fallsThrough = reached.has(step.fromServiceId) || step.fromServiceId === caller && isRead(step) && BACKING_STORES.includes(kindOf2(step.toServiceId));
+        if (fill2) miss.add(step);
+        if (!fallsThrough || step.toServiceId === caller) continue;
+        reached.add(step.toServiceId);
+        miss.add(step);
+      }
+      if (miss.size) lookups.push({ hit: Math.min(100, Math.max(0, hit)) / 100, miss });
+    });
+    return lookups;
+  });
+}
+function missFactors(lookups) {
+  const factors = /* @__PURE__ */ new Map();
+  for (const l of lookups.flat()) for (const step of l.miss) factors.set(step, (factors.get(step) ?? 1) * (1 - l.hit));
+  return factors;
+}
+function cacheVariants(hops, lookups) {
+  const out = [];
+  const n = Math.min(lookups.length, 10);
+  for (let mask = 0; mask < 1 << n; mask++) {
+    let share = 1;
+    const skipped = /* @__PURE__ */ new Set();
+    for (let k = 0; k < n; k++) {
+      const hit = mask >> k & 1;
+      share *= hit ? lookups[k].hit : 1 - lookups[k].hit;
+      if (hit) for (const step of lookups[k].miss) skipped.add(step);
+    }
+    if (share <= 0) continue;
+    out.push({ share, hops: hops.map((part) => part.filter((h2) => !skipped.has(h2.step))).filter((part) => part.length) });
+  }
+  return out;
+}
+function averageTraffic(traffic) {
+  if (![...traffic.values()].some((t) => t.average !== void 0)) return traffic;
+  return new Map([...traffic].map(([id, t]) => [id, t.average === void 0 ? t : { ...t, rps: t.rps * t.average }]));
+}
 var multiplierOf = (step) => step.multiplier !== void 0 && step.multiplier > 0 ? step.multiplier : 1;
 function forEachStepRate(diagram, traffic, visit) {
   for (const u of diagram.useCases) {
-    const { rps, shares } = traffic.get(u.id) ?? { rps: 0, shares: [] };
+    const { rps, shares, miss } = traffic.get(u.id) ?? { rps: 0, shares: [] };
     u.scenarios.forEach((s, i) => {
       const rate = rps * (shares[i] ?? 0);
       if (rate > 0) {
-        for (const step of s.steps) if (!step.failed) visit(step, rate);
+        for (const step of s.steps) if (!step.failed) visit(step, miss?.has(step) ? rate * miss.get(step) : rate, u);
       }
     });
   }
@@ -4658,7 +4950,7 @@ function analyze(diagram, options = {}) {
   const kindOf2 = (id) => profiles.get(id)?.kind ?? "client";
   const traffic = trafficFor(diagram, options, warnings);
   const load = computeLoad(diagram, traffic);
-  const egress = computeEgressGb(diagram, traffic, kindOf2);
+  const egress = computeEgressGb(diagram, averageTraffic(traffic), kindOf2);
   const bytes = computeBytesPerSecond(diagram, traffic);
   const systems = diagram.systems?.length ? analyzeSystems(diagram, traffic, options) : void 0;
   const hops = /* @__PURE__ */ new Map();
@@ -4713,7 +5005,18 @@ function analyze(diagram, options = {}) {
     )
   });
   const useCases = diagram.useCases.map((u) => {
-    const { rps, shares, stranded } = traffic.get(u.id);
+    const { rps, shares, stranded, average, lookups } = traffic.get(u.id);
+    if (lookups) {
+      const { scenarios: scenarios2, percentiles: percentiles2, tailScenario: tailScenario2 } = cachedLatency(u, shares, lookups, pathOf, new Set(options.percentiles ?? PERCENTILES2));
+      const writes2 = mainWrites(u, shares, (step) => access(step) === "write");
+      const availabilityOf2 = (id) => {
+        const n = nodeById.get(id);
+        if (!n && systems) return systemAvailability(u, id, systems.availability);
+        return !n ? 1 : writes2.has(id) ? n.writeAvailability : n.availability;
+      };
+      const availability3 = useCaseAvailability(u, shares, availabilityOf2) * (1 - (stranded ?? 0));
+      return { id: u.id, name: u.name, rps, ...average !== void 0 ? { avgRps: rps * average } : {}, scenarios: scenarios2, percentiles: percentiles2, tailScenario: tailScenario2, availability: availability3 };
+    }
     const paths = u.scenarios.map((s) => pathOf(criticalPath(u, s)));
     const scenarios = u.scenarios.map((s, i) => ({
       id: s.id,
@@ -4741,7 +5044,7 @@ function analyze(diagram, options = {}) {
       return !n ? 1 : writes.has(id) ? n.writeAvailability : n.availability;
     };
     const availability2 = useCaseAvailability(u, shares, availabilityOf) * (1 - (stranded ?? 0));
-    return { id: u.id, name: u.name, rps, scenarios, percentiles, tailScenario, availability: availability2 };
+    return { id: u.id, name: u.name, rps, ...average !== void 0 ? { avgRps: rps * average } : {}, scenarios, percentiles, tailScenario, availability: availability2 };
   });
   return {
     nodes: nodeResults,
@@ -4752,6 +5055,27 @@ function analyze(diagram, options = {}) {
     warnings,
     ...systems ? { systems: systems.systems } : {}
   };
+}
+function cachedLatency(u, shares, lookups, pathOf, wanted) {
+  const variants = u.scenarios.map((s, i) => cacheVariants(criticalPath(u, s), lookups[i] ?? []).map((v) => ({ share: v.share, path: pathOf(v.hops) })));
+  const scenarios = u.scenarios.map((s, i) => ({
+    id: s.id,
+    name: s.name,
+    share: shares[i] ?? 0,
+    meanMs: variants[i].reduce((sum, v) => sum + v.share * pathMean(v.path), 0),
+    percentiles: Object.fromEntries(PERCENTILES2.map((q) => [PERCENTILE_KEYS[q], mixtureQuantile(variants[i], q / 100)]))
+  }));
+  const weighted = variants.flatMap((vs, i) => vs.map((v) => ({ share: (shares[i] ?? 0) * v.share, path: v.path })));
+  const percentiles = Object.fromEntries(PERCENTILES2.map((q) => [PERCENTILE_KEYS[q], wanted.has(q) ? mixtureQuantile(weighted, q / 100) : NaN]));
+  const tailScenario = Object.fromEntries(
+    PERCENTILES2.map((q) => {
+      if (!wanted.has(q)) return [PERCENTILE_KEYS[q], 0];
+      const t = percentiles[PERCENTILE_KEYS[q]];
+      const above = variants.map((vs, i) => (shares[i] ?? 0) > 0 ? vs.reduce((sum, v) => sum + (shares[i] ?? 0) * v.share * (1 - pathCdf(v.path, t * (1 - 1e-9))), 0) : -1);
+      return [PERCENTILE_KEYS[q], Math.max(0, above.indexOf(Math.max(...above)))];
+    })
+  );
+  return { scenarios, percentiles, tailScenario };
 }
 function systemAvailability(u, id, availability2) {
   let result = 1;

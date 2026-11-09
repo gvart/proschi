@@ -1,7 +1,7 @@
 import { AlertTriangle, Info, LocateFixed, ShieldAlert } from 'lucide-react';
 import type { Diagram, SourceLoc } from '../../dsl';
 import ModelLink from './ModelLink';
-import { HOT, formatAvailability, formatMs, formatPercent, formatRps, formatUsd, type Analysis, type NodeAnalysis, type TestResult } from '../../sim';
+import { HOT, formatAvailability, formatMs, formatPercent, formatRps, formatTraffic, formatUsd, type Analysis, type NodeAnalysis, type TestResult } from '../../sim';
 import { BOTTLENECK_FROM, busiestOf } from '../../sim/overlay';
 import { systemSummaries } from '../Canvas/systemSummary';
 
@@ -151,7 +151,7 @@ export function AnalysisBody({ diagram, analysis, onSelect, results, onFocusNode
             <div key={u.id} className="rounded-md border border-ink/15">
               <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 px-3 py-2 bg-paper border-b border-ink/15">
                 <span className="font-medium text-ink">{u.name}</span>
-                <span className="text-muted tabular-nums">{u.rps > 0 ? formatRps(u.rps) : 'no traffic'}</span>
+                <span className="text-muted tabular-nums">{u.rps > 0 ? formatTraffic(u.rps, u.avgRps) : 'no traffic'}</span>
                 <span className="text-muted tabular-nums">availability {formatAvailability(u.availability)}</span>
                 <span className="ml-auto flex gap-3 tabular-nums">
                   {PERCENTILES.map((p) => (

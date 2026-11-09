@@ -13,7 +13,7 @@ line         = [ statement ] [ comment ] newline ;
 statement    = title | import | node | connection
              | group-open | system | usecase-open | par-open | alt-open | close
              | traffic | requirements | capacity | entity | decision | test | whatif | legend
-             | direction | layout ;
+             | direction | layout | let ;
 
 title        = "title" , ( string | id ) , [ string ] ;   (* 2nd string: summary *)
 import       = "import" , string ;                      (* a relative path, git: or https:// source *)
@@ -28,6 +28,8 @@ system       = "system" , id , { string | team | position | color | tag | rank }
 stub-part    = quantity | ( "p99" | "latency" | "availability" ) , quantity ;
 direction    = "direction" , ( "down" | "right" | "up" | "left" ) ;   (* alone on its line *)
 layout       = "layout" , "ordered" ;                   (* alone on its line *)
+let          = "let" , id , "=" , quantity ;            (* top level; a constant, used as constant *)
+constant     = "$" , id ;                               (* one token, e.g. $peak; stands for a quantity of its kind *)
 rank         = "rank" , ( digit , { digit } | "first" | "last" ) ;
 legend       = "legend" , "{" , { id , [ string ] , { color-value | color | "dashed" | "dotted" } } , "}" ;
 color        = "color" , ( color-value | hex ) ;
@@ -39,7 +41,8 @@ par-open     = "par" , "{" ;
 alt-open     = "alt" , ( string | id ) , [ "when" , string ] , "{" ;
 close        = "}" , [ alt-open ] ;
 
-traffic      = "traffic" , "{" , { string , quantity , [ "mix" , share , { "," , share } ] } , "}" ;
+traffic      = "traffic" , "{" , { string , quantity , [ "peak" , ( replicas | quantity ) ] , [ "mix" , share , { "," , share } ] } , "}" ;
+                                                         (* peak x3: 3× the average; peak 60k rps: the peak itself *)
 share        = string , quantity ;                       (* "Cache hit" 90% *)
 requirements = "requirements" , "{" , { requirement } , "}" ;
 requirement  = percentile , [ string , [ "scenario" , string ] ] , "<" , quantity
@@ -52,7 +55,8 @@ capacity     = "capacity" , "{" , { id , { capacity-part } } , "}" ;
 capacity-part = quantity | "reads" , quantity | "writes" , quantity | "shards" , integer | "size" , ( "S" | "M" | "L" )
              | "latency" , quantity | "availability" , quantity | "cost" , quantity
              | "durable" | "volatile" | "consistency" , ( "strong" | "eventual" )
-             | "bandwidth" , quantity | "egress" , quantity | "timeout" , quantity ;
+             | "bandwidth" , quantity | "egress" , quantity | "timeout" , quantity
+             | "hit" , quantity ;                       (* hit 90%: a cache's hit rate *)
 entity       = "entity" , id , [ "in" , id ] , [ string ] , "{" , { id , id , { flag } } , "}" ;
 flag         = "key" | "index" | "unique" | "optional" ;
 decision     = "decision" , string , ( "because" , string
@@ -71,7 +75,8 @@ assertion    = string , [ "scenario" , string ] , ( "calls" , selector , [ ( "be
 whatif       = "whatif" , string , "{" , { whatif-change } , "}" ;
 whatif-change = "traffic" , string , ( replicas | quantity )   (* x3 or x1.5 multiplies, 50k rps sets *)
              | "fail" , id
-             | id , replicas ;
+             | id , replicas
+             | id , "hit" , quantity ;                  (* cache hit 40%: a cold cache *)
 selector     = selector-atom , { "or" , selector-atom } ;
 selector-atom = id | tech | "any" , kind | "any" , ( "strong" | "eventual" ) , "store" ;
 kind         = "client" | "edge" | "cdn" | "loadbalancer" | "gateway" | "dns"
@@ -81,7 +86,8 @@ status       = digit , digit , digit | digit , "xx" ;     (* 201, 4xx *)
 
 arrow        = "->" | "->>" | "-->" | "-x" ;
 position     = "pos" , integer , "," , integer ;
-replicas     = "x" , digit , { digit } , [ "." , digit , { digit } ] ;  (* one token, e.g. x3; a fraction only in a whatif traffic line *)
+replicas     = "x" , digit , { digit } , [ "." , digit , { digit } ]   (* one token, e.g. x3; a fraction only in a whatif traffic line *)
+             | "x$" , id ;                              (* x$n: a plain-number constant, one token *)
 quantity     = number , [ magnitude ] , [ unit ] ;     (* 50ms, 100k rps, 99.9% *)
 number       = digit , { digit } , [ "." , digit , { digit } ] ;
 magnitude    = "k" | "m" | "b" ;
@@ -103,6 +109,7 @@ size-unit    = "B" | "KB" | "MB" | "GB" | "TB" ;
 | Statement | Top level | In `group` | In `usecase` / `alt` | In `par` |
 |---|---|---|---|---|
 | `title` | ✓ | | | |
+| `let` | ✓ | | | |
 | `import` | ✓ | | | |
 | node | ✓ | ✓ | | |
 | `group` | ✓ | ✓ | | |
@@ -119,12 +126,18 @@ size-unit    = "B" | "KB" | "MB" | "GB" | "TB" ;
 ## Notes
 
 - `-x` is only valid as a step.
+- A `constant` may stand in for any `quantity` and for the integer after
+  `shards`. Its value must be of the kind the place expects: a rate where a
+  rate goes, a duration where a duration goes. `x$n` takes a plain number
+  (`let n = 3`). A `let` line may come after the lines that use it, in the
+  same file; constants from an imported file count after its `import`.
 - A label is read as [Use case steps](USE-CASES.md#use-case-steps)
   describes: optional `x<N>` and `~<size>` prefixes on a request, an
   optional HTTP method and path, an optional `json`, `xml` or `text`
   payload, and on a response a leading status code.
 - The grammar describes syntax only. The parser also checks meaning:
-  duplicate ids, unknown tech stacks (a warning), responses without a
+  duplicate ids and constants, unknown constants and constants of the
+  wrong kind, unknown tech stacks (a warning), responses without a
   matching request, steps between nodes the architecture does not connect,
   import cycles, missing files and files outside the project root, edges to
   a system's internal nodes, and unknown use cases, scenarios and nodes in

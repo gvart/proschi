@@ -225,7 +225,7 @@ export function diffDiagrams(before: Diagram, after: Diagram): DiagramDiff {
     useCases: diffBy(before.useCases, after.useCases, (u) => u.id, useCaseFields),
     scenarios: diffBy(scenariosOf(before), scenariosOf(after), (s) => `${s.useCase}/${s.scenario.id}`, scenarioFields),
     requirements: diffBy(before.requirements ?? [], after.requirements ?? [], requirementKey, requirementFields),
-    traffic: diffBy(before.traffic ?? [], after.traffic ?? [], (t) => t.useCase, (t) => ({ rps: t.rps, mix: t.mix })),
+    traffic: diffBy(before.traffic ?? [], after.traffic ?? [], (t) => t.useCase, (t) => ({ rps: t.rps, ...(t.avgRps !== undefined ? { avgRps: t.avgRps } : {}), mix: t.mix })),
     capacity: diffBy(before.capacity ?? [], after.capacity ?? [], (c) => c.node, withoutLoc),
     systems: diffBy(before.systems ?? [], after.systems ?? [], (s) => s.id, systemFields),
   };

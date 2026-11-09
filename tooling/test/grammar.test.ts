@@ -205,6 +205,20 @@ describe('TextMate grammar', () => {
     ]);
   });
 
+  it('scopes constants: the let line and each use', () => {
+    const lines = tokenize('let peak = 120k rps # busiest hour\napi [REST API] x$n\ntraffic {\n  "Read" $peak\n}\nwhatif "W" {\n  db x$n\n}');
+    expect(lines[0]).toEqual([
+      ['let', 'keyword.other.let.proschi'],
+      ['peak', 'variable.other.constant.proschi'],
+      ['=', 'keyword.operator.assignment.proschi'],
+      ['120k rps', 'constant.numeric.proschi'],
+      ['# busiest hour', 'comment.line.number-sign.proschi'],
+    ]);
+    expect(lines[1][2]).toEqual(['x$n', 'variable.other.constant.proschi']);
+    expect(lines[3][3]).toEqual(['$peak', 'variable.other.constant.proschi']);
+    expect(lines[6][1]).toEqual(['x$n', 'variable.other.constant.proschi']);
+  });
+
   it('scopes color, critical, tags and the legend block', () => {
     const [node] = tokenize('api "API" [Go] color teal critical .owned');
     expect(node.slice(-4)).toEqual([

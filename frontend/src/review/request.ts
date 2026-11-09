@@ -3,7 +3,7 @@ import type { Analysis } from '../hld/engine';
 import type { Problem } from '../practice/types';
 import type { RunResult } from '../practice/workspace';
 import { accessIn } from '../sim/access';
-import { bandwidthBound, DEFAULT_TIMEOUT_MS, mainScenarioIndex, mainWrites, multiplierOf, PERCENTILE_KEYS, profilesOf, resolveTraffic, transferMs, writeBound } from '../sim/analyze';
+import { bandwidthBound, DEFAULT_TIMEOUT_MS, loadByUseCase, mainScenarioIndex, mainWrites, PERCENTILE_KEYS, profilesOf, resolveTraffic, trafficFor, transferMs, writeBound } from '../sim/analyze';
 import { criticalPath, fallbacksFor, findUseCase, needs, requestOrder } from '../sim/flow';
 import {
   MAX_REVIEW_ITEMS,
@@ -64,7 +64,8 @@ export function modelSummary(diagram: Diagram, diagnostics: ParseResult['diagnos
     useCases: cap(diagram.useCases.map((u) => u.name)),
     decisions: cap((diagram.decisions ?? []).map((d) => d.title)),
     // Only the reviewed file's own lines; the given is error-free by construction.
-    diagnostics: cap(diagnostics.filter((d) => d.file === undefined).map((d) => ({ severity: d.severity, message: d.message, line: d.line }))),
+    // An info explains a choice; it is not a problem to review.
+    diagnostics: cap(diagnostics.filter((d) => d.file === undefined && d.severity !== 'info').map((d) => ({ severity: d.severity as 'error' | 'warning', message: d.message, line: d.line }))),
   };
 }
 
@@ -110,21 +111,13 @@ export function reviewMetrics(analysis: Analysis, diagram?: Diagram): ReviewMetr
 }
 
 function nodeMetrics(diagram: Diagram, analysis: Analysis): ReviewNodeMetrics[] {
-  const traffic = resolveTraffic(diagram);
-  const loadBy = new Map<string, Map<string, number>>();
+  // The simulation's own per-use-case rates: peak traffic and cache misses included.
+  const loadBy = loadByUseCase(diagram, trafficFor(diagram));
   const usedBy = new Map<string, Set<string>>();
   for (const u of diagram.useCases) {
-    const { rps, shares } = traffic.get(u.id) ?? { rps: 0, shares: [] };
-    u.scenarios.forEach((s, i) => {
-      for (const step of s.steps) {
-        for (const id of [step.fromServiceId, step.toServiceId]) usedBy.set(id, (usedBy.get(id) ?? new Set<string>()).add(u.name));
-        const rate = rps * (shares[i] ?? 0) * multiplierOf(step);
-        if (step.failed || !(rate > 0)) continue;
-        const byUseCase = loadBy.get(step.toServiceId) ?? new Map<string, number>();
-        byUseCase.set(u.name, (byUseCase.get(u.name) ?? 0) + rate);
-        loadBy.set(step.toServiceId, byUseCase);
-      }
-    });
+    for (const s of u.scenarios) {
+      for (const step of s.steps) for (const id of [step.fromServiceId, step.toServiceId]) usedBy.set(id, (usedBy.get(id) ?? new Set<string>()).add(u.name));
+    }
   }
   return analysis.nodes.map((n) => ({
     id: n.id,
