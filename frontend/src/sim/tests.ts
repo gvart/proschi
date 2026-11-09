@@ -70,16 +70,20 @@ export interface AssertionResult {
   loc: SourceLoc;
 }
 
+/** A change to the source that fixes a failed check: `x3` on a node, or `shards 4` in its capacity line. */
+export type TestFix = { kind: 'replicas'; node: string; replicas: number } | { kind: 'shards'; node: string; shards: number };
+
 interface Check {
   passed: boolean;
   message: string;
   hint?: string;
+  fix?: TestFix;
   /** Set when the check could not run because a use case or scenario is missing; a test reports each once (§7.1). */
   missing?: string;
 }
 
 const pass = (message: string): Check => ({ passed: true, message });
-const fail = (message: string, hint?: string): Check => ({ passed: false, message, hint });
+const fail = (message: string, hint?: string, fix?: TestFix): Check => ({ passed: false, message, hint, ...(fix ? { fix } : {}) });
 
 /** Context shared by the checks of one run. */
 interface Run {
@@ -123,6 +127,19 @@ export function runTests(diagram: Diagram, analysis: Analysis = analyze(diagram)
     results.push({ id: n === 1 ? `test:${test.name}` : `test:${test.name}#${n}`, name: test.name, category: 'flow', ...flowTest(run, test), loc: test.loc });
   }
   return results.map(({ hint, ...r }) => (r.passed || !hint ? r : { ...r, hint }));
+}
+
+/**
+ * The source change each failed requirement's hint suggests, when it is one
+ * (`x2` on a node, `shards N` in its capacity line), with the result id
+ * runTests gives it; editors offer these as quick fixes.
+ */
+export function requirementFixes(diagram: Diagram, analysis: Analysis = analyze(diagram), options: AnalyzeOptions = {}): { id: string; loc: SourceLoc; fix: TestFix }[] {
+  const run = makeRun(diagram, analysis, options);
+  return (diagram.requirements ?? []).flatMap((r, i) => {
+    const { passed, fix } = requirement(run, r);
+    return !passed && fix ? [{ id: `req:${i + 1}`, loc: r.loc, fix }] : [];
+  });
 }
 
 /**
@@ -223,7 +240,7 @@ function overUseCases(run: Run, name: string | undefined, check: (u: DiagramUseC
   if (failed.length === 0) {
     return pass(checks.length === 1 ? checks[0].message : `All ${checks.length} use cases hold; ${checks.map((c) => c.value).join(', ')} ${limit}`);
   }
-  return fail(failed.length === 1 ? failed[0].message : `${failed.map((c) => c.value ?? c.message).join('; ')} ${limit}`, failed[0].hint);
+  return fail(failed.length === 1 ? failed[0].message : `${failed.map((c) => c.value ?? c.message).join('; ')} ${limit}`, failed[0].hint, failed[0].fix);
 }
 
 /**
@@ -243,7 +260,8 @@ function saturatedOn(run: Run, ids: Iterable<string>, value: (n: NodeAnalysis) =
   const n = [...new Set(ids)].map((id) => run.nodes.get(id)).find((x): x is NodeAnalysis => !!x?.saturated);
   if (!n) return undefined;
   const v = value(n);
-  return { ...fail(`${v} (limit ${formatMs(maxMs)})`, saturationHint(run, n)), value: v };
+  const { hint, fix } = saturationLever(run, n);
+  return { ...fail(`${v} (limit ${formatMs(maxMs)})`, hint, fix), value: v };
 }
 
 function latency(run: Run, u: DiagramUseCase, q: Percentile, maxMs: number): Check & { value?: string } {
@@ -279,23 +297,27 @@ function scenarioLatency(run: Run, useCase: string, scenario: string, q: Percent
   return ms < maxMs ? pass(message) : fail(message, latencyHint(run, sc.u, s));
 }
 
-function saturationHint(run: Run, n: NodeAnalysis): string {
+function saturationLever(run: Run, n: NodeAnalysis): { hint: string; fix: TestFix } {
   const label = nodeLabel(run.diagram, n.id);
   if (bandwidthBound(n)) {
     const replicas = Math.ceil((n.bandwidthUtilization * n.replicas) / HOT);
-    return `${label} moves more payload bytes than its network carries. Send the bytes around it (clients upload to and download from object storage or a CDN directly, with presigned URLs), or add replicas: x${replicas} keeps its bandwidth under ${formatPercent(HOT)}`;
+    const hint = `${label} moves more payload bytes than its network carries. Send the bytes around it (clients upload to and download from object storage or a CDN directly, with presigned URLs), or add replicas: x${replicas} keeps its bandwidth under ${formatPercent(HOT)}`;
+    return { hint, fix: { kind: 'replicas', node: n.id, replicas } };
   }
   if (writeBound(n)) {
     const perShard = n.writeCapacityRps / n.shards;
     const shards = Math.ceil(n.writeLoadRps / (perShard * HOT));
-    return (
+    const hint =
       `Writes to ${label} need ${formatRps(n.writeLoadRps)} and each primary takes ${formatRps(perShard)}; read replicas do not add write capacity. ` +
-      `Add shards (capacity { ${n.id} shards ${shards} } keeps writes under ${formatPercent(HOT)}), move the data to a partitioned store (DynamoDB, Cassandra), or batch writes through a queue`
-    );
+      `Add shards (capacity { ${n.id} shards ${shards} } keeps writes under ${formatPercent(HOT)}), move the data to a partitioned store (DynamoDB, Cassandra), or batch writes through a queue`;
+    return { hint, fix: { kind: 'shards', node: n.id, shards } };
   }
   const rho = n.writeScaling === 'shards' ? n.readUtilization : n.utilization;
   const replicas = Math.ceil((rho * n.replicas) / HOT);
-  return `Add replicas to ${label}: x${replicas} keeps it under ${formatPercent(HOT)}, or take load off it (a cache in front, or async work)`;
+  return {
+    hint: `Add replicas to ${label}: x${replicas} keeps it under ${formatPercent(HOT)}, or take load off it (a cache in front, or async work)`,
+    fix: { kind: 'replicas', node: n.id, replicas },
+  };
 }
 
 /** Names the slowest hop of the scenario and the lever for it. */
@@ -436,12 +458,10 @@ function survive(run: Run, target: Selector | 'any'): Check {
           : n.shards > 1
             ? `leaves that shard ${formatRps(left.capacityRps / n.shards)} for ${formatRps(n.loadRps / n.shards)}`
             : `leaves ${formatRps(left.capacityRps)} for ${formatRps(n.loadRps)}`;
-        failures.push(
-          fail(
-            `Losing ${lost} ${leaves}${bandwidthBound(left) ? '' : ` (${formatPercent(left.utilization)})`}`,
-            writeBound(left) ? saturationHint(run, { ...n, ...left }) : `Add a replica to ${label} (x${replicas + 1}) so the rest carry the load`,
-          ),
-        );
+        const lever = writeBound(left)
+          ? saturationLever(run, { ...n, ...left })
+          : { hint: `Add a replica to ${label} (x${replicas + 1}) so the rest carry the load`, fix: { kind: 'replicas' as const, node: node.id, replicas: replicas + 1 } };
+        failures.push(fail(`Losing ${lost} ${leaves}${bandwidthBound(left) ? '' : ` (${formatPercent(left.utilization)})`}`, lever.hint, lever.fix));
         continue;
       }
       const broken = latencies.map((r) => requirement(degraded, r)).find((c) => !c.passed);
@@ -450,6 +470,7 @@ function survive(run: Run, target: Selector | 'any'): Check {
           fail(
             `Losing ${lost} breaks a latency limit: ${broken.message}`,
             `Add a replica to ${label} (x${replicas + 1}) so the rest keep it under ${formatPercent(HOT)}, or take load off it`,
+            { kind: 'replicas', node: node.id, replicas: replicas + 1 },
           ),
         );
       }
@@ -461,6 +482,7 @@ function survive(run: Run, target: Selector | 'any'): Check {
           fail(
             `Losing ${label} breaks "${u.name}"`,
             `Add a replica (x2 on ${node.id}) or a fallback scenario in "${u.name}" that calls ${node.id} with -x and still completes`,
+            { kind: 'replicas', node: node.id, replicas: 2 },
           ),
         );
       }
@@ -471,7 +493,7 @@ function survive(run: Run, target: Selector | 'any'): Check {
     return pass(`Every use case keeps working after losing ${count}`);
   }
   const more = failures.length > 1 ? ` (and ${failures.length - 1} more)` : '';
-  return fail(`${failures[0].message}${more}`, failures[0].hint);
+  return fail(`${failures[0].message}${more}`, failures[0].hint, failures[0].fix);
 }
 
 function cost(run: Run, max: number): Check {

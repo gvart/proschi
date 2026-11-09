@@ -13,7 +13,7 @@ export {
   type ScenarioAnalysis,
   type UseCaseAnalysis,
 } from './analyze';
-export { runTests, requirementName, type AssertionResult, type TestResult } from './tests';
+export { runTests, requirementFixes, requirementName, type AssertionResult, type TestFix, type TestResult } from './tests';
 export {
   findWhatIf,
   headlineOf,

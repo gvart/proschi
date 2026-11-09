@@ -14,10 +14,21 @@ parser, so they agree on what is valid.
 Every plugin is built on two pieces from the `proschi` package:
 
 - **The language server** (`proschi-language-server`): errors and warnings
-  as you type, quick fixes (add a missing connection, replace an unknown
-  tech stack), completion of keywords, node ids and tech stacks, hover, go
-  to definition, find references, outline, formatting, and failing
-  requirements and tests.
+  as you type; quick fixes (add a missing connection, replace an unknown
+  tech stack, remove a repeated capacity part, add a traffic line for a use
+  case without one, and the `x2` or `shards N` a failing requirement
+  suggests); completion of keywords, node ids, tech stacks, `capacity`
+  parts, and the use case and scenario names in quotes; rename of node ids,
+  use cases and scenarios (see below); hover, go to definition, find
+  references, outline, formatting, and failing requirements and tests.
+
+Rename (F2 in most editors) changes every use of the name: steps,
+connections, `capacity`, `traffic` and `mix`, requirements, tests,
+`whatif` traffic, and the `expose … -> "Use case"` of a system whose team
+file declares the use case. It also changes the file that declares the name,
+and the files that import it. The language server has no index of the
+workspace, so it only finds importing files that are open in the editor.
+Open them before you rename.
 - **The command line** (`proschi`): checks, formats, renders and tests files
   in CI and pre-commit hooks.
 

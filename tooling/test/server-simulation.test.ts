@@ -96,4 +96,26 @@ test "Reads answer 404" {
     expect(found[0].message).toContain('survive any node failure: Losing api (REST API) breaks "Read"');
     expect(await hoverText(uri, 1, 1)).toContain('Load 1k rps of 2k rps (50% utilised)');
   });
+
+  it('offers the fix a failing requirement suggests, and a traffic line for a use case without one', async () => {
+    const uri = 'file:///tmp/sim-fixes.proschi';
+    const text = `${ITEMS}usecase "Write" {\n  client -> api : POST /items\n}\ntraffic {\n  "Read" 1k rps\n}\nrequirements {\n  survive any node failure\n}\n`;
+    const found = (await open(uri, text)).filter((d) => d.source === 'proschi-test');
+    const survive = found.find((d) => String(d.message).startsWith('survive'))!;
+    const actions = (await connection.sendRequest('textDocument/codeAction', {
+      textDocument: { uri },
+      range: survive.range,
+      context: { diagnostics: [survive] },
+    })) as { title: string; edit: { changes: Record<string, { newText: string }[]> } }[];
+    expect(actions.map((a) => a.title)).toEqual(["Add x2 to 'api'"]);
+    expect(actions[0].edit.changes[uri][0].newText).toBe(' x2');
+
+    const line = text.split('\n').indexOf('usecase "Write" {');
+    const onHeader = (await connection.sendRequest('textDocument/codeAction', {
+      textDocument: { uri },
+      range: { start: { line, character: 2 }, end: { line, character: 2 } },
+      context: { diagnostics: [] },
+    })) as { title: string; edit: { changes: Record<string, { newText: string }[]> } }[];
+    expect(onHeader.map((a) => [a.title, a.edit.changes[uri][0].newText])).toEqual([['Add a traffic line for "Write"', '  "Write" 100 rps\n']]);
+  });
 });

@@ -5,7 +5,8 @@
  * can never disagree about what is valid.
  */
 export { DID_YOU_MEAN, parse } from '../../frontend/src/dsl/parser';
-export { addConnection } from '../../frontend/src/dsl/edit';
+export { addConnection, setCapacity, setReplicas } from '../../frontend/src/dsl/edit';
+export { tokenizeLine } from '../../frontend/src/dsl/lexer';
 export { format } from '../../frontend/src/dsl/format';
 export { examples } from '../../frontend/src/dsl/examples';
 export { componentCatalog } from '../../frontend/src/catalog/componentCatalog';
@@ -29,6 +30,7 @@ export { EXPORT_CSP, buildHld, toHtml as hldToHtml, toMarkdown as hldToMarkdown,
 // `analyze` is the editor's simulation; tooling's own analysis.ts has an `analyze` for documents.
 export {
   analyze as simulate,
+  requirementFixes,
   runTests,
   formatAvailability,
   formatMs,
@@ -89,4 +91,21 @@ export const ASSERTIONS: { label: string; detail: string; snippet: string }[] = 
   { label: 'in "Use case" node calls node', detail: 'A step of the use case is sent by one node to the other', snippet: 'in "${1:Use case}" ${2:node} calls ${3:node}' },
   { label: 'no path from … to …', detail: 'No chain of connections links the nodes', snippet: 'no path from ${1:node} to ${2:node}' },
   { label: 'node has replicas >=', detail: 'Minimum replica count', snippet: '${1:node} has replicas >= ${2:2}' },
+];
+
+/** Parts offered after the node id of a `capacity` line (docs/HLD.md, "Capacity"). */
+export const CAPACITY_PARTS: { label: string; detail: string; snippet: string }[] = [
+  { label: 'reads', detail: 'Read capacity per replica', snippet: 'reads ${1:10k rps}' },
+  { label: 'writes', detail: 'Write capacity per replica', snippet: 'writes ${1:2k rps}' },
+  { label: 'shards', detail: 'Number of shards (data stores)', snippet: 'shards ${1:4}' },
+  { label: 'size', detail: 'Instance size: S, M or L', snippet: 'size ${1|S,M,L|}' },
+  { label: 'latency', detail: 'Latency per call', snippet: 'latency ${1:5ms}' },
+  { label: 'availability', detail: 'Availability', snippet: 'availability ${1:99.95%}' },
+  { label: 'cost', detail: 'Monthly cost', snippet: 'cost ${1:400} usd/month' },
+  { label: 'durable', detail: 'A write there survives a crash', snippet: 'durable' },
+  { label: 'volatile', detail: 'A write there is lost in a crash', snippet: 'volatile' },
+  { label: 'consistency', detail: 'strong or eventual (data stores)', snippet: 'consistency ${1|strong,eventual|}' },
+  { label: 'bandwidth', detail: 'Network bandwidth, for transfer time', snippet: 'bandwidth ${1:500} MB/s' },
+  { label: 'egress', detail: 'Price per GB sent out', snippet: 'egress ${1:0.05} usd/GB' },
+  { label: 'timeout', detail: 'What a failed call to the node costs', snippet: 'timeout ${1:300ms}' },
 ];
