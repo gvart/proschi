@@ -425,6 +425,11 @@ and `loc` per result.
 (`3k/15k rps 20%`), utilisation, latency, availability, egress and cost,
 then the total cost, latency percentiles per use case and scenario, and
 single points of failure. `--format json` prints the whole analysis.
+A file with [what-ifs](TESTS.md#what-ifs) also gets a summary of them;
+`--whatif "Name"` prints the table under one, and `--whatif all` only the
+summary; both exit with 1 when a what-if fails its requirements. `--sweep "Use case" 10k..500k` analyses that use case across the
+range and prints where each node saturates and the highest rate at which
+the requirements still hold.
 
 In the web editor, the **Results** tab lists failing checks first, each with
 its hint, then the analysis and **Review my design**. The review is

@@ -52,7 +52,7 @@ export function diagramSchema() {
     $defs: {
       block: object(
         {
-          kind: { enum: ['traffic', 'requirements', 'capacity', 'entity', 'decision', 'test', 'legend'] },
+          kind: { enum: ['traffic', 'requirements', 'capacity', 'entity', 'decision', 'test', 'legend', 'whatif'] },
           start: { type: 'integer', minimum: 1, description: "1-based line of the block's opening line." },
           end: { type: 'integer', minimum: 1, description: "1-based line of its closing `}`." },
         },
@@ -92,6 +92,7 @@ export function diagramSchema() {
           entities: array('entity', '`entity` blocks: the data model.'),
           decisions: array('decision', '`decision` statements.'),
           tests: array('test', '`test` blocks of flow assertions.'),
+          whatifs: array('whatif', '`whatif` blocks: variants of the design to simulate.'),
           legend: array('legendEntry', 'Entries of the `legend` block, in order.'),
           layout: object(
             {
@@ -293,6 +294,18 @@ export function diagramSchema() {
         ['title', 'rejected', 'loc'],
       ),
       test: object({ name: str, assertions: array('assertion'), loc }, ['name', 'assertions', 'loc']),
+      whatif: object({ name: str, changes: array('whatifChange'), loc }, ['name', 'changes', 'loc']),
+      whatifChange: {
+        description: 'One line of a whatif block.',
+        oneOf: [
+          object(
+            { kind: { const: 'traffic' }, useCase: str, multiply: { type: 'number', minimum: 0, description: '`x3`, `x1.5`: multiplies the rate.' }, rps: { ...num, description: '`50k rps`: sets the rate.' }, loc },
+            ['kind', 'useCase', 'loc'],
+          ),
+          object({ kind: { const: 'fail' }, node: str, loc }, ['kind', 'node', 'loc']),
+          object({ kind: { const: 'replicas' }, node: str, replicas: { type: 'integer', minimum: 1 }, loc }, ['kind', 'node', 'replicas', 'loc']),
+        ],
+      },
       assertion: {
         description: 'One assertion line of a test.',
         oneOf: Object.values({

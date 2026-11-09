@@ -12,7 +12,7 @@ line         = [ statement ] [ comment ] newline ;
 
 statement    = title | import | node | connection
              | group-open | system | usecase-open | par-open | alt-open | close
-             | traffic | requirements | capacity | entity | decision | test | legend
+             | traffic | requirements | capacity | entity | decision | test | whatif | legend
              | direction | layout ;
 
 title        = "title" , ( string | id ) , [ string ] ;   (* 2nd string: summary *)
@@ -68,6 +68,10 @@ assertion    = string , [ "scenario" , string ] , ( "calls" , selector , [ ( "be
              | [ "in" , string ] , selector , [ "never" ] , "calls" , selector
              | "no" , "path" , "from" , selector , "to" , selector
              | selector , "has" , "replicas" , ">=" , integer ;
+whatif       = "whatif" , string , "{" , { whatif-change } , "}" ;
+whatif-change = "traffic" , string , ( replicas | quantity )   (* x3 or x1.5 multiplies, 50k rps sets *)
+             | "fail" , id
+             | id , replicas ;
 selector     = selector-atom , { "or" , selector-atom } ;
 selector-atom = id | tech | "any" , kind | "any" , ( "strong" | "eventual" ) , "store" ;
 kind         = "client" | "edge" | "cdn" | "loadbalancer" | "gateway" | "dns"
@@ -77,7 +81,7 @@ status       = digit , digit , digit | digit , "xx" ;     (* 201, 4xx *)
 
 arrow        = "->" | "->>" | "-->" | "-x" ;
 position     = "pos" , integer , "," , integer ;
-replicas     = "x" , digit , { digit } ;               (* one token, e.g. x3 *)
+replicas     = "x" , digit , { digit } , [ "." , digit , { digit } ] ;  (* one token, e.g. x3; a fraction only in a whatif traffic line *)
 quantity     = number , [ magnitude ] , [ unit ] ;     (* 50ms, 100k rps, 99.9% *)
 number       = digit , { digit } , [ "." , digit , { digit } ] ;
 magnitude    = "k" | "m" | "b" ;
@@ -110,7 +114,7 @@ size-unit    = "B" | "KB" | "MB" | "GB" | "TB" ;
 | `usecase` | ✓ | | | |
 | `par` | | | ✓ | |
 | `alt` | | | ✓ | |
-| `traffic`, `requirements`, `capacity`, `entity`, `decision`, `test` | ✓ | | | |
+| `traffic`, `requirements`, `capacity`, `entity`, `decision`, `test`, `whatif` | ✓ | | | |
 
 ## Notes
 

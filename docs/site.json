@@ -77,7 +77,7 @@
       "slug": "tests",
       "title": "Requirements and tests for designs",
       "source": "TESTS.md",
-      "description": "Check a Proschi design with requirements and tests: latency, availability, cost and survival limits, assertions on request flows, and selectors."
+      "description": "Check a Proschi design with requirements and tests: latency, availability, cost and survival limits, assertions on request flows, what-ifs and traffic sweeps, and selectors."
     },
     {
       "slug": "grammar",

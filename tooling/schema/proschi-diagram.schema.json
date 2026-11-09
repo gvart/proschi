@@ -46,7 +46,8 @@
             "entity",
             "decision",
             "test",
-            "legend"
+            "legend",
+            "whatif"
           ]
         },
         "start": {
@@ -223,6 +224,13 @@
             "$ref": "#/$defs/test"
           },
           "description": "`test` blocks of flow assertions."
+        },
+        "whatifs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/whatif"
+          },
+          "description": "`whatif` blocks: variants of the design to simulate."
         },
         "legend": {
           "type": "array",
@@ -1407,6 +1415,108 @@
         "loc"
       ],
       "additionalProperties": false
+    },
+    "whatif": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "changes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/whatifChange"
+          }
+        },
+        "loc": {
+          "$ref": "#/$defs/loc"
+        }
+      },
+      "required": [
+        "name",
+        "changes",
+        "loc"
+      ],
+      "additionalProperties": false
+    },
+    "whatifChange": {
+      "description": "One line of a whatif block.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "traffic"
+            },
+            "useCase": {
+              "type": "string"
+            },
+            "multiply": {
+              "type": "number",
+              "minimum": 0,
+              "description": "`x3`, `x1.5`: multiplies the rate."
+            },
+            "rps": {
+              "type": "number",
+              "description": "`50k rps`: sets the rate."
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "useCase",
+            "loc"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "fail"
+            },
+            "node": {
+              "type": "string"
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "node",
+            "loc"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "replicas"
+            },
+            "node": {
+              "type": "string"
+            },
+            "replicas": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "node",
+            "replicas",
+            "loc"
+          ],
+          "additionalProperties": false
+        }
+      ]
     },
     "assertion": {
       "description": "One assertion line of a test.",

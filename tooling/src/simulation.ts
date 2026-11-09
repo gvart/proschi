@@ -11,26 +11,43 @@ import {
   formatPercent,
   formatRps,
   formatUsd,
+  findWhatIf,
+  headlineOf,
+  parseQuantity,
   runTests,
+  runWhatIf,
+  runWhatIfs,
   simulate,
+  sweep,
   type Diagnostic,
   type Diagram,
   type NodeAnalysis,
   type ParseResult,
   type SimAnalysis,
+  type SweepResult,
   type TestResult,
+  type WhatIfResult,
 } from './proschi';
 import { displayPath, parseFile } from './imports';
 
 export const SIM_USAGE = `  proschi test [--format text|github|json] <file|dir>...
-  proschi analyze [--format text|json] <file>`;
+  proschi analyze [--format text|json] [--whatif <name>|all] [--sweep <use case> <from>..<to> [--steps <n>]] <file>`;
 
 export const SIM_HELP = `test    Runs the requirements and test blocks of each file (imports are
         followed) against the simulation. Exits with 1 if any fails or a file
         has errors.
 analyze Prints the capacity table: reads and writes (load of capacity and
         utilisation), latency, availability, egress and cost per node; latency
-        percentiles per use case and scenario.`;
+        percentiles per use case and scenario. A file with whatif blocks also
+        gets a summary of them: requirements, worst p99, availability, cost.
+        --whatif <name> prints the table under that what-if, with its
+        requirement results; --whatif all prints only the summary. Either
+        exits with 1 when a what-if it runs fails its requirements.
+        --sweep "Use case" 10k..500k analyses that use case at --steps rates
+        (10 by default) and prints, per rate, p99, availability, cost and what
+        saturates, then where each node saturates and the highest rate at
+        which the requirements still hold. With --whatif <name>, the sweep
+        runs under that what-if.`;
 
 /** Reads a file with its imports; tests may substitute their own. */
 export type Loader = (file: string) => ParseResult;
@@ -134,8 +151,62 @@ export function runTest(
   return reports.some((r) => r.errors.length > 0 || r.results.some((t) => !t.passed)) ? 1 : 0;
 }
 
+interface AnalyzeFlags {
+  whatif?: string;
+  sweep?: { useCase: string; from: number; to: number };
+  steps?: number;
+}
+
+/** `10k..500k` or `10k rps..500k rps`: a rising range of rates in requests per second. */
+export function parseRange(text: string): { from: number; to: number } | { error: string } {
+  const bad = { error: `Expected a range of rates such as 10k..500k, not '${text}'` };
+  const parts = text.split('..');
+  if (parts.length !== 2) return bad;
+  const [from, to] = parts.map((p) => {
+    const q = parseQuantity(p.trim());
+    return 'error' in q || (q.unit !== undefined && q.unit !== 'rps') ? undefined : q.value;
+  });
+  if (from === undefined || to === undefined) return bad;
+  if (!(to > from)) return { error: `The range ${text} must go up` };
+  return { from, to };
+}
+
+/** Takes `--whatif`, `--sweep` and `--steps` out of the arguments; undefined after reporting bad usage. */
+function analyzeFlags(args: string[], err: (s: string) => void): { rest: string[]; flags: AnalyzeFlags } | undefined {
+  const rest: string[] = [];
+  const flags: AnalyzeFlags = {};
+  const usage = `Usage:\n${SIM_USAGE}`;
+  const fail = (message: string) => {
+    err(message);
+    return undefined;
+  };
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === '--whatif') {
+      if (args[i + 1] === undefined) return fail(`--whatif needs a what-if name, or all\n\n${usage}`);
+      flags.whatif = args[++i];
+    } else if (arg === '--sweep') {
+      const [useCase, range] = [args[i + 1], args[i + 2]];
+      if (useCase === undefined || range === undefined) return fail(`--sweep needs a use case and a range, e.g. --sweep "Checkout" 10k..500k\n\n${usage}`);
+      const parsed = parseRange(range);
+      if ('error' in parsed) return fail(parsed.error);
+      flags.sweep = { useCase, ...parsed };
+      i += 2;
+    } else if (arg === '--steps') {
+      const n = Number(args[++i]);
+      if (!Number.isInteger(n) || n < 2 || n > 100) return fail('--steps needs a whole number from 2 to 100');
+      flags.steps = n;
+    } else rest.push(arg);
+  }
+  if (flags.steps !== undefined && !flags.sweep) return fail(`--steps goes with --sweep\n\n${usage}`);
+  if (flags.whatif === 'all' && flags.sweep) return fail('--sweep runs under one what-if, not all');
+  return { rest, flags };
+}
+
 export function runAnalyze(args: string[], out: (s: string) => void, err: (s: string) => void, load: Loader = parseFile): number {
-  const parsed = parseArgs(args, ['text', 'json'], err);
+  const extra = analyzeFlags(args, err);
+  if (!extra) return 2;
+  const parsed = parseArgs(extra.rest, ['text', 'json'], err);
   if (!parsed) return 2;
   if (parsed.paths.length !== 1) {
     err(`Usage:\n${SIM_USAGE}`);
@@ -149,10 +220,119 @@ export function runAnalyze(args: string[], out: (s: string) => void, err: (s: st
     err(String((e as Error).message));
     return 2;
   }
-  const analysis = simulate(result.diagram);
-  if (parsed.style === 'json') out(JSON.stringify({ file: displayPath(file), analysis }, null, 2));
-  else out(capacityReport(result.diagram, analysis, displayPath(file)));
-  return result.diagnostics.some((d) => d.severity === 'error') ? 1 : 0;
+  const { diagram } = result;
+  const shown = displayPath(file);
+  const json = parsed.style === 'json';
+  const exit = result.diagnostics.some((d) => d.severity === 'error') ? 1 : 0;
+  const { whatif: name, sweep: range, steps } = extra.flags;
+
+  // `all` is the summary, unless a what-if has that name.
+  const whatif = name !== undefined ? findWhatIf(diagram, name) : undefined;
+  if (name !== undefined && name !== 'all' && !whatif) {
+    const names = (diagram.whatifs ?? []).map((w) => `"${w.name}"`).join(', ');
+    err(`No what-if named "${name}"; ${names ? `the file has ${names}` : 'the file has no whatif blocks'}`);
+    return 2;
+  }
+  const chosen = whatif ? runWhatIf(diagram, whatif) : undefined;
+
+  if (range) {
+    let swept: SweepResult;
+    try {
+      swept = sweep(diagram, range.useCase, range.from, range.to, { steps, base: chosen?.options });
+    } catch (e) {
+      err(String((e as Error).message));
+      return 2;
+    }
+    if (json) out(JSON.stringify({ file: shown, ...(chosen ? { whatif: chosen.name } : {}), sweep: swept }, null, 2));
+    else out(sweepReport(swept, shown, chosen?.name));
+    return exit;
+  }
+
+  if (chosen) {
+    if (json) out(JSON.stringify({ file: shown, whatif: chosen.name, analysis: chosen.analysis, ...whatIfJson(chosen) }, null, 2));
+    else out(whatIfReport(diagram, chosen, shown));
+    return chosen.passed ? exit : 1;
+  }
+
+  if (name === 'all') {
+    const all = runWhatIfs(diagram);
+    if (json) out(JSON.stringify({ file: shown, whatifs: all.map(whatIfJson) }, null, 2));
+    else out([diagram.title ? `${diagram.title} (${shown})` : shown, '', ...whatIfSummary(diagram, all)].join('\n'));
+    return all.every((w) => w.passed) ? exit : 1;
+  }
+
+  const analysis = simulate(diagram);
+  // A document without whatif blocks prints exactly as before.
+  const all = diagram.whatifs?.length ? runWhatIfs(diagram) : undefined;
+  if (json) out(JSON.stringify({ file: shown, analysis, ...(all ? { whatifs: all.map(whatIfJson) } : {}) }, null, 2));
+  else out([capacityReport(diagram, analysis, shown), ...(all ? ['', ...whatIfSummary(diagram, all)] : [])].join('\n'));
+  return exit;
+}
+
+/** A what-if in JSON output, without its full analysis. */
+function whatIfJson(w: WhatIfResult) {
+  return { name: w.name, passed: w.passed, headline: w.headline, results: w.results, ...(w.warnings.length ? { warnings: w.warnings } : {}) };
+}
+
+const headlineCells = (h: WhatIfResult['headline']) => [formatMs(h.p99Ms), formatAvailability(h.availability), formatUsd(h.costUsd).replace('/month', '')];
+
+/** `all 3 pass`, `1 of 3 fail`: the requirements (and systems) of a run; test blocks do not count. */
+function verdict(results: TestResult[]): string {
+  const reqs = results.filter((r) => !r.id.startsWith('test:'));
+  if (reqs.length === 0) return 'no requirements';
+  const failed = reqs.filter((r) => !r.passed).length;
+  return failed ? `${failed} of ${reqs.length} fail` : `all ${reqs.length} pass`;
+}
+
+/** The base design, then each what-if: requirements, worst p99, lowest availability, cost; then what fails. */
+function whatIfSummary(diagram: Diagram, all: WhatIfResult[]): string[] {
+  if (all.length === 0) return ['No whatif blocks.'];
+  const base = simulate(diagram);
+  const rows = [
+    ['What-if', 'Requirements', 'Worst p99', 'Availability', 'Cost/month'],
+    ['(as designed)', verdict(runTests(diagram, base)), ...headlineCells(headlineOf(base))],
+    ...all.map((w) => [w.name, verdict(w.results), ...headlineCells(w.headline)]),
+  ];
+  const failing = all.flatMap((w) => w.results.filter((r) => !r.passed && !r.id.startsWith('test:')).map((r) => `  ${w.name}: ${r.name}: ${r.message}`));
+  const warnings = all.flatMap((w) => w.warnings.map((m) => `  ${m}`));
+  return [...table(rows, 2), ...(failing.length ? ['', 'Failing:', ...failing] : []), ...(warnings.length ? ['', 'Warnings:', ...warnings] : [])];
+}
+
+/** `proschi analyze --whatif <name>`: its changes, the capacity table under it, and its requirement results. */
+function whatIfReport(diagram: Diagram, w: WhatIfResult, file: string): string {
+  const changes = (findWhatIf(diagram, w.name)?.changes ?? []).map((c) =>
+    c.kind === 'traffic' ? `traffic "${c.useCase}" ${c.rps !== undefined ? formatRps(c.rps) : `x${c.multiply}`}` : c.kind === 'fail' ? `fail ${c.node}` : `${c.node} x${c.replicas}`,
+  );
+  const lines = [`What-if "${w.name}": ${changes.join(', ') || 'no changes'}`, '', capacityReport(diagram, w.analysis, file), ''];
+  const reqs = w.results.filter((r) => !r.id.startsWith('test:'));
+  if (reqs.length === 0) lines.push('No requirements to check.');
+  for (const r of reqs) {
+    lines.push(`${r.passed ? '✓' : '✗'} ${r.name}: ${r.message}`);
+    if (!r.passed && r.hint) lines.push(`    → ${r.hint}`);
+  }
+  if (reqs.length) lines.push('', `Requirements ${w.passed ? 'hold' : 'fail'} under "${w.name}".`);
+  if (w.warnings.length) lines.push('', 'Warnings:', ...w.warnings.map((m) => `  ${m}`));
+  return lines.join('\n');
+}
+
+/** `proschi analyze --sweep`: one row per rate, then where nodes saturate and how far the requirements hold. */
+export function sweepReport(r: SweepResult, file: string, whatif?: string): string {
+  const lines = [`Sweep of "${r.useCase}" from ${formatRps(r.from)} to ${formatRps(r.to)}${whatif ? ` under what-if "${whatif}"` : ''} (${file})`, ''];
+  lines.push(
+    ...table([
+      ['Traffic', 'Worst p99', 'Availability', 'Cost/month', 'Requirements', 'Saturated'],
+      ...r.steps.map((s) => [formatRps(s.rps), ...headlineCells(s.headline), s.passed ? 'pass' : 'FAIL', s.saturated.join(', ') || '-']),
+    ]),
+    '',
+  );
+  if (r.saturation.length === 0) lines.push('No node saturates in this range.');
+  else lines.push('Saturates at:', ...r.saturation.map((s) => `  ${s.node}: ${s.atStart ? `already at ${formatRps(r.from)}` : formatRps(s.rps)}`));
+  lines.push('');
+  const failing = r.steps.find((s) => !s.passed)?.failing ?? [];
+  if (r.maxPassingRps === undefined) lines.push(`Requirements fail already at ${formatRps(r.from)}: ${failing.join(', ')}`);
+  else if (r.maxPassingRps >= r.to) lines.push(`Requirements hold over the whole range, up to ${formatRps(r.to)}.`);
+  else lines.push(`Requirements hold up to ${formatRps(r.maxPassingRps)}; past it: ${failing.join(', ')}`);
+  return lines.join('\n');
 }
 
 /** Left-aligns the first `left` columns (names) and right-aligns the rest (numbers). */
