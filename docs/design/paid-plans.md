@@ -575,3 +575,17 @@ id; don't rewrite old ones.
   way to Pro where paid plans are on. **Max** opens any session with its
   results as a printable report (the AI report's sheet, made in the
   browser), from the progress page and the interview's result.
+- **P54. Design diff with simulation deltas is Pro.** Comparing two versions
+  (or a version and the draft) shows every plan the structural diff and the
+  plain numbers side by side, as before. Pro (`design_diff`) also sees what
+  the change does (`sim/delta.ts` `designDelta`): cost, the worst p99 and the
+  lowest availability before and after, marked green when better and red
+  when worse, the same per use case with traffic, the requirements, systems
+  and tests that flipped between pass and fail, and the nodes whose
+  utilisation moved by ten points or more. It runs in the browser and spends
+  no credits, so it is not metered (`components/featureState.ts`): a build
+  without paid plans follows the server as for `share_links`. Where paid
+  plans are on, other plans see a locked teaser with no numbers in it and the
+  way to Pro. Prices stay the same; the pricing page lists it under Pro. The
+  command line (`proschi diff`, `proschi versions diff`) prints the same
+  deltas ungated: it is local and open source.

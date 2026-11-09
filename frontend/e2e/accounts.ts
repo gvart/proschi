@@ -29,7 +29,7 @@ export function featuresFor(plan: string | undefined): Record<string, { ok: bool
   const pro = plan === 'pro' || plan === 'max';
   const paid = pro ? { ok: true } : { ok: false, reason: 'needs_pro' };
   const max = plan === 'max' ? { ok: true } : { ok: false, reason: 'needs_pro' };
-  return { ai_interview: { ok: true }, interview_history: paid, ai_roadmap: paid, share_links: paid, design_partner: { ok: true }, deep_mode: max, interview_report: max };
+  return { ai_interview: { ok: true }, interview_history: paid, ai_roadmap: paid, share_links: paid, design_partner: { ok: true }, deep_mode: max, interview_report: max, design_diff: paid };
 }
 
 /** GET /api/credits/estimates as the server answers it with the default prices. */

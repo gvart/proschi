@@ -79,6 +79,18 @@ with what it added marked **NEW** and what it changed marked **CHANGED**.
 The left column puts the simulation numbers side by side (traffic, worst
 p99, availability, cost and tests) and lists every change.
 
+On Pro and Max, the left column shows **What the change does** instead: cost, the
+worst p99 and the lowest availability of the target, each with the change
+in green when it is better and red when it is worse (`−$120/mo`,
+`was 48 ms`), how many checks pass on each side, then:
+
+- **Checks that changed**: each requirement, system or test that now
+  passes or now fails, such as `survive failure of db  ✓ now passes`.
+- **Per use case**: the traffic, p99 and availability of each use case with
+  traffic (`p99 48→31 ms`).
+- **Load that moved**: each node whose utilisation went up or down by 10
+  points or more, or crossed 100%.
+
 ![Comparing 2026-09-14 with 2026-11-01: on the left, traffic 2k to 3k rps, worst p99 59.9 ms to 38.2 ms, cost $600 to $1,250 a month, and the list of changes; on the right, the diagram with Order cache marked NEW and Orders API and Orders DB marked CHANGED](images/screens/versions-compare.png "Two months of the orders design: a cache, a third API replica and a database replica.")
 
 To present a new design, save it as a version and open the compare view
@@ -126,14 +138,21 @@ proschi versions list orders
 proschi versions diff orders 2026-09-14
 proschi versions diff orders 2026-09-14 2026-10-01
 proschi versions diff orders 2026-11-01 orders.proschi
+proschi diff before.proschi after.proschi
 ```
 
 `list` prints the tags, dates, sizes and notes, newest first. `diff`
 compares a version with `latest`, with a second version, or with a local
 file. The name is the diagram's file name, with or without `.proschi`. `diff`
 prints added (`+`), removed (`-`) and changed (`~`) nodes, edges, use cases,
-scenarios, requirements, traffic, capacity and systems, then the counts.
-`--json` prints the same for scripts. Both commands only read the account.
+scenarios, requirements, traffic, capacity and systems, then the counts,
+then what the change does in the simulation: the same numbers as the
+compare view on Pro and Max, each marked `better` or `worse`. `--json` prints the
+same for scripts, the numbers under `delta`. Both commands only read the
+account. The command line is not limited by plan.
+
+`proschi diff` compares two local files the same way, with no account
+needed (see [Simulation and tests](EDITORS.md#simulation-and-tests)).
 
 ## Limits
 

@@ -13,7 +13,8 @@ import { ApiClient, type Fetch } from './api';
 import { cloudName, findDocument, listVersions, resolveVersion, type ResolvedVersion, type VersionInfo } from './cloud';
 import { CredentialStore, DEFAULT_SITE, normalizeBase } from './credentials';
 import { displayPath, parseFile } from './imports';
-import { DIFF_SECTIONS, diffDiagrams, parse, requirementKey, summarizeDiff, type DiagramDiff, type DiffSection, type FieldChange, type ParseResult } from './proschi';
+import { deltaJson, formatDelta, warnErrors } from './simDelta';
+import { DIFF_SECTIONS, designDelta, parse, requirementKey, summarizeDiff, type DiagramDiff, type DiffSection, type FieldChange, type ParseResult } from './proschi';
 
 export const VERSIONS_USAGE = `  proschi versions list [--json] [--base <url>] <name>
   proschi versions diff [--json] [--base <url>] <name> <base-tag> [<target-tag>|<file.proschi>]`;
@@ -23,8 +24,9 @@ export const VERSIONS_HELP = `versions
         first; <name> is its file name, with or without .proschi). list
         prints them, newest first. diff prints what changed from <base-tag>
         to <target-tag> (default: latest), or to a local file (a target
-        ending in .proschi or containing a /). --json prints the result for
-        scripts. Never changes proschi.lock or the cache.`;
+        ending in .proschi or containing a /), then what the change does in
+        the simulation, as proschi diff prints it. --json prints the result
+        for scripts. Never changes proschi.lock or the cache.`;
 
 const SECTION_TITLES: Record<DiffSection, string> = {
   nodes: 'Nodes',
@@ -165,15 +167,22 @@ export async function runVersions(args: string[], out: (s: string) => void, err:
     const right = after ? parseVersion(after) : parseFile(target);
     const label = (v: ResolvedVersion, asked: string) => `cloud:${spec.name}:${v.tag} (#${v.seq}${asked === LATEST_TAG ? ', latest' : ''})`;
     const toLabel = after ? label(after, target) : displayPath(target);
-    for (const [what, r] of [[label(before, baseTag), left], [toLabel, right]] as const) {
-      const errors = r.diagnostics.filter((d) => d.severity === 'error').length;
-      if (errors) err(`warning: ${what} has ${errors} error(s); the diff covers what parsed`);
-    }
-    const diff = diffDiagrams(left.diagram, right.diagram);
+    warnErrors(
+      [
+        [label(before, baseTag), left],
+        [toLabel, right],
+      ],
+      err,
+    );
+    const delta = designDelta(left.diagram, right.diagram);
+    const { diff } = delta;
     if (json) {
       const side = (v: ResolvedVersion) => ({ tag: v.tag, seq: v.seq, sha256: v.sha256 });
-      out(JSON.stringify({ name: spec.name, base: side(before), target: after ? side(after) : { file: displayPath(target) }, summary: summarizeDiff(diff), diff }, null, 2));
-    } else out(formatDiff(diff, label(before, baseTag), toLabel));
+      out(JSON.stringify({ name: spec.name, base: side(before), target: after ? side(after) : { file: displayPath(target) }, summary: summarizeDiff(diff), diff, delta: deltaJson(delta) }, null, 2));
+    } else {
+      const sim = formatDelta(delta);
+      out(sim ? `${formatDiff(diff, label(before, baseTag), toLabel)}\n\n${sim}` : formatDiff(diff, label(before, baseTag), toLabel));
+    }
     return 0;
   } catch (e) {
     err(`error: ${(e as Error).message}`);

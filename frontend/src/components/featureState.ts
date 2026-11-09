@@ -30,7 +30,7 @@ const BILLING_OFF: FeatureState = { ok: false, reason: 'billing_off', loading: f
 /**
  * The features that spend credits (Claude or Whisper): hidden, whatever the
  * server says, in a build without paid plans. The rest (share_links,
- * interview_history, interview_report) cost nothing to run and follow the
+ * interview_history, interview_report, design_diff) cost nothing to run and follow the
  * server there too: on for an account on Pro or Max, off without a hint
  * otherwise (P53).
  */
