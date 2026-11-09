@@ -139,6 +139,9 @@ const LEGACY_SOURCE_KEY = 'proschi.playground.source';
 /** The splitter's position between the code and diagram panes. */
 const SPLIT_KEY = 'proschi.playground.split';
 const PARSE_DELAY_MS = 150;
+/** How long the cursor rests before the canvas marks what its line declares. */
+const CURSOR_DELAY_MS = 120;
+const NO_IDS: string[] = [];
 /** Whether the diagrams sidebar is pinned open, on wider screens; until it is set, from this width on. */
 const FILES_KEY = 'proschi.playground.files';
 const FILES_PINNED_FROM = 1440;
@@ -806,14 +809,46 @@ export default function Playground() {
     if (importedNodes.has(id)) return setNotice(`'${id}' is declared in ${importedNodes.get(id)}; unpin it there.`);
     editSource((src) => clearPosition(src, id));
   };
+  const locOf = (id: string) => shown.nodes.find((n) => n.id === id)?.loc ?? shown.edges.find((e) => e.id === id)?.loc;
   /** Selects a node's or a connection's text in the code pane (on a phone, switching to it). */
   const jumpToCode = (id: string) => {
-    const loc = shown.nodes.find((n) => n.id === id)?.loc ?? shown.edges.find((e) => e.id === id)?.loc;
+    const loc = locOf(id);
     if (!loc) return;
     setMobilePane('code');
     if (loc.file !== undefined || team) return selectDiagnostic(loc);
     // After the code pane is shown, so the editor can take the focus.
     requestAnimationFrame(() => editorRef.current?.select(loc.line, loc.col, loc.length, true));
+  };
+  /** The cursor's line in the code pane, once it rests; its file is the team file when that is shown. */
+  const [cursorAt, setCursorAt] = useState<{ file?: string; line: number } | null>(null);
+  const cursorTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const followCursor = (file: string | undefined, line: number) => {
+    clearTimeout(cursorTimer.current);
+    cursorTimer.current = setTimeout(() => setCursorAt((prev) => (prev && prev.file === file && prev.line === line ? prev : { file, line })), CURSOR_DELAY_MS);
+  };
+  useEffect(() => () => clearTimeout(cursorTimer.current), []);
+  /** What the cursor's line declares, marked on the canvas; nothing while playing, or until the text typed is parsed. */
+  const linkedIds = useMemo(() => {
+    if (!cursorAt || playing || cursorAt.file !== team?.path || (!team && source !== parsedSource)) return NO_IDS;
+    const here = (loc: SourceLoc) => loc.file === cursorAt.file && loc.line === cursorAt.line;
+    const ids = [...shown.nodes.filter((n) => here(n.loc)).map((n) => n.id), ...shown.edges.filter((e) => here(e.loc)).map((e) => e.id)];
+    return ids.length > 0 ? ids : NO_IDS;
+  }, [cursorAt, playing, team, source, parsedSource, shown]);
+  /**
+   * A canvas selection shown in the code pane: one item's declaration is selected and scrolled to,
+   * several are shaded. The canvas keeps the focus (and its keys), and the pane stays as it is on a phone.
+   */
+  const linkSelection = (ids: string[]) => {
+    const editor = team ? teamEditorRef.current : editorRef.current;
+    // While the reader is in the code, the canvas follows it, not the other way round.
+    if (!editor || editor.hasFocus()) return;
+    if (ids.length > 0) setCursorAt(null);
+    const locs = ids.flatMap((id) => {
+      const loc = locOf(id);
+      return loc && loc.file === team?.path ? [loc] : [];
+    });
+    editor.linkLines(locs.map((l) => l.line));
+    if (ids.length === 1 && locs.length === 1) editor.select(locs[0].line, locs[0].col, locs[0].length, false);
   };
   const undoCanvas = useCallback(() => void editorRef.current?.undo(), []);
   const redoCanvas = useCallback(() => void editorRef.current?.redo(), []);
@@ -1285,7 +1320,7 @@ export default function Playground() {
             {team && <TeamFileBar team={team} up={systems.crumbs[systems.crumbs.length - 2]} onBack={systems.goTo} />}
             {/* Hidden, not unmounted, while a team file is shown, so the document keeps its cursor and undo history. */}
             <div className="flex-1 min-h-0" hidden={!!team}>
-              <CodeEditor ref={editorRef} value={source} onChange={typeSource} diagnostics={rootDiagnostics} nodeIds={nodeIds} extensions={codeHints} />
+              <CodeEditor ref={editorRef} value={source} onChange={typeSource} diagnostics={rootDiagnostics} nodeIds={nodeIds} extensions={codeHints} onCursor={(line) => followCursor(undefined, line)} />
             </div>
             {team && (
               <div className="flex-1 min-h-0">
@@ -1297,6 +1332,7 @@ export default function Playground() {
                   readOnly={!!team.readOnly}
                   diagnostics={teamDiagnostics}
                   nodeIds={shown.nodes.map((n) => n.id)}
+                  onCursor={(line) => followCursor(team.path, line)}
                 />
               </div>
             )}
@@ -1390,6 +1426,8 @@ export default function Playground() {
                           onReconnect={reconnectFromCanvas}
                           onUnpinNode={unpinFromCanvas}
                           onJumpToCode={jumpToCode}
+                          onSelectionLink={linkSelection}
+                          linked={linkedIds}
                           fitKey={`${mobilePane}:${layoutSettled}`}
                           layoutBusy={layoutBusy}
                         glideKey={String(splitMoves)}

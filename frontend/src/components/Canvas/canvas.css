@@ -665,3 +665,13 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Two-way selection sync (Playground): what the code's cursor sits on, a dashed ring apart from the pink selection. */
+.react-flow__node.pc-linked :is(.pc-node, .pc-group, .pc-note) {
+  outline: 2px dashed rgb(var(--c-blue));
+  outline-offset: 4px;
+}
+.react-flow .react-flow__edge.pc-linked .react-flow__edge-path {
+  stroke: rgb(var(--c-blue));
+  stroke-width: 3;
+}
