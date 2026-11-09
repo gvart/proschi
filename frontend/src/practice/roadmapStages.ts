@@ -45,7 +45,7 @@ export const ROADMAP: RoadmapStage[] = [
     id: 'partitioning',
     title: 'Partitioning and replication',
     why: 'Once one database cannot hold the data or the writes, split it into shards and keep replicas in step. Comes after caching, which is cheaper and usually tried first.',
-    problems: ['notion-sharding', 'github-repo-replication', 'social-graph-cache', 'distributed-kv'],
+    problems: ['read-replicas', 'notion-sharding', 'github-repo-replication', 'social-graph-cache', 'distributed-kv'],
   },
   {
     id: 'async',

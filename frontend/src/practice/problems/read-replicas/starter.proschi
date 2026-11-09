@@ -1,0 +1,13 @@
+import "problem.proschi"
+
+# Add a pool of read replicas, route each use case through the proxy, and
+# write "Place order" and "Check order".
+app   -> proxy
+proxy -> primary
+
+usecase "Read catalog" {
+  app      -> proxy   : SELECT products WHERE shop_id = $1
+  proxy    -> primary : SELECT products WHERE shop_id = $1
+  primary --> proxy   : 40 rows
+  proxy   --> app     : 40 rows
+}

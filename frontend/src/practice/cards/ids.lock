@@ -216,6 +216,8 @@ rate-limit-response
 read-committed-anomaly
 read-qps-from-write-ratio
 read-repair
+read-replicas-pool-size
+read-replicas-stable-pick
 read-write-ratio-first
 read-your-writes
 rebalance-effects
