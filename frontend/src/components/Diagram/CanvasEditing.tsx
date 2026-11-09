@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { Blocks, Cable, Settings2, Trash2, Workflow, X } from 'lucide-react';
+import { Blocks, Cable, Code2, Copy, Pencil, PinOff, Settings2, Trash2, Workflow, X } from 'lucide-react';
 import { MenuItem } from '../Playground/Menu';
+import { MOD_KEY } from '../Playground/modKey';
 import { iconButton, toolButton } from '../Playground/ui';
 import Palette from './Palette';
 
@@ -145,11 +146,35 @@ export interface CanvasMenuState {
   y: number;
   /** What was right-clicked, for the menu's label. */
   label: string;
+  /** The id of the node or connection right-clicked. */
+  id?: string;
 }
 
-/** The right-click menu of a node or connection: open its settings, or delete it. */
-export function CanvasMenu({ menu, onSettings, onDelete, onClose }: { menu: CanvasMenuState; onSettings: () => void; onDelete: () => void; onClose: () => void }) {
+/** The right-click menu's actions beyond Settings and Delete; each one is offered when given. */
+export interface CanvasMenuActions {
+  onRename?: () => void;
+  onDuplicate?: () => void;
+  onConnect?: () => void;
+  onUnpin?: () => void;
+  onJumpToCode?: () => void;
+}
+
+/** The right-click menu of a node or connection: its settings, the actions given, and Delete. */
+export function CanvasMenu({
+  menu,
+  onSettings,
+  onDelete,
+  onClose,
+  actions = {},
+}: {
+  menu: CanvasMenuState;
+  onSettings: () => void;
+  onDelete: () => void;
+  onClose: () => void;
+  actions?: CanvasMenuActions;
+}) {
   const ref = useRef<HTMLDivElement>(null);
+  const [place, setPlace] = useState({ left: menu.x, top: menu.y });
   useEffect(() => {
     const onPointer = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && onClose();
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -161,35 +186,41 @@ export function CanvasMenu({ menu, onSettings, onDelete, onClose }: { menu: Canv
       document.removeEventListener('keydown', onKey);
     };
   }, [onClose]);
-  // Kept on screen near the right and bottom edges.
-  const left = Math.min(menu.x, window.innerWidth - 200);
-  const top = Math.min(menu.y, window.innerHeight - 100);
+  // Kept on screen near the right and bottom edges, measured before paint.
+  useLayoutEffect(() => {
+    const box = ref.current?.getBoundingClientRect();
+    if (!box) return;
+    setPlace({ left: Math.max(8, Math.min(menu.x, window.innerWidth - box.width - 8)), top: Math.max(8, Math.min(menu.y, window.innerHeight - box.height - 8)) });
+  }, [menu.x, menu.y]);
+  const item = (icon: ReactNode, label: ReactNode, run: (() => void) | undefined) =>
+    run && (
+      <MenuItem
+        icon={icon}
+        onSelect={() => {
+          onClose();
+          run();
+        }}
+      >
+        {label}
+      </MenuItem>
+    );
+  const hint = (keys: string) => <span className="ml-auto pl-4 text-xs text-muted">{keys}</span>;
   return (
     <div
       ref={ref}
       role="menu"
       aria-label={`${menu.label} actions`}
-      style={{ left, top }}
-      className="fixed z-50 min-w-[11rem] rounded-sm border-bw-1 border-ink bg-surface py-1 text-ink shadow-brutal-md"
+      style={place}
+      className="fixed z-50 min-w-[12rem] rounded-sm border-bw-1 border-ink bg-surface py-1 text-ink shadow-brutal-md"
     >
-      <MenuItem
-        icon={<Settings2 size={14} />}
-        onSelect={() => {
-          onClose();
-          onSettings();
-        }}
-      >
-        Settings
-      </MenuItem>
-      <MenuItem
-        icon={<Trash2 size={14} />}
-        onSelect={() => {
-          onClose();
-          onDelete();
-        }}
-      >
-        Delete <span className="ml-auto text-xs text-muted">Del</span>
-      </MenuItem>
+      {item(<Settings2 size={14} />, 'Settings', onSettings)}
+      {item(<Pencil size={14} />, 'Rename…', actions.onRename)}
+      {item(<Copy size={14} />, <>Duplicate {hint(`${MOD_KEY}+D`)}</>, actions.onDuplicate)}
+      {item(<Cable size={14} />, 'Connect to…', actions.onConnect)}
+      {item(<PinOff size={14} />, 'Unpin position', actions.onUnpin)}
+      {item(<Code2 size={14} />, 'Jump to code', actions.onJumpToCode)}
+      <div className="my-1 border-t border-ink/10" />
+      {item(<Trash2 size={14} />, <>Delete {hint('Del')}</>, onDelete)}
     </div>
   );
 }
