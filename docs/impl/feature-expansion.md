@@ -45,7 +45,7 @@ per-use LLM cost), and improve the language and the visual editor.
   - completion of quoted use case and scenario names after `traffic`/`mix`/`p99 "`/`scenario "`, plus `capacity` keywords;
   - quick fixes: add a traffic line, add `x2` on a single point of failure, add `shards N` from the saturation hint, remove a duplicate capacity part.
   verify: tooling tests per feature. depends on: none
-- [ ] **2.3 E3 Canvas editing basics**:
+- [x] **2.3 E3 Canvas editing basics**:
   - copy, paste and duplicate (Ctrl+C/V/D), including the edges between the selected nodes;
   - edge reconnect (`onReconnect` → new `retargetConnection` in `dsl/edit.ts`);
   - right-click menu: Duplicate, Rename, Connect to…, Jump to code, Unpin;
