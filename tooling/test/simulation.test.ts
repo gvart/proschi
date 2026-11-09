@@ -310,7 +310,7 @@ requirements {
   p99 "Read" < 100ms
 }
 whatif "Double" {
-  traffic "Read" x2
+  traffic "Read" x1.5
   api x2
 }
 whatif "Spike" {
@@ -345,14 +345,18 @@ whatif "DB down" {
   it('prints one what-if, or the summary of all', () => {
     const one = analyzeRun('--whatif', 'Double', whatifFile);
     expect(one.code).toBe(0);
-    expect(one.out.split('\n')[0]).toBe('What-if "Double": traffic "Read" x2, api x2');
-    expect(one.out).toMatch(/^api +service +2 +2k\/4k rps 50%/m);
+    expect(one.out.split('\n')[0]).toBe('What-if "Double": traffic "Read" x1.5, api x2');
+    expect(one.out).toMatch(/^api +service +2 +1.5k\/4k rps 38%/m);
     expect(one.out).toContain('Requirements hold under "Double".');
 
     const down = analyzeRun('--whatif', 'DB down', whatifFile);
+    expect(down.code).toBe(0);
+    // A requested what-if that fails its requirements fails the command.
+    expect(analyzeRun('--whatif', 'Spike', whatifFile).code).toBe(1);
     expect(down.out).toMatch(/^Read +1k rps .* 0%$/m);
 
     const all = analyzeRun('--whatif', 'all', whatifFile);
+    expect(all.code).toBe(1);
     expect(all.out.split('\n')[2]).toMatch(/^What-if +Requirements/);
     expect(all.out).not.toContain('Node ');
 

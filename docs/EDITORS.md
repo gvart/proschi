@@ -427,7 +427,7 @@ then the total cost, latency percentiles per use case and scenario, and
 single points of failure. `--format json` prints the whole analysis.
 A file with [what-ifs](TESTS.md#what-ifs) also gets a summary of them;
 `--whatif "Name"` prints the table under one, and `--whatif all` only the
-summary. `--sweep "Use case" 10k..500k` analyses that use case across the
+summary; both exit with 1 when a what-if fails its requirements. `--sweep "Use case" 10k..500k` analyses that use case across the
 range and prints where each node saturates and the highest rate at which
 the requirements still hold.
 

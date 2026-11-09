@@ -41,7 +41,8 @@ analyze Prints the capacity table: reads and writes (load of capacity and
         percentiles per use case and scenario. A file with whatif blocks also
         gets a summary of them: requirements, worst p99, availability, cost.
         --whatif <name> prints the table under that what-if, with its
-        requirement results; --whatif all prints only the summary.
+        requirement results; --whatif all prints only the summary. Either
+        exits with 1 when a what-if it runs fails its requirements.
         --sweep "Use case" 10k..500k analyses that use case at --steps rates
         (10 by default) and prints, per rate, p99, availability, cost and what
         saturates, then where each node saturates and the highest rate at
@@ -250,14 +251,14 @@ export function runAnalyze(args: string[], out: (s: string) => void, err: (s: st
   if (chosen) {
     if (json) out(JSON.stringify({ file: shown, whatif: chosen.name, analysis: chosen.analysis, ...whatIfJson(chosen) }, null, 2));
     else out(whatIfReport(diagram, chosen, shown));
-    return exit;
+    return chosen.passed ? exit : 1;
   }
 
   if (name === 'all') {
     const all = runWhatIfs(diagram);
     if (json) out(JSON.stringify({ file: shown, whatifs: all.map(whatIfJson) }, null, 2));
     else out([diagram.title ? `${diagram.title} (${shown})` : shown, '', ...whatIfSummary(diagram, all)].join('\n'));
-    return exit;
+    return all.every((w) => w.passed) ? exit : 1;
   }
 
   const analysis = simulate(diagram);

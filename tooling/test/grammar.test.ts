@@ -192,7 +192,7 @@ describe('TextMate grammar', () => {
   });
 
   it('scopes whatif blocks', () => {
-    const lines = tokenize('whatif "Peak" {\n  traffic "Read" x3\n  fail cache\n  db x4\n}');
+    const lines = tokenize('whatif "Peak" {\n  traffic "Read" x1.5\n  fail cache\n  db x4\n}');
     expect(lines[0][0]).toEqual(['whatif', 'keyword.control.proschi']);
     expect(lines[1].map(([, s]) => s)).toEqual(['keyword.other.proschi', 'punctuation.definition.string.begin.proschi', 'string.quoted.double.proschi', 'punctuation.definition.string.end.proschi', 'constant.numeric.replicas.proschi']);
     expect(lines[2]).toEqual([

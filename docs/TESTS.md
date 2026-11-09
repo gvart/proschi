@@ -184,7 +184,7 @@ whatif "Database outage" {
 
 | Line | What it changes |
 |---|---|
-| `traffic "U" x3` | Multiplies the use case's rate from the `traffic` block. Scenario shares stay. |
+| `traffic "U" x3` | Multiplies the use case's rate from the `traffic` block; `x1.5` and `x0.5` work too. Scenario shares stay. |
 | `traffic "U" 50k rps` | Sets the use case's rate, also for a use case without traffic. |
 | `fail n` | Takes node `n` down. Its availability is 0. The traffic of each scenario that needs `n` moves to the use case's [fallback scenarios](SCENARIOS.md#error-paths-and-conditions) for it, the ones that call it with `-x` and still complete. Without a fallback, that share of requests fails. |
 | `n x4` | Runs `n` with that many replicas, for capacity, availability and cost. |
@@ -196,7 +196,8 @@ and nodes are warnings, and two what-ifs with one name are an error.
 On the command line, `proschi analyze` adds a summary of the what-ifs to its
 table: whether the requirements hold, the worst p99, the lowest
 availability and the cost. `--whatif "Name"` prints the whole table under
-one what-if, with each requirement's result.
+one what-if, with each requirement's result. With `--whatif`, the command
+exits with 1 when a what-if it runs fails, so CI can gate on it.
 
 `--sweep` finds how far the design scales:
 

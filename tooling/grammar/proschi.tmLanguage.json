@@ -345,9 +345,9 @@
       }
     },
     "replicas": {
-      "comment": "`x3` after a node id: its replica count.",
+      "comment": "`x3` after a node id: its replica count; `x1.5` in a whatif: a traffic multiplier.",
       "name": "constant.numeric.replicas.proschi",
-      "match": "(?<=\\s)x\\d+(?![A-Za-z0-9_])"
+      "match": "(?<=\\s)x\\d+(?:\\.\\d+)?(?![A-Za-z0-9_])"
     },
     "section": {
       "comment": "traffic, requirements, capacity, entity, decision, test and whatif blocks: top level, opened by a header line that ends with {, closed by a line starting with }.",

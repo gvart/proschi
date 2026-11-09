@@ -69,7 +69,7 @@ assertion    = string , [ "scenario" , string ] , ( "calls" , selector , [ ( "be
              | "no" , "path" , "from" , selector , "to" , selector
              | selector , "has" , "replicas" , ">=" , integer ;
 whatif       = "whatif" , string , "{" , { whatif-change } , "}" ;
-whatif-change = "traffic" , string , ( replicas | quantity )   (* x3 multiplies, 50k rps sets *)
+whatif-change = "traffic" , string , ( replicas | quantity )   (* x3 or x1.5 multiplies, 50k rps sets *)
              | "fail" , id
              | id , replicas ;
 selector     = selector-atom , { "or" , selector-atom } ;
@@ -81,7 +81,7 @@ status       = digit , digit , digit | digit , "xx" ;     (* 201, 4xx *)
 
 arrow        = "->" | "->>" | "-->" | "-x" ;
 position     = "pos" , integer , "," , integer ;
-replicas     = "x" , digit , { digit } ;               (* one token, e.g. x3 *)
+replicas     = "x" , digit , { digit } , [ "." , digit , { digit } ] ;  (* one token, e.g. x3; a fraction only in a whatif traffic line *)
 quantity     = number , [ magnitude ] , [ unit ] ;     (* 50ms, 100k rps, 99.9% *)
 number       = digit , { digit } , [ "." , digit , { digit } ] ;
 magnitude    = "k" | "m" | "b" ;

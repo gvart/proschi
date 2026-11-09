@@ -299,7 +299,7 @@ export function diagramSchema() {
         description: 'One line of a whatif block.',
         oneOf: [
           object(
-            { kind: { const: 'traffic' }, useCase: str, multiply: { type: 'integer', minimum: 0, description: '`x3`: multiplies the rate.' }, rps: { ...num, description: '`50k rps`: sets the rate.' }, loc },
+            { kind: { const: 'traffic' }, useCase: str, multiply: { type: 'number', minimum: 0, description: '`x3`, `x1.5`: multiplies the rate.' }, rps: { ...num, description: '`50k rps`: sets the rate.' }, loc },
             ['kind', 'useCase', 'loc'],
           ),
           object({ kind: { const: 'fail' }, node: str, loc }, ['kind', 'node', 'loc']),

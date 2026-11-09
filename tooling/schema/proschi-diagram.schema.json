@@ -1452,9 +1452,9 @@
               "type": "string"
             },
             "multiply": {
-              "type": "integer",
+              "type": "number",
               "minimum": 0,
-              "description": "`x3`: multiplies the rate."
+              "description": "`x3`, `x1.5`: multiplies the rate."
             },
             "rps": {
               "type": "number",

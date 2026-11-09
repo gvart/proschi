@@ -875,6 +875,10 @@ function tokenizeLine(text, line) {
     }
     if (IDENT_START.test(ch)) {
       while (i < text.length && IDENT_PART.test(text[i])) i++;
+      if (/^x\d+$/.test(text.slice(start2, i)) && text[i] === "." && DIGIT.test(text[i + 1] ?? "")) {
+        i++;
+        while (i < text.length && DIGIT.test(text[i])) i++;
+      }
       tokens.push({ kind: "ident", value: text.slice(start2, i), col: start2 + 1, length: i - start2 });
       continue;
     }
@@ -1272,6 +1276,7 @@ var MAX_SCENARIOS = 32;
 var MAX_ALT_DEPTH = 16;
 var DIRECTIONS = ["down", "right", "up", "left"];
 var REPLICAS = /^x(\d+)$/;
+var MULTIPLIER = /^x(\d+(?:\.\d+)?)$/;
 var PERCENTILES = { p50: 50, p90: 90, p95: 95, p99: 99, p999: 99.9 };
 var FIELD_FLAGS = ["key", "index", "unique", "optional"];
 var UNIT_EXAMPLES = {
@@ -2899,6 +2904,10 @@ var Parser = class _Parser {
       whatif.changes.push({ kind: "replicas", node: first.value, replicas, loc });
       return;
     }
+    if (first.kind === "ident" && second?.kind === "ident" && MULTIPLIER.test(second.value)) {
+      this.error(`Replicas are a whole number, e.g. ${first.value} x4`, this.locOf(second, line));
+      return;
+    }
     if (isWord(first, "fail")) {
       if (second?.kind !== "ident") {
         this.error("Expected the node that fails, e.g. fail cache", this.locOf(second ?? first, line));
@@ -2919,8 +2928,8 @@ var Parser = class _Parser {
         return;
       }
       let change;
-      if (third?.kind === "ident" && REPLICAS.test(third.value)) {
-        const multiply = Number(REPLICAS.exec(third.value)[1]);
+      if (third?.kind === "ident" && MULTIPLIER.test(third.value)) {
+        const multiply = Number(MULTIPLIER.exec(third.value)[1]);
         change = { kind: "traffic", useCase: second.value, multiply, loc };
       } else {
         const rps = this.quantityOf(third, "rps", second, line);
