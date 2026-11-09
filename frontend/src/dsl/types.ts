@@ -221,6 +221,24 @@ export interface Diagram {
   layout?: LayoutHints;
   /** `system` blocks, each a node of kind `system` too; absent when there are none. */
   systems?: DiagramSystem[];
+  /** `whatif "Name" { … }` blocks, in order; absent when there are none. */
+  whatifs?: WhatIf[];
+}
+
+/** One line of a `whatif` block. */
+export type WhatIfChange =
+  /** `traffic "Use case" x3` (`multiply`) or `traffic "Use case" 50k rps` (`rps`). */
+  | { kind: 'traffic'; useCase: string; multiply?: number; rps?: number; loc: SourceLoc }
+  /** `fail db`: the node is down. */
+  | { kind: 'fail'; node: string; loc: SourceLoc }
+  /** `db x4`: the node runs this many replicas. */
+  | { kind: 'replicas'; node: string; replicas: number; loc: SourceLoc };
+
+/** `whatif "Black Friday" { traffic "Checkout" x3; fail cache; db x4 }`: a variant of the design to simulate. */
+export interface WhatIf {
+  name: string;
+  changes: WhatIfChange[];
+  loc: SourceLoc;
 }
 
 /** `expose api "Orders API" -> "Place order"`: an entry point of a system. */
@@ -411,7 +429,7 @@ export interface DiagramImport {
 
 /** Where a top-level section block of the root document starts and ends (1-based lines, the `}` line included). */
 export interface BlockSpan {
-  kind: 'traffic' | 'requirements' | 'capacity' | 'entity' | 'decision' | 'test' | 'legend';
+  kind: 'traffic' | 'requirements' | 'capacity' | 'entity' | 'decision' | 'test' | 'legend' | 'whatif';
   start: number;
   end: number;
 }

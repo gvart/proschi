@@ -60,7 +60,7 @@ const INDENT = '  ';
 /** Words that start a statement other than a node declaration. */
 const KEYWORDS = new Set(['title', 'import', 'group', 'usecase', 'par', 'alt']);
 /** Sections whose lines are laid out in aligned columns. */
-type Section = 'traffic' | 'requirements' | 'capacity' | 'entity' | 'decision' | 'test';
+type Section = 'traffic' | 'requirements' | 'capacity' | 'entity' | 'decision' | 'test' | 'whatif';
 
 interface Base {
   depth: number;
@@ -221,6 +221,7 @@ function sectionOpenedBy(tokens: Token[]): Section | undefined {
       return second?.kind === 'ident' ? 'entity' : undefined;
     case 'decision':
     case 'test':
+    case 'whatif':
       return second?.kind === 'string' ? first.value : undefined;
     default:
       return undefined;

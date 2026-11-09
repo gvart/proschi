@@ -42,6 +42,7 @@ import type {
   SystemEntry,
   SystemStub,
   TrafficEntry,
+  WhatIf,
 } from './types';
 
 type Arrow = '->' | '->>' | '-->' | '-x';
@@ -110,7 +111,7 @@ interface SystemFrame {
 }
 
 /** The top-level blocks of docs/design/hld-and-practice.md §1, whose lines are read by their own rules. */
-type Section = 'traffic' | 'requirements' | 'capacity' | 'entity' | 'decision' | 'test' | 'legend';
+type Section = 'traffic' | 'requirements' | 'capacity' | 'entity' | 'decision' | 'test' | 'legend' | 'whatif';
 
 interface SectionFrame {
   kind: 'section';
@@ -124,6 +125,7 @@ interface SectionFrame {
   entity?: Entity;
   decision?: Decision;
   test?: FlowTest;
+  whatif?: WhatIf;
   loc: SourceLoc;
 }
 
@@ -252,6 +254,7 @@ class Parser {
   private readonly entities: Entity[] = [];
   private readonly decisions: Decision[] = [];
   private readonly tests: FlowTest[] = [];
+  private readonly whatifs: WhatIf[] = [];
   private readonly blocks: BlockSpan[] = [];
   private readonly legend: LegendEntry[] = [];
   private readonly layout: LayoutHints = {};
@@ -307,6 +310,7 @@ class Parser {
       ...(this.legend.length ? { legend: this.legend } : {}),
       ...(Object.keys(this.layout).length ? { layout: this.layout } : {}),
       ...(this.systems.length ? { systems: this.systems } : {}),
+      ...(this.whatifs.length ? { whatifs: this.whatifs } : {}),
     };
 
     const order = (d: Diagnostic) => this.fileOrder.get(d.file) ?? 0;
@@ -449,6 +453,10 @@ class Parser {
         break;
       case 'test':
         if (second?.kind === 'string' && tokens[tokens.length - 1].kind === 'lbrace') this.parseTest(tokens, line);
+        else this.parseNode(tokens, line);
+        break;
+      case 'whatif':
+        if (second?.kind === 'string' && tokens[tokens.length - 1].kind === 'lbrace') this.parseWhatIf(tokens, line);
         else this.parseNode(tokens, line);
         break;
       // Keywords only as `direction <word>` and `layout <word>`, so a node may still be called direction or layout.
@@ -1298,6 +1306,7 @@ class Parser {
 
   private closeSection(frame: SectionFrame) {
     if (frame.test && frame.test.assertions.length === 0) this.warning(`Test '${frame.test.name}' has no assertions`, frame.test.loc);
+    if (frame.whatif && frame.whatif.changes.length === 0) this.warning(`What-if '${frame.whatif.name}' changes nothing`, frame.whatif.loc);
   }
 
   private parseSectionLine(frame: SectionFrame, tokens: Token[], line: number) {
@@ -1319,6 +1328,8 @@ class Parser {
         if (assertion) frame.test!.assertions.push(assertion);
         return;
       }
+      case 'whatif':
+        return this.parseWhatIfLine(frame.whatif!, tokens, line);
     }
   }
 
@@ -1875,6 +1886,94 @@ class Parser {
     }
     const test: FlowTest = { name: name.value, assertions: [], loc };
     if (this.openSection('test', tokens, line, { test })) this.tests.push(test);
+  }
+
+  /** `whatif "Name" {` */
+  private parseWhatIf(tokens: Token[], line: number) {
+    const name = tokens[1];
+    const loc = this.locOf(name, line);
+    if (tokens[2].kind !== 'lbrace') {
+      this.error(`Expected { after the what-if name, not ${describe(tokens[2])}`, this.locOf(tokens[2], line));
+      this.skipSection('whatif', tokens, line);
+      return;
+    }
+    this.expectEnd(tokens, 3, line);
+    const first = this.whatifs.find((w) => w.name === name.value);
+    if (first) {
+      this.error(`Duplicate what-if '${name.value}' (first ${this.where(first.loc, loc)})`, loc);
+      this.skipSection('whatif', tokens, line);
+      return;
+    }
+    const whatif: WhatIf = { name: name.value, changes: [], loc };
+    if (this.openSection('whatif', tokens, line, { whatif })) this.whatifs.push(whatif);
+  }
+
+  /** One line of a what-if: `traffic "Use case" x3`, `traffic "Use case" 50k rps`, `fail <node>` or `<node> x4`. */
+  private parseWhatIfLine(whatif: WhatIf, tokens: Token[], line: number) {
+    const [first, second, third] = tokens;
+    const loc = this.lineLoc(tokens, line);
+    const help = 'Expected a what-if change: traffic "Use case" x3, traffic "Use case" 50k rps, fail <node> or <node> x4';
+    const checkNode = (id: Token) => {
+      const idLoc = this.locOf(id, line);
+      this.deferred.push(() => {
+        if (!this.nodes.has(id.value)) this.warning(`Unknown node '${id.value}' in what-if`, idLoc);
+      });
+    };
+    // `<node> x4` first, so a node may be called fail or traffic.
+    if (first.kind === 'ident' && second?.kind === 'ident' && REPLICAS.test(second.value)) {
+      if (!this.expectEnd(tokens, 2, line)) return;
+      const replicas = Number(REPLICAS.exec(second.value)![1]);
+      if (replicas < 1) {
+        this.error('A what-if needs at least one replica, x1; to take a node down, write fail <node>', this.locOf(second, line));
+        return;
+      }
+      if (whatif.changes.some((c) => c.kind === 'replicas' && c.node === first.value)) {
+        this.error(`Replicas of '${first.value}' are set twice in this what-if`, this.locOf(first, line));
+        return;
+      }
+      checkNode(first);
+      whatif.changes.push({ kind: 'replicas', node: first.value, replicas, loc });
+      return;
+    }
+    if (isWord(first, 'fail')) {
+      if (second?.kind !== 'ident') {
+        this.error('Expected the node that fails, e.g. fail cache', this.locOf(second ?? first, line));
+        return;
+      }
+      if (!this.expectEnd(tokens, 2, line)) return;
+      if (whatif.changes.some((c) => c.kind === 'fail' && c.node === second.value)) {
+        this.error(`'${second.value}' fails twice in this what-if`, this.locOf(second, line));
+        return;
+      }
+      checkNode(second);
+      whatif.changes.push({ kind: 'fail', node: second.value, loc });
+      return;
+    }
+    if (isWord(first, 'traffic')) {
+      if (second?.kind !== 'string') {
+        this.error('Expected a use case name in quotes, e.g. traffic "Checkout" x3 or traffic "Checkout" 50k rps', this.locOf(second ?? first, line));
+        return;
+      }
+      let change: WhatIf['changes'][number];
+      if (third?.kind === 'ident' && REPLICAS.test(third.value)) {
+        const multiply = Number(REPLICAS.exec(third.value)![1]);
+        change = { kind: 'traffic', useCase: second.value, multiply, loc };
+      } else {
+        const rps = this.quantityOf(third, 'rps', second, line);
+        if (rps === undefined) return;
+        change = { kind: 'traffic', useCase: second.value, rps, loc };
+      }
+      if (!this.expectEnd(tokens, 3, line)) return;
+      if (whatif.changes.some((c) => c.kind === 'traffic' && c.useCase === second.value)) {
+        this.error(`Traffic of '${second.value}' is changed twice in this what-if`, this.locOf(second, line));
+        return;
+      }
+      const nameLoc = this.locOf(second, line);
+      this.deferred.push(() => this.checkUseCase(second.value, nameLoc));
+      whatif.changes.push(change);
+      return;
+    }
+    this.error(help, this.locOf(first, line));
   }
 
   /** One assertion line of a test (docs/design/hld-and-practice.md §1.9). */
@@ -2472,6 +2571,7 @@ function sectionName(frame: SectionFrame): string {
   if (frame.entity) return `entity '${frame.entity.name}'`;
   if (frame.decision) return `decision '${frame.decision.title}'`;
   if (frame.test) return `test '${frame.test.name}'`;
+  if (frame.whatif) return `what-if '${frame.whatif.name}'`;
   return `${frame.section} block`;
 }
 

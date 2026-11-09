@@ -31,13 +31,13 @@ const AFTER_ALT_NAME = /^\s*(\}\s*)?alt\s+("(?:[^"\\]|\\.)*"|\w+)\s+$/;
 const STRING = '"(?:[^"\\\\]|\\\\.)*"';
 /** A line that opens a section block, in the shapes the parser accepts. */
 export const SECTION_HEADER = new RegExp(
-  `^\\s*(?:(?:traffic|requirements|capacity)\\s*\\{|entity\\s+[A-Za-z_]\\w*\\b.*\\{|(?:decision|test)\\s+${STRING}.*\\{)\\s*(?:#.*)?$`,
+  `^\\s*(?:(?:traffic|requirements|capacity)\\s*\\{|entity\\s+[A-Za-z_]\\w*\\b.*\\{|(?:decision|test|whatif)\\s+${STRING}.*\\{)\\s*(?:#.*)?$`,
 );
 /** `decision "…" because "…"`: a section statement without a block. */
 export const ONE_LINE_DECISION = new RegExp(`^\\s*decision\\s+${STRING}\\s+because\\b`);
 /** Words with a meaning inside section blocks (docs/HLD.md). */
 const SECTION_WORDS =
-  /^(traffic|requirements|capacity|entity|decision|test|mix|durable|volatile|survive|because|rejected|calls|before|after|never|every|waits|for|starts|at|or|responds|writes|reads|responding|handles|failure|path|replicas|any|strong|eventual|store|in|scenario|latency|availability|cost|shards|consistency|bandwidth|egress|timeout|no|from|to|has|of|node|key|index|unique|optional|p50|p90|p95|p99|p999)\b/;
+  /^(traffic|requirements|capacity|entity|decision|test|whatif|fail|mix|durable|volatile|survive|because|rejected|calls|before|after|never|every|waits|for|starts|at|or|responds|writes|reads|responding|handles|failure|path|replicas|any|strong|eventual|store|in|scenario|latency|availability|cost|shards|consistency|bandwidth|egress|timeout|no|from|to|has|of|node|key|index|unique|optional|p50|p90|p95|p99|p999)\b/;
 /** A number with an optional fraction and unit, attached or one space away: 120, 2.5, 50ms, 100k rps, 99.9 %. */
 const QUANTITY = /^-?\d+(?:\.\d+)?(?:[A-Za-z]+(?:\/[A-Za-z]+)?|%)?(?: (?:rps|rpm|rpd|ms|s|usd\/month|usd\/GB|MB\/s|GB\/s)\b| %)?/;
 /** `x200` (fan-out) and `~2MB` (payload size) at the start of a step label (§7.3). */
@@ -155,6 +155,7 @@ const keywordOptions: Completion[] = [
   snippetCompletion('entity ${Name} in ${store} {\n\t${id} ${uuid} key\n}', { label: 'entity', type: 'keyword', detail: 'entity Name in store { fields }' }),
   snippetCompletion('decision "${Title}" {\n\tbecause "${reason}"\n}', { label: 'decision', type: 'keyword', detail: 'a trade-off and its reasons' }),
   snippetCompletion('test "${Name}" {\n\t${}\n}', { label: 'test', type: 'keyword', detail: 'flow assertions' }),
+  snippetCompletion('whatif "${Name}" {\n\ttraffic "${Use case}" ${x3}\n}', { label: 'whatif', type: 'keyword', detail: 'traffic x3, fail node, node x4' }),
 ];
 
 /** Assertion forms, offered at the start of a line inside a test block. */
