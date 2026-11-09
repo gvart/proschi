@@ -37,7 +37,7 @@ import { toFlowEdges } from '../../dsl/layout';
 import { withEdgeStyles } from '../../dsl/toCanvas';
 import { useAutoLayout } from '../Diagram/useDiagramLayout';
 import { loadJson, saveJson } from '../../services/storage';
-import { criticalPathOf, edgeOverlays } from '../../sim/overlay';
+import { BOTTLENECK_FROM, criticalPathOf, edgeOverlays, type SimOverlay } from '../../sim/overlay';
 import { FIRST_RUN_SOURCE, exampleFromSearch, withoutExample } from '../../playground/exampleLink';
 import {
   BLANK_SOURCE,
@@ -90,6 +90,7 @@ import { useIsPhone } from '../../onboarding/layout';
 import { useAccount } from '../../practice/useAccount';
 import AccountMenu from '../../practice/AccountMenu';
 import { track } from '../../services/metrics';
+import type { SystemSummary } from '../Canvas/systemSummary';
 import Banner, { type BannerMessage } from './Banner';
 import ExportMenu from './ExportMenu';
 import { useZenMode } from './useZenMode';
@@ -136,6 +137,21 @@ const TourHint = lazy(() => import('../../onboarding/TourHint'));
 const StarterCard = lazy(() => import('../../onboarding/StarterCard'));
 
 const noop = () => {};
+
+/**
+ * A collapsed system box carries its team design's load: its busiest node's
+ * utilisation (the stub's, for a stub), so the edges into it take that colour
+ * and the box is ringed as a bottleneck from 70% or once saturated.
+ */
+function withSystemBoxes(overlay: SimOverlay, summaries: ReadonlyMap<string, SystemSummary>): SimOverlay {
+  const nodes = { ...overlay.nodes };
+  for (const [id, s] of summaries) {
+    if (nodes[id] || s.status === 'unsimulated' || s.status === 'idle') continue;
+    const saturated = s.utilization >= 1;
+    nodes[id] = { utilization: s.utilization, saturated, ...(saturated || s.utilization >= BOTTLENECK_FROM ? { bottleneck: true } : {}) };
+  }
+  return { ...overlay, nodes };
+}
 const LEGACY_SOURCE_KEY = 'proschi.playground.source';
 /** The splitter's position between the code and diagram panes. */
 const SPLIT_KEY = 'proschi.playground.split';
@@ -415,17 +431,19 @@ export default function Playground() {
   const toggleOverlay = () => {
     setOverlayOn(!overlayOn);
     saveJson(OVERLAY_KEY, !overlayOn);
+    // Turning it on is a look at the simulation; being on by default is not.
+    if (!overlayOn) track('simulation_run', { once: 'session' });
   };
   const canOverlay = (shown.traffic?.length ?? 0) > 0;
   const { overlayOf, summaries } = systems;
   const overlay = useMemo(() => {
     if (!overlayOn || !canOverlay) return undefined;
-    const base = overlayOf();
+    const base = withSystemBoxes(overlayOf(), summaries);
     // The p99 path of the use case picked for playback, else of the busiest one.
     if (selectedUseCaseId === undefined) return base;
     const critical = criticalPathOf(shown, systems.analysis, selectedUseCaseId) ?? base.critical;
     return { ...base, critical };
-  }, [overlayOn, canOverlay, overlayOf, selectedUseCaseId, shown, systems.analysis]);
+  }, [overlayOn, canOverlay, overlayOf, summaries, selectedUseCaseId, shown, systems.analysis]);
   /** With the overlay on, `62% · $400/mo` after each node line in the code too. */
   const codeHints = useMemo(() => (overlay ? loadHints(diagram, simulation.analysis) : undefined), [overlay, diagram, simulation.analysis]);
   const shownNodes = useMemo(
@@ -460,7 +478,7 @@ export default function Playground() {
   // Usage counts: the first look at the simulation's numbers (the Results or
   // HLD tab, or the load overlay) and at the tests (Results), once per session each.
   useEffect(() => {
-    if (view === 'results' || view === 'hld' || (overlayOn && canOverlay)) track('simulation_run', { once: 'session' });
+    if (view === 'results' || view === 'hld') track('simulation_run', { once: 'session' });
     if (view === 'results') track('test_run', { once: 'session', key: 'test_run:editor' });
   }, [view, overlayOn, canOverlay]);
 

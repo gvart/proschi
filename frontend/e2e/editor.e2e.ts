@@ -1,6 +1,26 @@
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
+import lz from 'lz-string';
 import { addFromPalette, appendCode, canvasNodes, codeEditor, editorText, expect, expectDiagramFitted, test, waitForCanvas } from './fixtures';
+
+/** The API runs at about 75% of what its two replicas take: a bottleneck. */
+const HOT = `user "User" [Actor]
+api "Notes API" [REST API] x2
+db "Notes DB" [PostgreSQL] x2
+user -> api : HTTPS
+api -> db : SQL
+usecase "Create a note" {
+  user -> api : POST /notes
+  api -> db : INSERT note
+}
+traffic {
+  "Create a note" 1500 rps
+}
+capacity {
+  api 1000 rps
+  db 10000 rps
+}
+`;
 
 /** The e-commerce example has six components and a group. */
 const DEFAULT_NODES = 6;
@@ -203,13 +223,20 @@ test.describe('editor', () => {
     await expect(page.locator('.pc-node__stats').filter({ hasText: /\d+%/ }).first()).toBeVisible();
     // The code shows the same load, with the monthly cost, after each node line.
     await expect(page.locator('.cm-load-hint').first()).toHaveText(/^\d+%( saturated)? · \$[\d,]+\/mo$/);
-    // Edges carry their requests and the latency they add; the p99 path is bold; the busiest node is ringed.
+    // Edges carry their requests and the latency they add; the p99 path is bold.
     await expect(page.locator('.pc-edge-load').filter({ hasText: /rps.*\+[\d.]+ ms/ }).first()).toBeVisible();
     await expect(page.locator('.pc-edge-load[data-critical]').first()).toBeVisible();
-    await expect(page.locator('.pc-node[data-bottleneck]')).toHaveCount(1);
+    // Every node has room to spare (the busiest runs at 42%), so none is called a bottleneck.
+    await expect(page.locator('.pc-node[data-bottleneck]')).toHaveCount(0);
+    // The legend is open the first time, then folds to one line on the next visit.
     const legend = page.getByRole('group', { name: 'Load legend' });
-    await expect(legend).toContainText('Utilisation');
+    await expect(legend).toHaveAttribute('open', '');
     await expect(legend).toContainText(/p99 path of “.+”: [\d.]+ ms/);
+    await page.reload();
+    await waitForCanvas(page);
+    await expect(legend).toBeVisible();
+    await expect(legend).not.toHaveAttribute('open', '');
+    await expect(legend.getByText(/p99 path/)).toBeHidden();
 
     await toggle.click();
     await expect(page.locator('.pc-node[data-load]')).toHaveCount(0);
@@ -223,19 +250,28 @@ test.describe('editor', () => {
     await expect(page.locator('.pc-node[data-load]')).toHaveCount(0);
   });
 
-  test('Results shows the bottleneck, and picks a node out on the canvas', async ({ page }) => {
+  test('a node at 70% or more is ringed as the bottleneck', async ({ page }) => {
+    await page.goto(`app/#code=${lz.compressToEncodedURIComponent(HOT)}`);
+    await waitForCanvas(page);
+    const ringed = page.locator('.react-flow__node').filter({ has: page.locator('.pc-node[data-bottleneck]') });
+    await expect(ringed).toHaveCount(1);
+    await expect(ringed).toContainText('Notes API');
+    await expect(ringed.getByText('Bottleneck', { exact: true })).toBeVisible();
+  });
+
+  test('Results names the busiest node, and picks a node out on the canvas', async ({ page }) => {
     await openExample(page, /URL shortener HLD/);
     await page.getByRole('tablist', { name: 'Diagram view' }).getByRole('tab', { name: /Results/ }).click();
-    const callout = page.getByText('Bottleneck', { exact: true }).locator('..');
-    await expect(callout).toContainText(/at \d+%/);
+    const callout = page.getByText('Busiest', { exact: true }).locator('..');
+    await expect(callout).toContainText(/api at 42%: [\d.]+× headroom/);
     await callout.getByRole('button', { name: 'Show on canvas' }).click();
     await expect(page.getByRole('tablist', { name: 'Diagram view' }).getByRole('tab', { name: 'Diagram' })).toHaveAttribute('aria-selected', 'true');
-    const ringed = page.locator('.react-flow__node').filter({ has: page.locator('.pc-node[data-bottleneck]') });
-    await expect(ringed.locator('.pc-node')).toHaveAttribute('data-selected', 'true');
+    const api = page.locator('.react-flow__node', { hasText: 'Shortener API' });
+    await expect(api.locator('.pc-node')).toHaveAttribute('data-selected', 'true');
     // Zoomed to it: the node sits in the middle of the canvas.
     const flow = (await page.locator('.react-flow').boundingBox())!;
     await expect.poll(async () => {
-      const b = (await ringed.boundingBox())!;
+      const b = (await api.boundingBox())!;
       return Math.abs(b.x + b.width / 2 - (flow.x + flow.width / 2));
     }).toBeLessThan(40);
 

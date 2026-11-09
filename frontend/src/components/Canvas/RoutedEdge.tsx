@@ -4,7 +4,7 @@ import { formatMs, formatRps } from '../../sim/format';
 import type { EdgeOverlay } from '../../sim/overlay';
 import { CANVAS_EDGE } from '../../utils/canvasColors';
 import { heatStroke } from '../../utils/heat';
-import { edgeLoadOf, loadWidth, showsLoadLabel, withLoad } from './edgeLoad';
+import { edgeLoadOf, loadWidth, showsLoadLabel, useLoadLabelsLegible, withLoad } from './edgeLoad';
 import { hasMarker, useEdgeGeometry } from './useEdgeGeometry';
 
 /** The arrowhead, in the edge's own colour (a tagged edge's `style.stroke`) and fading with it. */
@@ -25,13 +25,25 @@ export function EdgeCasing({ path, load }: { path: string; load: EdgeOverlay | u
   return <path d={path} className="pc-edge-casing" style={{ strokeWidth: loadWidth(load) + 2 }} />;
 }
 
-/** The edge's label, then its requests and the latency they add. */
+/**
+ * The edge's label, then its requests and the latency they add. Zoomed out
+ * past legibility the numbers are left out, and only the label stays.
+ */
 export function EdgeLoadLabel({ load, label, x, y }: { load: EdgeOverlay; label: ReactNode; x: number; y: number }) {
+  const legible = useLoadLabelsLegible();
+  if (!legible && !label) return null;
   return (
     <EdgeLabelRenderer>
-      <div className="pc-edge-load nodrag nopan" data-critical={load.critical || undefined} style={{ transform: `translate(-50%, -50%) translate(${x}px, ${y}px)` }}>
+      <div
+        className="pc-edge-load nodrag nopan"
+        data-critical={load.critical || undefined}
+        data-numbers={legible || undefined}
+        style={{ transform: `translate(-50%, -50%) translate(${x}px, ${y}px)` }}
+      >
         {/* Under a label, one number a line: no wider than the room the layout kept for the label. */}
-        {label ? (
+        {!legible ? (
+          <span className="pc-edge-load__label">{label}</span>
+        ) : label ? (
           <>
             <span className="pc-edge-load__label">{label}</span>
             <span>{formatRps(load.rps)}</span>

@@ -286,9 +286,14 @@
 }
 
 /* The load overlay's legend: the utilisation scale, the p99 path and the bottleneck ring. */
-.pc-load-legend {
+.pc-legend.pc-load-legend {
   min-width: 0;
   width: 212px;
+}
+/* Folded: one line, "Load ▸". */
+.pc-legend.pc-load-legend:not([open]) {
+  width: auto;
+  padding: 6px 10px;
 }
 .pc-load-legend > summary {
   cursor: pointer;
@@ -301,10 +306,10 @@
   margin-bottom: 0;
 }
 .pc-load-legend > summary::after {
-  content: ' ▾';
+  content: ' ▸';
 }
 .pc-load-legend[open] > summary::after {
-  content: ' ▴';
+  content: ' ▾';
 }
 .pc-load-legend__scale {
   display: grid;
@@ -360,7 +365,8 @@
   border-radius: var(--r-sm);
   background: rgb(var(--c-paper) / 0.92);
   color: rgb(var(--c-ink));
-  font: 600 10px / 1.3 var(--font-mono);
+  /* The size of a node's tech line: under it the chips are hidden (LOAD_LABEL_MIN_ZOOM). */
+  font: 600 11px / 1.3 var(--font-mono);
   white-space: nowrap;
   pointer-events: none;
 }

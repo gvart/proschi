@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parse } from '../dsl/parser';
 import { analyze } from './analyze';
-import { analysisOverlay, bottlenecksOf, criticalPathOf, edgeOverlays } from './overlay';
+import { analysisOverlay, bottlenecksOf, busiestOf, criticalPathOf, edgeOverlays } from './overlay';
 
 const source = `
 user [Actor]
@@ -91,21 +91,26 @@ describe('overlay of a busier design', () => {
     expect(flow.latencyMs).toBeCloseTo(api.latencyMs);
   });
 
-  it('marks the most utilised node as the bottleneck', () => {
-    // api runs at 100% of 1000 rps; db at 100 of 120 rps.
-    expect(bottlenecksOf(analysis)).toEqual(['api']);
+  it('marks nodes at 70% or more as bottlenecks', () => {
+    // api runs at 100% of 1000 rps; db at 100 of 120 rps (83%).
+    expect(bottlenecksOf(analysis).sort()).toEqual(['api', 'db']);
     expect(overlay.nodes.api.bottleneck).toBe(true);
-    expect(overlay.nodes.db.bottleneck).toBeUndefined();
+    expect(overlay.nodes.cache.bottleneck).toBeUndefined();
   });
 
-  it('marks every saturated node, not only the top one', () => {
-    const hot = parse(busy.replace('db 120 rps', 'db 50 rps')).diagram;
-    expect(bottlenecksOf(analyze(hot)).sort()).toEqual(['api', 'db']);
+  it('marks nothing while every node has room, but still names the busiest', () => {
+    const calm = parse(busy.replace('api 1000 rps', 'api 2000 rps').replace('db 120 rps', 'db 1000 rps')).diagram;
+    const a = analyze(calm);
+    expect(bottlenecksOf(a)).toEqual([]);
+    expect(analysisOverlay(calm, a).nodes.api.bottleneck).toBeUndefined();
+    expect(busiestOf(a)?.id).toBe('api');
+    expect(busiestOf(a)!.utilization).toBeCloseTo(0.5);
   });
 
   it('has no bottleneck without load', () => {
     const idle = parse(busy.replace(/traffic \{[^}]*\}/, '')).diagram;
     expect(bottlenecksOf(analyze(idle))).toEqual([]);
+    expect(busiestOf(analyze(idle))).toBeUndefined();
     expect(analysisOverlay(idle, analyze(idle)).critical).toBeUndefined();
   });
 

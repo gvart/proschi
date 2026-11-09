@@ -35,8 +35,6 @@ const nodeTypes = {
   textNode: TextNode,
 };
 
-/** The width the open load legend takes from the right of the canvas, with its margin. */
-const LOAD_LEGEND_ROOM = 240;
 
 export interface ImageRequest {
   format: 'png' | 'svg';
@@ -456,14 +454,7 @@ export default function DiagramView({
   // No animated fit: d3-zoom reads the pane size on the transition's first tick, and a pane hidden by
   // then (phone Code/Diagram tabs) is 0×0, which interpolates the viewport to NaN. Nodes already glide via settle.
   // The exception: playback, the splitter and the palette resize a pane that stays shown, and there the diagram glides to its new fit.
-  // The load legend stands open beside the diagram on wider screens: fit the diagram clear of it.
-  const loadLegend = !!overlay && !playing;
-  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, {
-    wrapper: wrapperRef,
-    inset,
-    glide: `${playing ? 'playing' : ''}:${glideKey}:${paletteOpen}`,
-    right: loadLegend && !phone ? LOAD_LEGEND_ROOM : undefined,
-  });
+  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { wrapper: wrapperRef, inset, glide: `${playing ? 'playing' : ''}:${glideKey}:${paletteOpen}` });
 
   const handleEdgesChange = useCallback(
     (changes: EdgeChange[]) => onEdgesChange((current) => applyEdgeChanges(changes, current)),
@@ -706,7 +697,7 @@ export default function DiagramView({
                 )}
               </div>
             )}
-            {loadLegend && <LoadLegend critical={overlay.critical} folded={phone} />}
+            {overlay && !playing && <LoadLegend critical={overlay.critical} phone={phone} />}
             {diagram.legend && <Legend entries={diagram.legend} />}
           </Panel>
         )}

@@ -2,7 +2,7 @@ import { AlertTriangle, Info, LocateFixed, ShieldAlert } from 'lucide-react';
 import type { Diagram, SourceLoc } from '../../dsl';
 import ModelLink from './ModelLink';
 import { HOT, formatAvailability, formatMs, formatPercent, formatRps, formatUsd, type Analysis, type NodeAnalysis, type TestResult } from '../../sim';
-import { bottlenecksOf } from '../../sim/overlay';
+import { BOTTLENECK_FROM, busiestOf } from '../../sim/overlay';
 import { systemSummaries } from '../Canvas/systemSummary';
 
 interface AnalysisPanelProps {
@@ -36,9 +36,7 @@ export function AnalysisBody({ diagram, analysis, onSelect, results, onFocusNode
   const byId = new Map(diagram.nodes.map((n) => [n.id, n]));
   const nodes = analysis.nodes.filter((n) => n.kind !== 'client' && n.kind !== 'other');
   const saturated = nodes.filter((n) => n.saturated).length;
-  const bottleneck = bottlenecksOf(analysis)
-    .map((id) => analysis.nodes.find((n) => n.id === id)!)
-    .sort((a, b) => b.utilization - a.utilization)[0];
+  const busiest = busiestOf(analysis);
 
   return (
     <>
@@ -53,7 +51,7 @@ export function AnalysisBody({ diagram, analysis, onSelect, results, onFocusNode
         <Stat label="Use cases with traffic" value={String(analysis.useCases.filter((u) => u.rps > 0).length)} />
       </div>
 
-      {bottleneck && <Bottleneck node={bottleneck} onFocusNode={onFocusNode} />}
+      {busiest && <Busiest node={busiest} onFocusNode={onFocusNode} />}
 
       {analysis.warnings.length > 0 && (
         <ul className="space-y-1">
@@ -271,13 +269,16 @@ function Systems({ diagram, analysis, results, onSelect }: Required<Omit<Analysi
   );
 }
 
-/** The node that gives way first, with how much more traffic it takes. */
-function Bottleneck({ node, onFocusNode }: { node: NodeAnalysis; onFocusNode?: (id: string) => void }) {
+/** The busiest node, which gives way first, with how much more traffic it takes: a bottleneck from 70%. */
+function Busiest({ node, onFocusNode }: { node: NodeAnalysis; onFocusNode?: (id: string) => void }) {
   const u = node.utilization;
-  const headroom = u >= 1 ? 'past its capacity: requests are dropped' : `traffic can grow about ${(Math.floor((1 / u) * 10) / 10).toFixed(1)}× before it saturates`;
+  const bottleneck = node.saturated || u >= BOTTLENECK_FROM;
+  const headroom = u >= 1 ? 'past its capacity: requests are dropped' : `${(Math.floor((1 / u) * 10) / 10).toFixed(1)}× headroom before it saturates`;
   return (
     <p className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-ink/15 px-3 py-2 text-ink/85">
-      <span className="rounded-sm bg-fail px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-on-accent">Bottleneck</span>
+      <span className={`rounded-sm px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${bottleneck ? 'bg-fail text-on-accent' : 'bg-ink/10 text-ink'}`}>
+        {bottleneck ? 'Bottleneck' : 'Busiest'}
+      </span>
       <span>
         <span className="font-medium text-ink">{node.id}</span> at {formatPercent(u)}: {headroom}.
       </span>

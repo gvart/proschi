@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react';
+import { useStore } from 'reactflow';
 import type { EdgeOverlay } from '../../sim/overlay';
 import { heatStroke } from '../../utils/heat';
 
@@ -17,3 +18,9 @@ export function withLoad(style: CSSProperties | undefined, load: EdgeOverlay | u
 
 /** Whether the overlay replaces the edge's own label with its chip (`EdgeLoadLabel`). */
 export const showsLoadLabel = (load: EdgeOverlay | undefined): load is EdgeOverlay => !!load && load.rps > 0;
+
+/** Below this zoom the chips' 11px text would draw under 8px: they are left out rather than drawn illegibly. */
+export const LOAD_LABEL_MIN_ZOOM = 0.72;
+
+/** Whether the view is close enough to read the edges' chips; re-renders an edge only when that flips. */
+export const useLoadLabelsLegible = (): boolean => useStore((s) => s.transform[2] >= LOAD_LABEL_MIN_ZOOM);

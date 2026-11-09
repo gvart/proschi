@@ -110,14 +110,20 @@ export function analysisOverlay(diagram: Diagram, analysis: Analysis): SimOverla
   return { nodes, flows, ...(critical ? { critical } : {}) };
 }
 
+/** Utilisation from which a node counts as a bottleneck: where the editor calls it hot (`HOT` in analyze.ts). */
+export const BOTTLENECK_FROM = 0.7;
+
+/** The most utilised node that does work, if any carries load. */
+export function busiestOf(analysis: Analysis): Analysis['nodes'][number] | undefined {
+  return analysis.nodes.filter((n) => works(n) && n.utilization > 0).reduce<Analysis['nodes'][number] | undefined>((best, n) => (!best || n.utilization > best.utilization ? n : best), undefined);
+}
+
 /**
- * The nodes that give way first as traffic grows: every saturated node, and
- * the most utilised one (ties included). None when nothing carries load.
+ * The nodes that give way first as traffic grows: the saturated ones and
+ * those at `BOTTLENECK_FROM` or more. None while every node has room to spare.
  */
 export function bottlenecksOf(analysis: Analysis): string[] {
-  const working = analysis.nodes.filter((n) => works(n) && n.utilization > 0);
-  const top = Math.max(0, ...working.map((n) => n.utilization));
-  return working.filter((n) => n.saturated || (top > 0 && n.utilization >= top - 1e-9)).map((n) => n.id);
+  return analysis.nodes.filter((n) => works(n) && (n.saturated || n.utilization >= BOTTLENECK_FROM)).map((n) => n.id);
 }
 
 /**
