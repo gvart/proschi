@@ -50,6 +50,9 @@ competing-consumers
 composite-index-prefix
 concurrent-idempotency-keys
 conditional-stock-update
+config-push-fan-out-bandwidth
+config-push-local-reads
+config-push-single-writer
 connection-draining
 connection-pool-size
 connection-pooler

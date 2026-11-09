@@ -1,0 +1,30 @@
+# expect-fail: p99 of Serve request < 20 ms
+# expect-fail: Edge requests read the local copy
+# mistake: Reading configuration from the central store on every request
+# explain: Every edge request asks the root for its settings, so 3M reads a second from 200 data centers land on two central nodes that serve about 40k: the root saturates and every request waits on it. Worse, a data center cut off from the core can no longer answer anyone. Copy the configuration to a store on each edge server and read it there.
+# lesson: read-locally-never-from-the-core
+# cards: config-push-local-reads, availability-in-series
+# The edge asks the root for configuration on every request.
+import "problem.proschi"
+
+api  "Config API" [REST API]        x2 @core "Takes configuration changes"
+root "Root"       [Key-Value Store] x2 @core "The only copy of the configuration"
+
+customer -> api  : HTTPS
+api      -> root : writes
+visitor  -> edge : HTTPS
+edge     -> root : configuration lookups
+
+usecase "Serve request" {
+  visitor -> edge    : GET /
+  edge    -> root    : x3 GET settings
+  root   --> edge    : values
+  edge   --> visitor : 200
+}
+
+usecase "Change config" {
+  customer -> api      : PUT /zones/{id}/settings
+  api      -> root     : SET key
+  root    --> api      : OK
+  api     --> customer : 200
+}

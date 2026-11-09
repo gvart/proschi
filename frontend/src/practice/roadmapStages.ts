@@ -57,7 +57,7 @@ export const ROADMAP: RoadmapStage[] = [
     id: 'fan-out',
     title: 'Fan-out and real-time delivery',
     why: 'Deliver one write to many readers: precomputed feeds, chat over websockets and server push. Combines caching, queues and partitioning from the stages before.',
-    problems: ['news-feed', 'chat', 'push-gateway', 'collaborative-docs'],
+    problems: ['news-feed', 'chat', 'push-gateway', 'config-push', 'collaborative-docs'],
   },
   {
     id: 'streams',
