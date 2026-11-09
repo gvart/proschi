@@ -7,7 +7,7 @@ import type { Ctx } from './context';
 import { now, type Env } from './env';
 import { requireFeature } from './features';
 import { json, rateLimit } from './http';
-import { findProblem, problemIds } from './verify';
+import { catalogSolved, findProblem, problemIds } from './verify';
 
 /**
  * GET /api/me/export?view=progress (Pro, `data_export`;
@@ -61,12 +61,16 @@ async function progressExport(_request: Request, ctx: Ctx, user: User): Promise<
   const byId = new Map((progress.results as Row[]).map((r) => [String(r.problem_id), r]));
   // Every problem of the catalog, in its order, tried or not, then progress on problems no longer in it.
   const ids = [...problemIds(), ...[...byId.keys()].filter((id) => !findProblem(id))];
+  // Counted as the certificate counts them: the published catalog, and the solves still in it.
+  const catalog = catalogSolved([...byId].filter(([, r]) => r.solved_at != null).map(([id]) => id));
   const body = {
     exportedAt: iso(now()),
     displayName: user.displayName,
     level: summary.level,
     readiness: summary.readiness,
     streak: summary.streak,
+    problemsSolved: catalog.solved.length,
+    problemsTotal: catalog.total,
     mastery: summary.topics,
     problems: ids.map((id) => {
       const problem = findProblem(id);

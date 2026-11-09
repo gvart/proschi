@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { catalogSolved, problemIds } from '../src/verify';
 import { call, resetDatabase, signedInUser } from './helpers';
 
 /**
@@ -150,6 +151,37 @@ describe('mastery certificate', () => {
     const data = (await (await call('/api/me/export', { token })).json()) as Record<string, any>;
     expect(data.certificate).toMatchObject({ public: true });
     expect(data.embedBranding).toBe(true);
+  });
+});
+
+describe('problems solved, counted one way', () => {
+  beforeEach(resetDatabase);
+
+  it('catalogSolved: the published catalog in its order, without problems no longer in it', () => {
+    const [first, second] = problemIds();
+    expect(catalogSolved([second, 'retired-problem', first])).toEqual({
+      total: problemIds().length,
+      solved: [expect.objectContaining({ id: first }), expect.objectContaining({ id: second })],
+    });
+    expect(catalogSolved([]).solved).toEqual([]);
+  });
+
+  it('the certificate, its card and the progress export agree on N of M', async () => {
+    const { id, token } = await solver();
+    const t = Math.floor(Date.now() / 1000);
+    // A solve on a problem since removed from the catalog counts nowhere.
+    await env.DB.prepare(`INSERT INTO progress (user_id, problem_id, runs, source, first_run_at, updated_at, solved_at) VALUES (?, 'retired-problem', 1, ?, ?, ?, ?)`)
+      .bind(id, SOURCE, t, t, t)
+      .run();
+    await setPlan(id, 'max');
+    const certId = ((await (await call('/api/me/certificate', { method: 'PUT', token, body: { public: true } })).json()) as { certificate: { id: string } }).certificate.id;
+    const cert = (await (await call(`/api/certificates/${certId}`)).json()) as { problems: number; solved: unknown[] };
+    const data = (await (await call('/api/me/export?view=progress', { token })).json()) as { problemsSolved: number; problemsTotal: number };
+    const total = problemIds().length;
+    expect([cert.solved.length, cert.problems]).toEqual([1, total]);
+    expect([data.problemsSolved, data.problemsTotal]).toEqual([1, total]);
+    const html = await (await call(`/c/${certId}`)).text();
+    expect(meta(html, 'property', 'og:description')).toMatch(new RegExp(`^Level \\d+ · 1 of ${total} system design problems solved`));
   });
 });
 

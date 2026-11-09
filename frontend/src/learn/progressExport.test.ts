@@ -8,6 +8,8 @@ const DATA: ProgressExport = {
   level: { level: 4, xp: 520 },
   readiness: 0.426,
   streak: { current: 3, longest: 9 },
+  problemsSolved: 1,
+  problemsTotal: 40,
   mastery: [{ topic: 'caching', title: 'Caching', mastery: 0.71 }],
   problems: [
     { problemId: 'url-shortener', title: 'URL Shortener', difficulty: 'easy', solved: true, solvedAt: '2026-10-01T00:00:00.000Z', runs: 2, firstRunAt: '2026-09-30T00:00:00.000Z', runsToSolve: 2, bestCostUsd: 12.5, bestP99Ms: 80 },
@@ -34,7 +36,7 @@ describe('progress export as CSV', () => {
   it('makes one file per table, with the interview scores as columns', () => {
     const files = Object.fromEntries(progressCsvFiles(DATA).map((f) => [f.name, f.data]));
     expect(Object.keys(files)).toEqual(['summary.csv', 'mastery.csv', 'problems.csv', 'interviews.csv', 'cards.csv']);
-    expect(files['summary.csv'].split('\r\n')[1]).toBe('2026-11-09T10:00:00.000Z,"Ada, ""the first""",4,520,43,3,9,1');
+    expect(files['summary.csv'].split('\r\n')[1]).toBe('2026-11-09T10:00:00.000Z,"Ada, ""the first""",4,520,43,3,9,1,40');
     expect(files['mastery.csv']).toBe('topic,title,mastery_percent\r\ncaching,Caching,71\r\n');
     expect(files['problems.csv'].split('\r\n')[2]).toBe('pastebin,Pastebin,easy,false,,0,,,,');
     const interviews = files['interviews.csv'].split('\r\n');

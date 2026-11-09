@@ -10,6 +10,9 @@ export interface ProgressExport {
   level: { level: number; xp: number };
   readiness: number;
   streak: { current: number; longest: number };
+  /** Solved of the published catalog, as the certificate counts them; `problems` also lists progress on problems since removed. */
+  problemsSolved: number;
+  problemsTotal: number;
   mastery: { topic: string; title: string; mastery: number }[];
   problems: {
     problemId: string;
@@ -52,8 +55,8 @@ export function progressCsvFiles(data: ProgressExport): { name: string; data: st
     {
       name: 'summary.csv',
       data: toCsv(
-        ['exported_at', 'display_name', 'level', 'xp', 'interview_ready_percent', 'streak_current_days', 'streak_longest_days', 'problems_solved'],
-        [[data.exportedAt, data.displayName, data.level.level, data.level.xp, percent(data.readiness), data.streak.current, data.streak.longest, data.problems.filter((p) => p.solved).length]],
+        ['exported_at', 'display_name', 'level', 'xp', 'interview_ready_percent', 'streak_current_days', 'streak_longest_days', 'problems_solved', 'problems_total'],
+        [[data.exportedAt, data.displayName, data.level.level, data.level.xp, percent(data.readiness), data.streak.current, data.streak.longest, data.problemsSolved, data.problemsTotal]],
       ),
     },
     { name: 'mastery.csv', data: toCsv(['topic', 'title', 'mastery_percent'], data.mastery.map((m) => [m.topic, m.title, percent(m.mastery)])) },

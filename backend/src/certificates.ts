@@ -8,7 +8,7 @@ import { renderCertificateCard, type CertificateCard } from './og';
 import { effectivePlan } from './plans';
 import { escapeHtml, headTags, notFoundPage, pageHeaders, rewritePracticePage, serveCardImage, standalonePage } from './profilePage';
 import { learningSummary } from './progressExport';
-import { findProblem, problemIds } from './verify';
+import { catalogSolved } from './verify';
 
 /**
  * The mastery certificate (Max, `certificate`; docs/design/paid-plans.md
@@ -66,7 +66,7 @@ export async function loadCertificate(env: Env, id: string): Promise<PublicCerti
     .first<{ id: string; issued_at: number; user_id: string; display_name: string; daily_goal: number; plan: string; comp_until: number | null }>();
   if (!row || !can({ plan: effectivePlan(row.plan, row.comp_until) }, 'certificate', env).ok) return null;
   const summary = await learningSummary(env, { id: row.user_id, dailyGoal: row.daily_goal });
-  const solved = new Set(
+  const catalog = catalogSolved(
     (await env.DB.prepare('SELECT problem_id FROM progress WHERE user_id = ? AND solved_at IS NOT NULL').bind(row.user_id).all<{ problem_id: string }>()).results.map(
       (r) => r.problem_id,
     ),
@@ -79,11 +79,8 @@ export async function loadCertificate(env: Env, id: string): Promise<PublicCerti
     level: summary.level.level,
     xp: summary.level.xp,
     readiness: share(summary.readiness),
-    problems: problemIds().length,
-    solved: problemIds().flatMap((pid) => {
-      const problem = solved.has(pid) ? findProblem(pid) : undefined;
-      return problem ? [{ id: pid, title: problem.title, difficulty: problem.difficulty }] : [];
-    }),
+    problems: catalog.total,
+    solved: catalog.solved,
     skills: summary.topics.map((t) => ({ ...t, mastery: share(t.mastery) })).sort((a, b) => b.mastery - a.mastery),
     streak: { longest: summary.streak.longest },
   };

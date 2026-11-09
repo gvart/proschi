@@ -25,7 +25,7 @@ const CERTIFICATE = {
   level: 9,
   xp: 3400,
   readiness: 0.64,
-  problems: 51,
+  problems: 40,
   solved: [
     { id: 'url-shortener', title: 'URL Shortener', difficulty: 'easy' },
     { id: 'pastebin', title: 'Pastebin', difficulty: 'easy' },
@@ -49,6 +49,8 @@ const PROGRESS = {
   level: { level: 4, xp: 520 },
   readiness: 0.43,
   streak: { current: 3, longest: 9 },
+  problemsSolved: 1,
+  problemsTotal: 40,
   mastery: [{ topic: 'caching', title: 'Caching', mastery: 0.71 }],
   problems: [{ problemId: 'url-shortener', title: 'URL Shortener', difficulty: 'easy', solved: true, solvedAt: '2026-10-01T00:00:00.000Z', runs: 2, firstRunAt: null, runsToSolve: 2, bestCostUsd: 12.5, bestP99Ms: 80 }],
   interviews: [],
@@ -161,7 +163,7 @@ test.describe('the certificate page', () => {
     await expect(page).toHaveTitle('Grace Hopper: mastery certificate · Proschi');
     await expect(sheet.getByTestId('certificate-level')).toHaveText('9');
     await expect(sheet).toContainText('3,400 XP');
-    await expect(sheet).toContainText('4/51');
+    await expect(sheet).toContainText('4/40');
     await expect(sheet).toContainText('64%');
     await expect(sheet.getByRole('listitem').filter({ hasText: 'Caching' })).toContainText('86%');
     await expect(sheet).toContainText('Rate Limiter');
