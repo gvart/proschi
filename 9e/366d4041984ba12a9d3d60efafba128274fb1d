@@ -1,0 +1,24 @@
+frontend/src/components/Diagram/EditableCanvas.tsx
+  s_f355061868c346::t_0382fad7781aab 22,401-403,417-425
+frontend/src/components/Playground/DiagramView.tsx
+  s_f355061868c346::t_0382fad7781aab 16,673-704
+frontend/src/components/Diagram/CanvasTools.tsx
+  s_f355061868c346::t_0382fad7781aab 2,80-93
+  s_f355061868c346::t_792e08efd903c9 94
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9e366d4041984ba12a9d3d60efafba128274fb1d",
+  "prompts": {},
+  "sessions": {
+    "s_f355061868c346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd556674-4248-429d-bf5c-2b361bc86c62",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
