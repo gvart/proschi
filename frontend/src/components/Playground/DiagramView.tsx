@@ -123,7 +123,7 @@ export interface DiagramViewProps {
   /** Navigates into a system box (double-click). */
   onOpenSystem: (id: string) => void;
   /** Offers the Flows builder (use cases and scenarios without code, FlowsPanel.tsx) on this document's text. */
-  flows?: { source: string; diagram: Diagram; onChange: (next: string) => void };
+  flows?: { source: string; diagram: Diagram; onChange: (next: string) => void; useCase: string | undefined; onUseCase: (id: string) => void };
 }
 
 /** Renders the parsed diagram. Canvas edits are written back to the text, which stays the source of truth. */
@@ -540,7 +540,7 @@ export default function DiagramView({
     else if (id !== pick.from) setPick({ ...pick, to: id });
   };
   const flowsPanel = flowsOpen && flows && (
-    <FlowsPanel source={flows.source} diagram={flows.diagram} onChange={flows.onChange} pick={pick} onPick={setPick} onClose={toggleFlows} />
+    <FlowsPanel source={flows.source} diagram={flows.diagram} onChange={flows.onChange} pick={pick} onPick={setPick} useCase={flows.useCase} onUseCase={flows.onUseCase} onClose={toggleFlows} />
   );
   const inspector = showSettings && (
     <Inspector

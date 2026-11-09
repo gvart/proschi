@@ -2,6 +2,7 @@ import { useId, useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { ArrowRight, MousePointerClick, Plus, Trash2, Workflow, X } from 'lucide-react';
 import { kindOf } from '../../dsl/kinds';
 import { addScenario, addStep, addUseCase, removeScenario, removeStep, removeUseCase, outlineOf, type OutlineStep, type StepKind } from '../../dsl/edit';
+import { parse } from '../../dsl/parser';
 import type { Diagram } from '../../dsl/types';
 import { eyebrow, field, iconButton, outlineButton, primaryButton, toolButton } from '../Playground/ui';
 import { defaultStepKind, labelSuggestions, missingScenarios, missingUseCases, outlineSteps } from './flows';
@@ -9,9 +10,11 @@ import Select from '../../design/Select';
 
 /**
  * The Flows builder (docs/design/paid-plans.md P46): use cases and their
- * scenarios without code. Add a use case by name, then its steps: click the
- * component a step starts at on the canvas, then the one it goes to, and pick
- * or type its label. A scenario is an alternative within a use case (a cache
+ * scenarios without code. Pick a use case in the select, or add one from its
+ * last options (a suggestion, or "New use case…" and a name), then its steps:
+ * click the component a step starts at on the canvas, then the one it goes
+ * to, and pick or type its label. Only the chosen use case's steps and
+ * scenarios show. A scenario is an alternative within a use case (a cache
  * hit or a miss); steps go to the main flow or to one scenario. Every change
  * is a dsl/edit.ts edit of the text, which stays the source of truth.
  */
@@ -30,6 +33,9 @@ interface FlowsPanelProps {
   /** The step being picked on the canvas; null when none is. */
   pick: StepPick | null;
   onPick: (pick: StepPick | null) => void;
+  /** The chosen use case's id (kept by the parent, so it outlives the panel and can match the editor's picker). */
+  useCase: string | undefined;
+  onUseCase: (id: string) => void;
   onClose: () => void;
 }
 
@@ -41,11 +47,16 @@ const KIND_HELP: Record<StepKind, string> = {
 };
 
 const MAIN = '';
+/** The select's options that add a use case rather than pick one. */
+const NEW = '\u0000new';
+const SUGGEST = '\u0000suggest:';
 
-export default function FlowsPanel({ source, diagram, onChange, pick, onPick, onClose }: FlowsPanelProps) {
-  const useCases = useMemo(() => diagram.useCases.filter((u) => u.loc.file === undefined).map((u) => u.name), [diagram]);
-  const [active, setActive] = useState<string | undefined>(useCases[0]);
-  const current = active && useCases.includes(active) ? active : useCases[0];
+export default function FlowsPanel({ source, diagram, onChange, pick, onPick, useCase, onUseCase, onClose }: FlowsPanelProps) {
+  const local = useMemo(() => diagram.useCases.filter((u) => u.loc.file === undefined), [diagram]);
+  const useCases = useMemo(() => local.map((u) => u.name), [local]);
+  const current = (local.find((u) => u.id === useCase) ?? local[0])?.name;
+  const selectId = useId();
+  const [naming, setNaming] = useState(false);
   const outline = useMemo(() => (current ? outlineOf(source, current) : undefined), [source, current]);
   const scenarios = useMemo(() => outline?.items.flatMap((i) => (i.kind === 'scenarios' ? i.branches.map((b) => b.name) : [])) ?? [], [outline]);
   const [lane, setLane] = useState(MAIN);
@@ -69,11 +80,43 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, on
       return false;
     }
     setError(undefined);
-    onChange(addUseCase(source, clean));
-    setActive(clean);
+    const next = addUseCase(source, clean);
+    onChange(next);
+    const id = parse(next).diagram.useCases.find((u) => u.loc.file === undefined && u.name === clean)?.id;
+    if (id) onUseCase(id);
     setLane(MAIN);
+    setNaming(false);
+    onPick(null);
     return true;
   };
+
+  const choose = (value: string) => {
+    if (value === NEW) {
+      setError(undefined);
+      setNaming(true);
+    } else if (value.startsWith(SUGGEST)) {
+      newUseCase(value.slice(SUGGEST.length));
+    } else {
+      onUseCase(value);
+      setLane(MAIN);
+      onPick(null);
+    }
+  };
+
+  const stopNaming = () => {
+    setNaming(false);
+    setError(undefined);
+    // Back to the select, where the keyboard was.
+    requestAnimationFrame(() => document.getElementById(selectId)?.focus());
+  };
+
+  const suggestions = missingUseCases(diagram, useCases);
+  const options = [
+    ...local.map((u) => ({ value: u.id, label: u.name })),
+    ...suggestions.map((s) => ({ value: `${SUGGEST}${s}`, label: s, group: 'Add a suggested one' })),
+    { value: NEW, label: '+ New use case…' },
+  ];
+  const currentId = local.find((u) => u.name === current)?.id ?? '';
 
   return (
     <aside role="region" aria-label="Flows" className="flex h-full min-h-0 flex-col bg-surface text-ink">
@@ -85,55 +128,46 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, on
         </button>
       </div>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3">
-        {useCases.length === 0 ? (
-          <p className="text-sm text-muted">A use case is one thing a user does, written as the requests it makes from component to component.</p>
-        ) : (
-          <div role="tablist" aria-label="Use cases" className="flex flex-wrap gap-1.5">
-            {useCases.map((u) => (
-              <button
-                key={u}
-                type="button"
-                role="tab"
-                aria-selected={u === current}
-                onClick={() => {
-                  setActive(u);
-                  setLane(MAIN);
-                  onPick(null);
-                }}
-                className={`rounded-sm border-bw-1 px-2 py-1 text-xs font-semibold ${u === current ? 'border-ink bg-ink text-paper' : 'border-ink/30 hover:border-ink'}`}
-              >
-                {u}
-              </button>
-            ))}
-          </div>
-        )}
-
-        <NameForm
-          label="New use case"
-          placeholder="e.g. Place order"
-          button="Add use case"
-          suggestions={missingUseCases(diagram, useCases)}
-          onAdd={newUseCase}
-        />
+        <div className="space-y-1">
+          {naming ? (
+            <NewUseCase onAdd={newUseCase} onCancel={stopNaming} />
+          ) : (
+            <>
+              <label htmlFor={selectId} className={`block ${eyebrow}`}>
+                Use case
+              </label>
+              <div className="flex items-center gap-1.5">
+                <Select
+                  size="sm"
+                  id={selectId}
+                  value={currentId}
+                  onChange={choose}
+                  options={options}
+                  placeholder="No use cases yet"
+                  className="min-w-0 flex-1"
+                />
+                {current && (
+                  <button
+                    type="button"
+                    aria-label={`Delete the use case ${current}`}
+                    title="Delete this use case"
+                    onClick={() => {
+                      onPick(null);
+                      onChange(removeUseCase(source, current));
+                    }}
+                    className={`${iconButton} !h-8 !w-8 shrink-0 text-red-700 dark:text-red-300`}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+          {useCases.length === 0 && !naming && <p className="pt-1 text-sm text-muted">A use case is one thing a user does, written as the requests it makes from component to component. Add one from the list.</p>}
+        </div>
 
         {current && outline && (
           <section aria-label={`Use case ${current}`} className="space-y-3 rounded-sm border-bw-1 border-ink p-2.5">
-            <div className="flex items-center gap-2">
-              <h3 className="min-w-0 flex-1 truncate font-display text-base font-bold">{current}</h3>
-              <button
-                type="button"
-                aria-label={`Delete the use case ${current}`}
-                title="Delete this use case"
-                onClick={() => {
-                  onPick(null);
-                  onChange(removeUseCase(source, current));
-                }}
-                className={`${iconButton} !h-8 !w-8 text-red-700 dark:text-red-300`}
-              >
-                <Trash2 size={15} />
-              </button>
-            </div>
-
             {outline.items.length === 0 ? (
               <p className="text-xs text-muted">No steps yet. Add the first request, from where the user starts.</p>
             ) : (
@@ -263,6 +297,48 @@ function StepRow({ n, step, name, onDelete }: { n?: number; step: OutlineStep; n
         <X size={12} />
       </button>
     </li>
+  );
+}
+
+/** The select turned into a name field: Enter adds the use case, Escape goes back to the select. */
+function NewUseCase({ onAdd, onCancel }: { onAdd: (name: string) => boolean; onCancel: () => void }) {
+  const [value, setValue] = useState('');
+  const id = useId();
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        onAdd(value);
+      }}
+      className="space-y-1"
+    >
+      <label htmlFor={id} className={`block ${eyebrow}`}>
+        New use case
+      </label>
+      <div className="flex gap-1.5">
+        <input
+          id={id}
+          autoFocus
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key !== 'Escape') return;
+            e.preventDefault();
+            e.stopPropagation();
+            onCancel();
+          }}
+          placeholder="e.g. Place order"
+          autoComplete="off"
+          className={`min-w-0 flex-1 ${field} !py-1`}
+        />
+        <button type="submit" disabled={!value.trim()} className={`${outlineButton} !px-2 !py-1`} aria-label="Add use case" title="Add use case (Enter)">
+          <Plus size={14} aria-hidden="true" />
+        </button>
+        <button type="button" onClick={onCancel} className={`${iconButton} !h-8 !w-8 shrink-0`} aria-label="Cancel the new use case" title="Cancel (Escape)">
+          <X size={14} />
+        </button>
+      </div>
+    </form>
   );
 }
 

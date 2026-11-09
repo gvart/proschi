@@ -92,6 +92,8 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
   const [paletteFocus, setPaletteFocus] = useState(false);
   const [flowsShown, setFlowsShown] = usePaletteOpen(`${paletteKey}.flows`);
   const flowsOpen = flows && flowsShown;
+  /** The Flows builder's use case, kept here so closing the builder doesn't forget it. */
+  const [flowsUseCase, setFlowsUseCase] = useState<string>();
   /** The step being added in the Flows builder: node clicks pick its ends instead of selecting. */
   const [pick, setPick] = useState<StepPick | null>(null);
   const paletteOpen = (phone ? sheet : docked) && !flowsOpen;
@@ -234,7 +236,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
     setFlowsShown(!flowsOpen);
   };
   const flowsPanel = flowsOpen && (
-    <FlowsPanel source={source} diagram={diagram} onChange={onChange} pick={pick} onPick={setPick} onClose={toggleFlows} />
+    <FlowsPanel source={source} diagram={diagram} onChange={onChange} pick={pick} onPick={setPick} useCase={flowsUseCase} onUseCase={setFlowsUseCase} onClose={toggleFlows} />
   );
   const shownEdges = useMemo(
     () => withEdgeLoads(edges.map((e) => (current?.kind === 'edge' && e.id === current.id ? { ...e, selected: true } : e)), overlay),
