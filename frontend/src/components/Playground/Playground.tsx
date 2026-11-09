@@ -723,11 +723,11 @@ export default function Playground() {
 
   /** An image of the diagram asked for in the Export menu; the canvas makes it once it is on screen. */
   const [imageRequest, setImageRequest] = useState<ImageRequest | null>(null);
-  const requestImage = (format: ImageRequest['format']) => {
+  const requestImage = (format: ImageRequest['format'], scale?: ImageRequest['scale']) => {
     stopPlaying();
     setView('diagram');
     setMobilePane('diagram');
-    setImageRequest({ format });
+    setImageRequest({ format, scale });
   };
 
   const pickScenario = (id: string) => {

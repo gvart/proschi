@@ -1,7 +1,7 @@
 import { Archive, Download, FileCode2, Image, Sparkles } from 'lucide-react';
 import { showsUpgrade, useFeature } from '../featureState';
 import { pricingHref } from '../../services/billing';
-import { setNextPngScale } from './exportDiagram';
+import type { PngScale } from './exportDiagram';
 import Menu, { MenuItem } from './Menu';
 import { MermaidMenuItems, type MermaidSource } from './mermaidExport';
 import { eyebrow } from './ui';
@@ -11,7 +11,8 @@ interface ExportMenuProps {
   canImage: boolean;
   /** An image is being made. */
   exporting: boolean;
-  onImage: (format: 'png' | 'svg') => void;
+  /** `scale`: a PNG's pixel ratio, 2× unless Pro picks 3×. */
+  onImage: (format: 'png' | 'svg', scale?: PngScale) => void;
   mermaid: MermaidSource;
   /** Downloads the current document as a .proschi file. */
   onDownloadSource: () => void;
@@ -57,8 +58,7 @@ export default function ExportMenu({ canImage, exporting, onImage, mermaid, onDo
               disabled={!canImage || exporting}
               onSelect={() => {
                 close();
-                setNextPngScale(3);
-                onImage('png');
+                onImage('png', 3);
               }}
             >
               PNG image, 3× (high-DPI)
