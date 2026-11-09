@@ -1,6 +1,6 @@
 ---
 title: Search Indexing
-summary: DoorDash's search, fed through Kafka so menu edits reach the index in near real time and queries never wait on writes.
+summary: DoorDash's search, fed through Kafka so edits reach the index fast and searches never wait on writes.
 difficulty: medium
 company: DoorDash
 tags: [search, streaming, queues, async, replication, real-world]
