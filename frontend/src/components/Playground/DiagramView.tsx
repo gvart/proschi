@@ -167,7 +167,7 @@ export default function DiagramView({
   onOpenSystem,
 }: DiagramViewProps) {
   const playing = playback.active;
-  const { getNode, getNodes, getViewport, screenToFlowPosition, fitView, setCenter } = useReactFlow();
+  const { getNode, getNodes, getViewport, screenToFlowPosition, fitView, setCenter, setViewport } = useReactFlow();
   const flowStore = useStoreApi();
   const [selection, setSelection] = useState<{ nodes: Node[]; edges: Edge[] }>({ nodes: [], edges: [] });
   // Rename and Delete stay clear of the toasts.
@@ -399,13 +399,45 @@ export default function DiagramView({
         return;
       }
       selectOnly(node.id);
-      fitView({ nodes: [{ id: node.id }], padding: 0.8, maxZoom: FIT_MAX_ZOOM });
+      zoomTo(node.id);
+    };
+    // A late fit of the whole diagram (a layout settling) may still come: for a moment, zoom back to the node,
+    // unless the reader has taken the view in hand.
+    let held = 0;
+    let target = '';
+    let touched = false;
+    const touch = () => (touched = true);
+    const wrapper = wrapperRef.current;
+    wrapper?.addEventListener('pointerdown', touch);
+    wrapper?.addEventListener('wheel', touch);
+    const viewOf = (t: readonly number[]) => t.map((n) => n.toFixed(2)).join(',');
+    const fit = (id: string) => {
+      const { width, height, minZoom, nodeOrigin } = flowStore.getState();
+      const node = getNodes().find((n) => n.id === id);
+      if (!node) return;
+      const viewport = getViewportForBounds(getNodesBounds([node], nodeOrigin), width, height, minZoom, FIT_MAX_ZOOM, 0.8);
+      // React Flow applies it a moment later, so the view is held against what was asked, not what is there yet.
+      target = viewOf([viewport.x, viewport.y, viewport.zoom]);
+      setViewport(viewport);
+    };
+    const zoomTo = (id: string) => {
+      fit(id);
+      const hold = () => {
+        if (touched || held++ > 90) return;
+        if (held > 3 && viewOf(flowStore.getState().transform) !== target) fit(id);
+        frame = requestAnimationFrame(hold);
+      };
+      frame = requestAnimationFrame(hold);
     };
     frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-    // Once per request.
+    return () => {
+      cancelAnimationFrame(frame);
+      wrapper?.removeEventListener('pointerdown', touch);
+      wrapper?.removeEventListener('wheel', touch);
+    };
+    // Once per request, and again once React Flow is ready: its viewport helpers do nothing until then.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusRequest?.n]);
+  }, [focusRequest?.n, setViewport]);
   // Re-fit once nodes are measured after being added or removed, not on every drag.
   // The part of the canvas a covering band hides, measured after layout.
   const [inset, setInset] = useState<FitInset | undefined>(undefined);

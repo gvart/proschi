@@ -452,6 +452,10 @@ export default function Playground() {
     setView('diagram');
     setMobilePane('diagram');
   };
+  // Done with once the canvas is left: coming back to it later does not zoom to the node again.
+  useEffect(() => {
+    if (view !== 'diagram') setFocusRequest(null);
+  }, [view]);
 
   // Usage counts: the first look at the simulation's numbers (the Results or
   // HLD tab, or the load overlay) and at the tests (Results), once per session each.
