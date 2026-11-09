@@ -1,0 +1,19 @@
+docs/impl/feature-expansion.md
+  s_7a26d664deba08::t_18979cfa183ae1 76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "485457ee1874b3be83cf095069dbd15ebcae7e05",
+  "prompts": {},
+  "sessions": {
+    "s_7a26d664deba08": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "27ff766a-8fd9-4c1c-95d6-9f81b7990739",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
