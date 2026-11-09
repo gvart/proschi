@@ -25,6 +25,11 @@ const LOADING: FeatureState = { ok: false, loading: true };
 const SIGNED_OUT: FeatureState = { ok: false, reason: 'signed_out', loading: false };
 const UNKNOWN: FeatureState = { ok: false, loading: false };
 
+const BILLING_OFF: FeatureState = { ok: false, reason: 'billing_off', loading: false };
+
+/** The features that spend credits (Claude or Whisper): hidden, whatever the server says, in a build without paid plans. */
+const METERED: ReadonlySet<FeatureId> = new Set<FeatureId>(['ai_interview', 'interview_history', 'ai_roadmap', 'design_partner', 'deep_mode', 'interview_report']);
+
 export type FeatureLookup = (id: FeatureId) => FeatureState;
 
 /** Outside an app's provider (a build without accounts, a test): signed out. */
@@ -54,6 +59,7 @@ export function useFeatures(account: AccountState): FeatureLookup {
   const status = account.status;
   return useCallback(
     (id: FeatureId) => {
+      if (!billingEnabled && METERED.has(id)) return BILLING_OFF;
       if (status === 'loading') return LOADING;
       if (status !== 'signed-in') return SIGNED_OUT;
       if (!answer || answer.userId !== userId) return LOADING;

@@ -13,6 +13,9 @@ const BASE_URL = `http://127.0.0.1:${PORT}${BASE_PATH}`;
 /** The build with accounts (VITE_ACCOUNTS=true, `npm run build:accounts`), on the next port, for *.accounts.e2e.ts. */
 const ACCOUNTS_URL = `http://127.0.0.1:${PORT + 1}${BASE_PATH}`;
 const ACCOUNTS = /\.accounts\.e2e\.ts$/;
+/** The build with accounts but no paid plans (`npm run build:accounts-free`, no VITE_BILLING), on the one after, for *.free.e2e.ts. */
+const FREE_URL = `http://127.0.0.1:${PORT + 2}${BASE_PATH}`;
+const FREE = /\.free\.e2e\.ts$/;
 
 // `vite preview` serves whatever is in dist/; a missing build would only show up as confusing 404s.
 if (!existsSync(new URL('./dist/index.html', import.meta.url))) {
@@ -20,6 +23,10 @@ if (!existsSync(new URL('./dist/index.html', import.meta.url))) {
 }
 if (!existsSync(new URL('./dist-accounts/index.html', import.meta.url))) {
   throw new Error('No build with accounts in frontend/dist-accounts. Run `npm run build:accounts` first, or `npm run e2e:build`.');
+}
+
+if (!existsSync(new URL('./dist-accounts-free/index.html', import.meta.url))) {
+  throw new Error('No build with accounts and no billing in frontend/dist-accounts-free. Run `npm run build:accounts-free` first, or `npm run e2e:build`.');
 }
 
 // A sandbox with a pre-installed Chromium that doesn't match this Playwright
@@ -47,7 +54,7 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      testIgnore: ACCOUNTS,
+      testIgnore: [ACCOUNTS, FREE],
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1440, height: 900 },
@@ -65,6 +72,17 @@ export default defineConfig({
         launchOptions: executablePath && existsSync(executablePath) ? { executablePath } : {},
       },
     },
+    {
+      // With sign-in but no paid plans: nothing that spends credits may show (e2e/*.free.e2e.ts).
+      name: 'accounts-free',
+      testMatch: FREE,
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: FREE_URL,
+        viewport: { width: 1440, height: 900 },
+        launchOptions: executablePath && existsSync(executablePath) ? { executablePath } : {},
+      },
+    },
   ],
   webServer: [
     {
@@ -76,6 +94,12 @@ export default defineConfig({
     {
       command: `npx vite preview --host 127.0.0.1 --port ${PORT + 1} --strictPort --base ${BASE_PATH} --outDir dist-accounts`,
       url: ACCOUNTS_URL,
+      reuseExistingServer: !process.env.CI,
+      timeout: 60_000,
+    },
+    {
+      command: `npx vite preview --host 127.0.0.1 --port ${PORT + 2} --strictPort --base ${BASE_PATH} --outDir dist-accounts-free`,
+      url: FREE_URL,
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,
     },

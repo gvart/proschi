@@ -54,7 +54,7 @@ const STEP_HEADING = 'setup-step-heading';
 
 export default function Setup({ preselect, prefer, onStarted }: SetupProps) {
   const aiFeature = useFeature('ai_interview');
-  const ai = aiFeature.ok && apiEnabled;
+  const ai = billingEnabled && aiFeature.ok && apiEnabled;
   /** The server's sessions: whether it has the interviewer, the problems done, one still open. */
   const [server, setServer] = useState<{ interviews: AiInterview[] } | null>();
   useEffect(() => {

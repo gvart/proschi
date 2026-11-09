@@ -71,6 +71,8 @@ jobs:
       - run: npm run build
       # The same site with sign-in, for e2e/*.accounts.e2e.ts (the API is mocked).
       - run: npm run build:accounts
+      # Sign-in without paid plans: e2e/*.free.e2e.ts checks nothing metered shows.
+      - run: npm run build:accounts-free
       - run: npx playwright install --with-deps chromium
       - run: npm run e2e
       - uses: actions/upload-artifact@v7

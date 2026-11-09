@@ -9,7 +9,7 @@ const nativeDialogs = ['alert', 'confirm', 'prompt']
 const NATIVE_DIALOG = "Use the design system's dialogs from src/design/dialogs (confirm, prompt, notify, copyText), not the browser's."
 
 export default defineConfig([
-  globalIgnores(['dist', 'dist-accounts', 'playwright-report', 'test-results']),
+  globalIgnores(['dist', 'dist-accounts', 'dist-accounts-free', 'playwright-report', 'test-results']),
   {
     files: ['**/*.{ts,tsx}'],
     extends: [

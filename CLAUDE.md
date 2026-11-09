@@ -22,7 +22,7 @@ Live at <https://proschi.app/>.
 ## Checks before pushing
 
 - `frontend/`: `npm run lint`, `npx tsc -b`, `npm test`, `npm run build`,
-  `npm run build:accounts`, and `npx playwright test` (needs both builds).
+  `npm run build:accounts`, `npm run build:accounts-free`, and `npx playwright test` (needs all three builds).
 - `backend/`: `npm run typecheck` and `npm test`.
 - `tooling/`: `npm run typecheck`, `npm test`, then `npm run build`,
   `node dist/cli.cjs problem check ../frontend/src/practice/problems`,
