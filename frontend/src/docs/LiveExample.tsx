@@ -23,6 +23,8 @@ interface LiveExampleProps {
   editorHref?: string;
   /** The editor link's text. */
   openLabel?: string;
+  /** Leaves the open link out: an embed of a Pro account that turned Proschi's branding off. */
+  unbranded?: boolean;
   /** Open the editor in a new tab (from inside an iframe). */
   newTab?: boolean;
   /** A heading at the start of the bar (the embed page's diagram title). */
@@ -56,7 +58,7 @@ const ROOT_PATH = 'embedded.proschi';
  * its scenarios, Play to run one over the diagram, and a link that opens the
  * code in the editor. Nothing is saved: the editor gets the code in the link.
  */
-export default function LiveExample({ source, siteRoot, imports, editorHref, openLabel = 'Open in editor', newTab, title, lit }: LiveExampleProps) {
+export default function LiveExample({ source, siteRoot, imports, editorHref, openLabel = 'Open in editor', unbranded, newTab, title, lit }: LiveExampleProps) {
   const diagram = useMemo(
     () => parse(source, imports ? { path: ROOT_PATH, resolve: filesResolver(imports, ROOT_PATH) } : undefined).diagram,
     [source, imports],
@@ -130,12 +132,14 @@ export default function LiveExample({ source, siteRoot, imports, editorHref, ope
             {playing ? 'Replay' : 'Play'}
           </button>
         )}
-        <a className="ps-btn ps-btn--sm" href={editor} {...(newTab ? { target: '_blank', rel: 'noopener' } : {})}>
-          {openLabel}
-          <svg className="ps-icon" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M4 12h15M13 6l6 6-6 6" />
-          </svg>
-        </a>
+        {!unbranded && (
+          <a className="ps-btn ps-btn--sm" href={editor} {...(newTab ? { target: '_blank', rel: 'noopener' } : {})}>
+            {openLabel}
+            <svg className="ps-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 12h15M13 6l6 6-6 6" />
+            </svg>
+          </a>
+        )}
       </div>
       <div className={`live__stage ${playing ? 'live__stage--playing' : ''}`} role="region" aria-label={label}>
         {/* One canvas throughout: Play and Replay restyle it rather than swapping it for another. */}

@@ -36,6 +36,15 @@ function paperColor(): string {
   return channels ? `rgb(${channels})` : '#ffffff';
 }
 
+/** PNG exports draw at 2× on every plan; Pro's Export menu picks 3× for the next one (pro_exports, ExportMenu.tsx). */
+const PNG_SCALE = 2;
+let nextPngScale = PNG_SCALE;
+
+/** The pixel ratio of the next PNG export only; the one after is 2× again. */
+export function setNextPngScale(scale: 2 | 3): void {
+  nextPngScale = scale;
+}
+
 /** Space between the diagram and the legend in an exported image. */
 const LEGEND_GAP = 32;
 
@@ -97,8 +106,10 @@ async function renderImage(
       transform: `translate(${PADDING - bounds.x}px, ${PADDING - bounds.y}px) scale(1)`,
     },
   };
-  const url = format === 'png' ? await toPng(viewport, { ...options, pixelRatio: 2 }) : await toSvg(viewport, options);
-  downloadUrl(url, fileName);
+  const scale = nextPngScale;
+  nextPngScale = PNG_SCALE;
+  const url = format === 'png' ? await toPng(viewport, { ...options, pixelRatio: scale }) : await toSvg(viewport, options);
+  downloadUrl(url, format === 'png' && scale !== PNG_SCALE ? fileName.replace(/\.png$/, `@${scale}x.png`) : fileName);
 }
 
 /** The size link previews show (Open Graph's 1.91:1). */
