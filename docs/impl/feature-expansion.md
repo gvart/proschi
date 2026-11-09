@@ -105,9 +105,9 @@ per-use LLM cost), and improve the language and the visual editor.
 - [x] **7.2 Peak and daily-profile traffic**: `"Read" 20k rps peak x3` or `profile 2k..60k rps`.
   Cost is taken at the average, capacity at the peak.
 - [x] **7.3 Cache hit rate**: `capacity { cache hit 90% }` derives the miss path's load.
-- [ ] **7.4 Cost per team, group or tag**, plus scoped budgets `cost "@Payments" <= 500 usd/month`.
-- [ ] **7.5 Retries and partial failure**: `errors 2% retries 3` adds retry amplification.
-- [ ] **7.6 Queue backlog**: `drain 5k rps` and a `lag "UC" < 30s` requirement.
+- [x] **7.4 Cost per team, group or tag**, plus scoped budgets `cost "@Payments" <= 500 usd/month`.
+- [x] **7.5 Retries and partial failure**: `errors 2% retries 3` adds retry amplification.
+- [x] **7.6 Queue backlog**: `drain 5k rps` and a `lag "UC" < 30s` requirement.
 
 For each: parser, formatter, language server, sim tests and docs (GRAMMAR, HLD, model.html).
 verify: dsl, sim and tooling tests, plus `problem check` across all problems (no regressions).
