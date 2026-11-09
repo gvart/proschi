@@ -189,6 +189,9 @@ whatif "Database outage" {
 | `fail n` | Takes node `n` down. Its availability is 0. The traffic of each scenario that needs `n` moves to the use case's [fallback scenarios](SCENARIOS.md#error-paths-and-conditions) for it, the ones that call it with `-x` and still complete. Without a fallback, that share of requests fails. |
 | `n x4` | Runs `n` with that many replicas, for capacity, availability and cost. |
 
+[Constants](HLD.md#constants) work here too: `traffic "U" $rate`,
+`traffic "U" x$factor` and `n x$fleet`.
+
 A what-if passes when every requirement holds under it. Test blocks don't
 count, because they check request flows and not numbers. Unknown use cases
 and nodes are warnings, and two what-ifs with one name are an error.

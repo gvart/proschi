@@ -120,7 +120,7 @@ connection.onDidChangeConfiguration(({ settings }) => {
 });
 
 // Standard token types, so every theme colours them: node ids, tech stacks, teams, legend tags.
-const TOKEN_TYPE: Record<TokenKind, string> = { node: 'variable', tech: 'type', team: 'decorator', tag: 'enumMember' };
+const TOKEN_TYPE: Record<TokenKind, string> = { node: 'variable', tech: 'type', team: 'decorator', tag: 'enumMember', constant: 'parameter' };
 const TOKEN_TYPES = Object.values(TOKEN_TYPE);
 
 connection.onInitialize(({ capabilities: client }) => {
@@ -128,7 +128,7 @@ connection.onInitialize(({ capabilities: client }) => {
   return {
     capabilities: {
       textDocumentSync: TextDocumentSyncKind.Incremental,
-      completionProvider: { triggerCharacters: ['[', ' ', '"'] },
+      completionProvider: { triggerCharacters: ['[', ' ', '"', '$'] },
       hoverProvider: true,
       definitionProvider: true,
       referencesProvider: true,
@@ -233,6 +233,7 @@ const COMPLETION_KIND = {
   tech: CompletionItemKind.Class,
   usecase: CompletionItemKind.Function,
   scenario: CompletionItemKind.Event,
+  constant: CompletionItemKind.Constant,
 };
 
 connection.onCompletion(

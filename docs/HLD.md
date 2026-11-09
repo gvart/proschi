@@ -98,6 +98,65 @@ The unit may be attached or one space away (`50ms`, `50 ms`). Rates become
 requests per second (6k rpm is 100 rps). A missing or wrong unit is an error
 that names the one expected.
 
+## Constants
+
+A number that shows up in several places gets a name: `let`, the name,
+`=` and the value. Write `$name` wherever a value of that kind goes, and
+`x$name` for replicas and what-if multipliers.
+
+```proschi
+title "Checkout"
+
+let peak = 2k rps
+let fleet = 3
+let slo = 300ms
+let budget = 1500 usd/month
+let launch = 2
+let launchFleet = 4
+
+shop "Shop"         [Browser]
+api  "Checkout API" [REST API]   x$fleet
+db   "Orders"       [PostgreSQL] x2
+
+shop -> api : HTTPS
+api  -> db  : SQL
+
+usecase "Checkout" {
+  shop -> api  : POST /orders
+  api  -> db   : INSERT order
+  api --> shop : 201
+}
+
+traffic {
+  "Checkout" $peak
+}
+
+requirements {
+  p99 "Checkout" < $slo
+  cost <= $budget
+}
+
+whatif "Launch day" {
+  traffic "Checkout" x$launch
+  api x$launchFleet
+}
+```
+
+> **Try it:** set `let peak = 3k rps`. The traffic follows, and so does
+> "Launch day", which now sends 6k rps: the Orders database, whose writes
+> all go to one primary, saturates.
+
+- **A value has a kind.** `let peak = 2k rps` is a rate, `let slo = 300ms` a
+  duration, `let fleet = 3` a plain number. Using one where another kind
+  goes, like `$slo` as a rate, is an error that says what was expected.
+- **`x$name` takes a plain number**: whole and at least 1 for replicas
+  (`api x$fleet`, `shards $n` in capacity), any number for a what-if's
+  `traffic "U" x$factor`.
+- **Constants are top level.** A `let` may come after the lines that use
+  it. An unknown name and a name defined twice are errors.
+- The editor plugins show a constant's value on hover, jump to its `let`,
+  and rename it everywhere.
+
 ## Traffic
 
 Traffic is the load: requests per second for each use case, split over its

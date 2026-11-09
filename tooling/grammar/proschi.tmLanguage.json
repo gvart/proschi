@@ -34,6 +34,9 @@
       "include": "#layout-hint"
     },
     {
+      "include": "#let"
+    },
+    {
       "include": "#keyword"
     },
     {
@@ -56,6 +59,9 @@
     },
     {
       "include": "#position"
+    },
+    {
+      "include": "#constant"
     },
     {
       "include": "#replicas"
@@ -144,6 +150,35 @@
           "name": "keyword.control.proschi"
         }
       }
+    },
+    "let": {
+      "comment": "`let name = value`: a constant, used as `$name` (or `x$name` for replicas and multipliers).",
+      "begin": "^\\s*(let)\\s+([A-Za-z_][A-Za-z0-9_]*)\\s*(=)",
+      "end": "$",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.other.let.proschi"
+        },
+        "2": {
+          "name": "variable.other.constant.proschi"
+        },
+        "3": {
+          "name": "keyword.operator.assignment.proschi"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#quantity"
+        }
+      ]
+    },
+    "constant": {
+      "comment": "`$peak`, or `x$n` for replicas and multipliers: a use of a constant.",
+      "name": "variable.other.constant.proschi",
+      "match": "(?<![A-Za-z0-9_])x?\\$[A-Za-z_][A-Za-z0-9_]*"
     },
     "position": {
       "match": "\\b(pos)\\s+(-?\\d+)\\s*(,)\\s*(-?\\d+)",
@@ -384,6 +419,9 @@
           "include": "#section-keyword"
         },
         {
+          "include": "#constant"
+        },
+        {
           "include": "#replicas"
         },
         {
@@ -585,6 +623,9 @@
         },
         {
           "include": "#section-keyword"
+        },
+        {
+          "include": "#constant"
         },
         {
           "include": "#quantity"

@@ -25,6 +25,10 @@ const LEGEND_HEADER = /^\s*legend\s*\{\s*(?:#.*)?$/;
 const HTTP_METHOD = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b/;
 /** `direction right`, `layout ordered`: layout hints, statements of their own (any other use of the words is a node id). */
 const LAYOUT_HINT = /^\s*(?:direction\s+(?:down|right|up|left)|layout\s+ordered)\s*(?:#.*)?$/;
+/** `let name = value`: a constant's definition (any other use of `let` is a node id). */
+const LET_LINE = /^\s*let\s+[A-Za-z_]\w*\s*=/;
+/** `$peak`, or `x$n` for replicas and multipliers: a constant's use. */
+const CONSTANT = /^x?\$[A-Za-z_]\w*/;
 /** `when` is a keyword only right after an alt name: `alt "Name" when "condition" {`. */
 const AFTER_ALT_NAME = /^\s*(\}\s*)?alt\s+("(?:[^"\\]|\\.)*"|\w+)\s+$/;
 
@@ -89,6 +93,11 @@ export const proschiStreamParser: StreamParser<LexState> = {
     if (stream.match(/^\[[^\]]*\]?/)) return 'typeName';
     if (stream.match(/^@[\w-]*/)) return 'attributeName';
     if (stream.match(/^(->>|-->|->|-x(?!\w))/)) return 'operator';
+    if (stream.match(CONSTANT)) return 'atom';
+    if (LET_LINE.test(stream.string)) {
+      if (stream.pos === stream.string.search(/\S/) && stream.match(/^let\b/)) return 'keyword';
+      if (stream.eat('=')) return 'operator';
+    }
     if (stream.match(QUANTITY)) return 'number';
     if (stream.match(/^[<>]=?/)) return 'operator';
     if ((afterColor || (state.inLegend && stream.string.slice(0, stream.pos).trim())) && stream.match(COLOR_NAME)) return 'atom';
@@ -140,6 +149,7 @@ const techOptions: Completion[] = componentCatalog.flatMap((c) => [
 const keywordOptions: Completion[] = [
   { label: 'title', type: 'keyword', apply: 'title "', detail: 'document title' },
   { label: 'import', type: 'keyword', apply: 'import "', detail: 'import "file.proschi"' },
+  snippetCompletion('let ${name} = ${100 rps}', { label: 'let', type: 'keyword', detail: 'a constant, used as $name' }),
   { label: 'group', type: 'keyword', detail: 'group id "Name" { … }' },
   { label: 'usecase', type: 'keyword', apply: 'usecase "', detail: 'usecase "Name" { … }' },
   { label: 'par', type: 'keyword', apply: 'par {', detail: 'parallel steps' },

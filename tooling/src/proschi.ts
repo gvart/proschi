@@ -4,13 +4,14 @@
  * thin adapter around it, so the CLI, the language server and the web editor
  * can never disagree about what is valid.
  */
-export { DID_YOU_MEAN, parse } from '../../frontend/src/dsl/parser';
+export { DID_YOU_MEAN, kindName, parse } from '../../frontend/src/dsl/parser';
 export { addConnection, setCapacity, setReplicas } from '../../frontend/src/dsl/edit';
 export { tokenizeLine } from '../../frontend/src/dsl/lexer';
 export { format } from '../../frontend/src/dsl/format';
 export { examples } from '../../frontend/src/dsl/examples';
 export { componentCatalog } from '../../frontend/src/catalog/componentCatalog';
 export type {
+  Constant,
   Diagnostic,
   Diagram,
   DiagramImport,
@@ -57,6 +58,7 @@ export { parseQuantity } from '../../frontend/src/dsl/quantity';
 export const KEYWORDS: { label: string; detail: string; snippet: string }[] = [
   { label: 'title', detail: 'Document title', snippet: 'title "$1"' },
   { label: 'import', detail: 'import "file.proschi" (top level)', snippet: 'import "${1:file.proschi}"' },
+  { label: 'let', detail: 'A constant, used as $name: let peak = 120k rps (top level)', snippet: 'let ${1:name} = ${2:100 rps}' },
   { label: 'group', detail: 'group id "Name" [Style] { … }', snippet: 'group ${1:id} "${2:Name}" {\n\t$0\n}' },
   { label: 'usecase', detail: 'usecase "Name" { steps }', snippet: 'usecase "${1:Name}" {\n\t$0\n}' },
   { label: 'par', detail: 'Steps that run in parallel', snippet: 'par {\n\t$0\n}' },

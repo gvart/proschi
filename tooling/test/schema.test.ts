@@ -41,6 +41,13 @@ describe('JSON Schema', () => {
     expect(validate(result), JSON.stringify(validate.errors, null, 2)).toBe(true);
   });
 
+  it('describes constants', () => {
+    const source = 'let peak = 2k rps\nlet n = 2\napi [REST API] x$n\nusecase "U" {\n  api -> api : x\n}\ntraffic {\n  "U" $peak\n}';
+    const result = JSON.parse(JSON.stringify(parse(source)));
+    expect(result.diagram.constants).toHaveLength(2);
+    expect(validate(result), JSON.stringify(validate.errors, null, 2)).toBe(true);
+  });
+
   it('describes every requirement, assertion and selector', () => {
     const source = [
       'title "T" "Summary"',

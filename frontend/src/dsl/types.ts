@@ -223,6 +223,24 @@ export interface Diagram {
   systems?: DiagramSystem[];
   /** `whatif "Name" { … }` blocks, in order; absent when there are none. */
   whatifs?: WhatIf[];
+  /** `let name = value` constants, in order; absent when there are none. Their uses are already replaced by their values. */
+  constants?: Constant[];
+}
+
+/**
+ * `let peak = 120k rps`: a named quantity, used as `$peak` wherever a
+ * quantity of its kind goes, or as `x$n` for replicas and multipliers.
+ */
+export interface Constant {
+  name: string;
+  /** The value after unit normalisation, like any quantity (`2s` is 2000). */
+  value: number;
+  /** Absent for a plain number (`let n = 3`). */
+  unit?: Quantity['unit'];
+  /** The value as written, e.g. `120k rps`. */
+  text: string;
+  /** The name in its `let` line. */
+  loc: SourceLoc;
 }
 
 /** One line of a `whatif` block. */

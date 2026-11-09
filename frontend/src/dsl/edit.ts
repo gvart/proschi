@@ -285,7 +285,7 @@ export function setTech(source: string, id: string, tech: string | null): string
 /** Sets the `x3` replica count of a node; 1 removes it. */
 export function setReplicas(source: string, id: string, replicas: number): string {
   const n = Math.max(1, Math.floor(replicas));
-  return setProperty(source, id, (t) => t.kind === 'ident' && /^x\d+$/.test(t.value), n > 1 ? `x${n}` : null);
+  return setProperty(source, id, (t) => (t.kind === 'ident' && /^x\d+$/.test(t.value)) || (t.kind === 'const' && t.value.startsWith('x$')), n > 1 ? `x${n}` : null);
 }
 
 /** Sets or clears the `@team` that owns a node. */

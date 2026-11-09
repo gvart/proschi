@@ -860,6 +860,17 @@ function tokenizeLine(text, line) {
       tokens.push({ kind, value, col: start2 + 1, length: i - start2 });
       continue;
     }
+    if (ch === "=") {
+      tokens.push({ kind: "op", value: "=", col: start2 + 1, length: 1 });
+      i++;
+      continue;
+    }
+    if (ch === "$" && IDENT_START.test(text[i + 1] ?? "")) {
+      i++;
+      while (i < text.length && IDENT_PART.test(text[i])) i++;
+      tokens.push({ kind: "const", value: text.slice(start2, i), col: start2 + 1, length: i - start2 });
+      continue;
+    }
     if (ch === "<" || ch === ">") {
       const value = text[i + 1] === "=" ? ch + "=" : ch;
       tokens.push({ kind: "op", value, col: start2 + 1, length: value.length });
@@ -875,6 +886,12 @@ function tokenizeLine(text, line) {
     }
     if (IDENT_START.test(ch)) {
       while (i < text.length && IDENT_PART.test(text[i])) i++;
+      if (i === start2 + 1 && ch === "x" && text[i] === "$" && IDENT_START.test(text[i + 1] ?? "")) {
+        i += 2;
+        while (i < text.length && IDENT_PART.test(text[i])) i++;
+        tokens.push({ kind: "const", value: text.slice(start2, i), col: start2 + 1, length: i - start2 });
+        continue;
+      }
       if (/^x\d+$/.test(text.slice(start2, i)) && text[i] === "." && DIGIT.test(text[i + 1] ?? "")) {
         i++;
         while (i < text.length && DIGIT.test(text[i])) i++;
@@ -1354,6 +1371,8 @@ var Parser = class _Parser {
   decisions = [];
   tests = [];
   whatifs = [];
+  /** `let` constants by name, from every file read so far. */
+  constants = /* @__PURE__ */ new Map();
   blocks = [];
   legend = [];
   layout = {};
@@ -1401,7 +1420,8 @@ var Parser = class _Parser {
       ...this.legend.length ? { legend: this.legend } : {},
       ...Object.keys(this.layout).length ? { layout: this.layout } : {},
       ...this.systems.length ? { systems: this.systems } : {},
-      ...this.whatifs.length ? { whatifs: this.whatifs } : {}
+      ...this.whatifs.length ? { whatifs: this.whatifs } : {},
+      ...this.constants.size ? { constants: [...this.constants.values()] } : {}
     };
     const order = (d) => this.fileOrder.get(d.file) ?? 0;
     this.diagnostics.sort((a, b) => order(a) - order(b) || a.line - b.line || a.col - b.col);
@@ -1414,6 +1434,10 @@ var Parser = class _Parser {
   }
   /** Reads the current file's lines and reports blocks it leaves open. */
   parseFile() {
+    this.lines.forEach((text, index) => {
+      const { tokens, diagnostics } = tokenizeLine(text, index + 1);
+      if (isLet(tokens) && diagnostics.length === 0) this.defineConstant(tokens, index + 1);
+    });
     for (let i = 0; i < this.lines.length; i++) {
       i = this.parseLine(i);
     }
@@ -1433,6 +1457,10 @@ var Parser = class _Parser {
     const [first, second, third] = tokens;
     const loc = (t) => this.locOf(t, line);
     const top = this.top();
+    if (isLet(tokens) && !(top?.kind === "section" && top.skipped !== void 0)) {
+      if (top) this.error("Define constants at the top level, not inside a block", loc(first));
+      return index;
+    }
     if (top?.kind === "section") {
       if (top.skipped !== void 0) {
         const opens = tokens[tokens.length - 1].kind === "lbrace";
@@ -1879,7 +1907,7 @@ var Parser = class _Parser {
   readStub(stub, tokens, from, to, line) {
     for (let i = from; i < to; ) {
       const t = tokens[i];
-      if (t.kind === "quantity" || t.kind === "number") {
+      if (t.kind === "quantity" || t.kind === "number" || isConstUse(t)) {
         const rps = this.quantityOf(t, "rps", t, line);
         if (rps === void 0) return;
         stub.rps = rps;
@@ -2153,6 +2181,10 @@ var Parser = class _Parser {
           this.error("A node needs at least one replica: x1, x2, \u2026", this.locOf(t, line));
           return;
         }
+        node.replicas = replicas;
+      } else if (t.kind === "const") {
+        const replicas = this.replicasOf(t, line, "A node needs a whole number of replicas, at least 1: x1, x2, \u2026");
+        if (replicas === void 0) return;
         node.replicas = replicas;
       } else if (t.kind === "label" || t.kind === "arrow") {
         this.error(`Expected '${idToken.value} -> target' for a connection`, this.locOf(t, line));
@@ -2612,7 +2644,7 @@ var Parser = class _Parser {
     for (let i = 1; i < tokens.length; ) {
       const t = tokens[i];
       let part;
-      if (t.kind === "quantity" || t.kind === "number") {
+      if (t.kind === "quantity" || t.kind === "number" || isConstUse(t)) {
         part = "rate";
         const rps = this.quantityOf(t, "rps", t, line);
         if (rps === void 0) return;
@@ -2642,11 +2674,13 @@ var Parser = class _Parser {
       } else if (isWord(t, "shards")) {
         part = "shards";
         const n = tokens[i + 1];
-        if (n?.kind !== "number" || Number(n.value) < 1) {
+        const shards = isConstUse(n) ? this.countOf(n, line) : n?.kind === "number" ? Number(n.value) : NaN;
+        if (shards === void 0) return;
+        if (!Number.isInteger(shards) || shards < 1) {
           this.error("Expected a whole number of shards, at least 1, e.g. shards 4", this.locOf(n ?? t, line));
           return;
         }
-        override.shards = Number(n.value);
+        override.shards = shards;
         i += 2;
       } else if (isWord(t, "size")) {
         part = "size";
@@ -2889,9 +2923,10 @@ var Parser = class _Parser {
         if (!this.nodes.has(id.value)) this.warning(`Unknown node '${id.value}' in what-if`, idLoc);
       });
     };
-    if (first.kind === "ident" && second?.kind === "ident" && REPLICAS.test(second.value)) {
+    if (first.kind === "ident" && (second?.kind === "ident" && REPLICAS.test(second.value) || second?.kind === "const")) {
       if (!this.expectEnd(tokens, 2, line)) return;
-      const replicas = Number(REPLICAS.exec(second.value)[1]);
+      const replicas = second.kind === "const" ? this.replicasOf(second, line, "A what-if needs a whole number of replicas, at least x1; to take a node down, write fail <node>") : Number(REPLICAS.exec(second.value)[1]);
+      if (replicas === void 0) return;
       if (replicas < 1) {
         this.error("A what-if needs at least one replica, x1; to take a node down, write fail <node>", this.locOf(second, line));
         return;
@@ -2930,6 +2965,10 @@ var Parser = class _Parser {
       let change;
       if (third?.kind === "ident" && MULTIPLIER.test(third.value)) {
         const multiply = Number(MULTIPLIER.exec(third.value)[1]);
+        change = { kind: "traffic", useCase: second.value, multiply, loc };
+      } else if (third?.kind === "const" && third.value.startsWith("x")) {
+        const multiply = this.countOf(third, line);
+        if (multiply === void 0) return;
         change = { kind: "traffic", useCase: second.value, multiply, loc };
       } else {
         const rps = this.quantityOf(third, "rps", second, line);
@@ -3179,6 +3218,15 @@ var Parser = class _Parser {
   /** The value of a quantity token in `unit`, or undefined after reporting what is wrong. `after` locates a missing token. */
   quantityOf(token, unit, after2, line) {
     const expected = UNIT_EXAMPLES[unit];
+    if (isConstUse(token)) {
+      const c = this.constantOf(token, line);
+      if (!c) return void 0;
+      if (c.unit !== unit) {
+        this.error(`'${token.value}' is ${c.text}, ${kindName(c.unit)}; expected ${expected}`, this.locOf(token, line));
+        return void 0;
+      }
+      return c.value;
+    }
     if (token?.kind !== "quantity" && token?.kind !== "number") {
       this.error(`Expected ${expected}${token ? `, not ${describe(token)}` : ""}`, this.locOf(token ?? after2, line));
       return void 0;
@@ -3195,6 +3243,61 @@ var Parser = class _Parser {
       return void 0;
     }
     return q.value;
+  }
+  /** `let name = value`, read before the rest of its file. */
+  defineConstant(tokens, line) {
+    const [, name, eq, value] = tokens;
+    if (value?.kind !== "quantity" && value?.kind !== "number") {
+      this.error(`Expected a number or quantity after =, e.g. let ${name.value} = 120k rps${value ? `, not ${describe(value)}` : ""}`, this.locOf(value ?? eq, line));
+      return;
+    }
+    if (!this.expectEnd(tokens, 4, line)) return;
+    const text = this.lines[line - 1].slice(value.col - 1, value.col - 1 + value.length);
+    const q = parseQuantity(text);
+    if ("error" in q) {
+      this.error(q.error, this.locOf(value, line));
+      return;
+    }
+    const loc = this.locOf(name, line);
+    const first = this.constants.get(name.value);
+    if (first) {
+      this.error(`Constant '${name.value}' is defined twice (first ${this.where(first.loc, loc)})`, loc);
+      return;
+    }
+    this.constants.set(name.value, { name: name.value, value: q.value, ...q.unit ? { unit: q.unit } : {}, text: text.replace(/[ \t]+/g, " "), loc });
+  }
+  /** The constant `$name` or `x$name` names, or undefined after reporting that there is none. */
+  constantOf(token, line) {
+    const name = token.value.replace(/^x?\$/, "");
+    const found = this.constants.get(name);
+    if (found) return found;
+    const near = [...this.constants.keys()].find((k) => editDistance2(k, name) <= 2);
+    this.error(`Unknown constant '$${name}'${near ? `; did you mean '$${near}'?` : `; define it with let ${name} = \u2026`}`, this.locOf(token, line));
+    return void 0;
+  }
+  /** The value of a constant used as a count (`x$n`, `shards $n`): a plain number. */
+  countOf(token, line) {
+    const c = this.constantOf(token, line);
+    if (!c) return void 0;
+    if (c.unit !== void 0) {
+      this.error(`'${token.value}' needs a plain number, as in let ${c.name} = 3; '$${c.name}' is ${c.text}, ${kindName(c.unit)}`, this.locOf(token, line));
+      return void 0;
+    }
+    return c.value;
+  }
+  /** `x$n` after a node: its replicas, a whole number of at least 1. */
+  replicasOf(token, line, wrong) {
+    if (!token.value.startsWith("x")) {
+      this.error(`Write x${token.value} for replicas`, this.locOf(token, line));
+      return void 0;
+    }
+    const n = this.countOf(token, line);
+    if (n === void 0) return void 0;
+    if (!Number.isInteger(n) || n < 1) {
+      this.error(`${wrong} ('${token.value}' is ${n})`, this.locOf(token, line));
+      return void 0;
+    }
+    return n;
   }
   expectOp(tokens, i, ops, example, line) {
     const t = tokens[i];
@@ -3454,6 +3557,23 @@ function expand(items) {
 function findUseCaseIn(diagram, name) {
   const lower = name.toLowerCase();
   return diagram.useCases.find((u) => u.name === name) ?? diagram.useCases.find((u) => u.name.toLowerCase() === lower) ?? diagram.useCases.find((u) => u.id === name);
+}
+function isLet(tokens) {
+  return isWord(tokens[0], "let") && tokens[1]?.kind === "ident" && tokens[2]?.kind === "op" && tokens[2].value === "=";
+}
+function isConstUse(token) {
+  return token?.kind === "const" && token.value.startsWith("$");
+}
+var KIND_NAMES = {
+  rps: "a rate",
+  ms: "a duration",
+  "%": "a percentage",
+  "usd/month": "a monthly cost",
+  MBps: "a bandwidth",
+  "usd/GB": "an egress price"
+};
+function kindName(unit) {
+  return unit ? KIND_NAMES[unit] : "a plain number";
 }
 function isWord(token, word) {
   return token?.kind === "ident" && token.value === word;

@@ -93,6 +93,7 @@ export function diagramSchema() {
           decisions: array('decision', '`decision` statements.'),
           tests: array('test', '`test` blocks of flow assertions.'),
           whatifs: array('whatif', '`whatif` blocks: variants of the design to simulate.'),
+          constants: array('constant', '`let name = value` constants, in order. Their uses are already replaced by their values.'),
           legend: array('legendEntry', 'Entries of the `legend` block, in order.'),
           layout: object(
             {
@@ -295,6 +296,16 @@ export function diagramSchema() {
       ),
       test: object({ name: str, assertions: array('assertion'), loc }, ['name', 'assertions', 'loc']),
       whatif: object({ name: str, changes: array('whatifChange'), loc }, ['name', 'changes', 'loc']),
+      constant: object(
+        {
+          name: str,
+          value: { ...num, description: 'The value after unit normalisation: rates in rps, durations in ms.' },
+          unit: { enum: ['rps', 'ms', '%', 'usd/month', 'MBps', 'usd/GB'], description: 'Left out for a plain number.' },
+          text: { ...str, description: 'The value as written, e.g. `120k rps`.' },
+          loc: { ...loc, description: 'The name in its `let` line.' },
+        },
+        ['name', 'value', 'text', 'loc'],
+      ),
       whatifChange: {
         description: 'One line of a whatif block.',
         oneOf: [
