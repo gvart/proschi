@@ -1,0 +1,33 @@
+frontend/e2e/selection-sync.e2e.ts
+  s_f355061868c346::t_17a94b8f2e4052 26
+  s_f355061868c346::t_2a6d4d9c14f343 147
+  s_f355061868c346::t_a7926776062482 167-168
+frontend/src/components/Playground/DiagramView.tsx
+  s_f355061868c346::t_a7926776062482 285-294
+frontend/e2e/visual-editing.e2e.ts
+  s_f355061868c346::t_17a94b8f2e4052 26-27,41-42
+frontend/src/practice/interview/Room.tsx
+  s_f355061868c346::t_260d0d46b76511 101
+frontend/src/components/Diagram/EditableCanvas.tsx
+  s_f355061868c346::t_260d0d46b76511 45-46,62,217
+frontend/src/components/Diagram/useDiagramLayout.ts
+  s_f355061868c346::t_260d0d46b76511 70-71,73,77-78
+frontend/src/practice/ProblemPage.tsx
+  s_f355061868c346::t_260d0d46b76511 269,452,585,971,985,1041
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c0cc5a75b92bf46937080e9bbb7d192abc561ad1",
+  "prompts": {},
+  "sessions": {
+    "s_f355061868c346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd556674-4248-429d-bf5c-2b361bc86c62",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
