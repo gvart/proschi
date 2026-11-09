@@ -73,7 +73,7 @@ per-use LLM cost), and improve the language and the visual editor.
   `requirements`. The CLI gets `proschi analyze --whatif` and `--sweep "UC" 10k..500k`
   (prints where each node saturates and the max rps that still passes).
   verify: dsl and sim tests, tooling tests, docs page. depends on: none
-- [ ] **4.2 T3 What-if UI**:
+- [x] **4.2 T3 What-if UI**:
   - a traffic multiplier slider on the overlay that doesn't edit the text, plus a "write to traffic" button;
   - "Simulate down" in the right-click menu;
   - saved `whatif` blocks shown as tabs in Results (Pro).
