@@ -37,6 +37,7 @@ import { toFlowEdges } from '../../dsl/layout';
 import { withEdgeStyles } from '../../dsl/toCanvas';
 import { useAutoLayout } from '../Diagram/useDiagramLayout';
 import { loadJson, saveJson } from '../../services/storage';
+import { criticalPathOf, edgeOverlays } from '../../sim/overlay';
 import { FIRST_RUN_SOURCE, exampleFromSearch, withoutExample } from '../../playground/exampleLink';
 import {
   BLANK_SOURCE,
@@ -145,6 +146,8 @@ const NO_IDS: string[] = [];
 /** Whether the diagrams sidebar is pinned open, on wider screens; until it is set, from this width on. */
 const FILES_KEY = 'proschi.playground.files';
 const FILES_PINNED_FROM = 1440;
+/** "Overlay: load", on unless this viewer turned it off (false). */
+const OVERLAY_KEY = 'proschi.playground.overlay';
 const VIEW_LABEL: Record<View, string> = { diagram: 'Diagram', results: 'Results', hld: 'HLD' };
 
 function loadInitialState(): DocumentState {
@@ -407,11 +410,22 @@ export default function Playground() {
   }, [source, playbackKey, importsKey]);
 
   const [nodes, setNodes] = useState<Node[]>([]);
-  /** "Overlay: load": the analysis drawn on the diagram, for documents with a traffic block. */
-  const [overlayOn, setOverlayOn] = useState(false);
+  /** "Overlay: load": the analysis drawn on the diagram, for documents with a traffic block; on until turned off. */
+  const [overlayOn, setOverlayOn] = useState(() => loadJson<boolean>(OVERLAY_KEY, true) !== false);
+  const toggleOverlay = () => {
+    setOverlayOn(!overlayOn);
+    saveJson(OVERLAY_KEY, !overlayOn);
+  };
   const canOverlay = (shown.traffic?.length ?? 0) > 0;
   const { overlayOf, summaries } = systems;
-  const overlay = useMemo(() => (overlayOn && canOverlay ? overlayOf() : undefined), [overlayOn, canOverlay, overlayOf]);
+  const overlay = useMemo(() => {
+    if (!overlayOn || !canOverlay) return undefined;
+    const base = overlayOf();
+    // The p99 path of the use case picked for playback, else of the busiest one.
+    if (selectedUseCaseId === undefined) return base;
+    const critical = criticalPathOf(shown, systems.analysis, selectedUseCaseId) ?? base.critical;
+    return { ...base, critical };
+  }, [overlayOn, canOverlay, overlayOf, selectedUseCaseId, shown, systems.analysis]);
   /** With the overlay on, `62% · $400/mo` after each node line in the code too. */
   const codeHints = useMemo(() => (overlay ? loadHints(diagram, simulation.analysis) : undefined), [overlay, diagram, simulation.analysis]);
   const shownNodes = useMemo(
@@ -425,6 +439,19 @@ export default function Playground() {
   );
   const systemActions = useMemo<SystemActions>(() => ({ open: systems.open, toggle: systems.toggle }), [systems.open, systems.toggle]);
   const [edges, setEdges] = useState<Edge[]>([]);
+  /** The edges with what they carry while the overlay is on (not while a use case plays over them). */
+  const shownEdges = useMemo(() => {
+    if (!overlay || playing) return edges;
+    const loads = edgeOverlays(edges, overlay);
+    return edges.map((e) => (loads[e.id] ? { ...e, data: { ...(e.data ?? {}), overlay: loads[e.id] } } : e));
+  }, [edges, overlay, playing]);
+  /** A node picked in Results, to select and zoom to on the canvas; `n` makes picking it again count. */
+  const [focusRequest, setFocusRequest] = useState<{ id: string; n: number } | null>(null);
+  const focusOnCanvas = (id: string) => {
+    setFocusRequest((r) => ({ id, n: (r?.n ?? 0) + 1 }));
+    setView('diagram');
+    setMobilePane('diagram');
+  };
 
   // Usage counts: the first look at the simulation's numbers (the Results or
   // HLD tab, or the load overlay) and at the tests (Results), once per session each.
@@ -1359,6 +1386,7 @@ export default function Playground() {
                     analysis={simulation.analysis}
                     results={simulation.results}
                     onSelect={selectDiagnostic}
+                    onFocusNode={focusOnCanvas}
                     review={
                       <ReviewPanel
                         source={source}
@@ -1382,7 +1410,7 @@ export default function Playground() {
                   <UseCasePlayback
                     useCase={playing ? playedUseCase : undefined}
                     nodes={shownNodes}
-                    edges={edges}
+                    edges={shownEdges}
                     onBack={stopPlaying}
                     initialStep={initialStep}
                     onStepChange={setPlayStep}
@@ -1396,7 +1424,8 @@ export default function Playground() {
                           playback={pv}
                           overlay={overlay}
                           canOverlay={canOverlay}
-                          onToggleOverlay={() => setOverlayOn((on) => !on)}
+                          onToggleOverlay={toggleOverlay}
+                          focusRequest={focusRequest}
                           edges={pv.edges}
                           onNodesChange={setNodes}
                           onEdgesChange={setEdges}

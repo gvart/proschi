@@ -122,7 +122,8 @@ test.describe('team systems in the editor', () => {
   });
 
   test('the load overlay moves its dots along the drawn connections', async ({ page }) => {
-    await page.getByRole('button', { name: 'Overlay: load' }).click();
+    // On by default: the document has traffic.
+    await expect(page.getByRole('button', { name: 'Overlay: load' })).toHaveAttribute('aria-pressed', 'true');
     await layoutSettled(page);
     // Every drawn dot pixel of the particle canvas lies on a connection's line, even one routed around a corner.
     const offPath = () =>
@@ -182,8 +183,7 @@ test.describe('team systems in the editor', () => {
     const collapse = (await frame.getByRole('button', { name: 'Collapse Order Processing' }).boundingBox())!;
     expect(collapse.x + collapse.width).toBeLessThanOrEqual(frameBox.x + frameBox.width - 8);
     expect(collapse.y).toBeGreaterThanOrEqual(frameBox.y + 8);
-    // With the load overlay on, its members show their load like any node.
-    await page.getByRole('button', { name: 'Overlay: load' }).click();
+    // With the load overlay on (the default), its members show their load like any node.
     await expect(page.locator('.react-flow__node', { hasText: 'Orders DB' }).locator('.pc-node[data-load]')).toBeVisible();
     await expect(page.locator('.react-flow__node', { hasText: 'Orders DB' })).toContainText(/\d+%/);
     await page.getByRole('button', { name: 'Overlay: load' }).click();
@@ -231,7 +231,7 @@ test.describe('team systems on a busy org', () => {
     await layoutSettled(page);
     await box(page, 'Order Processing').dblclick();
     await expect(breadcrumb(page).locator('[aria-current="page"]')).toHaveText('Order Processing');
-    await page.getByRole('button', { name: 'Overlay: load' }).click();
+    await expect(page.getByRole('button', { name: 'Overlay: load' })).toHaveAttribute('aria-pressed', 'true');
     const db = page.locator('.react-flow__node', { hasText: 'Orders DB' }).locator('.pc-node');
     await expect(db).toHaveAttribute('data-heat', 'accent');
     // The dark text drawn on accents, not the theme's light ink or its muted grey.

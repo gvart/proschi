@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import ReactFlow, { Background, BackgroundVariant, ControlButton, Controls, MiniMap, Panel, applyEdgeChanges, applyNodeChanges, useReactFlow } from 'reactflow';
+import ReactFlow, { Background, BackgroundVariant, ControlButton, Controls, MiniMap, Panel, applyEdgeChanges, applyNodeChanges, getNodesBounds, getViewportForBounds, useReactFlow, useStoreApi } from 'reactflow';
 import type { Edge, EdgeChange, Node, NodeChange } from 'reactflow';
 import { ArrowLeft, ChevronRight, Gauge, LayoutGrid, Map as MapIcon, Pencil, Trash2 } from 'lucide-react';
 import { CANVAS_EDGE } from '../../utils/canvasColors';
@@ -19,8 +19,9 @@ import { CanvasMenu, ConnectHint, PaletteDock, PaletteToggle, type CanvasMenuAct
 import { canvasKey, historyKey, useConnectHint, useMiniMap, usePaletteOpen, type CanvasKey } from '../Diagram/canvasEditState';
 import Inspector from '../Diagram/Inspector';
 import NodeFinder from '../Diagram/NodeFinder';
-import { FIT_VIEW_OPTIONS, useFitOnChange, type FitInset } from '../Diagram/useFitOnChange';
+import { FIT_MAX_ZOOM, FIT_VIEW_OPTIONS, useFitOnChange, type FitInset } from '../Diagram/useFitOnChange';
 import FlowParticles from '../Overlay/FlowParticles';
+import LoadLegend from '../Overlay/LoadLegend';
 import { PlaybackMiniMap } from '../UseCases/UseCasePlayback';
 import { PLAYBACK_EDGE_TYPES, type PlaybackView } from '../UseCases/playbackView';
 import { exportImage, fileNameFor } from './exportDiagram';
@@ -33,6 +34,9 @@ const nodeTypes = {
   systemNode: SystemNode,
   textNode: TextNode,
 };
+
+/** The width the open load legend takes from the right of the canvas, with its margin. */
+const LOAD_LEGEND_ROOM = 240;
 
 export interface ImageRequest {
   format: 'png' | 'svg';
@@ -64,6 +68,8 @@ export interface DiagramViewProps {
   /** The document has traffic to simulate, so the overlay can be turned on. */
   canOverlay: boolean;
   onToggleOverlay: () => void;
+  /** A node picked elsewhere (Results), to select and zoom to; a new `n` asks again. */
+  focusRequest?: { id: string; n: number } | null;
   onResetLayout: () => void;
   onDelete: (nodeIds: string[], edgeIds: string[]) => void;
   /** Ctrl/Cmd+C: keeps the nodes and the connections between them for pasting. */
@@ -132,6 +138,7 @@ export default function DiagramView({
   overlay,
   canOverlay,
   onToggleOverlay,
+  focusRequest,
   onResetLayout,
   onDelete,
   onCopyNodes,
@@ -161,6 +168,7 @@ export default function DiagramView({
 }: DiagramViewProps) {
   const playing = playback.active;
   const { getNode, getNodes, getViewport, screenToFlowPosition, fitView, setCenter } = useReactFlow();
+  const flowStore = useStoreApi();
   const [selection, setSelection] = useState<{ nodes: Node[]; edges: Edge[] }>({ nodes: [], edges: [] });
   // Rename and Delete stay clear of the toasts.
   const clearToasts = useToastClearance();
@@ -369,6 +377,29 @@ export default function DiagramView({
     // Once per request.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imageRequest]);
+  // A node picked in Results: once it is drawn and the canvas has had its first fit, select it and zoom to it.
+  useEffect(() => {
+    if (!focusRequest) return;
+    let frame = 0;
+    let tries = 0;
+    let settled = 0;
+    const tick = () => {
+      const node = getNodes().find((n) => n.id === focusRequest.id);
+      const { domNode, width, height } = flowStore.getState();
+      const sized = !!domNode?.offsetWidth && Math.abs(domNode.offsetWidth - width) <= 1 && Math.abs(domNode.offsetHeight - height) <= 1;
+      // A few frames more once ready, so the fit of a canvas just shown goes first.
+      if (!node?.width || !node.height || !wrapperRef.current?.offsetWidth || !sized || settled++ < 6) {
+        if (tries++ < 180) frame = requestAnimationFrame(tick);
+        return;
+      }
+      selectOnly(node.id);
+      fitView({ nodes: [{ id: node.id }], padding: 0.8, maxZoom: FIT_MAX_ZOOM });
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+    // Once per request.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusRequest?.n]);
   // Re-fit once nodes are measured after being added or removed, not on every drag.
   // The part of the canvas a covering band hides, measured after layout.
   const [inset, setInset] = useState<FitInset | undefined>(undefined);
@@ -387,7 +418,14 @@ export default function DiagramView({
   // No animated fit: d3-zoom reads the pane size on the transition's first tick, and a pane hidden by
   // then (phone Code/Diagram tabs) is 0×0, which interpolates the viewport to NaN. Nodes already glide via settle.
   // The exception: playback, the splitter and the palette resize a pane that stays shown, and there the diagram glides to its new fit.
-  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { wrapper: wrapperRef, inset, glide: `${playing ? 'playing' : ''}:${glideKey}:${paletteOpen}` });
+  // The load legend stands open beside the diagram on wider screens: fit the diagram clear of it.
+  const loadLegend = !!overlay && !playing;
+  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, {
+    wrapper: wrapperRef,
+    inset,
+    glide: `${playing ? 'playing' : ''}:${glideKey}:${paletteOpen}`,
+    right: loadLegend && !phone ? LOAD_LEGEND_ROOM : undefined,
+  });
 
   const handleEdgesChange = useCallback(
     (changes: EdgeChange[]) => onEdgesChange((current) => applyEdgeChanges(changes, current)),
@@ -630,6 +668,7 @@ export default function DiagramView({
                 )}
               </div>
             )}
+            {loadLegend && <LoadLegend critical={overlay.critical} folded={phone} />}
             {diagram.legend && <Legend entries={diagram.legend} />}
           </Panel>
         )}
