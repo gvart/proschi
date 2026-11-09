@@ -1,0 +1,552 @@
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import ReactFlow, { Background, BackgroundVariant, Controls, Panel, applyEdgeChanges, applyNodeChanges, useReactFlow } from 'reactflow';
+import type { Edge, EdgeChange, Node, NodeChange } from 'reactflow';
+import { ArrowLeft, ChevronRight, Gauge, LayoutGrid, Pencil, Trash2 } from 'lucide-react';
+import { notify, prompt } from '../../design/dialogs';
+import { useToastClearance } from '../../design/toastClearance';
+import type { Diagram } from '../../dsl/types';
+import type { SimOverlay } from '../../sim/overlay';
+import type { CoverBand } from '../../onboarding/Tour';
+import Legend from '../Canvas/Legend';
+import ComponentNode from '../Canvas/ComponentNode';
+import GroupNode from '../Canvas/GroupNode';
+import SystemNode from '../Canvas/SystemNode';
+import TextNode from '../Canvas/TextNode';
+import type { SystemNodeData } from '../Canvas/systemActions';
+import { TECH_DRAG_TYPE } from '../Diagram/Palette';
+import { CanvasMenu, ConnectHint, PaletteDock, PaletteToggle, type CanvasMenuState } from '../Diagram/CanvasEditing';
+import { historyKey, useConnectHint, usePaletteOpen } from '../Diagram/canvasEditState';
+import Inspector from '../Diagram/Inspector';
+import { FIT_VIEW_OPTIONS, useFitOnChange, type FitInset } from '../Diagram/useFitOnChange';
+import FlowParticles from '../Overlay/FlowParticles';
+import { PlaybackMiniMap } from '../UseCases/UseCasePlayback';
+import { PLAYBACK_EDGE_TYPES, type PlaybackView } from '../UseCases/playbackView';
+import { exportImage, fileNameFor } from './exportDiagram';
+import { iconButton, toolButton } from './ui';
+import type { Crumb } from './useSystemView';
+
+const nodeTypes = {
+  componentNode: ComponentNode,
+  groupNode: GroupNode,
+  systemNode: SystemNode,
+  textNode: TextNode,
+};
+
+export interface ImageRequest {
+  format: 'png' | 'svg';
+}
+
+export interface DiagramViewProps {
+  nodes: Node[];
+  edges: Edge[];
+  onNodesChange: (update: (nodes: Node[]) => Node[]) => void;
+  onEdgesChange: (update: (edges: Edge[]) => Edge[]) => void;
+  title?: string;
+  hasPinnedNodes: boolean;
+  onMoveNodes: (moved: { id: string; position: { x: number; y: number } }[]) => void;
+  onConnectNodes: (from: string, to: string) => void;
+  onRenameNode: (id: string, name: string) => void;
+  /** Adds a component from the palette, at a canvas position when it was dropped; returns its id, if it was added. */
+  onAddNode: (techStack: string, position?: { x: number; y: number }) => string | undefined;
+  /** Applies an inspector edit to the text. */
+  onEdit: (edit: (source: string) => string) => void;
+  /** Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z on the canvas: the code editor's undo and redo, where every canvas edit is one step. */
+  onUndo: () => void;
+  onRedo: () => void;
+  /** Phones add components from a bottom sheet instead of the docked palette. */
+  phone: boolean;
+  /** The parsed diagram, for the inspector. */
+  diagram: Diagram;
+  /** The simulation drawn on the canvas, when "Overlay: load" is on. */
+  overlay?: SimOverlay;
+  /** The document has traffic to simulate, so the overlay can be turned on. */
+  canOverlay: boolean;
+  onToggleOverlay: () => void;
+  onResetLayout: () => void;
+  onDelete: (nodeIds: string[], edgeIds: string[]) => void;
+  /** Changes when the view becomes visible again, so it can re-fit. */
+  fitKey: string;
+  /** A layout is on its way (ELK, then the glide): `data-layout-busy` on the canvas, which the e2e tests wait out. */
+  layoutBusy: boolean;
+  /** Changes when the pane was resized in place (the splitter), so it can glide to a new fit. */
+  glideKey: string;
+  /** An image to export (the Export menu in the header), made once the nodes are drawn. */
+  imageRequest: ImageRequest | null;
+  onImageDone: () => void;
+  /** Nodes declared in imported files (id → file); they cannot be moved here. */
+  importedNodes: Map<string, string>;
+  /** A short message shown over the canvas, e.g. why an edit was refused. */
+  notice: string | null;
+  onNotice: (message: string) => void;
+  /** A band of the screen covered by a floating card; fitting keeps the diagram clear of it. */
+  cover?: CoverBand | null;
+  /** The use case playing over the diagram, if any; the canvas is read-only meanwhile. */
+  playback: PlaybackView;
+  /** Where the canvas is among the document's systems, top first; one crumb at the top. */
+  crumbs: Crumb[];
+  /** The team file shown when navigated into a system; the canvas cannot edit it. */
+  focusFile?: string;
+  /** The team file cannot be edited in the code pane (it came with a link, or from a remote source). */
+  focusReadOnly?: boolean;
+  /** What the rest of the document sends into the design navigated into. */
+  focusInbound?: string;
+  onCrumb: (path: string) => void;
+  /** Navigates into a system box (double-click). */
+  onOpenSystem: (id: string) => void;
+}
+
+/** Renders the parsed diagram. Canvas edits are written back to the text, which stays the source of truth. */
+export default function DiagramView({
+  nodes,
+  edges,
+  onNodesChange,
+  onEdgesChange,
+  title,
+  hasPinnedNodes,
+  onMoveNodes,
+  onConnectNodes,
+  onRenameNode,
+  onAddNode,
+  onEdit,
+  onUndo,
+  onRedo,
+  phone,
+  diagram,
+  overlay,
+  canOverlay,
+  onToggleOverlay,
+  onResetLayout,
+  onDelete,
+  fitKey,
+  layoutBusy,
+  glideKey,
+  imageRequest,
+  onImageDone,
+  importedNodes,
+  notice,
+  onNotice,
+  cover,
+  playback,
+  crumbs,
+  focusFile,
+  focusReadOnly,
+  focusInbound,
+  onCrumb,
+  onOpenSystem,
+}: DiagramViewProps) {
+  const playing = playback.active;
+  const { getNodes, screenToFlowPosition } = useReactFlow();
+  const [selection, setSelection] = useState<{ nodes: Node[]; edges: Edge[] }>({ nodes: [], edges: [] });
+  // Rename and Delete stay clear of the toasts.
+  const clearToasts = useToastClearance();
+  // The palette: docked beside the canvas on wider screens (remembered), a sheet on phones.
+  const [docked, setDocked] = usePaletteOpen('proschi.canvas.palette');
+  const [sheet, setSheet] = useState(false);
+  const [paletteFocus, setPaletteFocus] = useState(false);
+  const canAdd = !playing && crumbs.length === 1;
+  const paletteOpen = canAdd && (phone ? sheet : docked);
+  const togglePalette = () => {
+    setPaletteFocus(!paletteOpen);
+    if (phone) setSheet(!sheet);
+    else setDocked(!docked);
+  };
+  const closePalette = () => (phone ? setSheet(false) : setDocked(false));
+  const [menu, setMenu] = useState<CanvasMenuState | null>(null);
+  const closeMenu = useCallback(() => setMenu(null), []);
+  const [hintSeen, dismissHint] = useConnectHint();
+  /** A component just added, selected once the layout draws it. */
+  const [pendingSelect, setPendingSelect] = useState<string | null>(null);
+  /** The node or connection whose settings were closed, so they stay closed until something else is selected. */
+  const [closedSettings, setClosedSettings] = useState<string | null>(null);
+  const single = selection.nodes.length + selection.edges.length === 1 ? (selection.nodes[0] ?? selection.edges[0]) : undefined;
+  const selectedNode = selection.nodes.length === 1 ? diagram.nodes.find((n) => n.id === selection.nodes[0].id) : undefined;
+  const selectedEdge = selection.edges.length === 1 ? diagram.edges.find((e) => e.id === selection.edges[0].id) : undefined;
+  const showSettings = !playing && single !== undefined && single.id !== closedSettings && (selectedNode !== undefined || selectedEdge !== undefined);
+  const selectionCount = selection.nodes.length + selection.edges.length;
+  const hasSelection = !playing && selectionCount > 0;
+  const singleNode = selection.nodes.length === 1 && selection.edges.length === 0 ? selection.nodes[0] : undefined;
+  const dragStartRef = useRef(new Map<string, { x: number; y: number }>());
+
+  /**
+   * A dropped component is selected, so its settings open; one clicked in the palette is not, so
+   * the palette stays for the next one. A phone's sheet closes on a tap, and selects it too.
+   */
+  const addComponent = (tech: string, position?: { x: number; y: number }) => {
+    const id = onAddNode(tech, position);
+    if (id && (position || phone)) setPendingSelect(id);
+  };
+  /** Selects only `id` (a node or a connection), as a click would. */
+  const selectOnly = useCallback(
+    (id: string) => {
+      onNodesChange((current) => current.map((n) => (!!n.selected === (n.id === id) ? n : { ...n, selected: n.id === id })));
+      onEdgesChange((current) => current.map((e) => (!!e.selected === (e.id === id) ? e : { ...e, selected: e.id === id })));
+    },
+    [onNodesChange, onEdgesChange],
+  );
+  useEffect(() => {
+    if (!pendingSelect || !nodes.some((n) => n.id === pendingSelect)) return;
+    selectOnly(pendingSelect);
+    setPendingSelect(null);
+  }, [nodes, pendingSelect, selectOnly]);
+
+  // React Flow re-sends the selection when this handler changes, so it must be stable
+  // and must not store an equal selection again.
+  const handleSelectionChange = useCallback(({ nodes: selectedNodes, edges: selectedEdges }: { nodes: Node[]; edges: Edge[] }) => {
+    setSelection((current) => {
+      const same =
+        current.nodes.map((n) => n.id).join('|') === selectedNodes.map((n) => n.id).join('|') &&
+        current.edges.map((e) => e.id).join('|') === selectedEdges.map((e) => e.id).join('|');
+      return same ? current : { nodes: selectedNodes, edges: selectedEdges };
+    });
+  }, []);
+
+  const promptRename = async (node: Node) => {
+    // Ask the parent straight away, which explains why a node from an imported file cannot be renamed.
+    if (importedNodes.has(node.id)) return onRenameNode(node.id, '');
+    const name = await prompt({ title: 'Rename', label: 'Display name', defaultValue: node.data?.name ?? node.id, confirmLabel: 'Rename' });
+    if (name !== null) onRenameNode(node.id, name);
+  };
+
+  const deleteSelection = () => {
+    if (playing || (selection.nodes.length === 0 && selection.edges.length === 0)) return;
+    onDelete(
+      selection.nodes.map((n) => n.id),
+      selection.edges.map((e) => e.id).filter((id) => !id.startsWith('step:')),
+    );
+  };
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  // The canvas may have just been opened for the export (from another tab, the
+  // code pane on a phone, or playback): wait until it is shown and its nodes are measured.
+  useEffect(() => {
+    if (!imageRequest) return;
+    let cancelled = false;
+    let frame = 0;
+    const tick = async () => {
+      if (cancelled) return;
+      const viewport = wrapperRef.current?.querySelector<HTMLElement>('.react-flow__viewport');
+      const drawn = getNodes();
+      const ready = !!viewport && viewport.getClientRects().length > 0 && drawn.length > 0 && drawn.every((n) => n.width && n.height);
+      if (!ready && frame++ < 120) {
+        requestAnimationFrame(() => void tick());
+        return;
+      }
+      try {
+        if (!ready || !viewport) throw new Error('the diagram is not on screen');
+        const legend = wrapperRef.current?.querySelector<HTMLElement>('.pc-legend') ?? undefined;
+        await exportImage(imageRequest.format, drawn, viewport, fileNameFor(title, imageRequest.format), legend);
+      } catch (error) {
+        console.error('Export failed:', error);
+        notify({ title: 'Sorry, the image could not be exported.', tone: 'danger' });
+      } finally {
+        if (!cancelled) onImageDone();
+      }
+    };
+    requestAnimationFrame(() => void tick());
+    return () => {
+      cancelled = true;
+    };
+    // Once per request.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [imageRequest]);
+  // Re-fit once nodes are measured after being added or removed, not on every drag.
+  // The part of the canvas a covering band hides, measured after layout.
+  const [inset, setInset] = useState<FitInset | undefined>(undefined);
+  const coverKey = cover ? `${cover.top}:${cover.bottom}` : '';
+  useLayoutEffect(() => {
+    const rect = wrapperRef.current?.getBoundingClientRect();
+    if (!cover || !rect || rect.height === 0) return setInset(undefined);
+    // A card docked low hides the bottom of the canvas, one docked high its top.
+    const low = cover.top + cover.bottom > rect.top + rect.bottom;
+    const top = low ? 0 : Math.max(0, cover.bottom - rect.top);
+    const bottom = low ? Math.max(0, rect.bottom - cover.top) : 0;
+    setInset((prev) => (prev?.top === top && prev?.bottom === bottom ? prev : { top, bottom }));
+    // coverKey captures cover by value; fitKey changes when the pane is shown again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coverKey, fitKey]);
+  // No animated fit: d3-zoom reads the pane size on the transition's first tick, and a pane hidden by
+  // then (phone Code/Diagram tabs) is 0×0, which interpolates the viewport to NaN. Nodes already glide via settle.
+  // The exception: playback, the splitter and the palette resize a pane that stays shown, and there the diagram glides to its new fit.
+  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { wrapper: wrapperRef, inset, glide: `${playing ? 'playing' : ''}:${glideKey}:${paletteOpen}` });
+
+  const handleEdgesChange = useCallback(
+    (changes: EdgeChange[]) => onEdgesChange((current) => applyEdgeChanges(changes, current)),
+    [onEdgesChange],
+  );
+
+  const handleNodesChange = useCallback(
+    (changes: NodeChange[]) => onNodesChange((current) => applyNodeChanges(changes, current)),
+    [onNodesChange],
+  );
+
+  // With the palette docked, the settings take its place beside the canvas instead of covering the diagram.
+  const dockSettings = showSettings && paletteOpen && !phone;
+  const inspector = showSettings && (
+    <Inspector
+      key={single.id}
+      node={selectedNode}
+      edge={selectedNode ? undefined : selectedEdge}
+      capacity={selectedNode ? diagram.capacity?.find((c) => c.node === selectedNode.id) : undefined}
+      importedFrom={selectedNode ? importedNodes.get(selectedNode.id) : selectedEdge?.loc.file}
+      system={selectedNode ? (nodes.find((n) => n.id === selectedNode.id)?.data as SystemNodeData | undefined)?.system : undefined}
+      docked={dockSettings}
+      onEdit={onEdit}
+      onDelete={deleteSelection}
+      onClose={() => setClosedSettings(single.id)}
+    />
+  );
+
+  return (
+    <div
+      className="flex h-full"
+      onKeyDown={(e) => {
+        const step = playing ? null : historyKey(e);
+        if (!step) return;
+        e.preventDefault();
+        if (step === 'undo') onUndo();
+        else onRedo();
+      }}
+    >
+    <PaletteDock open={paletteOpen} phone={phone} focus={paletteFocus} onAdd={(tech) => addComponent(tech)} onClose={closePalette} settings={dockSettings ? inspector : undefined} />
+    <div
+      ref={wrapperRef}
+      // Focusable, so the keys above work after a drop from the palette.
+      tabIndex={-1}
+      className={`relative h-full min-w-0 flex-1 outline-hidden ${playing ? '' : 'pc-editable'}`}
+      data-layout-busy={layoutBusy || undefined}
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes(TECH_DRAG_TYPE)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+      }}
+      onDrop={(e) => {
+        const tech = e.dataTransfer.getData(TECH_DRAG_TYPE);
+        if (!tech || playing) return;
+        e.preventDefault();
+        e.currentTarget.focus();
+        addComponent(tech, screenToFlowPosition({ x: e.clientX, y: e.clientY }));
+      }}
+      onKeyDown={(e) => {
+        const target = e.target as HTMLElement;
+        if ((e.key === 'Delete' || e.key === 'Backspace') && !target.closest('input, textarea, [contenteditable]')) {
+          e.preventDefault();
+          deleteSelection();
+          // The deleted item had the focus; keep it on the canvas so Ctrl+Z still works.
+          wrapperRef.current?.focus({ preventScroll: true });
+        }
+      }}
+    >
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={nodeTypes}
+        edgeTypes={PLAYBACK_EDGE_TYPES}
+        // Playing a use case shows it over this canvas, read-only.
+        nodesDraggable={!playing}
+        nodesConnectable={!playing}
+        elementsSelectable={!playing}
+        onNodesChange={handleNodesChange}
+        onEdgesChange={handleEdgesChange}
+        onNodeDragStart={(_event, _node, dragged) => {
+          dragStartRef.current = new Map(dragged.map((n) => [n.id, { ...n.position }]));
+        }}
+        onNodeDragStop={(_event, _node, dragged) => {
+          // A click is a drag that never moved; only real moves are written to the text.
+          const moved = dragged.filter((n) => {
+            const start = dragStartRef.current.get(n.id);
+            return !start || Math.abs(start.x - n.position.x) > 1 || Math.abs(start.y - n.position.y) > 1;
+          });
+          // Nodes from imported files snap back: their text is in another file.
+          const locked = moved.filter((n) => importedNodes.has(n.id));
+          if (locked.length > 0) {
+            const back = new Map(locked.map((n) => [n.id, dragStartRef.current.get(n.id)]));
+            onNodesChange((current) => current.map((n) => {
+              const start = back.get(n.id);
+              return start ? { ...n, position: start } : n;
+            }));
+            onNotice(`'${locked[0].id}' is declared in ${importedNodes.get(locked[0].id)}; move it there.`);
+          }
+          if (moved.length > locked.length) onMoveNodes(moved.map((n) => ({ id: n.id, position: n.position })));
+        }}
+        onConnect={(connection) => {
+          if (!connection.source || !connection.target) return;
+          dismissHint();
+          onConnectNodes(connection.source, connection.target);
+        }}
+        onNodeContextMenu={(event, node) => {
+          if (playing) return;
+          event.preventDefault();
+          selectOnly(node.id);
+          setClosedSettings(null);
+          setMenu({ x: event.clientX, y: event.clientY, label: node.data?.name ?? node.id });
+        }}
+        onEdgeContextMenu={(event, edge) => {
+          if (playing || edge.id.startsWith('step:')) return;
+          event.preventDefault();
+          selectOnly(edge.id);
+          setClosedSettings(null);
+          setMenu({ x: event.clientX, y: event.clientY, label: `${edge.source} → ${edge.target}` });
+        }}
+        // A system box opens its team design; renaming it stays in its settings and the selection bar.
+        onNodeDoubleClick={(_event, node) => {
+          if (playing) return;
+          if (node.type === 'systemNode' || node.data?.system) onOpenSystem(node.id);
+          else promptRename(node);
+        }}
+        onSelectionChange={handleSelectionChange}
+        // Deleting goes through the text; React Flow's own delete would only hide the node until the next render.
+        deleteKeyCode={null}
+        zoomOnDoubleClick={false}
+        fitView
+        fitViewOptions={FIT_VIEW_OPTIONS}
+        minZoom={0.1}
+        proOptions={{ hideAttribution: true }}
+      >
+        <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
+        {overlay && !playing && <FlowParticles flows={overlay.flows} nodes={overlay.nodes} />}
+        <Controls showInteractive={false} />
+        {playing && <PlaybackMiniMap view={playback} />}
+        {!playing && crumbs.length > 1 && (
+          <Panel position="top-left">
+            <Breadcrumbs crumbs={crumbs} file={focusFile} readOnly={focusReadOnly} inbound={focusInbound} onPick={onCrumb} />
+          </Panel>
+        )}
+        {canAdd && (
+          <Panel position="top-left">
+            {/* While the settings stand in for the palette, the button brings the palette back. */}
+            <PaletteToggle open={paletteOpen && !dockSettings} onToggle={() => (dockSettings ? setClosedSettings(single.id) : togglePalette())} />
+          </Panel>
+        )}
+        {canAdd && !hintSeen && nodes.length >= 2 && edges.length === 0 && (
+          <Panel position="top-center" className="max-md:!top-12">
+            <ConnectHint onDismiss={dismissHint} />
+          </Panel>
+        )}
+        {/* With the settings card open, Delete is in its header; this bar covers several items or a closed card. */}
+        {(notice || (hasSelection && !showSettings)) && (
+          <Panel position="bottom-center" className="flex flex-col items-center gap-2">
+            {notice && (
+              <p role="status" className="rounded-sm border-bw-1 border-ink bg-ink px-3 py-1.5 text-xs font-semibold text-paper shadow-brutal-sm">
+                {notice}
+              </p>
+            )}
+            {hasSelection && !showSettings && (
+              <div ref={clearToasts} role="toolbar" aria-label="Selection" className="flex items-center gap-1 rounded-full border-bw-1 border-ink bg-surface py-1 pl-4 pr-1 shadow-brutal-sm">
+                <span className="max-w-[10rem] truncate pr-1 text-sm font-semibold text-ink">
+                  {singleNode ? (singleNode.data?.name ?? singleNode.id) : `${selectionCount} selected`}
+                </span>
+                {singleNode && (
+                  <button
+                    type="button"
+                    onClick={() => promptRename(singleNode)}
+                    className="inline-flex items-center gap-1 rounded-full px-3 py-2 text-sm font-semibold text-ink hover:bg-ink/10"
+                  >
+                    <Pencil size={14} />
+                    Rename
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={deleteSelection}
+                  className="inline-flex items-center gap-1 rounded-full px-3 py-2 text-sm font-semibold text-red-700 dark:text-red-300 hover:bg-fail/10"
+                >
+                  <Trash2 size={14} />
+                  Delete
+                </button>
+              </div>
+            )}
+          </Panel>
+        )}
+        {nodes.length > 0 && !playing && !(hasSelection && !showSettings) && (
+          <Panel position="bottom-right" className="hidden md:block text-xs text-muted bg-paper/85 rounded-sm px-2 py-1">
+            Drag to pin · select to edit · drag dot to dot to connect · right-click for more
+          </Panel>
+        )}
+        {nodes.length > 0 && (!playing || diagram.legend) && (
+          <Panel position="top-right" className="flex flex-col items-end gap-2">
+            {!playing && (
+              <div className="flex items-center gap-1">
+                {canOverlay && (
+                  <button
+                    type="button"
+                    onClick={onToggleOverlay}
+                    aria-pressed={overlay !== undefined}
+                    title="Show how busy each node is and the requests flowing, at the traffic block's rates"
+                    className={`${toolButton} aria-pressed:border-ink aria-pressed:bg-pop-yellow aria-pressed:text-on-accent aria-pressed:shadow-brutal-sm`}
+                  >
+                    <Gauge size={16} />
+                    <span className="whitespace-nowrap">
+                      <span className="hidden sm:inline">Overlay: </span>load
+                    </span>
+                  </button>
+                )}
+                {hasPinnedNodes && (
+                  <button
+                    onClick={onResetLayout}
+                    title="Remove every pos x,y and lay the diagram out automatically"
+                    className={toolButton}
+                  >
+                    <LayoutGrid size={16} />
+                    Auto-layout
+                  </button>
+                )}
+              </div>
+            )}
+            {diagram.legend && <Legend entries={diagram.legend} />}
+          </Panel>
+        )}
+      </ReactFlow>
+      {showSettings && !dockSettings && (
+        <div className="pointer-events-none absolute inset-x-2 bottom-2 z-10 flex max-h-[55%] max-md:[[data-keyboard]_&]:max-h-[calc(100%-1rem)] md:inset-x-auto md:bottom-auto md:right-2 md:top-14 md:max-h-[calc(100%-4.5rem)] md:w-72">
+          {inspector}
+        </div>
+      )}
+      {menu && <CanvasMenu menu={menu} onSettings={() => setClosedSettings(null)} onDelete={deleteSelection} onClose={closeMenu} />}
+    </div>
+    </div>
+  );
+}
+
+/** Where the canvas is among the document's systems (Drone startup › Order Processing), with the way back. */
+function Breadcrumbs({ crumbs, file, readOnly, inbound, onPick }: { crumbs: Crumb[]; file?: string; readOnly?: boolean; inbound?: string; onPick: (path: string) => void }) {
+  const up = crumbs[crumbs.length - 2];
+  return (
+    <nav aria-label="Breadcrumb" className="flex max-w-[min(calc(100vw-7rem),36rem)] flex-col rounded-sm border-bw-1 border-ink bg-surface py-1 pl-1 pr-3 shadow-brutal-sm">
+      <div className="flex min-w-0 items-center gap-1">
+        <button type="button" onClick={() => onPick(up.path)} aria-label={`Back to ${up.name}`} title={`Back to ${up.name}`} className={`${iconButton} !h-7 !w-7`}>
+          <ArrowLeft size={15} />
+        </button>
+        <ol className="flex min-w-0 items-center gap-1 text-sm">
+          {crumbs.map((c, i) => {
+            const last = i === crumbs.length - 1;
+            return (
+              <li key={c.path} className={`flex items-center gap-1 ${last ? 'min-w-0' : 'flex-none max-sm:[&:not(:first-child)]:hidden'}`}>
+                {i > 0 && <ChevronRight size={14} className="flex-none text-muted" aria-hidden="true" />}
+                {last ? (
+                  <span aria-current="page" className="truncate font-bold text-ink">
+                    {c.name}
+                  </span>
+                ) : (
+                  <button type="button" onClick={() => onPick(c.path)} className="max-w-[10rem] truncate rounded-sm px-1 font-semibold text-ink/75 underline-offset-2 hover:text-ink hover:underline">
+                    {c.name}
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+        {file && (
+          <span className="ml-2 hidden flex-none font-mono text-xs text-muted md:inline" title={readOnly ? 'This design is in its own file, which cannot be edited here' : 'This design is in its own file, open in the code pane'}>
+            {file}
+            {readOnly && ' · read-only'}
+          </span>
+        )}
+      </div>
+      {inbound && (
+        <span className="min-w-0 truncate pb-0.5 pl-9 text-xs font-semibold text-ink/75" title="The load shown includes what the rest of the document sends into this design">
+          {inbound}
+        </span>
+      )}
+    </nav>
+  );
+}
