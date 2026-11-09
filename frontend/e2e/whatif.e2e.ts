@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { canvasNodes, codeEditor, editorText, expect, test } from './fixtures';
+import { canvasNodes, codeEditor, editorText, expect, expectTopBarClear, test } from './fixtures';
 import { diagramTab, openDoc, resultsTab, WHATIF_DOC, WITH_WHATIFS } from './whatif';
 
 /**
@@ -36,6 +36,42 @@ async function expectToolbarClear(page: Page) {
     expect(overlaps).toBe(false);
   }
 }
+
+test('the open card stacks above the open load legend, never over it, and does not move the diagram', async ({ page }) => {
+  await openDoc(page, WHATIF_DOC);
+  const legend = page.getByRole('group', { name: 'Load legend' });
+  if ((await legend.getAttribute('open')) === null) await legend.locator('summary').click();
+  await expect(legend).toHaveAttribute('open', '');
+  // A what-if on, then the card folded, so what follows only opens and closes it.
+  await control(page);
+  await slider(page).fill('6');
+  await page.keyboard.press('Escape');
+  // Once the diagram has settled after the what-if.
+  const transform = () => page.locator('.react-flow__viewport').getAttribute('style');
+  let viewport = await transform();
+  await expect(async () => {
+    const before = viewport;
+    await page.waitForTimeout(400);
+    viewport = await transform();
+    expect(viewport).toBe(before);
+  }).toPass();
+  const card = await control(page);
+  const c = (await card.boundingBox())!;
+  const l = (await legend.boundingBox())!;
+  // The legend moves down under the card, in the same right-aligned column.
+  expect(l.y).toBeGreaterThanOrEqual(c.y + c.height);
+  expect(Math.abs(c.x + c.width - (l.x + l.width))).toBeLessThan(2);
+  // The card is passing: opening it does not fit the diagram again.
+  await page.waitForTimeout(600);
+  expect(await transform()).toBe(viewport);
+  // Clicks in the card keep it open; a click elsewhere folds it, and the legend moves back up.
+  await card.getByText('All traffic').click();
+  await expect(card).toBeVisible();
+  await page.locator('.react-flow__pane').click({ position: { x: 20, y: 560 } });
+  await expect(card).toHaveCount(0);
+  expect((await legend.boundingBox())!.y).toBeLessThan(l.y);
+  await expectTopBarClear(page);
+});
 
 test('the traffic slider multiplies the load without editing the text, and writes it to the traffic block', async ({ page }) => {
   await openDoc(page, WHATIF_DOC);

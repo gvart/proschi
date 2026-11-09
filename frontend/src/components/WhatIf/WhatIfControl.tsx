@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { BookmarkPlus, PenLine, Power, RotateCcw, SlidersHorizontal, X } from 'lucide-react';
 import type { Diagram } from '../../dsl/types';
 import { formatRps } from '../../sim/format';
+import { ToolsPopoverSlot } from '../Diagram/canvasShared';
 import { iconButton, toolButton } from '../Playground/ui';
 import { formatMultiplier, isActive, MULTIPLIERS, NO_WHATIF, stopOf, toggleFailed, totalRps, whatIfLabel, type LiveWhatIf } from './whatIf';
 
@@ -28,12 +30,15 @@ interface WhatIfControlProps {
 export default function WhatIfControl(props: WhatIfControlProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLElement>(null);
+  /** The card opens in the top bar's slot above the load legend, so the two never overlap; else under the pill. */
+  const slot = useContext(ToolsPopoverSlot);
   const { diagram, whatIf, onChange, phone } = props;
   const active = isActive(whatIf);
   // The card closes on a click elsewhere and on Escape, like a menu.
   useEffect(() => {
     if (!open || phone) return;
-    const onPointer = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    const onPointer = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && !cardRef.current?.contains(e.target as Node) && setOpen(false);
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
     document.addEventListener('pointerdown', onPointer);
     document.addEventListener('keydown', onKey);
@@ -66,15 +71,21 @@ export default function WhatIfControl(props: WhatIfControlProps) {
           <RotateCcw size={16} />
         </button>
       )}
-      {open && !phone && (
-        <section
-          aria-label="What-if"
-          data-testid="whatif-control"
-          className="absolute right-0 top-full z-20 mt-2 w-64 rounded-sm border-bw-1 border-ink bg-surface px-3 py-2 text-ink shadow-brutal-md"
-        >
-          <WhatIfBody {...props} />
-        </section>
-      )}
+      {open &&
+        !phone &&
+        (() => {
+          const card = (
+            <section
+              ref={cardRef}
+              aria-label="What-if"
+              data-testid="whatif-control"
+              className={`${slot ? '' : 'absolute right-0 top-full z-20 mt-2 '}w-64 rounded-sm border-bw-1 border-ink bg-surface px-3 py-2 text-ink shadow-brutal-md`}
+            >
+              <WhatIfBody {...props} />
+            </section>
+          );
+          return slot ? createPortal(card, slot) : card;
+        })()}
       {open && phone && (
         <div className="fixed inset-0 z-40 flex flex-col justify-end bg-black/40" onMouseDown={() => setOpen(false)}>
           <div
