@@ -86,7 +86,7 @@ per-use LLM cost), and improve the language and the visual editor.
 - [x] **5.1 T4 Rule-based next steps** (Free): built from mastery, mistakes and due cards
   (`learn/mastery.ts`, `practice/mistakes.ts`, `practice/history/NextForYou.tsx`).
   verify: unit tests on the recommender. depends on: none
-- [ ] **5.2 T5 Interview-date plan** (Max): pick a date and get a daily schedule of
+- [x] **5.2 T5 Interview-date plan** (Max): pick a date and get a daily schedule of
   problems, cards and drills, with reminders (`practice/hub/goal.ts`, `backend/src/reminders.ts`).
   verify: schedule unit tests, backend tests, e2e. depends on: 5.1
 - [ ] **5.3 T6+T7 Export and proof**:
