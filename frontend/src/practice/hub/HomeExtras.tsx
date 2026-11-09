@@ -1,11 +1,9 @@
-import { Suspense, lazy, useMemo, type ReactNode } from 'react';
-import { ArrowRight, CalendarDays, Check, Flame, Gamepad2, Layers, ListChecks, Play, Briefcase, Sparkles, X, Zap, type LucideIcon } from 'lucide-react';
+import { Suspense, lazy, type ReactNode } from 'react';
+import { ArrowRight, CalendarDays, Check, Flame, Gamepad2, Layers, ListChecks, Play, Briefcase, X, Zap, type LucideIcon } from 'lucide-react';
 import { eyebrow } from '../../components/Playground/ui';
-import type { Progress } from '../progress';
 import type { Account } from '../useAccount';
 import type { ContinueTarget } from './continue';
 import { GOALS, setGoal, wantsInterview, wantsStreak, type Goal, type GoalState } from './goal';
-import NextSteps from './NextSteps';
 import { useTodayCards, type TodayCards } from './todayCards';
 import { mockInterviewHref } from './tabs';
 import { useChallengeStatus, useDailyRunStatus, type Played } from './todayStatus';
@@ -20,18 +18,14 @@ import { useChallengeStatus, useDailyRunStatus, type Played } from './todayStatu
  *   interview prep the roadmap's next step, with the roadmap and the mock
  *   interview beside it;
  * - for a daily habit (or the streak switched on), one line with the streak
- *   and today's review, challenge and Arcade run;
- * - once something was started, "Your next steps" (RuleSteps.tsx): up to
- *   three things to do next, each with its reason, never the Continue problem,
- *   nor (with the habit line) today's review or challenge.
+ *   and today's review, challenge and Arcade run.
  *
- * Solving problems, or no answer, adds nothing else but the Continue line and the next steps.
+ * Solving problems, or no answer, adds nothing else but the Continue line.
+ * "Your next steps" are on the roadmap (history/NextForYou.tsx), not here.
  */
 
 // The due count needs the whole deck: loaded after the line shows.
 const DueCards = lazy(() => import('./DueCards'));
-
-const HABIT_KINDS = ['review', 'challenge'] as const;
 
 const GOAL_ICON: Record<Goal, LucideIcon> = { solve: ListChecks, interview: Briefcase, habit: Flame };
 const GOAL_ABOUT: Record<Goal, string> = {
@@ -49,7 +43,6 @@ export default function HomeExtras({
   nextTitle,
   streak,
   ask = !goal.asked,
-  steps,
 }: {
   goal: GoalState;
   account: Account;
@@ -60,43 +53,16 @@ export default function HomeExtras({
   streak?: ReactNode;
   /** Whether to ask "What are you here for?" (goal.ts asksGoal: not while an announcement is on the page). */
   ask?: boolean;
-  /** What "Your next steps" needs beyond the account; none hides them. */
-  steps?: { progress: Progress; skills?: readonly { topic: string; mastery: number }[]; streak?: number };
 }) {
   const interview = wantsInterview(goal);
-  const nextId = next?.id;
-  const exclude = useMemo(() => (nextId ? [nextId] : undefined), [nextId]);
   const habit = wantsStreak(goal);
-  const showSteps = !!steps && Object.keys(steps.progress).length > 0;
-  // One load of the card states (one request signed in) for the Review chip and the next steps.
-  const cards = useTodayCards(account, habit || showSteps);
+  // One load of the card states (one request signed in) for the Review chip.
+  const cards = useTodayCards(account, habit);
   return (
     <>
       {ask && <GoalPrompt goal={goal} />}
       {(next || interview) && <ContinueLine next={next} title={nextTitle} interview={interview} />}
       {habit && <HabitLine account={account} streak={streak} cards={cards} />}
-      {steps && showSteps && cards && (
-        <NextSteps
-          account={account}
-          {...steps}
-          cards={cards}
-          exclude={exclude}
-          // The habit line offers today's review and challenge already.
-          omit={habit ? HABIT_KINDS : undefined}
-          limit={3}
-          render={(list) =>
-            list && (
-              <section aria-labelledby="home-next-steps" className="mt-5 rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-brutal-sm" data-testid="home-next-steps">
-                <h2 id="home-next-steps" className={`flex items-center gap-1.5 ${eyebrow}`}>
-                  <Sparkles size={13} aria-hidden="true" />
-                  Your next steps
-                </h2>
-                <div className="mt-3">{list}</div>
-              </section>
-            )
-          }
-        />
-      )}
     </>
   );
 }

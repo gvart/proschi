@@ -2,8 +2,8 @@ import { expect, test } from './fixtures';
 
 /**
  * Signed out, in the build with accounts and paid plans (API mocked), the
- * free "Your next steps" still come from this browser's progress, with the
- * way to Pro's picks under them on the roadmap.
+ * free "Your next steps" still come from this browser's progress, on the
+ * roadmap (never on the home).
  */
 
 test('signed out: the rule-based steps from this browser’s progress', async ({ page, errors }) => {
@@ -22,13 +22,14 @@ test('signed out: the rule-based steps from this browser’s progress', async ({
   }, Math.floor(Date.now() / 1000));
 
   await page.goto('practice/');
-  const home = page.getByRole('region', { name: 'Your next steps' });
-  await expect(home.getByRole('link').first()).toContainText('Retry Pastebin');
-  await expect(home.getByRole('link').filter({ hasText: 'Do today’s daily challenge' })).toHaveCount(1);
+  await expect(page.getByRole('link', { name: /URL Shortener/ }).first()).toBeVisible();
+  await expect(page.getByText('Your next steps')).toHaveCount(0);
 
   await page.goto('practice/#/roadmap');
   const roadmap = page.getByRole('region', { name: 'Your next steps' });
   await expect(roadmap.getByTestId('next-steps').getByRole('link').first()).toContainText('Retry Pastebin');
+  await expect(roadmap.getByTestId('next-steps').getByRole('link').first()).toHaveAttribute('href', '#/interview?problem=pastebin');
+  await expect(roadmap.getByTestId('next-steps').getByRole('link').filter({ hasText: 'Do today’s daily challenge' })).toHaveAttribute('href', '#/challenge');
   await expect(roadmap.getByTestId('roadmap-picks')).toHaveCount(0);
 
   // Signed out, GET /api/me answers 401, which Chromium logs as a failed resource load; the unmocked API calls 404.

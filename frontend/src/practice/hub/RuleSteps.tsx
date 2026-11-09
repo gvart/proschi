@@ -3,7 +3,8 @@ import { ArrowRight, Layers, Play, Puzzle, RotateCcw, Zap, type LucideIcon } fro
 import { nextSteps, type NextStep, type NextStepKind } from '../../learn/nextSteps';
 import type { Progress } from '../progress';
 import type { Account } from '../useAccount';
-import { useTodayCards, type TodayCards } from './todayCards';
+import { setupHref } from '../interview/links';
+import { useTodayCards } from './todayCards';
 import { learnerInput } from './learnerInput';
 import { useRecentMistakes } from './recentMistakes';
 import { useChallengeStatus } from './todayStatus';
@@ -24,22 +25,15 @@ export interface RuleStepsProps {
   skills?: readonly { topic: string; mastery: number }[];
   /** The current daily streak in days. */
   streak?: number;
-  /** Problems shown elsewhere on the page, e.g. by Continue. */
-  exclude?: readonly string[];
-  limit?: number;
-  /** Kinds the page already offers (learn/nextSteps.ts `omit`). */
-  omit?: readonly NextStepKind[];
-  /** The card states when the page loaded them already (one load, one request); else loaded here. */
-  cards?: TodayCards;
   /** Places the list (null without steps). */
   render: (list: ReactNode | null) => ReactNode;
 }
 
-/** Where a step leads on the practice page. */
+/** Where a step leads on the practice page: a problem's to the interview set-up with it chosen (free, solo or mock). */
 function stepHref(step: NextStep): string {
   if (step.kind === 'review') return step.topic ? `#/review/${step.topic}` : '#/review';
   if (step.kind === 'challenge') return '#/challenge';
-  return `#/${step.problem}`;
+  return setupHref(step.problem);
 }
 
 const KIND: Record<NextStepKind, { label: string; icon: LucideIcon }> = {
@@ -50,9 +44,8 @@ const KIND: Record<NextStepKind, { label: string; icon: LucideIcon }> = {
   finish: { label: 'Problem', icon: Play },
 };
 
-export default function RuleSteps({ account, progress, skills, streak, exclude, limit, omit, cards, render }: RuleStepsProps) {
-  const own = useTodayCards(account, !cards);
-  const today = cards ?? own;
+export default function RuleSteps({ account, progress, skills, streak, render }: RuleStepsProps) {
+  const today = useTodayCards(account);
   const challenge = useChallengeStatus(account);
   const challengeKnown = challenge.status === 'ready' || challenge.status === 'unknown';
   // Re-read when a mistake is recorded or the account's join them.
@@ -63,11 +56,8 @@ export default function RuleSteps({ account, progress, skills, streak, exclude, 
       ...learnerInput(progress, today, skills, Math.floor(Date.now() / 1000), mistakes),
       challengeDone: challenge.status === 'ready' ? challenge.played : undefined,
       streak,
-      exclude,
-      omit,
-      limit,
     });
-  }, [today, challengeKnown, challenge, progress, skills, streak, exclude, omit, limit, mistakes]);
+  }, [today, challengeKnown, challenge, progress, skills, streak, mistakes]);
   if (!steps) return null;
   return render(steps.length ? <StepList steps={steps} /> : null);
 }
