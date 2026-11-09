@@ -46,7 +46,9 @@ test('the open card stacks above the open load legend, never over it, and does n
   await control(page);
   await slider(page).fill('6');
   await page.keyboard.press('Escape');
-  // Once the diagram has settled after the what-if.
+  // Once the diagram has settled: its layout applied (the glide from the provisional grid leaves the view still,
+  // and the fit to the final layout comes after it), then the view still.
+  await expect(page.locator('[data-layout-busy]')).toHaveCount(0);
   const transform = () => page.locator('.react-flow__viewport').getAttribute('style');
   let viewport = await transform();
   await expect(async () => {
