@@ -1,0 +1,31 @@
+frontend/src/onboarding/HelpMenuItems.tsx
+  s_f355061868c346::t_0712433f7bf569 19
+  s_f355061868c346::t_7eb666e0190b1b 1
+  s_f355061868c346::t_6ec9484c32eb81 28-32
+  s_f355061868c346::t_2182b4c9df56fa 13-14
+frontend/src/onboarding/HelpMenu.tsx
+  s_f355061868c346::t_786dd4504cd350 20
+  s_f355061868c346::t_2df5ecd200d6d5 41-47
+  s_f355061868c346::t_b955d589dfd5e8 15-16
+frontend/src/components/Playground/ShortcutsDialog.tsx
+  s_f355061868c346::t_6e068672b535bd 26
+  s_f355061868c346::t_e0fae5bea9155e 1-25,27-42,44-57,60-72,74-149
+  s_f355061868c346::t_0993d52349f8c2 73
+  s_f355061868c346::t_d4d15afe2481e1 43,58-59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c1c733f0586959b1670d5a2c6708d910d1e977b3",
+  "prompts": {},
+  "sessions": {
+    "s_f355061868c346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd556674-4248-429d-bf5c-2b361bc86c62",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
