@@ -1,0 +1,60 @@
+frontend/src/practice/problems/media-processing/given.proschi
+  s_248f83f833fb51::t_d706a3ec8cb470 13,15
+  s_248f83f833fb51::t_94f85bdb502f6e 1,3,6-10,12,14,20-25,28-55,58-59
+  s_248f83f833fb51::t_75fecf318cf422 4,19,27
+  s_248f83f833fb51::t_e4a4bf4690702f 2,5,11,16-18,26,56-57,60
+frontend/src/practice/problems/media-processing/wrong/thumbnails-through-the-api.proschi
+  s_248f83f833fb51::t_bc1d3b2fff8c69 1,3-95
+  s_248f83f833fb51::t_fb8f4905379203 2
+frontend/src/practice/problems/media-processing/starter.proschi
+  s_248f83f833fb51::t_67316e865c856e 3-6,9,11-15
+  s_248f83f833fb51::t_e4a4bf4690702f 1-2,7-8,10,16
+frontend/src/practice/cards/queues/media-processing-separate-pools.md
+  s_248f83f833fb51::t_38554dc94288e4 1-18
+frontend/src/practice/problems/media-processing/interview.md
+  s_248f83f833fb51::t_4b1556cd98d568 76-79,81
+  s_248f83f833fb51::t_8559c4ccfb76ee 1-75,80
+frontend/src/practice/problems/media-processing/lesson.md
+  s_248f83f833fb51::t_4147efcccf2ea6 175
+  s_248f83f833fb51::t_4888b058ea4829 1-174
+frontend/src/practice/roadmapStages.ts
+  s_248f83f833fb51::t_8ce543a9dc9f92 54
+frontend/src/practice/problems/media-processing/wrong/preview-pool-sized-like-thumbnails.proschi
+  s_248f83f833fb51::t_bc1d3b2fff8c69 1-99
+frontend/src/practice/cards/caching/media-processing-generate-once.md
+  s_248f83f833fb51::t_d1976cbff2719b 1-18
+frontend/src/practice/problems/media-processing/wrong/transform-on-every-view.proschi
+  s_248f83f833fb51::t_fb8f4905379203 2
+  s_248f83f833fb51::t_bc1d3b2fff8c69 1,3-102
+frontend/src/practice/problems/media-processing/wrong/upload-renders-thumbnail.proschi
+  s_248f83f833fb51::t_d706a3ec8cb470 2
+  s_248f83f833fb51::t_bc1d3b2fff8c69 1,3-104
+frontend/src/practice/cards/queues/media-processing-upload-never-waits.md
+  s_248f83f833fb51::t_d2907ce848e8ea 1-26
+frontend/src/practice/problems/media-processing/problem.md
+  s_248f83f833fb51::t_e4a4bf4690702f 1,7,12-13,21,26,30,56-58,71-73,84-86
+  s_248f83f833fb51::t_fd4735b968d6bb 3
+  s_248f83f833fb51::t_3a6345e8289d88 2,4-6,8-11,14-20,22-25,27-29,31-55,59-70,74-83,87-126
+frontend/src/practice/problems/media-processing/solution.proschi
+  s_248f83f833fb51::t_76bcf57c5aac0f 10-52,56-95
+  s_248f83f833fb51::t_e4a4bf4690702f 1-2,107-108
+  s_248f83f833fb51::t_d706a3ec8cb470 3-9,53-55,96-106
+frontend/src/practice/cards/ids.lock
+  s_248f83f833fb51::t_5c3653b772d513 164-166
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "34ad4f6f7dbf92750fc5dc4ef7b1248ff05d1c82",
+  "prompts": {},
+  "sessions": {
+    "s_248f83f833fb51": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2d46bc96-3c9a-4511-a065-8673803644a9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
