@@ -18,7 +18,7 @@ test.use({ lessons: 'fresh', stages: 'fresh' });
 const shot = async (page: Page, name: string) => {
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/${name}.png` });
 };
-const rail = (page: Page) => page.getByRole('navigation', { name: 'Stages' });
+const rail = (page: Page) => page.getByRole('navigation', { name: 'Steps' });
 const next = (page: Page) => page.getByTestId('stage-next');
 
 for (const [device, viewport] of [
@@ -153,7 +153,7 @@ test('a problem opened from Problems is the plain workspace: no stage bar, no le
   await expect(page.locator('[data-view="editor"]')).toBeVisible();
   await expect(page.locator('.cm-content')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Run tests' })).toBeVisible();
-  await expect(page.getByRole('navigation', { name: 'Stages' })).toHaveCount(0);
+  await expect(page.getByRole('navigation', { name: 'Steps' })).toHaveCount(0);
   await expect(page.getByTestId('stage-next')).toHaveCount(0);
   await expect(page.getByRole('article', { name: 'Lesson' })).toHaveCount(0);
   // The modes and the lesson are where they were before the stages.

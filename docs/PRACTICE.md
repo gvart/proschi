@@ -94,10 +94,10 @@ text. Headings get ids from their text, GitHub style
 
 The lesson teaches the ideas behind the problem before the solver tries it:
 each roadmap step is *Learn → Challenge → Review*. A problem
-from the roadmap (`practice/#/roadmap/<id>`) opens on the stage the learner
+from the roadmap (`practice/#/roadmap/<id>`) opens on the step the learner
 was last on, a first visit on Clarify, never on the lesson (P52); the lesson
-is the first stage in the stage bar, a page of its own with a table of
-contents and a button at the top and the bottom that leads on to the stages
+is the first step in the step bar, a page of its own with a table of
+contents and a button at the top and the bottom that leads on to the steps
 (see below), and the browser remembers once it was read. A problem from the list (`practice/#/<id>`) opens straight on
 the workspace (the statement, the editor and the diagram in resizable panes,
 the tests folded under them until the first run), with no lesson first. There
@@ -212,21 +212,21 @@ they show on every device; on sign-in the reads of the browser and of the
 account are joined. The reading badges count them (docs/CARDS.md,
 "Achievements": `lessons`, `stage-lessons`, `all-lessons`).
 
-### The stages
+### The steps
 
 A problem opened from **Interview prep** (the roadmap) is worked through in
-stages; one opened from the **Problems** list stays the plain workspace of
+steps; one opened from the **Problems** list stays the plain workspace of
 the lesson section above (the statement, editor and diagram, Run tests, the
 Interview mode and Guided walkthrough buttons, Design partner), like a
-coding-practice site, with no stage bar. Solved state and saved code are
-shared between the two entries; the stage notes only exist on the roadmap.
-The stages are self-paced: **Lesson**, **Clarify**
+coding-practice site, with no step bar. Solved state and saved code are
+shared between the two entries; the step notes only exist on the roadmap.
+The steps are self-paced: **Lesson**, **Clarify**
 (your own questions first, then the interviewer's answers from
 `interview.md`), **Estimate** (its estimates, each checked after you commit
 to a number), **Design** (the whiteboard, with the full editor one click
 away) and **Wrap-up** (the tests, the review and a recall prompt). The
-notes of each stage are kept per problem in the browser
-(`proschi.practice.stages.<id>`); a problem opens on the stage it was
+notes of each step are kept per problem in the browser
+(`proschi.practice.stages.<id>`); a problem opens on the step it was
 left on, a first visit on Clarify. See `docs/design/paid-plans.md` P50, P51
 and P52.
 
