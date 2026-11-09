@@ -160,7 +160,7 @@ export default function DiagramView({
   onOpenSystem,
 }: DiagramViewProps) {
   const playing = playback.active;
-  const { getNode, getNodes, getViewport, screenToFlowPosition, fitView, setCenter } = useReactFlow();
+  const { getNode, getNodes, getViewport, screenToFlowPosition, fitView, setViewport } = useReactFlow();
   const [selection, setSelection] = useState<{ nodes: Node[]; edges: Edge[] }>({ nodes: [], edges: [] });
   // Rename and Delete stay clear of the toasts.
   const clearToasts = useToastClearance();
@@ -250,19 +250,32 @@ export default function DiagramView({
     () => (linkedIds.size === 0 ? edges : edges.map((e) => (linkedIds.has(e.id) ? { ...e, className: linkedClass(e.className) } : e))),
     [edges, linkedIds],
   );
-  // A linked node out of sight is brought into view: a short pan at the same zoom.
+  // A linked node out of sight, or under a card over the canvas (settings, a floating palette, the legend),
+  // is brought into the uncovered part: a short pan at the same zoom.
   useEffect(() => {
-    const rect = wrapperRef.current?.getBoundingClientRect();
+    const wrapper = wrapperRef.current;
+    const rect = wrapper?.getBoundingClientRect();
     const node = [...linkedIds].map((id) => getNode(id)).find((n) => n?.width && n.height);
-    if (!node || !rect || rect.width === 0) return;
+    if (!wrapper || !node || !rect || rect.width === 0) return;
+    const covers = [...(wrapper.parentElement ?? wrapper).querySelectorAll<HTMLElement>('[data-canvas-cover], [data-testid="palette-dock"][data-floating], .pc-legend')]
+      .map((el) => ((el.hasAttribute('data-canvas-cover') ? el.firstElementChild : el) ?? el).getBoundingClientRect())
+      .filter((c) => c.width > 0 && c.height > 0);
+    // The free area: the pane less the cards along a whole side (settings on the right, or at the bottom on a phone).
+    const free = { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
+    for (const c of covers) {
+      if (c.height > rect.height / 2 && c.left > rect.left + rect.width / 2) free.right = Math.min(free.right, c.left);
+      else if (c.width > rect.width / 2 && c.top > rect.top + rect.height / 2) free.bottom = Math.min(free.bottom, c.top);
+    }
     const { x, y, zoom } = getViewport();
     const at = node.positionAbsolute ?? node.position;
     const center = { x: at.x + node.width! / 2, y: at.y + node.height! / 2 };
-    const screenX = center.x * zoom + x;
-    const screenY = center.y * zoom + y;
-    if (screenX >= 0 && screenX <= rect.width && screenY >= 0 && screenY <= rect.height) return;
-    void setCenter(center.x, center.y, { zoom, duration: 300 });
-  }, [linkedIds, getNode, getViewport, setCenter]);
+    const screen = { x: rect.left + center.x * zoom + x, y: rect.top + center.y * zoom + y };
+    const inFree = screen.x >= free.left && screen.x <= free.right && screen.y >= free.top && screen.y <= free.bottom;
+    const covered = covers.some((c) => screen.x >= c.left && screen.x <= c.right && screen.y >= c.top && screen.y <= c.bottom);
+    if (inFree && !covered) return;
+    const target = { x: (free.left + free.right) / 2 - rect.left, y: (free.top + free.bottom) / 2 - rect.top };
+    void setViewport({ x: target.x - center.x * zoom, y: target.y - center.y * zoom, zoom }, { duration: 300 });
+  }, [linkedIds, getNode, getViewport, setViewport]);
 
   const promptRename = async (node: Node) => {
     // Ask the parent straight away, which explains why a node from an imported file cannot be renamed.
@@ -635,7 +648,7 @@ export default function DiagramView({
         )}
       </ReactFlow>
       {showSettings && !dockSettings && (
-        <div className="pointer-events-none absolute inset-x-2 bottom-2 z-10 flex max-h-[55%] max-md:[[data-keyboard]_&]:max-h-[calc(100%-1rem)] md:inset-x-auto md:bottom-auto md:right-2 md:top-14 md:max-h-[calc(100%-4.5rem)] md:w-72">
+        <div data-canvas-cover className="pointer-events-none absolute inset-x-2 bottom-2 z-10 flex max-h-[55%] max-md:[[data-keyboard]_&]:max-h-[calc(100%-1rem)] md:inset-x-auto md:bottom-auto md:right-2 md:top-14 md:max-h-[calc(100%-4.5rem)] md:w-72">
           {inspector}
         </div>
       )}

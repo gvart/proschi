@@ -145,6 +145,26 @@ test.describe('selection sync', () => {
     await expect.poll(() => inside(target)).toBe(true);
     expect(await scale()).toBeCloseTo(zoom, 1);
   });
+  test('a ringed node under the settings card is panned clear of it, at the same zoom', async ({ page }) => {
+    await newDiagram(page, PINNED, 3);
+    await node(page, 'API').click();
+    const card = page.getByRole('region', { name: 'API settings' });
+    await expect(card).toBeVisible();
+    await settled(page);
+    const cardBox = (await card.boundingBox())!;
+    const clear = async () => {
+      const box = (await node(page, 'Cache').boundingBox())!;
+      const x = box.x + box.width / 2;
+      return x < cardBox.x;
+    };
+    expect(await clear()).toBe(false);
+    const scale = () => page.locator('.react-flow__viewport').evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).a);
+    const zoom = await scale();
+    await clickLine(page, 'cache "Cache"');
+    await expect(node(page, 'Cache')).toHaveClass(/pc-linked/);
+    await expect.poll(clear).toBe(true);
+    expect(await scale()).toBeCloseTo(zoom, 1);
+  });
 });
 
 test.describe('selection sync on a phone', () => {
