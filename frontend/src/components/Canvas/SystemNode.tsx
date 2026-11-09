@@ -17,7 +17,18 @@ function SystemNode({ id, data, selected }: NodeProps<SystemNodeData>) {
   const actions = useSystemActions();
   const status = s?.status ?? 'unsimulated';
   return (
-    <div className="pc-node pc-system" data-selected={selected || undefined} data-status={status} data-stub={s && !s.linked ? '' : undefined}>
+    <div
+      className="pc-node pc-system"
+      data-selected={selected || undefined}
+      data-status={status}
+      data-stub={s && !s.linked ? '' : undefined}
+      data-bottleneck={data.overlay?.bottleneck || undefined}
+    >
+      {data.overlay?.bottleneck && (
+        <span className="pc-node__tag" title="This team's design runs at 70% or more of what it takes: the first to give way as traffic grows">
+          Bottleneck
+        </span>
+      )}
       <Handle type="target" position={Position.Top} className="pc-handle" />
 
       <div className="pc-system__head">

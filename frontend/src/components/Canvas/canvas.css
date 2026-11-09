@@ -266,6 +266,118 @@
 .pc-node__bar > div[data-over] {
   background: rgb(var(--c-fail));
 }
+/* The load overlay's bottleneck: a dashed ring around the node, and its name on a tab above. */
+.pc-node[data-bottleneck] {
+  outline: 2px dashed rgb(var(--c-fail));
+  outline-offset: 5px;
+}
+.pc-node__tag {
+  position: absolute;
+  top: -10px;
+  left: 10px;
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+  background: rgb(var(--c-fail));
+  color: rgb(var(--c-on-accent));
+  font: 700 9px / 1.2 var(--font-sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+/* The load overlay's legend: the utilisation scale, the p99 path and the bottleneck ring. */
+.pc-legend.pc-load-legend {
+  min-width: 0;
+  width: 212px;
+}
+/* Folded: one line, "Load ▸". */
+.pc-legend.pc-load-legend:not([open]) {
+  width: auto;
+  padding: 6px 10px;
+}
+.pc-load-legend > summary {
+  cursor: pointer;
+  list-style: none;
+}
+.pc-load-legend > summary::-webkit-details-marker {
+  display: none;
+}
+.pc-load-legend:not([open]) > summary {
+  margin-bottom: 0;
+}
+.pc-load-legend > summary::after {
+  content: ' ▸';
+}
+.pc-load-legend[open] > summary::after {
+  content: ' ▾';
+}
+.pc-load-legend__scale {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 2px;
+  margin-bottom: 6px;
+  font: 500 10px / 1.2 var(--font-mono);
+  color: rgb(var(--c-muted));
+}
+.pc-load-legend__band {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pc-load-legend__swatch {
+  height: 12px;
+  border: 1px solid rgb(var(--c-ink));
+  border-radius: 2px;
+}
+.pc-load-legend__path {
+  flex: none;
+  width: 22px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgb(var(--c-ink));
+}
+.pc-load-legend__ring {
+  flex: none;
+  width: 22px;
+  height: 14px;
+  border: 2px dashed rgb(var(--c-fail));
+  border-radius: 3px;
+}
+.pc-load-legend__note {
+  color: rgb(var(--c-muted));
+  font-size: 11px;
+}
+
+/* ---------- load overlay on edges ---------- */
+
+.react-flow .pc-edge-casing {
+  fill: none;
+  stroke: rgb(var(--c-ink) / 0.85);
+  pointer-events: none;
+}
+.pc-edge-load {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1px 5px;
+  border: 1px solid rgb(var(--c-ink) / 0.35);
+  border-radius: var(--r-sm);
+  background: rgb(var(--c-paper) / 0.92);
+  color: rgb(var(--c-ink));
+  /* The size of a node's tech line: under it the chips are hidden (LOAD_LABEL_MIN_ZOOM). */
+  font: 600 11px / 1.3 var(--font-mono);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.pc-edge-load[data-critical] {
+  border: 1.5px solid rgb(var(--c-ink));
+}
+.pc-edge-load__label {
+  color: rgb(var(--c-ink) / 0.75);
+  font-weight: 500;
+}
+
 @keyframes pc-shake {
   0%,
   100% {
