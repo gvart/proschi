@@ -250,6 +250,12 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   // A new page checks for new badges (signed in, at most every few seconds).
   useEffect(() => refreshAchievements(), [route, refreshAchievements]);
   const unseen = achievements.state.status === 'ready' ? achievements.state.answer.achievements.filter((a) => a.unseen) : [];
+  // The free "Your next steps" (hub/RuleSteps.tsx), on the home and the roadmap: the skill map once known, else computed from the cards and solves.
+  const stepsData = {
+    progress,
+    skills: achievements.state.status === 'ready' ? achievements.state.answer.skills.topics : undefined,
+    streak: ready ? summarize(ready).streak.current : undefined,
+  };
   useEffect(() => {
     // The review, challenge, progress and profile pages name themselves.
     if (onReview || onProgress || onChallenge || onArcade || onProfile || onInterview) return;
@@ -335,7 +341,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
                 progress={progress}
                 stats={stats}
                 meta={<GoalSummary goal={goal} />}
-                top={<HomeExtras goal={goal} ask={asksGoal(goal, account.state.status, announcement)} account={account} next={next} nextTitle={next && problems.find((p) => p.id === next.id)?.title} streak={streak} />}
+                top={<HomeExtras goal={goal} ask={asksGoal(goal, account.state.status, announcement)} account={account} next={next} nextTitle={next && problems.find((p) => p.id === next.id)?.title} streak={streak} steps={stepsData} />}
               >
                 {leaderboard && <LeaderboardPanel leaderboard={leaderboard} />}
               </ProblemList>
@@ -371,7 +377,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
                 guide={firstGuide}
                 locked={target && lock && lock.kind !== 'open' ? { id: target.id, lock } : undefined}
                 read={lessonsReadIds}
-                nextForYou={<NextForYou problemTitle={(id) => problems.find((p) => p.id === id)?.title} />}
+                nextForYou={<NextForYou problemTitle={(id) => problems.find((p) => p.id === id)?.title} steps={{ account, ...stepsData }} />}
               />
             )}
           </PracticeHub>
