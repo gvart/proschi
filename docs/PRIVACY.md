@@ -311,6 +311,16 @@ nobody can tell whether you have an account. Its picture card stops being
 served at once too, but link previews that a chat app or social network
 already fetched are kept by them, beyond our control.
 
+**Your mastery certificate** (Max): turning it on in Settings › Exports &
+certificate makes a public page at a random address
+(`proschi.app/c/<certificate id>`, not your user id), with a link preview,
+that shows your display name, your level and XP, your interview-ready score,
+your mastery of each topic in whole percent, the problems you solved (which
+ones, never your designs), your longest streak and the day it was first
+turned on. It is read from your progress each time it is opened. Turning it
+off, or a plan without it, makes the address answer "not found" at once; it
+comes back at the same address when you turn it on again.
+
 ## Plans, credits and payments
 
 Pro, Max and top-ups are paid through [Polar](https://polar.sh), the

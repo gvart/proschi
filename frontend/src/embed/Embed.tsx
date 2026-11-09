@@ -11,12 +11,14 @@ import { embedTarget } from './target';
  * No editor, no CodeMirror: the docs' live example, filling the frame.
  * `?s=<id>` reads a short link (GET /api/shares/<id>); `#code=…` carries the
  * diagram itself. `?theme=light|dark` is read by public/embed-theme.js.
+ * A short link whose owner turned Proschi's branding off (Pro) shows no
+ * "Open in Proschi" link and no "· Proschi" in the title.
  */
 
 /** From /embed/ to the site root. */
 const SITE_ROOT = '../';
 
-type Shown = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; source: string; imports?: Record<string, string>; title: string; editorHref?: string };
+type Shown = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; source: string; imports?: Record<string, string>; title: string; editorHref?: string; unbranded?: boolean };
 
 function initial(): Shown {
   const target = embedTarget(window.location.search, window.location.hash);
@@ -34,7 +36,8 @@ export default function Embed() {
     let cancelled = false;
     fetchShare(target.id).then(
       (share) => {
-        if (!cancelled) setShown({ status: 'ready', source: share.source, imports: share.imports, title: share.title, editorHref: `${SITE_ROOT}app/?s=${share.id}` });
+        if (!cancelled)
+          setShown({ status: 'ready', source: share.source, imports: share.imports, title: share.title, editorHref: `${SITE_ROOT}app/?s=${share.id}`, unbranded: share.branding === false });
       },
       (error: unknown) => {
         if (cancelled) return;
@@ -48,7 +51,7 @@ export default function Embed() {
   }, []);
 
   useEffect(() => {
-    if (shown.status === 'ready') document.title = `${shown.title} · Proschi`;
+    if (shown.status === 'ready') document.title = shown.unbranded ? shown.title : `${shown.title} · Proschi`;
   }, [shown]);
 
   if (shown.status !== 'ready') {
@@ -70,6 +73,7 @@ export default function Embed() {
         editorHref={shown.editorHref}
         title={shown.title}
         openLabel="Open in Proschi"
+        unbranded={shown.unbranded}
         newTab
       />
     </main>

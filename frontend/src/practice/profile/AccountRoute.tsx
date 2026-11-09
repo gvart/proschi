@@ -10,14 +10,16 @@ import { ConnectedAccounts, DangerZone, DataPrivacy, LearningSection, ProfileSec
 import CheckoutStatus from './CheckoutStatus';
 import { checkoutReturned } from './checkoutReturned';
 import EmailReminders from './EmailReminders';
+import { ExportsSection } from './ExportsSection';
+import { useFeature } from '../../components/featureState';
 import PlanBilling from './PlanBilling';
 import SettingsNav from './SettingsNav';
-import { SECTIONS } from './settingsSections';
+import { exportsShown, SECTIONS } from './settingsSections';
 
 /**
  * The account and settings page (`#/me`): who is signed in, then the
  * sections in order (settingsSections.ts): Plan & billing, Profile,
- * Learning, Notifications, Connected accounts, Data & privacy and the
+ * Learning, Exports & certificate (what the plan has), Notifications, Connected accounts, Data & privacy and the
  * Danger zone, with a sticky list of them on the left from 900 px and a
  * "Jump to" menu on phones (SettingsNav.tsx). Back from a checkout, its
  * status and the welcome to Pro show at the top, above the sections. Progress
@@ -31,6 +33,7 @@ const heading = 'mt-1 font-display text-[clamp(2rem,5vw,3rem)] font-extrabold le
 export default function AccountRoute({ account, activity }: { account: Account; activity: Activity }) {
   const { state } = account;
   const [returned] = useState(checkoutReturned);
+  const exports = exportsShown([useFeature('data_export'), useFeature('pro_exports'), useFeature('certificate')]);
   useEffect(() => {
     document.title = 'Settings · Proschi practice';
   }, []);
@@ -52,7 +55,7 @@ export default function AccountRoute({ account, activity }: { account: Account; 
   }
 
   const { user } = state;
-  const sections = SECTIONS.filter((s) => s.id !== 'plan' || billingEnabled);
+  const sections = SECTIONS.filter((s) => (s.id !== 'plan' || billingEnabled) && (s.id !== 'exports' || exports));
   return (
     <main className="max-w-5xl mx-auto px-4 py-8 sm:py-14">
       <p className={eyebrow}>Your account</p>
@@ -73,6 +76,7 @@ export default function AccountRoute({ account, activity }: { account: Account; 
           <PlanBilling />
           <ProfileSection account={account} user={user} />
           <LearningSection activity={activity} />
+          <ExportsSection />
           <EmailReminders />
           <ConnectedAccounts account={account} state={state} />
           <DataPrivacy account={account} user={user} />

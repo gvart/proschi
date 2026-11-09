@@ -265,6 +265,8 @@ describe('data export', () => {
       lessonReads: [],
       soloInterviews: [],
       interviewPlan: null,
+      certificate: null,
+      embedBranding: true,
       shares: [],
       documents: [],
       documentVersions: [],

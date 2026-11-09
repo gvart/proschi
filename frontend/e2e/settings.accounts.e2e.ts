@@ -10,7 +10,7 @@ import { expect, test } from './fixtures';
  * cloud copies, sign-in methods), each destructive one asking first.
  */
 
-const SECTIONS = ['Plan & billing', 'Profile', 'Learning', 'Notifications', 'Connected accounts', 'Data & privacy', 'Danger zone'];
+const SECTIONS = ['Plan & billing', 'Profile', 'Learning', 'Exports & certificate', 'Notifications', 'Connected accounts', 'Data & privacy', 'Danger zone'];
 
 /** Answers the writes on top of mockSignedIn and records them. */
 async function mockWrites(page: Page) {

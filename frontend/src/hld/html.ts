@@ -20,7 +20,8 @@ import {
  * The HLD as one self-contained HTML page: no scripts, no external files.
  * `proschi render --format hld-html` passes the architecture and sequence
  * SVGs as `figures`; the browser download has none and lists each scenario's
- * messages instead.
+ * messages instead. Its print styles make it the PDF too (Pro, the HLD
+ * tab's PDF button: the browser's print, light whatever the theme).
  */
 
 export interface HldFigures {
@@ -65,6 +66,17 @@ figure svg { display: block; max-width: none; }
 ol.messages { font-size: 13px; padding-left: 24px; }
 ol.messages .error { color: var(--fail); }
 ul.risks { padding-left: 20px; }
+@media print {
+  :root { color-scheme: light; --bg: #ffffff; --fg: #111827; --muted: #4b5563; --card: #ffffff; --border: #d1d5db; --link: #1d4ed8; --pass: #15803d; --fail: #b91c1c; --warn: #92400e; }
+  @page { size: A4; margin: 14mm; }
+  body { background: #ffffff; }
+  main { max-width: none; padding: 0; }
+  nav { display: none; }
+  h2, h3, h4 { break-after: avoid; }
+  tr, figure, pre, ol.messages li, ul.risks li { break-inside: avoid; }
+  .table, figure { overflow: visible; }
+  figure svg { max-width: 100%; height: auto; }
+}
 `;
 
 function table(head: string[], rows: string[][]): string {

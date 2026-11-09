@@ -23,7 +23,7 @@ import { FIT_VIEW_OPTIONS, useFitOnChange, type FitInset } from '../Diagram/useF
 import FlowParticles from '../Overlay/FlowParticles';
 import { PlaybackMiniMap } from '../UseCases/UseCasePlayback';
 import { PLAYBACK_EDGE_TYPES, type PlaybackView } from '../UseCases/playbackView';
-import { exportImage, fileNameFor } from './exportDiagram';
+import { exportImage, fileNameFor, type PngScale } from './exportDiagram';
 import { iconButton, toolButton } from './ui';
 import type { Crumb } from './useSystemView';
 
@@ -36,6 +36,8 @@ const nodeTypes = {
 
 export interface ImageRequest {
   format: 'png' | 'svg';
+  /** A PNG's pixel ratio; 2× when absent. */
+  scale?: PngScale;
 }
 
 export interface DiagramViewProps {
@@ -367,7 +369,7 @@ export default function DiagramView({
       try {
         if (!ready || !viewport) throw new Error('the diagram is not on screen');
         const legend = wrapperRef.current?.querySelector<HTMLElement>('.pc-legend') ?? undefined;
-        await exportImage(imageRequest.format, drawn, viewport, fileNameFor(title, imageRequest.format), legend);
+        await exportImage(imageRequest.format, drawn, viewport, fileNameFor(title, imageRequest.format), legend, imageRequest.scale);
       } catch (error) {
         console.error('Export failed:', error);
         notify({ title: 'Sorry, the image could not be exported.', tone: 'danger' });

@@ -180,7 +180,7 @@ export function Pricing({ account, plan, estimates }: { account: Account; plan?:
             />
           }
           value={<Value credits={PLAN_CREDITS.pro} when="a month" creditsWhen="a month" estimates={estimates} />}
-          items={['Everything in Free', 'Every verdict kept, and how each skill trends, on your own too', 'Your next steps, picked after each interview', 'Unlimited diagrams and versions', 'Private, revocable share links', 'What each change does to cost, p99 and the checks']}
+          items={['Everything in Free', 'Every verdict kept, and how each skill trends, on your own too', 'Your next steps, picked after each interview', 'Unlimited diagrams and versions', 'Private, revocable share links', 'What each change does to cost, p99 and the checks', 'Your progress as JSON and CSV', 'Embeds without Proschi branding, 3× PNG and the HLD as PDF']}
           footer={planAction('pro')}
         />
         <PlanCard
@@ -197,7 +197,7 @@ export function Pricing({ account, plan, estimates }: { account: Account; plan?:
             />
           }
           value={<Value credits={PLAN_CREDITS.max} when="a month" creditsWhen="a month" estimates={estimates} />}
-          items={['Everything in Pro', 'Deep verdict: the strongest model grades you, at its price', 'A printable interview report, on your own too, saved as PDF', 'An interview-date plan: a schedule for every day to your interview', 'Deep mode for Design partner too']}
+          items={['Everything in Pro', 'Deep verdict: the strongest model grades you, at its price', 'A printable interview report, on your own too, saved as PDF', 'An interview-date plan: a schedule for every day to your interview', 'Deep mode for Design partner too', 'A mastery certificate to share, ready for LinkedIn']}
           footer={planAction('max')}
         />
       </div>
