@@ -42,6 +42,8 @@ interface EditableCanvasProps {
   edges: Edge[];
   /** Changes when the canvas becomes visible again or is laid out, so it can re-fit. */
   fitKey: string;
+  /** A layout is on its way (ELK, then the glide): `data-layout-busy` on the canvas, which the e2e tests wait out. */
+  layoutBusy?: boolean;
   /** Practice: capacity is the problem's (Inspector `problemCapacity`). */
   problemCapacity?: boolean;
   /** Where the palette's shown state is remembered. */
@@ -57,7 +59,7 @@ type Selected = { kind: 'node' | 'edge'; id: string } | null;
 const FLOATING_PALETTE = 256 + 8;
 const FLOATING_SETTINGS = 288 + 8;
 
-function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKey, problemCapacity, paletteKey, phone, flows = false }: EditableCanvasProps) {
+function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKey, layoutBusy, problemCapacity, paletteKey, phone, flows = false }: EditableCanvasProps) {
   const [selected, setSelected] = useState<Selected>(null);
   const [settingsClosed, setSettingsClosed] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -212,6 +214,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
         ref={canvasRef}
         tabIndex={-1}
         className="pc-editable relative h-full min-w-0 flex-1 outline-hidden"
+        data-layout-busy={layoutBusy || undefined}
         onDragOver={(e) => {
           if (!e.dataTransfer.types.includes(TECH_DRAG_TYPE)) return;
           e.preventDefault();

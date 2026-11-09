@@ -98,6 +98,7 @@ export default function Room({ problem, board, phone, phase, viewing, onView, ne
         nodes={layout.nodes}
         edges={layout.edges}
         fitKey={`${shownTab}:${layout.settled}:${fitTick}:${code.shown}:${rail.folded}`}
+        layoutBusy={layout.busy}
         problemCapacity
         paletteKey="proschi.interview.palette"
         phone={phone}

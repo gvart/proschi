@@ -67,12 +67,13 @@ export function useAutoLayout(diagram: Diagram, apply: (nodes: Node[]) => void, 
 
 /**
  * React Flow nodes and edges of a diagram, laid out again whenever it changes, for read-only canvases;
- * `settled` changes after every layout (useAutoLayout's `everyLayout`), so a fit key built on it re-fits.
+ * `settled` changes after every layout (useAutoLayout's `everyLayout`), so a fit key built on it re-fits;
+ * `busy` until a layout is applied, glide included.
  */
-export function useDiagramLayout(diagram: Diagram): { nodes: Node[]; edges: Edge[]; settled: number } {
+export function useDiagramLayout(diagram: Diagram): { nodes: Node[]; edges: Edge[]; settled: number; busy: boolean } {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   useEffect(() => setEdges(withEdgeStyles(diagram, toFlowEdges(diagram))), [diagram]);
-  const { settled } = useAutoLayout(diagram, setNodes, { everyLayout: true });
-  return { nodes, edges, settled };
+  const { settled, busy } = useAutoLayout(diagram, setNodes, { everyLayout: true });
+  return { nodes, edges, settled, busy };
 }

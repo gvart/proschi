@@ -266,7 +266,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   const { diagram, diagnostics } = parsed;
   const rootDiagnostics = useMemo(() => diagnostics.filter((d) => d.file === undefined), [diagnostics]);
   const nodeIds = useMemo(() => diagram.nodes.map((n) => n.id), [diagram]);
-  const { nodes, edges, settled } = useDiagramLayout(diagram);
+  const { nodes, edges, settled, busy: layoutBusy } = useDiagramLayout(diagram);
 
   const [running, setRunning] = useState(false);
   const runTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -449,6 +449,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
         nodes={nodes}
         edges={edges}
         fitKey={`${pane}:${settled}:${fitTick}`}
+        layoutBusy={layoutBusy}
         engine={engine}
         onSelect={goTo}
         zen={zen.zen}
@@ -581,6 +582,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
         nodes={nodes}
         edges={edges}
         fitKey={`board:${designTab}:${settled}:${fitTick}:${codeShown}`}
+        layoutBusy={layoutBusy}
         problemCapacity
         paletteKey="proschi.practice.palette"
         flows
@@ -966,6 +968,7 @@ interface DiagramPaneProps {
   nodes: ReturnType<typeof useDiagramLayout>['nodes'];
   edges: ReturnType<typeof useDiagramLayout>['edges'];
   fitKey: string;
+  layoutBusy: boolean;
   engine: Engine;
   onSelect: (loc: SourceLoc) => void;
   /** Zen mode folds the tab bar away. */
@@ -979,7 +982,7 @@ interface DiagramPaneProps {
 }
 
 /** The design as a diagram, one scenario played step by step, or its capacity analysis. */
-function DiagramPane({ diagram, nodes, edges, fitKey, engine, onSelect, zen, source, onChange, onUndo, onRedo, phone }: DiagramPaneProps) {
+function DiagramPane({ diagram, nodes, edges, fitKey, layoutBusy, engine, onSelect, zen, source, onChange, onUndo, onRedo, phone }: DiagramPaneProps) {
   const [tab, setTab] = useState<'diagram' | 'playback' | 'analysis'>('diagram');
   const analysis = useMemo(() => (tab === 'analysis' ? engine.analyze(diagram) : undefined), [tab, engine, diagram]);
   const options = useMemo(
@@ -1035,6 +1038,7 @@ function DiagramPane({ diagram, nodes, edges, fitKey, engine, onSelect, zen, sou
             nodes={nodes}
             edges={edges}
             fitKey={fitKey}
+            layoutBusy={layoutBusy}
             problemCapacity
             paletteKey="proschi.practice.palette"
             flows

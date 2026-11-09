@@ -282,7 +282,16 @@ export default function DiagramView({
     const covered = covers.some((c) => screen.x >= c.left && screen.x <= c.right && screen.y >= c.top && screen.y <= c.bottom);
     if (inFree && !covered) return;
     const target = { x: (free.left + free.right) / 2 - rect.left, y: (free.top + free.bottom) / 2 - rect.top };
-    void setViewport({ x: target.x - center.x * zoom, y: target.y - center.y * zoom, zoom }, { duration: 300 });
+    // A tween of our own: React Flow's animated setViewport zooms out and back in mid-pan (d3's interpolateZoom).
+    const to = { x: target.x - center.x * zoom, y: target.y - center.y * zoom };
+    const start = performance.now();
+    let frame = requestAnimationFrame(function step(now) {
+      const t = Math.min(1, (now - start) / 300);
+      const eased = 1 - (1 - t) ** 3;
+      setViewport({ x: x + (to.x - x) * eased, y: y + (to.y - y) * eased, zoom });
+      if (t < 1) frame = requestAnimationFrame(step);
+    });
+    return () => cancelAnimationFrame(frame);
   }, [linkedIds, getNode, getViewport, setViewport]);
 
   const promptRename = async (node: Node) => {
