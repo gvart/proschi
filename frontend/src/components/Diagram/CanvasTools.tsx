@@ -27,11 +27,13 @@ interface OverlayToolsProps {
   /** The tools are hidden (the editor while a use case plays); the legends stay. */
   hideTools?: boolean;
   phone: boolean;
+  /** The pane is narrow (practice, or the editor beside a docked panel): the load legend starts folded. */
+  narrow?: boolean;
   legend?: LegendEntry[];
 }
 
 /** The canvas's top-right corner: the overlay toggle and Auto-layout, then the load legend and the diagram's own legend. */
-export function OverlayTools({ overlay, canOverlay, onToggleOverlay, whatIfControl, pinned, onResetLayout, hideTools, phone, legend }: OverlayToolsProps) {
+export function OverlayTools({ overlay, canOverlay, onToggleOverlay, whatIfControl, pinned, onResetLayout, hideTools, phone, narrow, legend }: OverlayToolsProps) {
   return (
     <>
       {!hideTools && (
@@ -59,7 +61,7 @@ export function OverlayTools({ overlay, canOverlay, onToggleOverlay, whatIfContr
           )}
         </div>
       )}
-      {overlay && !hideTools && <LoadLegend critical={overlay.critical} phone={phone} />}
+      {overlay && !hideTools && <LoadLegend critical={overlay.critical} folded={phone || !!narrow} />}
       {legend && <Legend entries={legend} />}
     </>
   );
@@ -86,9 +88,13 @@ export function CanvasMiniMap() {
 export function CanvasTopBar({ left, right }: { left?: ReactNode; right?: ReactNode }) {
   if (!left && !right) return null;
   return (
-    <Panel position="top-left" style={{ right: 0 }} className="pointer-events-none flex flex-wrap items-start gap-2">
+    <Panel position="top-left" style={{ right: 0 }} data-canvas-topbar className="pointer-events-none flex flex-wrap items-start gap-2">
       {left && <div className="pointer-events-auto flex flex-wrap gap-2">{left}</div>}
-      {right && <div className="pointer-events-auto ml-auto flex flex-col items-end gap-2">{right}</div>}
+      {right && (
+        <div data-topbar-right className="pointer-events-auto ml-auto flex flex-col items-end gap-2">
+          {right}
+        </div>
+      )}
     </Panel>
   );
 }

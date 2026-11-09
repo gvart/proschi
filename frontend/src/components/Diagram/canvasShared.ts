@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import type { Edge, Node, NodeDragHandler } from 'reactflow';
 import { loadJson, saveJson } from '../../services/storage';
 import { edgeOverlays, type SimOverlay } from '../../sim/overlay';
@@ -81,4 +81,65 @@ export function finderItemsOf(diagram: Diagram, drawn: readonly Node[], connectF
   return diagram.nodes
     .filter((n) => ids.has(n.id) && (!connectFrom || (n.id !== connectFrom && n.kind !== 'group' && n.kind !== 'text')))
     .map((n) => ({ id: n.id, name: n.name, tech: n.techStack || undefined }));
+}
+
+/** Below this width a canvas pane is narrow: the load legend starts folded and the shortcut hint shortens. */
+export const NARROW_PANE = 640;
+
+/** Whether the element is narrower than `below` pixels, followed as it resizes (kept while it is hidden). */
+export function useNarrow(ref: RefObject<HTMLElement | null>, below = NARROW_PANE): boolean {
+  const [narrow, setNarrow] = useState(false);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const update = () => {
+      if (el.offsetWidth > 0) setNarrow(el.offsetWidth < below);
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ref, below]);
+  return narrow;
+}
+
+/**
+ * How far the canvas's top bar (CanvasTopBar) reaches into the pane `ref`, in pixels with a small gap, so a fit
+ * keeps the diagram below its buttons and tools. The load legend counts folded (its one line), so opening it
+ * does not move the diagram. Measured again when `contents` (what the bar shows) changes, and as the pane or
+ * the bar resizes (the bar wraps in a narrow pane).
+ */
+export function useTopBarInset(ref: RefObject<HTMLElement | null>, contents: string): number {
+  const [inset, setInset] = useState(0);
+  useLayoutEffect(() => {
+    const pane = ref.current;
+    if (!pane) return;
+    const bar = pane.querySelector<HTMLElement>('[data-canvas-topbar]');
+    const measure = () => {
+      if (pane.offsetWidth === 0) return;
+      setInset((prev) => {
+        const next = barBottom(pane, bar);
+        return Math.abs(prev - next) > 1 ? next : prev;
+      });
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(pane);
+    if (bar) observer.observe(bar);
+    return () => observer.disconnect();
+  }, [ref, contents]);
+  return inset;
+}
+
+function barBottom(pane: HTMLElement, bar: HTMLElement | null): number {
+  const top = pane.getBoundingClientRect().top;
+  let bottom = top;
+  for (const group of bar ? Array.from(bar.children) : []) {
+    for (const part of group.matches('[data-topbar-right]') ? Array.from(group.children) : [group]) {
+      const box = ((part.matches('.pc-load-legend') && part.querySelector('summary')) || part).getBoundingClientRect();
+      if (box.height > 0) bottom = Math.max(bottom, box.bottom);
+    }
+  }
+  return bottom > top ? Math.round(bottom - top + 8) : 0;
 }

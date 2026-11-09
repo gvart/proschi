@@ -14,7 +14,7 @@ import TextNode from '../Canvas/TextNode';
 import type { SystemNodeData } from '../Canvas/systemActions';
 import { TECH_DRAG_TYPE } from '../Diagram/Palette';
 import { CanvasMiniMap, CanvasTopBar, MiniMapButton, OverlayTools } from '../Diagram/CanvasTools';
-import { finderItemsOf, usePinDrag } from '../Diagram/canvasShared';
+import { finderItemsOf, useNarrow, usePinDrag, useTopBarInset } from '../Diagram/canvasShared';
 import FlowsPanel, { type StepPick } from '../Diagram/FlowsPanel';
 import { CanvasMenu, ConnectHint, FlowsToggle, PaletteDock, PaletteToggle, type CanvasMenuActions, type CanvasMenuState } from '../Diagram/CanvasEditing';
 import { canvasKey, historyKey, useConnectHint, useMiniMap, usePaletteOpen, type CanvasKey } from '../Diagram/canvasEditState';
@@ -507,7 +507,11 @@ export default function DiagramView({
   // No animated fit: d3-zoom reads the pane size on the transition's first tick, and a pane hidden by
   // then (phone Code/Diagram tabs) is 0×0, which interpolates the viewport to NaN. Nodes already glide via settle.
   // The exception: playback, the splitter and the palette resize a pane that stays shown, and there the diagram glides to its new fit.
-  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { wrapper: wrapperRef, inset, glide: `${playing ? 'playing' : ''}:${glideKey}:${paletteOpen}:${flowsOpen}` });
+  // Below the top bar's buttons, tools and folded legend too, so no node of the fit sits under them.
+  const barInset = useTopBarInset(wrapperRef, `${nodes.length > 0}:${playing}:${crumbs.length}:${canOverlay}:${!!overlay}:${hasPinnedNodes}:${!!diagram.legend}`);
+  const narrow = useNarrow(wrapperRef);
+  const fitInset = useMemo(() => (barInset > (inset?.top ?? 0) ? { top: barInset, bottom: inset?.bottom } : inset), [barInset, inset]);
+  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { wrapper: wrapperRef, inset: fitInset, glide: `${playing ? 'playing' : ''}:${glideKey}:${paletteOpen}:${flowsOpen}` });
 
   const handleEdgesChange = useCallback(
     (changes: EdgeChange[]) => onEdgesChange((current) => applyEdgeChanges(changes, current)),
@@ -697,6 +701,7 @@ export default function DiagramView({
                 onResetLayout={onResetLayout}
                 hideTools={playing}
                 phone={phone}
+                narrow={narrow}
                 legend={diagram.legend}
               />
             )
@@ -745,7 +750,7 @@ export default function DiagramView({
         {/* The minimap takes this corner. */}
         {nodes.length > 0 && !playing && !miniMap && !(hasSelection && !showSettings) && (
           <Panel position="bottom-right" className="hidden md:block text-xs text-muted bg-paper/85 rounded-sm px-2 py-1">
-            Drag to pin · select to edit · drag dot to dot to connect · right-click for more · ? for shortcuts
+            {narrow ? '? for shortcuts' : 'Drag to pin · select to edit · drag dot to dot to connect · right-click for more · ? for shortcuts'}
           </Panel>
         )}
       </ReactFlow>

@@ -20,7 +20,7 @@ import { CanvasMenu, ConnectHint, FlowsToggle, PaletteDock, PaletteToggle, type 
 import FlowsPanel, { type StepPick } from './FlowsPanel';
 import { canvasKey, historyKey, useConnectHint, useMiniMap, usePaletteOpen, type CanvasKey } from './canvasEditState';
 import { CanvasMiniMap, CanvasTopBar, MiniMapButton, OverlayTools } from './CanvasTools';
-import { finderItemsOf, useOverlayOn, usePinDrag, withEdgeLoads, withNodeLoads } from './canvasShared';
+import { finderItemsOf, useOverlayOn, usePinDrag, useTopBarInset, withEdgeLoads, withNodeLoads } from './canvasShared';
 import { useCanvasEdits } from './useCanvasEdits';
 import NodeFinder from './NodeFinder';
 
@@ -294,7 +294,9 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
   // Showing or hiding a panel glides the diagram to a new fit (unless the reader zoomed or panned): a docked one
   // changes the canvas's width, a floating one (the palette in a narrow pane, the settings) covers its right side.
   const cover = (paletteOpen || flowsOpen) && !phone && floating ? (flowsOpen ? FLOATING_SETTINGS : FLOATING_PALETTE) : current && !settingsClosed && !dockSettings && !phone ? FLOATING_SETTINGS : 0;
-  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { glide: `${paletteOpen}:${flowsOpen}`, right: cover });
+  // Below the top bar's buttons, tools and folded legend, so no node of the fit sits under them.
+  const barInset = useTopBarInset(canvasRef, `${nodes.length > 0}:${canOverlay}:${!!overlay}:${pinned}:${!!diagram.legend}`);
+  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { glide: `${paletteOpen}:${flowsOpen}`, right: cover, inset: barInset ? { top: barInset } : undefined });
   const inspector = current && !settingsClosed && (
     <Inspector
       key={current.id}
@@ -419,7 +421,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
             right={
               nodes.length > 0 &&
               (canOverlay || pinned || diagram.legend) && (
-                <OverlayTools overlay={overlay} canOverlay={canOverlay} onToggleOverlay={toggleOverlay} pinned={pinned} onResetLayout={edits.resetLayout} phone={phone} legend={diagram.legend} />
+                <OverlayTools overlay={overlay} canOverlay={canOverlay} onToggleOverlay={toggleOverlay} pinned={pinned} onResetLayout={edits.resetLayout} phone={phone} narrow legend={diagram.legend} />
               )
             }
           />
