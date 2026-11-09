@@ -177,6 +177,8 @@ metrics-logs-traces
 monotonic-reads
 mtls-between-services
 multi-leader-conflicts
+multi-region-cache-invalidation
+multi-region-failover-headroom
 multipart-upload
 mvcc
 n-plus-one-queries

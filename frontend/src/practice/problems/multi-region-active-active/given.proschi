@@ -1,0 +1,57 @@
+title "Multi-Region Active-Active" "Serves every member from two US regions at once, and lets either one take all the traffic when the other fails"
+
+viewer "Member Device" [Actor] "Phones, TVs and browsers running the Netflix app"
+dns    "Geo DNS"       [DNS]   "Directional records (UltraDNS) over Route53 CNAMEs; Denominator switches them"
+
+traffic {
+  "Browse"             8k rps mix "East › Hit" 45%, "East › Miss" 5%, "West › Hit" 45%, "West › Miss" 5%
+  "Save progress"      2k rps mix "East" 50%, "West" 50%
+  "Browse in failover" 8k rps mix "East evacuated › Hit" 35%, "East evacuated › Miss" 15%, "West evacuated › Hit" 35%, "West evacuated › Miss" 15%
+}
+
+requirements {
+  p99 "Browse" < 100ms
+  p99 "Save progress" < 130ms
+  p99 "Browse in failover" < 100ms
+  availability >= 99.99%
+  durable "Save progress"
+  survive any node failure
+  cost <= 5000 usd/month
+}
+
+test "DNS picks the region" {
+  "Browse" starts at viewer
+  "Save progress" starts at viewer
+  "Browse in failover" starts at viewer
+  "Browse" calls dns before any gateway
+  "Save progress" calls dns before any gateway
+  "Browse in failover" calls dns before any gateway
+  no path from viewer to any service or any cache or any database
+}
+
+test "Both regions serve live traffic" {
+  "Browse" scenario "East › Miss" calls eastZuul before eastDb
+  "Browse" scenario "East › Miss" never calls westZuul or westApi or westCache or westDb
+  "Browse" scenario "West › Miss" calls westZuul before westDb
+  "Browse" scenario "West › Miss" never calls eastZuul or eastApi or eastCache or eastDb
+  "Browse" scenario "East › Hit" never calls westZuul or westApi or westCache or westDb
+  "Browse" scenario "West › Hit" never calls eastZuul or eastApi or eastCache or eastDb
+}
+
+test "Writes replicate to the other region asynchronously" {
+  "Save progress" scenario "East" writes eastDb before responding
+  "Save progress" scenario "West" writes westDb before responding
+  "Save progress" scenario "East" calls westDb
+  "Save progress" scenario "West" calls eastDb
+  "Save progress" scenario "East" never waits for westZuul or westApi or westCache or westDb
+  "Save progress" scenario "West" never waits for eastZuul or eastApi or eastCache or eastDb
+}
+
+test "Evacuated traffic stays out of the failed region" {
+  "Browse in failover" scenario "East evacuated › Miss" calls westZuul before westDb
+  "Browse in failover" scenario "East evacuated › Miss" never calls eastZuul or eastApi or eastCache or eastDb
+  "Browse in failover" scenario "West evacuated › Miss" calls eastZuul before eastDb
+  "Browse in failover" scenario "West evacuated › Miss" never calls westZuul or westApi or westCache or westDb
+  "Browse in failover" scenario "East evacuated › Hit" never calls eastZuul or eastApi or eastCache or eastDb
+  "Browse in failover" scenario "West evacuated › Hit" never calls westZuul or westApi or westCache or westDb
+}
