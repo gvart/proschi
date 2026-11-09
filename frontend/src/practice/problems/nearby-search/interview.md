@@ -16,7 +16,7 @@ No: **40%** of the searches come from dense metros that cover well under 1% of t
 - kind: good
 - fact: A search circle covers about 3 geoshards
 
-If the index is split by location, a search circle covers about **3 geoshards**. The index needs at least **7** to hold it.
+If the index is split by location, a search circle covers about **3 geoshards**, as in Tinder's example of a 100-mile search reading 3 of 55. The index needs at least **7** to hold it (an assumption for the exercise; Tinder runs 40 to 100 worldwide).
 
 ### What can one search node take?
 - kind: good
