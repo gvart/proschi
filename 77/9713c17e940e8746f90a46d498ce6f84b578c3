@@ -1,0 +1,45 @@
+frontend/src/practice/problems/distributed-cron/wrong/no-run-state.proschi
+  s_248f83f833fb51::t_557d96e0d331d2 1-37
+frontend/src/practice/problems/distributed-cron/wrong/pool-sized-for-average.proschi
+  s_248f83f833fb51::t_557d96e0d331d2 1-48
+frontend/src/practice/problems/distributed-cron/wrong/scheduler-runs-scripts.proschi
+  s_248f83f833fb51::t_557d96e0d331d2 1-37
+frontend/src/practice/roadmapStages.ts
+  s_248f83f833fb51::t_557d96e0d331d2 54
+frontend/src/practice/problems/distributed-cron/starter.proschi
+  s_248f83f833fb51::t_557d96e0d331d2 1-12
+frontend/src/practice/problems/distributed-cron/wrong/single-scheduler.proschi
+  s_248f83f833fb51::t_557d96e0d331d2 1-48
+frontend/src/practice/cards/queues/distributed-cron-scheduler-only-enqueues.md
+  s_248f83f833fb51::t_557d96e0d331d2 1-24
+frontend/src/practice/cards/coordination/distributed-cron-skip-overlapping-runs.md
+  s_248f83f833fb51::t_557d96e0d331d2 1-27
+frontend/src/practice/problems/distributed-cron/given.proschi
+  s_248f83f833fb51::t_557d96e0d331d2 1-50
+frontend/src/practice/problems/distributed-cron/problem.md
+  s_248f83f833fb51::t_557d96e0d331d2 1-112
+frontend/src/practice/problems/distributed-cron/interview.md
+  s_248f83f833fb51::t_557d96e0d331d2 1-81
+frontend/src/practice/problems/distributed-cron/solution.proschi
+  s_248f83f833fb51::t_557d96e0d331d2 1-65
+frontend/src/practice/problems/distributed-cron/lesson.md
+  s_248f83f833fb51::t_557d96e0d331d2 1-173
+frontend/src/practice/cards/ids.lock
+  s_248f83f833fb51::t_57e68a7eea8147 79-80
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "779713c17e940e8746f90a46d498ce6f84b578c3",
+  "prompts": {},
+  "sessions": {
+    "s_248f83f833fb51": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2d46bc96-3c9a-4511-a065-8673803644a9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
