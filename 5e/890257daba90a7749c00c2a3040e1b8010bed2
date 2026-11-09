@@ -1,0 +1,27 @@
+frontend/src/practice/problems/nearby-search/interview.md
+  s_248f83f833fb51::t_7cbfe9d0b9f58d 19
+frontend/src/practice/problems/search-indexing/lesson.md
+  s_248f83f833fb51::t_042b31f5b67219 19,78,102,150,152
+frontend/src/practice/problems/nearby-search/lesson.md
+  s_248f83f833fb51::t_7cbfe9d0b9f58d 19,39,106,123,133,144,179-180
+frontend/src/practice/problems/nearby-search/problem.md
+  s_248f83f833fb51::t_7cbfe9d0b9f58d 15-19,65-67,98-102,110-112,114-138
+frontend/src/practice/problems/search-indexing/problem.md
+  s_248f83f833fb51::t_042b31f5b67219 3,17-19,83-84,103-118
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5e890257daba90a7749c00c2a3040e1b8010bed2",
+  "prompts": {},
+  "sessions": {
+    "s_248f83f833fb51": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2d46bc96-3c9a-4511-a065-8673803644a9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
