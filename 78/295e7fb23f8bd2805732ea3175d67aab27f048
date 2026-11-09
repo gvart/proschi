@@ -1,0 +1,72 @@
+frontend/src/sim/analyze.ts
+  s_f355061868c346::t_cbd5382b0a39ac 2,151-152,195-196,248-258,286-327,356,359
+frontend/src/review/request.ts
+  s_f355061868c346::t_cbd5382b0a39ac 67-68
+frontend/src/dsl/types.ts
+  s_f355061868c346::t_2e75d167c00e88 45-46,254-256,395-400
+docs/GRAMMAR.md
+  s_f355061868c346::t_65acb59c9badf2 58-59,78-79
+tooling/test/analysis.test.ts
+  s_f355061868c346::t_c25cb82caf96c5 270-285
+frontend/src/sim/cache.test.ts
+  s_f355061868c346::t_d4bec12efbd25e 1-102
+tooling/src/schema.ts
+  s_f355061868c346::t_00355e7be7d001 68,280,320
+frontend/src/sim/whatif.ts
+  s_f355061868c346::t_cbd5382b0a39ac 60,69,82,86,95
+tooling/src/server.ts
+  s_f355061868c346::t_00355e7be7d001 152
+docs/TESTS.md
+  s_f355061868c346::t_65acb59c9badf2 191
+plugin/hooks/layout.cjs
+  s_f355061868c346::t_50dd160a16227c 1-3,5-7,9,18-22,24-38
+tooling/src/simulation.ts
+  s_f355061868c346::t_00355e7be7d001 305-311
+  s_f355061868c346::t_65acb59c9badf2 440,445
+frontend/src/dsl/whatif.test.ts
+  s_f355061868c346::t_ac423f07935282 121
+docs/HLD.md
+  s_f355061868c346::t_65acb59c9badf2 239,247-273,275-289,293-308
+  s_f355061868c346::t_9df3202f6e1d4d 274,290-292
+  s_f355061868c346::t_e13b449085bad6 309
+frontend/src/components/Playground/Playground.tsx
+  s_f355061868c346::t_6aac690756b2e9 12,1716-1717
+tooling/src/cli.ts
+  s_f355061868c346::t_00355e7be7d001 108,202
+frontend/src/dsl/sections.test.ts
+  s_f355061868c346::t_ac423f07935282 273,282
+tooling/src/proschi.ts
+  s_f355061868c346::t_00355e7be7d001 116
+frontend/src/dsl/parser.ts
+  s_f355061868c346::t_2e75d167c00e88 162,1675,1695-1706,1799,1803-1818,1993,2024-2039,2667-2671
+  s_f355061868c346::t_09acdc2c7d00d3 2672-2673
+tooling/test/schema.test.ts
+  s_f355061868c346::t_5b2187315f873c 54-61
+  s_f355061868c346::t_a85d474466f949 52-53
+plugin/hooks/register.js
+  s_f355061868c346::t_50dd160a16227c 1307,2667,2687-2697,2785,2788-2802,2970,2997-3011,3588-3597,4635-4644,4670-4694,4702,4706
+frontend/src/docs/model.html
+  s_f355061868c346::t_65acb59c9badf2 50-54,65-66,718-722
+  s_f355061868c346::t_9a106820e78acc 49
+tooling/schema/proschi-diagram.schema.json
+  s_f355061868c346::t_50dd160a16227c 105-106,1305-1310,1575-1598
+  s_f355061868c346::t_44e62c4360d982 1599-1601
+tooling/src/analysis.ts
+  s_f355061868c346::t_00355e7be7d001 347
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "78295e7fb23f8bd2805732ea3175d67aab27f048",
+  "prompts": {},
+  "sessions": {
+    "s_f355061868c346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd556674-4248-429d-bf5c-2b361bc86c62",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
