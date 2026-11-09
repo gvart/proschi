@@ -1,0 +1,49 @@
+# expect-fail: Location updates reach the geoshards through the stream
+# expect-fail: p99 of Update location < 80 ms
+# mistake: Updating the geoshards inside the location update
+# explain: The app now waits for Elasticsearch on every location update, a busy geoshard slows the update down, and a move between geoshards is a delete and an insert on two indexes that can half-succeed with nobody to retry.
+# explain: Save the location, publish a change event keyed by user id, and let an indexer move the user between geoshards from the stream.
+# lesson: keeping-the-index-in-step-with-moves
+# cards: transactional-outbox, change-data-capture, nearby-search-move-between-geoshards
+# The API writes the profile and then the geoshard before it answers; there is no stream and no indexer.
+import "problem.proschi"
+
+api      "Recommendations API" [REST API]      x8 @serve "Takes searches and writes locations to the profile and the index"
+router   "Geo Router"          [Service]       x6 @serve "Maps the search circle to geoshards, fans out and merges"
+metro    "Metro Geoshards"     [Elasticsearch] x3 @index "Small geoshards that split the dense metros"
+regional "Regional Geoshards"  [Elasticsearch] x3 @index "Large geoshards for everywhere else"
+
+capacity {
+  metro    shards 3
+  regional shards 4
+}
+
+app    -> api      : HTTPS
+api    -> router   : gRPC
+api    -> profiles : write location
+api    -> metro    : index, delete
+api    -> regional : index, delete
+router -> metro    : _search
+router -> regional : _search
+
+usecase "Recommend" "A user opens the app and gets people within their search radius" {
+  app -> api    : GET /recs?radius=50mi
+  api -> router : Search(lat 40.73, lng -73.99, radius 50mi, age 25-35)
+
+  alt "Dense metro" {
+    router -> metro : x3 _search users in the covering S2 cells
+  } alt "Elsewhere" {
+    router -> regional : x3 _search users in the covering S2 cells
+  }
+
+  router --> api : merged candidates
+  api    --> app : 200 recommendations
+}
+
+usecase "Update location" "The app reports where the user is now, and the API reindexes it" {
+  app      -> api      : PUT /me/location {"lat": 40.73, "lng": -73.99}
+  api      -> profiles : UPDATE user 7731 SET lat, lng, cellId
+  api      -> regional : DELETE user 7731 from the old geoshard
+  api      -> metro    : UPSERT user 7731 into the new geoshard
+  api     --> app      : 204
+}

@@ -1,0 +1,65 @@
+# expect-fail: A search visits only the geoshards around the searcher
+# expect-fail: cost ≤ $13,500/month
+# mistake: Sharding the user index by user id
+# explain: A hash of the user id scatters neighbours over every shard, so each search has to ask all 7 shards and merge: every shard serves every search, and adding shards adds no search capacity, only replicas do.
+# explain: Shard by location instead, so a search reads only the few geoshards its circle covers.
+# lesson: routing-a-search-to-its-geoshards
+# cards: scatter-gather, fan-out-tail-latency, nearby-search-shards-per-search
+# One index of 7 shards keyed by user id: every search fans out to all 7, so each shard needs 4 copies to keep up.
+import "problem.proschi"
+
+api     "Recommendations API" [REST API]      x8 @serve "Takes searches and location updates"
+router  "Search Router"       [Service]       x6 @serve "Sends every search to every shard and merges"
+users   "User Index"          [Elasticsearch] x4 @index "7 shards by hash of user id, each with a primary and 3 replicas"
+changes "Location Changes"    [Kafka]         x3 @write "Location changes, partitioned by user id"
+indexer "Indexer"             [Worker]        x4 @write "Updates the user's document"
+
+capacity {
+  users shards 7
+}
+
+app     -> api      : HTTPS
+api     -> router   : gRPC
+api     -> profiles : write location
+api     -> changes  : produce
+router  -> users    : _search
+changes -> indexer  : consume
+indexer -> users    : index
+
+usecase "Recommend" "A user opens the app and gets people within their search radius" {
+  app    -> api    : GET /recs?radius=50mi
+  api    -> router : Search(lat 40.73, lng -73.99, radius 50mi, age 25-35)
+
+  alt "Dense metro" {
+    router -> users  : x7 _search users within 50 miles, on every shard
+    users --> router : candidates
+  } alt "Elsewhere" {
+    router -> users  : x7 _search users within 50 miles, on every shard
+    users --> router : candidates
+  }
+
+  router --> api : merged candidates
+  api    --> app : 200 recommendations
+}
+
+usecase "Update location" "The app reports where the user is now" {
+  app       -> api      : PUT /me/location {"lat": 40.73, "lng": -73.99}
+  api       -> profiles : UPDATE user 7731 SET lat, lng
+  profiles --> api      : ok
+  api      ->> changes  : PUBLISH LocationChanged user 7731
+  api      --> app      : 204
+}
+
+usecase "Index location" "The indexer updates the user's document in its shard" {
+  changes -> indexer : LocationChanged user 7731
+
+  alt "Dense metro" {
+    indexer -> users : UPSERT user 7731 with its new location
+  } alt "Elsewhere" {
+    indexer -> users : UPSERT user 7731 with its new location
+  } alt "Moved geoshard" {
+    indexer -> users : UPSERT user 7731 with its new location
+  }
+
+  indexer --> changes : commit offset
+}
