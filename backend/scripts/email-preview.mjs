@@ -36,6 +36,7 @@ const emails = {
   cards: reminderEmail('cards', { due: 17, topics: ['Caching', 'Databases', 'Queues'] }, opts),
   recap: reminderEmail('recap', { recap }, opts),
   'recap-quiet': reminderEmail('recap', { recap: { ...recap, reviews: 12, newCards: 0, solves: 1, challenges: 0, runs: 0, goalDays: 2, streak: 0 } }, opts),
+  plan: reminderEmail('plan', { plan: { daysLeft: 9, phase: 'mock', items: ['Mock interview: Chat', 'Review 6 due cards'] } }, opts),
   paused: reminderEmail('cards', { due: 9 }, { ...opts, paused: true }),
 };
 

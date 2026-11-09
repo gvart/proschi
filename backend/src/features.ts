@@ -26,6 +26,7 @@ export const FEATURES: Readonly<Record<FeatureId, { plans: readonly Plan[]; desc
   deep_mode: { plans: ['max'], description: 'Deep mode is part of Max' },
   interview_report: { plans: ['max'], description: 'The printable interview report is part of Max' },
   design_diff: { plans: ['pro', 'max'], description: 'What a change does to cost, p99 and the checks, version against version, is part of Pro' },
+  interview_plan: { plans: ['max'], description: 'The interview-date plan is part of Max' },
 };
 
 /**

@@ -69,6 +69,7 @@ import { errorText, log } from './log';
 import { deleteMe, exportMe, getMe, importProgress, recordRun, updateMe } from './progress';
 import { postLessonsRead } from './lessons';
 import { postSoloInterviews, soloInterviewHistory } from './soloInterviews';
+import { deleteInterviewPlan, getInterviewPlan, putInterviewPlan } from './interviewPlan';
 import { confirmEmail, confirmPage, deleteEmail, getEmailPrefs, patchEmail, putEmail, unsubscribe, unsubscribePage } from './reminders';
 import { getPublicProfile } from './profile';
 import { servePublicProfile } from './profilePage';
@@ -116,6 +117,9 @@ import { deleteFeedback, getFeedback, getFeedbackFile, listFeedback, patchFeedba
  *   POST   /api/me/lessons {ids}            lessons and roadmap guides read
  *   POST   /api/me/interviews/solo {sessions}   mock interviews finished on your own (src/soloInterviews.ts)
  *   GET    /api/me/interviews/solo          those kept, newest first, with what each did: Pro (402 plan_required)
+ *   GET    /api/me/interview-plan           the interview-date plan's date and minutes: Max (402 plan_required; src/interviewPlan.ts)
+ *   PUT    /api/me/interview-plan {date, minutes, start, today?}   sets it, with today's list for the reminder: Max
+ *   DELETE /api/me/interview-plan           removes it
  *   GET    /api/me/achievements?day=        every badge with its progress, and the skill map (stores newly earned badges)
  *   POST   /api/me/achievements/seen {ids?} marks earned badges as celebrated
  *   GET    /api/me/documents?since=<ms>     the editor's synced diagrams changed since (tombstones too), {documents, cursor}
@@ -296,6 +300,9 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('POST', 'api', 'me', 'lessons')) return postLessonsRead(request, ctx);
   if (is('POST', 'api', 'me', 'interviews', 'solo')) return postSoloInterviews(request, ctx);
   if (is('GET', 'api', 'me', 'interviews', 'solo')) return soloInterviewHistory(request, ctx);
+  if (is('GET', 'api', 'me', 'interview-plan')) return getInterviewPlan(request, ctx);
+  if (is('PUT', 'api', 'me', 'interview-plan')) return putInterviewPlan(request, ctx);
+  if (is('DELETE', 'api', 'me', 'interview-plan')) return deleteInterviewPlan(request, ctx);
   if (is('GET', 'api', 'me', 'achievements')) return getAchievements(request, ctx);
   if (is('POST', 'api', 'me', 'achievements', 'seen')) return markAchievementsSeen(request, ctx);
   if (is('GET', 'api', 'me', 'documents')) return listDocuments(request, ctx);

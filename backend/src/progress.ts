@@ -24,6 +24,7 @@ import { exportCharges } from './meter';
 import { exportRoadmapRecs } from './roadmap';
 import { exportInterviews } from './interviews';
 import { exportSoloInterviews } from './soloInterviews';
+import { exportInterviewPlan } from './interviewPlan';
 import { exportPartnerSessions } from './partner';
 import { deleteFeedbackFiles, exportFeedback } from './feedback';
 import { parseScopes } from './scopes';
@@ -286,6 +287,7 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
     })),
     // Mock interviews finished on your own, as the browser sent them.
     soloInterviews: await exportSoloInterviews(DB, user.id),
+    interviewPlan: await exportInterviewPlan(DB, user.id),
     // Short links: the diagram of each; the preview image is at imageUrl.
     shares: await exportShares(DB, user.id, new URL(request.url).origin),
     // The editor's diagrams kept by cloud sync, with tombstones of deleted ones (kept 30 days).

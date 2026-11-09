@@ -234,7 +234,7 @@ export function buildPlan(input: PlanInput): PlanDay[] {
       if (!items.length) items = revision(day);
     } else if (phase === 'mock') {
       const id = mockProblem();
-      const mock: PlanItem | undefined = id && {
+      const mock: PlanItem | undefined = id === undefined ? undefined : {
         kind: 'interview',
         key: `interview:${id}`,
         problem: id,
