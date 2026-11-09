@@ -1,0 +1,74 @@
+docs/GRAMMAR.md
+  s_f355061868c346::t_65acb59c9badf2 58-59,78-79
+frontend/src/dsl/parser.ts
+  s_f355061868c346::t_09acdc2c7d00d3 2672-2673
+  s_f355061868c346::t_2e75d167c00e88 162,1675,1695-1706,1799,1803-1818,1993,2024-2039,2667-2671
+frontend/src/sim/cache.test.ts
+  s_f355061868c346::t_d4bec12efbd25e 1-102
+plugin/hooks/register.js
+  s_f355061868c346::t_bff0cb539fe269 4271,4274-4275,4277,4279,4281-4282,4285-4311
+  s_f355061868c346::t_50dd160a16227c 1307,2667,2687-2697,2785,2788-2802,2970,2997-3011,3588-3597,4665-4674,4700-4724,4732,4736
+frontend/src/sim/whatif.ts
+  s_f355061868c346::t_cbd5382b0a39ac 60,69,82,86,95
+tooling/schema/proschi-diagram.schema.json
+  s_f355061868c346::t_50dd160a16227c 105-106,1305-1310,1575-1598
+  s_f355061868c346::t_44e62c4360d982 1599-1601
+frontend/src/sim/analyze.ts
+  s_f355061868c346::t_cbd5382b0a39ac 2,151-152,195-196,248-258,286-327,356,359
+tooling/src/analysis.ts
+  s_f355061868c346::t_00355e7be7d001 347
+tooling/src/schema.ts
+  s_f355061868c346::t_00355e7be7d001 68,280,320
+tooling/test/schema.test.ts
+  s_f355061868c346::t_a85d474466f949 52-53
+  s_f355061868c346::t_5b2187315f873c 54-61
+frontend/src/docs/model.html
+  s_f355061868c346::t_9a106820e78acc 49
+  s_f355061868c346::t_65acb59c9badf2 50-54,65-66,718-722
+docs/HLD.md
+  s_f355061868c346::t_65acb59c9badf2 239,247-273,275-289,293-308
+  s_f355061868c346::t_9df3202f6e1d4d 274,290-292
+  s_f355061868c346::t_e13b449085bad6 309
+frontend/src/components/Playground/Playground.tsx
+  s_f355061868c346::t_6aac690756b2e9 12,1767-1768
+tooling/test/analysis.test.ts
+  s_f355061868c346::t_c25cb82caf96c5 270-285
+tooling/src/simulation.ts
+  s_f355061868c346::t_65acb59c9badf2 440,445
+  s_f355061868c346::t_00355e7be7d001 305-311
+tooling/src/cli.ts
+  s_f355061868c346::t_00355e7be7d001 108,202
+frontend/src/dsl/types.ts
+  s_f355061868c346::t_2e75d167c00e88 45-46,254-256,395-400
+tooling/src/proschi.ts
+  s_f355061868c346::t_00355e7be7d001 116
+plugin/hooks/layout.cjs
+  s_f355061868c346::t_bff0cb539fe269 1-3,5-7,9,18,20-22,24-27,38
+  s_f355061868c346::t_50dd160a16227c 19,28-37
+frontend/src/review/request.ts
+  s_f355061868c346::t_cbd5382b0a39ac 67-68
+docs/TESTS.md
+  s_f355061868c346::t_65acb59c9badf2 191
+frontend/src/dsl/whatif.test.ts
+  s_f355061868c346::t_ac423f07935282 121
+tooling/src/server.ts
+  s_f355061868c346::t_00355e7be7d001 152
+frontend/src/dsl/sections.test.ts
+  s_f355061868c346::t_ac423f07935282 273,282
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "128dde44fda54894cea5565fa68262cd5787eb31",
+  "prompts": {},
+  "sessions": {
+    "s_f355061868c346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd556674-4248-429d-bf5c-2b361bc86c62",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": null
+    }
+  }
+}
