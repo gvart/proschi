@@ -1,5 +1,6 @@
 frontend/src/components/Feature.test.tsx
   s_f355061868c346::t_f16a14de270847 162
+  s_f355061868c346::t_fd991b0c124bf1 149,154
 backend/src/index.ts
   s_f355061868c346::t_083b94ae37e3f9 72,120-122,303-305
 backend/src/progress.ts
@@ -30,6 +31,12 @@ backend/src/interviewPlan.ts
   s_f355061868c346::t_eeb89d7c00a85c 3-76,80-86,89-112
 backend/scripts/email-preview.mjs
   s_f355061868c346::t_2be2e925b569f3 39
+frontend/e2e/accounts.ts
+  s_f355061868c346::t_fd991b0c124bf1 32
+frontend/src/services/featureContract.ts
+  s_f355061868c346::t_fd991b0c124bf1 9
+frontend/src/components/featureState.ts
+  s_f355061868c346::t_fd991b0c124bf1 33-35
 ---
 {
   "schema_version": "authorship/3.0.0",
