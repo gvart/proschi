@@ -9,6 +9,8 @@ import { downloadBlob } from '../../components/Playground/exportDiagram';
 import { certificateUrl, linkedInAddUrl } from '../../learn/certificate';
 import { progressCsvFiles } from '../../learn/progressExport';
 import { writeZip } from '../../playground/zip';
+import { ApiError } from '../../services/api';
+import { announcePlanChanged } from '../../services/billing';
 import { getEmbedBranding, getMyCertificate, getProgressExport, setCertificate, setEmbedBranding, type MyCertificate } from '../../services/certificates';
 import { exportsShown, shownRow as shown } from './settingsSections';
 import { Row, Section, switchInput } from './settingsUi';
@@ -21,7 +23,19 @@ import { Row, Section, switchInput } from './settingsUi';
  * are off (P53), and the section with it when no row is left.
  */
 
-const errorText = (e: unknown) => (e instanceof Error ? e.message : String(e));
+/** What went wrong, in words: the plan when it no longer has the feature (and the page reads the plan again), never a bare status. */
+function errorText(e: unknown, plan: 'Pro' | 'Max'): string {
+  if (e instanceof ApiError) {
+    if (e.status === 402) {
+      announcePlanChanged();
+      return `This is part of ${plan}, and your account is not on it now.`;
+    }
+    if (e.status === 401) return 'Your session expired; sign in again.';
+    if (e.status === 429) return e.message;
+    if (e.status >= 500) return 'Proschi could not do this just now; try again in a minute.';
+  }
+  return e instanceof Error ? e.message : String(e);
+}
 
 export function ExportsSection() {
   const data = useFeature('data_export');
@@ -62,7 +76,7 @@ function ProgressExportRow({ state }: { state: FeatureState }) {
       if (format === 'json') downloadBlob(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), 'proschi-progress.json');
       else downloadBlob(new Blob([writeZip(progressCsvFiles(data))], { type: 'application/zip' }), 'proschi-progress-csv.zip');
     } catch (e) {
-      setError(errorText(e));
+      setError(errorText(e, 'Pro'));
     } finally {
       setBusy(undefined);
     }
@@ -103,7 +117,7 @@ function EmbedBrandingRow({ state }: { state: FeatureState }) {
     let live = true;
     getEmbedBranding().then(
       (b) => live && setBranding(b),
-      (e: unknown) => live && setError(errorText(e)),
+      (e: unknown) => live && setError(errorText(e, 'Pro')),
     );
     return () => {
       live = false;
@@ -116,7 +130,7 @@ function EmbedBrandingRow({ state }: { state: FeatureState }) {
     setBranding(!hide);
     setEmbedBranding(!hide).then(setBranding, (e: unknown) => {
       setBranding(was);
-      setError(errorText(e));
+      setError(errorText(e, 'Pro'));
     });
   };
   return (
@@ -160,7 +174,7 @@ function CertificateRow({ state }: { state: FeatureState }) {
     let live = true;
     getMyCertificate().then(
       (c) => live && setMine(c),
-      (e: unknown) => live && setError(errorText(e)),
+      (e: unknown) => live && setError(errorText(e, 'Max')),
     );
     return () => {
       live = false;
@@ -178,7 +192,7 @@ function CertificateRow({ state }: { state: FeatureState }) {
       },
       (e: unknown) => {
         setPending(undefined);
-        setError(errorText(e));
+        setError(errorText(e, 'Max'));
       },
     );
   };
