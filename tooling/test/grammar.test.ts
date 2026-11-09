@@ -124,6 +124,19 @@ describe('TextMate grammar', () => {
     expect(scopeOf(lines, '#2')).toBe('string.quoted.double.json.proschi');
   });
 
+  it('scopes budgets, retries, drain rates and lag in section blocks', () => {
+    const lines = tokenize(
+      ['requirements {', '  cost @Payments <= 500 usd/month', '  cost .edge <= 5 usd/month', '  cost group checkout <= 5 usd/month', '  lag "Pay" < 30s', '}', 'capacity {', '  pay errors 2% retries 3', '  events drain 5k rps', '}'].join('\n'),
+    );
+    expect(scopeOf([lines[1]], '@Payments')).toBe('entity.other.attribute-name.team.proschi');
+    expect(scopeOf([lines[2]], '.edge')).toBe('entity.other.attribute-name.tag.proschi');
+    expect(scopeOf([lines[3]], 'group')).toBe('keyword.other.proschi');
+    expect(scopeOf([lines[4]], 'lag')).toBe('keyword.other.proschi');
+    expect(scopeOf([lines[7]], 'errors')).toBe('keyword.other.proschi');
+    expect(scopeOf([lines[7]], 'retries')).toBe('keyword.other.proschi');
+    expect(scopeOf([lines[8]], 'drain')).toBe('keyword.other.proschi');
+  });
+
   it('scopes section blocks: header keywords, section words, quantities and operators', () => {
     const lines = tokenize(
       [

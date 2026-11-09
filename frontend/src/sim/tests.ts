@@ -38,7 +38,7 @@ import {
   writesBeforeResponse,
 } from './flow';
 import { scopedCost } from './cost';
-import { formatAvailability, formatMs, formatPercent, formatRps, formatUsd } from './format';
+import { formatAvailability, formatCount, formatDuration, formatMs, formatPercent, formatRps, formatUsd } from './format';
 import type { Profile } from './profiles';
 
 /**
@@ -178,6 +178,7 @@ const CATEGORY: Record<Requirement['kind'], TestResult['category']> = {
   durable: 'durability',
   survive: 'resilience',
   cost: 'cost',
+  lag: 'latency',
 };
 
 const percentileName = (q: Percentile) => PERCENTILE_KEYS[q];
@@ -205,6 +206,8 @@ export function requirementName(r: Requirement): string {
       return r.target === 'any' ? 'survive any node failure' : `survive failure of ${selectorText(r.target)}`;
     case 'cost':
       return `cost${r.scope ? ` of ${scopeText(r.scope)}` : ''} ≤ ${formatUsd(r.maxUsdPerMonth)}`;
+    case 'lag':
+      return `lag of ${r.useCase} < ${formatDuration(r.maxMs)}`;
   }
 }
 
@@ -221,6 +224,8 @@ function requirement(run: Run, r: Requirement): Check {
       return survive(run, r.target);
     case 'cost':
       return r.scope ? budget(run, r.scope, r.maxUsdPerMonth) : cost(run, r.maxUsdPerMonth);
+    case 'lag':
+      return lag(run, r.useCase, r.maxMs);
   }
 }
 
@@ -514,6 +519,35 @@ function cost(run: Run, max: number): Check {
   const egressHint =
     egress > total / 2 ? ' Most of it is egress: serve repeated downloads from a CDN ($0.02/GB) instead of storage ($0.09/GB), or send fewer bytes.' : '';
   return fail(message, `Biggest items: ${top.join(', ')}. Drop replicas on nodes with low utilisation or pick cheaper techs.${egressHint}`);
+}
+
+/**
+ * `lag "U" < 30s`: the consumer lag of the queues U sends to, the slowest of
+ * them. A queue whose backlog grows fails, and so does a use case that sends
+ * to no queue with a `drain` rate.
+ */
+function lag(run: Run, name: string, maxMs: number): Check {
+  const u = findUseCase(run.diagram, name);
+  if (!u) return unknownUseCase(run, name);
+  const ids = [...new Set(u.scenarios.flatMap((s) => s.steps.filter((step) => !step.failed).map((step) => step.toServiceId)))];
+  const queues = ids.map((id) => run.nodes.get(id)).filter((n): n is NodeAnalysis => !!n?.queue);
+  if (queues.length === 0) {
+    const plain = ids.find((id) => ['queue', 'broker'].includes(run.nodes.get(id)?.kind ?? ''));
+    return fail(
+      `"${u.name}" sends to no queue with a drain rate, so it has no lag to measure`,
+      plain ? `Say how fast its consumers take messages: capacity { ${plain} drain 1k rps }` : 'Send its slow work to a queue (->> queue) and give the queue a drain rate in capacity',
+    );
+  }
+  const slowest = queues.reduce((worst, n) => (n.queue!.lagMs > worst.queue!.lagMs ? n : worst));
+  const q = slowest.queue!;
+  if (q.backlogPerHour > 0) {
+    return fail(
+      `"${u.name}" falls behind at ${slowest.id}: ${formatRps(q.inflowRps)} flows in, its consumers drain ${formatRps(q.drainRps)}, and the backlog grows by ${formatCount(q.backlogPerHour)} messages an hour (limit ${formatDuration(maxMs)})`,
+      `Drain ${slowest.id} faster than ${formatRps(q.inflowRps)}: more consumers, or capacity { ${slowest.id} drain ${formatRps(Math.ceil((q.inflowRps / 0.7) / 100) * 100)} }`,
+    );
+  }
+  const message = `Lag of "${u.name}" is ${formatDuration(q.lagMs)} at ${slowest.id}, its consumers ${formatPercent(q.utilization)} busy (limit ${formatDuration(maxMs)})`;
+  return q.lagMs < maxMs ? pass(message) : fail(message, `Drain ${slowest.id} faster, so its consumers run below ${formatPercent(HOT)}`);
 }
 
 /** `@Payments`, `.edge`, `group checkout`. */

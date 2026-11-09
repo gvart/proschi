@@ -2,7 +2,7 @@ import type { Diagram, DiagramNode, DiagramStep, DiagramUseCase, Kind, Percentil
 import { kindOf as nodeKind } from '../dsl/kinds';
 import { accessIn } from './access';
 import { criticalPath, fallbacksFor, findScenario, findUseCase, needs, pathNodes, type Hop } from './flow';
-import { formatPercent, formatRps } from './format';
+import { formatCount, formatPercent, formatRps } from './format';
 import { capacityOf, combinedUtilization, profileOf, type Profile } from './profiles';
 import { analyzeSystems, type SharedSystemLoad, type SystemAnalysis } from './systems';
 
@@ -90,6 +90,8 @@ export interface NodeAnalysis {
    * error rate.
    */
   retry?: RetryAnalysis;
+  /** A queue or broker with a `drain` rate: its backlog and consumer lag. Absent otherwise. */
+  queue?: QueueAnalysis;
 }
 
 export interface RetryAnalysis {
@@ -99,6 +101,31 @@ export interface RetryAnalysis {
   success: number;
   /** Hot (`HOT` or more) with retries: saturation raises the error rate, and each failure comes back up to `retries` more times. */
   stormRisk: boolean;
+}
+
+/**
+ * A queue or broker with consumers (`capacity { events drain 5k rps }`):
+ * what flows in (every request to it, `loadRps`), what the consumers take
+ * off, and what that leads to. With more inflow than drain the backlog
+ * grows; otherwise a message waits the M/M/1 queueing delay of a consumer
+ * pool that drains at `drainRps`.
+ */
+export interface QueueAnalysis {
+  inflowRps: number;
+  drainRps: number;
+  /** `inflowRps ÷ drainRps`; at 1 or more the backlog grows. */
+  utilization: number;
+  /** Messages the backlog grows by per hour, `(inflow − drain) × 3600`; 0 while the consumers keep up. */
+  backlogPerHour: number;
+  /** The mean wait before a consumer takes a message, `ρ ÷ (drain − inflow)`; Infinity while the backlog grows. */
+  lagMs: number;
+}
+
+/** The backlog and lag of a queue with `inflow` requests per second and consumers that drain `drain`. */
+export function queueOf(inflow: number, drain: number): QueueAnalysis {
+  const utilization = drain > 0 ? inflow / drain : inflow > 0 ? Infinity : 0;
+  if (inflow >= drain && inflow > 0) return { inflowRps: inflow, drainRps: drain, utilization, backlogPerHour: (inflow - drain) * 3600, lagMs: Infinity };
+  return { inflowRps: inflow, drainRps: drain, utilization, backlogPerHour: 0, lagMs: drain > 0 ? (utilization / (drain - inflow)) * 1000 : 0 };
 }
 
 export type Percentiles = Record<'p50' | 'p90' | 'p95' | 'p99' | 'p999', number>;
@@ -874,6 +901,7 @@ export function analyze(diagram: Diagram, options: AnalyzeOptions = {}): Analysi
 
   const traffic = trafficFor(diagram, options, warnings);
   const retries = retriesOf(diagram, options);
+  const drains = new Map((diagram.capacity ?? []).flatMap((o) => (o.drainRps !== undefined ? [[o.node, o.drainRps] as const] : [])));
   const load = computeLoad(diagram, traffic);
   const egress = computeEgressGb(diagram, averageTraffic(traffic), kindOf);
   const bytes = computeBytesPerSecond(diagram, traffic);
@@ -909,6 +937,7 @@ export function analyze(diagram: Diagram, options: AnalyzeOptions = {}): Analysi
       egressUsd,
       durable: p.durable,
       ...(down ? { failed: true as const } : {}),
+      ...(drains.has(n.id) ? { queue: queueOf(read + write, drains.get(n.id)!) } : {}),
       ...(retries.has(n.id) ? { retry: { ...retries.get(n.id)!, stormRisk: usage.utilization >= HOT && retries.get(n.id)!.retries > 0 && retries.get(n.id)!.errorRate > 0 } } : {}),
     };
   });
@@ -920,6 +949,12 @@ export function analyze(diagram: Diagram, options: AnalyzeOptions = {}): Analysi
     const usage = usageText(n);
     if (n.saturated) warnings.push(`'${n.id}' is saturated: ${usage}. ${writeBound(n) ? 'Add shards for writes' : 'Add replicas'} or take load off it.`);
     else if (n.utilization > HOT) warnings.push(`'${n.id}' runs hot: ${usage}.`);
+  }
+  for (const n of nodeResults) {
+    if (!n.queue || n.queue.backlogPerHour <= 0) continue;
+    warnings.push(
+      `'${n.id}' falls behind: ${formatRps(n.queue.inflowRps)} flows in and its consumers drain ${formatRps(n.queue.drainRps)}, so the backlog grows by ${formatCount(n.queue.backlogPerHour)} messages an hour. Drain faster or send it less.`,
+    );
   }
   for (const n of nodeResults) {
     if (!n.retry?.stormRisk) continue;

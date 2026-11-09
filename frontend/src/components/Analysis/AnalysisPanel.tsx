@@ -2,6 +2,7 @@ import { AlertTriangle, Info, LocateFixed, ShieldAlert } from 'lucide-react';
 import type { Diagram, SourceLoc } from '../../dsl';
 import CostBreakdown from './CostBreakdown';
 import ModelLink from './ModelLink';
+import Queues from './Queues';
 import { HOT, formatAvailability, formatMs, formatPercent, formatRps, formatTraffic, formatUsd, type Analysis, type NodeAnalysis, type TestResult } from '../../sim';
 import { BOTTLENECK_FROM, busiestOf } from '../../sim/overlay';
 import { systemSummaries } from '../Canvas/systemSummary';
@@ -141,6 +142,8 @@ export function AnalysisBody({ diagram, analysis, onSelect, results, onFocusNode
           </table>
         </div>
       </section>
+
+      <Queues analysis={analysis} />
 
       <CostBreakdown diagram={diagram} analysis={analysis} />
 

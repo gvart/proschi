@@ -370,7 +370,9 @@ export type Requirement =
   | { kind: 'durable'; useCase: string; loc: SourceLoc }
   | { kind: 'survive'; target: Selector | 'any'; loc: SourceLoc }
   /** `cost <= 3000 usd/month`, or with `scope` a budget for part of the design: `cost @Payments <= 500 usd/month`. */
-  | { kind: 'cost'; maxUsdPerMonth: number; scope?: CostScope; loc: SourceLoc };
+  | { kind: 'cost'; maxUsdPerMonth: number; scope?: CostScope; loc: SourceLoc }
+  /** `lag "Use case" < 30s`: how long the use case's messages wait in the queues it sends to (those with a `drain` rate). */
+  | { kind: 'lag'; useCase: string; maxMs: number; loc: SourceLoc };
 
 /**
  * Whose cost a scoped budget covers: the nodes a team owns (`@Payments`),
@@ -416,6 +418,12 @@ export interface CapacityOverride {
   errorPercent?: number;
   /** `retries 3`: how many times a caller tries a failed call again, 0..5. */
   retries?: number;
+  /**
+   * `drain 5k rps` on a queue or broker: how fast its consumers take
+   * messages off it. More inflow than that grows a backlog; less waits a
+   * queueing delay, the consumer lag.
+   */
+  drainRps?: number;
   loc: SourceLoc;
 }
 

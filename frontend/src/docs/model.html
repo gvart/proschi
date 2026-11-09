@@ -139,6 +139,12 @@ write capacity = writes × shards              single-primary
           store queue for its one primary.
         </p>
         <p>
+          A queue or broker with consumers (<code>capacity { events drain 5k rps }</code>) queues messages the
+          same way, with the consumers as one server that drains at that rate: below it, a message waits
+          <code>ρ ÷ (drain − inflow)</code>, the consumer lag; above it, the backlog grows by the difference every
+          second.
+        </p>
+        <p>
           One server gives the classic <code>1 ÷ (1 − ρ)</code> slowdown. A pool waits much less: at 50%, one
           server waits half the time, four servers <span data-pin="const|wait@4@50">17%</span>. ρ is capped at
           <span data-pin="const|queueCap">95%</span> here, so a saturated node is at most
@@ -148,7 +154,10 @@ write capacity = writes × shards              single-primary
       <div class="figure">
         <pre class="formula" tabindex="0"><code>C      = Erlang C(c, ρ)              ρ capped at 0.95
 hop(n) = base + C × base ÷ (c (1 − ρ))
-       = base ÷ (1 − ρ)                 for c = 1</code></pre>
+       = base ÷ (1 − ρ)                 for c = 1
+
+lag(q)     = ρ ÷ (drain − inflow)       ρ = inflow ÷ drain &lt; 1
+backlog(q) = (inflow − drain) × 3600    messages an hour, inflow ≥ drain</code></pre>
         <div class="mini-scroll" tabindex="0"><table class="mini">
           <caption class="visually-hidden">Slowdown over the idle latency by utilisation</caption>
           <thead><tr><th scope="col">ρ</th><th scope="col">10%</th><th scope="col">50%</th><th scope="col">70%</th><th scope="col">90%</th><th scope="col">≥ 95%</th></tr></thead>
@@ -776,7 +785,11 @@ traffic {
       </tr>
       <tr>
         <th scope="row">Queues and consumers <span class="tag">either way</span></th>
-        <td>Backlog, consumer lag, ordering, redelivery and dead letters are out of scope. A queue is a node that takes writes.</td>
+        <td>
+          With a <code>drain</code> rate, a queue has a backlog or a consumer lag at the analysed rate. A backlog
+          that builds at the peak and empties overnight, consumers that scale with the backlog, ordering,
+          redelivery and dead letters are not modelled. Without one, a queue is a node that takes writes.
+        </td>
       </tr>
       <tr>
         <th scope="row">Time and consistency <span class="tag">either way</span></th>

@@ -66,6 +66,7 @@ requirements {
   survive failure of cache    # a node id, [Tech], or any <kind>
   cost <= 3000 usd/month
   cost @Payments <= 500 usd/month   # a team, .tag or group id
+  lag "Place order" < 30s           # queues with a drain rate
 }
 ```
 
@@ -76,6 +77,7 @@ requirements {
 | Durability: `durable "U"` | Every success scenario writes to a durable store, synchronously, before the first request is answered. |
 | Failures: `survive any node failure` | After losing any one node instance, nothing saturates and every latency target that held still holds. `survive failure of` a [selector](#selectors-and-kinds) checks only those nodes. |
 | Budget: `cost <= 3000 usd/month` | Replicas plus egress cost at most that much. |
+| Lag: `lag "U" < 30s` | The queues U sends to that have a [drain rate](HLD.md#queue-backlog-and-lag) keep up, and a message waits less than that in the slowest of them. |
 | Scoped budget: `cost @Payments <= 500 usd/month` | The nodes the team owns cost at most that much. `cost .edge` covers the nodes with the tag, and the nodes inside a group with it; `cost group checkout` the nodes inside the group. See [budgets per team](#budgets-per-team-group-or-tag). |
 
 Requirements need [traffic](HLD.md#traffic): a use case without traffic is

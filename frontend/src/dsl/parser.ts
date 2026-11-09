@@ -160,7 +160,7 @@ const UNIT_EXAMPLES: Record<Quantity['unit'], string> = {
   MBps: 'a bandwidth, e.g. 500 MB/s or 1 GB/s',
   'usd/GB': 'a price per gigabyte, e.g. 0.05 usd/GB',
 };
-const CAPACITY_PARTS = 'a rate, reads, writes, shards, size, latency, availability, cost, durable or volatile, consistency, bandwidth, egress, timeout, hit, errors or retries';
+const CAPACITY_PARTS = 'a rate, reads, writes, shards, size, latency, availability, cost, durable or volatile, consistency, bandwidth, egress, timeout, hit, errors, retries or drain';
 /** The most retries a capacity line takes: more only multiplies the variants, not the insight. */
 const MAX_RETRIES = 5;
 const ASSERTION_HELP =
@@ -1630,6 +1630,19 @@ class Parser {
         commit({ kind: 'availability', ...withUseCase(), minPercent, loc });
         return;
       }
+      case 'lag': {
+        // `lag "Use case" < 30s`: the consumer lag of the queues the use case sends to.
+        readUseCase();
+        if (!useCase) {
+          this.error('Expected a use case name in quotes, e.g. lag "Place order" < 30s', this.locOf(tokens[1] ?? first, line));
+          return;
+        }
+        if (!this.expectOp(tokens, i, ['<', '<='], 'lag "Use case" < 30s', line)) return;
+        const maxMs = this.quantityOf(tokens[i + 1], 'ms', tokens[i], line);
+        if (maxMs === undefined || !this.expectEnd(tokens, i + 2, line)) return;
+        commit({ kind: 'lag', useCase: useCase.name, maxMs, loc });
+        return;
+      }
       case 'durable':
         readUseCase();
         if (!useCase) {
@@ -1718,6 +1731,7 @@ class Parser {
     const override: CapacityOverride = { node: id.value, loc: this.lineLoc(tokens, line) };
     const seen = new Set<string>();
     let hitLoc: SourceLoc | undefined;
+    let drainLoc: SourceLoc | undefined;
     for (let i = 1; i < tokens.length; ) {
       const t = tokens[i];
       let part: string;
@@ -1759,6 +1773,14 @@ class Parser {
           return;
         }
         override.errorPercent = value;
+        i += 2;
+      } else if (isWord(t, 'drain')) {
+        // How fast a queue's consumers take messages off it.
+        part = 'drain';
+        const value = this.quantityOf(tokens[i + 1], 'rps', t, line);
+        if (value === undefined) return;
+        override.drainRps = value;
+        drainLoc = this.locOf(t, line);
         i += 2;
       } else if (isWord(t, 'retries')) {
         part = 'retries';
@@ -1864,6 +1886,7 @@ class Parser {
       if (storeOnly.length && !isDataStore(kindOf(node)))
         this.warning(`'${id.value}' is not a data store (${DATA_STORE_KINDS.join(', ')}); ${storeOnly.join(' and ')} only apply to data stores`, idLoc);
       if (hitLoc) this.checkHitRate(node, override.hitPercent!, hitLoc);
+      if (drainLoc && !['queue', 'broker'].includes(kindOf(node))) this.warning(`'${id.value}' is not a queue or broker; a drain rate only means something for one`, drainLoc);
     });
   }
 

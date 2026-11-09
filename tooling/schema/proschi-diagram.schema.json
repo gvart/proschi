@@ -1272,6 +1272,31 @@
             "loc"
           ],
           "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "lag"
+            },
+            "useCase": {
+              "type": "string"
+            },
+            "maxMs": {
+              "type": "number",
+              "description": "The longest a message may wait in the queues the use case sends to."
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "useCase",
+            "maxMs",
+            "loc"
+          ],
+          "additionalProperties": false
         }
       ]
     },
@@ -1360,6 +1385,10 @@
           "minimum": 0,
           "maximum": 5,
           "description": "`retries`: how many times a caller tries a failed call again."
+        },
+        "drainRps": {
+          "type": "number",
+          "description": "`drain`: how fast the consumers of a queue or broker take messages off it, in rps."
         },
         "loc": {
           "$ref": "#/$defs/loc"

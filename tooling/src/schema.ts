@@ -270,6 +270,10 @@ export function diagramSchema() {
             },
             ['kind', 'maxUsdPerMonth', 'loc'],
           ),
+          lag: object(
+            { kind: { const: 'lag' }, useCase: str, maxMs: { ...num, description: 'The longest a message may wait in the queues the use case sends to.' }, loc },
+            ['kind', 'useCase', 'maxMs', 'loc'],
+          ),
         } satisfies Record<Requirement['kind'], unknown>),
       },
       capacity: object(
@@ -291,6 +295,7 @@ export function diagramSchema() {
           hitPercent: { ...percent, description: '`hit`: the share of reads a cache answers itself; the miss path takes the rest.' },
           errorPercent: { ...percent, description: '`errors`: the share of calls to the node that fail with an error.' },
           retries: { type: 'integer', minimum: 0, maximum: 5, description: '`retries`: how many times a caller tries a failed call again.' },
+          drainRps: { ...num, description: '`drain`: how fast the consumers of a queue or broker take messages off it, in rps.' },
           loc,
         },
         ['node', 'loc'],

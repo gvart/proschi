@@ -59,6 +59,14 @@ describe('JSON Schema', () => {
     expect(validate(result), JSON.stringify(validate.errors, null, 2)).toBe(true);
   });
 
+  it('describes queue drain rates and lag requirements', () => {
+    const source = 'api [REST API]\nq [Kafka]\napi -> q\nusecase "U" {\n  api ->> q : publish\n}\ncapacity {\n  q drain 5k rps\n}\nrequirements {\n  lag "U" < 30s\n}';
+    const result = JSON.parse(JSON.stringify(parse(source)));
+    expect(result.diagram.capacity[0]).toMatchObject({ drainRps: 5000 });
+    expect(result.diagram.requirements[0]).toMatchObject({ kind: 'lag', useCase: 'U', maxMs: 30000 });
+    expect(validate(result), JSON.stringify(validate.errors, null, 2)).toBe(true);
+  });
+
   it('describes scoped budgets', () => {
     const source =
       'group g {\n  api [REST API] @Pay .hot\n}\nlegend {\n  hot "Hot" red\n}\nrequirements {\n  cost @Pay <= 500 usd/month\n  cost .hot <= 5 usd/month\n  cost group g <= 1k usd/month\n}';

@@ -35,6 +35,8 @@ export {
   requirementFixes,
   runTests,
   formatAvailability,
+  formatCount,
+  formatDuration,
   formatMs,
   formatPercent,
   formatRps,
@@ -117,4 +119,5 @@ export const CAPACITY_PARTS: { label: string; detail: string; snippet: string }[
   { label: 'hit', detail: 'Cache hit rate: the miss path takes the rest', snippet: 'hit ${1:90%}' },
   { label: 'errors', detail: 'Share of calls that fail (a partial failure)', snippet: 'errors ${1:2%}' },
   { label: 'retries', detail: 'Times a caller tries a failed call again (0 to 5)', snippet: 'retries ${1:3}' },
+  { label: 'drain', detail: 'How fast consumers take messages off a queue', snippet: 'drain ${1:5k rps}' },
 ];

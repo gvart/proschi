@@ -49,7 +49,8 @@ requirement  = percentile , [ string , [ "scenario" , string ] ] , "<" , quantit
              | "availability" , [ string ] , ">=" , quantity
              | "durable" , string
              | "survive" , ( "any" , "node" , "failure" | "failure" , "of" , selector )
-             | "cost" , [ cost-scope ] , "<=" , quantity ;
+             | "cost" , [ cost-scope ] , "<=" , quantity
+             | "lag" , string , "<" , quantity ;        (* the consumer lag of the queues the use case sends to *)
 cost-scope   = team | tag | "group" , id ;              (* a budget for a team's, a tag's or a group's nodes *)
 percentile   = "p50" | "p90" | "p95" | "p99" | "p999" ;
 capacity     = "capacity" , "{" , { id , { capacity-part } } , "}" ;
@@ -58,7 +59,8 @@ capacity-part = quantity | "reads" , quantity | "writes" , quantity | "shards" ,
              | "durable" | "volatile" | "consistency" , ( "strong" | "eventual" )
              | "bandwidth" , quantity | "egress" , quantity | "timeout" , quantity
              | "hit" , quantity                         (* hit 90%: a cache's hit rate *)
-             | "errors" , quantity | "retries" , integer ;  (* errors 2% retries 3: partial failure, 0 to 5 retries *)
+             | "errors" , quantity | "retries" , integer   (* errors 2% retries 3: partial failure, 0 to 5 retries *)
+             | "drain" , quantity ;                     (* drain 5k rps: how fast a queue's consumers take messages *)
 entity       = "entity" , id , [ "in" , id ] , [ string ] , "{" , { id , id , { flag } } , "}" ;
 flag         = "key" | "index" | "unique" | "optional" ;
 decision     = "decision" , string , ( "because" , string

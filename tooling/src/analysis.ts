@@ -26,7 +26,7 @@ import {
   type ParseResult,
   type SourceLoc,
 } from './proschi';
-import { nodeSimulation, resultsOf, simulationOf, verdict, whatIfsOf } from './simulation';
+import { nodeSimulation, queueText, resultsOf, simulationOf, verdict, whatIfsOf } from './simulation';
 
 /** 0-based position, as LSP uses. */
 export interface Position {
@@ -304,7 +304,7 @@ export function complete(analysis: Analysis, pos: Position): CompletionItem[] {
 }
 
 const PERCENTILE = 'p50|p90|p95|p99|p999';
-const USE_CASE_REQUIREMENT = new RegExp(`^\\s*(?:${PERCENTILE}|availability|durable)\\s+$`);
+const USE_CASE_REQUIREMENT = new RegExp(`^\\s*(?:${PERCENTILE}|availability|durable|lag)\\s+$`);
 const SCENARIO_REQUIREMENT = new RegExp(`^\\s*(?:${PERCENTILE})\\s+"([^"]*)"\\s+scenario\\s+$`);
 
 /**
@@ -349,7 +349,7 @@ function capacityCompletions(analysis: Analysis, head: string, range: Range): Co
   if (/^\s*$/.test(head)) return analysis.diagram.nodes.map((n) => ({ label: n.id, kind: 'node', detail: describeNode(n), range }));
   const value = head.match(/\b(size|consistency)\s+$/)?.[1];
   if (value) return (value === 'size' ? ['S', 'M', 'L'] : ['strong', 'eventual']).map((label) => ({ label, kind: 'keyword', range }));
-  if (/\b(latency|availability|cost|timeout|reads|writes|shards|bandwidth|egress|hit|errors|retries)\s+$/.test(head)) return [];
+  if (/\b(latency|availability|cost|timeout|reads|writes|shards|bandwidth|egress|hit|errors|retries|drain)\s+$/.test(head)) return [];
   const used = new Set(head.trim().split(/\s+/));
   return CAPACITY_PARTS.filter((p) => !used.has(p.label)).map((p) => ({ label: p.label, kind: 'keyword', detail: p.detail, snippet: p.snippet, range }));
 }
@@ -983,7 +983,7 @@ export function inlayHints(analysis: Analysis, range?: Range): InlayHint[] {
     return [
       {
         position: { line, character: (lines[line] ?? '').trimEnd().length },
-        label: `${formatPercent(n.utilization)}${n.saturated ? ' saturated' : ''} · ${perMonth(n.costUsd)}`,
+        label: `${formatPercent(n.utilization)}${n.saturated ? ' saturated' : ''} · ${perMonth(n.costUsd)}${n.queue ? ` · ${queueText(n.queue)}` : ''}`,
         saturated: n.saturated,
         tooltip: nodeSimulation(diagram, node.id),
       },

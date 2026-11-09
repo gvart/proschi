@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { analyze, complete, hover, semanticTokens } from '../src/analysis';
+import { analyze, complete, hover, inlayHints, semanticTokens } from '../src/analysis';
 import { runAnalyze } from '../src/simulation';
 
 // The simulation model upgrades of docs/impl/feature-expansion.md, iteration 7.4-7.6.
@@ -131,5 +131,52 @@ describe('retries and partial failure', () => {
     expect(base.out).toContain("'pay' risks a retry storm: it runs at 88% with 5% errors and 3 retries.");
     const w = capture((out, err) => runAnalyze(['--whatif', 'Bad deploy', file], out, err));
     expect(w.out).toContain('What-if "Bad deploy": pay errors 50%');
+  });
+});
+
+const orders = `api [REST API] x4
+events [Kafka] x3
+worker [Worker] x3
+api -> events
+events -> worker
+usecase "Place order" {
+  api ->> events : publish order
+  events ->> worker : order placed
+}
+traffic {
+  "Place order" 4k rps
+}
+capacity {
+  events drain 3k rps
+}
+requirements {
+  lag "Place order" < 30s
+}
+`;
+
+describe('queue backlog and lag', () => {
+  const a = analyze(orders);
+
+  it('hovers the queue with its backlog, and adds it to the inlay hint', () => {
+    expect(a.diagnostics).toEqual([]);
+    expect(hover(a, { line: 1, character: 1 })?.markdown).toContain('Consumers drain 3k rps of 4k rps in: the backlog grows by **3.6M messages an hour**');
+    expect(inlayHints(a).find((h) => h.position.line === 1)?.label).toMatch(/ · backlog \+3\.6M\/h$/);
+    const keeps = analyze(orders.replace('drain 3k rps', 'drain 5k rps'));
+    expect(inlayHints(keeps).find((h) => h.position.line === 1)?.label).toMatch(/ · lag 0\.8 ms$/);
+  });
+
+  it('completes drain in capacity and use case names after lag', () => {
+    const typing = analyze(orders.replace('  events drain 3k rps', '  events '));
+    expect(complete(typing, { line: 13, character: 9 }).map((i) => i.label)).toContain('drain');
+    const lag = analyze(orders.replace('  lag "Place order" < 30s', '  lag "'));
+    expect(complete(lag, { line: 16, character: 7 }).map((i) => i.label)).toEqual(['Place order']);
+  });
+
+  it('prints the queue table and the failing lag in proschi analyze and test', () => {
+    const file = join(dir, 'orders.proschi');
+    writeFileSync(file, orders);
+    const r = capture((out, err) => runAnalyze([file], out, err));
+    expect(r.out).toContain('Queue   Inflow   Drain  Consumers       Backlog or lag\nevents  4k rps  3k rps       133%  +3.6M messages/hour\n');
+    expect(r.out).toContain("'events' falls behind");
   });
 });

@@ -8,6 +8,8 @@ import {
   HOT,
   costBreakdown,
   formatAvailability,
+  formatCount,
+  formatDuration,
   formatMs,
   formatPercent,
   formatRps,
@@ -395,6 +397,20 @@ export function capacityReport(diagram: Diagram, analysis: SimAnalysis, file: st
     '',
   );
 
+  const queues = analysis.nodes.filter((n) => n.queue);
+  if (queues.length) {
+    lines.push(
+      ...table([
+        ['Queue', 'Inflow', 'Drain', 'Consumers', 'Backlog or lag'],
+        ...queues.map((n) => {
+          const q = n.queue!;
+          return [n.id, formatRps(q.inflowRps), formatRps(q.drainRps), Number.isFinite(q.utilization) ? formatPercent(q.utilization) : '-', q.backlogPerHour > 0 ? `+${formatCount(q.backlogPerHour)} messages/hour` : `lag ${formatDuration(q.lagMs)}`];
+        }),
+      ]),
+      '',
+    );
+  }
+
   if (analysis.useCases.length) {
     const rows = [['Use case', 'Traffic', 'p50', 'p95', 'p99', 'p99.9', 'Availability']];
     for (const u of analysis.useCases) {
@@ -456,8 +472,14 @@ export function nodeSimulation(diagram: Diagram, nodeId: string): string | undef
     ...split,
     ...(hit !== undefined ? [`Hit rate ${hit}%: what it misses, ${Number((100 - hit).toFixed(6))}% of reads, goes on to the backing store`] : []),
     ...(n.retry ? [retryLine(n.retry)] : []),
+    ...(n.queue ? [`Consumers drain ${formatRps(n.queue.drainRps)} of ${formatRps(n.queue.inflowRps)} in: ${n.queue.backlogPerHour > 0 ? `the backlog grows by **${formatCount(n.queue.backlogPerHour)} messages an hour**` : `lag ${formatDuration(n.queue.lagMs)}`}`] : []),
     `Latency ${formatMs(n.latencyMs)} per call · availability ${formatAvailability(n.availability)} · ${formatUsd(n.costUsd)}${n.replicas > 1 ? ` for ${n.replicas} replicas` : ''}${egress}`,
   ].join('  \n');
+}
+
+/** `lag 0.8 ms`, or `backlog +3.6M/h` when the consumers fall behind. */
+export function queueText(q: NonNullable<NodeAnalysis['queue']>): string {
+  return q.backlogPerHour > 0 ? `backlog +${formatCount(q.backlogPerHour)}/h` : `lag ${formatDuration(q.lagMs)}`;
 }
 
 /** `Errors 2% · 3 retries: 1.02 calls a request (in the load), 99.99999% succeed in the end`, and the storm risk. */

@@ -214,6 +214,7 @@ const REQUIREMENT_CATEGORY: Record<Requirement['kind'], TestResult['category']> 
   durable: 'durability',
   survive: 'resilience',
   cost: 'cost',
+  lag: 'latency',
 };
 
 /** An assertion as it is written in a `test` block. */
