@@ -1468,8 +1468,7 @@ needs only the ones before it):
    | `AI_GATEWAY_URL`, `AI_GATEWAY_TOKEN` | Optional: the AI Gateway's Anthropic endpoint and, if authenticated, its token |
    | `CREDITS_USD_EUR` | Optional: the dollar-to-euro rate credits are priced at (unset: 0.95) |
    | `POLAR_ACCESS_TOKEN`, `POLAR_WEBHOOK_SECRET` | Checkout, the portal, plan changes and the webhook (501 without them) |
-   | `POLAR_PRODUCT_PRO_MONTHLY`, `POLAR_PRODUCT_PRO_YEARLY`, `POLAR_PRODUCT_MAX_MONTHLY`, `POLAR_PRODUCT_MAX_YEARLY`, `POLAR_PRODUCT_CREDITS_1000` | The five product ids from step 2 |
-   | `TURNSTILE_SECRET_KEY` | Turnstile's check (skipped without it) |
+      | `TURNSTILE_SECRET_KEY` | Turnstile's check (skipped without it) |
    | `ADMIN_EMAIL` | Optional: where campaigns' **Send a test to me** goes (501 without it) |
    | `CAMPAIGN_DAILY_CAP` | Optional: campaign emails a UTC day (unset: 500) |
    | `METRICS_TOKEN`, `ADMIN_SETUP_TOKEN` | Optional: the usage summary; the admin's first passkey (once, then delete it) |
@@ -1478,7 +1477,9 @@ needs only the ones before it):
 
    `POLAR_SERVER` must not be `sandbox` in production: leave it unset.
 5. **Vars** (`wrangler.jsonc`, public, in git): add
-   `"TURNSTILE_SITE_KEY": "<the widget's site key>"` to `vars`. A dashboard
+   `"TURNSTILE_SITE_KEY": "<the widget's site key>"` and the five Polar product
+   ids from step 2 (`POLAR_PRODUCT_PRO_MONTHLY`, `…_PRO_YEARLY`, `…_MAX_MONTHLY`,
+   `…_MAX_YEARLY`, `…_CREDITS_1000`) to `vars`; they are public. A dashboard
    variable would be overwritten by the next deploy. Turnstile is on only
    with both the site key and the secret.
 6. **Deploy** (a push to `main`, or `npm run deploy`). It applies the

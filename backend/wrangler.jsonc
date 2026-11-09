@@ -33,7 +33,19 @@
   "send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["reminders@proschi.app"] }],
   // APP_REDIRECT_URIS: where native apps may be sent back to after signing in
   // (exact URIs, comma-separated; README "Mobile apps"). Empty: app sign-in is off.
-  "vars": { "ENVIRONMENT": "production", "APP_REDIRECT_URIS": "" },
+  // Public values, kept here because a deploy overwrites dashboard variables. Secrets go in `wrangler secret put`.
+  "vars": {
+    "ENVIRONMENT": "production",
+    "APP_REDIRECT_URIS": "",
+    // Polar's live product ids (README "Production checklist"); .dev.vars overrides them with the sandbox ones.
+    "POLAR_PRODUCT_PRO_MONTHLY": "6301dcda-7d92-43bd-b9e6-45878f535a74",
+    "POLAR_PRODUCT_PRO_YEARLY": "965c669d-5b6d-43c3-a322-91a142be6512",
+    "POLAR_PRODUCT_MAX_MONTHLY": "545e7c76-70b4-45b7-8071-141bb5005be6",
+    "POLAR_PRODUCT_MAX_YEARLY": "3846113c-e9c6-4efb-84b7-2f1d61cdbff9",
+    "POLAR_PRODUCT_CREDITS_1000": "2809daaa-b4e9-4d0f-88b7-b0b390de465f",
+    // Turnstile is on only with this and the TURNSTILE_SECRET_KEY secret.
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAF5Qf326lE4XwTI"
+  },
   "d1_databases": [
     {
       "binding": "DB",
