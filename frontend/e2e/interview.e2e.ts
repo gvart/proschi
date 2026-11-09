@@ -299,8 +299,10 @@ test.describe('the interview room on your own', () => {
     // The second use case, from the traffic's suggestion, with two steps picked on the canvas.
     await board.getByRole('button', { name: 'Flows' }).click();
     const flows = page.getByRole('region', { name: 'Flows' });
-    await flows.getByRole('button', { name: 'Start generator' }).click();
-    await expect(flows.getByRole('tab', { name: 'Start generator' })).toHaveAttribute('aria-selected', 'true');
+    const picker = flows.getByRole('combobox', { name: 'Use case' });
+    await chooseOption(picker, 'Start generator');
+    await expect(picker).toHaveText(/Start generator/);
+    await expect(flows.getByRole('region', { name: 'Use case Start generator' })).toBeVisible();
     await flows.getByRole('button', { name: 'Add a step' }).click();
     const step = flows.getByRole('form', { name: 'New step' });
     await expect(step.getByRole('status')).toHaveText('Click the component the step starts at.');

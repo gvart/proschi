@@ -367,6 +367,12 @@ export default function Playground() {
   const nodeIds = useMemo(() => diagram.nodes.map((n) => n.id), [diagram]);
   // Use cases play on what the canvas shows, so navigated into a team design they are that team's.
   const useCase = shown.useCases.find((u) => u.id === selectedUseCaseId) ?? shown.useCases[0];
+  /** From the top bar's picker or the Flows builder, which show the same use case. */
+  const chooseUseCase = (id: string) => {
+    setSelectedUseCaseId(id);
+    setSelectedScenarioId(undefined);
+    setInitialStep(undefined);
+  };
   const scenario = useCase?.scenarios.find((s) => s.id === selectedScenarioId) ?? useCase?.scenarios[0];
   const hasScenarios = (useCase?.scenarios.length ?? 0) > 1;
   const playback: PlaybackTarget | undefined =
@@ -1154,11 +1160,7 @@ export default function Playground() {
               </>
             }
             value={useCase?.id ?? ''}
-            onChange={(id) => {
-              setSelectedUseCaseId(id);
-              setSelectedScenarioId(undefined);
-              setInitialStep(undefined);
-            }}
+            onChange={chooseUseCase}
             options={useCaseOptions}
             placeholder="No use cases"
             disabled={shown.useCases.length === 0}
@@ -1467,7 +1469,7 @@ export default function Playground() {
                           onDuplicateNodes={canvasEdits.duplicate}
                           onReconnect={canvasEdits.reconnect}
                           onUnpinNode={canvasEdits.unpin}
-                          flows={systems.focusFile ? undefined : { source, diagram, onChange: (next) => editSource(() => next) }}
+                          flows={systems.focusFile ? undefined : { source, diagram, onChange: (next) => editSource(() => next), useCase: useCase?.id, onUseCase: chooseUseCase }}
                           onJumpToCode={jumpToCode}
                           onSelectionLink={linkSelection}
                           linked={linkedIds}
