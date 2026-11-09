@@ -1,9 +1,11 @@
-import { Suspense, lazy, type ReactNode } from 'react';
-import { ArrowRight, CalendarDays, Check, Flame, Gamepad2, Layers, ListChecks, Play, Briefcase, X, Zap, type LucideIcon } from 'lucide-react';
+import { Suspense, lazy, useMemo, type ReactNode } from 'react';
+import { ArrowRight, CalendarDays, Check, Flame, Gamepad2, Layers, ListChecks, Play, Briefcase, Sparkles, X, Zap, type LucideIcon } from 'lucide-react';
 import { eyebrow } from '../../components/Playground/ui';
+import type { Progress } from '../progress';
 import type { Account } from '../useAccount';
 import type { ContinueTarget } from './continue';
 import { GOALS, setGoal, wantsInterview, wantsStreak, type Goal, type GoalState } from './goal';
+import NextSteps from './NextSteps';
 import { mockInterviewHref } from './tabs';
 import { useChallengeStatus, useDailyRunStatus, type Played } from './todayStatus';
 
@@ -17,9 +19,11 @@ import { useChallengeStatus, useDailyRunStatus, type Played } from './todayStatu
  *   interview prep the roadmap's next step, with the roadmap and the mock
  *   interview beside it;
  * - for a daily habit (or the streak switched on), one line with the streak
- *   and today's review, challenge and Arcade run.
+ *   and today's review, challenge and Arcade run;
+ * - once something was started, "Your next steps" (RuleSteps.tsx): up to
+ *   three things to do next, each with its reason, never the Continue problem.
  *
- * Solving problems, or no answer, adds nothing but the Continue line.
+ * Solving problems, or no answer, adds nothing else but the Continue line and the next steps.
  */
 
 // The due count needs the whole deck: loaded after the line shows.
@@ -41,6 +45,7 @@ export default function HomeExtras({
   nextTitle,
   streak,
   ask = !goal.asked,
+  steps,
 }: {
   goal: GoalState;
   account: Account;
@@ -51,13 +56,36 @@ export default function HomeExtras({
   streak?: ReactNode;
   /** Whether to ask "What are you here for?" (goal.ts asksGoal: not while an announcement is on the page). */
   ask?: boolean;
+  /** What "Your next steps" needs beyond the account; none hides them. */
+  steps?: { progress: Progress; skills?: readonly { topic: string; mastery: number }[]; streak?: number };
 }) {
   const interview = wantsInterview(goal);
+  const nextId = next?.id;
+  const exclude = useMemo(() => (nextId ? [nextId] : undefined), [nextId]);
   return (
     <>
       {ask && <GoalPrompt goal={goal} />}
       {(next || interview) && <ContinueLine next={next} title={nextTitle} interview={interview} />}
       {wantsStreak(goal) && <HabitLine account={account} streak={streak} />}
+      {steps && Object.keys(steps.progress).length > 0 && (
+        <NextSteps
+          account={account}
+          {...steps}
+          exclude={exclude}
+          limit={3}
+          render={(list) =>
+            list && (
+              <section aria-labelledby="home-next-steps" className="mt-5 rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-brutal-sm" data-testid="home-next-steps">
+                <h2 id="home-next-steps" className={`flex items-center gap-1.5 ${eyebrow}`}>
+                  <Sparkles size={13} aria-hidden="true" />
+                  Your next steps
+                </h2>
+                <div className="mt-3">{list}</div>
+              </section>
+            )
+          }
+        />
+      )}
     </>
   );
 }

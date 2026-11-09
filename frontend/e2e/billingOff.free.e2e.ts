@@ -97,11 +97,14 @@ test('a mock interview left open in the browser is not resumed: the room address
   expect(metered).toEqual([]);
 });
 
-test('the roadmap and the progress page have no "Your next steps", report or credits', async ({ page }) => {
+test('the roadmap and the progress page have no AI picks, report or credits', async ({ page }) => {
   const metered = await open(page);
   await page.goto('practice/#/roadmap');
   await expect(page.getByRole('heading', { name: 'Interview prep roadmap' })).toBeVisible();
-  await expect(page.getByText('Your next steps')).toHaveCount(0);
+  // The free, rule-based next steps stay; the AI picks and the way to them don't.
+  await expect(page.getByTestId('next-steps')).toBeVisible();
+  await expect(page.getByTestId('roadmap-picks')).toHaveCount(0);
+  await expect(page.getByTestId('next-for-you-upgrade')).toHaveCount(0);
   await expect(page.getByTestId('account-credits')).toHaveCount(0);
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/roadmap.png` });
   await page.goto('practice/#/progress');

@@ -1,40 +1,15 @@
-import { useEffect, useMemo, useState } from 'react';
 import deck from 'virtual:practice-cards';
-import { localDay, NEW_PER_DAY, overview } from '../../learn/review';
+import { NEW_PER_DAY, overview } from '../../learn/review';
 import type { Account } from '../useAccount';
-import { accountStore, localStore, memoryStore, type CardStore } from '../review/store';
+import { useTodayCards } from './todayCards';
 
-/**
- * How many cards daily review has for today: those due and the new ones
- * today's allowance still lets in, from the same store and scheduling as
- * the review page (review/ReviewRoute.tsx). Signed out, the free sample
- * deck. Loaded lazily with the cards, like the review page.
- */
+/** How many cards daily review has for today: those due and the new ones today's allowance still lets in. */
 function useDueCount(account: Account): number | undefined {
-  const { state } = account;
-  const userId = state.status === 'signed-in' ? state.user.id : undefined;
-  const signedOut = state.status === 'signed-out';
-  const store = useMemo<CardStore | undefined>(
-    () => (state.status === 'off' ? localStore() : signedOut ? memoryStore() : userId ? accountStore(userId) : undefined),
-    [state.status, signedOut, userId],
-  );
-  const [count, setCount] = useState<number>();
-  useEffect(() => {
-    if (!store) return;
-    let cancelled = false;
-    store.load(localDay(new Date())).then(
-      (loaded) => {
-        if (cancelled) return;
-        const stats = overview(deck.cards, loaded.states, deck.topics, { now: Math.floor(Date.now() / 1000), deck: signedOut ? 'sample' : undefined });
-        setCount(stats.due + Math.min(stats.new, Math.max(0, NEW_PER_DAY - loaded.today.new)));
-      },
-      () => undefined,
-    );
-    return () => {
-      cancelled = true;
-    };
-  }, [store, signedOut]);
-  return count;
+  const today = useTodayCards(account);
+  if (!today) return undefined;
+  const { loaded, signedOut } = today;
+  const stats = overview(deck.cards, loaded.states, deck.topics, { now: Math.floor(Date.now() / 1000), deck: signedOut ? 'sample' : undefined });
+  return stats.due + Math.min(stats.new, Math.max(0, NEW_PER_DAY - loaded.today.new));
 }
 
 /** The cards for today, for the Review chip: "9 due", or "all done" when caught up; "…" while counting. */

@@ -7,6 +7,7 @@ import { eyebrow, primaryButton, toolButton } from '../components/Playground/ui'
 import { inlineText, parseMarkdown } from './markdownReader';
 import { knownFailures, matchMistake } from './mistakes';
 import { addToFocus } from './review/focus';
+import { recordMistake } from './hub/recentMistakes';
 import type { Problem } from './types';
 
 interface MistakePanelProps {
@@ -49,6 +50,11 @@ export default function MistakePanel({ problem, engine, results, onLesson }: Mis
   const cards = (match?.mistake.cards ?? []).map((id) => deck?.cards.find((c) => c.id === id && !c.retired)).filter((c): c is Card => !!c);
   const [added, setAdded] = useState<string>();
   const key = match ? `${match.design}:${cards.map((c) => c.id).join(',')}` : undefined;
+  // Kept for "Your next steps" (hub/recentMistakes.ts): retry it.
+  const matched = match?.mistake.title;
+  useEffect(() => {
+    if (matched) recordMistake(problem.id, matched);
+  }, [problem.id, matched]);
 
   if (!match) return null;
   const topicTitle = (id: string) => deck?.topics.find((t) => t.id === id)?.title ?? id;
