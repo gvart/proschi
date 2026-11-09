@@ -126,6 +126,22 @@ export function PinnedBrief({ title, source, defaultOpen = false, fill = false }
   );
 }
 
+/**
+ * The Estimate screen: the heading and the brief in one column, the worksheet
+ * in the other. On wide screens both fill the window's height (the brief and
+ * the worksheet with `fill` stretch and scroll inside); narrow ones stack.
+ */
+export function EstimateLayout({ aside, children, testId }: { aside: ReactNode; children: ReactNode; testId?: string }) {
+  return (
+    <div className="min-h-0 flex-1 overflow-y-auto lg:flex lg:flex-col" data-testid={testId}>
+      <div className="mx-auto grid w-full max-w-6xl gap-5 px-4 py-6 sm:px-6 lg:min-h-[36rem] lg:flex-1 lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
+        <div className="space-y-4 lg:flex lg:min-h-0 lg:flex-col">{aside}</div>
+        <div className="space-y-4 lg:flex lg:min-h-0 lg:flex-col">{children}</div>
+      </div>
+    </div>
+  );
+}
+
 /** What was learned in Clarify: the facts given, or on your own the answers to the questions asked. */
 export function RequirementsCard({ items, collapsible = false, defaultOpen = true, empty }: { items: ReactNode[]; collapsible?: boolean; defaultOpen?: boolean; empty?: string }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -192,7 +208,7 @@ export function Worksheet({ rows, onChange, readOnly = false, scoring, fill = fa
   const inRange = scoring ? scored.filter((i) => scoring.answers[Number(i)].correct).length : 0;
 
   return (
-    <section aria-labelledby="worksheet-title" className={`rounded-sm border-bw-1 border-ink bg-surface shadow-brutal-sm ${fill ? 'lg:flex lg:min-h-0 lg:flex-col' : ''}`} data-testid="worksheet">
+    <section aria-labelledby="worksheet-title" className={`rounded-sm border-bw-1 border-ink bg-surface shadow-brutal-sm ${fill ? 'lg:flex lg:min-h-0 lg:flex-1 lg:flex-col' : ''}`} data-testid="worksheet">
       <div className="flex shrink-0 flex-wrap items-baseline gap-x-3 gap-y-1 border-b-bw-1 border-ink px-4 py-3">
         <h3 id="worksheet-title" className="text-base font-bold text-ink">
           Estimation worksheet

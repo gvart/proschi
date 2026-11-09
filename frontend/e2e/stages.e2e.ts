@@ -70,6 +70,13 @@ for (const [device, viewport] of [
       const rows = page.getByTestId('worksheet-row');
       await expect(rows).toHaveCount(3);
       await expect(page.getByTestId('worksheet-result')).toHaveCount(0);
+      if (device === 'desktop') {
+        // The brief fills its column, open and scrolling inside, and the worksheet most of the other one.
+        const pinned = page.getByTestId('pinned-brief');
+        await expect(pinned.getByRole('button', { name: 'Read it all' })).toBeHidden();
+        expect((await pinned.boundingBox())!.height).toBeGreaterThanOrEqual(viewport.height * 0.4);
+        expect((await page.getByTestId('worksheet').boundingBox())!.height).toBeGreaterThanOrEqual(viewport.height * 0.4);
+      }
       await shot(page, `${device}-4-estimate`);
       await rows.nth(0).getByRole('textbox', { name: 'Your estimate' }).fill('100 * 86400 * 365');
       await rows.nth(0).getByRole('button', { name: 'Check' }).click();
