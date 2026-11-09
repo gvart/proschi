@@ -1,0 +1,72 @@
+# expect-fail: Every shard of the index has a replica
+# expect-fail: survive any node failure
+# mistake: Splitting the index into shards but keeping one copy of each
+# explain: Nine shards on nine nodes give enough query capacity, but each shard lives on exactly one node: lose that node and every search misses a ninth of the stores, or fails. Shards split the data; replicas keep a second copy of each shard and add query capacity.
+# explain: Give every shard at least one replica, and count the nodes as shards times copies.
+# lesson: shards-and-replicas
+# cards: search-indexing-shards-vs-replicas, three-replicas-parallel, nodes-for-storage
+# Nine shards with one copy each: the same nine nodes as the reference design, and no shard survives its node.
+import "problem.proschi"
+
+menuapi   "Menu API"       [REST API]      x3 @write "Saves merchant edits and publishes a change event for each"
+changes   "Change Events"  [Kafka]         x3 @write "Store and menu changes by id, and the ETL's rows"
+indexer   "Indexer"        [Worker]        x10 @write "Flink jobs: assemble, buffer and flush bulk requests"
+search    "Search Cluster" [Elasticsearch] @read "9 shards, one copy each"
+searchapi "Search API"     [REST API]      x8 @read "Answers search queries from the index only"
+
+capacity {
+  search shards 9
+}
+
+merchant  -> menuapi   : HTTPS
+menuapi   -> db        : SQL
+menuapi   -> changes   : produce
+changes   -> indexer   : consume
+indexer   -> db        : SQL, read-only
+indexer   -> search    : _bulk
+loader    -> changes   : produce
+diner     -> searchapi : HTTPS
+searchapi -> search    : _search
+
+usecase "Search" "A diner searches for stores and dishes" {
+  diner      -> searchapi : GET /search?q=tacos
+  searchapi  -> search    : match "tacos" near the diner, open now
+  search    --> searchapi : top 50 stores
+  searchapi --> diner     : 200 results
+}
+
+usecase "Edit menu" "A merchant changes a menu item" {
+  merchant -> menuapi  : PUT /stores/812/items/5510 {"price": 11.5}
+  menuapi  -> db       : UPDATE item 5510 of store 812
+  db      --> menuapi  : committed
+  menuapi ->> changes  : PUBLISH StoreChanged store 812
+  menuapi --> merchant : 200
+}
+
+usecase "Index change" "The indexer turns one change event into a fresh search document" {
+  changes -> indexer : StoreChanged store 812
+  indexer -> db      : SELECT store 812 with its menu and items
+  db     --> indexer : current rows
+
+  alt "Buffered" when "the bulk buffer has room" {
+    indexer --> changes : document added to the bulk buffer
+  } alt "Flush" when "the buffer is full" {
+    indexer  -> search  : UPSERT 100 documents with one _bulk request
+    search  --> indexer : per-document results
+    indexer --> changes : commit offsets
+  }
+}
+
+usecase "Backfill" "The nightly ETL's scores and tags reach the index, throttled" {
+  loader   -> changes : PUBLISH ScoreUpdated item 5510
+  changes --> loader  : ack
+  changes  -> indexer : ScoreUpdated item 5510, with its new score
+
+  alt "Buffered" when "the bulk buffer has room" {
+    indexer --> changes : document added to the bulk buffer
+  } alt "Flush" when "the buffer is full" {
+    indexer  -> search  : UPSERT 100 partial documents with one _bulk request
+    search  --> indexer : per-document results
+    indexer --> changes : commit offsets
+  }
+}

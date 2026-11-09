@@ -1,0 +1,72 @@
+# expect-fail: An edit is saved, then indexed in the background
+# mistake: Updating the search index inside the merchant's edit request
+# explain: The edit now waits for Elasticsearch, so a busy or failing search cluster slows down or breaks merchant writes, and an edit that commits to the database but fails to index leaves the two out of step for good.
+# explain: Commit the edit, publish a change event to Kafka, and let indexers update the search cluster from the stream a few seconds later.
+# lesson: indexing-from-a-change-stream
+# cards: change-data-capture, transactional-outbox, queue-load-levelling
+# The Menu API writes PostgreSQL and then Elasticsearch before it answers: a dual write on the request path.
+import "problem.proschi"
+
+menuapi   "Menu API"       [REST API]      x3 @write "Saves merchant edits and updates the index itself"
+changes   "Change Events"  [Kafka]         x3 @write "Only the ETL's rows now"
+indexer   "Indexer"        [Worker]        x10 @write "Flink jobs: buffer documents and flush bulk requests"
+search    "Search Cluster" [Elasticsearch] x3 @read "3 shards, each with a primary and 2 replicas"
+searchapi "Search API"     [REST API]      x8 @read "Answers search queries from the index only"
+
+capacity {
+  search shards 3
+}
+
+merchant  -> menuapi   : HTTPS
+menuapi   -> db        : SQL
+menuapi   -> search    : index
+changes   -> indexer   : consume
+indexer   -> db        : SQL, read-only
+indexer   -> search    : _bulk
+loader    -> changes   : produce
+diner     -> searchapi : HTTPS
+searchapi -> search    : _search
+
+usecase "Search" "A diner searches for stores and dishes" {
+  diner      -> searchapi : GET /search?q=tacos
+  searchapi  -> search    : match "tacos" near the diner, open now
+  search    --> searchapi : top 50 stores
+  searchapi --> diner     : 200 results
+}
+
+usecase "Edit menu" "A merchant changes a menu item, and the API reindexes the store before answering" {
+  merchant -> menuapi  : PUT /stores/812/items/5510 {"price": 11.5}
+  menuapi  -> db       : UPDATE item 5510 of store 812
+  db      --> menuapi  : committed
+  menuapi  -> search   : UPSERT document for store 812
+  search  --> menuapi  : indexed
+  menuapi --> merchant : 200
+}
+
+usecase "Index change" "Left over from the stream: nothing publishes edits to it any more" {
+  changes -> indexer : StoreChanged store 812
+  indexer -> db      : SELECT store 812 with its menu and items
+  db     --> indexer : current rows
+
+  alt "Buffered" when "the bulk buffer has room" {
+    indexer --> changes : document added to the bulk buffer
+  } alt "Flush" when "the buffer is full" {
+    indexer  -> search  : UPSERT 100 documents with one _bulk request
+    search  --> indexer : per-document results
+    indexer --> changes : commit offsets
+  }
+}
+
+usecase "Backfill" "The nightly ETL's scores and tags reach the index, throttled" {
+  loader   -> changes : PUBLISH ScoreUpdated item 5510
+  changes --> loader  : ack
+  changes  -> indexer : ScoreUpdated item 5510, with its new score
+
+  alt "Buffered" when "the bulk buffer has room" {
+    indexer --> changes : document added to the bulk buffer
+  } alt "Flush" when "the buffer is full" {
+    indexer  -> search  : UPSERT 100 partial documents with one _bulk request
+    search  --> indexer : per-document results
+    indexer --> changes : commit offsets
+  }
+}

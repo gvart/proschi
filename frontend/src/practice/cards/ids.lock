@@ -247,6 +247,8 @@ saga-orchestration-vs-choreography
 saga-over-2pc
 scale-on-message-age
 scatter-gather
+search-indexing-bulk-requests
+search-indexing-shards-vs-replicas
 seconds-in-a-day
 seconds-in-a-month
 secret-rotation

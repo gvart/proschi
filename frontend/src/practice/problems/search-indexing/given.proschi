@@ -1,0 +1,56 @@
+title "Search Indexing" "Keeps a store and menu search index fresh within seconds without slowing down a single query"
+
+merchant "Merchant"         [Actor]      "Merchants and operators editing stores, menus and items"
+diner    "Diner"            [Actor]      "Searches for stores and dishes in the app"
+db       "Stores and Menus" [PostgreSQL] x2 @source "The source of truth for stores, menus and items"
+loader   "ETL Loader"       [Worker]     x2 @source "Streams the nightly ETL's rows (scores, tags) in throttled batches"
+
+traffic {
+  "Search"       10k rps
+  "Edit menu"    2k rps
+  "Index change" 2k rps  mix "Buffered" 99%, "Flush" 1%
+  "Backfill"     10k rps mix "Buffered" 99%, "Flush" 1%
+}
+
+requirements {
+  p99 "Search" < 120ms
+  p99 "Edit menu" < 150ms
+  availability "Search" >= 99.95%
+  availability "Edit menu" >= 99.9%
+  durable "Edit menu"
+  survive any node failure
+  cost <= 8000 usd/month
+}
+
+test "Searches never touch the source of truth" {
+  "Search" starts at diner
+  "Search" calls any search
+  "Search" never calls db
+  no path from any client to db
+}
+
+test "An edit is saved, then indexed in the background" {
+  "Edit menu" starts at merchant
+  "Edit menu" writes db before responding
+  "Edit menu" calls any broker
+  "Edit menu" never calls any search
+}
+
+test "Every change reaches the index through the stream" {
+  "Index change" starts at any broker
+  "Index change" calls db before any search
+  "Backfill" starts at loader
+  "Backfill" calls any broker before any search
+  "Backfill" never calls db
+}
+
+test "Documents are written to the index in bulk" {
+  "Index change" scenario "Buffered" never calls any search
+  "Index change" scenario "Flush" calls any search
+  "Backfill" scenario "Buffered" never calls any search
+  "Backfill" scenario "Flush" calls any search
+}
+
+test "Every shard of the index has a replica" {
+  any search has replicas >= 2
+}
