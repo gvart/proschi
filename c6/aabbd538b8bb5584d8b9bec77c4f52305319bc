@@ -1,0 +1,51 @@
+frontend/e2e/editor.e2e.ts
+  s_f355061868c346::t_9ce7ad08b9646f 3,6-24,216,226-240,244-283
+frontend/e2e/systems.e2e.ts
+  s_f355061868c346::t_ed4eab46921eef 58-60,128-129,189,237
+frontend/src/components/Analysis/AnalysisPanel.tsx
+  s_f355061868c346::t_9dddf54054efd8 1,5,15-16,35,39,54-55,102,210,272-308
+frontend/src/components/Analysis/ResultsPanel.tsx
+  s_f355061868c346::t_80277613d947be 16-17,25,32
+frontend/src/components/Canvas/ComponentNode.tsx
+  s_f355061868c346::t_0c10b35690cb6a 30,39-43
+frontend/src/components/Canvas/RoutedEdge.tsx
+  s_f355061868c346::t_2af46d3f2afdac 1-4,6-7,22-62,68,71-72,75,81,92
+frontend/src/components/Canvas/SystemNode.tsx
+  s_f355061868c346::t_5e5a3b7ef35059 20-31
+frontend/src/components/Canvas/canvas.css
+  s_f355061868c346::t_49ed1db68961b7 269-380
+frontend/src/components/Canvas/edgeLoad.ts
+  s_f355061868c346::t_23c6e2b05abde2 1-26
+frontend/src/components/Overlay/LoadLegend.tsx
+  s_f355061868c346::t_d975080f51a4a0 1-70
+frontend/src/components/Playground/DiagramView.tsx
+  s_f355061868c346::t_d4fcae00417608 2,22,24,38,71-72,141,171,393-453,715
+frontend/src/components/Playground/Playground.tsx
+  s_f355061868c346::t_679bb5e3fa8f8a 40,93,140-154,165-166,429-436,439-446,460-476,481,1411,1435,1449-1450
+frontend/src/components/Playground/useSystemView.ts
+  s_f355061868c346::t_36dff2cb2bcdd8 97
+frontend/src/components/UseCases/AnimatedPlaybackEdge.tsx
+  s_f355061868c346::t_93e346c1393346 5-6,29,49-51,55,61,72
+frontend/src/sim/overlay.test.ts
+  s_f355061868c346::t_efc07e924a139e 4,44-46,51-148
+frontend/src/sim/overlay.ts
+  s_f355061868c346::t_c6d8e8224c2299 3,22-23,32-43,49-64,88-94,97-98,100,102,105-176,179
+frontend/src/utils/heat.ts
+  s_f355061868c346::t_aac55932fdb90f 21-31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c6aabbd538b8bb5584d8b9bec77c4f52305319bc",
+  "prompts": {},
+  "sessions": {
+    "s_f355061868c346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd556674-4248-429d-bf5c-2b361bc86c62",
+        "model": "unknown"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
