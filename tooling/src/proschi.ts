@@ -5,7 +5,7 @@
  * can never disagree about what is valid.
  */
 export { DID_YOU_MEAN, parse } from '../../frontend/src/dsl/parser';
-export { addConnection } from '../../frontend/src/dsl/edit';
+export { addConnection, setCapacity, setReplicas } from '../../frontend/src/dsl/edit';
 export { tokenizeLine } from '../../frontend/src/dsl/lexer';
 export { format } from '../../frontend/src/dsl/format';
 export { examples } from '../../frontend/src/dsl/examples';
@@ -30,6 +30,7 @@ export { EXPORT_CSP, buildHld, toHtml as hldToHtml, toMarkdown as hldToMarkdown,
 // `analyze` is the editor's simulation; tooling's own analysis.ts has an `analyze` for documents.
 export {
   analyze as simulate,
+  requirementFixes,
   runTests,
   formatAvailability,
   formatMs,

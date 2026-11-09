@@ -31,6 +31,7 @@ import { openApiDiagnostics, watchedFiles } from './openapi/config';
 import {
   analyze,
   complete,
+  cursorFixes,
   declaration,
   hover,
   outline,
@@ -39,6 +40,7 @@ import {
   rename,
   renameTarget,
   semanticTokens,
+  testQuickFix,
   toRange,
   type Analysis,
   type OutlineSymbol,
@@ -300,9 +302,12 @@ connection.onCodeAction((params) => {
   if (!doc) return [];
   const analysis = analysisOf(doc);
   const actions: CodeAction[] = [];
+  if (params.context.only && !params.context.only.some((k) => CodeActionKind.QuickFix.startsWith(k))) return [];
   for (const diagnostic of params.context.diagnostics) {
-    if (diagnostic.source !== 'proschi') continue;
-    const fix = typeof diagnostic.message === 'string' && quickFix(analysis, diagnostic.message, diagnostic.range);
+    const fix =
+      diagnostic.source === 'proschi'
+        ? typeof diagnostic.message === 'string' && quickFix(analysis, diagnostic.message, diagnostic.range)
+        : diagnostic.source === 'proschi-test' && testQuickFix(analysis, diagnostic.range);
     if (!fix) continue;
     actions.push({
       title: fix.title,
@@ -311,6 +316,9 @@ connection.onCodeAction((params) => {
       isPreferred: true,
       edit: { changes: { [params.textDocument.uri]: [fix.edit] } },
     });
+  }
+  for (const fix of cursorFixes(analysis, params.range)) {
+    actions.push({ title: fix.title, kind: CodeActionKind.QuickFix, edit: { changes: { [params.textDocument.uri]: [fix.edit] } } });
   }
   return actions;
 });

@@ -6,6 +6,9 @@ import {
   addConnection,
   componentCatalog,
   parse,
+  requirementFixes,
+  setCapacity,
+  setReplicas,
   tokenizeLine,
   type Diagnostic,
   type Diagram,
@@ -602,14 +605,17 @@ export interface TextEdit {
 }
 
 const MISSING_CONNECTION = /^No connection between '\w+' and '\w+' in the architecture; add '(\w+) -> (\w+)'$/;
+const REPEATED_PART = /^.+ is given twice for '\w+'$/;
 
 /**
  * A quick fix for a parser diagnostic, if it has one: the missing-connection
  * warning adds the connection; an unknown tech stack with a "did you mean"
  * replaces the text in its brackets (`range` is the diagnostic's, which
- * covers `[…]`).
+ * covers `[…]`); a capacity part given twice is removed (`range` starts at
+ * the second one).
  */
 export function quickFix(analysis: Analysis, message: string, range?: Range): { title: string; edit: TextEdit } | null {
+  if (REPEATED_PART.test(message) && range) return removeCapacityPart(analysis, range.start);
   const tech = message.match(DID_YOU_MEAN);
   if (tech && range) {
     const line = analysis.lines[range.start.line] ?? '';
@@ -629,6 +635,71 @@ export function quickFix(analysis: Analysis, message: string, range?: Range): { 
   const updated = addConnection(text, from, to);
   if (updated === text) return null;
   return { title: `Add connection '${from} -> ${to}'`, edit: diffEdit(text, updated) };
+}
+
+/** Removes the capacity part that starts at `at`: a keyword and its value, or a rate, `durable` or `volatile` alone. */
+function removeCapacityPart(analysis: Analysis, at: Position): { title: string; edit: TextEdit } | null {
+  const text = analysis.lines[at.line] ?? '';
+  const tokens = tokenizeLine(text, at.line + 1).tokens;
+  const k = tokens.findIndex((t) => t.col - 1 === at.character);
+  if (k < 1) return null;
+  const t = tokens[k];
+  const alone = t.kind === 'quantity' || t.kind === 'number' || (t.kind === 'ident' && (t.value === 'durable' || t.value === 'volatile'));
+  const last = tokens[Math.min(k + (alone ? 1 : 2), tokens.length) - 1];
+  const from = tokens[k - 1].col - 1 + tokens[k - 1].length;
+  const to = last.col - 1 + last.length;
+  return {
+    title: `Remove the repeated '${text.slice(t.col - 1, to)}'`,
+    edit: { range: { start: { line: at.line, character: from }, end: { line: at.line, character: to } }, newText: '' },
+  };
+}
+
+/**
+ * The fix a failing requirement suggests (`x2` on a node, `shards N` in its
+ * capacity line), for the warning at `range`, which is the requirement's.
+ */
+export function testQuickFix(analysis: Analysis, range: Range): { title: string; edit: TextEdit } | null {
+  const fix = requirementFixes(analysis.diagram).find(
+    ({ loc }) => loc.file === undefined && loc.line - 1 === range.start.line && loc.col - 1 === range.start.character,
+  )?.fix;
+  if (!fix) return null;
+  const node = analysis.diagram.nodes.find((n) => n.id === fix.node);
+  const text = analysis.lines.join('\n');
+  let updated: string;
+  let title: string;
+  if (fix.kind === 'replicas') {
+    // The declaration of a node from an imported file is not this document's to change.
+    if (!node || node.loc.file !== undefined) return null;
+    updated = setReplicas(text, fix.node, fix.replicas);
+    title = `Add x${fix.replicas} to '${fix.node}'`;
+  } else {
+    updated = setCapacity(text, fix.node, 'shards', fix.shards);
+    title = `Add shards ${fix.shards} to the capacity of '${fix.node}'`;
+  }
+  return updated === text ? null : { title, edit: diffEdit(text, updated) };
+}
+
+/**
+ * Fixes offered where the cursor is, without a diagnostic: on a use case
+ * header with no traffic line, a line for it in `traffic` (adding the block
+ * when there is none).
+ */
+export function cursorFixes(analysis: Analysis, range: Range): { title: string; edit: TextEdit }[] {
+  const u = analysis.diagram.useCases.find((x) => x.loc.file === undefined && x.loc.line - 1 === range.start.line);
+  if (!u || (analysis.diagram.traffic ?? []).some((t) => t.useCase === u.name)) return [];
+  const entry = `"${u.name.replace(/["\\]/g, '\\$&')}" 100 rps`;
+  const title = `Add a traffic line for "${u.name}"`;
+  const block = analysis.result.blocks?.find((b) => b.kind === 'traffic');
+  if (block) {
+    const first = analysis.lines[block.start] ?? '';
+    const indent = block.end - block.start > 1 ? (/^\s*/.exec(first)?.[0] ?? '  ') : '  ';
+    const at = { line: block.end - 1, character: 0 };
+    return [{ title, edit: { range: { start: at, end: at }, newText: `${indent}${entry}\n` } }];
+  }
+  const last = analysis.lines.length - 1;
+  const at = { line: last, character: analysis.lines[last].length };
+  const gap = analysis.lines[last] === '' ? '' : '\n';
+  return [{ title, edit: { range: { start: at, end: at }, newText: `${gap}\ntraffic {\n  ${entry}\n}\n` } }];
 }
 
 /** The smallest single edit that turns `before` into `after`. */

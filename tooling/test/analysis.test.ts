@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyze, complete, definition, hover, outline, quickFix, references, rename, renameTarget, semanticTokens, toRange, type RenameResult, type TextEdit } from '../src/analysis';
+import { analyze, complete, cursorFixes, definition, hover, outline, quickFix, references, rename, renameTarget, semanticTokens, testQuickFix, toRange, type RenameResult, type TextEdit } from '../src/analysis';
 
 const doc = `title "Shop"
 
@@ -371,6 +371,92 @@ describe('completion of names and capacity parts', () => {
     expect(labels('db [PostgreSQL]\ncapacity {\n  db latency 5ms \n}', 2, 18)).not.toContain('latency');
     // Still while the block has no closing brace.
     expect(labels('db [PostgreSQL]\ncapacity {\n  db ', 2, 5)).toContain('shards');
+  });
+});
+
+describe('quick fixes for capacity, traffic and failed requirements', () => {
+  it('removes a capacity part given twice', () => {
+    const src = 'db [PostgreSQL]\ncapacity {\n  db 20k rps latency 4ms latency 5 ms durable\n}\n';
+    const b = analyze(src);
+    const error = b.diagnostics.find((d) => d.message.includes('given twice'))!;
+    expect(error.message).toBe("Latency is given twice for 'db'");
+    const fix = quickFix(b, error.message, toRange(error))!;
+    expect(fix.title).toBe("Remove the repeated 'latency 5 ms'");
+    expect(applyEdit(src, fix.edit)).toBe(src.replace(' latency 5 ms', ''));
+    expect(analyze(applyEdit(src, fix.edit)).diagnostics).toEqual([]);
+
+    const rate = 'db [PostgreSQL]\ncapacity {\n  db 20k rps 30k rps\n}\n';
+    const r = analyze(rate);
+    const again = r.diagnostics.find((d) => d.message.includes('given twice'))!;
+    expect(applyEdit(rate, quickFix(r, again.message, toRange(again))!.edit)).toBe(rate.replace(' 30k rps', ''));
+  });
+
+  it('adds a traffic line for a use case that has none, into the block or a new one', () => {
+    const [fix] = cursorFixes(h, { start: { line: hl('usecase "Shorten"'), character: 3 }, end: { line: hl('usecase "Shorten"'), character: 3 } });
+    expect(fix.title).toBe('Add a traffic line for "Shorten"');
+    const added = applyEdit(hld, fix.edit);
+    expect(added).toContain('  "Redirect" 1k rps mix "Cache hit" 90%, "Cache miss" 10%\n  "Shorten" 100 rps\n}');
+    expect(analyze(added).diagram.traffic?.map((t) => t.useCase)).toEqual(['Redirect', 'Shorten']);
+    // A use case with traffic, or a line that is not a use case header, has nothing to add.
+    expect(cursorFixes(h, { start: { line: hl('usecase "Redirect"'), character: 0 }, end: { line: hl('usecase "Redirect"'), character: 0 } })).toEqual([]);
+    expect(cursorFixes(h, { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } })).toEqual([]);
+
+    const bare = 'usecase "Read" {\n  a -> b\n}';
+    const [first] = cursorFixes(analyze(bare), { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } });
+    expect(applyEdit(bare, first.edit)).toBe(`${bare}\n\ntraffic {\n  "Read" 100 rps\n}\n`);
+  });
+
+  const ITEMS = `client [Actor]
+api [REST API]
+db [PostgreSQL]
+client -> api
+api -> db
+usecase "Read" {
+  client -> api : GET /items
+  api -> db : SELECT item
+  api --> client : 200
+}
+traffic {
+  "Read" 1k rps
+}
+requirements {
+  survive any node failure
+}
+`;
+
+  it('adds x2 to a single point of failure that survive names', () => {
+    const b = analyze(ITEMS);
+    const fix = testQuickFix(b, { start: { line: 14, character: 2 }, end: { line: 14, character: 26 } })!;
+    expect(fix.title).toBe("Add x2 to 'api'");
+    expect(applyEdit(ITEMS, fix.edit)).toContain('api [REST API] x2\n');
+    // Not on another line.
+    expect(testQuickFix(b, { start: { line: 13, character: 0 }, end: { line: 13, character: 1 } })).toBeNull();
+  });
+
+  it('adds the shards the saturation hint computes to the capacity block', () => {
+    const src = `client [Actor]
+api [REST API] x40
+db [PostgreSQL] x3
+client -> api
+api -> db
+usecase "Write" {
+  client -> api : POST /items
+  api -> db : INSERT item
+  api --> client : 201
+}
+traffic {
+  "Write" 6k rps
+}
+requirements {
+  p99 "Write" < 1000ms
+}
+`;
+    const b = analyze(src);
+    const fix = testQuickFix(b, { start: { line: 14, character: 2 }, end: { line: 14, character: 5 } })!;
+    expect(fix.title).toBe("Add shards 2 to the capacity of 'db'");
+    const fixed = applyEdit(src, fix.edit);
+    expect(fixed).toContain('capacity {\n  db shards 2\n}');
+    expect(analyze(fixed).diagram.capacity).toEqual([expect.objectContaining({ node: 'db', shards: 2 })]);
   });
 });
 
