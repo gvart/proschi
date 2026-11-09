@@ -828,7 +828,6 @@ export interface CodeLens {
 
 type Requirement = NonNullable<Diagram['requirements']>[number];
 type LatencyRequirement = Extract<Requirement, { kind: 'latency' }>;
-const PERCENTILE_KEY = { 50: 'p50', 90: 'p90', 95: 'p95', 99: 'p99', 99.9: 'p999' } as const;
 const percentileLabel = (r: LatencyRequirement) => (r.percentile === 99.9 ? 'p99.9' : `p${r.percentile}`);
 
 /**
@@ -845,18 +844,15 @@ export function codeLenses(analysis: Analysis): CodeLens[] {
   const results = resultsOf(diagram);
   const requirements = diagram.requirements ?? [];
   const resultOf = (i: number) => results.find((r) => r.id === `req:${i + 1}`);
-  const nodes = new Map(sim.nodes.map((n) => [n.id, n]));
 
   for (const u of diagram.useCases) {
     const ua = sim.useCases.find((x) => x.id === u.id);
     if (u.loc.file !== undefined || !ua || !Number.isFinite(ua.percentiles.p99)) continue;
-    const touched = u.scenarios.flatMap((s) => s.steps.map((step) => step.toServiceId));
     const checks = requirements.flatMap((r, i) => {
-      if (r.kind !== 'latency') return [];
-      if (r.useCase !== undefined) return findUseCase(diagram, r.useCase) === u ? [{ r, passed: resultOf(i)?.passed ?? true }] : [];
-      // `p99 < 200ms` applies to every use case with traffic; checked here for this one alone.
-      if (ua.rps <= 0) return [];
-      return [{ r, passed: ua.percentiles[PERCENTILE_KEY[r.percentile]] < r.maxMs && !touched.some((id) => nodes.get(id)?.saturated) }];
+      // Only requirements that name the use case: their result is the simulator's verdict on it alone.
+      // One without a use case (`p99 < 200ms`) counts on the `requirements` lens only.
+      if (r.kind !== 'latency' || r.useCase === undefined || findUseCase(diagram, r.useCase) !== u) return [];
+      return [{ r, passed: resultOf(i)?.passed ?? true }];
     });
     const failed = checks.find((c) => !c.passed)?.r;
     const limit = failed && `${failed.percentile === 99 ? '' : `${percentileLabel(failed)} `}< ${formatMs(failed.maxMs)}${failed.scenario !== undefined ? ` in "${failed.scenario}"` : ''}`;

@@ -40,9 +40,10 @@ same simulation as the Results view:
   cost, such as `62% · $400/mo`, or `130% saturated · $400/mo` past
   capacity. Only in documents with a `traffic` block.
 - **Code lenses**: `p99 38 ms ✓` above each use case, or
-  `p99 120 ms ✗ (req < 100 ms)` when it breaks a latency requirement; the
-  requirements, worst p99, availability and cost above each `whatif` block;
-  and `✓ 3/3 requirements pass` above `requirements`.
+  `p99 120 ms ✗ (req < 100 ms)` when it breaks a latency requirement that
+  names it; the requirements, worst p99, availability and cost above each
+  `whatif` block; and `✓ 3/3 requirements pass` above `requirements`, which
+  also counts the requirements that name no use case.
 
 In VS Code and Open VSX editors, turn them off with the
 `proschi.inlayHints.enabled` and `proschi.codeLens.enabled` settings. In the

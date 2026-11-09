@@ -73,9 +73,10 @@ describe('code lenses', () => {
     expect(titles(strict)[1][1]).toBe('✗ 1/2 requirements pass');
   });
 
-  it('applies a requirement without a use case to every use case with traffic', () => {
+  it('counts a requirement without a use case on the requirements lens only', () => {
     const global = loaded.replace('p99 "Read" < 100ms', 'p99 < 50ms');
-    expect(titles(global)[0][1]).toBe('p99 89.3 ms ✗ (req < 50 ms)');
+    expect(titles(global)[0][1]).toBe('p99 89.3 ms');
+    expect(titles(global)[1][1]).toBe('✗ 1/2 requirements pass');
   });
 
   it('shows p99 alone without requirements, and no what-if or requirements lens without the blocks', () => {
