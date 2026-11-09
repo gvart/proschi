@@ -1,0 +1,26 @@
+frontend/src/sim/delta.ts
+  s_f355061868c346::t_ae8054b26a56d4 1-153,155-204,206-207,209-257
+  s_f355061868c346::t_1a06e9da3f3d53 154,205,208
+frontend/src/sim/delta.test.ts
+  s_f355061868c346::t_8d0cff796f8c3c 76
+  s_f355061868c346::t_4cd0c180b6bc36 1-35,37-75,77-124,127-146
+  s_f355061868c346::t_38ce8f4e410beb 36,125-126
+frontend/src/sim/index.ts
+  s_f355061868c346::t_1a06e9da3f3d53 31-47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "adf6b17cdb9ae84ef3825e1d5096ec284ca05924",
+  "prompts": {},
+  "sessions": {
+    "s_f355061868c346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd556674-4248-429d-bf5c-2b361bc86c62",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
