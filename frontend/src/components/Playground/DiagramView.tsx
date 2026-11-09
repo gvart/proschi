@@ -377,19 +377,25 @@ export default function DiagramView({
     // Once per request.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imageRequest]);
-  // A node picked in Results: once it is drawn and the canvas has had its first fit, select it and zoom to it.
+  // A node picked in Results: once the canvas is drawn and its own fit has settled
+  // (the view has not moved for a while), select the node and zoom to it.
   useEffect(() => {
     if (!focusRequest) return;
     let frame = 0;
     let tries = 0;
-    let settled = 0;
+    let still = 0;
+    let last = '';
     const tick = () => {
-      const node = getNodes().find((n) => n.id === focusRequest.id);
-      const { domNode, width, height } = flowStore.getState();
+      const { domNode, width, height, transform } = flowStore.getState();
+      const drawn = getNodes();
+      const node = drawn.find((n) => n.id === focusRequest.id);
       const sized = !!domNode?.offsetWidth && Math.abs(domNode.offsetWidth - width) <= 1 && Math.abs(domNode.offsetHeight - height) <= 1;
-      // A few frames more once ready, so the fit of a canvas just shown goes first.
-      if (!node?.width || !node.height || !wrapperRef.current?.offsetWidth || !sized || settled++ < 6) {
-        if (tries++ < 180) frame = requestAnimationFrame(tick);
+      const ready = !!node && sized && !!wrapperRef.current?.offsetWidth && drawn.every((n) => n.width && n.height);
+      const view = transform.join(',');
+      still = ready && view === last ? still + 1 : 0;
+      last = view;
+      if (!node || still < 15) {
+        if (tries++ < 300) frame = requestAnimationFrame(tick);
         return;
       }
       selectOnly(node.id);

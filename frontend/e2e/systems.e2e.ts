@@ -28,6 +28,17 @@ async function layoutSettled(page: Page) {
     .toBe(true);
 }
 
+/**
+ * Turns the load overlay off (it is on for a document with traffic): its legend takes room
+ * from the right of the canvas, so the tests that measure boxes at their usual zoom do without it.
+ */
+async function overlayOff(page: Page) {
+  const toggle = page.getByRole('button', { name: 'Overlay: load' });
+  await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+  await toggle.click();
+  await layoutSettled(page);
+}
+
 test.describe('team systems in the editor', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(droneLink(100));
@@ -48,6 +59,7 @@ test.describe('team systems in the editor', () => {
   });
 
   test('more traffic through the frontend turns Orders red, with who to ask', async ({ page }) => {
+    await overlayOff(page);
     await codeEditor(page).click();
     await page.keyboard.press('ControlOrMeta+A');
     await page.keyboard.insertText(droneOrgSource(2000));
@@ -172,6 +184,7 @@ test.describe('team systems in the editor', () => {
   });
 
   test('a box expands in place and collapses again', async ({ page }) => {
+    await overlayOff(page);
     const before = await editorText(page);
     await box(page, 'Order Processing').getByRole('button', { name: 'Expand Order Processing', exact: true }).click();
     const frame = page.locator('.react-flow__node-groupNode', { hasText: 'Order Processing' });
@@ -183,7 +196,8 @@ test.describe('team systems in the editor', () => {
     const collapse = (await frame.getByRole('button', { name: 'Collapse Order Processing' }).boundingBox())!;
     expect(collapse.x + collapse.width).toBeLessThanOrEqual(frameBox.x + frameBox.width - 8);
     expect(collapse.y).toBeGreaterThanOrEqual(frameBox.y + 8);
-    // With the load overlay on (the default), its members show their load like any node.
+    // With the load overlay on, its members show their load like any node.
+    await page.getByRole('button', { name: 'Overlay: load' }).click();
     await expect(page.locator('.react-flow__node', { hasText: 'Orders DB' }).locator('.pc-node[data-load]')).toBeVisible();
     await expect(page.locator('.react-flow__node', { hasText: 'Orders DB' })).toContainText(/\d+%/);
     await page.getByRole('button', { name: 'Overlay: load' }).click();
@@ -245,6 +259,7 @@ test('a narrow team design with a long name keeps its frame controls inside the 
   const feed = 'title "Feed"\ncaller "Callers" [Actor]\ningest "Ingest" [Microservice]\ncaller -> ingest\nusecase "Publish event" {\n  caller -> ingest : POST\n}\n';
   const files = { ...DRONE_TEAM_FILES, 'teams/feed.proschi': feed };
   await page.goto(`app/#code=${lz.compressToEncodedURIComponent(org)}&imports=${lz.compressToEncodedURIComponent(JSON.stringify(files))}`);
+  await overlayOff(page);
   await box(page, 'Customer Feed Notifications').getByRole('button', { name: 'Expand Customer Feed Notifications', exact: true }).click();
   const frame = page.locator('.react-flow__node-groupNode', { hasText: 'Customer Feed Notifications' }).locator('.pc-group');
   await expect(frame).toBeVisible();
