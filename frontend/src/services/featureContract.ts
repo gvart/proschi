@@ -6,7 +6,7 @@
  * server; the page reads the answer.
  */
 
-export const FEATURE_IDS = ['ai_interview', 'interview_history', 'ai_roadmap', 'share_links', 'design_partner', 'deep_mode', 'interview_report'] as const;
+export const FEATURE_IDS = ['ai_interview', 'interview_history', 'ai_roadmap', 'share_links', 'design_partner', 'deep_mode', 'interview_report', 'design_diff'] as const;
 
 export type FeatureId = (typeof FEATURE_IDS)[number];
 

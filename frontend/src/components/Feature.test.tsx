@@ -146,12 +146,12 @@ describe('<Feature>', () => {
     billing.on = false;
     const on = { ok: true } as const;
     function States() {
-      const ids = ['ai_interview', 'ai_roadmap', 'design_partner', 'deep_mode', 'interview_history', 'interview_report', 'share_links'] as const;
+      const ids = ['ai_interview', 'ai_roadmap', 'design_partner', 'deep_mode', 'interview_history', 'interview_report', 'share_links', 'design_diff'] as const;
       // eslint-disable-next-line react-hooks/rules-of-hooks -- a fixed list, called in the same order every render
       const states = ids.map((id) => [id, useFeature(id).ok]);
       return <output data-testid="states">{JSON.stringify(Object.fromEntries(states))}</output>;
     }
-    await signedIn({ ai_interview: on, ai_roadmap: on, design_partner: on, deep_mode: on, interview_history: on, interview_report: on, share_links: on }, <States />);
+    await signedIn({ ai_interview: on, ai_roadmap: on, design_partner: on, deep_mode: on, interview_history: on, interview_report: on, share_links: on, design_diff: on }, <States />);
     expect(JSON.parse(screen.getByTestId('states').textContent!)).toEqual({
       ai_interview: false,
       ai_roadmap: false,
@@ -160,6 +160,7 @@ describe('<Feature>', () => {
       interview_history: true,
       interview_report: true,
       share_links: true,
+      design_diff: true,
     });
   });
 });

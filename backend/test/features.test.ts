@@ -59,6 +59,7 @@ describe('features', () => {
       design_partner: { ok: true },
       deep_mode: { ok: false, reason: 'needs_pro' },
       interview_report: { ok: false, reason: 'needs_pro' },
+      design_diff: { ok: false, reason: 'needs_pro' },
     });
     await setPlan(id, 'pro');
     // Pro has every feature but Max's two.
