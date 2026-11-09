@@ -119,6 +119,98 @@ that starts with a selector is about the sender. Order is sequence order,
 requests and responses interleaved. Unknown names and empty tests are
 warnings, and two tests with one name are an error.
 
+## What-ifs
+
+A `whatif` block is a variant of the design: more traffic, a node down, or
+other replica counts. Each one is analysed on its own and checked against
+the same requirements, so you can ask "does it hold on launch day?" without
+editing the design. The design itself is analysed exactly as before.
+
+```proschi
+title "Paste bin"
+
+user  "Visitor"    [Browser]
+api   "Paste API"  [REST API]   x4
+cache "Hot pastes" [Redis]      x2
+db    "Pastes"     [PostgreSQL] x2
+
+user -> api   : HTTPS
+api  -> cache : RESP
+api  -> db    : SQL
+
+usecase "Read paste" {
+  user -> api : GET /p/{id}
+  alt "Hit" {
+    api -> cache : GET paste
+    api --> user : 200
+  } alt "Miss" {
+    api -> cache : GET paste
+    api -> db    : SELECT paste
+    api --> user : 200
+  } alt "Cache down" {
+    api -x cache : GET paste
+    api -> db    : SELECT paste
+    api --> user : 200
+  }
+}
+
+traffic {
+  "Read paste" 2k rps mix "Hit" 80%, "Miss" 20%, "Cache down" 0%
+}
+
+capacity {
+  cache timeout 50ms
+}
+
+requirements {
+  p99 "Read paste" < 200ms
+  availability >= 99.9%
+}
+
+whatif "Launch day" {
+  traffic "Read paste" x3
+}
+whatif "Cache outage" {
+  fail cache
+}
+whatif "Database outage" {
+  fail db
+}
+```
+
+> **Try it:** run `proschi analyze --whatif all paste.proschi`. The cache
+> outage passes, because "Cache down" takes the traffic. The database outage
+> fails: the misses, 20% of reads, have no fallback.
+
+| Line | What it changes |
+|---|---|
+| `traffic "U" x3` | Multiplies the use case's rate from the `traffic` block. Scenario shares stay. |
+| `traffic "U" 50k rps` | Sets the use case's rate, also for a use case without traffic. |
+| `fail n` | Takes node `n` down. Its availability is 0. The traffic of each scenario that needs `n` moves to the use case's [fallback scenarios](SCENARIOS.md#error-paths-and-conditions) for it, the ones that call it with `-x` and still complete. Without a fallback, that share of requests fails. |
+| `n x4` | Runs `n` with that many replicas, for capacity, availability and cost. |
+
+A what-if passes when every requirement holds under it. Test blocks don't
+count, because they check request flows and not numbers. Unknown use cases
+and nodes are warnings, and two what-ifs with one name are an error.
+
+On the command line, `proschi analyze` adds a summary of the what-ifs to its
+table: whether the requirements hold, the worst p99, the lowest
+availability and the cost. `--whatif "Name"` prints the whole table under
+one what-if, with each requirement's result.
+
+`--sweep` finds how far the design scales:
+
+```sh
+proschi analyze --sweep "Read paste" 1k..20k paste.proschi
+```
+
+It analyses the use case at ten rates across the range (`--steps` sets how
+many) and prints p99, availability, cost and what saturates at each. Then it
+prints the rate at which each node saturates and the highest rate at which
+the requirements still hold. For the paste bin, the API saturates at 8k rps
+and the p99 limit breaks just before, at 7.5k rps. Add `--whatif "Name"` to
+sweep under a what-if.
+
 ## Selectors and kinds
 
 Tests and the failure requirement take a selector, so a rule such as

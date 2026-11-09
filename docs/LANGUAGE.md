@@ -72,6 +72,7 @@ parts, except in a tech stack such as `[Redis]`, where they are literal.
 | Decision | `decision "Title" { … }` | top level | [Decisions](HLD.md#decisions) |
 | Requirements | `requirements { … }` | top level | [Requirements](TESTS.md#requirements) |
 | Test | `test "Name" { … }` | top level | [Tests](TESTS.md#tests) |
+| What-if | `whatif "Name" { … }` | top level | [What-ifs](TESTS.md#what-ifs) |
 | Comment | `# …` | anywhere | To the end of the line. A `#` inside quotes or a JSON payload is text, and so is a hex color after `color`. |
 
 The [grammar](GRAMMAR.md) has every statement in EBNF.

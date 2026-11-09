@@ -287,11 +287,19 @@ A(U) = Π over nodes n on the main path of
           The Results tab lists single-replica nodes that a use case needs without a fallback as
           <em>single points of failure</em>.
         </p>
+        <p>
+          A <code>whatif</code> block's <code>fail &lt;node&gt;</code> takes the whole node down: its availability is
+          0, and each scenario that needs it hands its share of traffic to the use case's fallback scenarios for
+          it, in proportion to their own shares (equally when they have none). A scenario without a fallback keeps
+          its share, and that share of the use case's requests fails: its availability is multiplied by what is
+          left. Latency, load and cost then follow from the new shares.
+        </p>
       </div>
       <dl class="facts">
         <div><dt>x2+</dt><dd>with one replica fewer, the node does not saturate and the latency limits still hold</dd></div>
         <div><dt>x1</dt><dd>every use case that needs it has a fallback scenario</dd></div>
         <div><dt>Skipped</dt><dd>clients, external systems, DNS, notes</dd></div>
+        <div><dt>fail n</dt><dd>traffic moves to fallbacks; without one, that share fails</dd></div>
       </dl>
     </li>
 
