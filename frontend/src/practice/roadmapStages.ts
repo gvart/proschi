@@ -63,7 +63,7 @@ export const ROADMAP: RoadmapStage[] = [
     id: 'streams',
     title: 'Streams and aggregation',
     why: 'Count and rank events at a rate no database takes row by row: batch, pre-aggregate and accept approximate answers where they are good enough.',
-    problems: ['view-counting', 'trending-topics', 'metrics-ingest'],
+    problems: ['view-counting', 'trending-topics', 'ad-click-aggregator', 'metrics-ingest'],
   },
   {
     id: 'consistency',

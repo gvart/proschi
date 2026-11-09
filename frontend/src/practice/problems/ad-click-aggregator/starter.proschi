@@ -1,0 +1,11 @@
+import "problem.proschi"
+
+# Add the ingest tier, the Kafka topics events and aggregates, the Flink
+# aggregation job, its checkpoint store, Pinot (id pinot) and the report API,
+# then write the seven use cases.
+app -> ingest
+
+usecase "Record event" {
+  app     -> ingest : POST /ad-events
+  ingest --> app    : 202
+}
