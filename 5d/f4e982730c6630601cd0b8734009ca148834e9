@@ -1,0 +1,26 @@
+frontend/src/practice/stages/Screens.tsx
+  s_f355061868c346::t_7a57642ffa2a2e 8,145-148,152-158,160-172
+frontend/src/practice/interview/StageParts.tsx
+  s_f355061868c346::t_7a57642ffa2a2e 129-144,211
+frontend/e2e/stages.e2e.ts
+  s_f355061868c346::t_f144fc39ef52d7 73-79
+frontend/src/practice/interview/SoloRoom.tsx
+  s_f355061868c346::t_7a57642ffa2a2e 164-166,175-179
+  s_f355061868c346::t_500b073cd30e1f 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5df4e982730c6630601cd0b8734009ca148834e9",
+  "prompts": {},
+  "sessions": {
+    "s_f355061868c346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd556674-4248-429d-bf5c-2b361bc86c62",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
