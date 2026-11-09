@@ -1,0 +1,14 @@
+docs/impl/feature-expansion.md
+  h_bdd87144da84ba 92
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "96589d8ad2a6f49e9c2cd6b09cf21bfffc8d0f04",
+  "prompts": {},
+  "humans": {
+    "h_bdd87144da84ba": {
+      "author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
