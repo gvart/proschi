@@ -78,7 +78,7 @@ per-use LLM cost), and improve the language and the visual editor.
   - "Simulate down" in the right-click menu;
   - saved `whatif` blocks shown as tabs in Results (Pro).
   verify: e2e, Free vs Pro gating. depends on: 2.3, 3.2, 4.1
-- [ ] **4.3 T2 Design diff with sim deltas**: a versions diff in the UI showing cost, p99 and
+- [x] **4.3 T2 Design diff with sim deltas**: a versions diff in the UI showing cost, p99 and
   which checks pass before and after (Pro). A new `proschi diff a.proschi b.proschi` in the CLI.
   verify: unit tests on the delta function, tooling tests, e2e. depends on: none
 
