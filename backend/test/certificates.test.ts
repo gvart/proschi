@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { catalogSolved, problemIds } from '../src/verify';
 import { call, resetDatabase, signedInUser } from './helpers';
+import wranglerConfig from '../wrangler.jsonc?raw';
 
 /**
  * T6+T7 (docs/design/paid-plans.md P56): the progress export (Pro), the
@@ -207,5 +208,14 @@ describe('embeds without branding', () => {
     await setPlan(id, 'free');
     expect('branding' in (await share())).toBe(false);
     expect((await call('/api/me/embeds', { method: 'PUT', token, body: { branding: true } })).status).toBe(200);
+  });
+});
+
+describe('the certificate page reaches the Worker', () => {
+  // Cloudflare serves a path outside run_worker_first from the built site without running the Worker,
+  // so /c/<id> answered the site's 404 page in production although the Worker serves it (src/index.ts).
+  it('has /c/* in run_worker_first, with the other paths the Worker serves', () => {
+    const config = JSON.parse(wranglerConfig.replace(/^\s*\/\/.*$/gm, '')) as { assets: { run_worker_first: string[] } };
+    expect(config.assets.run_worker_first).toEqual(expect.arrayContaining(['/api/*', '/auth/*', '/s/*', '/u/*', '/c/*', '/share/*']));
   });
 });
