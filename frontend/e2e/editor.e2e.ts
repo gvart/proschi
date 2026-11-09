@@ -251,7 +251,9 @@ test.describe('editor', () => {
   });
 
   test('a node at 70% or more is ringed as the bottleneck', async ({ page }) => {
+    // Only the hash changes from the page already open, so load it again to open the link.
     await page.goto(`app/#code=${lz.compressToEncodedURIComponent(HOT)}`);
+    await page.reload();
     await waitForCanvas(page);
     const ringed = page.locator('.react-flow__node').filter({ has: page.locator('.pc-node[data-bottleneck]') });
     await expect(ringed).toHaveCount(1);
