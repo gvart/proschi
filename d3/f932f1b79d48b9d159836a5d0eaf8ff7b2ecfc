@@ -1,0 +1,32 @@
+frontend/e2e/landing.e2e.ts
+  s_248f83f833fb51::t_3bbfed0f9d9efd 57,60,62
+CONTRIBUTING.md
+  s_248f83f833fb51::t_93ae2d326e3955 162-165,167,171,176
+  s_248f83f833fb51::t_aca6af0cd0f516 170,179
+frontend/e2e/README.md
+  s_248f83f833fb51::t_3bbfed0f9d9efd 32
+frontend/src/practice/practice.test.ts
+  s_248f83f833fb51::t_3bbfed0f9d9efd 18,41-42,44-45,47,52,54,58,66,69-70
+tooling/test/problem.test.ts
+  s_248f83f833fb51::t_3bbfed0f9d9efd 74
+docs/PRACTICE.md
+  s_248f83f833fb51::t_3bbfed0f9d9efd 548
+frontend/e2e/practice.e2e.ts
+  s_248f83f833fb51::t_3bbfed0f9d9efd 11,14-15,205
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d3f932f1b79d48b9d159836a5d0eaf8ff7b2ecfc",
+  "prompts": {},
+  "sessions": {
+    "s_248f83f833fb51": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2d46bc96-3c9a-4511-a065-8673803644a9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
