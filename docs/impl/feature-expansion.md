@@ -89,7 +89,7 @@ per-use LLM cost), and improve the language and the visual editor.
 - [x] **5.2 T5 Interview-date plan** (Max): pick a date and get a daily schedule of
   problems, cards and drills, with reminders (`practice/hub/goal.ts`, `backend/src/reminders.ts`).
   verify: schedule unit tests, backend tests, e2e. depends on: 5.1
-- [ ] **5.3 T6+T7 Export and proof**:
+- [x] **5.3 T6+T7 Export and proof**:
   - a JSON/CSV data export (Pro);
   - a mastery certificate (Max: a shareable page and image via `backend/src/og.ts`);
   - Pro exports: no watermark on embeds, high-DPI PNG, PDF of the HLD.
