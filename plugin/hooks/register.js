@@ -1348,6 +1348,7 @@ var Parser = class _Parser {
   entities = [];
   decisions = [];
   tests = [];
+  whatifs = [];
   blocks = [];
   legend = [];
   layout = {};
@@ -1394,7 +1395,8 @@ var Parser = class _Parser {
       ...this.tests.length ? { tests: this.tests } : {},
       ...this.legend.length ? { legend: this.legend } : {},
       ...Object.keys(this.layout).length ? { layout: this.layout } : {},
-      ...this.systems.length ? { systems: this.systems } : {}
+      ...this.systems.length ? { systems: this.systems } : {},
+      ...this.whatifs.length ? { whatifs: this.whatifs } : {}
     };
     const order = (d) => this.fileOrder.get(d.file) ?? 0;
     this.diagnostics.sort((a, b) => order(a) - order(b) || a.line - b.line || a.col - b.col);
@@ -1509,6 +1511,10 @@ var Parser = class _Parser {
         break;
       case "test":
         if (second?.kind === "string" && tokens[tokens.length - 1].kind === "lbrace") this.parseTest(tokens, line);
+        else this.parseNode(tokens, line);
+        break;
+      case "whatif":
+        if (second?.kind === "string" && tokens[tokens.length - 1].kind === "lbrace") this.parseWhatIf(tokens, line);
         else this.parseNode(tokens, line);
         break;
       // Keywords only as `direction <word>` and `layout <word>`, so a node may still be called direction or layout.
@@ -2295,6 +2301,7 @@ var Parser = class _Parser {
   }
   closeSection(frame2) {
     if (frame2.test && frame2.test.assertions.length === 0) this.warning(`Test '${frame2.test.name}' has no assertions`, frame2.test.loc);
+    if (frame2.whatif && frame2.whatif.changes.length === 0) this.warning(`What-if '${frame2.whatif.name}' changes nothing`, frame2.whatif.loc);
   }
   parseSectionLine(frame2, tokens, line) {
     switch (frame2.section) {
@@ -2315,6 +2322,8 @@ var Parser = class _Parser {
         if (assertion2) frame2.test.assertions.push(assertion2);
         return;
       }
+      case "whatif":
+        return this.parseWhatIfLine(frame2.whatif, tokens, line);
     }
   }
   /**
@@ -2845,6 +2854,91 @@ var Parser = class _Parser {
     const test = { name: name.value, assertions: [], loc };
     if (this.openSection("test", tokens, line, { test })) this.tests.push(test);
   }
+  /** `whatif "Name" {` */
+  parseWhatIf(tokens, line) {
+    const name = tokens[1];
+    const loc = this.locOf(name, line);
+    if (tokens[2].kind !== "lbrace") {
+      this.error(`Expected { after the what-if name, not ${describe(tokens[2])}`, this.locOf(tokens[2], line));
+      this.skipSection("whatif", tokens, line);
+      return;
+    }
+    this.expectEnd(tokens, 3, line);
+    const first = this.whatifs.find((w) => w.name === name.value);
+    if (first) {
+      this.error(`Duplicate what-if '${name.value}' (first ${this.where(first.loc, loc)})`, loc);
+      this.skipSection("whatif", tokens, line);
+      return;
+    }
+    const whatif = { name: name.value, changes: [], loc };
+    if (this.openSection("whatif", tokens, line, { whatif })) this.whatifs.push(whatif);
+  }
+  /** One line of a what-if: `traffic "Use case" x3`, `traffic "Use case" 50k rps`, `fail <node>` or `<node> x4`. */
+  parseWhatIfLine(whatif, tokens, line) {
+    const [first, second, third] = tokens;
+    const loc = this.lineLoc(tokens, line);
+    const help = 'Expected a what-if change: traffic "Use case" x3, traffic "Use case" 50k rps, fail <node> or <node> x4';
+    const checkNode = (id) => {
+      const idLoc = this.locOf(id, line);
+      this.deferred.push(() => {
+        if (!this.nodes.has(id.value)) this.warning(`Unknown node '${id.value}' in what-if`, idLoc);
+      });
+    };
+    if (first.kind === "ident" && second?.kind === "ident" && REPLICAS.test(second.value)) {
+      if (!this.expectEnd(tokens, 2, line)) return;
+      const replicas = Number(REPLICAS.exec(second.value)[1]);
+      if (replicas < 1) {
+        this.error("A what-if needs at least one replica, x1; to take a node down, write fail <node>", this.locOf(second, line));
+        return;
+      }
+      if (whatif.changes.some((c) => c.kind === "replicas" && c.node === first.value)) {
+        this.error(`Replicas of '${first.value}' are set twice in this what-if`, this.locOf(first, line));
+        return;
+      }
+      checkNode(first);
+      whatif.changes.push({ kind: "replicas", node: first.value, replicas, loc });
+      return;
+    }
+    if (isWord(first, "fail")) {
+      if (second?.kind !== "ident") {
+        this.error("Expected the node that fails, e.g. fail cache", this.locOf(second ?? first, line));
+        return;
+      }
+      if (!this.expectEnd(tokens, 2, line)) return;
+      if (whatif.changes.some((c) => c.kind === "fail" && c.node === second.value)) {
+        this.error(`'${second.value}' fails twice in this what-if`, this.locOf(second, line));
+        return;
+      }
+      checkNode(second);
+      whatif.changes.push({ kind: "fail", node: second.value, loc });
+      return;
+    }
+    if (isWord(first, "traffic")) {
+      if (second?.kind !== "string") {
+        this.error('Expected a use case name in quotes, e.g. traffic "Checkout" x3 or traffic "Checkout" 50k rps', this.locOf(second ?? first, line));
+        return;
+      }
+      let change;
+      if (third?.kind === "ident" && REPLICAS.test(third.value)) {
+        const multiply = Number(REPLICAS.exec(third.value)[1]);
+        change = { kind: "traffic", useCase: second.value, multiply, loc };
+      } else {
+        const rps = this.quantityOf(third, "rps", second, line);
+        if (rps === void 0) return;
+        change = { kind: "traffic", useCase: second.value, rps, loc };
+      }
+      if (!this.expectEnd(tokens, 3, line)) return;
+      if (whatif.changes.some((c) => c.kind === "traffic" && c.useCase === second.value)) {
+        this.error(`Traffic of '${second.value}' is changed twice in this what-if`, this.locOf(second, line));
+        return;
+      }
+      const nameLoc = this.locOf(second, line);
+      this.deferred.push(() => this.checkUseCase(second.value, nameLoc));
+      whatif.changes.push(change);
+      return;
+    }
+    this.error(help, this.locOf(first, line));
+  }
   /** One assertion line of a test (docs/design/hld-and-practice.md §1.9). */
   parseAssertion(tokens, line) {
     const loc = this.lineLoc(tokens, line);
@@ -3360,6 +3454,7 @@ function sectionName(frame2) {
   if (frame2.entity) return `entity '${frame2.entity.name}'`;
   if (frame2.decision) return `decision '${frame2.decision.title}'`;
   if (frame2.test) return `test '${frame2.test.name}'`;
+  if (frame2.whatif) return `what-if '${frame2.whatif.name}'`;
   return `${frame2.section} block`;
 }
 function fileName(path) {
@@ -4325,6 +4420,37 @@ function resolveTraffic(diagram, warnings = []) {
   }
   return result;
 }
+function trafficFor(diagram, options = {}, warnings = []) {
+  const traffic = resolveTraffic(diagram, warnings);
+  for (const [id, rps] of options.trafficRps ?? []) {
+    const t = traffic.get(id);
+    if (t) t.rps = Math.max(0, rps);
+  }
+  const failed = options.failed;
+  if (!failed?.size) return traffic;
+  for (const u of diagram.useCases) {
+    const t = traffic.get(u.id);
+    const down = (s) => pathNodes(u, s).filter((id) => failed.has(id));
+    const shares = [...t.shares];
+    let stranded = 0;
+    u.scenarios.forEach((s, i) => {
+      if (!(shares[i] > 0)) return;
+      const ids = down(s);
+      if (ids.length === 0) return;
+      const targets = u.scenarios.filter((f) => f.outcome === "success" && down(f).length === 0 && ids.every((id) => fallbacksFor(u, id).includes(f)));
+      if (targets.length === 0) {
+        stranded += shares[i];
+        return;
+      }
+      const indexes = targets.map((f) => u.scenarios.indexOf(f));
+      const weight = indexes.reduce((sum, j) => sum + t.shares[j], 0);
+      for (const j of indexes) shares[j] += shares[i] * (weight > 0 ? t.shares[j] / weight : 1 / indexes.length);
+      shares[i] = 0;
+    });
+    traffic.set(u.id, { ...t, shares, stranded: Math.min(1, stranded) });
+  }
+  return traffic;
+}
 var multiplierOf = (step) => step.multiplier !== void 0 && step.multiplier > 0 ? step.multiplier : 1;
 function forEachStepRate(diagram, traffic, visit) {
   for (const u of diagram.useCases) {
@@ -4521,7 +4647,7 @@ function analyze(diagram, options = {}) {
   const nodes = components(diagram);
   const profiles = profilesOf(diagram, warnings);
   const kindOf2 = (id) => profiles.get(id)?.kind ?? "client";
-  const traffic = resolveTraffic(diagram, warnings);
+  const traffic = trafficFor(diagram, options, warnings);
   const load = computeLoad(diagram, traffic);
   const egress = computeEgressGb(diagram, traffic, kindOf2);
   const bytes = computeBytesPerSecond(diagram, traffic);
@@ -4537,7 +4663,8 @@ function analyze(diagram, options = {}) {
     hops.set(n.id, hop);
     const egressGbPerMonth = egress.get(n.id) ?? 0;
     const egressUsd = egressGbPerMonth * p.egressUsdPerGb;
-    const availability2 = replicatedAvailability(p.availability, replicas);
+    const down = options.failed?.has(n.id) ?? false;
+    const availability2 = down ? 0 : replicatedAvailability(p.availability, replicas);
     return {
       id: n.id,
       kind: p.kind,
@@ -4549,11 +4676,12 @@ function analyze(diagram, options = {}) {
       waitProbability: hop.waitProbability,
       latencyMs: hopMean(hop),
       availability: availability2,
-      writeAvailability: p.writeScaling === "shards" ? primaryAvailability(p.availability, replicas) : availability2,
+      writeAvailability: down ? 0 : p.writeScaling === "shards" ? primaryAvailability(p.availability, replicas) : availability2,
       costUsd: replicas * p.shards * p.costUsd + egressUsd,
       egressGbPerMonth,
       egressUsd,
-      durable: p.durable
+      durable: p.durable,
+      ...down ? { failed: true } : {}
     };
   });
   const nodeById = new Map(nodeResults.map((n) => [n.id, n]));
@@ -4576,7 +4704,7 @@ function analyze(diagram, options = {}) {
     )
   });
   const useCases = diagram.useCases.map((u) => {
-    const { rps, shares } = traffic.get(u.id);
+    const { rps, shares, stranded } = traffic.get(u.id);
     const paths = u.scenarios.map((s) => pathOf(criticalPath(u, s)));
     const scenarios = u.scenarios.map((s, i) => ({
       id: s.id,
@@ -4603,7 +4731,8 @@ function analyze(diagram, options = {}) {
       if (!n && systems) return systemAvailability(u, id, systems.availability);
       return !n ? 1 : writes.has(id) ? n.writeAvailability : n.availability;
     };
-    return { id: u.id, name: u.name, rps, scenarios, percentiles, tailScenario, availability: useCaseAvailability(u, shares, availabilityOf) };
+    const availability2 = useCaseAvailability(u, shares, availabilityOf) * (1 - (stranded ?? 0));
+    return { id: u.id, name: u.name, rps, scenarios, percentiles, tailScenario, availability: availability2 };
   });
   return {
     nodes: nodeResults,
@@ -4657,7 +4786,7 @@ function makeRun(diagram, analysis, options = {}) {
     analysis,
     nodes: new Map(analysis.nodes.map((n) => [n.id, n])),
     useCases: new Map(analysis.useCases.map((u) => [u.id, u])),
-    shares: new Map([...resolveTraffic(diagram)].map(([id, t]) => [id, t.shares])),
+    shares: new Map([...trafficFor(diagram, options)].map(([id, t]) => [id, t.shares])),
     profiles: profilesOf(diagram),
     isWrite: (step) => access(step) === "write",
     options
@@ -4836,7 +4965,7 @@ function availability(run, u, minPercent) {
   const effective = (n) => writes.has(n.id) ? n.writeAvailability : n.availability;
   const weakest = main.filter((id) => fallbacksFor(u, id).length === 0).map((id) => run.nodes.get(id)).filter((n) => !!n && effective(n) < 1).sort((a, b) => effective(a) - effective(b))[0];
   const primaryBound = weakest && writes.has(weakest.id) && weakest.writeAvailability < weakest.availability;
-  const hint = !weakest ? "Add replicas to the nodes on the main path, or fallback scenarios that complete without them" : primaryBound ? `The weakest link is writing to ${nodeLabel(run.diagram, weakest.id)}: writes need its primary, ${formatAvailability(weakest.writeAvailability)} with failover${weakest.replicas < 2 ? " (none without a second replica; add one)" : ` (a replica takes over, but about ${formatPercent(FAILOVER_SHARE)} of each outage is lost)`}. Move the writes to a partitioned store, or add a fallback scenario that calls it with -x and still completes` : `The weakest link is ${nodeLabel(run.diagram, weakest.id)} at ${formatAvailability(effective(weakest))}: add a replica (x${weakest.replicas + 1}) or a fallback scenario that calls it with -x and still completes`;
+  const hint = !weakest ? "Add replicas to the nodes on the main path, or fallback scenarios that complete without them" : primaryBound ? `The weakest link is writing to ${nodeLabel(run.diagram, weakest.id)}: writes need its primary, ${formatAvailability(weakest.writeAvailability)} with failover${weakest.replicas < 2 ? " (none without a second replica; add one)" : ` (a replica takes over, but about ${formatPercent(FAILOVER_SHARE)} of each outage is lost)`}. Move the writes to a partitioned store, or add a fallback scenario that calls it with -x and still completes` : weakest.failed ? `${nodeLabel(run.diagram, weakest.id)} is down in this what-if: add a fallback scenario in "${u.name}" that calls ${weakest.id} with -x and still completes` : `The weakest link is ${nodeLabel(run.diagram, weakest.id)} at ${formatAvailability(effective(weakest))}: add a replica (x${weakest.replicas + 1}) or a fallback scenario that calls it with -x and still completes`;
   return { ...fail(message, hint), value };
 }
 function writeGap(run, u, s, accept) {

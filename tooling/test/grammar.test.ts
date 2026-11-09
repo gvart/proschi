@@ -191,6 +191,20 @@ describe('TextMate grammar', () => {
     ]);
   });
 
+  it('scopes whatif blocks', () => {
+    const lines = tokenize('whatif "Peak" {\n  traffic "Read" x3\n  fail cache\n  db x4\n}');
+    expect(lines[0][0]).toEqual(['whatif', 'keyword.control.proschi']);
+    expect(lines[1].map(([, s]) => s)).toEqual(['keyword.other.proschi', 'punctuation.definition.string.begin.proschi', 'string.quoted.double.proschi', 'punctuation.definition.string.end.proschi', 'constant.numeric.replicas.proschi']);
+    expect(lines[2]).toEqual([
+      ['fail', 'keyword.other.proschi'],
+      ['cache', 'variable.other.node.proschi'],
+    ]);
+    expect(lines[3]).toEqual([
+      ['db', 'variable.other.node.proschi'],
+      ['x4', 'constant.numeric.replicas.proschi'],
+    ]);
+  });
+
   it('scopes color, critical, tags and the legend block', () => {
     const [node] = tokenize('api "API" [Go] color teal critical .owned');
     expect(node.slice(-4)).toEqual([

@@ -39,7 +39,15 @@ export {
   type Analysis as SimAnalysis,
   type NodeAnalysis,
   type TestResult,
+  findWhatIf,
+  headlineOf,
+  runWhatIf,
+  runWhatIfs,
+  sweep,
+  type SweepResult,
+  type WhatIfResult,
 } from '../../frontend/src/sim';
+export { parseQuantity } from '../../frontend/src/dsl/quantity';
 
 /** Keywords that start a statement, with a one-line hint for completion lists. */
 export const KEYWORDS: { label: string; detail: string; snippet: string }[] = [
@@ -60,6 +68,7 @@ export const KEYWORDS: { label: string; detail: string; snippet: string }[] = [
   { label: 'entity', detail: 'entity Name in store { fields }', snippet: 'entity ${1:Name} in ${2:store} {\n\t${3:id} ${4:uuid} key$0\n}' },
   { label: 'decision', detail: 'A design decision with its reasons', snippet: 'decision "${1:Title}" {\n\tbecause "${2:reason}"$0\n}' },
   { label: 'test', detail: 'Flow assertions: "Use case" calls any cache', snippet: 'test "${1:Name}" {\n\t$0\n}' },
+  { label: 'whatif', detail: 'A variant to simulate: traffic "Use case" x3, fail node, node x4', snippet: 'whatif "${1:Name}" {\n\ttraffic "${2:Use case}" ${3:x3}$0\n}' },
 ];
 
 /** Assertion forms offered at the start of a line inside a `test` block (docs/TESTS.md, "Tests"). */
