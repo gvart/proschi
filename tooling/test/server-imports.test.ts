@@ -132,4 +132,24 @@ describe('language server with imports', () => {
     const after = (await connection.sendRequest('textDocument/hover', { textDocument: { uri: shopUri }, position: { line: 3, character: 4 } })) as { contents: { value: string } };
     expect(after.contents.value).toContain('`AWS API Gateway`');
   });
+
+  it('renames a node in the document and in the imported file that declares it', async () => {
+    const textDocument = { uri: shopUri };
+    expect(await connection.sendRequest('textDocument/prepareRename', { textDocument, position: { line: 3, character: 15 } })).toEqual({
+      range: { start: { line: 3, character: 13 }, end: { line: 3, character: 19 } },
+      placeholder: 'orders',
+    });
+    const edit = (await connection.sendRequest('textDocument/rename', { textDocument, position: { line: 3, character: 15 }, newName: 'ordering' })) as {
+      changes: Record<string, { range: { start: { line: number; character: number } }; newText: string }[]>;
+    };
+    expect(Object.keys(edit.changes).sort()).toEqual([infraUri, shopUri].sort());
+    expect(edit.changes[shopUri].map((e) => [e.range.start.line, e.range.start.character, e.newText])).toEqual([[3, 13, 'ordering']]);
+    expect(edit.changes[infraUri].map((e) => [e.range.start.line, e.range.start.character])).toEqual([
+      [2, 0],
+      [3, 11],
+    ]);
+    await expect(connection.sendRequest('textDocument/rename', { textDocument, position: { line: 3, character: 15 }, newName: 'gateway' })).rejects.toThrow(
+      "There is already a node 'gateway'",
+    );
+  });
 });

@@ -1,7 +1,7 @@
 /**
  * Proschi language server (LSP over stdio). Any editor with an LSP client
  * gets the same diagnostics as the web editor, plus completion, hover,
- * go-to-definition, references, an outline, formatting and links on import
+ * go-to-definition, references, rename, an outline, formatting and links on import
  * paths, and failing requirements and tests as warnings (source `proschi-test`). Imports resolve from disk relative to the document, preferring the
  * text of open (possibly unsaved) documents, confined to the project root;
  * git and https imports come from the cache of `proschi imports sync`.
@@ -12,6 +12,8 @@ import {
   CompletionItemKind,
   DiagnosticSeverity,
   InsertTextFormat,
+  ResponseError,
+  ErrorCodes,
   MarkupKind,
   ProposedFeatures,
   SymbolKind,
@@ -20,9 +22,11 @@ import {
   createConnection,
   type CodeAction,
   type DocumentSymbol,
+  type TextEdit as LspTextEdit,
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
-import { statSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
+import { isAbsolute } from 'node:path';
 import { openApiDiagnostics, watchedFiles } from './openapi/config';
 import {
   analyze,
@@ -32,6 +36,8 @@ import {
   outline,
   quickFix,
   references,
+  rename,
+  renameTarget,
   semanticTokens,
   toRange,
   type Analysis,
@@ -97,6 +103,7 @@ connection.onInitialize(() => ({
     hoverProvider: true,
     definitionProvider: true,
     referencesProvider: true,
+    renameProvider: { prepareProvider: true },
     documentSymbolProvider: true,
     documentLinkProvider: { resolveProvider: false },
     documentFormattingProvider: true,
@@ -232,6 +239,29 @@ connection.onReferences((params) => {
   const doc = documents.get(params.textDocument.uri);
   if (!doc) return [];
   return references(analysisOf(doc), params.position).map((range) => ({ uri: params.textDocument.uri, range }));
+});
+
+connection.onPrepareRename(withDoc(null, (analysis, { position }) => renameTarget(analysis, position)));
+
+/**
+ * Renames in the document; a node declared in an imported file on disk is
+ * renamed there too, with its uses in that file. Other files that import it
+ * are not searched.
+ */
+connection.onRenameRequest((params) => {
+  const doc = documents.get(params.textDocument.uri);
+  if (!doc) return null;
+  const result = rename(analysisOf(doc), params.position, params.newName);
+  if (!result) return null;
+  if ('error' in result) throw new ResponseError(ErrorCodes.InvalidParams, result.error);
+  const changes: Record<string, LspTextEdit[]> = { [params.textDocument.uri]: result.edits };
+  const declared = result.declaredIn;
+  if (declared && isAbsolute(declared.file)) {
+    const text = openText(declared.file) ?? readFileSync(declared.file, 'utf8');
+    const there = rename(analyze(text, { path: declared.file, resolve: fileResolver({ entry: declared.file, read: openText }) }), declared.position, params.newName);
+    if (there && 'edits' in there) changes[uriOf(declared.file)] = there.edits;
+  }
+  return { changes };
 });
 
 const SYMBOL_KIND: Record<OutlineSymbol['kind'], SymbolKind> = {

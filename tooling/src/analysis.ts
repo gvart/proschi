@@ -6,6 +6,7 @@ import {
   addConnection,
   componentCatalog,
   parse,
+  tokenizeLine,
   type Diagnostic,
   type Diagram,
   type DiagramNode,
@@ -359,6 +360,150 @@ export function references(analysis: Analysis, pos: Position): Range[] {
     }
   });
   return out;
+}
+
+type LineToken = ReturnType<typeof tokenizeLine>['tokens'][number];
+
+/** A quoted use case or scenario name in this document, where it is declared or named. */
+interface NameRef {
+  kind: 'usecase' | 'scenario';
+  /** The use case it names or belongs to. */
+  useCase: string;
+  /** A use case: its name. A scenario: its alt names, outermost first. */
+  path: string[];
+  /** 0-based. */
+  line: number;
+  /** Where each name of `path` starts (0-based), when it is written here; an alt header writes only the last. */
+  starts: (number | undefined)[];
+}
+
+/**
+ * Every quoted use case and scenario name in the document: `usecase` and
+ * `alt` headers, the use cases and `mix` of traffic lines, requirements, and
+ * test assertions with their `scenario` names. Names with escapes are left out.
+ */
+function nameRefs(analysis: Analysis): NameRef[] {
+  const out: NameRef[] = [];
+  const blocks = analysis.result.blocks ?? [];
+  const payload = payloadLines(analysis.lines);
+  const str = (t: LineToken | undefined) => (t?.kind === 'string' && t.length === t.value.length + 2 ? t : undefined);
+  const word = (t: LineToken | undefined, w: string) => t?.kind === 'ident' && t.value === w;
+  const add = (kind: NameRef['kind'], useCase: string, path: string[], line: number, starts: (number | undefined)[]) => out.push({ kind, useCase, path, line, starts });
+  const named = (useCase: string, t: LineToken, line: number) => {
+    const path = t.value.split(' › ');
+    let at = t.col;
+    add('scenario', useCase, path, line, path.map((p) => ((at += p.length + 3), at - p.length - 3)));
+  };
+  const scenarioAfter = (useCase: string, tokens: LineToken[], line: number) => {
+    tokens.forEach((t, k) => {
+      const s = word(t, 'scenario') ? str(tokens[k + 1]) : undefined;
+      if (s) named(useCase, s, line);
+    });
+  };
+  type Frame = { kind: 'usecase' | 'alt' | 'other'; name?: string };
+  const frames: Frame[] = [];
+  analysis.lines.forEach((text, line) => {
+    if (payload[line]) return;
+    const tokens = tokenizeLine(text, line + 1).tokens;
+    const block = blocks.find((b) => b.start <= line + 1 && line + 1 <= b.end);
+    if (block) {
+      if (line + 1 === block.start || line + 1 === block.end) return;
+      const [first, second] = tokens;
+      if (block.kind === 'traffic' && str(first)) {
+        add('usecase', first.value, [first.value], line, [first.col]);
+        const mix = tokens.findIndex((t) => word(t, 'mix'));
+        if (mix > 0) tokens.slice(mix + 1).forEach((t) => str(t) && named(first.value, t, line));
+      } else if (block.kind === 'requirements' && first?.kind === 'ident' && USE_CASE_REQUIREMENT.test(`${first.value} `) && str(second)) {
+        add('usecase', second.value, [second.value], line, [second.col]);
+        scenarioAfter(second.value, tokens, line);
+      } else if (block.kind === 'test') {
+        const name = str(first) ?? (word(first, 'in') ? str(second) : undefined);
+        if (name) {
+          add('usecase', name.value, [name.value], line, [name.col]);
+          scenarioAfter(name.value, tokens, line);
+        }
+      }
+      return;
+    }
+    let pending: Frame | undefined;
+    tokens.forEach((t, k) => {
+      if (t.kind === 'lbrace') {
+        frames.push(pending ?? { kind: 'other' });
+        pending = undefined;
+      } else if (t.kind === 'rbrace') frames.pop();
+      else if (k === 0 && frames.length === 0 && word(t, 'usecase') && (tokens[1]?.kind === 'string' || tokens[1]?.kind === 'ident')) {
+        pending = { kind: 'usecase', name: tokens[1].value };
+        if (str(tokens[1])) add('usecase', tokens[1].value, [tokens[1].value], line, [tokens[1].col]);
+      } else if (word(t, 'alt') && frames.length > 0 && frames[0].kind === 'usecase' && (tokens[k + 1]?.kind === 'string' || tokens[k + 1]?.kind === 'ident')) {
+        const name = tokens[k + 1];
+        pending = { kind: 'alt', name: name.value };
+        const path = [...frames.filter((f) => f.kind === 'alt').map((f) => f.name!), name.value];
+        if (str(name)) add('scenario', frames[0].name!, path, line, [...path.slice(1).map(() => undefined), name.col]);
+      }
+    });
+  });
+  return out;
+}
+
+/** The name of `path` under the cursor, with the refs it covers: `path` up to that name. */
+function nameAt(analysis: Analysis, pos: Position): { ref: NameRef; index: number; range: Range } | null {
+  for (const ref of nameRefs(analysis)) {
+    if (ref.line !== pos.line) continue;
+    for (let index = 0; index < ref.path.length; index++) {
+      const start = ref.starts[index];
+      if (start === undefined || pos.character < start || pos.character > start + ref.path[index].length) continue;
+      return { ref, index, range: { start: { line: pos.line, character: start }, end: { line: pos.line, character: start + ref.path[index].length } } };
+    }
+  }
+  return null;
+}
+
+/** Where a rename at `pos` applies and what it changes, or null when nothing renameable is there. */
+export function renameTarget(analysis: Analysis, pos: Position): { range: Range; placeholder: string } | null {
+  const name = nameAt(analysis, pos);
+  if (name) return { range: name.range, placeholder: name.ref.path[name.index] };
+  const hit = nodeAt(analysis, pos);
+  if (!hit || (analysis.lines[pos.line] ?? '')[hit.range.start.character - 1] === '.') return null;
+  return { range: hit.range, placeholder: hit.node.id };
+}
+
+export interface RenameResult {
+  edits: TextEdit[];
+  /** A node declared in an imported file: rename it there too, from this position. */
+  declaredIn?: { file: string; position: Position };
+}
+
+/**
+ * Renames the node id, use case or scenario name at `pos` everywhere this
+ * document uses it. A use case or scenario keeps its references in traffic,
+ * requirements and tests; a scenario's nested names follow it. An error
+ * explains a name that cannot be used.
+ */
+export function rename(analysis: Analysis, pos: Position, newName: string): RenameResult | { error: string } | null {
+  const name = nameAt(analysis, pos);
+  if (name) {
+    if (!newName.trim() || /["\\\n]/.test(newName) || newName.includes(' › ')) return { error: `'${newName}' cannot be a name; leave out quotes, backslashes and ' › '` };
+    const { ref, index } = name;
+    if (ref.kind === 'usecase' && newName !== ref.useCase && analysis.diagram.useCases.some((u) => u.name === newName)) return { error: `There is already a use case named "${newName}"` };
+    const prefix = ref.path.slice(0, index + 1);
+    const edits = nameRefs(analysis)
+      .filter((r) => r.kind === ref.kind && r.useCase === ref.useCase && r.path.length > index && prefix.every((p, i) => r.path[i] === p) && r.starts[index] !== undefined)
+      .map((r) => ({
+        range: { start: { line: r.line, character: r.starts[index]! }, end: { line: r.line, character: r.starts[index]! + prefix[index].length } },
+        newText: newName,
+      }));
+    return { edits };
+  }
+  if (!renameTarget(analysis, pos)) return null;
+  const hit = nodeAt(analysis, pos)!;
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(newName)) return { error: `'${newName}' is not a node id; use letters, digits and _` };
+  if (newName !== hit.node.id && analysis.diagram.nodes.some((n) => n.id === newName)) return { error: `There is already a node '${newName}'` };
+  // `.id` after a system is one of its entry points, not this node.
+  const edits = references(analysis, pos)
+    .filter((r) => (analysis.lines[r.start.line] ?? '')[r.start.character - 1] !== '.')
+    .map((range) => ({ range, newText: newName }));
+  const file = hit.node.loc.file;
+  return file === undefined || hit.node.implicit ? { edits } : { edits, declaredIn: { file, position: toRange(hit.node.loc).start } };
 }
 
 /** Markdown hover text for the node under the cursor. */

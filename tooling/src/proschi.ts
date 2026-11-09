@@ -6,6 +6,7 @@
  */
 export { DID_YOU_MEAN, parse } from '../../frontend/src/dsl/parser';
 export { addConnection } from '../../frontend/src/dsl/edit';
+export { tokenizeLine } from '../../frontend/src/dsl/lexer';
 export { format } from '../../frontend/src/dsl/format';
 export { examples } from '../../frontend/src/dsl/examples';
 export { componentCatalog } from '../../frontend/src/catalog/componentCatalog';

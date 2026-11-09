@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyze, complete, definition, hover, outline, quickFix, references, semanticTokens, toRange, type TextEdit } from '../src/analysis';
+import { analyze, complete, definition, hover, outline, quickFix, references, rename, renameTarget, semanticTokens, toRange, type RenameResult, type TextEdit } from '../src/analysis';
 
 const doc = `title "Shop"
 
@@ -240,7 +240,97 @@ test "Flows" {
   in "Shorten" api calls db
 }
 `;
+const h = analyze(hld);
 const hl = (text: string, from = 0) => hld.split('\n').findIndex((l, i) => i >= from && l.includes(text));
+/** The position of the first character of `text` (or `at` characters into it) on the first line with it. */
+const at = (text: string, offset = 0) => ({ line: hl(text), character: hld.split('\n')[hl(text)].indexOf(text) + offset });
+
+function applyEdits(text: string, edits: TextEdit[]): string {
+  return [...edits].sort((x, y) => y.range.start.line - x.range.start.line || y.range.start.character - x.range.start.character).reduce(applyEdit, text);
+}
+
+describe('rename', () => {
+  it('renames a node id everywhere it is used as a node, but not in strings or labels', () => {
+    expect(renameTarget(h, at('db [PostgreSQL]', 1))).toEqual({ range: { start: { line: 1, character: 0 }, end: { line: 1, character: 2 } }, placeholder: 'db' });
+    const result = rename(h, at('db [PostgreSQL]'), 'store') as RenameResult;
+    const renamed = applyEdits(hld, result.edits);
+    expect(renamed).toContain('store [PostgreSQL]');
+    expect(renamed).toContain('api -> store : SELECT url');
+    expect(renamed).toContain('  store 20k rps');
+    expect(renamed).toContain('in "Shorten" api calls store');
+    expect(renamed).not.toMatch(/\bdb\b/);
+    expect(analyze(renamed).diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+  });
+
+  it('rejects a node id that is invalid or taken', () => {
+    expect(rename(h, at('db [PostgreSQL]'), 'my db')).toEqual({ error: "'my db' is not a node id; use letters, digits and _" });
+    expect(rename(h, at('db [PostgreSQL]'), 'cache')).toEqual({ error: "There is already a node 'cache'" });
+  });
+
+  it('renames a use case in its header, traffic, requirements and tests', () => {
+    const target = renameTarget(h, at('"Shorten" api calls', 3));
+    expect(target).toEqual({ range: { start: { line: hl('in "Shorten"'), character: 6 }, end: { line: hl('in "Shorten"'), character: 13 } }, placeholder: 'Shorten' });
+    const result = rename(h, at('"Shorten" api calls', 3), 'Shorten URL') as RenameResult;
+    expect(result.edits).toHaveLength(3);
+    const renamed = applyEdits(hld, result.edits);
+    expect(renamed).toContain('usecase "Shorten URL" {');
+    expect(renamed).toContain('durable "Shorten URL"');
+    expect(renamed).toContain('in "Shorten URL" api calls db');
+
+    const redirect = applyEdits(hld, (rename(h, at('usecase "Redirect"', 10), 'Go') as RenameResult).edits);
+    expect(redirect).toContain('usecase "Go" {');
+    expect(redirect).toContain('  "Go" 1k rps mix "Cache hit" 90%');
+    expect(redirect).toContain('p99 "Go" scenario "Cache miss"');
+    expect(redirect).toContain('  "Go" has scenario "Cache hit"');
+    expect(analyze(redirect).diagnostics).toEqual([]);
+    expect(rename(h, at('usecase "Redirect"', 10), 'Shorten')).toEqual({ error: 'There is already a use case named "Shorten"' });
+    expect(rename(h, at('usecase "Redirect"', 10), 'a"b')).toMatchObject({ error: expect.stringContaining('cannot be a name') });
+  });
+
+  it("renames a scenario in its alt header and where its use case's traffic, requirements and tests name it", () => {
+    const fromMix = applyEdits(hld, (rename(h, at('"Cache miss" 10%', 2), 'Miss') as RenameResult).edits);
+    expect(fromMix).toContain('} alt "Miss" {');
+    expect(fromMix).toContain('mix "Cache hit" 90%, "Miss" 10%');
+    expect(fromMix).toContain('scenario "Miss" < 100ms');
+    expect(fromMix).toContain('alt "Cache hit" {');
+
+    const fromHeader = applyEdits(hld, (rename(h, at('alt "Cache hit"', 6), 'Hit') as RenameResult).edits);
+    expect(fromHeader).toContain('alt "Hit" {');
+    expect(fromHeader).toContain('mix "Hit" 90%');
+    expect(fromHeader).toContain('has scenario "Hit"');
+    expect(analyze(fromHeader).diagnostics).toEqual([]);
+  });
+
+  it('renames an outer alt inside the full names of its nested scenarios', () => {
+    const src = 'usecase "U" {\n  a -> b\n  alt "A" {\n    alt "X" {\n      b -> c\n    } alt "Y" {\n      b -> d\n    }\n  } alt "B" {\n    b -> e\n  }\n}\ntraffic {\n  "U" 1 rps mix "A › X" 50%, "A › Y" 25%, "B" 25%\n}\n';
+    const s = analyze(src);
+    const pos = { line: 2, character: 8 };
+    expect(renameTarget(s, pos)?.placeholder).toBe('A');
+    const renamed = applyEdits(src, (rename(s, pos, 'Outer') as RenameResult).edits);
+    expect(renamed).toContain('alt "Outer" {');
+    expect(renamed).toContain('mix "Outer › X" 50%, "Outer › Y" 25%, "B" 25%');
+    // A nested name renames only that segment.
+    const inner = applyEdits(src, (rename(s, { line: 13, character: 21 }, 'Z') as RenameResult).edits);
+    expect(inner).toContain('alt "Z" {');
+    expect(inner).toContain('"A › Z" 50%, "A › Y" 25%');
+  });
+
+  it('points at the imported file that declares a node', () => {
+    const src = 'import "infra.proschi"\nusecase "U" {\n  web -> api : GET\n}\n';
+    const s = analyze(src, { resolve: () => ({ path: '/p/infra.proschi', source: 'api [REST API]\n' }) });
+    const result = rename(s, { line: 2, character: 10 }, 'gateway') as RenameResult;
+    expect(result.edits).toEqual([{ range: { start: { line: 2, character: 9 }, end: { line: 2, character: 12 } }, newText: 'gateway' }]);
+    expect(result.declaredIn).toEqual({ file: '/p/infra.proschi', position: { line: 0, character: 0 } });
+  });
+
+  it('has nothing to rename on keywords, labels and free strings', () => {
+    expect(renameTarget(h, at('usecase "Redirect"', 2))).toBeNull();
+    expect(renameTarget(h, at('GET code', 1))).toBeNull();
+    expect(renameTarget(h, at('test "Flows"', 7))).toBeNull();
+    expect(rename(h, at('test "Flows"', 7), 'x')).toBeNull();
+  });
+});
+
 describe('completion of names and capacity parts', () => {
   const labels = (src: string, line: number, character: number) => complete(analyze(src), { line, character }).map((i) => i.label);
 
