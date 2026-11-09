@@ -1,0 +1,21 @@
+frontend/e2e/selection-sync.e2e.ts
+  s_f355061868c346::t_beae9a71622798 77-78
+  s_f355061868c346::t_4ce28c7c084470 21-37,131
+  s_f355061868c346::t_0bfb76140de8e6 146
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c538118dbc2fed12be7bf71a50bed97c7c007c35",
+  "prompts": {},
+  "sessions": {
+    "s_f355061868c346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd556674-4248-429d-bf5c-2b361bc86c62",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
