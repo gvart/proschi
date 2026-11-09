@@ -1,6 +1,8 @@
 import { AlertTriangle, Info, LocateFixed, ShieldAlert } from 'lucide-react';
 import type { Diagram, SourceLoc } from '../../dsl';
+import CostBreakdown from './CostBreakdown';
 import ModelLink from './ModelLink';
+import Queues from './Queues';
 import { HOT, formatAvailability, formatMs, formatPercent, formatRps, formatTraffic, formatUsd, type Analysis, type NodeAnalysis, type TestResult } from '../../sim';
 import { BOTTLENECK_FROM, busiestOf } from '../../sim/overlay';
 import { systemSummaries } from '../Canvas/systemSummary';
@@ -35,7 +37,8 @@ export default function AnalysisPanel(props: AnalysisPanelProps) {
 export function AnalysisBody({ diagram, analysis, onSelect, results, onFocusNode }: AnalysisPanelProps) {
   const byId = new Map(diagram.nodes.map((n) => [n.id, n]));
   const nodes = analysis.nodes.filter((n) => n.kind !== 'client' && n.kind !== 'other');
-  const saturated = nodes.filter((n) => n.saturated).length;
+  // A queue whose consumers fall behind counts too: its backlog grows, as its red badge on the canvas shows.
+  const saturated = nodes.filter((n) => n.saturated || (n.queue !== undefined && n.queue.utilization >= 1)).length;
   const busiest = busiestOf(analysis);
 
   return (
@@ -97,6 +100,7 @@ export function AnalysisBody({ diagram, analysis, onSelect, results, onFocusNode
                           {node && !node.implicit ? node.techStack : n.kind} · {n.kind}
                           {n.durable ? ' · durable' : ''}
                           {n.consistency ? ` · ${n.consistency}` : ''}
+                          {n.retry ? ` · ${formatPercent(n.retry.errorRate)} errors${n.retry.retries ? `, ${n.retry.retries} ${n.retry.retries === 1 ? 'retry' : 'retries'}` : ''}` : ''}
                         </span>
                       </button>
                       {onFocusNode && <ShowOnCanvas id={n.id} onFocusNode={onFocusNode} />}
@@ -139,6 +143,10 @@ export function AnalysisBody({ diagram, analysis, onSelect, results, onFocusNode
           </table>
         </div>
       </section>
+
+      <Queues analysis={analysis} />
+
+      <CostBreakdown diagram={diagram} analysis={analysis} />
 
       <section>
         <h2 className="mb-1 font-semibold text-ink">Use cases</h2>

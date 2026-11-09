@@ -5,6 +5,7 @@ import {
   KEYWORDS,
   addConnection,
   componentCatalog,
+  costBreakdown,
   findUseCase,
   formatAvailability,
   formatMs,
@@ -25,7 +26,7 @@ import {
   type ParseResult,
   type SourceLoc,
 } from './proschi';
-import { nodeSimulation, resultsOf, simulationOf, verdict, whatIfsOf } from './simulation';
+import { nodeSimulation, queueText, resultsOf, simulationOf, verdict, whatIfsOf } from './simulation';
 
 /** 0-based position, as LSP uses. */
 export interface Position {
@@ -266,6 +267,10 @@ export function complete(analysis: Analysis, pos: Position): CompletionItem[] {
     return (analysis.diagram.constants ?? []).map((c) => ({ label: c.name, kind: 'constant' as const, detail: `${c.text} · ${kindName(c.unit)}`, range }));
   }
 
+  if (sectionAt(analysis, pos.line) === 'requirements') {
+    const scoped = costScopeCompletions(analysis, before, pos);
+    if (scoped) return scoped;
+  }
   const word = before.match(/[A-Za-z_]\w*$/)?.[0] ?? '';
   const range = { start: { line: pos.line, character: pos.character - word.length }, end: pos };
   const atLineStart = /^\s*(\}\s*)?$/.test(before.slice(0, before.length - word.length));
@@ -299,7 +304,7 @@ export function complete(analysis: Analysis, pos: Position): CompletionItem[] {
 }
 
 const PERCENTILE = 'p50|p90|p95|p99|p999';
-const USE_CASE_REQUIREMENT = new RegExp(`^\\s*(?:${PERCENTILE}|availability|durable)\\s+$`);
+const USE_CASE_REQUIREMENT = new RegExp(`^\\s*(?:${PERCENTILE}|availability|durable|lag)\\s+$`);
 const SCENARIO_REQUIREMENT = new RegExp(`^\\s*(?:${PERCENTILE})\\s+"([^"]*)"\\s+scenario\\s+$`);
 
 /**
@@ -344,9 +349,33 @@ function capacityCompletions(analysis: Analysis, head: string, range: Range): Co
   if (/^\s*$/.test(head)) return analysis.diagram.nodes.map((n) => ({ label: n.id, kind: 'node', detail: describeNode(n), range }));
   const value = head.match(/\b(size|consistency)\s+$/)?.[1];
   if (value) return (value === 'size' ? ['S', 'M', 'L'] : ['strong', 'eventual']).map((label) => ({ label, kind: 'keyword', range }));
-  if (/\b(latency|availability|cost|timeout|reads|writes|shards|bandwidth|egress|hit)\s+$/.test(head)) return [];
+  if (/\b(latency|availability|cost|timeout|reads|writes|shards|bandwidth|egress|hit|errors|retries|drain)\s+$/.test(head)) return [];
   const used = new Set(head.trim().split(/\s+/));
   return CAPACITY_PARTS.filter((p) => !used.has(p.label)).map((p) => ({ label: p.label, kind: 'keyword', detail: p.detail, snippet: p.snippet, range }));
+}
+
+/**
+ * After `cost` in requirements: the teams (`@Payments`), the tags (`.edge`)
+ * and `group`; after `cost group`, the group ids. Null elsewhere.
+ */
+function costScopeCompletions(analysis: Analysis, before: string, pos: Position): CompletionItem[] | null {
+  const { nodes } = analysis.diagram;
+  const group = before.match(/^\s*cost\s+group\s+(\w*)$/);
+  if (group) {
+    const range = { start: { line: pos.line, character: pos.character - group[1].length }, end: pos };
+    return nodes.filter((n) => n.kind === 'group').map((n) => ({ label: n.id, kind: 'node' as const, detail: n.name !== n.id ? n.name : 'group', range }));
+  }
+  const scope = before.match(/^\s*cost\s+([@.]?[\w-]*)$/);
+  if (!scope) return null;
+  const range = { start: { line: pos.line, character: pos.character - scope[1].length }, end: pos };
+  const teams = [...new Set(nodes.map((n) => n.ownerTeam).filter((t): t is string => t !== undefined))];
+  const tags = [...new Set(nodes.map((n) => n.tag).filter((t): t is string => t !== undefined))];
+  return [
+    ...teams.map((t) => ({ label: `@${t}`, kind: 'keyword' as const, detail: 'Budget for what the team owns', snippet: `@${t} <= \${1:500} usd/month`, range })),
+    ...tags.map((t) => ({ label: `.${t}`, kind: 'keyword' as const, detail: 'Budget for the nodes with the tag', snippet: `.${t} <= \${1:500} usd/month`, range })),
+    { label: 'group', kind: 'keyword' as const, detail: 'Budget for the nodes inside a group', snippet: 'group ${1:id} <= ${2:500} usd/month', range },
+    { label: '<=', kind: 'keyword' as const, detail: 'Budget for the whole design', snippet: '<= ${1:3000} usd/month', range },
+  ];
 }
 
 const RATE = String.raw`\S+(?:\s+(?:rps|rpm|rpd))?`;
@@ -692,6 +721,8 @@ export function hover(analysis: Analysis, pos: Position): { markdown: string; ra
     if (Number.isFinite(u.percentiles.p99)) lines.push('', `p99 ${formatMs(u.percentiles.p99)} · availability ${formatAvailability(u.availability)}`);
     return { markdown: lines.join('\n'), range: name.range };
   }
+  const team = teamAt(analysis, pos);
+  if (team) return teamHover(analysis, team.team, team.range);
   const hit = nodeAt(analysis, pos);
   if (!hit) return null;
   const n = hit.node;
@@ -711,6 +742,34 @@ export function hover(analysis: Analysis, pos: Position): { markdown: string; ra
   const load = nodeSimulation(analysis.diagram, n.id);
   if (load) lines.push('', load);
   return { markdown: lines.join('\n'), range: hit.range };
+}
+
+/** The `@team` under the cursor, outside labels and strings, with its range (the `@` included). */
+export function teamAt(analysis: Analysis, pos: Position): { team: string; range: Range } | null {
+  if (insidePayload(analysis.lines, pos.line)) return null;
+  for (const t of tokenizeLine(analysis.lines[pos.line] ?? '', pos.line + 1).tokens) {
+    if (t.kind !== 'team' || pos.character < t.col - 1 || pos.character > t.col - 1 + t.length) continue;
+    return { team: t.value, range: { start: { line: pos.line, character: t.col - 1 }, end: { line: pos.line, character: t.col - 1 + t.length } } };
+  }
+  return null;
+}
+
+/** A team's nodes and, with traffic, what they cost a month against its budget. */
+function teamHover(analysis: Analysis, team: string, range: Range): { markdown: string; range: Range } {
+  const { diagram } = analysis;
+  const owned = diagram.nodes.filter((n) => n.ownerTeam === team);
+  const lines = [`**@${team}** · team`, '', owned.length ? `Owns ${owned.map((n) => `\`${n.id}\``).join(', ')}` : '_Owns no node in this design._'];
+  if ((diagram.traffic ?? []).length > 0 && owned.length) {
+    const sim = simulationOf(diagram);
+    const share = costBreakdown(diagram, sim).teams.find((t) => t.id === `@${team}`);
+    if (share) {
+      const of = sim.totalCostUsd > 0 ? ` (${formatPercent(share.costUsd / sim.totalCostUsd)} of ${formatUsd(sim.totalCostUsd)})` : '';
+      lines.push('', `Costs ${formatUsd(share.costUsd)}${of}`);
+      const budget = (diagram.requirements ?? []).find((r) => r.kind === 'cost' && r.scope && 'team' in r.scope && r.scope.team === team);
+      if (budget?.kind === 'cost') lines.push('', `Budget ${formatUsd(budget.maxUsdPerMonth)}: ${share.costUsd <= budget.maxUsdPerMonth ? 'within it' : '**over it**'}`);
+    }
+  }
+  return { markdown: lines.join('\n'), range };
 }
 
 export interface OutlineSymbol {
@@ -924,7 +983,7 @@ export function inlayHints(analysis: Analysis, range?: Range): InlayHint[] {
     return [
       {
         position: { line, character: (lines[line] ?? '').trimEnd().length },
-        label: `${formatPercent(n.utilization)}${n.saturated ? ' saturated' : ''} · ${perMonth(n.costUsd)}`,
+        label: `${formatPercent(n.utilization)}${n.saturated ? ' saturated' : ''} · ${perMonth(n.costUsd)}${n.queue ? ` · ${queueText(n.queue)}` : ''}`,
         saturated: n.saturated,
         tooltip: nodeSimulation(diagram, node.id),
       },

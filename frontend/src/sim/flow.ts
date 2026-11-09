@@ -47,6 +47,8 @@ export interface Hop {
   failed: boolean;
   /** `->>`: only the send counts, not what the receiver does next. */
   async: boolean;
+  /** Set by `retryVariants` (sim/analyze.ts): the attempts this hop takes in a retry variant. Absent means one. */
+  attempts?: number;
 }
 
 /**

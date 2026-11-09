@@ -49,14 +49,18 @@ requirement  = percentile , [ string , [ "scenario" , string ] ] , "<" , quantit
              | "availability" , [ string ] , ">=" , quantity
              | "durable" , string
              | "survive" , ( "any" , "node" , "failure" | "failure" , "of" , selector )
-             | "cost" , "<=" , quantity ;
+             | "cost" , [ cost-scope ] , "<=" , quantity
+             | "lag" , string , "<" , quantity ;        (* the consumer lag of the queues the use case sends to *)
+cost-scope   = team | tag | "group" , id ;              (* a budget for a team's, a tag's or a group's nodes *)
 percentile   = "p50" | "p90" | "p95" | "p99" | "p999" ;
 capacity     = "capacity" , "{" , { id , { capacity-part } } , "}" ;
 capacity-part = quantity | "reads" , quantity | "writes" , quantity | "shards" , integer | "size" , ( "S" | "M" | "L" )
              | "latency" , quantity | "availability" , quantity | "cost" , quantity
              | "durable" | "volatile" | "consistency" , ( "strong" | "eventual" )
              | "bandwidth" , quantity | "egress" , quantity | "timeout" , quantity
-             | "hit" , quantity ;                       (* hit 90%: a cache's hit rate *)
+             | "hit" , quantity                         (* hit 90%: a cache's hit rate *)
+             | "errors" , quantity | "retries" , integer   (* errors 2% retries 3: partial failure, 0 to 5 retries *)
+             | "drain" , quantity ;                     (* drain 5k rps: how fast a queue's consumers take messages *)
 entity       = "entity" , id , [ "in" , id ] , [ string ] , "{" , { id , id , { flag } } , "}" ;
 flag         = "key" | "index" | "unique" | "optional" ;
 decision     = "decision" , string , ( "because" , string
@@ -76,7 +80,8 @@ whatif       = "whatif" , string , "{" , { whatif-change } , "}" ;
 whatif-change = "traffic" , string , ( replicas | quantity )   (* x3 or x1.5 multiplies, 50k rps sets *)
              | "fail" , id
              | id , replicas
-             | id , "hit" , quantity ;                  (* cache hit 40%: a cold cache *)
+             | id , "hit" , quantity                    (* cache hit 40%: a cold cache *)
+             | id , "errors" , quantity ;               (* pay errors 20%: a bad deploy *)
 selector     = selector-atom , { "or" , selector-atom } ;
 selector-atom = id | tech | "any" , kind | "any" , ( "strong" | "eventual" ) , "store" ;
 kind         = "client" | "edge" | "cdn" | "loadbalancer" | "gateway" | "dns"

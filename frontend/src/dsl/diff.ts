@@ -193,7 +193,9 @@ export function requirementKey(r: Requirement): string {
     case 'survive':
       return `survive ${canonical(r.target)}`;
     case 'cost':
-      return 'cost';
+      return r.scope ? `cost ${'team' in r.scope ? `@${r.scope.team}` : 'tag' in r.scope ? `.${r.scope.tag}` : `group ${r.scope.group}`}` : 'cost';
+    case 'lag':
+      return `lag ${r.useCase}`;
   }
 }
 
@@ -205,6 +207,8 @@ function requirementFields(r: Requirement): Record<string, unknown> {
       return { minPercent: r.minPercent };
     case 'cost':
       return { maxUsdPerMonth: r.maxUsdPerMonth };
+    case 'lag':
+      return { maxMs: r.maxMs };
     default:
       return {};
   }

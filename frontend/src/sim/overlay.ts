@@ -21,6 +21,10 @@ export interface NodeOverlay {
   size?: string;
   /** The most utilised node, or one past 100%: the first to give way as traffic grows. */
   bottleneck?: boolean;
+  /** A queue with a `drain` rate whose consumers fall behind: messages the backlog grows by per hour. */
+  backlogPerHour?: number;
+  /** A queue with a `drain` rate whose consumers keep up: the mean wait before one takes a message. */
+  lagMs?: number;
 }
 
 export interface FlowOverlay {
@@ -118,8 +122,11 @@ export function analysisOverlay(diagram: Diagram, analysis: Analysis): SimOverla
   for (const n of analysis.nodes) {
     latency.set(n.id, n.latencyMs);
     if (n.failed) failed.add(n.id);
+    // A queue with consumers is as busy as the busier of the broker and its consumers, so the badge shows a backlog.
+    const busy = n.queue ? Math.max(n.utilization, Math.min(n.queue.utilization, 9.99)) : n.utilization;
     nodes[n.id] = {
-      ...(works(n) ? { utilization: n.utilization, saturated: n.saturated } : {}),
+      ...(works(n) ? { utilization: busy, saturated: n.saturated || busy >= 1 } : {}),
+      ...(n.queue ? (n.queue.backlogPerHour > 0 ? { backlogPerHour: n.queue.backlogPerHour } : { lagMs: n.queue.lagMs }) : {}),
       ...(n.replicas > 1 ? { replicas: n.replicas } : {}),
       ...(n.shards > 1 ? { shards: n.shards } : {}),
       ...(bottlenecks.has(n.id) ? { bottleneck: true } : {}),

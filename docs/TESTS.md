@@ -65,6 +65,8 @@ requirements {
   survive any node failure
   survive failure of cache    # a node id, [Tech], or any <kind>
   cost <= 3000 usd/month
+  cost @Payments <= 500 usd/month   # a team, .tag or group id
+  lag "Place order" < 30s           # queues with a drain rate
 }
 ```
 
@@ -75,9 +77,68 @@ requirements {
 | Durability: `durable "U"` | Every success scenario writes to a durable store, synchronously, before the first request is answered. |
 | Failures: `survive any node failure` | After losing any one node instance, nothing saturates and every latency target that held still holds. `survive failure of` a [selector](#selectors-and-kinds) checks only those nodes. |
 | Budget: `cost <= 3000 usd/month` | Replicas plus egress cost at most that much. |
+| Lag: `lag "U" < 30s` | The queues U sends to that have a [drain rate](HLD.md#queue-backlog-and-lag) keep up, and a message waits less than that in the slowest of them. |
+| Scoped budget: `cost @Payments <= 500 usd/month` | The nodes the team owns cost at most that much. `cost .edge` covers the nodes with the tag, and the nodes inside a group with it; `cost group checkout` the nodes inside the group. See [budgets per team](#budgets-per-team-group-or-tag). |
 
 Requirements need [traffic](HLD.md#traffic): a use case without traffic is
 not measured.
+
+### Budgets per team, group or tag
+
+A total budget says what the design may cost. A scoped one says who pays:
+the team that owns a node (`@Payments` after its name), a legend tag, or a
+group. The *Results* tab splits the cost the same three ways, and
+`proschi analyze` prints a line for each.
+
+```proschi
+title "Checkout"
+
+legend {
+  edge "At the edge" blue
+}
+
+user [Browser]
+group checkout "Checkout" .edge {
+  api "Checkout API" [REST API] @Payments x3
+  pay "Payments"     [Go]       @Payments x2
+}
+db    "Orders"   [PostgreSQL] @Data x2
+cache "Sessions" [Redis]
+
+user -> api
+api  -> pay
+api  -> cache
+pay  -> db
+
+usecase "Pay" {
+  user -> api   : POST /checkout
+  api  -> cache : GET session
+  api  -> pay   : charge
+  pay  -> db    : INSERT payment
+  api --> user  : 201
+}
+
+traffic {
+  "Pay" 500 rps
+}
+
+requirements {
+  cost @Payments <= 400 usd/month
+  cost group checkout <= 600 usd/month
+  cost <= 1500 usd/month
+}
+```
+
+> **Try it:** the Payments budget fails: its five replicas cost $500, over
+> its $400. Change `x3` on `api` to `x2` and it fits.
+
+- A node counts for its own team, for every group it is inside (nested
+  groups too), and for its own tag and its groups' tags. A node with no team
+  is listed as *No team*.
+- A budget that covers no node is a warning: an unknown team, tag or group.
+  Write the team as `@Payments`, without quotes.
+- Hover a team in an editor with the language server to see what it owns
+  and costs, and whether it is within its budget.
 
 ## Tests
 
@@ -189,6 +250,7 @@ whatif "Database outage" {
 | `fail n` | Takes node `n` down. Its availability is 0. The traffic of each scenario that needs `n` moves to the use case's [fallback scenarios](SCENARIOS.md#error-paths-and-conditions) for it, the ones that call it with `-x` and still complete. Without a fallback, that share of requests fails. |
 | `n x4` | Runs `n` with that many replicas, for capacity, availability and cost. |
 | `cache hit 40%` | Sets the [hit rate](HLD.md#cache-hit-rate) of a cache, such as a cold one after a restart. |
+| `pay errors 20%` | Sets the [error rate](HLD.md#retries-and-partial-failure) of a node, such as after a bad deploy. Its `retries` stay. |
 
 [Constants](HLD.md#constants) work here too: `traffic "U" $rate`,
 `traffic "U" x$factor` and `n x$fleet`.

@@ -12,6 +12,7 @@ import type {
   Assertion,
   BlockSpan,
   CapacityOverride,
+  CostScope,
   Constant,
   Decision,
   Diagnostic,
@@ -159,7 +160,9 @@ const UNIT_EXAMPLES: Record<Quantity['unit'], string> = {
   MBps: 'a bandwidth, e.g. 500 MB/s or 1 GB/s',
   'usd/GB': 'a price per gigabyte, e.g. 0.05 usd/GB',
 };
-const CAPACITY_PARTS = 'a rate, reads, writes, shards, size, latency, availability, cost, durable or volatile, consistency, bandwidth, egress, timeout or hit';
+const CAPACITY_PARTS = 'a rate, reads, writes, shards, size, latency, availability, cost, durable or volatile, consistency, bandwidth, egress, timeout, hit, errors, retries or drain';
+/** The most retries a capacity line takes: more only multiplies the variants, not the insight. */
+const MAX_RETRIES = 5;
 const ASSERTION_HELP =
   'Expected an assertion: "Use case" calls <node>, "Use case" writes <node> before responding, <node> calls <node>, no path from <node> to <node>, <node> has replicas >= 2, …';
 const ASSERTION_VERBS = 'calls, every scenario calls, never calls, never waits for, writes, responds, starts at, has scenario or handles failure of';
@@ -1627,6 +1630,19 @@ class Parser {
         commit({ kind: 'availability', ...withUseCase(), minPercent, loc });
         return;
       }
+      case 'lag': {
+        // `lag "Use case" < 30s`: the consumer lag of the queues the use case sends to.
+        readUseCase();
+        if (!useCase) {
+          this.error('Expected a use case name in quotes, e.g. lag "Place order" < 30s', this.locOf(tokens[1] ?? first, line));
+          return;
+        }
+        if (!this.expectOp(tokens, i, ['<', '<='], 'lag "Use case" < 30s', line)) return;
+        const maxMs = this.quantityOf(tokens[i + 1], 'ms', tokens[i], line);
+        if (maxMs === undefined || !this.expectEnd(tokens, i + 2, line)) return;
+        commit({ kind: 'lag', useCase: useCase.name, maxMs, loc });
+        return;
+      }
       case 'durable':
         readUseCase();
         if (!useCase) {
@@ -1652,15 +1668,57 @@ class Parser {
         return;
       }
       case 'cost': {
-        if (!this.expectOp(tokens, 1, ['<=', '<'], 'cost <= 3000 usd/month', line)) return;
-        const maxUsdPerMonth = this.quantityOf(tokens[2], 'usd/month', tokens[1], line);
-        if (maxUsdPerMonth === undefined || !this.expectEnd(tokens, 3, line)) return;
-        commit({ kind: 'cost', maxUsdPerMonth, loc });
+        // `cost @Payments <= …`, `cost .edge <= …`, `cost group checkout <= …`: a budget for part of the design.
+        const scoped = this.parseCostScope(tokens, line);
+        if (!scoped) return;
+        const at = scoped.next;
+        if (!this.expectOp(tokens, at, ['<=', '<'], scoped.scope ? 'cost @Payments <= 500 usd/month' : 'cost <= 3000 usd/month', line)) return;
+        const maxUsdPerMonth = this.quantityOf(tokens[at + 1], 'usd/month', tokens[at], line);
+        if (maxUsdPerMonth === undefined || !this.expectEnd(tokens, at + 2, line)) return;
+        commit({ kind: 'cost', maxUsdPerMonth, ...(scoped.scope ? { scope: scoped.scope } : {}), loc });
+        if (scoped.scope) this.checkCostScope(scoped.scope, this.locOf(tokens[at - 1], line));
         return;
       }
       default:
         this.error(`Unknown requirement '${word}'. ${help}`, this.locOf(first, line));
     }
+  }
+
+  /** What follows `cost` before its operator: nothing, `@team`, `.tag` or `group <id>`; the index after it. */
+  private parseCostScope(tokens: Token[], line: number): { scope?: CostScope; next: number } | undefined {
+    const t = tokens[1];
+    if (t?.kind === 'team') return { scope: { team: t.value }, next: 2 };
+    if (t?.kind === 'tag') return { scope: { tag: t.value }, next: 2 };
+    if (isWord(t, 'group')) {
+      const id = tokens[2];
+      if (id?.kind !== 'ident') {
+        this.error('Expected a group id after group, e.g. cost group checkout <= 500 usd/month', this.locOf(id ?? t, line));
+        return undefined;
+      }
+      return { scope: { group: id.value }, next: 3 };
+    }
+    if (t?.kind === 'string') {
+      const name = t.value.replace(/^@/, '');
+      this.error(`A budget names a team as @${name}, a tag as .${name} or a group as group ${name}, without quotes`, this.locOf(t, line));
+      return undefined;
+    }
+    return { next: 1 };
+  }
+
+  /** A scoped budget that covers no node is a warning: an unknown team, tag or group. */
+  private checkCostScope(scope: CostScope, loc: SourceLoc) {
+    this.deferred.push(() => {
+      const nodes = [...this.nodes.values()];
+      if ('team' in scope) {
+        if (!nodes.some((n) => n.ownerTeam === scope.team)) this.warning(`No node is owned by @${scope.team}; give nodes the team with @${scope.team} after their name`, loc);
+      } else if ('tag' in scope) {
+        if (!nodes.some((n) => n.tag === scope.tag)) this.warning(`No node or group has the tag .${scope.tag}`, loc);
+      } else {
+        const group = this.nodes.get(scope.group);
+        if (!group) this.warning(`Unknown group '${scope.group}'`, loc);
+        else if (group.kind !== 'group') this.warning(`'${scope.group}' is not a group; a budget covers a team (@team), a tag (.tag) or a group (group <id>)`, loc);
+      }
+    });
   }
 
   /** `db 20k rps latency 4ms availability 99.95% cost 400 usd/month durable`, parts in any order. */
@@ -1673,6 +1731,7 @@ class Parser {
     const override: CapacityOverride = { node: id.value, loc: this.lineLoc(tokens, line) };
     const seen = new Set<string>();
     let hitLoc: SourceLoc | undefined;
+    let drainLoc: SourceLoc | undefined;
     for (let i = 1; i < tokens.length; ) {
       const t = tokens[i];
       let part: string;
@@ -1703,6 +1762,36 @@ class Parser {
         }
         override.hitPercent = value;
         hitLoc = this.locOf(t, line);
+        i += 2;
+      } else if (isWord(t, 'errors')) {
+        // A partial failure: the share of calls that fail.
+        part = 'errors';
+        const value = this.quantityOf(tokens[i + 1], '%', t, line);
+        if (value === undefined) return;
+        if (value > 100) {
+          this.error('An error rate cannot be more than 100%', this.locOf(tokens[i + 1], line));
+          return;
+        }
+        override.errorPercent = value;
+        i += 2;
+      } else if (isWord(t, 'drain')) {
+        // How fast a queue's consumers take messages off it.
+        part = 'drain';
+        const value = this.quantityOf(tokens[i + 1], 'rps', t, line);
+        if (value === undefined) return;
+        override.drainRps = value;
+        drainLoc = this.locOf(t, line);
+        i += 2;
+      } else if (isWord(t, 'retries')) {
+        part = 'retries';
+        const n = tokens[i + 1];
+        const retries = isConstUse(n) ? this.countOf(n!, line) : n?.kind === 'number' ? Number(n.value) : NaN;
+        if (retries === undefined) return;
+        if (!Number.isInteger(retries) || retries < 0 || retries > MAX_RETRIES) {
+          this.error(`Expected a whole number of retries from 0 to ${MAX_RETRIES}, e.g. retries 3`, this.locOf(n ?? t, line));
+          return;
+        }
+        override.retries = retries;
         i += 2;
       } else if (isWord(t, 'durable') || isWord(t, 'volatile')) {
         part = 'durable or volatile';
@@ -1797,6 +1886,7 @@ class Parser {
       if (storeOnly.length && !isDataStore(kindOf(node)))
         this.warning(`'${id.value}' is not a data store (${DATA_STORE_KINDS.join(', ')}); ${storeOnly.join(' and ')} only apply to data stores`, idLoc);
       if (hitLoc) this.checkHitRate(node, override.hitPercent!, hitLoc);
+      if (drainLoc && !['queue', 'broker'].includes(kindOf(node))) this.warning(`'${id.value}' is not a queue or broker; a drain rate only means something for one`, drainLoc);
     });
   }
 
@@ -1990,7 +2080,7 @@ class Parser {
   private parseWhatIfLine(whatif: WhatIf, tokens: Token[], line: number) {
     const [first, second, third] = tokens;
     const loc = this.lineLoc(tokens, line);
-    const help = 'Expected a what-if change: traffic "Use case" x3, traffic "Use case" 50k rps, fail <node>, <node> x4 or <node> hit 40%';
+    const help = 'Expected a what-if change: traffic "Use case" x3, traffic "Use case" 50k rps, fail <node>, <node> x4, <node> hit 40% or <node> errors 20%';
     const checkNode = (id: Token) => {
       const idLoc = this.locOf(id, line);
       this.deferred.push(() => {
@@ -2035,6 +2125,22 @@ class Parser {
       }
       checkNode(first);
       whatif.changes.push({ kind: 'hit', node: first.value, percent, loc });
+      return;
+    }
+    // `<node> errors 20%`: a partial failure, such as a bad deploy.
+    if (first.kind === 'ident' && isWord(second, 'errors') && tokens.length > 2) {
+      const percent = this.quantityOf(third, '%', second, line);
+      if (percent === undefined || !this.expectEnd(tokens, 3, line)) return;
+      if (percent > 100) {
+        this.error('An error rate cannot be more than 100%', this.locOf(third, line));
+        return;
+      }
+      if (whatif.changes.some((c) => c.kind === 'errors' && c.node === first.value)) {
+        this.error(`The error rate of '${first.value}' is set twice in this what-if`, this.locOf(first, line));
+        return;
+      }
+      checkNode(first);
+      whatif.changes.push({ kind: 'errors', node: first.value, percent, loc });
       return;
     }
     if (isWord(first, 'fail')) {

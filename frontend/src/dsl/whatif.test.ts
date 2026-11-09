@@ -118,7 +118,7 @@ group g {
       ['error', 20, "Replicas of 'cache' are set twice in this what-if"],
       ['error', 22, "'api' fails twice in this what-if"],
       ['error', 24, "Traffic of 'Read' is changed twice in this what-if"],
-      ['error', 25, 'Expected a what-if change: traffic "Use case" x3, traffic "Use case" 50k rps, fail <node>, <node> x4 or <node> hit 40%'],
+      ['error', 25, 'Expected a what-if change: traffic "Use case" x3, traffic "Use case" 50k rps, fail <node>, <node> x4, <node> hit 40% or <node> errors 20%'],
       ['error', 27, "Duplicate what-if 'W' (first on line 14)"],
       ['error', 30, 'whatif is only allowed at the top level'],
     ]);

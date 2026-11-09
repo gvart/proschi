@@ -2,7 +2,7 @@ import type { Diagram, DiagramNode, DiagramStep, DiagramUseCase, Kind, Percentil
 import { kindOf as nodeKind } from '../dsl/kinds';
 import { accessIn } from './access';
 import { criticalPath, fallbacksFor, findScenario, findUseCase, needs, pathNodes, type Hop } from './flow';
-import { formatPercent, formatRps } from './format';
+import { formatCount, formatPercent, formatRps } from './format';
 import { capacityOf, combinedUtilization, profileOf, type Profile } from './profiles';
 import { analyzeSystems, type SharedSystemLoad, type SystemAnalysis } from './systems';
 
@@ -81,6 +81,51 @@ export interface NodeAnalysis {
   durable: boolean;
   /** Down in a what-if (`AnalyzeOptions.failed`): its availability is 0. Absent otherwise. */
   failed?: true;
+  /**
+   * `capacity { n errors 2% retries 3 }` (or a what-if's `n errors 20%`):
+   * the error rate of one call, 0..1, the retries a caller makes, the calls
+   * each request makes on average (`Σ e^k` for k = 0..retries, in `loadRps`
+   * already) and the chance that a call succeeds in the end
+   * (`1 − e^(retries + 1)`, in the use cases' availability). Absent without an
+   * error rate.
+   */
+  retry?: RetryAnalysis;
+  /** A queue or broker with a `drain` rate: its backlog and consumer lag. Absent otherwise. */
+  queue?: QueueAnalysis;
+}
+
+export interface RetryAnalysis {
+  errorRate: number;
+  retries: number;
+  attempts: number;
+  success: number;
+  /** Hot (`HOT` or more) with retries: saturation raises the error rate, and each failure comes back up to `retries` more times. */
+  stormRisk: boolean;
+}
+
+/**
+ * A queue or broker with consumers (`capacity { events drain 5k rps }`):
+ * what flows in (every request to it, `loadRps`), what the consumers take
+ * off, and what that leads to. With more inflow than drain the backlog
+ * grows; otherwise a message waits the M/M/1 queueing delay of a consumer
+ * pool that drains at `drainRps`.
+ */
+export interface QueueAnalysis {
+  inflowRps: number;
+  drainRps: number;
+  /** `inflowRps ÷ drainRps`; at 1 or more the backlog grows. */
+  utilization: number;
+  /** Messages the backlog grows by per hour, `(inflow − drain) × 3600`; 0 while the consumers keep up. */
+  backlogPerHour: number;
+  /** The mean wait before a consumer takes a message, `ρ ÷ (drain − inflow)`; Infinity while the backlog grows. */
+  lagMs: number;
+}
+
+/** The backlog and lag of a queue with `inflow` requests per second and consumers that drain `drain`. */
+export function queueOf(inflow: number, drain: number): QueueAnalysis {
+  const utilization = drain > 0 ? inflow / drain : inflow > 0 ? Infinity : 0;
+  if (inflow >= drain && inflow > 0) return { inflowRps: inflow, drainRps: drain, utilization, backlogPerHour: (inflow - drain) * 3600, lagMs: Infinity };
+  return { inflowRps: inflow, drainRps: drain, utilization, backlogPerHour: 0, lagMs: drain > 0 ? (utilization / (drain - inflow)) * 1000 : 0 };
 }
 
 export type Percentiles = Record<'p50' | 'p90' | 'p95' | 'p99' | 'p999', number>;
@@ -150,6 +195,8 @@ export interface AnalyzeOptions {
   failed?: ReadonlySet<string>;
   /** Cache hit rates (0..100) to use instead of `capacity { n hit … }`, by node id (a what-if's `cache hit 40%`). */
   hitRates?: ReadonlyMap<string, number>;
+  /** Error rates (0..100) to use instead of `capacity { n errors … }`, by node id (a what-if's `pay errors 20%`). */
+  errorRates?: ReadonlyMap<string, number>;
   /** Internal: the load on every team design of the document being analysed (sim/systems.ts), passed to the team designs' own analyses. */
   sharedSystems?: SharedSystemLoad;
 }
@@ -198,6 +245,8 @@ export interface UseCaseTraffic {
   lookups?: CacheLookup[][];
   /** With failed nodes: the share of requests whose scenario needs a failed node and has no fallback, 0..1. Absent otherwise. */
   stranded?: number;
+  /** Steps to a node with an error rate and retries, with the calls each makes on average (`attempts`). Absent without error rates. */
+  retry?: Map<DiagramStep, number>;
 }
 
 /**
@@ -259,6 +308,14 @@ export function trafficFor(diagram: Diagram, options: AnalyzeOptions = {}, warni
       if (miss.size) traffic.set(u.id, { ...traffic.get(u.id)!, miss, lookups });
     }
   }
+  const retries = retriesOf(diagram, options);
+  if (retries.size) {
+    for (const u of diagram.useCases) {
+      const retry = new Map<DiagramStep, number>();
+      for (const s of u.scenarios) for (const step of s.steps) if (!step.failed && retries.has(step.toServiceId)) retry.set(step, retries.get(step.toServiceId)!.attempts);
+      if (retry.size) traffic.set(u.id, { ...traffic.get(u.id)!, retry });
+    }
+  }
   const failed = options.failed;
   if (!failed?.size) return traffic;
   for (const u of diagram.useCases) {
@@ -293,6 +350,82 @@ function hitRatesOf(diagram: Diagram, options: AnalyzeOptions): Map<string, numb
   for (const [id, percent] of options.hitRates ?? []) hits.set(id, percent);
   return hits;
 }
+
+/** A node's error rate (0..1) and retries, with what they lead to; see `RetryAnalysis`. */
+export interface Retry {
+  errorRate: number;
+  retries: number;
+  attempts: number;
+  success: number;
+}
+
+/** `Σ e^k` for k = 0..retries: the calls a request makes on average when each fails with probability e. */
+export const expectedAttempts = (e: number, retries: number): number => {
+  let sum = 0;
+  for (let k = 0; k <= retries; k++) sum += e ** k;
+  return sum;
+};
+
+/**
+ * Error rates and retries by node: `capacity { n errors … retries … }`, with
+ * the what-if's `errorRates` on top. Only nodes with an error rate; a what-if
+ * error rate on a node without `retries` has none.
+ */
+export function retriesOf(diagram: Diagram, options: AnalyzeOptions = {}): Map<string, Retry> {
+  const out = new Map<string, Retry>();
+  const set = (id: string, percent: number, retries: number) => {
+    const e = Math.min(100, Math.max(0, percent)) / 100;
+    out.set(id, { errorRate: e, retries, attempts: expectedAttempts(e, retries), success: 1 - e ** (retries + 1) });
+  };
+  const declared = new Map((diagram.capacity ?? []).map((o) => [o.node, o]));
+  for (const o of diagram.capacity ?? []) if (o.errorPercent !== undefined) set(o.node, o.errorPercent, o.retries ?? 0);
+  for (const [id, percent] of options.errorRates ?? []) set(id, percent, declared.get(id)?.retries ?? 0);
+  return out;
+}
+
+/**
+ * A path's variants under retries (§1.5 of the model page): each hop to a
+ * node with an error rate and retries takes k + 1 attempts, with probability
+ * `e^k (1 − e)` for k < retries and `e^retries` for the last. Combinations
+ * are independent; past `MAX_RETRY_VARIANTS` the least likely are dropped
+ * and the rest scaled up.
+ */
+export function retryVariants(hops: Hop[][], retries: ReadonlyMap<string, Retry>): { share: number; hops: Hop[][] }[] {
+  let out: { share: number; hops: Hop[][] }[] = [{ share: 1, hops }];
+  hops.forEach((part, p) =>
+    part.forEach((h, i) => {
+      const r = retries.get(h.target);
+      if (!r || h.failed || r.retries === 0 || r.errorRate <= 0) return;
+      const next: typeof out = [];
+      for (const v of out) {
+        for (let k = 0; k <= r.retries; k++) {
+          const share = v.share * (k < r.retries ? r.errorRate ** k * (1 - r.errorRate) : r.errorRate ** k);
+          if (share <= 0) continue;
+          if (k === 0) {
+            next.push({ share, hops: v.hops });
+            continue;
+          }
+          const changed = v.hops.map((q, j) => (j === p ? q.map((x, n) => (n === i ? { ...x, attempts: k + 1 } : x)) : q));
+          next.push({ share, hops: changed });
+        }
+      }
+      out = next;
+      if (out.length > MAX_RETRY_VARIANTS) {
+        out = out
+          .map((v, n) => ({ v, n }))
+          .sort((a, b) => b.v.share - a.v.share || a.n - b.n)
+          .slice(0, MAX_RETRY_VARIANTS)
+          .map(({ v }) => v);
+        const total = out.reduce((sum, v) => sum + v.share, 0);
+        out = out.map((v) => ({ ...v, share: v.share / total }));
+      }
+    }),
+  );
+  return out;
+}
+
+/** The most retry variants one scenario path is split into. */
+export const MAX_RETRY_VARIANTS = 256;
 
 /** Kinds a cache-aside miss falls through to: the stores behind a cache. */
 const BACKING_STORES: readonly Kind[] = ['database', 'search', 'analytics', 'storage'];
@@ -410,10 +543,15 @@ export interface Load {
  */
 export function forEachStepRate(diagram: Diagram, traffic: Map<string, UseCaseTraffic>, visit: (step: DiagramStep, rate: number, useCase: DiagramUseCase) => void) {
   for (const u of diagram.useCases) {
-    const { rps, shares, miss } = traffic.get(u.id) ?? { rps: 0, shares: [] };
+    const { rps, shares, miss, retry } = traffic.get(u.id) ?? { rps: 0, shares: [] };
     u.scenarios.forEach((s, i) => {
       const rate = rps * (shares[i] ?? 0);
-      if (rate > 0) for (const step of s.steps) if (!step.failed) visit(step, miss?.has(step) ? rate * miss.get(step)! : rate, u);
+      if (!(rate > 0)) return;
+      for (const step of s.steps) {
+        if (step.failed) continue;
+        const r = miss?.has(step) ? rate * miss.get(step)! : rate;
+        visit(step, retry?.has(step) ? r * retry.get(step)! : r, u);
+      }
     });
   }
 }
@@ -762,6 +900,8 @@ export function analyze(diagram: Diagram, options: AnalyzeOptions = {}): Analysi
   const kindOf = (id: string): Kind => profiles.get(id)?.kind ?? 'client';
 
   const traffic = trafficFor(diagram, options, warnings);
+  const retries = retriesOf(diagram, options);
+  const drains = new Map((diagram.capacity ?? []).flatMap((o) => (o.drainRps !== undefined ? [[o.node, o.drainRps] as const] : [])));
   const load = computeLoad(diagram, traffic);
   const egress = computeEgressGb(diagram, averageTraffic(traffic), kindOf);
   const bytes = computeBytesPerSecond(diagram, traffic);
@@ -797,6 +937,8 @@ export function analyze(diagram: Diagram, options: AnalyzeOptions = {}): Analysi
       egressUsd,
       durable: p.durable,
       ...(down ? { failed: true as const } : {}),
+      ...(drains.has(n.id) ? { queue: queueOf(read + write, drains.get(n.id)!) } : {}),
+      ...(retries.has(n.id) ? { retry: { ...retries.get(n.id)!, stormRisk: usage.utilization >= HOT && retries.get(n.id)!.retries > 0 && retries.get(n.id)!.errorRate > 0 } } : {}),
     };
   });
   const nodeById = new Map(nodeResults.map((n) => [n.id, n]));
@@ -808,6 +950,19 @@ export function analyze(diagram: Diagram, options: AnalyzeOptions = {}): Analysi
     if (n.saturated) warnings.push(`'${n.id}' is saturated: ${usage}. ${writeBound(n) ? 'Add shards for writes' : 'Add replicas'} or take load off it.`);
     else if (n.utilization > HOT) warnings.push(`'${n.id}' runs hot: ${usage}.`);
   }
+  for (const n of nodeResults) {
+    if (!n.queue || n.queue.backlogPerHour <= 0) continue;
+    warnings.push(
+      `'${n.id}' falls behind: ${formatRps(n.queue.inflowRps)} flows in and its consumers drain ${formatRps(n.queue.drainRps)}, so the backlog grows by ${formatCount(n.queue.backlogPerHour)} messages an hour. Drain faster or send it less.`,
+    );
+  }
+  for (const n of nodeResults) {
+    if (!n.retry?.stormRisk) continue;
+    const { errorRate, retries: r } = n.retry;
+    warnings.push(
+      `'${n.id}' risks a retry storm: it runs at ${formatPercent(n.utilization)} with ${formatPercent(errorRate)} errors and ${r} ${r === 1 ? 'retry' : 'retries'}. Once it saturates, more calls fail and each comes back up to ${r} more times, up to ${formatRps((n.loadRps / n.retry.attempts) * (r + 1))}. Add capacity, retry less, or back off.`,
+    );
+  }
   for (const s of systems?.systems ?? []) warnings.push(...s.warnings);
 
   const access = accessIn(diagram);
@@ -816,22 +971,26 @@ export function analyze(diagram: Diagram, options: AnalyzeOptions = {}): Analysi
       part.map((h) => {
         if (h.failed) return { fixedMs: timeoutOf(h.target), tailMs: 0 };
         const hop = systems?.hop(h.target, h.step.toPort) ?? hops.get(h.target) ?? { fixedMs: 0, tailMs: 0 };
-        return { fixedMs: transferMs(h.step, bandwidthOf) + hop.fixedMs, tailMs: hop.tailMs };
+        const item = { fixedMs: transferMs(h.step, bandwidthOf) + hop.fixedMs, tailMs: hop.tailMs };
+        // A retry variant: each attempt takes the whole hop again (no backoff).
+        return h.attempts === undefined ? item : { fixedMs: item.fixedMs * h.attempts, tailMs: item.tailMs * h.attempts };
       }),
     ),
   });
 
   const useCases: UseCaseAnalysis[] = diagram.useCases.map((u) => {
-    const { rps, shares, stranded, average, lookups } = traffic.get(u.id)!;
-    if (lookups) {
-      const { scenarios, percentiles, tailScenario } = cachedLatency(u, shares, lookups, pathOf, new Set(options.percentiles ?? PERCENTILES));
+    const { rps, shares, stranded, average, lookups, retry } = traffic.get(u.id)!;
+    const availabilityOf = (id: string, writes: Set<string>) => {
+      const n = nodeById.get(id);
+      if (!n && systems) return systemAvailability(u, id, systems.availability);
+      return !n ? 1 : writes.has(id) ? n.writeAvailability : n.availability;
+    };
+    // With retries, a call fails only when every attempt does.
+    const withRetries = (writes: Set<string>) => (id: string) => (retries.has(id) ? availabilityOf(id, writes) * retries.get(id)!.success : availabilityOf(id, writes));
+    if (lookups || retry) {
+      const { scenarios, percentiles, tailScenario } = cachedLatency(u, shares, lookups ?? [], retry ? retries : new Map(), pathOf, new Set(options.percentiles ?? PERCENTILES));
       const writes = mainWrites(u, shares, (step) => access(step) === 'write');
-      const availabilityOf = (id: string) => {
-        const n = nodeById.get(id);
-        if (!n && systems) return systemAvailability(u, id, systems.availability);
-        return !n ? 1 : writes.has(id) ? n.writeAvailability : n.availability;
-      };
-      const availability = useCaseAvailability(u, shares, availabilityOf) * (1 - (stranded ?? 0));
+      const availability = useCaseAvailability(u, shares, retries.size ? withRetries(writes) : (id) => availabilityOf(id, writes)) * (1 - (stranded ?? 0));
       return { id: u.id, name: u.name, rps, ...(average !== undefined ? { avgRps: rps * average } : {}), scenarios, percentiles, tailScenario, availability };
     }
     const paths = u.scenarios.map((s) => pathOf(criticalPath(u, s)));
@@ -855,12 +1014,7 @@ export function analyze(diagram: Diagram, options: AnalyzeOptions = {}): Analysi
     ) as UseCaseAnalysis['tailScenario'];
     if (rps > 0 && u.scenarios.length === 0) warnings.push(`"${u.name}" has traffic but no steps`);
     const writes = mainWrites(u, shares, (step) => access(step) === 'write');
-    const availabilityOf = (id: string) => {
-      const n = nodeById.get(id);
-      if (!n && systems) return systemAvailability(u, id, systems.availability);
-      return !n ? 1 : writes.has(id) ? n.writeAvailability : n.availability;
-    };
-    const availability = useCaseAvailability(u, shares, availabilityOf) * (1 - (stranded ?? 0));
+    const availability = useCaseAvailability(u, shares, retries.size ? withRetries(writes) : (id) => availabilityOf(id, writes)) * (1 - (stranded ?? 0));
     return { id: u.id, name: u.name, rps, ...(average !== undefined ? { avgRps: rps * average } : {}), scenarios, percentiles, tailScenario, availability };
   });
 
@@ -876,19 +1030,26 @@ export function analyze(diagram: Diagram, options: AnalyzeOptions = {}): Analysi
 }
 
 /**
- * Latency of a use case whose scenarios read caches with a hit rate: each
- * scenario is the mixture of its hit and miss variants (`cacheVariants`), and
- * the use case the mixture of all of them weighted by scenario share, exactly
- * as an explicit `alt` per variant with a `mix` would be.
+ * Latency of a use case whose scenarios read caches with a hit rate or call
+ * nodes with retries: each scenario is the mixture of its hit and miss
+ * variants (`cacheVariants`), each of those split by how many attempts its
+ * retried hops take (`retryVariants`), and the use case the mixture of all of
+ * them weighted by scenario share, exactly as an explicit `alt` per variant
+ * with a `mix` would be.
  */
 function cachedLatency(
   u: DiagramUseCase,
   shares: number[],
   lookups: CacheLookup[][],
+  retries: ReadonlyMap<string, Retry>,
   pathOf: (hops: Hop[][]) => PathModel,
   wanted: Set<Percentile>,
 ): Pick<UseCaseAnalysis, 'scenarios' | 'percentiles' | 'tailScenario'> {
-  const variants = u.scenarios.map((s, i) => cacheVariants(criticalPath(u, s), lookups[i] ?? []).map((v) => ({ share: v.share, path: pathOf(v.hops) })));
+  const variants = u.scenarios.map((s, i) =>
+    cacheVariants(criticalPath(u, s), lookups[i] ?? []).flatMap((v) =>
+      retries.size ? retryVariants(v.hops, retries).map((r) => ({ share: v.share * r.share, path: pathOf(r.hops) })) : [{ share: v.share, path: pathOf(v.hops) }],
+    ),
+  );
   const scenarios: ScenarioAnalysis[] = u.scenarios.map((s, i) => ({
     id: s.id,
     name: s.name,

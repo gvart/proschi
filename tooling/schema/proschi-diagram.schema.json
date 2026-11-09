@@ -1221,6 +1221,47 @@
             "maxUsdPerMonth": {
               "type": "number"
             },
+            "scope": {
+              "description": "Left out: the whole design. `@Payments`: the nodes the team owns; `.edge`: the nodes with the tag or inside a group with it; `group checkout`: the nodes inside the group.",
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "team": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "team"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "tag": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "tag"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "group": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "group"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
             "loc": {
               "$ref": "#/$defs/loc"
             }
@@ -1228,6 +1269,31 @@
           "required": [
             "kind",
             "maxUsdPerMonth",
+            "loc"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "lag"
+            },
+            "useCase": {
+              "type": "string"
+            },
+            "maxMs": {
+              "type": "number",
+              "description": "The longest a message may wait in the queues the use case sends to."
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "useCase",
+            "maxMs",
             "loc"
           ],
           "additionalProperties": false
@@ -1307,6 +1373,22 @@
           "minimum": 0,
           "maximum": 100,
           "description": "`hit`: the share of reads a cache answers itself; the miss path takes the rest."
+        },
+        "errorPercent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "`errors`: the share of calls to the node that fail with an error."
+        },
+        "retries": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5,
+          "description": "`retries`: how many times a caller tries a failed call again."
+        },
+        "drainRps": {
+          "type": "number",
+          "description": "`drain`: how fast the consumers of a queue or broker take messages off it, in rps."
         },
         "loc": {
           "$ref": "#/$defs/loc"
@@ -1587,6 +1669,33 @@
               "minimum": 0,
               "maximum": 100,
               "description": "`cache hit 40%`: the hit rate under this what-if."
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "node",
+            "percent",
+            "loc"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "errors"
+            },
+            "node": {
+              "type": "string"
+            },
+            "percent": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "`pay errors 20%`: the error rate under this what-if."
             },
             "loc": {
               "$ref": "#/$defs/loc"

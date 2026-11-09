@@ -57,7 +57,8 @@ export function findWhatIf(diagram: Diagram, name: string): WhatIf | undefined {
  * The analysis options of a what-if, on top of `base`: `traffic "X" x3`
  * multiplies X's rate (the one in `base`, else the traffic block's),
  * `traffic "X" 50k rps` sets it, `fail n` takes n down, `n x4` runs four
- * replicas of n, `cache hit 40%` sets the cache's hit rate.
+ * replicas of n, `cache hit 40%` sets the cache's hit rate, `pay errors 20%`
+ * the node's error rate (its `retries` stay).
  */
 export function whatIfOptions(diagram: Diagram, whatif: WhatIf, base: AnalyzeOptions = {}): { options: AnalyzeOptions; warnings: string[] } {
   const warnings: string[] = [];
@@ -67,6 +68,7 @@ export function whatIfOptions(diagram: Diagram, whatif: WhatIf, base: AnalyzeOpt
   const replicas = new Map(base.replicas ?? []);
   const failed = new Set(base.failed ?? []);
   const hitRates = new Map(base.hitRates ?? []);
+  const errorRates = new Map(base.errorRates ?? []);
   for (const change of whatif.changes) {
     if (change.kind === 'traffic') {
       const u = findUseCase(diagram, change.useCase);
@@ -79,11 +81,12 @@ export function whatIfOptions(diagram: Diagram, whatif: WhatIf, base: AnalyzeOpt
       continue;
     }
     if (!ids.has(change.node)) {
-      warnings.push(`What-if "${whatif.name}": no node '${change.node}'; ${change.kind === 'fail' ? 'fail' : change.kind === 'hit' ? 'its hit rate' : 'its replicas'} ignored`);
+      warnings.push(`What-if "${whatif.name}": no node '${change.node}'; ${change.kind === 'fail' ? 'fail' : change.kind === 'hit' ? 'its hit rate' : change.kind === 'errors' ? 'its error rate' : 'its replicas'} ignored`);
       continue;
     }
     if (change.kind === 'fail') failed.add(change.node);
     else if (change.kind === 'hit') hitRates.set(change.node, change.percent);
+    else if (change.kind === 'errors') errorRates.set(change.node, change.percent);
     else replicas.set(change.node, change.replicas);
   }
   return {
@@ -93,6 +96,7 @@ export function whatIfOptions(diagram: Diagram, whatif: WhatIf, base: AnalyzeOpt
       ...(replicas.size ? { replicas } : {}),
       ...(failed.size ? { failed } : {}),
       ...(hitRates.size ? { hitRates } : {}),
+      ...(errorRates.size ? { errorRates } : {}),
     },
     warnings,
   };

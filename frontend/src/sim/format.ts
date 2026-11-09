@@ -37,6 +37,28 @@ export function formatPercent(fraction: number): string {
   return `${Math.round(fraction * 100)}%`;
 }
 
+/** A wait that may be long: `4.5 ms`, `12 s`, `4.2 min`, `3.1 h`; `∞` when it grows without bound. */
+export function formatDuration(ms: number): string {
+  if (!Number.isFinite(ms)) return '∞';
+  if (ms < 1000) return formatMs(ms);
+  if (ms < 60_000) return `${trim(ms / 1000, ms < 10_000 ? 1 : 0)} s`;
+  if (ms < 3_600_000) return `${trim(ms / 60_000, 1)} min`;
+  return `${trim(ms / 3_600_000, 1)} h`;
+}
+
+/** A count of messages: `950`, `12.5k`, `3.6M`. */
+export function formatCount(n: number): string {
+  if (n >= 1e9) return `${trim(n / 1e9, 1)}B`;
+  if (n >= 1e6) return `${trim(n / 1e6, 1)}M`;
+  if (n >= 1e3) return `${trim(n / 1e3, 1)}k`;
+  return trim(n, 0);
+}
+
+/** A queue with a drain rate, as inlay hints show it: `lag 0.8 ms`, or `backlog +3.6M/h` when its consumers fall behind. */
+export function formatQueue(q: { backlogPerHour: number; lagMs: number }): string {
+  return q.backlogPerHour > 0 ? `backlog +${formatCount(q.backlogPerHour)}/h` : `lag ${formatDuration(q.lagMs)}`;
+}
+
 /** `$1,250/month` */
 export function formatUsd(usd: number): string {
   return `$${Math.round(usd).toLocaleString('en-US')}/month`;

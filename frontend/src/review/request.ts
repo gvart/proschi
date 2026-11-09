@@ -91,7 +91,7 @@ export function reviewMetrics(analysis: Analysis, diagram?: Diagram): ReviewMetr
   const p99s = useCases.map((u) => u.p99Ms).filter(Number.isFinite);
   const availabilities = useCases.map((u) => u.availability).filter(Number.isFinite);
   const details = diagram ? detailsByUseCase(diagram, analysis) : undefined;
-  const costLimits = (diagram?.requirements ?? []).flatMap((r, i) => (r.kind === 'cost' ? [{ maxUsd: r.maxUsdPerMonth, testId: `req:${i + 1}` }] : []));
+  const costLimits = (diagram?.requirements ?? []).flatMap((r, i) => (r.kind === 'cost' && !r.scope ? [{ maxUsd: r.maxUsdPerMonth, testId: `req:${i + 1}` }] : []));
   return {
     costUsd: finite(analysis.totalCostUsd) ?? 0,
     ...(p99s.length ? { worstP99Ms: Math.max(...p99s) } : {}),
