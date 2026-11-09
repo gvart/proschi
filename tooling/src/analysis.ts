@@ -1,5 +1,6 @@
 import {
   ASSERTIONS,
+  CAPACITY_PARTS,
   DID_YOU_MEAN,
   KEYWORDS,
   addConnection,
@@ -151,7 +152,7 @@ function labelStart(text: string): number {
   return -1;
 }
 
-export type CompletionKind = 'keyword' | 'node' | 'tech';
+export type CompletionKind = 'keyword' | 'node' | 'tech' | 'usecase' | 'scenario';
 
 export interface CompletionItem {
   label: string;
@@ -167,7 +168,11 @@ export interface CompletionItem {
   range: Range;
 }
 
-/** Completions at a position: tech stacks in [ ], keywords at line start, node ids elsewhere. */
+/**
+ * Completions at a position: tech stacks in [ ], use case and scenario names in
+ * the quotes of traffic, requirements and tests, capacity parts after a node id
+ * in `capacity`, keywords at line start, node ids elsewhere.
+ */
 export function complete(analysis: Analysis, pos: Position): CompletionItem[] {
   const line = analysis.lines[pos.line] ?? '';
   const before = line.slice(0, pos.character);
@@ -189,11 +194,14 @@ export function complete(analysis: Analysis, pos: Position): CompletionItem[] {
       };
     });
   }
+  const names = quotedNames(analysis, pos);
+  if (names) return names;
   if (inLabel(before)) return [];
 
   const word = before.match(/[A-Za-z_]\w*$/)?.[0] ?? '';
   const range = { start: { line: pos.line, character: pos.character - word.length }, end: pos };
   const atLineStart = /^\s*(\}\s*)?$/.test(before.slice(0, before.length - word.length));
+  if (sectionAt(analysis, pos.line) === 'capacity') return capacityCompletions(analysis, before.slice(0, before.length - word.length), range);
   // `when` is only valid right after an alt name: alt "Not found" when "…" {
   if (/^\s*(\}\s*)?alt\s+"[^"]*"\s+$/.test(before.slice(0, before.length - word.length))) {
     return [{ label: 'when', kind: 'keyword', detail: 'Condition of this scenario', snippet: 'when "${1:condition}" {\n\t$0\n}', range }];
@@ -219,6 +227,76 @@ export function complete(analysis: Analysis, pos: Position): CompletionItem[] {
     range,
   }));
   return afterBrace ? keywords : [...keywords, ...nodes];
+}
+
+const PERCENTILE = 'p50|p90|p95|p99|p999';
+const USE_CASE_REQUIREMENT = new RegExp(`^\\s*(?:${PERCENTILE}|availability|durable)\\s+$`);
+const SCENARIO_REQUIREMENT = new RegExp(`^\\s*(?:${PERCENTILE})\\s+"([^"]*)"\\s+scenario\\s+$`);
+
+/**
+ * Use case names in an open quote where traffic, requirements and test
+ * assertions name one, and scenario names after `mix`, `scenario` and
+ * `has scenario`; null when the cursor is not in such a quote.
+ */
+function quotedNames(analysis: Analysis, pos: Position): CompletionItem[] | null {
+  const line = analysis.lines[pos.line] ?? '';
+  const before = line.slice(0, pos.character);
+  if ((before.match(/"/g)?.length ?? 0) % 2 === 0) return null;
+  const partial = before.slice(before.lastIndexOf('"') + 1);
+  const head = before.slice(0, before.length - partial.length - 1);
+  const section = sectionAt(analysis, pos.line);
+  let useCases = false;
+  let scenariosOf: string | undefined;
+  if (section === 'traffic') {
+    useCases = /^\s*$/.test(head);
+    scenariosOf = head.match(/^\s*"([^"]*)"[^"]*\bmix\s+(?:"[^"]*"[^",]*,\s*)*$/)?.[1];
+  } else if (section === 'requirements') {
+    useCases = USE_CASE_REQUIREMENT.test(head);
+    scenariosOf = head.match(SCENARIO_REQUIREMENT)?.[1];
+  } else if (section === 'test') {
+    useCases = /^\s*(in\s+)?$/.test(head);
+    scenariosOf = head.match(/^\s*(?:in\s+)?"([^"]*)"\s+(?:has\s+)?scenario\s+$/)?.[1];
+  } else return null;
+  const range = { start: { line: pos.line, character: pos.character - partial.length }, end: pos };
+  const close = line[pos.character] === '"' ? '' : '"';
+  if (useCases) {
+    return analysis.diagram.useCases.map((u) => ({ label: u.name, kind: 'usecase' as const, detail: u.endpoint, insertText: `${u.name}${close}`, range }));
+  }
+  const u = scenariosOf === undefined ? undefined : analysis.diagram.useCases.find((x) => x.name === scenariosOf);
+  return (u?.scenarios ?? [])
+    .filter((s) => s.id !== 'main')
+    .map((s) => ({ label: s.name, kind: 'scenario' as const, detail: s.outcome === 'error' ? 'error path' : undefined, insertText: `${s.name}${close}`, range }));
+}
+
+/** Node ids at the start of a capacity line; then the parts not yet on it, or the values of `size` and `consistency`. */
+function capacityCompletions(analysis: Analysis, head: string, range: Range): CompletionItem[] {
+  if (/^\s*$/.test(head)) return analysis.diagram.nodes.map((n) => ({ label: n.id, kind: 'node', detail: describeNode(n), range }));
+  const value = head.match(/\b(size|consistency)\s+$/)?.[1];
+  if (value) return (value === 'size' ? ['S', 'M', 'L'] : ['strong', 'eventual']).map((label) => ({ label, kind: 'keyword', range }));
+  if (/\b(latency|availability|cost|timeout|reads|writes|shards|bandwidth|egress)\s+$/.test(head)) return [];
+  const used = new Set(head.trim().split(/\s+/));
+  return CAPACITY_PARTS.filter((p) => !used.has(p.label)).map((p) => ({ label: p.label, kind: 'keyword', detail: p.detail, snippet: p.snippet, range }));
+}
+
+type SectionKind = NonNullable<ParseResult['blocks']>[number]['kind'];
+
+/**
+ * The top-level section block that line `index` (0-based) is inside, not on
+ * its opening or closing line. A block still being typed has no `}` yet, so
+ * then it is found by its opening line.
+ */
+function sectionAt(analysis: Analysis, index: number): SectionKind | undefined {
+  const line = index + 1;
+  const closed = (analysis.result.blocks ?? []).find((b) => b.start < line && line < b.end);
+  if (closed) return closed.kind;
+  for (let i = index - 1; i >= 0; i--) {
+    const text = analysis.lines[i];
+    if (/^\s*\}/.test(text)) return undefined;
+    const open = text.match(/^\s*(traffic|requirements|capacity|test)\b.*\{\s*(?:#.*)?$/);
+    if (open) return open[1] as SectionKind;
+    if (/\{\s*(?:#.*)?$/.test(text)) return undefined;
+  }
+  return undefined;
 }
 
 /**

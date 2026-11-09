@@ -24,7 +24,20 @@ import {
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { statSync } from 'node:fs';
 import { openApiDiagnostics, watchedFiles } from './openapi/config';
-import { analyze, complete, declaration, hover, outline, quickFix, references, semanticTokens, toRange, type Analysis, type OutlineSymbol, type TokenKind } from './analysis';
+import {
+  analyze,
+  complete,
+  declaration,
+  hover,
+  outline,
+  quickFix,
+  references,
+  semanticTokens,
+  toRange,
+  type Analysis,
+  type OutlineSymbol,
+  type TokenKind,
+} from './analysis';
 import { fileResolver, importLinks, ownDiagnostics } from './imports';
 import { format } from './proschi';
 import { testDiagnostics } from './simulation';
@@ -80,7 +93,7 @@ const TOKEN_TYPES = Object.values(TOKEN_TYPE);
 connection.onInitialize(() => ({
   capabilities: {
     textDocumentSync: TextDocumentSyncKind.Incremental,
-    completionProvider: { triggerCharacters: ['[', ' '] },
+    completionProvider: { triggerCharacters: ['[', ' ', '"'] },
     hoverProvider: true,
     definitionProvider: true,
     referencesProvider: true,
@@ -175,7 +188,13 @@ const withDoc =
     return doc ? fn(analysisOf(doc), params) : fallback;
   };
 
-const COMPLETION_KIND = { keyword: CompletionItemKind.Keyword, node: CompletionItemKind.Variable, tech: CompletionItemKind.Class };
+const COMPLETION_KIND = {
+  keyword: CompletionItemKind.Keyword,
+  node: CompletionItemKind.Variable,
+  tech: CompletionItemKind.Class,
+  usecase: CompletionItemKind.Function,
+  scenario: CompletionItemKind.Event,
+};
 
 connection.onCompletion(
   withDoc([], (analysis, { position }) =>

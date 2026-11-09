@@ -201,6 +201,89 @@ describe('analysis', () => {
   });
 });
 
+const hld = `api [REST API]
+db [PostgreSQL]
+cache [Redis]
+user -> api
+api -> cache
+api -> db
+
+usecase "Redirect" {
+  user -> api : GET /code
+  alt "Cache hit" {
+    api -> cache : GET code
+  } alt "Cache miss" {
+    api -> db : SELECT url
+  }
+}
+
+usecase "Shorten" {
+  user -> api : POST /urls
+  api -> db : INSERT url
+}
+
+traffic {
+  "Redirect" 1k rps mix "Cache hit" 90%, "Cache miss" 10%
+}
+
+requirements {
+  p99 "Redirect" scenario "Cache miss" < 100ms
+  durable "Shorten"
+}
+
+capacity {
+  db 20k rps
+}
+
+test "Flows" {
+  "Redirect" has scenario "Cache hit"
+  in "Shorten" api calls db
+}
+`;
+const hl = (text: string, from = 0) => hld.split('\n').findIndex((l, i) => i >= from && l.includes(text));
+describe('completion of names and capacity parts', () => {
+  const labels = (src: string, line: number, character: number) => complete(analyze(src), { line, character }).map((i) => i.label);
+
+  it('completes use case names in traffic, requirements and test assertions', () => {
+    const items = complete(analyze(hld.replace('traffic {\n', 'traffic {\n  "\n')), { line: hl('traffic {') + 1, character: 3 });
+    expect(items.map((i) => [i.label, i.kind, i.insertText])).toEqual([
+      ['Redirect', 'usecase', 'Redirect"'],
+      ['Shorten', 'usecase', 'Shorten"'],
+    ]);
+    expect(items[0].range).toEqual({ start: { line: hl('traffic {') + 1, character: 3 }, end: { line: hl('traffic {') + 1, character: 3 } });
+    // A closing quote already there is not doubled.
+    expect(complete(analyze(hld.replace('durable "Shorten"', 'durable "Sh"')), { line: hl('durable'), character: 13 })[1]).toMatchObject({ label: 'Shorten', insertText: 'Shorten' });
+    expect(labels(hld.replace('durable "Shorten"', 'p99 "'), hl('durable'), 7)).toEqual(['Redirect', 'Shorten']);
+    expect(labels(hld.replace('in "Shorten" api calls db', 'in "'), hl('in "'), 6)).toEqual(['Redirect', 'Shorten']);
+    // Not in the quotes of a decision or a label.
+    expect(complete(analyze('decision "'), { line: 0, character: 10 })).toEqual([]);
+  });
+
+  it('completes scenario names after mix, scenario and has scenario', () => {
+    const mix = hld.replace('mix "Cache hit" 90%, "Cache miss" 10%', 'mix "Cache hit" 90%, "');
+    expect(labels(mix, hl('mix'), mix.split('\n')[hl('mix')].length)).toEqual(['Cache hit', 'Cache miss']);
+    const first = hld.replace('mix "Cache hit" 90%, "Cache miss" 10%', 'mix "');
+    expect(labels(first, hl('mix'), first.split('\n')[hl('mix')].length)).toEqual(['Cache hit', 'Cache miss']);
+    expect(labels(hld, hl('scenario "Cache miss"'), hld.split('\n')[hl('scenario "Cache miss"')].indexOf('Cache miss'))).toEqual(['Cache hit', 'Cache miss']);
+    expect(labels(hld, hl('has scenario'), hld.split('\n')[hl('has scenario')].indexOf('Cache hit'))).toEqual(['Cache hit', 'Cache miss']);
+    // A use case without alts has no scenario names to offer.
+    expect(labels(hld.replace('"Redirect" has scenario', '"Shorten" has scenario'), hl('has scenario'), 27)).toEqual([]);
+  });
+
+  it('completes capacity parts after a node id, and node ids at the start of a line', () => {
+    const src = 'db [PostgreSQL]\ncapacity {\n  db 20k rps \n  \n  db size \n}\n';
+    const parts = labels(src, 2, 13);
+    expect(parts).toEqual(expect.arrayContaining(['latency', 'shards', 'size', 'durable', 'consistency', 'timeout']));
+    expect(parts).not.toContain('rps');
+    expect(complete(analyze(src), { line: 2, character: 13 }).find((i) => i.label === 'latency')).toMatchObject({ kind: 'keyword', snippet: 'latency ${1:5ms}' });
+    expect(labels(src, 3, 2)).toEqual(['db']);
+    expect(labels(src, 4, 10)).toEqual(['S', 'M', 'L']);
+    expect(labels('db [PostgreSQL]\ncapacity {\n  db latency 5ms \n}', 2, 18)).not.toContain('latency');
+    // Still while the block has no closing brace.
+    expect(labels('db [PostgreSQL]\ncapacity {\n  db ', 2, 5)).toContain('shards');
+  });
+});
+
 function applyEdit(text: string, { range, newText }: TextEdit): string {
   const lines = text.split('\n');
   const offset = (p: { line: number; character: number }) => lines.slice(0, p.line).reduce((n, l) => n + l.length + 1, 0) + p.character;
