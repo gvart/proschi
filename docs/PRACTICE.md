@@ -545,7 +545,7 @@ proschi problem check --format json                   # every report, with what 
 ✓ url-shortener: 10 tests, the starter fails 8, 1 wrong design, interview (9 questions, 3 estimates), guided (6 steps)
     wrong/miss-never-fills-cache: fails "Misses fill the cache" (Cache misses that never fill the cache)
 …
-29 problems, 105 wrong designs: no violations
+40 problems, 149 wrong designs: no violations
 ```
 
 It exits with 1 on any violation. `npm test` in `frontend/` runs the same
