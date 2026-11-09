@@ -735,6 +735,12 @@
     flex-basis: 100%;
   }
 }
+@media (max-width: 379px) {
+  .ps-header--compact .ps-header__inner,
+  .ps-header--compact .ps-header__end {
+    gap: 4px;
+  }
+}
 .ps-header--compact .ps-nav {
   margin-left: 0;
 }

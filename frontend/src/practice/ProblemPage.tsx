@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ArrowLeft, BookOpen, Code2, Compass, Eye, FlaskConical, GraduationCap, Lightbulb, MoreHorizontal, Network, PanelsTopLeft, Presentation, RotateCcw, Timer } from 'lucide-react';
+import { ArrowLeft, BookOpen, Code2, Compass, Eye, FlaskConical, GraduationCap, Lightbulb, Maximize2, MoreHorizontal, Network, PanelsTopLeft, Presentation, RotateCcw, Timer } from 'lucide-react';
 import { confirm } from '../design/dialogs';
 import { Group, Panel, Separator, usePanelRef } from 'react-resizable-panels';
 import type { Diagnostic, SourceLoc } from '../dsl';
@@ -734,8 +734,8 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
           <ArrowLeft size={16} />
           <span className="hidden xl:inline">{back.label}</span>
         </a>
-        <h1 className="flex items-center gap-2 min-w-0 font-display text-lg font-bold tracking-tight text-ink">
-          <StatusIcon status={status} />
+        <h1 className="flex items-center gap-2 min-w-0 max-sm:flex-1 max-sm:basis-0 font-display text-lg font-bold tracking-tight text-ink">
+          <span className="flex max-sm:hidden"><StatusIcon status={status} /></span>
           <span className="truncate">{problem.title}</span>
           {progress[problem.id]?.assisted && <AssistedTag />}
         </h1>
@@ -755,8 +755,8 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
                 <span className="hidden min-[1440px]:inline">Reset</span>
               </button>
             </span>
-            <MoreMenu className={`sm:hidden ml-auto`} onReset={reset} onTour={startTour} />
-            {editorView && <ZenButton zen={zen} className={iconButton} />}
+            <MoreMenu className={`sm:hidden ml-auto`} onReset={reset} onTour={startTour} onZen={editorView ? zen.toggle : undefined} />
+            {editorView && <ZenButton zen={zen} className={`${iconButton} max-sm:hidden`} />}
           </>
         ) : (
           <span className="ml-auto" />
@@ -829,7 +829,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
 }
 
 /** Phones only: Reset and Help's items in one menu. */
-function MoreMenu({ className, onReset, onTour }: { className: string; onReset: () => void; onTour: () => void }) {
+function MoreMenu({ className, onReset, onTour, onZen }: { className: string; onReset: () => void; onTour: () => void; onZen?: () => void }) {
   const [sheet, setSheet] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   return (
@@ -846,6 +846,17 @@ function MoreMenu({ className, onReset, onTour }: { className: string; onReset: 
             >
               Reset to the starter code
             </MenuItem>
+            {onZen && (
+              <MenuItem
+                icon={<Maximize2 size={14} />}
+                onSelect={() => {
+                  close();
+                  onZen();
+                }}
+              >
+                Zen mode
+              </MenuItem>
+            )}
             <div className="my-1 border-t border-ink/10" />
             <Suspense fallback={<p className="px-3 py-1.5 text-sm text-muted">Loading…</p>}>
               <HelpMenuItems
