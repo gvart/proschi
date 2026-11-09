@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import ReactFlow, { Background, BackgroundVariant, Controls, Panel, applyEdgeChanges, applyNodeChanges, useReactFlow } from 'reactflow';
+import ReactFlow, { Background, BackgroundVariant, ControlButton, Controls, MiniMap, Panel, applyEdgeChanges, applyNodeChanges, useReactFlow } from 'reactflow';
 import type { Edge, EdgeChange, Node, NodeChange } from 'reactflow';
-import { ArrowLeft, ChevronRight, Gauge, LayoutGrid, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, ChevronRight, Gauge, LayoutGrid, Map as MapIcon, Pencil, Trash2 } from 'lucide-react';
+import { CANVAS_EDGE } from '../../utils/canvasColors';
 import { notify, prompt } from '../../design/dialogs';
 import { useToastClearance } from '../../design/toastClearance';
 import type { Diagram } from '../../dsl/types';
@@ -14,9 +15,10 @@ import SystemNode from '../Canvas/SystemNode';
 import TextNode from '../Canvas/TextNode';
 import type { SystemNodeData } from '../Canvas/systemActions';
 import { TECH_DRAG_TYPE } from '../Diagram/Palette';
-import { CanvasMenu, ConnectHint, PaletteDock, PaletteToggle, type CanvasMenuState } from '../Diagram/CanvasEditing';
-import { historyKey, useConnectHint, usePaletteOpen } from '../Diagram/canvasEditState';
+import { CanvasMenu, ConnectHint, PaletteDock, PaletteToggle, type CanvasMenuActions, type CanvasMenuState } from '../Diagram/CanvasEditing';
+import { canvasKey, historyKey, useConnectHint, useMiniMap, usePaletteOpen, type CanvasKey } from '../Diagram/canvasEditState';
 import Inspector from '../Diagram/Inspector';
+import NodeFinder from '../Diagram/NodeFinder';
 import { FIT_VIEW_OPTIONS, useFitOnChange, type FitInset } from '../Diagram/useFitOnChange';
 import FlowParticles from '../Overlay/FlowParticles';
 import { PlaybackMiniMap } from '../UseCases/UseCasePlayback';
@@ -64,6 +66,17 @@ export interface DiagramViewProps {
   onToggleOverlay: () => void;
   onResetLayout: () => void;
   onDelete: (nodeIds: string[], edgeIds: string[]) => void;
+  /** Ctrl/Cmd+C: keeps the nodes and the connections between them for pasting. */
+  onCopyNodes: (ids: string[]) => void;
+  /** Ctrl/Cmd+V and Ctrl/Cmd+D: the new nodes' ids, to select them. */
+  onPasteNodes: () => string[] | undefined;
+  onDuplicateNodes: (ids: string[]) => string[] | undefined;
+  /** An end of a connection was dragged to another node. */
+  onReconnect: (edgeId: string, from: string, to: string) => void;
+  /** Removes a node's `pos x,y` (right-click → Unpin position). */
+  onUnpinNode: (id: string) => void;
+  /** Shows a node's or a connection's text in the code pane. */
+  onJumpToCode: (id: string) => void;
   /** Changes when the view becomes visible again, so it can re-fit. */
   fitKey: string;
   /** A layout is on its way (ELK, then the glide): `data-layout-busy` on the canvas, which the e2e tests wait out. */
@@ -117,6 +130,12 @@ export default function DiagramView({
   onToggleOverlay,
   onResetLayout,
   onDelete,
+  onCopyNodes,
+  onPasteNodes,
+  onDuplicateNodes,
+  onReconnect,
+  onUnpinNode,
+  onJumpToCode,
   fitKey,
   layoutBusy,
   glideKey,
@@ -135,7 +154,7 @@ export default function DiagramView({
   onOpenSystem,
 }: DiagramViewProps) {
   const playing = playback.active;
-  const { getNodes, screenToFlowPosition } = useReactFlow();
+  const { getNodes, screenToFlowPosition, fitView } = useReactFlow();
   const [selection, setSelection] = useState<{ nodes: Node[]; edges: Edge[] }>({ nodes: [], edges: [] });
   // Rename and Delete stay clear of the toasts.
   const clearToasts = useToastClearance();
@@ -154,8 +173,11 @@ export default function DiagramView({
   const [menu, setMenu] = useState<CanvasMenuState | null>(null);
   const closeMenu = useCallback(() => setMenu(null), []);
   const [hintSeen, dismissHint] = useConnectHint();
-  /** A component just added, selected once the layout draws it. */
-  const [pendingSelect, setPendingSelect] = useState<string | null>(null);
+  const [miniMap, setMiniMap] = useMiniMap();
+  /** The node finder: to jump to a node, or to pick the one to connect `from` to. */
+  const [finder, setFinder] = useState<{ connectFrom?: string } | null>(null);
+  /** Components just added, selected once the layout draws them. */
+  const [pendingSelect, setPendingSelect] = useState<string[] | null>(null);
   /** The node or connection whose settings were closed, so they stay closed until something else is selected. */
   const [closedSettings, setClosedSettings] = useState<string | null>(null);
   const single = selection.nodes.length + selection.edges.length === 1 ? (selection.nodes[0] ?? selection.edges[0]) : undefined;
@@ -173,19 +195,20 @@ export default function DiagramView({
    */
   const addComponent = (tech: string, position?: { x: number; y: number }) => {
     const id = onAddNode(tech, position);
-    if (id && (position || phone)) setPendingSelect(id);
+    if (id && (position || phone)) setPendingSelect([id]);
   };
-  /** Selects only `id` (a node or a connection), as a click would. */
+  /** Selects only `ids` (nodes or a connection), as a click (or a box) would. */
   const selectOnly = useCallback(
-    (id: string) => {
-      onNodesChange((current) => current.map((n) => (!!n.selected === (n.id === id) ? n : { ...n, selected: n.id === id })));
-      onEdgesChange((current) => current.map((e) => (!!e.selected === (e.id === id) ? e : { ...e, selected: e.id === id })));
+    (...ids: string[]) => {
+      const chosen = new Set(ids);
+      onNodesChange((current) => current.map((n) => (!!n.selected === chosen.has(n.id) ? n : { ...n, selected: chosen.has(n.id) })));
+      onEdgesChange((current) => current.map((e) => (!!e.selected === chosen.has(e.id) ? e : { ...e, selected: chosen.has(e.id) })));
     },
     [onNodesChange, onEdgesChange],
   );
   useEffect(() => {
-    if (!pendingSelect || !nodes.some((n) => n.id === pendingSelect)) return;
-    selectOnly(pendingSelect);
+    if (!pendingSelect || !pendingSelect.every((id) => nodes.some((n) => n.id === id))) return;
+    selectOnly(...pendingSelect);
     setPendingSelect(null);
   }, [nodes, pendingSelect, selectOnly]);
 
@@ -215,6 +238,63 @@ export default function DiagramView({
     );
   };
   const wrapperRef = useRef<HTMLDivElement>(null);
+
+  const duplicate = (ids: string[]) => {
+    const added = onDuplicateNodes(ids);
+    if (added?.length) setPendingSelect(added);
+  };
+  /** Ctrl/Cmd+C, V and D, and `/` or Ctrl/Cmd+F; false when the key is left to the browser (Ctrl+C with nothing selected). */
+  const runCanvasKey = (key: CanvasKey): boolean => {
+    const ids = selection.nodes.map((n) => n.id);
+    if (key === 'copy') {
+      if (ids.length === 0) return false;
+      onCopyNodes(ids);
+    } else if (key === 'paste') {
+      const added = onPasteNodes();
+      if (added?.length) setPendingSelect(added);
+    } else if (key === 'duplicate') {
+      if (ids.length > 0) duplicate(ids);
+    } else setFinder({});
+    return true;
+  };
+  /** The nodes the finder offers: those drawn, without groups and notes when connecting. */
+  const finderItems = () => {
+    const drawn = new Set(nodes.map((n) => n.id));
+    return diagram.nodes
+      .filter((n) => drawn.has(n.id) && (!finder?.connectFrom || (n.id !== finder.connectFrom && n.kind !== 'group' && n.kind !== 'text')))
+      .map((n) => ({ id: n.id, name: n.name, tech: n.techStack || undefined }));
+  };
+  const closeFinder = () => {
+    setFinder(null);
+    // Back on the canvas, so its keys work again.
+    wrapperRef.current?.focus({ preventScroll: true });
+  };
+  const pickFound = (id: string) => {
+    if (finder?.connectFrom) {
+      dismissHint();
+      onConnectNodes(finder.connectFrom, id);
+      return;
+    }
+    selectOnly(id);
+    setClosedSettings(null);
+    void fitView({ nodes: [{ id }], duration: 300, maxZoom: 1.25, padding: 0.5 });
+  };
+  /** The right-click menu's actions for what it was opened on. */
+  const menuActions = (): CanvasMenuActions => {
+    const node = menu?.id ? diagram.nodes.find((n) => n.id === menu.id) : undefined;
+    if (!menu?.id) return {};
+    if (!node) return { onJumpToCode: () => onJumpToCode(menu.id!) };
+    const drawn = nodes.find((n) => n.id === node.id);
+    const own = !importedNodes.has(node.id);
+    const plain = node.kind === 'component' || node.kind === 'text';
+    return {
+      onRename: drawn && (() => promptRename(drawn)),
+      onDuplicate: own && plain ? () => duplicate([node.id]) : undefined,
+      onConnect: node.kind === 'component' || node.kind === 'system' ? () => setFinder({ connectFrom: node.id }) : undefined,
+      onUnpin: own && node.position ? () => onUnpinNode(node.id) : undefined,
+      onJumpToCode: () => onJumpToCode(node.id),
+    };
+  };
 
   // The canvas may have just been opened for the export (from another tab, the
   // code pane on a phone, or playback): wait until it is shown and its nodes are measured.
@@ -333,7 +413,10 @@ export default function DiagramView({
           deleteSelection();
           // The deleted item had the focus; keep it on the canvas so Ctrl+Z still works.
           wrapperRef.current?.focus({ preventScroll: true });
+          return;
         }
+        const key = playing ? null : canvasKey(e);
+        if (key && runCanvasKey(key)) e.preventDefault();
       }}
     >
       <ReactFlow
@@ -378,14 +461,20 @@ export default function DiagramView({
           event.preventDefault();
           selectOnly(node.id);
           setClosedSettings(null);
-          setMenu({ x: event.clientX, y: event.clientY, label: node.data?.name ?? node.id });
+          setMenu({ x: event.clientX, y: event.clientY, label: node.data?.name ?? node.id, id: node.id });
         }}
         onEdgeContextMenu={(event, edge) => {
           if (playing || edge.id.startsWith('step:')) return;
           event.preventDefault();
           selectOnly(edge.id);
           setClosedSettings(null);
-          setMenu({ x: event.clientX, y: event.clientY, label: `${edge.source} → ${edge.target}` });
+          setMenu({ x: event.clientX, y: event.clientY, label: `${edge.source} → ${edge.target}`, id: edge.id });
+        }}
+        // Dragging an end of a connection onto another node moves that end, in the text.
+        edgesUpdatable={!playing}
+        onReconnect={(edge, connection) => {
+          if (playing || edge.id.startsWith('step:') || !connection.source || !connection.target) return;
+          onReconnect(edge.id, connection.source, connection.target);
         }}
         // A system box opens its team design; renaming it stays in its settings and the selection bar.
         onNodeDoubleClick={(_event, node) => {
@@ -404,8 +493,16 @@ export default function DiagramView({
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
         {overlay && !playing && <FlowParticles flows={overlay.flows} nodes={overlay.nodes} />}
-        <Controls showInteractive={false} />
+        <Controls showInteractive={false}>
+          {/* The minimap is for wide screens; on a phone it would cover the diagram. */}
+          {!playing && !phone && (
+            <ControlButton className="[&>svg]:!fill-none aria-pressed:!bg-pop-yellow aria-pressed:!text-on-accent" onClick={() => setMiniMap(!miniMap)} aria-label="Minimap" aria-pressed={miniMap} title={miniMap ? 'Hide the minimap' : 'Show the minimap'}>
+              <MapIcon />
+            </ControlButton>
+          )}
+        </Controls>
         {playing && <PlaybackMiniMap view={playback} />}
+        {!playing && !phone && miniMap && <MiniMap pannable zoomable ariaLabel="Minimap" nodeColor={CANVAS_EDGE} maskColor="rgb(var(--c-paper) / 0.6)" />}
         {!playing && crumbs.length > 1 && (
           <Panel position="top-left">
             <Breadcrumbs crumbs={crumbs} file={focusFile} readOnly={focusReadOnly} inbound={focusInbound} onPick={onCrumb} />
@@ -457,9 +554,10 @@ export default function DiagramView({
             )}
           </Panel>
         )}
-        {nodes.length > 0 && !playing && !(hasSelection && !showSettings) && (
+        {/* The minimap takes this corner. */}
+        {nodes.length > 0 && !playing && !miniMap && !(hasSelection && !showSettings) && (
           <Panel position="bottom-right" className="hidden md:block text-xs text-muted bg-paper/85 rounded-sm px-2 py-1">
-            Drag to pin · select to edit · drag dot to dot to connect · right-click for more
+            Drag to pin · select to edit · drag dot to dot to connect · right-click for more · ? for shortcuts
           </Panel>
         )}
         {nodes.length > 0 && (!playing || diagram.legend) && (
@@ -501,7 +599,16 @@ export default function DiagramView({
           {inspector}
         </div>
       )}
-      {menu && <CanvasMenu menu={menu} onSettings={() => setClosedSettings(null)} onDelete={deleteSelection} onClose={closeMenu} />}
+      {menu && <CanvasMenu menu={menu} onSettings={() => setClosedSettings(null)} onDelete={deleteSelection} onClose={closeMenu} actions={menuActions()} />}
+      {finder && (
+        <NodeFinder
+          items={finderItems()}
+          label={finder.connectFrom ? `Connect ${diagram.nodes.find((n) => n.id === finder.connectFrom)?.name ?? finder.connectFrom} to` : 'Find a component'}
+          placeholder={finder.connectFrom ? 'Connect to…' : 'Find a component…'}
+          onPick={pickFound}
+          onClose={closeFinder}
+        />
+      )}
     </div>
     </div>
   );

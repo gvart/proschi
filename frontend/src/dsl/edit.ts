@@ -97,22 +97,146 @@ function removeStatementLines(source: string, starts: number[]): string {
 /** Removes every `pos x,y` so the whole diagram is auto-laid-out again. */
 export function clearPositions(source: string): string {
   const { diagram } = parse(source);
-  let result = source;
   const pinned = diagram.nodes.filter((n) => n.position && !n.implicit).sort((a, b) => b.loc.line - a.loc.line);
-  for (const node of pinned) {
-    const decl = findDeclaration(result, node.id);
-    if (!decl) continue;
-    const { tokens, firstProp } = decl;
-    const at = tokens.findIndex((t, i) => i >= firstProp && t.kind === 'ident' && t.value === 'pos');
-    if (at === -1 || tokens[at + 3]?.kind !== 'number') continue;
-    const prev = tokens[at - 1];
-    const next = tokens[at + 4];
-    // Remove the space before `pos` too, unless `pos` sits right before `{`.
-    const from = next?.kind === 'lbrace' ? tokens[at].col - 1 : end(prev);
-    const to = next?.kind === 'lbrace' ? next.col - 1 : end(tokens[at + 3]);
-    result = replaceInLine(result, decl.line, from, to, '');
+  return pinned.reduce((result, node) => clearPosition(result, node.id), source);
+}
+
+/** Removes a node's `pos x,y`, so the auto layout places it again. */
+export function clearPosition(source: string, id: string): string {
+  const decl = findDeclaration(source, id);
+  if (!decl) return source;
+  const { tokens, firstProp } = decl;
+  const at = tokens.findIndex((t, i) => i >= firstProp && t.kind === 'ident' && t.value === 'pos');
+  if (at === -1 || tokens[at + 3]?.kind !== 'number') return source;
+  const prev = tokens[at - 1];
+  const next = tokens[at + 4];
+  // Remove the space before `pos` too, unless `pos` sits right before `{`.
+  const from = next?.kind === 'lbrace' ? tokens[at].col - 1 : end(prev);
+  const to = next?.kind === 'lbrace' ? next.col - 1 : end(tokens[at + 3]);
+  return replaceInLine(source, decl.line, from, to, '');
+}
+
+/**
+ * Moves one end of an architecture connection: `a -> b` becomes `from -> to`,
+ * keeping its arrow, tag and label. Refused when it would connect a node to
+ * itself or repeat a connection that is already there.
+ */
+export function retargetConnection(source: string, edgeId: string, from: string, to: string): EditResult {
+  const { diagram } = parse(source);
+  const edge = diagram.edges.find((e) => e.id === edgeId && e.loc.file === undefined);
+  if (!edge || (edge.source === from && edge.target === to)) return { source };
+  if (from === to) return { error: 'A connection goes from one component to another.' };
+  if (diagram.edges.some((e) => e !== edge && e.source === from && e.target === to)) return { error: `'${from}' is already connected to '${to}'.` };
+  const lineText = source.split('\n')[edge.loc.line - 1] ?? '';
+  const { tokens } = tokenizeLine(lineText, edge.loc.line);
+  const arrowAt = tokens.findIndex((t) => t.kind === 'arrow');
+  if (arrowAt < 1 || tokens[arrowAt + 1]?.kind !== 'ident') return { source };
+  // A port (`orders.api`) belongs to the end it is on, so a moved end loses it.
+  const targetEnd = edge.targetPort ? arrowAt + 2 : arrowAt + 1;
+  let result = source;
+  // Right to left, so the source's columns stay valid.
+  if (edge.target !== to) result = replaceInLine(result, edge.loc.line, tokens[arrowAt + 1].col - 1, end(tokens[targetEnd]), to);
+  if (edge.source !== from) result = replaceInLine(result, edge.loc.line, tokens[0].col - 1, end(tokens[arrowAt - 1]), from);
+  return { source: result };
+}
+
+/**
+ * The text of the nodes `ids` and of the connections between them, as pasteNodes
+ * takes it (and as it would be written in code). Groups, systems and what
+ * imported files declare are left out.
+ */
+export function copyNodes(source: string, ids: Iterable<string>): string {
+  const { diagram } = parse(source);
+  const wanted = new Set(ids);
+  const lines = source.split('\n');
+  const out: string[] = [];
+  const copied = new Set<string>();
+  for (const node of diagram.nodes) {
+    if (!wanted.has(node.id) || node.kind === 'group' || node.kind === 'system' || node.loc.file !== undefined) continue;
+    out.push(node.implicit ? node.id : lines[node.loc.line - 1].trim());
+    copied.add(node.id);
   }
-  return result;
+  for (const edge of diagram.edges) {
+    if (edge.loc.file !== undefined || edge.sourcePort || edge.targetPort || !copied.has(edge.source) || !copied.has(edge.target)) continue;
+    const start = edge.loc.line - 1;
+    const statement = lines.slice(start, statementEnd(lines, start) + 1);
+    statement[0] = statement[0].trim();
+    out.push(statement.join('\n'));
+  }
+  return out.length > 0 ? `${out.join('\n')}\n` : '';
+}
+
+/** `id` when no node has it yet, else the same with the next free number: `api` → `api2`, `api2` → `api3`. */
+function freeId(id: string, used: Set<string>): string {
+  const free = (candidate: string) => !used.has(candidate) && !RESERVED.has(candidate) && !/^x\d+$/.test(candidate);
+  if (free(id)) return id;
+  const stem = id.replace(/\d+$/, '') || id;
+  for (let n = 2; ; n++) if (free(`${stem}${n}`)) return `${stem}${n}`;
+}
+
+export interface PasteOptions {
+  /** Ids the text alone does not show, such as the nodes of an imported file (see uniqueId). */
+  taken?: Iterable<string>;
+  /** How far a pinned node lands from where it was copied, so the copy does not hide it; 40,40 by default. */
+  offset?: { x: number; y: number };
+}
+
+/**
+ * Adds the nodes and connections of `snippet` (see copyNodes), giving each node
+ * an id no node uses yet (`api` → `api2`) and its connections the new ids.
+ * Returns the new ids in the snippet's order.
+ */
+export function pasteNodes(source: string, snippet: string, options: PasteOptions = {}): { source: string; ids: string[] } {
+  const { diagram } = parse(snippet);
+  const used = new Set([...parse(source).diagram.nodes.map((n) => n.id), ...(options.taken ?? [])]);
+  const renamed = new Map<string, string>();
+  for (const node of diagram.nodes) {
+    if (node.kind === 'group' || node.kind === 'system') continue;
+    const id = freeId(node.id, used);
+    used.add(id);
+    renamed.set(node.id, id);
+  }
+  if (renamed.size === 0) return { source, ids: [] };
+  const lines = snippet.split('\n');
+  const rename = (line: number, token: Token | undefined) => {
+    const id = token?.kind === 'ident' ? renamed.get(token.value) : undefined;
+    if (token && id) lines[line - 1] = lines[line - 1].slice(0, token.col - 1) + id + lines[line - 1].slice(end(token));
+  };
+  /** The snippet's lines (1-based) that are pasted: node declarations and connections, whole payloads included. */
+  const keep = new Set<number>();
+  // Nodes only a connection names are declared, so they are copied too.
+  const implicit: string[] = [];
+  for (const node of diagram.nodes) {
+    const id = renamed.get(node.id);
+    if (!id) continue;
+    if (node.implicit) {
+      implicit.push(id);
+      continue;
+    }
+    rename(node.loc.line, tokenizeLine(lines[node.loc.line - 1], node.loc.line).tokens.find((t) => t.col === node.loc.col));
+    keep.add(node.loc.line);
+  }
+  for (const edge of diagram.edges) {
+    if (!renamed.has(edge.source) || !renamed.has(edge.target)) continue;
+    const { tokens } = tokenizeLine(lines[edge.loc.line - 1], edge.loc.line);
+    // Right to left, so the first id's column stays valid.
+    rename(edge.loc.line, tokens[tokens.findIndex((t) => t.kind === 'arrow') + 1]);
+    rename(edge.loc.line, tokens[0]);
+    const last = statementEnd(lines, edge.loc.line - 1) + 1;
+    for (let line = edge.loc.line; line <= last; line++) keep.add(line);
+  }
+  let result = insertDeclaration(source, [...implicit, ...lines.filter((_, i) => keep.has(i + 1))].join('\n'));
+  const offset = options.offset ?? { x: 40, y: 40 };
+  for (const node of diagram.nodes) {
+    const id = renamed.get(node.id);
+    if (id && node.position) result = setNodePosition(result, id, { x: node.position.x + offset.x, y: node.position.y + offset.y });
+  }
+  return { source: result, ids: [...renamed.values()] };
+}
+
+/** Copies the nodes `ids` and the connections between them beside the originals, in one edit (see pasteNodes). */
+export function duplicateNodes(source: string, ids: Iterable<string>, options?: PasteOptions): { source: string; ids: string[] } {
+  return pasteNodes(source, copyNodes(source, ids), options);
 }
 
 /** Words that start statements, so a new node never takes them as its id. */

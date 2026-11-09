@@ -64,8 +64,10 @@ import { filesResolver, importableFiles, teamFileOf, usedImports, type TeamFile 
 import { LONG_LINK_MESSAGE, LONG_LINK_SHORTEN_MESSAGE, decodeShareLink, encodeShareHash, isLongLink, readShareLink, shareUrl, type PlaybackTarget } from '../../playground/share';
 import { applyMerge, backupFileName, buildBackup, mergeSummary, planMerge, readBackup } from '../../playground/backup';
 import { loadProgress, mergeProgress, saveProgress } from '../../practice/progress';
-import { addConnection, addNode, clearPositions, removeConnections, removeNode, renameNode, setNodePosition, uniqueId } from '../../dsl/edit';
+import { addConnection, addNode, clearPosition, clearPositions, copyNodes, duplicateNodes, pasteNodes, removeConnections, removeNode, renameNode, retargetConnection, setNodePosition, uniqueId, type PasteOptions } from '../../dsl/edit';
 import { EmptyCanvas } from '../Diagram/CanvasEditing';
+import { isShortcutsKey } from '../Diagram/canvasEditState';
+import ShortcutsDialog from './ShortcutsDialog';
 import { SystemActionsContext, type SystemActions } from '../Canvas/systemActions';
 import { useSystemView, type Crumb } from './useSystemView';
 import PaneLoading from '../PaneLoading';
@@ -234,6 +236,8 @@ export default function Playground() {
   const [filesPeek, setFilesPeek] = useState(false);
   const [drawer, setDrawer] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
+  const closeShortcuts = useCallback(() => setShowShortcuts(false), []);
   const [showShortLinks, setShowShortLinks] = useState(false);
   /** The short link made for a document and its imports, so asking again reuses it. */
   const shortLinkRef = useRef<{ key: string; id: string; url: string } | null>(null);
@@ -487,7 +491,7 @@ export default function Playground() {
     setBanner({ tone: 'warning', message: `${names}${broken.length > 3 ? ` and ${broken.length - 3} more` : ''} ${broken.length === 1 ? 'has an import that no longer finds its file' : 'have imports that no longer find their files'}; update the import lines.` });
   };
 
-  // Ctrl/Cmd+P: go to a diagram (instead of printing the page); Escape closes the phone drawer.
+  // Ctrl/Cmd+P: go to a diagram (instead of printing the page); `?` outside fields: the shortcuts; Escape closes the phone drawer.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -497,6 +501,10 @@ export default function Playground() {
       if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'p') {
         e.preventDefault();
         setQuickOpen(true);
+      }
+      if (isShortcutsKey(e)) {
+        e.preventDefault();
+        setShowShortcuts(true);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -744,6 +752,66 @@ export default function Playground() {
     editSource((src) => addNode(src, { id, name: tech, tech, position }).source);
     return id;
   };
+  /** What Ctrl/Cmd+C on the canvas copied (see copyNodes), and how often it was pasted since, so each paste lands a step further. */
+  const canvasClipboard = useRef<{ text: string; pastes: number } | null>(null);
+  const copyFromCanvas = (ids: string[]) => {
+    const text = copyNodes(source, ids.filter((id) => !importedNodes.has(id)));
+    if (!text) return setNotice('Groups, systems and imported components are copied in the code.');
+    canvasClipboard.current = { text, pastes: 0 };
+    // Also as text, to paste into the code or another app; the canvas pastes its own copy.
+    navigator.clipboard?.writeText(text).catch(() => undefined);
+    const count = parse(text).diagram.nodes.length;
+    setNotice(`Copied ${count === 1 ? 'a component' : `${count} components`}; ${MOD_KEY}+V pastes.`);
+  };
+  /** Applies a paste in one edit and returns the new nodes' ids, so the canvas selects them. */
+  const addOnCanvas = (paste: (src: string, options: PasteOptions) => { source: string; ids: string[] }, step: number) => {
+    if (systems.focusFile) {
+      setNotice(`This is the design in ${systems.focusFile}; add components there.`);
+      return undefined;
+    }
+    const options = { taken: [...importedNodes.keys()], offset: { x: 40 * step, y: 40 * step } };
+    const { ids } = paste(source, options);
+    if (ids.length > 0) editSource((src) => paste(src, options).source);
+    return ids;
+  };
+  const pasteFromCanvas = () => {
+    const clip = canvasClipboard.current;
+    if (!clip) return undefined;
+    clip.pastes++;
+    return addOnCanvas((src, options) => pasteNodes(src, clip.text, options), clip.pastes);
+  };
+  const duplicateFromCanvas = (ids: string[]) => {
+    const own = ids.filter((id) => !importedNodes.has(id));
+    const added = addOnCanvas((src, options) => duplicateNodes(src, own, options), 1);
+    if (added?.length === 0) setNotice('Groups, systems and imported components are duplicated in the code.');
+    return added;
+  };
+  const reconnectFromCanvas = (edgeId: string, from: string, to: string) => {
+    const edge = shown.edges.find((e) => e.id === edgeId);
+    if (!edge) return;
+    if (systems.focusFile || edge.loc.file || importedNodes.has(from) || importedNodes.has(to)) {
+      return setNotice(`Declared in ${systems.focusFile ?? edge.loc.file ?? importedNodes.get(from) ?? importedNodes.get(to)}; connect it there.`);
+    }
+    // Edge ids count duplicates across every file; the text edit needs this document's own id.
+    const rootId = parse(source).diagram.edges.find((r) => r.loc.line === edge.loc.line)?.id;
+    if (!rootId) return;
+    const result = retargetConnection(source, rootId, from, to);
+    if (result.error !== undefined) return setNotice(result.error);
+    editSource((src) => retargetConnection(src, rootId, from, to).source ?? src);
+  };
+  const unpinFromCanvas = (id: string) => {
+    if (importedNodes.has(id)) return setNotice(`'${id}' is declared in ${importedNodes.get(id)}; unpin it there.`);
+    editSource((src) => clearPosition(src, id));
+  };
+  /** Selects a node's or a connection's text in the code pane (on a phone, switching to it). */
+  const jumpToCode = (id: string) => {
+    const loc = shown.nodes.find((n) => n.id === id)?.loc ?? shown.edges.find((e) => e.id === id)?.loc;
+    if (!loc) return;
+    setMobilePane('code');
+    if (loc.file !== undefined || team) return selectDiagnostic(loc);
+    // After the code pane is shown, so the editor can take the focus.
+    requestAnimationFrame(() => editorRef.current?.select(loc.line, loc.col, loc.length, true));
+  };
   const undoCanvas = useCallback(() => void editorRef.current?.undo(), []);
   const redoCanvas = useCallback(() => void editorRef.current?.redo(), []);
 
@@ -983,6 +1051,7 @@ export default function Playground() {
             setTourRun((n) => n + 1);
             setTour('tour');
           }}
+          onShortcuts={() => setShowShortcuts(true)}
         />
         <input
           ref={fileInputRef}
@@ -1312,6 +1381,12 @@ export default function Playground() {
                           onOpenSystem={(id) => (summaries.get(id)?.linked ? systems.open(id) : setNotice(`'${id}' is declared without a design; add from "file" to its block to open it.`))}
                           onResetLayout={() => editSource(clearPositions)}
                           onDelete={deleteFromCanvas}
+                          onCopyNodes={copyFromCanvas}
+                          onPasteNodes={pasteFromCanvas}
+                          onDuplicateNodes={duplicateFromCanvas}
+                          onReconnect={reconnectFromCanvas}
+                          onUnpinNode={unpinFromCanvas}
+                          onJumpToCode={jumpToCode}
                           fitKey={`${mobilePane}:${layoutSettled}`}
                           layoutBusy={layoutBusy}
                         glideKey={String(splitMoves)}
@@ -1379,6 +1454,8 @@ export default function Playground() {
           onClose={() => setQuickOpen(false)}
         />
       )}
+
+      {showShortcuts && <ShortcutsDialog partner={hasPartner} onClose={closeShortcuts} />}
 
       {showExamples && (
         <Suspense fallback={<PaneLoading overlay />}>
