@@ -1,0 +1,36 @@
+frontend/src/hld/html.ts
+  s_f355061868c346::t_d3d61899961079 23-24,69-79
+frontend/src/components/Playground/exportDiagram.ts
+  s_f355061868c346::t_6198a41e7b759c 39-47,109-112
+frontend/src/embed/Embed.tsx
+  s_f355061868c346::t_dd4f42491e5065 14-15,21,39-40,54,76
+docs/SHARING.md
+  s_f355061868c346::t_07af083f785fab 113-116
+frontend/src/docs/LiveExample.tsx
+  s_f355061868c346::t_dd4f42491e5065 26-27,61,135-142
+frontend/src/components/Hld/HldView.tsx
+  s_f355061868c346::t_d3d61899961079 3,33-35,41-42,45,47-61,76,104-124
+  s_f355061868c346::t_d3ab06f74f340b 46
+frontend/src/components/Playground/ExportMenu.tsx
+  s_f355061868c346::t_6198a41e7b759c 1-4,27-28,54-78
+frontend/src/services/shares.ts
+  s_f355061868c346::t_dd4f42491e5065 30-31,57
+backend/src/shares.ts
+  s_f355061868c346::t_d664502a59e7e5 6-7,147-150,157,164-168,180
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9457262f7bcc06fb8a3affb6304fdae78d99185a",
+  "prompts": {},
+  "sessions": {
+    "s_f355061868c346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd556674-4248-429d-bf5c-2b361bc86c62",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
