@@ -1,0 +1,113 @@
+# expect-fail: Writes replicate to the other region asynchronously
+# mistake: Waiting for the other region before acknowledging a write
+# explain: The bookmark is acknowledged only after the other region's Cassandra has it too, so every write pays a cross-country round trip, and when the link between the regions breaks, writes fail in both. That couples the two regions on exactly the path that should keep them independent.
+# explain: Acknowledge once the local quorum has the write and let Cassandra replicate to the other region in the background.
+# lesson: asynchronous-replication-between-regions
+# cards: cross-region-async, sync-vs-async-replication
+# Each write waits for the other region's Cassandra (like EACH_QUORUM) before answering.
+import "problem.proschi"
+
+eastZuul  "Zuul, US-East"         [API Gateway] x3 @east "Edge gateway of US-East-1: routes, and sheds load when the region is overrun"
+eastApi   "Playback API, US-East" [Service]     x7 @east "Stateless: any instance serves any member, so it can absorb the other region's members"
+eastCache "EVCache, US-East"      [Memcached]   x2 @east "Memcached in front of Cassandra; filled by local reads only"
+eastDb    "Cassandra, US-East"    [Cassandra]   x2 @east "Every member's data; each write also waits for US-West"
+
+westZuul  "Zuul, US-West"         [API Gateway] x3 @west "Edge gateway of US-West-2: routes, and sheds load when the region is overrun"
+westApi   "Playback API, US-West" [Service]     x7 @west "Stateless: any instance serves any member, so it can absorb the other region's members"
+westCache "EVCache, US-West"      [Memcached]   x2 @west "Memcached in front of Cassandra; filled by local reads only"
+westDb    "Cassandra, US-West"    [Cassandra]   x2 @west "Every member's data; each write also waits for US-East"
+
+viewer   -> dns       : resolve api.netflix.com
+viewer   -> eastZuul  : HTTPS
+viewer   -> westZuul  : HTTPS
+eastZuul -> eastApi   : HTTP
+westZuul -> westApi   : HTTP
+eastApi  -> eastCache : memcached
+westApi  -> westCache : memcached
+eastApi  -> eastDb    : CQL
+westApi  -> westDb    : CQL
+eastDb   -> westDb    : sync replication
+westDb   -> eastDb    : sync replication
+eastApi  -> westCache : invalidate (via SQS)
+westApi  -> eastCache : invalidate (via SQS)
+
+usecase "Browse" "A member opens the home screen; read from the local region only" {
+  viewer -> dns : resolve api.netflix.com
+  alt "East" when "member in the eastern half" {
+    viewer   -> eastZuul : GET /home
+    eastZuul -> eastApi  : GET /home
+    alt "Hit" {
+      eastApi -> eastCache : GET member rows
+    } alt "Miss" when "not in US-East EVCache" {
+      eastApi -> eastCache : GET member rows
+      eastApi -> eastDb    : SELECT at LOCAL_QUORUM
+      eastApi -> eastCache : SET member rows
+    }
+    eastApi  --> eastZuul : 200
+    eastZuul --> viewer   : 200 home screen
+  } alt "West" when "member in the western half" {
+    viewer   -> westZuul : GET /home
+    westZuul -> westApi  : GET /home
+    alt "Hit" {
+      westApi -> westCache : GET member rows
+    } alt "Miss" when "not in US-West EVCache" {
+      westApi -> westCache : GET member rows
+      westApi -> westDb    : SELECT at LOCAL_QUORUM
+      westApi -> westCache : SET member rows
+    }
+    westApi  --> westZuul : 200
+    westZuul --> viewer   : 200 home screen
+  }
+}
+
+usecase "Save progress" "The player saves where the member stopped; acknowledged by the local region" {
+  viewer -> dns : resolve api.netflix.com
+  alt "East" {
+    viewer    -> eastZuul  : PUT /bookmark
+    eastZuul  -> eastApi   : PUT /bookmark
+    eastApi   -> eastDb    : INSERT bookmark at LOCAL_QUORUM
+    eastDb    -> westDb    : replicate bookmark, wait for US-West
+    eastApi   -> eastCache : DELETE bookmark
+    eastApi  --> eastZuul  : 204
+    eastZuul --> viewer    : 204
+    eastApi  ->> westCache : DELETE bookmark (via SQS)
+  } alt "West" {
+    viewer    -> westZuul  : PUT /bookmark
+    westZuul  -> westApi   : PUT /bookmark
+    westApi   -> westDb    : INSERT bookmark at LOCAL_QUORUM
+    westDb    -> eastDb    : replicate bookmark, wait for US-East
+    westApi   -> westCache : DELETE bookmark
+    westApi  --> westZuul  : 204
+    westZuul --> viewer    : 204
+    westApi  ->> eastCache : DELETE bookmark (via SQS)
+  }
+}
+
+usecase "Browse in failover" "One region is evacuated: DNS sends all its members to the other" {
+  viewer -> dns : resolve api.netflix.com
+  alt "East evacuated" when "US-East is failed over" {
+    viewer   -> westZuul : GET /home
+    westZuul -> westApi  : GET /home
+    alt "Hit" {
+      westApi -> westCache : GET member rows
+    } alt "Miss" when "an eastern member, not yet in US-West EVCache" {
+      westApi -> westCache : GET member rows
+      westApi -> westDb    : SELECT at LOCAL_QUORUM
+      westApi -> westCache : SET member rows
+    }
+    westApi  --> westZuul : 200
+    westZuul --> viewer   : 200 home screen
+  } alt "West evacuated" when "US-West is failed over" {
+    viewer   -> eastZuul : GET /home
+    eastZuul -> eastApi  : GET /home
+    alt "Hit" {
+      eastApi -> eastCache : GET member rows
+    } alt "Miss" when "a western member, not yet in US-East EVCache" {
+      eastApi -> eastCache : GET member rows
+      eastApi -> eastDb    : SELECT at LOCAL_QUORUM
+      eastApi -> eastCache : SET member rows
+    }
+    eastApi  --> eastZuul : 200
+    eastZuul --> viewer   : 200 home screen
+  }
+}
