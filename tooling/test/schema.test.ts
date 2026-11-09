@@ -45,6 +45,9 @@ describe('JSON Schema', () => {
     const source = 'let peak = 2k rps\nlet n = 2\napi [REST API] x$n\nusecase "U" {\n  api -> api : x\n}\ntraffic {\n  "U" $peak\n}';
     const result = JSON.parse(JSON.stringify(parse(source)));
     expect(result.diagram.constants).toHaveLength(2);
+    const peak = JSON.parse(JSON.stringify(parse(source.replace('"U" $peak', '"U" $peak peak x3'))));
+    expect(peak.diagram.traffic[0]).toMatchObject({ rps: 6000, avgRps: 2000 });
+    expect(validate(peak), JSON.stringify(validate.errors, null, 2)).toBe(true);
     expect(validate(result), JSON.stringify(validate.errors, null, 2)).toBe(true);
   });
 

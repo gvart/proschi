@@ -10,6 +10,12 @@ export function formatRps(rps: number): string {
   return `${trim(rps, rps < 10 ? 2 : 0)} rps`;
 }
 
+/** A use case's traffic: `20k rps`, or with a peak `avg 20k · peak 60k rps`. */
+export function formatTraffic(rps: number, avgRps?: number): string {
+  if (avgRps === undefined || avgRps === rps) return formatRps(rps);
+  return `avg ${formatRps(avgRps).replace(/ rps$/, '')} · peak ${formatRps(rps)}`;
+}
+
 /** `4.5 ms`, `41 ms`, `1200 ms` */
 export function formatMs(ms: number): string {
   return `${trim(ms, ms < 100 ? 1 : 0)} ms`;

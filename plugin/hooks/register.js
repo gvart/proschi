@@ -2477,8 +2477,31 @@ var Parser = class _Parser {
     const rps = this.quantityOf(rate, "rps", name, line);
     if (rps === void 0) return;
     const entry = { useCase: name.value, rps, loc: this.lineLoc(tokens, line) };
-    const shares = [];
     let i = 2;
+    if (isWord(tokens[i], "peak")) {
+      const word = tokens[i];
+      const value = tokens[i + 1];
+      let peak;
+      if (value?.kind === "ident" && MULTIPLIER.test(value.value)) peak = rps * Number(MULTIPLIER.exec(value.value)[1]);
+      else if (value?.kind === "const" && value.value.startsWith("x")) {
+        const factor = this.countOf(value, line);
+        if (factor === void 0) return;
+        peak = rps * factor;
+      } else if (value?.kind === "quantity" || value?.kind === "number" || isConstUse(value)) peak = this.quantityOf(value, "rps", word, line);
+      else {
+        this.error(`Expected the peak after peak, as a multiple of the average (peak x3) or a rate (peak 60k rps)${value ? `, not ${describe(value)}` : ""}`, this.locOf(value ?? word, line));
+        return;
+      }
+      if (peak === void 0) return;
+      if (peak < rps) {
+        this.error(`The peak cannot be below the average, ${rps.toLocaleString("en-US")} rps`, this.locOf(value, line));
+        return;
+      }
+      entry.avgRps = rps;
+      entry.rps = Number(peak.toPrecision(12));
+      i += 2;
+    }
+    const shares = [];
     if (tokens[i]) {
       const mix = tokens[i++];
       if (!isWord(mix, "mix")) {
@@ -4545,7 +4568,8 @@ function resolveTraffic(diagram, warnings = []) {
       if (Math.abs(total - 1) > 1e-6) warnings.push(`Traffic mix of "${useCase.name}" adds up to ${formatPercent(total)}; shares are scaled to 100%`);
       for (let i = 0; i < shares.length; i++) shares[i] /= total;
     }
-    result.set(useCase.id, { rps: entry.rps, shares: useCase.scenarios.length ? shares : [] });
+    const average = entry.avgRps === void 0 ? void 0 : entry.rps > 0 ? entry.avgRps / entry.rps : 1;
+    result.set(useCase.id, { rps: entry.rps, shares: useCase.scenarios.length ? shares : [], ...average !== void 0 ? { average } : {} });
   }
   return result;
 }
@@ -4579,6 +4603,10 @@ function trafficFor(diagram, options = {}, warnings = []) {
     traffic.set(u.id, { ...t, shares, stranded: Math.min(1, stranded) });
   }
   return traffic;
+}
+function averageTraffic(traffic) {
+  if (![...traffic.values()].some((t) => t.average !== void 0)) return traffic;
+  return new Map([...traffic].map(([id, t]) => [id, t.average === void 0 ? t : { ...t, rps: t.rps * t.average }]));
 }
 var multiplierOf = (step) => step.multiplier !== void 0 && step.multiplier > 0 ? step.multiplier : 1;
 function forEachStepRate(diagram, traffic, visit) {
@@ -4778,7 +4806,7 @@ function analyze(diagram, options = {}) {
   const kindOf2 = (id) => profiles.get(id)?.kind ?? "client";
   const traffic = trafficFor(diagram, options, warnings);
   const load = computeLoad(diagram, traffic);
-  const egress = computeEgressGb(diagram, traffic, kindOf2);
+  const egress = computeEgressGb(diagram, averageTraffic(traffic), kindOf2);
   const bytes = computeBytesPerSecond(diagram, traffic);
   const systems = diagram.systems?.length ? analyzeSystems(diagram, traffic, options) : void 0;
   const hops = /* @__PURE__ */ new Map();
@@ -4833,7 +4861,7 @@ function analyze(diagram, options = {}) {
     )
   });
   const useCases = diagram.useCases.map((u) => {
-    const { rps, shares, stranded } = traffic.get(u.id);
+    const { rps, shares, stranded, average } = traffic.get(u.id);
     const paths = u.scenarios.map((s) => pathOf(criticalPath(u, s)));
     const scenarios = u.scenarios.map((s, i) => ({
       id: s.id,
@@ -4861,7 +4889,7 @@ function analyze(diagram, options = {}) {
       return !n ? 1 : writes.has(id) ? n.writeAvailability : n.availability;
     };
     const availability2 = useCaseAvailability(u, shares, availabilityOf) * (1 - (stranded ?? 0));
-    return { id: u.id, name: u.name, rps, scenarios, percentiles, tailScenario, availability: availability2 };
+    return { id: u.id, name: u.name, rps, ...average !== void 0 ? { avgRps: rps * average } : {}, scenarios, percentiles, tailScenario, availability: availability2 };
   });
   return {
     nodes: nodeResults,

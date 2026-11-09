@@ -96,7 +96,10 @@ export interface ScenarioAnalysis {
 export interface UseCaseAnalysis {
   id: string;
   name: string;
+  /** The rate the design is loaded with: the peak, for a traffic line with `peak`. */
   rps: number;
+  /** `"U" 20k rps peak x3`: the average rate, which egress is costed at. Absent for a flat rate. */
+  avgRps?: number;
   scenarios: ScenarioAnalysis[];
   /** Percentiles of the mixture of the scenarios, weighted by their shares. */
   percentiles: ScenarioAnalysis['percentiles'];
@@ -184,6 +187,8 @@ export const replicasOf = (node: DiagramNode): number => Math.max(1, node.replic
 export interface UseCaseTraffic {
   rps: number;
   shares: number[];
+  /** `peak` traffic: the average as a fraction of `rps` (the peak), 0..1. Absent for a flat rate. */
+  average?: number;
   /** With failed nodes: the share of requests whose scenario needs a failed node and has no fallback, 0..1. Absent otherwise. */
   stranded?: number;
 }
@@ -217,7 +222,8 @@ export function resolveTraffic(diagram: Diagram, warnings: string[] = []): Map<s
       if (Math.abs(total - 1) > 1e-6) warnings.push(`Traffic mix of "${useCase.name}" adds up to ${formatPercent(total)}; shares are scaled to 100%`);
       for (let i = 0; i < shares.length; i++) shares[i] /= total;
     }
-    result.set(useCase.id, { rps: entry.rps, shares: useCase.scenarios.length ? shares : [] });
+    const average = entry.avgRps === undefined ? undefined : entry.rps > 0 ? entry.avgRps / entry.rps : 1;
+    result.set(useCase.id, { rps: entry.rps, shares: useCase.scenarios.length ? shares : [], ...(average !== undefined ? { average } : {}) });
   }
   return result;
 }
@@ -259,6 +265,17 @@ export function trafficFor(diagram: Diagram, options: AnalyzeOptions = {}, warni
     traffic.set(u.id, { ...t, shares, stranded: Math.min(1, stranded) });
   }
   return traffic;
+}
+
+/**
+ * The traffic at its average: each use case with `peak` traffic at its
+ * average rate, the others unchanged. Egress, a monthly bill, is costed at
+ * it; everything else is taken at the peak. Without `peak` traffic it is
+ * `traffic` itself.
+ */
+export function averageTraffic(traffic: Map<string, UseCaseTraffic>): Map<string, UseCaseTraffic> {
+  if (![...traffic.values()].some((t) => t.average !== undefined)) return traffic;
+  return new Map([...traffic].map(([id, t]) => [id, t.average === undefined ? t : { ...t, rps: t.rps * t.average }]));
 }
 
 /** Times the step happens per request (`x200 …`, §7.3); 1 when absent. */
@@ -631,7 +648,7 @@ export function analyze(diagram: Diagram, options: AnalyzeOptions = {}): Analysi
 
   const traffic = trafficFor(diagram, options, warnings);
   const load = computeLoad(diagram, traffic);
-  const egress = computeEgressGb(diagram, traffic, kindOf);
+  const egress = computeEgressGb(diagram, averageTraffic(traffic), kindOf);
   const bytes = computeBytesPerSecond(diagram, traffic);
   const systems = diagram.systems?.length ? analyzeSystems(diagram, traffic, options) : undefined;
 
@@ -690,7 +707,7 @@ export function analyze(diagram: Diagram, options: AnalyzeOptions = {}): Analysi
   });
 
   const useCases: UseCaseAnalysis[] = diagram.useCases.map((u) => {
-    const { rps, shares, stranded } = traffic.get(u.id)!;
+    const { rps, shares, stranded, average } = traffic.get(u.id)!;
     const paths = u.scenarios.map((s) => pathOf(criticalPath(u, s)));
     const scenarios: ScenarioAnalysis[] = u.scenarios.map((s, i) => ({
       id: s.id,
@@ -718,7 +735,7 @@ export function analyze(diagram: Diagram, options: AnalyzeOptions = {}): Analysi
       return !n ? 1 : writes.has(id) ? n.writeAvailability : n.availability;
     };
     const availability = useCaseAvailability(u, shares, availabilityOf) * (1 - (stranded ?? 0));
-    return { id: u.id, name: u.name, rps, scenarios, percentiles, tailScenario, availability };
+    return { id: u.id, name: u.name, rps, ...(average !== undefined ? { avgRps: rps * average } : {}), scenarios, percentiles, tailScenario, availability };
   });
 
   return {

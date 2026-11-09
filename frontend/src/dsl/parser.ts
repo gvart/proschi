@@ -1475,8 +1475,33 @@ class Parser {
     if (rps === undefined) return;
     const entry: TrafficEntry = { useCase: name.value, rps, loc: this.lineLoc(tokens, line) };
 
-    const shares: { scenario: string; share: number; loc: SourceLoc }[] = [];
     let i = 2;
+    // `peak x3` or `peak 60k rps`: the rate is the average, and the design is loaded with the peak.
+    if (isWord(tokens[i], 'peak')) {
+      const word = tokens[i];
+      const value = tokens[i + 1];
+      let peak: number | undefined;
+      if (value?.kind === 'ident' && MULTIPLIER.test(value.value)) peak = rps * Number(MULTIPLIER.exec(value.value)![1]);
+      else if (value?.kind === 'const' && value.value.startsWith('x')) {
+        const factor = this.countOf(value, line);
+        if (factor === undefined) return;
+        peak = rps * factor;
+      } else if (value?.kind === 'quantity' || value?.kind === 'number' || isConstUse(value)) peak = this.quantityOf(value, 'rps', word, line);
+      else {
+        this.error(`Expected the peak after peak, as a multiple of the average (peak x3) or a rate (peak 60k rps)${value ? `, not ${describe(value)}` : ''}`, this.locOf(value ?? word, line));
+        return;
+      }
+      if (peak === undefined) return;
+      if (peak < rps) {
+        this.error(`The peak cannot be below the average, ${rps.toLocaleString('en-US')} rps`, this.locOf(value, line));
+        return;
+      }
+      entry.avgRps = rps;
+      entry.rps = Number(peak.toPrecision(12));
+      i += 2;
+    }
+
+    const shares: { scenario: string; share: number; loc: SourceLoc }[] = [];
     if (tokens[i]) {
       const mix = tokens[i++];
       if (!isWord(mix, 'mix')) {

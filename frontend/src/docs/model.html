@@ -46,6 +46,11 @@
           Steps after the response count too, so a queue's consumer carries load the user never waits for. A use
           case without a traffic line adds no load.
         </p>
+        <p>
+          With <code>peak</code> (<code>"Read" 20k rps peak x3</code>), <var>R</var> is the peak, 60k: load,
+          utilisation, latency and requirements are all taken at the busiest hour. Only egress is costed at the
+          average, 20k (rule 1.8).
+        </p>
       </div>
       <pre class="formula" tabindex="0"><code>load(n) = Σ  R(U) × share(s) × N(step)
           over every request step to n that is not -x
@@ -268,6 +273,8 @@ A(U) = Π over nodes n on the main path of
         <p>
           Each instance costs a flat monthly price from its profile, whatever its load, plus egress, for a 30-day
           month. Clients, DNS and external systems cost nothing. There are no instance sizes or per-request prices.
+          Egress follows the average rate of a traffic line with <code>peak</code>, since the month is mostly not
+          the peak hour.
         </p>
       </div>
       <pre class="formula" tabindex="0"><code>cost = Σ over nodes  replicas × shards × cost(n) + egress cost(n)</code></pre>
@@ -709,7 +716,10 @@ traffic {
       </tr>
       <tr>
         <th scope="row">Traffic shape and autoscaling <span class="tag tag--opt">optimistic</span></th>
-        <td>Traffic is one constant rate and replica counts are fixed. Enter your peak rate, not your average.</td>
+        <td>
+          Traffic is one rate per use case, or an average and a peak (<code>peak x3</code>): the design is sized for
+          the peak and billed for the average. Replica counts are fixed, so there is no autoscaling between the two.
+        </td>
       </tr>
       <tr>
         <th scope="row">Contention and per-request work <span class="tag">either way</span></th>

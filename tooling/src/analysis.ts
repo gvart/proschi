@@ -9,6 +9,7 @@ import {
   formatAvailability,
   formatMs,
   formatPercent,
+  formatTraffic,
   formatUsd,
   kindName,
   parse,
@@ -269,6 +270,7 @@ export function complete(analysis: Analysis, pos: Position): CompletionItem[] {
   const range = { start: { line: pos.line, character: pos.character - word.length }, end: pos };
   const atLineStart = /^\s*(\}\s*)?$/.test(before.slice(0, before.length - word.length));
   if (sectionAt(analysis, pos.line) === 'capacity') return capacityCompletions(analysis, before.slice(0, before.length - word.length), range);
+  if (sectionAt(analysis, pos.line) === 'traffic') return trafficCompletions(before.slice(0, before.length - word.length), range);
   // `when` is only valid right after an alt name: alt "Not found" when "…" {
   if (/^\s*(\}\s*)?alt\s+"[^"]*"\s+$/.test(before.slice(0, before.length - word.length))) {
     return [{ label: 'when', kind: 'keyword', detail: 'Condition of this scenario', snippet: 'when "${1:condition}" {\n\t$0\n}', range }];
@@ -345,6 +347,18 @@ function capacityCompletions(analysis: Analysis, head: string, range: Range): Co
   if (/\b(latency|availability|cost|timeout|reads|writes|shards|bandwidth|egress)\s+$/.test(head)) return [];
   const used = new Set(head.trim().split(/\s+/));
   return CAPACITY_PARTS.filter((p) => !used.has(p.label)).map((p) => ({ label: p.label, kind: 'keyword', detail: p.detail, snippet: p.snippet, range }));
+}
+
+const RATE = String.raw`\S+(?:\s+(?:rps|rpm|rpd))?`;
+const AFTER_RATE = new RegExp(String.raw`^\s*"[^"]*"\s+${RATE}\s+$`);
+const AFTER_PEAK = new RegExp(String.raw`^\s*"[^"]*"\s+${RATE}\s+peak\s+${RATE}\s+$`);
+
+/** After a traffic line's rate: `peak` and `mix`; after its peak: `mix`. */
+function trafficCompletions(head: string, range: Range): CompletionItem[] {
+  const peak: CompletionItem = { label: 'peak', kind: 'keyword', detail: 'The peak, as a multiple of this average rate', snippet: 'peak x${1:3}', range };
+  const mix: CompletionItem = { label: 'mix', kind: 'keyword', detail: 'Shares of the scenarios', snippet: 'mix "${1:Scenario}" ${2:90%}', range };
+  if (AFTER_RATE.test(head)) return [peak, mix];
+  return AFTER_PEAK.test(head) ? [mix] : [];
 }
 
 type SectionKind = NonNullable<ParseResult['blocks']>[number]['kind'];
@@ -668,6 +682,15 @@ export function hover(analysis: Analysis, pos: Position): { markdown: string; ra
     const lines = [`**$${c.name}** = \`${c.text}\``, '', `Constant, ${kindName(c.unit)}`];
     if (c.loc.file) lines.push('', `_Defined in ${c.loc.file.split(/[\\/]/).pop()}_`);
     return { markdown: lines.join('\n'), range: constant.range };
+  }
+  const name = nameAt(analysis, pos);
+  if (name?.ref.kind === 'usecase' && sectionAt(analysis, pos.line) === 'traffic') {
+    const u = simulationOf(analysis.diagram).useCases.find((x) => x.name === name.ref.useCase);
+    if (!u) return null;
+    const lines = [`**${u.name}** · ${formatTraffic(u.rps, u.avgRps)}`];
+    if (u.avgRps !== undefined) lines.push('', 'Capacity, latency and requirements are taken at the peak, egress cost at the average.');
+    if (Number.isFinite(u.percentiles.p99)) lines.push('', `p99 ${formatMs(u.percentiles.p99)} · availability ${formatAvailability(u.availability)}`);
+    return { markdown: lines.join('\n'), range: name.range };
   }
   const hit = nodeAt(analysis, pos);
   if (!hit) return null;

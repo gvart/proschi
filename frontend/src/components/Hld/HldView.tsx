@@ -16,6 +16,7 @@ import {
   formatMs,
   formatPercent,
   formatRps,
+  formatTraffic,
   formatUsd,
   overviewFacts,
   responseText,
@@ -238,7 +239,7 @@ function SectionBody({ doc, section: s, nodes, edges }: { doc: HldDocument; sect
           {s.traffic.length > 0 && (
             <>
               <H3>Traffic</H3>
-              <Table head={['Use case', 'Rate', 'Mix']} rows={s.traffic.map((t) => [t.useCase, formatRps(t.rps), t.mix.map((m) => `${m.scenario} ${formatPercent(m.share)}`).join(', ')])} />
+              <Table head={['Use case', 'Rate', 'Mix']} rows={s.traffic.map((t) => [t.useCase, formatTraffic(t.rps, t.avgRps), t.mix.map((m) => `${m.scenario} ${formatPercent(m.share)}`).join(', ')])} />
             </>
           )}
           {s.load.length > 0 && (

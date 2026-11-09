@@ -37,6 +37,7 @@ export {
   formatMs,
   formatPercent,
   formatRps,
+  formatTraffic,
   formatUsd,
   HOT,
   type Analysis as SimAnalysis,

@@ -344,7 +344,14 @@ export type Selector =
 /** `"Redirect" 100k rps mix "Cache hit" 90%, "Cache miss" 10%`; shares are fractions 0..1. */
 export interface TrafficEntry {
   useCase: string;
+  /** The rate the design is loaded with: the peak when `peak` is written, else the one rate. */
   rps: number;
+  /**
+   * `"Read" 20k rps peak x3` (or `peak 60k rps`): the average rate, 20k, while
+   * `rps` is the peak, 60k. Capacity, latency and requirements are taken at
+   * the peak, egress cost at the average. Absent for a flat rate.
+   */
+  avgRps?: number;
   mix?: { scenario: string; share: number }[];
   loc: SourceLoc;
 }

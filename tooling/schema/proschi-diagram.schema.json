@@ -1058,7 +1058,12 @@
         "rps": {
           "type": "number",
           "minimum": 0,
-          "description": "Requests per second."
+          "description": "Requests per second the design is loaded with: the peak when `peak` is written."
+        },
+        "avgRps": {
+          "type": "number",
+          "minimum": 0,
+          "description": "`peak x3` or `peak 60k rps`: the average rate (the one written first), which egress is costed at. Left out for a flat rate."
         },
         "mix": {
           "type": "array",

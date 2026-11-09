@@ -107,7 +107,7 @@ A number that shows up in several places gets a name: `let`, the name,
 ```proschi
 title "Checkout"
 
-let peak = 2k rps
+let orders = 2k rps
 let fleet = 3
 let slo = 300ms
 let budget = 1500 usd/month
@@ -128,7 +128,7 @@ usecase "Checkout" {
 }
 
 traffic {
-  "Checkout" $peak
+  "Checkout" $orders
 }
 
 requirements {
@@ -142,7 +142,7 @@ whatif "Launch day" {
 }
 ```
 
-> **Try it:** set `let peak = 3k rps`. The traffic follows, and so does
+> **Try it:** set `let orders = 3k rps`. The traffic follows, and so does
 > "Launch day", which now sends 6k rps: the Orders database, whose writes
 > all go to one primary, saturates.
 
@@ -164,6 +164,40 @@ scenarios. Without it the simulation measures nothing, so add it first.
 
 - One line per use case: its name in quotes, then a rate, as in the
   example above.
+- `peak` gives the busiest hour: `"Read" 20k rps peak x3` averages 20k rps
+  and peaks at 60k, and so does `"Read" 20k rps peak 60k rps`. Capacity,
+  latency and requirements are taken at the peak, because that is when a
+  node saturates. Egress is costed at the average, because the bill is for
+  the whole month. The results show both: avg 20k · peak 60k rps. A rate
+  without `peak` is both, as before.
+
+```proschi
+title "Photo feed"
+
+phone "Phone"    [Mobile App]
+api   "Feed API" [REST API]   x6
+cache "Feeds"    [Redis]      x2
+
+phone -> api   : HTTPS
+api   -> cache : RESP
+
+usecase "Open feed" {
+  phone -> api   : ~5KB GET /feed
+  api   -> cache : GET feed
+  api  --> phone : 200
+}
+
+traffic {
+  "Open feed" 2k rps peak x4
+}
+
+requirements {
+  p99 "Open feed" < 100ms
+}
+```
+
+> **Try it:** replace `2k rps peak x4` with a flat `8k rps`. The Feed API
+> runs just as hot, but the egress bill is four times as large.
 - `mix` splits the traffic over the [scenarios](SCENARIOS.md) by their full
   names ("A › B" for nested ones). Without it, all the traffic goes to the
   first scenario.

@@ -10,6 +10,7 @@ import {
   formatMs,
   formatPercent,
   formatRps,
+  formatTraffic,
   formatUsd,
   findWhatIf,
   headlineOf,
@@ -387,7 +388,7 @@ export function capacityReport(diagram: Diagram, analysis: SimAnalysis, file: st
   if (analysis.useCases.length) {
     const rows = [['Use case', 'Traffic', 'p50', 'p95', 'p99', 'p99.9', 'Availability']];
     for (const u of analysis.useCases) {
-      rows.push([u.name, u.rps > 0 ? formatRps(u.rps) : '-', ...(['p50', 'p95', 'p99', 'p999'] as const).map((p) => formatMs(u.percentiles[p])), formatAvailability(u.availability)]);
+      rows.push([u.name, u.rps > 0 ? formatTraffic(u.rps, u.avgRps) : '-', ...(['p50', 'p95', 'p99', 'p999'] as const).map((p) => formatMs(u.percentiles[p])), formatAvailability(u.availability)]);
       if (u.scenarios.length > 1) {
         for (const s of u.scenarios) rows.push([`  ${s.name}`, formatPercent(s.share), formatMs(s.percentiles.p50), formatMs(s.percentiles.p95), formatMs(s.percentiles.p99), formatMs(s.percentiles.p999), '']);
       }
@@ -421,8 +422,10 @@ export function testDiagnostics(diagram: Diagram): Diagnostic[] {
 /** Load, utilisation and latency of a node, for hovers; only when the document has traffic. */
 export function nodeSimulation(diagram: Diagram, nodeId: string): string | undefined {
   if ((diagram.traffic ?? []).length === 0) return undefined;
-  const n = simulationOf(diagram).nodes.find((x) => x.id === nodeId);
+  const sim = simulationOf(diagram);
+  const n = sim.nodes.find((x) => x.id === nodeId);
   if (!n || n.kind === 'client' || n.kind === 'other') return undefined;
+  const peak = sim.useCases.some((u) => u.avgRps !== undefined) ? ' at the peak' : '';
   const state = n.saturated ? ' — **saturated**' : n.utilization > HOT ? ' — hot' : '';
   const split =
     n.readLoadRps > 0 && n.writeLoadRps > 0
@@ -430,7 +433,7 @@ export function nodeSimulation(diagram: Diagram, nodeId: string): string | undef
       : [];
   const egress = n.egressGbPerMonth > 0 ? ` (${formatUsd(n.egressUsd).replace('/month', '')} of it egress, ${formatGb(n.egressGbPerMonth)})` : '';
   return [
-    `Load ${formatRps(n.loadRps)} of ${formatRps(n.capacityRps)} (${formatPercent(n.utilization)} utilised${state})`,
+    `Load ${formatRps(n.loadRps)} of ${formatRps(n.capacityRps)}${peak} (${formatPercent(n.utilization)} utilised${state})`,
     ...split,
     `Latency ${formatMs(n.latencyMs)} per call · availability ${formatAvailability(n.availability)} · ${formatUsd(n.costUsd)}${n.replicas > 1 ? ` for ${n.replicas} replicas` : ''}${egress}`,
   ].join('  \n');

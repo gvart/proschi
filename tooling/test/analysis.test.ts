@@ -249,6 +249,24 @@ function applyEdits(text: string, edits: TextEdit[]): string {
   return [...edits].sort((x, y) => y.range.start.line - x.range.start.line || y.range.start.character - x.range.start.character).reduce(applyEdit, text);
 }
 
+describe('peak traffic', () => {
+  const src = 'user [Browser]\napi [REST API] x4\nuser -> api\nusecase "Read" {\n  user -> api : GET /\n}\ntraffic {\n  "Read" 2k rps peak x3\n}\n';
+  const p = analyze(src);
+
+  it('hovers a traffic line with the average and the peak, and node loads at the peak', () => {
+    const markdown = hover(p, { line: 7, character: 4 })?.markdown ?? '';
+    expect(markdown.split('\n')[0]).toBe('**Read** · avg 2k · peak 6k rps');
+    expect(markdown).toContain('taken at the peak');
+    expect(hover(p, { line: 1, character: 1 })?.markdown).toContain('Load 6k rps of 8k rps at the peak (75% utilised');
+  });
+
+  it('completes peak and mix after the rate, and mix after the peak', () => {
+    const at = (line: string) => complete(analyze(src.replace('"Read" 2k rps peak x3', line)), { line: 7, character: line.length + 2 }).map((i) => i.label);
+    expect(at('"Read" 2k rps ')).toEqual(['peak', 'mix']);
+    expect(at('"Read" 2k rps peak x3 ')).toEqual(['mix']);
+  });
+});
+
 describe('constants', () => {
   const src = 'let peak = 120k rps\nlet n = 3\napi [REST API] x$n\ndb [PostgreSQL]\napi -> db\nusecase "Read" {\n  api -> db\n}\ntraffic {\n  "Read" $peak\n}\nwhatif "Big" {\n  db x$n\n}\n';
   const c = analyze(src);

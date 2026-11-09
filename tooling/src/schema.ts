@@ -230,7 +230,8 @@ export function diagramSchema() {
       traffic: object(
         {
           useCase: str,
-          rps: { ...num, minimum: 0, description: 'Requests per second.' },
+          rps: { ...num, minimum: 0, description: 'Requests per second the design is loaded with: the peak when `peak` is written.' },
+          avgRps: { ...num, minimum: 0, description: '`peak x3` or `peak 60k rps`: the average rate (the one written first), which egress is costed at. Left out for a flat rate.' },
           mix: {
             type: 'array',
             description: 'Shares of the use case traffic per scenario, as fractions that add up to 1. Without a mix, all traffic goes to the first scenario.',

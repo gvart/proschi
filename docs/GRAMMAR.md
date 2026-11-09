@@ -41,7 +41,8 @@ par-open     = "par" , "{" ;
 alt-open     = "alt" , ( string | id ) , [ "when" , string ] , "{" ;
 close        = "}" , [ alt-open ] ;
 
-traffic      = "traffic" , "{" , { string , quantity , [ "mix" , share , { "," , share } ] } , "}" ;
+traffic      = "traffic" , "{" , { string , quantity , [ "peak" , ( replicas | quantity ) ] , [ "mix" , share , { "," , share } ] } , "}" ;
+                                                         (* peak x3: 3× the average; peak 60k rps: the peak itself *)
 share        = string , quantity ;                       (* "Cache hit" 90% *)
 requirements = "requirements" , "{" , { requirement } , "}" ;
 requirement  = percentile , [ string , [ "scenario" , string ] ] , "<" , quantity
