@@ -1,0 +1,57 @@
+frontend/src/practice/problems/search-indexing/given.proschi
+  s_248f83f833fb51::t_98fe99618ca623 1-8,10,12-15,17-21,23-56
+  s_248f83f833fb51::t_acf5558392dc83 16
+  s_248f83f833fb51::t_19a14f97a570d2 9
+  s_248f83f833fb51::t_c296b41b2d9fa9 22
+  s_248f83f833fb51::t_207f1fac7580ab 11
+frontend/src/practice/cards/sharding/search-indexing-shards-vs-replicas.md
+  s_248f83f833fb51::t_4f886604f9ca89 1-27
+frontend/src/practice/problems/search-indexing/problem.md
+  s_248f83f833fb51::t_c13db9f9948f1b 1-2,4-110
+  s_248f83f833fb51::t_e0739c49d64ae9 3
+frontend/src/practice/problems/search-indexing/lesson.md
+  s_248f83f833fb51::t_39b7a709eb3855 162
+  s_248f83f833fb51::t_937f9755c5080d 1-60,62,64-87,89-161
+  s_248f83f833fb51::t_bb6bce3c2e842c 88
+  s_248f83f833fb51::t_54d5b658a2cd0a 61,63
+frontend/src/practice/roadmapStages.ts
+  s_248f83f833fb51::t_67d938794a94a9 54
+frontend/src/practice/problems/search-indexing/starter.proschi
+  s_248f83f833fb51::t_b4c22fa87376a7 12-14
+  s_248f83f833fb51::t_ad9dd9acacdb16 1-11,15-16
+frontend/src/practice/problems/search-indexing/wrong/one-write-per-change.proschi
+  s_248f83f833fb51::t_ccec34308360d2 1-60
+frontend/src/practice/cards/databases/search-indexing-bulk-requests.md
+  s_248f83f833fb51::t_1241a33b968aca 1-27
+frontend/src/practice/problems/search-indexing/interview.md
+  s_248f83f833fb51::t_70219cabc6893d 1-83
+frontend/src/practice/problems/search-indexing/solution.proschi
+  s_248f83f833fb51::t_79a44f2bbd680c 1-6,8-23,29-68,74-76,80-102
+  s_248f83f833fb51::t_19a14f97a570d2 7
+  s_248f83f833fb51::t_207f1fac7580ab 24-28,69-73,77-79
+frontend/src/practice/problems/search-indexing/wrong/shards-without-replicas.proschi
+  s_248f83f833fb51::t_4f9e0cb916cbd7 1-72
+frontend/src/practice/problems/search-indexing/wrong/index-inside-the-edit.proschi
+  s_248f83f833fb51::t_48874aab0da73c 1-72
+frontend/src/practice/problems/search-indexing/wrong/search-the-database.proschi
+  s_248f83f833fb51::t_984daf4fff0fd0 6
+  s_248f83f833fb51::t_94b5e3b5f5e68e 1-5,7-71
+frontend/src/practice/cards/ids.lock
+  s_248f83f833fb51::t_36ff53a001ceaf 241-242
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ab08533cbd8855e9c13371f0533404097a65d027",
+  "prompts": {},
+  "sessions": {
+    "s_248f83f833fb51": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2d46bc96-3c9a-4511-a065-8673803644a9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
