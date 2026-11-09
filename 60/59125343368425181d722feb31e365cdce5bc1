@@ -1,0 +1,27 @@
+frontend/e2e/selection-sync.e2e.ts
+  s_f355061868c346::t_0d54bdeeea5623 1-163
+frontend/src/components/Canvas/canvas.css
+  s_f355061868c346::t_07c1183a40b4a1 668-677
+frontend/src/components/Playground/CodeEditor.tsx
+  s_f355061868c346::t_a73aa729d96bf7 3-4,27-30,52-53,79-99,102,110,116,138-139,142-145,220-225
+frontend/src/components/Playground/DiagramView.tsx
+  s_f355061868c346::t_7ebde3bf08ed1f 1,80-83,143-144,163,232-266,463-464
+frontend/src/components/Playground/Playground.tsx
+  s_f355061868c346::t_e53616758ec6f2 142-144,812,815,822-852,1323,1335,1429-1430
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6059125343368425181d722feb31e365cdce5bc1",
+  "prompts": {},
+  "sessions": {
+    "s_f355061868c346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd556674-4248-429d-bf5c-2b361bc86c62",
+        "model": "unknown"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
