@@ -1,0 +1,40 @@
+tooling/src/designDiff.ts
+  s_f355061868c346::t_01cda216c3604a 1-7,9,11-44,46-54,59-60
+  s_f355061868c346::t_c70f4f3606d923 8,55-58
+  s_f355061868c346::t_c1bee11e6e8868 10
+  s_f355061868c346::t_7f3f9507787788 45
+tooling/test/versions.test.ts
+  s_f355061868c346::t_b83c4f7da37661 98
+tooling/src/versions.ts
+  s_f355061868c346::t_c70f4f3606d923 16-17,27-29,170-178,181-185
+tooling/src/simDelta.ts
+  s_f355061868c346::t_c1bee11e6e8868 1-7,9,13-14,16,18-27,29-50
+  s_f355061868c346::t_0278d0ffa3d555 10-12,15
+  s_f355061868c346::t_c70f4f3606d923 8,17,28
+plugin/hooks/layout.cjs
+  s_f355061868c346::t_26489df05368fd 1-3,5-9,18,20-22,24-27,34
+tooling/src/cli.ts
+  s_f355061868c346::t_c70f4f3606d923 14-15,34,54,76-77,158
+tooling/src/proschi.ts
+  s_f355061868c346::t_c1bee11e6e8868 50
+tooling/test/designDiff.test.ts
+  s_f355061868c346::t_8874d68c68ec62 1-109
+tooling/test/__snapshots__/versions.test.ts.snap
+  s_f355061868c346::t_cc90b6b6c9bde6 26-31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f62332a206859bd711df5b03e4b169b2bdbc7d46",
+  "prompts": {},
+  "sessions": {
+    "s_f355061868c346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd556674-4248-429d-bf5c-2b361bc86c62",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
