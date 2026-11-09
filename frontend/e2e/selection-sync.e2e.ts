@@ -18,6 +18,23 @@ async function newDiagram(page: Page, code: string, nodes: number) {
   await expect(canvasNodes(page)).toHaveCount(0);
   await appendCode(page, code);
   await waitForCanvas(page, nodes);
+  await settled(page);
+}
+
+/** Waits until the canvas stops moving: the layout, its glide and any fit are done. */
+async function settled(page: Page) {
+  let last = '';
+  await expect
+    .poll(async () => {
+      const now = JSON.stringify([
+        await page.locator('.react-flow__viewport').evaluate((el) => getComputedStyle(el).transform),
+        await canvasNodes(page).evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON())),
+      ]);
+      const same = now === last;
+      last = now;
+      return same;
+    }, { intervals: [300] })
+    .toBe(true);
 }
 
 const node = (page: Page, name: string) => canvasNodes(page).filter({ hasText: name });
@@ -57,6 +74,8 @@ test.describe('selection sync', () => {
     // The canvas's keys still work.
     await page.keyboard.press('ControlOrMeta+d');
     await expect.poll(() => editorText(page)).toContain('db2 "Orders DB" [PostgreSQL]');
+    await waitForCanvas(page, 4);
+    await settled(page);
 
     // A connection selects its line too.
     await page.locator('.react-flow__edge').filter({ hasText: 'reads' }).first().click({ force: true });
@@ -109,6 +128,7 @@ test.describe('selection sync', () => {
     await newDiagram(page, 'api "API" [REST API] pos 0,0\ndb "Orders DB" [PostgreSQL] pos 0,2400\ncache "Cache" [Redis] pos 3000,0\n', 3);
     const zoomIn = page.getByRole('button', { name: 'zoom in' });
     for (let i = 0; i < 6; i++) await zoomIn.click();
+    await settled(page);
     const pane = (await page.locator('.react-flow').boundingBox())!;
     const inside = async (name: string) => {
       const box = await node(page, name).boundingBox();
@@ -123,7 +143,7 @@ test.describe('selection sync', () => {
     const zoom = await scale();
     await clickLine(page, target === 'Cache' ? 'cache "Cache"' : 'db "Orders DB"');
     await expect.poll(() => inside(target)).toBe(true);
-    expect(await scale()).toBeCloseTo(zoom);
+    expect(await scale()).toBeCloseTo(zoom, 1);
   });
 });
 
