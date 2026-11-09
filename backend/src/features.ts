@@ -30,6 +30,7 @@ export const FEATURES: Readonly<Record<FeatureId, { plans: readonly Plan[]; desc
   data_export: { plans: ['pro', 'max'], description: 'Your progress as JSON and CSV is part of Pro' },
   certificate: { plans: ['max'], description: 'The mastery certificate is part of Max' },
   pro_exports: { plans: ['pro', 'max'], description: 'Embeds without branding, 3x PNG and the HLD as PDF are part of Pro' },
+  saved_whatifs: { plans: ['pro', 'max'], description: 'Saved what-ifs compared in Results, and sweeps, are part of Pro' },
 };
 
 /**

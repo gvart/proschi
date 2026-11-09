@@ -644,3 +644,23 @@ id; don't rewrite old ones.
   everyone a print layout (one landscape A4). Off, or a plan without it,
   answers 404 at once; on again, the same id. Turning it on needs Max,
   turning it off any plan.
+- **P57. Asking "what if" is free; keeping and sweeping what-ifs is Pro.**
+  Every plan, signed in or not, gets the editor's live what-if: with the
+  load overlay on, a slider multiplies all traffic from ×0.5 to ×10, and
+  "Simulate down" in a node's right-click menu takes it down (several at
+  once). Neither edits the text: the analysis runs again with
+  `AnalyzeOptions.trafficRps` and `failed` (`sim/whatif.ts`), and the canvas,
+  the bottleneck and Results show it under a what-if badge with a reset.
+  "Save as what-if" writes it as a `whatif` block and "Write to traffic"
+  scales the traffic block's rates (`dsl/edit.ts` `addWhatIf`,
+  `scaleTraffic`), each one undoable step; the language stays free on every
+  plan. **`saved_whatifs` (Pro)**: Results lists the document's `whatif`
+  blocks with pass or fail and their p99, availability and cost against the
+  design as written, and picking one previews it on the canvas; a Sweep runs
+  `sweep` on a use case from half to ten times its traffic and shows the
+  highest rate that passes and where each node saturates. Everything runs in
+  the browser and spends no credits, so it is not metered
+  (`components/featureState.ts`): a build without paid plans follows the
+  server as for P54. Where paid plans are on, other plans see the blocks'
+  names with a locked teaser and the way to Pro. Prices stay the same; the
+  pricing page lists it under Pro.

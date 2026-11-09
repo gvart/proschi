@@ -65,7 +65,7 @@ import { filesResolver, importableFiles, teamFileOf, usedImports, type TeamFile 
 import { LONG_LINK_MESSAGE, LONG_LINK_SHORTEN_MESSAGE, decodeShareLink, encodeShareHash, isLongLink, readShareLink, shareUrl, type PlaybackTarget } from '../../playground/share';
 import { applyMerge, backupFileName, buildBackup, mergeSummary, planMerge, readBackup } from '../../playground/backup';
 import { loadProgress, mergeProgress, saveProgress } from '../../practice/progress';
-import { addConnection, addNode, clearPosition, clearPositions, copyNodes, duplicateNodes, pasteNodes, removeConnections, removeNode, renameNode, retargetConnection, setNodePosition, uniqueId, type PasteOptions } from '../../dsl/edit';
+import { addConnection, addNode, addWhatIf, clearPosition, clearPositions, copyNodes, duplicateNodes, pasteNodes, removeConnections, removeNode, renameNode, retargetConnection, scaleTraffic, setNodePosition, uniqueId, type PasteOptions } from '../../dsl/edit';
 import { EmptyCanvas } from '../Diagram/CanvasEditing';
 import { isShortcutsKey } from '../Diagram/canvasEditState';
 import ShortcutsDialog from './ShortcutsDialog';
@@ -74,7 +74,10 @@ import { useSystemView, type Crumb } from './useSystemView';
 import PaneLoading from '../PaneLoading';
 import ViewTabs from '../Analysis/ViewTabs';
 import { parseView, type View } from '../Analysis/view';
-import { useSimulation } from '../Analysis/useSimulation';
+import { useSimulation, useWhatIfSimulation } from '../Analysis/useSimulation';
+import WhatIfControl from '../WhatIf/WhatIfControl';
+import { SavedWhatIfs, WhatIfImpact } from '../WhatIf/WhatIfResults';
+import { isActive, liveChanges, liveOptions, NO_WHATIF, toggleFailed, whatIfLabel, type LiveWhatIf } from '../WhatIf/whatIf';
 import { editorReviewInput } from '../../review/editor';
 import CodeEditor, { type CodeEditorHandle } from './CodeEditor';
 import Menu, { MenuItem } from './Menu';
@@ -317,7 +320,14 @@ export default function Playground() {
     [parsedSource, rootPath, importableKey, cloudErrorsKey, cloudRefs.loading],
   );
   const { diagram, diagnostics } = parsed;
-  const simulation = useSimulation(diagram);
+  const baseSimulation = useSimulation(diagram);
+  /** The live what-if (components/WhatIf): view state of this document, which the text never sees until saved. */
+  const [whatIfState, setWhatIfState] = useState<{ doc: string; whatIf: LiveWhatIf }>({ doc: current.id, whatIf: NO_WHATIF });
+  const whatIf = whatIfState.doc === current.id ? whatIfState.whatIf : NO_WHATIF;
+  const setWhatIf = useCallback((next: LiveWhatIf) => setWhatIfState({ doc: current.id, whatIf: next }), [current.id]);
+  const whatIfOptions = useMemo(() => liveOptions(diagram, whatIf), [diagram, whatIf]);
+  /** The analysis the canvas and Results show: the design as written, or under the what-if. */
+  const simulation = useWhatIfSimulation(diagram, baseSimulation, whatIfOptions);
   /** What the canvas shows of the document's systems: collapsed, expanded in place, or navigated into. */
   const systems = useSystemView(current.id, diagram, simulation.analysis, simulation.results);
   const { shown } = systems;
@@ -444,6 +454,34 @@ export default function Playground() {
     const critical = criticalPathOf(shown, systems.analysis, selectedUseCaseId) ?? base.critical;
     return { ...base, critical };
   }, [overlayOn, canOverlay, overlayOf, summaries, selectedUseCaseId, shown, systems.analysis]);
+  /** Right-click → Simulate down: the node down (or up again) in the live what-if, with the overlay on to show it. */
+  const simulateDown = (id: string) => {
+    setWhatIf(toggleFailed(whatIf, id));
+    if (!overlayOn) toggleOverlay();
+  };
+  /** Previews a saved what-if (Pro) on the canvas; none goes back to the design as written. */
+  const previewWhatIf = (name: string | undefined) => {
+    setWhatIf(name === undefined ? NO_WHATIF : { ...NO_WHATIF, saved: name });
+    if (name === undefined) return;
+    if (!overlayOn) toggleOverlay();
+    setView('diagram');
+    setMobilePane('diagram');
+  };
+  const saveWhatIf = () => {
+    if (!isActive(whatIf) || whatIf.saved !== undefined) return;
+    const name = whatIfLabel(diagram, whatIf);
+    const changes = liveChanges(diagram, whatIf);
+    editSource((s) => addWhatIf(s, name, changes).source);
+    setNotice(`Saved as what-if "${addWhatIf(source, name, changes).name}" at the end of the code.`);
+  };
+  /** Multiplies the traffic block's rates by the slider's, which then goes back to ×1. */
+  const writeTraffic = () => {
+    const factor = whatIf.multiplier;
+    if (factor === 1) return;
+    editSource((s) => scaleTraffic(s, factor));
+    setWhatIf({ multiplier: 1, failed: whatIf.failed });
+    setNotice(`Traffic multiplied by ${Number(factor.toFixed(2))} in the code.`);
+  };
   /** With the overlay on, `62% · $400/mo` after each node line in the code too. */
   const codeHints = useMemo(() => (overlay ? loadHints(diagram, simulation.analysis) : undefined), [overlay, diagram, simulation.analysis]);
   const shownNodes = useMemo(
@@ -1409,10 +1447,12 @@ export default function Playground() {
                     results={simulation.results}
                     onSelect={selectDiagnostic}
                     onFocusNode={focusOnCanvas}
+                    whatIf={whatIfOptions && <WhatIfImpact label={whatIfLabel(diagram, whatIf)} base={baseSimulation} now={simulation} onReset={() => setWhatIf(NO_WHATIF)} />}
+                    whatIfs={<SavedWhatIfs diagram={diagram} previewing={whatIf.saved} onPreview={previewWhatIf} useCaseId={selectedUseCaseId} />}
                     review={
                       <ReviewPanel
                         source={source}
-                        input={() => editorReviewInput(parsedSource, parsed, simulation.analysis, simulation.results, { path: rootPath, imports })}
+                        input={() => editorReviewInput(parsedSource, parsed, baseSimulation.analysis, baseSimulation.results, { path: rootPath, imports })}
                         onSelect={selectDiagnostic}
                         onOpenPartner={hasPartner ? () => setPartnerOpen(true) : undefined}
                       />
@@ -1423,8 +1463,8 @@ export default function Playground() {
                     diagram={diagram}
                     nodes={nodes}
                     edges={edges}
-                    analysis={simulation.analysis}
-                    results={simulation.results}
+                    analysis={baseSimulation.analysis}
+                    results={baseSimulation.results}
                     onOpenResults={() => setView('results')}
                   />
                 ) : (
@@ -1447,6 +1487,13 @@ export default function Playground() {
                           overlay={overlay}
                           canOverlay={canOverlay}
                           onToggleOverlay={toggleOverlay}
+                          whatIfControl={
+                            systems.crumbs.length === 1 && (
+                              <WhatIfControl diagram={diagram} whatIf={whatIf} onChange={setWhatIf} onSave={saveWhatIf} onWriteTraffic={writeTraffic} phone={phone} />
+                            )
+                          }
+                          onSimulateDown={canOverlay ? simulateDown : undefined}
+                          downIds={whatIf.failed}
                           focusRequest={focusRequest}
                           edges={pv.edges}
                           onNodesChange={setNodes}

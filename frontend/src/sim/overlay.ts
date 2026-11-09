@@ -1,5 +1,5 @@
 import type { Diagram, TrafficEntry } from '../dsl/types';
-import type { Analysis } from './analyze';
+import { resolveTraffic, trafficFor, type Analysis } from './analyze';
 import { criticalPath, findUseCase } from './flow';
 
 /**
@@ -88,6 +88,24 @@ export function flowsOf(diagram: Diagram, traffic: readonly TrafficEntry[]): Flo
 const works = (n: Analysis['nodes'][number]) => Number.isFinite(n.capacityRps) && n.kind !== 'client';
 
 /**
+ * The traffic the analysis was made with: the `traffic` block's, unless a
+ * what-if (sim/whatif.ts) changed a rate or took nodes down, in which case
+ * each use case's analysed rate, with its shares moved to the fallbacks.
+ */
+function analysedTraffic(diagram: Diagram, analysis: Analysis, failed: ReadonlySet<string>): TrafficEntry[] {
+  const declared = resolveTraffic(diagram);
+  const rates = new Map(analysis.useCases.map((u) => [u.id, u.rps]));
+  const changed = failed.size > 0 || [...declared].some(([id, t]) => rates.has(id) && rates.get(id) !== t.rps);
+  if (!changed) return diagram.traffic ?? [];
+  const loc = { line: 0, col: 0, length: 0 };
+  return [...trafficFor(diagram, { trafficRps: rates, failed })].flatMap(([id, t]) => {
+    const u = diagram.useCases.find((c) => c.id === id);
+    if (!u || !(t.rps > 0)) return [];
+    return [{ useCase: u.name, rps: t.rps, mix: u.scenarios.map((s, i) => ({ scenario: s.name, share: t.shares[i] ?? 0 })), loc }];
+  });
+}
+
+/**
  * The overlay of a diagram's analysis: utilisation per node (the bottleneck
  * marked), the flows at its `traffic` rates with the latency each hop adds,
  * and the p99 path of the busiest use case.
@@ -96,16 +114,21 @@ export function analysisOverlay(diagram: Diagram, analysis: Analysis): SimOverla
   const nodes: Record<string, NodeOverlay> = {};
   const bottlenecks = new Set(bottlenecksOf(analysis));
   const latency = new Map<string, number>();
+  const failed = new Set<string>();
   for (const n of analysis.nodes) {
     latency.set(n.id, n.latencyMs);
+    if (n.failed) failed.add(n.id);
     nodes[n.id] = {
       ...(works(n) ? { utilization: n.utilization, saturated: n.saturated } : {}),
       ...(n.replicas > 1 ? { replicas: n.replicas } : {}),
       ...(n.shards > 1 ? { shards: n.shards } : {}),
       ...(bottlenecks.has(n.id) ? { bottleneck: true } : {}),
+      ...(n.failed ? { down: true } : {}),
     };
   }
-  const flows = flowsOf(diagram, diagram.traffic ?? []).map((f) => (latency.has(f.to) ? { ...f, latencyMs: latency.get(f.to)! } : f));
+  const flows = flowsOf(diagram, analysedTraffic(diagram, analysis, failed))
+    .filter((f) => !failed.has(f.from) && !failed.has(f.to))
+    .map((f) => (latency.has(f.to) ? { ...f, latencyMs: latency.get(f.to)! } : f));
   const critical = criticalPathOf(diagram, analysis);
   return { nodes, flows, ...(critical ? { critical } : {}) };
 }

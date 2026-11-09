@@ -180,7 +180,7 @@ export function Pricing({ account, plan, estimates }: { account: Account; plan?:
             />
           }
           value={<Value credits={PLAN_CREDITS.pro} when="a month" creditsWhen="a month" estimates={estimates} />}
-          items={['Everything in Free', 'Every verdict kept, and how each skill trends, on your own too', 'Your next steps, picked after each interview', 'Unlimited diagrams and versions', 'Private, revocable share links', 'What each change does to cost, p99 and the checks', 'Your progress as JSON and CSV', 'Embeds without Proschi branding, 3× PNG and the HLD as PDF']}
+          items={['Everything in Free', 'Every verdict kept, and how each skill trends, on your own too', 'Your next steps, picked after each interview', 'Unlimited diagrams and versions', 'Private, revocable share links', 'What each change does to cost, p99 and the checks', 'Saved what-ifs side by side, and sweeps to the traffic that breaks it', 'Your progress as JSON and CSV', 'Embeds without Proschi branding, 3× PNG and the HLD as PDF']}
           footer={planAction('pro')}
         />
         <PlanCard

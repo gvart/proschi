@@ -27,6 +27,26 @@ capacity {
 }
 `;
 
+describe('analysisOverlay under a what-if', () => {
+  const diagram = parse(source).diagram;
+  const buy = diagram.useCases[0].id;
+
+  it('carries the analysed rates, not the traffic block', () => {
+    const overlay = analysisOverlay(diagram, analyze(diagram, { trafficRps: new Map([[buy, 2400]]) }));
+    expect(overlay.flows.find((f) => f.from === 'user' && f.to === 'api')?.rps).toBe(2400);
+    expect(overlay.nodes.db.saturated).toBe(true);
+    expect(overlay.nodes.db.bottleneck).toBe(true);
+  });
+
+  it('marks failed nodes down and drops the flows to them', () => {
+    const overlay = analysisOverlay(diagram, analyze(diagram, { failed: new Set(['mail']) }));
+    expect(overlay.nodes.mail.down).toBe(true);
+    expect(overlay.nodes.db.down).toBeUndefined();
+    expect(overlay.flows.some((f) => f.to === 'mail')).toBe(false);
+    expect(overlay.flows.find((f) => f.to === 'db')?.rps).toBe(800);
+  });
+});
+
 describe('analysisOverlay', () => {
   const diagram = parse(source).diagram;
   const overlay = analysisOverlay(diagram, analyze(diagram));
