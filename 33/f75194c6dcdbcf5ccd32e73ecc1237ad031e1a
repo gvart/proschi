@@ -1,0 +1,59 @@
+frontend/src/practice/problems/load-shedding/given.proschi
+  s_248f83f833fb51::t_81e33f35df34b0 1,4,7,9,13-16,18,21-41,45-46
+  s_248f83f833fb51::t_25df5080495789 3,8
+  s_248f83f833fb51::t_d040a552406e76 2,5-6,10-12,17,19-20,47
+  s_248f83f833fb51::t_436ad825dee9a2 42-44
+frontend/src/practice/problems/load-shedding/wrong/undersized-gateway.proschi
+  s_248f83f833fb51::t_e35dc911510e5d 3-25,29-37,41-44
+  s_248f83f833fb51::t_25df5080495789 1,26-28,38-40
+  s_248f83f833fb51::t_1977e74ace0118 2
+frontend/src/practice/problems/load-shedding/lesson.md
+  s_248f83f833fb51::t_40f479717e69d0 194
+  s_248f83f833fb51::t_2077e3db01c0ba 1-162,164-193,195-207
+  s_248f83f833fb51::t_a46026083b8f27 163
+frontend/src/practice/problems/load-shedding/wrong/shed-without-priority.proschi
+  s_248f83f833fb51::t_efdea9d4ba2f94 1-17,21-29,33-41,45-48
+  s_248f83f833fb51::t_25df5080495789 18-20,30-32,42-44
+frontend/src/practice/problems/load-shedding/problem.md
+  s_248f83f833fb51::t_d2c7406c5f51e1 20-22
+  s_248f83f833fb51::t_f5a1c53b9cb235 2-6,8-11,14-19,23-25,29-41,45-56,60-71,75-114
+  s_248f83f833fb51::t_d040a552406e76 1,7,12-13,26-28,42-44,57-59,72-74
+frontend/src/practice/problems/load-shedding/starter.proschi
+  s_248f83f833fb51::t_d040a552406e76 1-2,7,11
+  s_248f83f833fb51::t_a3678db93aa470 3-6,8-10
+frontend/src/practice/problems/load-shedding/wrong/shed-at-the-backend.proschi
+  s_248f83f833fb51::t_f2314e5dd768eb 1,3-26,29,32-39,42,45-46
+  s_248f83f833fb51::t_55e4f457c69029 2
+  s_248f83f833fb51::t_25df5080495789 27-28,30-31,40-41,43-44
+frontend/src/practice/problems/load-shedding/solution.proschi
+  s_248f83f833fb51::t_d040a552406e76 1-2,51-52
+  s_248f83f833fb51::t_a17d2fd62e3183 3-33,37-45,49-50
+  s_248f83f833fb51::t_25df5080495789 34-36,46-48
+frontend/src/practice/problems/load-shedding/wrong/provision-for-the-spike.proschi
+  s_248f83f833fb51::t_25df5080495789 10-11
+  s_248f83f833fb51::t_5c6843e33ac2a1 1-9,12-36
+frontend/src/practice/problems/load-shedding/interview.md
+  s_248f83f833fb51::t_552c9d22a584a7 1-83
+frontend/src/practice/roadmapStages.ts
+  s_248f83f833fb51::t_c1b63d1a533070 42
+frontend/src/practice/cards/resilience/load-shedding-at-the-gateway.md
+  s_248f83f833fb51::t_02545dbd8ba534 1-26
+frontend/src/practice/cards/ids.lock
+  s_248f83f833fb51::t_1a6c54397b0f5d 153
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "33f75194c6dcdbcf5ccd32e73ecc1237ad031e1a",
+  "prompts": {},
+  "sessions": {
+    "s_248f83f833fb51": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2d46bc96-3c9a-4511-a065-8673803644a9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
