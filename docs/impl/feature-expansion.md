@@ -55,7 +55,7 @@ per-use LLM cost), and improve the language and the visual editor.
   verify: `dsl/edit` unit tests, `visual-editing.e2e.ts` additions. depends on: 1.1
 
 ### Iteration 3: simulation visibility
-- [ ] **3.1 E1 Two-way selection sync**: a canvas selection selects its source `loc` in
+- [x] **3.1 E1 Two-way selection sync**: a canvas selection selects its source `loc` in
   the code editor, and a cursor on a declaration highlights the node.
   verify: e2e both directions. depends on: 1.1
 - [ ] **3.2 E2 Sim on canvas**:
