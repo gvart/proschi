@@ -28,6 +28,23 @@ export {
   type SweepStep,
   type WhatIfResult,
 } from './whatif';
+export {
+  availabilityRow,
+  checkRow,
+  costRow,
+  deltaRows,
+  designDelta,
+  p99Row,
+  utilizationRow,
+  type CheckChange,
+  type DeltaRow,
+  type DesignDelta,
+  type DesignDeltaOptions,
+  type Pair,
+  type Tone,
+  type UseCaseDelta,
+  type UtilizationDelta,
+} from './delta';
 export { analyzeSystems, contractOf, inboundLoad, type EntryContract, type SystemAnalysis, type SystemBreach, type SystemContract } from './systems';
 export { kindOf, KINDS } from '../dsl/kinds';
 export { profileOf, KIND_PROFILES, TECH_PROFILES, type Profile } from './profiles';
