@@ -11,7 +11,7 @@ import { redactedStatement, type Interview } from '../modes/interviewFile';
 import { CHECKLIST, PHASES, PHASE_SHARE, remaining, totalElapsed, type InterviewAction, type InterviewSession, type Phase } from '../modes/session';
 import { useCodePref, useRailFoldedPref, useSoundPref } from './prefs';
 import Room, { ChecksSheet, type RoomTab } from './Room';
-import { Brief, EstimatesSummary, PinnedBrief, RequirementsCard, StageContext, StageHeading, StartClarifying, Worksheet } from './StageParts';
+import { Brief, EstimateLayout, EstimatesSummary, PinnedBrief, RequirementsCard, StageContext, StageHeading, StartClarifying, Worksheet } from './StageParts';
 import { loadBriefRead, loadWorksheet, nextStage, questionRowId, saveBriefRead, saveWorksheet, stageLabel, type WorksheetRow } from './stages';
 import { useClockCues, useCues, usePhaseCue, useStageNudge, useWhiteboard } from './useRoom';
 
@@ -161,9 +161,9 @@ export default function SoloRoom({ problem, engine, phone, interview, session, d
     );
   } else if (stage === 'estimate') {
     screen = (
-      <div className="min-h-0 flex-1 overflow-y-auto lg:flex lg:flex-col">
-        <div className="mx-auto grid w-full max-w-6xl gap-5 px-4 py-6 sm:px-6 lg:min-h-[36rem] lg:flex-1 lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
-          <div className="space-y-4 lg:flex lg:min-h-0 lg:flex-col">
+      <EstimateLayout
+        aside={
+          <>
             <StageHeading stage="estimate" title="Back-of-the-envelope numbers">
               An answer within the accepted range counts; the worked answer follows.
             </StageHeading>
@@ -172,10 +172,11 @@ export default function SoloRoom({ problem, engine, phone, interview, session, d
               <RequirementsCard items={requirements} collapsible={phone} empty="No questions answered: estimate from the brief." />
             </div>
             <PinnedBrief title="Full brief, with scale" source={problem.statement} fill />
-          </div>
-          <Worksheet rows={rows} onChange={setRows} scoring={scoring} fill />
-        </div>
-      </div>
+          </>
+        }
+      >
+        <Worksheet rows={rows} onChange={setRows} scoring={scoring} fill />
+      </EstimateLayout>
     );
   }
 

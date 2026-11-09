@@ -5,7 +5,7 @@ import { field, outlineButton, primaryButton } from '../../components/Playground
 import Markdown from '../Markdown';
 import type { Problem } from '../types';
 import { redactedStatement, type Interview } from '../modes/interviewFile';
-import { Brief, PinnedBrief, RequirementsCard, StageHeading, Worksheet } from '../interview/StageParts';
+import { Brief, EstimateLayout, PinnedBrief, RequirementsCard, StageHeading, Worksheet } from '../interview/StageParts';
 import { questionRowId, type WorksheetRow } from '../interview/stages';
 import { setupHref } from '../interview/links';
 import { ROADMAP, roadmapFor, roadmapHref, roadmapState } from '../roadmap';
@@ -142,30 +142,34 @@ export function EstimateStage({ problem, interview, notes, onNotes, onNext, phon
   const rows: WorksheetRow[] = notes.rows ?? questions.map((e, i) => ({ id: questionRowId(i), label: e.question, expression: '', unit: e.unit }));
   const done = Object.keys(notes.estimates).length >= questions.length;
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto" data-testid="stage-estimate">
-      <div className="mx-auto grid w-full max-w-6xl gap-5 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,21rem)_minmax(0,1fr)] lg:items-start lg:py-10">
-        <div className="space-y-4 lg:sticky lg:top-0">
+    <EstimateLayout
+      testId="stage-estimate"
+      aside={
+        <>
           <StageHeading stage="estimate" eyebrow={stageEyebrow(3, 'Estimate')} title="Back-of-the-envelope numbers">
             Work each number out yourself and commit to it with Check. The accepted range and the worked answer show after.
           </StageHeading>
-          <RequirementsCard items={factsOf(interview)} collapsible={phone} empty="Estimate from the brief." />
-          <PinnedBrief title="Full brief, with scale" source={problem.statement} />
-        </div>
-        <div className="space-y-4">
-          <Worksheet
-            rows={rows}
-            onChange={(next) => onNotes((n) => ({ ...n, rows: next }))}
-            scoring={{ questions, answers: notes.estimates, onCheck: (index, value) => onNotes((n) => checkEstimate(n, index, questions[index], value)) }}
-          />
-          {done && (
-            <button type="button" onClick={onNext} className={primaryButton}>
-              Next: Design
-              <ArrowRight size={15} aria-hidden="true" />
-            </button>
-          )}
-        </div>
+          <PinnedBrief title="Full brief, with scale" source={problem.statement} fill />
+        </>
+      }
+    >
+      {/* The facts sit over the worksheet, so the brief keeps its column; a long list scrolls. */}
+      <div className="lg:max-h-[40%] lg:shrink-0 lg:overflow-y-auto">
+        <RequirementsCard items={factsOf(interview)} collapsible={phone} empty="Estimate from the brief." />
       </div>
-    </div>
+      <Worksheet
+        rows={rows}
+        onChange={(next) => onNotes((n) => ({ ...n, rows: next }))}
+        scoring={{ questions, answers: notes.estimates, onCheck: (index, value) => onNotes((n) => checkEstimate(n, index, questions[index], value)) }}
+        fill
+      />
+      {done && (
+        <button type="button" onClick={onNext} className={`${primaryButton} lg:shrink-0 lg:self-start`}>
+          Next: Design
+          <ArrowRight size={15} aria-hidden="true" />
+        </button>
+      )}
+    </EstimateLayout>
   );
 }
 
