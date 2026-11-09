@@ -277,7 +277,7 @@ function whatIfJson(w: WhatIfResult) {
 const headlineCells = (h: WhatIfResult['headline']) => [formatMs(h.p99Ms), formatAvailability(h.availability), formatUsd(h.costUsd).replace('/month', '')];
 
 /** `all 3 pass`, `1 of 3 fail`: the requirements (and systems) of a run; test blocks do not count. */
-function verdict(results: TestResult[]): string {
+export function verdict(results: TestResult[]): string {
   const reqs = results.filter((r) => !r.id.startsWith('test:'));
   if (reqs.length === 0) return 'no requirements';
   const failed = reqs.filter((r) => !r.passed).length;
@@ -406,7 +406,7 @@ export function capacityReport(diagram: Diagram, analysis: SimAnalysis, file: st
  */
 export function testDiagnostics(diagram: Diagram): Diagnostic[] {
   const out: Diagnostic[] = [];
-  for (const r of runTests(diagram)) {
+  for (const r of resultsOf(diagram)) {
     if (r.passed || !r.loc || r.loc.file !== undefined) continue;
     const message = `${r.name}: ${r.message}${r.hint ? `. ${r.hint}` : ''}`;
     out.push({ ...r.loc, severity: 'warning', message });
@@ -421,7 +421,7 @@ export function testDiagnostics(diagram: Diagram): Diagnostic[] {
 /** Load, utilisation and latency of a node, for hovers; only when the document has traffic. */
 export function nodeSimulation(diagram: Diagram, nodeId: string): string | undefined {
   if ((diagram.traffic ?? []).length === 0) return undefined;
-  const n = simulate(diagram).nodes.find((x) => x.id === nodeId);
+  const n = simulationOf(diagram).nodes.find((x) => x.id === nodeId);
   if (!n || n.kind === 'client' || n.kind === 'other') return undefined;
   const state = n.saturated ? ' — **saturated**' : n.utilization > HOT ? ' — hot' : '';
   const split =
@@ -434,4 +434,29 @@ export function nodeSimulation(diagram: Diagram, nodeId: string): string | undef
     ...split,
     `Latency ${formatMs(n.latencyMs)} per call · availability ${formatAvailability(n.availability)} · ${formatUsd(n.costUsd)}${n.replicas > 1 ? ` for ${n.replicas} replicas` : ''}${egress}`,
   ].join('  \n');
+}
+
+/**
+ * The simulation, requirement results and what-ifs of a parsed diagram,
+ * computed once: the language server keeps one parse per document version,
+ * so hovers, inlay hints, code lenses and diagnostics of a version share them.
+ */
+const runs = new WeakMap<Diagram, { analysis: SimAnalysis; results?: TestResult[]; whatifs?: WhatIfResult[] }>();
+
+function runOf(diagram: Diagram) {
+  let run = runs.get(diagram);
+  if (!run) runs.set(diagram, (run = { analysis: simulate(diagram) }));
+  return run;
+}
+
+export const simulationOf = (diagram: Diagram): SimAnalysis => runOf(diagram).analysis;
+
+export function resultsOf(diagram: Diagram): TestResult[] {
+  const run = runOf(diagram);
+  return (run.results ??= runTests(diagram, run.analysis));
+}
+
+export function whatIfsOf(diagram: Diagram): WhatIfResult[] {
+  const run = runOf(diagram);
+  return (run.whatifs ??= runWhatIfs(diagram));
 }

@@ -116,6 +116,7 @@ import { markSeen, startMode, type StartMode } from '../../onboarding/seen';
 import type { CoverBand } from '../../onboarding/Tour';
 import { UseCasePlayback } from '../UseCases/UseCasePlayback';
 import { useFeedbackDiagram } from '../../feedback/diagram';
+import { loadHints } from './loadHints';
 
 // Panes that are not visible at start load on first use.
 const HldView = lazy(() => import('../Hld/HldView'));
@@ -408,6 +409,8 @@ export default function Playground() {
   const canOverlay = (shown.traffic?.length ?? 0) > 0;
   const { overlayOf, summaries } = systems;
   const overlay = useMemo(() => (overlayOn && canOverlay ? overlayOf() : undefined), [overlayOn, canOverlay, overlayOf]);
+  /** With the overlay on, `62% · $400/mo` after each node line in the code too. */
+  const codeHints = useMemo(() => (overlay ? loadHints(diagram, simulation.analysis) : undefined), [overlay, diagram, simulation.analysis]);
   const shownNodes = useMemo(
     () =>
       nodes.map((n) => {
@@ -1282,7 +1285,7 @@ export default function Playground() {
             {team && <TeamFileBar team={team} up={systems.crumbs[systems.crumbs.length - 2]} onBack={systems.goTo} />}
             {/* Hidden, not unmounted, while a team file is shown, so the document keeps its cursor and undo history. */}
             <div className="flex-1 min-h-0" hidden={!!team}>
-              <CodeEditor ref={editorRef} value={source} onChange={typeSource} diagnostics={rootDiagnostics} nodeIds={nodeIds} />
+              <CodeEditor ref={editorRef} value={source} onChange={typeSource} diagnostics={rootDiagnostics} nodeIds={nodeIds} extensions={codeHints} />
             </div>
             {team && (
               <div className="flex-1 min-h-0">

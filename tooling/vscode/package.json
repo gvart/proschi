@@ -69,6 +69,21 @@
         "icon": "$(open-preview)"
       }
     ],
+    "configuration": {
+      "title": "Proschi",
+      "properties": {
+        "proschi.inlayHints.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the simulated utilisation and monthly cost after each node declaration, e.g. `62% · $400/mo`. Only for documents with a traffic block."
+        },
+        "proschi.codeLens.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show simulation results above use cases (`p99 38 ms ✓`), whatif blocks and requirements blocks."
+        }
+      }
+    },
     "menus": {
       "editor/title": [
         {

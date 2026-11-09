@@ -5,6 +5,11 @@ import {
   KEYWORDS,
   addConnection,
   componentCatalog,
+  findUseCase,
+  formatAvailability,
+  formatMs,
+  formatPercent,
+  formatUsd,
   parse,
   requirementFixes,
   setCapacity,
@@ -17,7 +22,7 @@ import {
   type ParseResult,
   type SourceLoc,
 } from './proschi';
-import { nodeSimulation } from './simulation';
+import { nodeSimulation, resultsOf, simulationOf, verdict, whatIfsOf } from './simulation';
 
 /** 0-based position, as LSP uses. */
 export interface Position {
@@ -778,4 +783,97 @@ function diffEdit(before: string, after: string): TextEdit {
 function positionAt(text: string, offset: number): Position {
   const before = text.slice(0, offset).split('\n');
   return { line: before.length - 1, character: before[before.length - 1].length };
+}
+
+/** `62% · $400/mo` after a node declaration; `saturated` when the node is at or past capacity. */
+export interface InlayHint {
+  position: Position;
+  label: string;
+  saturated: boolean;
+  /** The hover's load, latency and cost lines. */
+  tooltip?: string;
+}
+
+const perMonth = (usd: number) => formatUsd(usd).replace('/month', '/mo');
+
+/**
+ * Utilisation and monthly cost after each node declared in the document
+ * (within `range`, when given); none when the document has no traffic.
+ */
+export function inlayHints(analysis: Analysis, range?: Range): InlayHint[] {
+  const { diagram, lines } = analysis;
+  if ((diagram.traffic ?? []).length === 0) return [];
+  const sim = new Map(simulationOf(diagram).nodes.map((n) => [n.id, n]));
+  return diagram.nodes.flatMap((node) => {
+    const n = sim.get(node.id);
+    const line = node.loc.line - 1;
+    if (node.implicit || node.loc.file !== undefined || !n || n.kind === 'client' || n.kind === 'other') return [];
+    if (range && (line < range.start.line || line > range.end.line)) return [];
+    return [
+      {
+        position: { line, character: (lines[line] ?? '').trimEnd().length },
+        label: `${formatPercent(n.utilization)}${n.saturated ? ' saturated' : ''} · ${perMonth(n.costUsd)}`,
+        saturated: n.saturated,
+        tooltip: nodeSimulation(diagram, node.id),
+      },
+    ];
+  });
+}
+
+/** A line of simulation results above a use case, a `whatif` block or `requirements`. */
+export interface CodeLens {
+  range: Range;
+  title: string;
+}
+
+type Requirement = NonNullable<Diagram['requirements']>[number];
+type LatencyRequirement = Extract<Requirement, { kind: 'latency' }>;
+const percentileLabel = (r: LatencyRequirement) => (r.percentile === 99.9 ? 'p99.9' : `p${r.percentile}`);
+
+/**
+ * `p99 38 ms ✓` above each use case (✗ with the limit it breaks), the
+ * requirements and headline numbers of each `whatif` block, and how many
+ * requirements pass above each `requirements` block. Only for what the
+ * document itself declares.
+ */
+export function codeLenses(analysis: Analysis): CodeLens[] {
+  const { diagram, lines } = analysis;
+  const lenses: CodeLens[] = [];
+  const at = (line: number, title: string) => lenses.push({ range: { start: { line, character: 0 }, end: { line, character: 0 } }, title });
+  const sim = simulationOf(diagram);
+  const results = resultsOf(diagram);
+  const requirements = diagram.requirements ?? [];
+  const resultOf = (i: number) => results.find((r) => r.id === `req:${i + 1}`);
+
+  for (const u of diagram.useCases) {
+    const ua = sim.useCases.find((x) => x.id === u.id);
+    if (u.loc.file !== undefined || !ua || !Number.isFinite(ua.percentiles.p99)) continue;
+    const checks = requirements.flatMap((r, i) => {
+      // Only requirements that name the use case: their result is the simulator's verdict on it alone.
+      // One without a use case (`p99 < 200ms`) counts on the `requirements` lens only.
+      if (r.kind !== 'latency' || r.useCase === undefined || findUseCase(diagram, r.useCase) !== u) return [];
+      return [{ r, passed: resultOf(i)?.passed ?? true }];
+    });
+    const failed = checks.find((c) => !c.passed)?.r;
+    const limit = failed && `${failed.percentile === 99 ? '' : `${percentileLabel(failed)} `}< ${formatMs(failed.maxMs)}${failed.scenario !== undefined ? ` in "${failed.scenario}"` : ''}`;
+    at(u.loc.line - 1, `p99 ${formatMs(ua.percentiles.p99)}${failed ? ` ✗ (req ${limit})` : checks.length ? ' ✓' : ''}`);
+  }
+
+  for (const w of diagram.whatifs?.length ? whatIfsOf(diagram) : []) {
+    if (!w.loc || w.loc.file !== undefined) continue;
+    const reqs = w.results.filter((r) => !r.id.startsWith('test:'));
+    const mark = reqs.length ? `${w.passed ? '✓' : '✗'} ` : '';
+    at(w.loc.line - 1, `${mark}${verdict(w.results)} · worst p99 ${formatMs(w.headline.p99Ms)} · ${formatAvailability(w.headline.availability)} · ${perMonth(w.headline.costUsd)}`);
+  }
+
+  // Each `requirements {` header of the document, with the requirements up to the next one.
+  const headers = lines.flatMap((text, line) => (/^\s*requirements\s*\{/.test(text) ? [line] : []));
+  headers.forEach((line, h) => {
+    const end = headers[h + 1] ?? Infinity;
+    const own = requirements.flatMap((r, i) => (r.loc.file === undefined && r.loc.line - 1 > line && r.loc.line - 1 < end ? [resultOf(i)] : []));
+    if (own.length === 0) return;
+    const passed = own.filter((r) => r?.passed).length;
+    at(line, `${passed === own.length ? '✓' : '✗'} ${passed}/${own.length} requirements pass`);
+  });
+  return lenses;
 }

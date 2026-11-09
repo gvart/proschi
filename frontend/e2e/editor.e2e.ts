@@ -202,8 +202,11 @@ test.describe('editor', () => {
     await expect(toggle).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('.pc-node[data-load]').first()).toBeVisible();
     await expect(page.locator('.pc-node__stats').filter({ hasText: /\d+%/ }).first()).toBeVisible();
+    // The code shows the same load, with the monthly cost, after each node line.
+    await expect(page.locator('.cm-load-hint').first()).toHaveText(/^\d+%( saturated)? · \$[\d,]+\/mo$/);
     await toggle.click();
     await expect(page.locator('.pc-node[data-load]')).toHaveCount(0);
+    await expect(page.locator('.cm-load-hint')).toHaveCount(0);
   });
 
   test('three views: Diagram, Results and HLD', async ({ page }) => {

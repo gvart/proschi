@@ -20,7 +20,8 @@ Every plugin is built on two pieces from the `proschi` package:
   suggests); completion of keywords, node ids, tech stacks, `capacity`
   parts, and the use case and scenario names in quotes; rename of node ids,
   use cases and scenarios (see below); hover, go to definition, find
-  references, outline, formatting, and failing requirements and tests.
+  references, outline, formatting, failing requirements and tests, and
+  simulation results as inlay hints and code lenses (see below).
 
 Rename (F2 in most editors) changes every use of the name: steps,
 connections, `capacity`, `traffic` and `mix`, requirements, tests,
@@ -31,6 +32,22 @@ workspace, so it only finds importing files that are open in the editor.
 Open them before you rename.
 - **The command line** (`proschi`): checks, formats, renders and tests files
   in CI and pre-commit hooks.
+
+The language server also shows simulation results in the code, from the
+same simulation as the Results view:
+
+- **Inlay hints** after each node declaration: its utilisation and monthly
+  cost, such as `62% · $400/mo`, or `130% saturated · $400/mo` past
+  capacity. Only in documents with a `traffic` block.
+- **Code lenses**: `p99 38 ms ✓` above each use case, or
+  `p99 120 ms ✗ (req < 100 ms)` when it breaks a latency requirement that
+  names it; the requirements, worst p99, availability and cost above each
+  `whatif` block; and `✓ 3/3 requirements pass` above `requirements`, which
+  also counts the requirements that name no use case.
+
+In VS Code and Open VSX editors, turn them off with the
+`proschi.inlayHints.enabled` and `proschi.codeLens.enabled` settings. In the
+web editor, **Overlay: load** shows the same hint after each node line.
 
 A TextMate grammar for highlighting and a JSON Schema of the parsed diagram
 are in the [Proschi repository](https://github.com/gvart/proschi/tree/main/tooling).
