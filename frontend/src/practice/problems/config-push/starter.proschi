@@ -1,0 +1,10 @@
+import "problem.proschi"
+
+# Add the config API, the root and the main nodes, give "Serve request" its
+# configuration reads, and write "Change config".
+visitor -> edge : HTTPS
+
+usecase "Serve request" {
+  visitor -> edge    : GET /
+  edge   --> visitor : 200
+}
