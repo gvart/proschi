@@ -39,6 +39,7 @@ export const TOKEN_ROUTES: readonly (readonly [method: string, path: string, sco
   ['GET', 'api/stats/*', PUBLIC],
   ['GET', 'api/leaderboard', PUBLIC],
   ['GET', 'api/users/*/profile', PUBLIC],
+  ['GET', 'api/certificates/*', PUBLIC],
   ['GET', 'api/problems/*/leaderboard', PUBLIC],
   ['GET', 'api/challenge/today', PUBLIC],
   ['GET', 'api/challenge/leaderboard', PUBLIC],

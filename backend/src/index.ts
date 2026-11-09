@@ -73,6 +73,7 @@ import { deleteInterviewPlan, getInterviewPlan, putInterviewPlan } from './inter
 import { confirmEmail, confirmPage, deleteEmail, getEmailPrefs, patchEmail, putEmail, unsubscribe, unsubscribePage } from './reminders';
 import { getPublicProfile } from './profile';
 import { servePublicProfile } from './profilePage';
+import { getCertificate, getEmbeds, getMyCertificate, putEmbeds, putMyCertificate, serveCertificate } from './certificates';
 import { createShare, deleteShare, getShare, listShares, oembed, shareImage, sharePage } from './shares';
 import { getLeaderboard, getProblemLeaderboard, getProblemStats, getStats } from './stats';
 import { createVersion, deleteVersion, getVersion, listVersions, resolveVersion } from './versions';
@@ -103,6 +104,10 @@ import { deleteFeedback, getFeedback, getFeedbackFile, listFeedback, patchFeedba
  *   PATCH  /api/me {displayName?, publicProfile?, dailyGoal?}
  *   DELETE /api/me
  *   GET    /api/me/export                   everything stored about the user, as a download
+ *   GET    /api/me/export?view=progress     the learning data alone, for a spreadsheet: Pro (402 plan_required; src/progressExport.ts)
+ *   GET    /api/me/certificate, PUT {public}   the mastery certificate: on is Max (402), off any plan (src/certificates.ts)
+ *   GET    /api/certificates/<id>           a certificate, public (404 when off)
+ *   GET    /api/me/embeds, PUT {branding}   Proschi's branding on the account's embeds: hiding it is Pro (402)
  *   GET    /api/me/activity?day=YYYY-MM-DD  daily goal, streak, weekly recap and each day's activity
  *   GET    /api/me/email                    email reminders: the address and settings ({email: null} without one)
  *   PUT    /api/me/email {email, timeZone, streak?, cards?, recap?}   sets the address (a new one gets a confirmation email)
@@ -283,6 +288,11 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('PATCH', 'api', 'me')) return updateMe(request, ctx);
   if (is('DELETE', 'api', 'me')) return deleteMe(request, ctx);
   if (is('GET', 'api', 'me', 'export')) return exportMe(request, ctx);
+  if (is('GET', 'api', 'me', 'certificate')) return getMyCertificate(request, ctx);
+  if (is('PUT', 'api', 'me', 'certificate')) return putMyCertificate(request, ctx);
+  if (is('GET', 'api', 'certificates', '*')) return getCertificate(ctx, parts[2]);
+  if (is('GET', 'api', 'me', 'embeds')) return getEmbeds(request, ctx);
+  if (is('PUT', 'api', 'me', 'embeds')) return putEmbeds(request, ctx);
   if (is('GET', 'api', 'me', 'activity')) return getActivity(request, ctx);
   if (is('GET', 'api', 'me', 'email')) return getEmailPrefs(request, ctx);
   if (is('PUT', 'api', 'me', 'email')) return putEmail(request, ctx);
@@ -436,7 +446,7 @@ export default {
     const { pathname } = new URL(request.url);
     // A live share link: the share page, which loads the diagram with GET /api/share/<token>.
     if ((request.method === 'GET' || request.method === 'HEAD') && /^\/share\/[A-Za-z0-9_-]{22}$/.test(pathname)) return shareViewPage(request, env.ASSETS);
-    const page = pathname.startsWith('/u/');
+    const page = pathname.startsWith('/u/') || pathname.startsWith('/c/');
     if (!page && !/^\/(api|auth|s)(\/|$)/.test(pathname)) return env.ASSETS.fetch(request);
     const started = Date.now();
     const ctx = createContext(request, env, exec);
@@ -446,7 +456,7 @@ export default {
     let pageResponse = false;
     try {
       if (page) {
-        response = await servePublicProfile(request, ctx);
+        response = await (pathname.startsWith('/c/') ? serveCertificate(request, ctx) : servePublicProfile(request, ctx));
         pageResponse = true;
       } else response = await route(request, ctx, pathname);
     } catch (e) {

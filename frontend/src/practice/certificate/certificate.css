@@ -1,0 +1,38 @@
+/* The mastery certificate (CertificateRoute.tsx): a sheet of paper, light in
+   both themes (.ps-light). In print only the sheet, on one landscape A4 page. */
+
+.certificate-sheet {
+  border: 6px double rgb(var(--c-ink));
+  outline: 2px solid rgb(var(--c-ink));
+  outline-offset: 6px;
+}
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+  html:has(body.printing-certificate),
+  body.printing-certificate {
+    background: #fff !important;
+    color-scheme: light;
+  }
+  body.printing-certificate * {
+    visibility: hidden;
+  }
+  body.printing-certificate .certificate-sheet,
+  body.printing-certificate .certificate-sheet * {
+    visibility: visible;
+  }
+  body.printing-certificate .certificate-sheet {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    margin: 0;
+    box-shadow: none;
+    break-inside: avoid;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}

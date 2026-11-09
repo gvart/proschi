@@ -17,6 +17,8 @@ const ALLOWED_CONSOLE_ERRORS: RegExp[] = [
   /^Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set\.( \(about:srcdoc:0\))?$/,
   // The admin's Cloudflare usage page before it is set up (cfUsage.accounts.e2e.ts): 501, which the page shows as the setup steps.
   /^Failed to load resource: the server responded with a status of 501 \(Not Implemented\) \(http:\/\/127\.0\.0\.1:\d+\/api\/admin\/cf-usage:0\)$/,
+  // A certificate turned off, or no such id (exports.accounts.e2e.ts): 404, which the page shows as "No certificate here".
+  /^Failed to load resource: the server responded with a status of 404 \(Not Found\) \(http:\/\/127\.0\.0\.1:\d+\/api\/certificates\/[\w-]+:0\)$/,
 ];
 
 /** The key src/onboarding/seen.ts keeps the first-run tours' "seen" flags in. */
