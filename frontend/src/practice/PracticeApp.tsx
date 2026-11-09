@@ -41,6 +41,7 @@ import { track } from '../services/metrics';
 import { setupHref } from './interview/links';
 import { sendSoloInterviews } from './interview/record';
 import { loadHistory } from './modes/store';
+import { onMistakesChange, sendMistakes, syncMistakes } from './hub/recentMistakes';
 
 // The editor, canvas, simulation and problem files load when a problem is opened.
 const ProblemRoute = lazy(() => import('./ProblemRoute'));
@@ -172,6 +173,8 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
       // Interviews on your own done in this browser: the account keeps each once, and its interview badges count them.
       const solo = loadHistory();
       if (solo.length) void sendSoloInterviews(solo).then(notifyActivity);
+      // Known mistakes failed runs matched: the account's join this browser's (the retry step on every device), and this browser's it lacks are sent.
+      void syncMistakes();
       // The learning goal: the account's wins; an account without one gets this browser's.
       const goalToSend = mergeAccountGoal(me.user.practiceGoal);
       if (goalToSend) void sendGoal(goalToSend);
@@ -192,6 +195,10 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
     if (!signedIn) return;
     onGoalChange((g) => void sendGoal(g));
     return () => onGoalChange(undefined);
+  }, [signedIn]);
+  // Signed in, each mistake recorded here goes to the account too.
+  useEffect(() => {
+    if (signedIn) return onMistakesChange((added, source) => source === 'here' && void sendMistakes(added));
   }, [signedIn]);
   useEffect(() => {
     if (signedIn) return onLessonsRead((ids, source) => source === 'here' && void sendLessonsRead(ids));

@@ -264,6 +264,7 @@ describe('data export', () => {
       game: { meta: null, runs: [] },
       lessonReads: [],
       soloInterviews: [],
+      practiceMistakes: [],
       interviewPlan: null,
       certificate: null,
       embedBranding: true,

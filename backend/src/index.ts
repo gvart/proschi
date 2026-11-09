@@ -69,6 +69,7 @@ import { errorText, log } from './log';
 import { deleteMe, exportMe, getMe, importProgress, recordRun, updateMe } from './progress';
 import { postLessonsRead } from './lessons';
 import { postSoloInterviews, soloInterviewHistory } from './soloInterviews';
+import { getMistakes, postMistakes } from './mistakes';
 import { deleteInterviewPlan, getInterviewPlan, putInterviewPlan } from './interviewPlan';
 import { confirmEmail, confirmPage, deleteEmail, getEmailPrefs, patchEmail, putEmail, unsubscribe, unsubscribePage } from './reminders';
 import { getPublicProfile } from './profile';
@@ -122,6 +123,7 @@ import { deleteFeedback, getFeedback, getFeedbackFile, listFeedback, patchFeedba
  *   POST   /api/me/lessons {ids}            lessons and roadmap guides read
  *   POST   /api/me/interviews/solo {sessions}   mock interviews finished on your own (src/soloInterviews.ts)
  *   GET    /api/me/interviews/solo          those kept, newest first, with what each did: Pro (402 plan_required)
+ *   GET    /api/me/mistakes, POST {mistakes}   known mistakes failed practice runs matched, for the retry step (src/mistakes.ts)
  *   GET    /api/me/interview-plan           the interview-date plan's date and minutes: Max (402 plan_required; src/interviewPlan.ts)
  *   PUT    /api/me/interview-plan {date, minutes, start, today?}   sets it, with today's list for the reminder: Max
  *   DELETE /api/me/interview-plan           removes it
@@ -310,6 +312,8 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('POST', 'api', 'me', 'lessons')) return postLessonsRead(request, ctx);
   if (is('POST', 'api', 'me', 'interviews', 'solo')) return postSoloInterviews(request, ctx);
   if (is('GET', 'api', 'me', 'interviews', 'solo')) return soloInterviewHistory(request, ctx);
+  if (is('GET', 'api', 'me', 'mistakes')) return getMistakes(request, ctx);
+  if (is('POST', 'api', 'me', 'mistakes')) return postMistakes(request, ctx);
   if (is('GET', 'api', 'me', 'interview-plan')) return getInterviewPlan(request, ctx);
   if (is('PUT', 'api', 'me', 'interview-plan')) return putInterviewPlan(request, ctx);
   if (is('DELETE', 'api', 'me', 'interview-plan')) return deleteInterviewPlan(request, ctx);

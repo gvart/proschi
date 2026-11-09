@@ -26,7 +26,7 @@ server. What they remember stays in your browser's storage on this device:
 | `proschi.practice` | Practice progress: per problem, your latest design, how many times you ran the tests and whether you solved it |
 | `proschi.practice.runs` | Per problem: how many test runs, the runs it took to solve it, and the monthly cost of your cheapest solving design and of the reference solution, for the badges on a copy of the site without accounts |
 | `proschi.practice.last` | The last practice problem you opened, for "Continue" on the practice page |
-| `proschi.practice.mistakes` | The known mistake your last failed test run matched, per problem (its title and when), for "Your next steps" on the practice page |
+| `proschi.practice.mistakes` | The known mistake your last failed test run matched, per problem (its name, title and when), for "Your next steps" on the practice page; signed in, joined by the copy your account keeps |
 | `proschi.practice.plan` | The interview-date plan (Max): your interview date, the minutes a day, the day you set it, the last day's list and what you ticked by hand; signed in, the date and minutes are a copy of what your account keeps |
 | `proschi.practice.goal` | What you are on the practice page for (solving problems, interview prep, a daily habit), whether you answered or skipped that question, and whether you switched the daily streak on or off; signed in, a copy of what your account keeps |
 | `proschi.interview.<problem>` | Scripted interview mode in progress on a problem: the length, the phase, the time spent per phase, the questions asked, your estimates, the last test run and the self-review ticks; removed when you leave interview mode |
@@ -156,6 +156,13 @@ above are about events, not about you).
   under. When you sign in,
   designs in your browser that your account lacks are uploaded to it, and the
   server re-runs their tests before it counts a solve.
+- Known mistakes: when a failed test run on a practice problem matches a
+  common mistake, the problem, the mistake's name and title, and when it
+  last matched (the newest 100 per account; one row per problem and
+  mistake). They are kept so "Your next steps" can suggest retrying the
+  problem on any device you sign in on. Mistakes kept in your browser are
+  sent when you sign in; signed out, they stay in your browser. Free on
+  every plan.
 - Daily review, per card review: which card (and its version), your rating
   (again, hard, good or easy), when, how long you took to answer and your
   local date; and per card the schedule computed from them (when it is due
