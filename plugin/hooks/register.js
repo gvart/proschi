@@ -1304,7 +1304,8 @@ var UNIT_EXAMPLES = {
   MBps: "a bandwidth, e.g. 500 MB/s or 1 GB/s",
   "usd/GB": "a price per gigabyte, e.g. 0.05 usd/GB"
 };
-var CAPACITY_PARTS = "a rate, reads, writes, shards, size, latency, availability, cost, durable or volatile, consistency, bandwidth, egress, timeout or hit";
+var CAPACITY_PARTS = "a rate, reads, writes, shards, size, latency, availability, cost, durable or volatile, consistency, bandwidth, egress, timeout, hit, errors, retries or drain";
+var MAX_RETRIES = 5;
 var ASSERTION_HELP = 'Expected an assertion: "Use case" calls <node>, "Use case" writes <node> before responding, <node> calls <node>, no path from <node> to <node>, <node> has replicas >= 2, \u2026';
 var ASSERTION_VERBS = "calls, every scenario calls, never calls, never waits for, writes, responds, starts at, has scenario or handles failure of";
 var GENERIC_TECH = {
@@ -2514,14 +2515,14 @@ var Parser = class _Parser {
           this.error('Expected a scenario name in quotes and its share, e.g. "Cache hit" 90%', this.locOf(scenario ?? tokens[i - 1], line));
           return;
         }
-        const share = this.quantityOf(tokens[i + 1], "%", scenario, line);
-        if (share === void 0) return;
+        const share2 = this.quantityOf(tokens[i + 1], "%", scenario, line);
+        if (share2 === void 0) return;
         const loc = this.locOf(scenario, line);
         if (shares.some((s) => s.scenario === scenario.value)) {
           this.error(`Scenario '${scenario.value}' is in the mix twice`, loc);
           return;
         }
-        shares.push({ scenario: scenario.value, share, loc });
+        shares.push({ scenario: scenario.value, share: share2, loc });
         i += 2;
         if (!tokens[i]) break;
         if (tokens[i].kind !== "comma") {
@@ -2620,6 +2621,18 @@ var Parser = class _Parser {
         commit({ kind: "availability", ...withUseCase(), minPercent, loc });
         return;
       }
+      case "lag": {
+        readUseCase();
+        if (!useCase) {
+          this.error('Expected a use case name in quotes, e.g. lag "Place order" < 30s', this.locOf(tokens[1] ?? first, line));
+          return;
+        }
+        if (!this.expectOp(tokens, i, ["<", "<="], 'lag "Use case" < 30s', line)) return;
+        const maxMs = this.quantityOf(tokens[i + 1], "ms", tokens[i], line);
+        if (maxMs === void 0 || !this.expectEnd(tokens, i + 2, line)) return;
+        commit({ kind: "lag", useCase: useCase.name, maxMs, loc });
+        return;
+      }
       case "durable":
         readUseCase();
         if (!useCase) {
@@ -2645,15 +2658,54 @@ var Parser = class _Parser {
         return;
       }
       case "cost": {
-        if (!this.expectOp(tokens, 1, ["<=", "<"], "cost <= 3000 usd/month", line)) return;
-        const maxUsdPerMonth = this.quantityOf(tokens[2], "usd/month", tokens[1], line);
-        if (maxUsdPerMonth === void 0 || !this.expectEnd(tokens, 3, line)) return;
-        commit({ kind: "cost", maxUsdPerMonth, loc });
+        const scoped = this.parseCostScope(tokens, line);
+        if (!scoped) return;
+        const at = scoped.next;
+        if (!this.expectOp(tokens, at, ["<=", "<"], scoped.scope ? "cost @Payments <= 500 usd/month" : "cost <= 3000 usd/month", line)) return;
+        const maxUsdPerMonth = this.quantityOf(tokens[at + 1], "usd/month", tokens[at], line);
+        if (maxUsdPerMonth === void 0 || !this.expectEnd(tokens, at + 2, line)) return;
+        commit({ kind: "cost", maxUsdPerMonth, ...scoped.scope ? { scope: scoped.scope } : {}, loc });
+        if (scoped.scope) this.checkCostScope(scoped.scope, this.locOf(tokens[at - 1], line));
         return;
       }
       default:
         this.error(`Unknown requirement '${word}'. ${help}`, this.locOf(first, line));
     }
+  }
+  /** What follows `cost` before its operator: nothing, `@team`, `.tag` or `group <id>`; the index after it. */
+  parseCostScope(tokens, line) {
+    const t = tokens[1];
+    if (t?.kind === "team") return { scope: { team: t.value }, next: 2 };
+    if (t?.kind === "tag") return { scope: { tag: t.value }, next: 2 };
+    if (isWord(t, "group")) {
+      const id = tokens[2];
+      if (id?.kind !== "ident") {
+        this.error("Expected a group id after group, e.g. cost group checkout <= 500 usd/month", this.locOf(id ?? t, line));
+        return void 0;
+      }
+      return { scope: { group: id.value }, next: 3 };
+    }
+    if (t?.kind === "string") {
+      const name = t.value.replace(/^@/, "");
+      this.error(`A budget names a team as @${name}, a tag as .${name} or a group as group ${name}, without quotes`, this.locOf(t, line));
+      return void 0;
+    }
+    return { next: 1 };
+  }
+  /** A scoped budget that covers no node is a warning: an unknown team, tag or group. */
+  checkCostScope(scope2, loc) {
+    this.deferred.push(() => {
+      const nodes = [...this.nodes.values()];
+      if ("team" in scope2) {
+        if (!nodes.some((n) => n.ownerTeam === scope2.team)) this.warning(`No node is owned by @${scope2.team}; give nodes the team with @${scope2.team} after their name`, loc);
+      } else if ("tag" in scope2) {
+        if (!nodes.some((n) => n.tag === scope2.tag)) this.warning(`No node or group has the tag .${scope2.tag}`, loc);
+      } else {
+        const group = this.nodes.get(scope2.group);
+        if (!group) this.warning(`Unknown group '${scope2.group}'`, loc);
+        else if (group.kind !== "group") this.warning(`'${scope2.group}' is not a group; a budget covers a team (@team), a tag (.tag) or a group (group <id>)`, loc);
+      }
+    });
   }
   /** `db 20k rps latency 4ms availability 99.95% cost 400 usd/month durable`, parts in any order. */
   parseCapacityLine(tokens, line) {
@@ -2665,6 +2717,7 @@ var Parser = class _Parser {
     const override = { node: id.value, loc: this.lineLoc(tokens, line) };
     const seen = /* @__PURE__ */ new Set();
     let hitLoc;
+    let drainLoc;
     for (let i = 1; i < tokens.length; ) {
       const t = tokens[i];
       let part;
@@ -2694,6 +2747,34 @@ var Parser = class _Parser {
         }
         override.hitPercent = value;
         hitLoc = this.locOf(t, line);
+        i += 2;
+      } else if (isWord(t, "errors")) {
+        part = "errors";
+        const value = this.quantityOf(tokens[i + 1], "%", t, line);
+        if (value === void 0) return;
+        if (value > 100) {
+          this.error("An error rate cannot be more than 100%", this.locOf(tokens[i + 1], line));
+          return;
+        }
+        override.errorPercent = value;
+        i += 2;
+      } else if (isWord(t, "drain")) {
+        part = "drain";
+        const value = this.quantityOf(tokens[i + 1], "rps", t, line);
+        if (value === void 0) return;
+        override.drainRps = value;
+        drainLoc = this.locOf(t, line);
+        i += 2;
+      } else if (isWord(t, "retries")) {
+        part = "retries";
+        const n = tokens[i + 1];
+        const retries = isConstUse(n) ? this.countOf(n, line) : n?.kind === "number" ? Number(n.value) : NaN;
+        if (retries === void 0) return;
+        if (!Number.isInteger(retries) || retries < 0 || retries > MAX_RETRIES) {
+          this.error(`Expected a whole number of retries from 0 to ${MAX_RETRIES}, e.g. retries 3`, this.locOf(n ?? t, line));
+          return;
+        }
+        override.retries = retries;
         i += 2;
       } else if (isWord(t, "durable") || isWord(t, "volatile")) {
         part = "durable or volatile";
@@ -2783,6 +2864,7 @@ var Parser = class _Parser {
       if (storeOnly.length && !isDataStore(kindOf(node)))
         this.warning(`'${id.value}' is not a data store (${DATA_STORE_KINDS.join(", ")}); ${storeOnly.join(" and ")} only apply to data stores`, idLoc);
       if (hitLoc) this.checkHitRate(node, override.hitPercent, hitLoc);
+      if (drainLoc && !["queue", "broker"].includes(kindOf(node))) this.warning(`'${id.value}' is not a queue or broker; a drain rate only means something for one`, drainLoc);
     });
   }
   /**
@@ -2967,7 +3049,7 @@ var Parser = class _Parser {
   parseWhatIfLine(whatif, tokens, line) {
     const [first, second, third] = tokens;
     const loc = this.lineLoc(tokens, line);
-    const help = 'Expected a what-if change: traffic "Use case" x3, traffic "Use case" 50k rps, fail <node>, <node> x4 or <node> hit 40%';
+    const help = 'Expected a what-if change: traffic "Use case" x3, traffic "Use case" 50k rps, fail <node>, <node> x4, <node> hit 40% or <node> errors 20%';
     const checkNode = (id) => {
       const idLoc = this.locOf(id, line);
       this.deferred.push(() => {
@@ -3007,6 +3089,21 @@ var Parser = class _Parser {
       }
       checkNode(first);
       whatif.changes.push({ kind: "hit", node: first.value, percent, loc });
+      return;
+    }
+    if (first.kind === "ident" && isWord(second, "errors") && tokens.length > 2) {
+      const percent = this.quantityOf(third, "%", second, line);
+      if (percent === void 0 || !this.expectEnd(tokens, 3, line)) return;
+      if (percent > 100) {
+        this.error("An error rate cannot be more than 100%", this.locOf(third, line));
+        return;
+      }
+      if (whatif.changes.some((c) => c.kind === "errors" && c.node === first.value)) {
+        this.error(`The error rate of '${first.value}' is set twice in this what-if`, this.locOf(first, line));
+        return;
+      }
+      checkNode(first);
+      whatif.changes.push({ kind: "errors", node: first.value, percent, loc });
       return;
     }
     if (isWord(first, "fail")) {
@@ -4244,6 +4341,19 @@ function formatAvailability(fraction) {
 function formatPercent(fraction) {
   return `${Math.round(fraction * 100)}%`;
 }
+function formatDuration(ms) {
+  if (!Number.isFinite(ms)) return "\u221E";
+  if (ms < 1e3) return formatMs(ms);
+  if (ms < 6e4) return `${trim(ms / 1e3, ms < 1e4 ? 1 : 0)} s`;
+  if (ms < 36e5) return `${trim(ms / 6e4, 1)} min`;
+  return `${trim(ms / 36e5, 1)} h`;
+}
+function formatCount(n) {
+  if (n >= 1e9) return `${trim(n / 1e9, 1)}B`;
+  if (n >= 1e6) return `${trim(n / 1e6, 1)}M`;
+  if (n >= 1e3) return `${trim(n / 1e3, 1)}k`;
+  return trim(n, 0);
+}
 function formatUsd(usd) {
   return `$${Math.round(usd).toLocaleString("en-US")}/month`;
 }
@@ -4255,13 +4365,13 @@ function flowsOf(diagram, traffic) {
     const u = findUseCase(diagram, t.useCase);
     if (!u || t.rps <= 0) continue;
     for (const sc of u.scenarios) {
-      const share = t.mix ? t.mix.find((m) => m.scenario === sc.name)?.share ?? 0 : sc === u.scenarios[0] ? 1 : 0;
-      if (share <= 0) continue;
+      const share2 = t.mix ? t.mix.find((m) => m.scenario === sc.name)?.share ?? 0 : sc === u.scenarios[0] ? 1 : 0;
+      if (share2 <= 0) continue;
       for (const step of sc.steps) {
         if (step.failed) continue;
         const key = `${step.fromServiceId}>${step.toServiceId}`;
         const f = flows.get(key) ?? { from: step.fromServiceId, to: step.toServiceId, rps: 0, async: step.executionType !== "SYNC_REQUEST_RESPONSE" };
-        f.rps += t.rps * share * (step.multiplier ?? 1);
+        f.rps += t.rps * share2 * (step.multiplier ?? 1);
         flows.set(key, f);
       }
     }
@@ -4289,8 +4399,10 @@ function analysisOverlay(diagram, analysis) {
   for (const n of analysis.nodes) {
     latency2.set(n.id, n.latencyMs);
     if (n.failed) failed.add(n.id);
+    const busy = n.queue ? Math.max(n.utilization, Math.min(n.queue.utilization, 9.99)) : n.utilization;
     nodes[n.id] = {
-      ...works(n) ? { utilization: n.utilization, saturated: n.saturated } : {},
+      ...works(n) ? { utilization: busy, saturated: n.saturated || busy >= 1 } : {},
+      ...n.queue ? n.queue.backlogPerHour > 0 ? { backlogPerHour: n.queue.backlogPerHour } : { lagMs: n.queue.lagMs } : {},
       ...n.replicas > 1 ? { replicas: n.replicas } : {},
       ...n.shards > 1 ? { shards: n.shards } : {},
       ...bottlenecks.has(n.id) ? { bottleneck: true } : {},
@@ -4628,6 +4740,11 @@ function breachesOf(team, sent, analysis) {
 }
 
 // ../frontend/src/sim/analyze.ts
+function queueOf(inflow, drain) {
+  const utilization = drain > 0 ? inflow / drain : inflow > 0 ? Infinity : 0;
+  if (inflow >= drain && inflow > 0) return { inflowRps: inflow, drainRps: drain, utilization, backlogPerHour: (inflow - drain) * 3600, lagMs: Infinity };
+  return { inflowRps: inflow, drainRps: drain, utilization, backlogPerHour: 0, lagMs: drain > 0 ? utilization / (drain - inflow) * 1e3 : 0 };
+}
 var DEFAULT_TIMEOUT_MS = 1e3;
 var HOT = 0.7;
 var QUEUE_CAP = 0.95;
@@ -4655,9 +4772,9 @@ function resolveTraffic(diagram, warnings = []) {
     if (seen.has(useCase.id)) continue;
     seen.add(useCase.id);
     const shares = useCase.scenarios.map(() => 0);
-    for (const { scenario, share } of entry.mix ?? []) {
+    for (const { scenario, share: share2 } of entry.mix ?? []) {
       const found = findScenario(useCase, scenario);
-      if (found) shares[useCase.scenarios.indexOf(found)] += share;
+      if (found) shares[useCase.scenarios.indexOf(found)] += share2;
       else warnings.push(`"${useCase.name}" has no scenario "${scenario}"; its traffic share is ignored`);
     }
     const total = shares.reduce((a, b) => a + b, 0);
@@ -4686,6 +4803,14 @@ function trafficFor(diagram, options = {}, warnings = []) {
       const lookups = cacheLookups(u, hits, (id) => kinds.get(id), (step) => access(step) === "read");
       const miss = missFactors(lookups);
       if (miss.size) traffic.set(u.id, { ...traffic.get(u.id), miss, lookups });
+    }
+  }
+  const retries = retriesOf(diagram, options);
+  if (retries.size) {
+    for (const u of diagram.useCases) {
+      const retry = /* @__PURE__ */ new Map();
+      for (const s of u.scenarios) for (const step of s.steps) if (!step.failed && retries.has(step.toServiceId)) retry.set(step, retries.get(step.toServiceId).attempts);
+      if (retry.size) traffic.set(u.id, { ...traffic.get(u.id), retry });
     }
   }
   const failed = options.failed;
@@ -4719,6 +4844,52 @@ function hitRatesOf(diagram, options) {
   for (const [id, percent] of options.hitRates ?? []) hits.set(id, percent);
   return hits;
 }
+var expectedAttempts = (e, retries) => {
+  let sum = 0;
+  for (let k = 0; k <= retries; k++) sum += e ** k;
+  return sum;
+};
+function retriesOf(diagram, options = {}) {
+  const out = /* @__PURE__ */ new Map();
+  const set = (id, percent, retries) => {
+    const e = Math.min(100, Math.max(0, percent)) / 100;
+    out.set(id, { errorRate: e, retries, attempts: expectedAttempts(e, retries), success: 1 - e ** (retries + 1) });
+  };
+  const declared = new Map((diagram.capacity ?? []).map((o) => [o.node, o]));
+  for (const o of diagram.capacity ?? []) if (o.errorPercent !== void 0) set(o.node, o.errorPercent, o.retries ?? 0);
+  for (const [id, percent] of options.errorRates ?? []) set(id, percent, declared.get(id)?.retries ?? 0);
+  return out;
+}
+function retryVariants(hops, retries) {
+  let out = [{ share: 1, hops }];
+  hops.forEach(
+    (part, p) => part.forEach((h2, i) => {
+      const r = retries.get(h2.target);
+      if (!r || h2.failed || r.retries === 0 || r.errorRate <= 0) return;
+      const next = [];
+      for (const v of out) {
+        for (let k = 0; k <= r.retries; k++) {
+          const share2 = v.share * (k < r.retries ? r.errorRate ** k * (1 - r.errorRate) : r.errorRate ** k);
+          if (share2 <= 0) continue;
+          if (k === 0) {
+            next.push({ share: share2, hops: v.hops });
+            continue;
+          }
+          const changed = v.hops.map((q, j) => j === p ? q.map((x, n) => n === i ? { ...x, attempts: k + 1 } : x) : q);
+          next.push({ share: share2, hops: changed });
+        }
+      }
+      out = next;
+      if (out.length > MAX_RETRY_VARIANTS) {
+        out = out.map((v, n) => ({ v, n })).sort((a, b) => b.v.share - a.v.share || a.n - b.n).slice(0, MAX_RETRY_VARIANTS).map(({ v }) => v);
+        const total = out.reduce((sum, v) => sum + v.share, 0);
+        out = out.map((v) => ({ ...v, share: v.share / total }));
+      }
+    })
+  );
+  return out;
+}
+var MAX_RETRY_VARIANTS = 256;
 var BACKING_STORES = ["database", "search", "analytics", "storage"];
 function cacheLookups(useCase, hits, kindOf2, isRead) {
   return useCase.scenarios.map((s) => {
@@ -4751,15 +4922,15 @@ function cacheVariants(hops, lookups) {
   const out = [];
   const n = Math.min(lookups.length, 10);
   for (let mask = 0; mask < 1 << n; mask++) {
-    let share = 1;
+    let share2 = 1;
     const skipped = /* @__PURE__ */ new Set();
     for (let k = 0; k < n; k++) {
       const hit = mask >> k & 1;
-      share *= hit ? lookups[k].hit : 1 - lookups[k].hit;
+      share2 *= hit ? lookups[k].hit : 1 - lookups[k].hit;
       if (hit) for (const step of lookups[k].miss) skipped.add(step);
     }
-    if (share <= 0) continue;
-    out.push({ share, hops: hops.map((part) => part.filter((h2) => !skipped.has(h2.step))).filter((part) => part.length) });
+    if (share2 <= 0) continue;
+    out.push({ share: share2, hops: hops.map((part) => part.filter((h2) => !skipped.has(h2.step))).filter((part) => part.length) });
   }
   return out;
 }
@@ -4770,11 +4941,14 @@ function averageTraffic(traffic) {
 var multiplierOf = (step) => step.multiplier !== void 0 && step.multiplier > 0 ? step.multiplier : 1;
 function forEachStepRate(diagram, traffic, visit) {
   for (const u of diagram.useCases) {
-    const { rps, shares, miss } = traffic.get(u.id) ?? { rps: 0, shares: [] };
+    const { rps, shares, miss, retry } = traffic.get(u.id) ?? { rps: 0, shares: [] };
     u.scenarios.forEach((s, i) => {
       const rate = rps * (shares[i] ?? 0);
-      if (rate > 0) {
-        for (const step of s.steps) if (!step.failed) visit(step, miss?.has(step) ? rate * miss.get(step) : rate, u);
+      if (!(rate > 0)) return;
+      for (const step of s.steps) {
+        if (step.failed) continue;
+        const r = miss?.has(step) ? rate * miss.get(step) : rate;
+        visit(step, retry?.has(step) ? r * retry.get(step) : r, u);
       }
     });
   }
@@ -4945,8 +5119,8 @@ function mixtureQuantile(paths, q) {
 }
 function mainScenarioIndex(shares) {
   let best = 0;
-  shares.forEach((share, i) => {
-    if (share > shares[best]) best = i;
+  shares.forEach((share2, i) => {
+    if (share2 > shares[best]) best = i;
   });
   return best;
 }
@@ -4964,6 +5138,8 @@ function analyze(diagram, options = {}) {
   const profiles = profilesOf(diagram, warnings);
   const kindOf2 = (id) => profiles.get(id)?.kind ?? "client";
   const traffic = trafficFor(diagram, options, warnings);
+  const retries = retriesOf(diagram, options);
+  const drains = new Map((diagram.capacity ?? []).flatMap((o) => o.drainRps !== void 0 ? [[o.node, o.drainRps]] : []));
   const load = computeLoad(diagram, traffic);
   const egress = computeEgressGb(diagram, averageTraffic(traffic), kindOf2);
   const bytes = computeBytesPerSecond(diagram, traffic);
@@ -4997,7 +5173,9 @@ function analyze(diagram, options = {}) {
       egressGbPerMonth,
       egressUsd,
       durable: p.durable,
-      ...down ? { failed: true } : {}
+      ...down ? { failed: true } : {},
+      ...drains.has(n.id) ? { queue: queueOf(read2 + write, drains.get(n.id)) } : {},
+      ...retries.has(n.id) ? { retry: { ...retries.get(n.id), stormRisk: usage.utilization >= HOT && retries.get(n.id).retries > 0 && retries.get(n.id).errorRate > 0 } } : {}
     };
   });
   const nodeById = new Map(nodeResults.map((n) => [n.id, n]));
@@ -5008,6 +5186,19 @@ function analyze(diagram, options = {}) {
     if (n.saturated) warnings.push(`'${n.id}' is saturated: ${usage}. ${writeBound(n) ? "Add shards for writes" : "Add replicas"} or take load off it.`);
     else if (n.utilization > HOT) warnings.push(`'${n.id}' runs hot: ${usage}.`);
   }
+  for (const n of nodeResults) {
+    if (!n.queue || n.queue.backlogPerHour <= 0) continue;
+    warnings.push(
+      `'${n.id}' falls behind: ${formatRps(n.queue.inflowRps)} flows in and its consumers drain ${formatRps(n.queue.drainRps)}, so the backlog grows by ${formatCount(n.queue.backlogPerHour)} messages an hour. Drain faster or send it less.`
+    );
+  }
+  for (const n of nodeResults) {
+    if (!n.retry?.stormRisk) continue;
+    const { errorRate, retries: r } = n.retry;
+    warnings.push(
+      `'${n.id}' risks a retry storm: it runs at ${formatPercent(n.utilization)} with ${formatPercent(errorRate)} errors and ${r} ${r === 1 ? "retry" : "retries"}. Once it saturates, more calls fail and each comes back up to ${r} more times, up to ${formatRps(n.loadRps / n.retry.attempts * (r + 1))}. Add capacity, retry less, or back off.`
+    );
+  }
   for (const s of systems?.systems ?? []) warnings.push(...s.warnings);
   const access = accessIn(diagram);
   const pathOf = (hopsOfPath) => ({
@@ -5015,21 +5206,23 @@ function analyze(diagram, options = {}) {
       (part) => part.map((h2) => {
         if (h2.failed) return { fixedMs: timeoutOf(h2.target), tailMs: 0 };
         const hop = systems?.hop(h2.target, h2.step.toPort) ?? hops.get(h2.target) ?? { fixedMs: 0, tailMs: 0 };
-        return { fixedMs: transferMs(h2.step, bandwidthOf) + hop.fixedMs, tailMs: hop.tailMs };
+        const item = { fixedMs: transferMs(h2.step, bandwidthOf) + hop.fixedMs, tailMs: hop.tailMs };
+        return h2.attempts === void 0 ? item : { fixedMs: item.fixedMs * h2.attempts, tailMs: item.tailMs * h2.attempts };
       })
     )
   });
   const useCases = diagram.useCases.map((u) => {
-    const { rps, shares, stranded, average, lookups } = traffic.get(u.id);
-    if (lookups) {
-      const { scenarios: scenarios2, percentiles: percentiles2, tailScenario: tailScenario2 } = cachedLatency(u, shares, lookups, pathOf, new Set(options.percentiles ?? PERCENTILES2));
+    const { rps, shares, stranded, average, lookups, retry } = traffic.get(u.id);
+    const availabilityOf = (id, writes2) => {
+      const n = nodeById.get(id);
+      if (!n && systems) return systemAvailability(u, id, systems.availability);
+      return !n ? 1 : writes2.has(id) ? n.writeAvailability : n.availability;
+    };
+    const withRetries = (writes2) => (id) => retries.has(id) ? availabilityOf(id, writes2) * retries.get(id).success : availabilityOf(id, writes2);
+    if (lookups || retry) {
+      const { scenarios: scenarios2, percentiles: percentiles2, tailScenario: tailScenario2 } = cachedLatency(u, shares, lookups ?? [], retry ? retries : /* @__PURE__ */ new Map(), pathOf, new Set(options.percentiles ?? PERCENTILES2));
       const writes2 = mainWrites(u, shares, (step) => access(step) === "write");
-      const availabilityOf2 = (id) => {
-        const n = nodeById.get(id);
-        if (!n && systems) return systemAvailability(u, id, systems.availability);
-        return !n ? 1 : writes2.has(id) ? n.writeAvailability : n.availability;
-      };
-      const availability3 = useCaseAvailability(u, shares, availabilityOf2) * (1 - (stranded ?? 0));
+      const availability3 = useCaseAvailability(u, shares, retries.size ? withRetries(writes2) : (id) => availabilityOf(id, writes2)) * (1 - (stranded ?? 0));
       return { id: u.id, name: u.name, rps, ...average !== void 0 ? { avgRps: rps * average } : {}, scenarios: scenarios2, percentiles: percentiles2, tailScenario: tailScenario2, availability: availability3 };
     }
     const paths = u.scenarios.map((s) => pathOf(criticalPath(u, s)));
@@ -5053,12 +5246,7 @@ function analyze(diagram, options = {}) {
     );
     if (rps > 0 && u.scenarios.length === 0) warnings.push(`"${u.name}" has traffic but no steps`);
     const writes = mainWrites(u, shares, (step) => access(step) === "write");
-    const availabilityOf = (id) => {
-      const n = nodeById.get(id);
-      if (!n && systems) return systemAvailability(u, id, systems.availability);
-      return !n ? 1 : writes.has(id) ? n.writeAvailability : n.availability;
-    };
-    const availability2 = useCaseAvailability(u, shares, availabilityOf) * (1 - (stranded ?? 0));
+    const availability2 = useCaseAvailability(u, shares, retries.size ? withRetries(writes) : (id) => availabilityOf(id, writes)) * (1 - (stranded ?? 0));
     return { id: u.id, name: u.name, rps, ...average !== void 0 ? { avgRps: rps * average } : {}, scenarios, percentiles, tailScenario, availability: availability2 };
   });
   return {
@@ -5071,8 +5259,12 @@ function analyze(diagram, options = {}) {
     ...systems ? { systems: systems.systems } : {}
   };
 }
-function cachedLatency(u, shares, lookups, pathOf, wanted) {
-  const variants = u.scenarios.map((s, i) => cacheVariants(criticalPath(u, s), lookups[i] ?? []).map((v) => ({ share: v.share, path: pathOf(v.hops) })));
+function cachedLatency(u, shares, lookups, retries, pathOf, wanted) {
+  const variants = u.scenarios.map(
+    (s, i) => cacheVariants(criticalPath(u, s), lookups[i] ?? []).flatMap(
+      (v) => retries.size ? retryVariants(v.hops, retries).map((r) => ({ share: v.share * r.share, path: pathOf(r.hops) })) : [{ share: v.share, path: pathOf(v.hops) }]
+    )
+  );
   const scenarios = u.scenarios.map((s, i) => ({
     id: s.id,
     name: s.name,
@@ -5122,6 +5314,39 @@ function useCaseAvailability(useCase, shares, availabilityOf) {
 var DEPLOYED = (kind) => kind !== "client" && kind !== "other" && kind !== "external" && kind !== "dns";
 function singlePointsOfFailure(diagram) {
   return components(diagram).filter((n) => replicasOf(n) === 1 && DEPLOYED(profileOf(n).kind)).filter((n) => diagram.useCases.some((u) => needs(u, n.id) && fallbacksFor(u, n.id).length === 0)).map((n) => n.id);
+}
+
+// ../frontend/src/sim/cost.ts
+function ancestors(byId, node) {
+  const out = [];
+  for (let p = node.parent ? byId.get(node.parent) : void 0; p && !out.includes(p); p = p.parent ? byId.get(p.parent) : void 0) out.push(p);
+  return out;
+}
+function covers(byId, node, scope2) {
+  if ("team" in scope2) return node.ownerTeam === scope2.team;
+  const outer = ancestors(byId, node);
+  if ("tag" in scope2) return node.tag === scope2.tag || outer.some((g) => g.tag === scope2.tag);
+  return outer.some((g) => g.id === scope2.group);
+}
+function scopedCost(diagram, analysis, scope2) {
+  const byId = new Map(diagram.nodes.map((n) => [n.id, n]));
+  const nodes = analysis.nodes.filter((n) => {
+    const node = byId.get(n.id);
+    return node !== void 0 && covers(byId, node, scope2);
+  });
+  const id = "team" in scope2 ? `@${scope2.team}` : "tag" in scope2 ? `.${scope2.tag}` : scope2.group;
+  const label = "team" in scope2 ? id : "tag" in scope2 ? diagram.legend?.find((e) => e.id === scope2.tag)?.label ?? id : byId.get(scope2.group)?.name ?? id;
+  return share(id, label, nodes);
+}
+function share(id, label, nodes) {
+  const sorted = [...nodes].sort((a, b) => b.costUsd - a.costUsd || a.id.localeCompare(b.id));
+  return {
+    id,
+    label,
+    costUsd: sorted.reduce((sum, n) => sum + n.costUsd, 0),
+    egressUsd: sorted.reduce((sum, n) => sum + n.egressUsd, 0),
+    nodes: sorted.map((n) => n.id)
+  };
 }
 
 // ../frontend/src/sim/tests.ts
@@ -5180,7 +5405,8 @@ var CATEGORY = {
   availability: "availability",
   durable: "durability",
   survive: "resilience",
-  cost: "cost"
+  cost: "cost",
+  lag: "latency"
 };
 var percentileName = (q) => PERCENTILE_KEYS[q];
 var lineOf = (loc) => `${loc.file ? `${loc.file}:` : "line "}${loc.line}`;
@@ -5200,7 +5426,9 @@ function requirementName(r) {
     case "survive":
       return r.target === "any" ? "survive any node failure" : `survive failure of ${selectorText(r.target)}`;
     case "cost":
-      return `cost \u2264 ${formatUsd(r.maxUsdPerMonth)}`;
+      return `cost${r.scope ? ` of ${scopeText(r.scope)}` : ""} \u2264 ${formatUsd(r.maxUsdPerMonth)}`;
+    case "lag":
+      return `lag of ${r.useCase} < ${formatDuration(r.maxMs)}`;
   }
 }
 function requirement(run, r) {
@@ -5215,7 +5443,9 @@ function requirement(run, r) {
     case "survive":
       return survive(run, r.target);
     case "cost":
-      return cost(run, r.maxUsdPerMonth);
+      return r.scope ? budget(run, r.scope, r.maxUsdPerMonth) : cost(run, r.maxUsdPerMonth);
+    case "lag":
+      return lag(run, r.useCase, r.maxMs);
   }
 }
 function overUseCases(run, name, check, limit, anyWithoutTraffic = false) {
@@ -5437,6 +5667,41 @@ function cost(run, max) {
   });
   const egressHint = egress > total / 2 ? " Most of it is egress: serve repeated downloads from a CDN ($0.02/GB) instead of storage ($0.09/GB), or send fewer bytes." : "";
   return fail(message, `Biggest items: ${top.join(", ")}. Drop replicas on nodes with low utilisation or pick cheaper techs.${egressHint}`);
+}
+function lag(run, name, maxMs) {
+  const u = findUseCase(run.diagram, name);
+  if (!u) return unknownUseCase(run, name);
+  const ids = [...new Set(u.scenarios.flatMap((s) => s.steps.filter((step) => !step.failed).map((step) => step.toServiceId)))];
+  const queues = ids.map((id) => run.nodes.get(id)).filter((n) => !!n?.queue);
+  if (queues.length === 0) {
+    const plain = ids.find((id) => ["queue", "broker"].includes(run.nodes.get(id)?.kind ?? ""));
+    return fail(
+      `"${u.name}" sends to no queue with a drain rate, so it has no lag to measure`,
+      plain ? `Say how fast its consumers take messages: capacity { ${plain} drain 1k rps }` : "Send its slow work to a queue (->> queue) and give the queue a drain rate in capacity"
+    );
+  }
+  const slowest = queues.reduce((worst, n) => n.queue.lagMs > worst.queue.lagMs ? n : worst);
+  const q = slowest.queue;
+  if (q.backlogPerHour > 0) {
+    return fail(
+      `"${u.name}" falls behind at ${slowest.id}: ${formatRps(q.inflowRps)} flows in, its consumers drain ${formatRps(q.drainRps)}, and the backlog grows by ${formatCount(q.backlogPerHour)} messages an hour (limit ${formatDuration(maxMs)})`,
+      `Drain ${slowest.id} faster than ${formatRps(q.inflowRps)}: more consumers, or capacity { ${slowest.id} drain ${formatRps(Math.ceil(q.inflowRps / 0.7 / 100) * 100)} }`
+    );
+  }
+  const message = `Lag of "${u.name}" is ${formatDuration(q.lagMs)} at ${slowest.id}, its consumers ${formatPercent(q.utilization)} busy (limit ${formatDuration(maxMs)})`;
+  return q.lagMs < maxMs ? pass(message) : fail(message, `Drain ${slowest.id} faster, so its consumers run below ${formatPercent(HOT)}`);
+}
+var scopeText = (scope2) => "team" in scope2 ? `@${scope2.team}` : "tag" in scope2 ? `.${scope2.tag}` : `group ${scope2.group}`;
+function budget(run, scope2, max) {
+  const share2 = scopedCost(run.diagram, run.analysis, scope2);
+  const what = scopeText(scope2);
+  if (share2.nodes.length === 0) return fail(`No node is covered by ${what}`, "team" in scope2 ? `Give nodes the team with ${what} after their name` : "tag" in scope2 ? `Tag nodes or groups with ${what}` : `Add nodes inside ${what}`);
+  const ofWhich = share2.egressUsd > 0 ? `, ${formatUsd(share2.egressUsd)} of it egress` : "";
+  const message = `${what} costs ${formatUsd(share2.costUsd)}${ofWhich} (limit ${formatUsd(max)})`;
+  if (share2.costUsd <= max) return pass(message);
+  const nodes = new Map(run.analysis.nodes.map((n) => [n.id, n]));
+  const top = share2.nodes.slice(0, 3).map((id) => `${id} ${formatUsd(nodes.get(id).costUsd)}`);
+  return fail(message, `Biggest items: ${top.join(", ")}. Drop replicas on nodes with low utilisation, pick cheaper techs, or move work to another team's budget.`);
 }
 function flowTest(run, test) {
   const checks = test.assertions.map((a) => ({ ...assertion(run, a), loc: a.loc }));
@@ -6825,8 +7090,8 @@ function drawSystem(grid, { node, rect }, badge, look, selected) {
   grid.text(left, rect.y + 4, text, ink, Infinity, heat);
   const bar = room - text.length - 1;
   if (bar < 4 || !Number.isFinite(badge.headroomRps) || badge.headroomRps <= 0) return;
-  const share = badge.sentRps / badge.headroomRps;
-  const filled = Math.max(share > 0 ? 1 : 0, Math.min(bar, Math.round(share * bar)));
+  const share2 = badge.sentRps / badge.headroomRps;
+  const filled = Math.max(share2 > 0 ? 1 : 0, Math.min(bar, Math.round(share2 * bar)));
   for (let i = 0; i < bar; i++) {
     const full = i < filled;
     grid.set(left + text.length + 1 + i, rect.y + 4, full ? "\u2501" : "\u2500", heat !== void 0 ? COLOR.onColor : full ? ink : COLOR.muted, heat);
@@ -7017,9 +7282,9 @@ function playAt(scene, steps, index, progress, tick = 0) {
     const error = isErrorStep(step);
     const roundTrip = step.executionType === "SYNC_REQUEST_RESPONSE" && !failed;
     edges.push({ path, error, failed, flowing: progress >= 100 && !failed });
-    const share = failed ? Math.min(progress, FAIL_AT) / 100 : roundTrip ? progress <= 50 ? progress / 50 : 1 - (progress - 50) / 50 : progress / 100;
+    const share2 = failed ? Math.min(progress, FAIL_AT) / 100 : roundTrip ? progress <= 50 ? progress / 50 : 1 - (progress - 50) / 50 : progress / 100;
     const last = path.cells.length - 1;
-    const at = path.cells[Math.max(0, Math.min(last, Math.round(share * last)))];
+    const at = path.cells[Math.max(0, Math.min(last, Math.round(share2 * last)))];
     if (failed && progress >= FAIL_AT) packets.push({ at, error: true, cut: true });
     else if (progress < 100) packets.push({ at, error: error && (!roundTrip || progress > 50), cut: false });
   }
