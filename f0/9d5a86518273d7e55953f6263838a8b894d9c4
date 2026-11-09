@@ -1,0 +1,58 @@
+frontend/src/practice/problems/nearby-search/wrong/equal-area-geoshards.proschi
+  s_248f83f833fb51::t_5adbfa428c1f0e 1-66
+frontend/src/practice/problems/nearby-search/given.proschi
+  s_248f83f833fb51::t_25d5540a427e90 19
+  s_248f83f833fb51::t_d5a685817d51cf 1-18,20-52
+frontend/src/practice/problems/nearby-search/wrong/index-inside-the-update.proschi
+  s_248f83f833fb51::t_bd0e7257b8c55d 46-47
+  s_248f83f833fb51::t_06f612afd38e82 2
+  s_248f83f833fb51::t_7a11fe0ef5eda5 1,3-45,48-49
+frontend/src/practice/problems/nearby-search/starter.proschi
+  s_248f83f833fb51::t_a75fe1cf5bfd22 1-16
+frontend/src/practice/cards/sharding/nearby-search-balance-by-load.md
+  s_248f83f833fb51::t_d577244af557e2 1-25
+frontend/src/practice/problems/nearby-search/solution.proschi
+  s_248f83f833fb51::t_25d5540a427e90 5-6
+  s_248f83f833fb51::t_cdc93fae65dfcc 65-66,69-70,92-93
+  s_248f83f833fb51::t_6239d7ae5d11d6 1-4,7-64,67-68,71-91,94-105
+frontend/src/practice/cards/sharding/nearby-search-shards-per-search.md
+  s_248f83f833fb51::t_ff4543ff9b360f 1-23,26-30
+  s_248f83f833fb51::t_24db70b1ecfbbf 24-25
+frontend/src/practice/cards/sharding/nearby-search-move-between-geoshards.md
+  s_248f83f833fb51::t_e75eebcd25c5fc 1-24
+frontend/src/practice/problems/nearby-search/wrong/geo-query-on-profiles.proschi
+  s_248f83f833fb51::t_b00151db0ce1c7 1-5,7-60
+  s_248f83f833fb51::t_06f612afd38e82 6
+frontend/src/practice/problems/nearby-search/lesson.md
+  s_248f83f833fb51::t_9fc74ba7f01f69 89,106
+  s_248f83f833fb51::t_2f61e9aac6f83e 1-88,90-105,107-183
+frontend/src/practice/problems/nearby-search/problem.md
+  s_248f83f833fb51::t_e2421e33ff2780 3
+  s_248f83f833fb51::t_25d5540a427e90 74
+  s_248f83f833fb51::t_a72ba215e083ca 1-2,4-9,12-16,19-73,75-123
+  s_248f83f833fb51::t_27e1724f822e9b 10-11,17-18
+frontend/src/practice/problems/nearby-search/wrong/shard-by-user-id.proschi
+  s_248f83f833fb51::t_6eab06db908593 1-65
+frontend/src/practice/problems/nearby-search/interview.md
+  s_248f83f833fb51::t_b816932211c653 1-89
+frontend/src/practice/roadmapStages.ts
+  s_248f83f833fb51::t_b6f087c83af3c9 78
+frontend/src/practice/cards/ids.lock
+  s_248f83f833fb51::t_0adf32e62f7b0d 183-185
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f09d5a86518273d7e55953f6263838a8b894d9c4",
+  "prompts": {},
+  "sessions": {
+    "s_248f83f833fb51": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2d46bc96-3c9a-4511-a065-8673803644a9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
