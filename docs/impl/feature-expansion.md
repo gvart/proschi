@@ -34,7 +34,7 @@ per-use LLM cost), and improve the language and the visual editor.
   verify: lint, tsc, unit tests, full e2e green. depends on: none
 
 ### Iteration 2: quick wins
-- [ ] **2.1 T1 Ungate history and report**: remove `interview_history` and
+- [x] **2.1 T1 Ungate history and report**: remove `interview_history` and
   `interview_report` from `METERED` in `featureState.ts`. Extend history to solo
   interviews (`practice/history/SoloHistory.tsx`, `SkillTrends.tsx`,
   `backend/src/soloInterviews.ts`) and make the report printable for solo verdicts.
@@ -83,7 +83,7 @@ per-use LLM cost), and improve the language and the visual editor.
   verify: unit tests on the delta function, tooling tests, e2e. depends on: none
 
 ### Iteration 5: learning value
-- [ ] **5.1 T4 Rule-based next steps** (Free): built from mastery, mistakes and due cards
+- [x] **5.1 T4 Rule-based next steps** (Free): built from mastery, mistakes and due cards
   (`learn/mastery.ts`, `practice/mistakes.ts`, `practice/history/NextForYou.tsx`).
   verify: unit tests on the recommender. depends on: none
 - [ ] **5.2 T5 Interview-date plan** (Max): pick a date and get a daily schedule of
