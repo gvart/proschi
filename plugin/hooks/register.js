@@ -4269,20 +4269,35 @@ function flowsOf(diagram, traffic) {
   return [...flows.values()];
 }
 var works = (n) => Number.isFinite(n.capacityRps) && n.kind !== "client";
+function analysedTraffic(diagram, analysis, failed) {
+  const declared = resolveTraffic(diagram);
+  const rates = new Map(analysis.useCases.map((u) => [u.id, u.rps]));
+  const changed = failed.size > 0 || [...declared].some(([id, t]) => rates.has(id) && rates.get(id) !== t.rps);
+  if (!changed) return diagram.traffic ?? [];
+  const loc = { line: 0, col: 0, length: 0 };
+  return [...trafficFor(diagram, { trafficRps: rates, failed })].flatMap(([id, t]) => {
+    const u = diagram.useCases.find((c) => c.id === id);
+    if (!u || !(t.rps > 0)) return [];
+    return [{ useCase: u.name, rps: t.rps, mix: u.scenarios.map((s, i) => ({ scenario: s.name, share: t.shares[i] ?? 0 })), loc }];
+  });
+}
 function analysisOverlay(diagram, analysis) {
   const nodes = {};
   const bottlenecks = new Set(bottlenecksOf(analysis));
   const latency2 = /* @__PURE__ */ new Map();
+  const failed = /* @__PURE__ */ new Set();
   for (const n of analysis.nodes) {
     latency2.set(n.id, n.latencyMs);
+    if (n.failed) failed.add(n.id);
     nodes[n.id] = {
       ...works(n) ? { utilization: n.utilization, saturated: n.saturated } : {},
       ...n.replicas > 1 ? { replicas: n.replicas } : {},
       ...n.shards > 1 ? { shards: n.shards } : {},
-      ...bottlenecks.has(n.id) ? { bottleneck: true } : {}
+      ...bottlenecks.has(n.id) ? { bottleneck: true } : {},
+      ...n.failed ? { down: true } : {}
     };
   }
-  const flows = flowsOf(diagram, diagram.traffic ?? []).map((f) => latency2.has(f.to) ? { ...f, latencyMs: latency2.get(f.to) } : f);
+  const flows = flowsOf(diagram, analysedTraffic(diagram, analysis, failed)).filter((f) => !failed.has(f.from) && !failed.has(f.to)).map((f) => latency2.has(f.to) ? { ...f, latencyMs: latency2.get(f.to) } : f);
   const critical = criticalPathOf(diagram, analysis);
   return { nodes, flows, ...critical ? { critical } : {} };
 }

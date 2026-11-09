@@ -101,10 +101,10 @@ per-use LLM cost), and improve the language and the visual editor.
   verify: practice and editor e2e. depends on: 1.1, 3.2
 
 ### Iteration 7: simulation model upgrades (one at a time, in order)
-- [ ] **7.1 Constants**: `let peak = 120k rps`, used in traffic, replicas and budgets.
-- [ ] **7.2 Peak and daily-profile traffic**: `"Read" 20k rps peak x3` or `profile 2k..60k rps`.
+- [x] **7.1 Constants**: `let peak = 120k rps`, used in traffic, replicas and budgets.
+- [x] **7.2 Peak and daily-profile traffic**: `"Read" 20k rps peak x3` or `profile 2k..60k rps`.
   Cost is taken at the average, capacity at the peak.
-- [ ] **7.3 Cache hit rate**: `capacity { cache hit 90% }` derives the miss path's load.
+- [x] **7.3 Cache hit rate**: `capacity { cache hit 90% }` derives the miss path's load.
 - [ ] **7.4 Cost per team, group or tag**, plus scoped budgets `cost "@Payments" <= 500 usd/month`.
 - [ ] **7.5 Retries and partial failure**: `errors 2% retries 3` adds retry amplification.
 - [ ] **7.6 Queue backlog**: `drain 5k rps` and a `lag "UC" < 30s` requirement.
