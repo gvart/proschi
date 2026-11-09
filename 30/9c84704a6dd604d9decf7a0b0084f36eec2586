@@ -1,0 +1,60 @@
+frontend/src/practice/cards/availability/multi-region-failover-headroom.md
+  s_248f83f833fb51::t_5c6653e88b3d4a 1-28
+frontend/src/practice/cards/caching/multi-region-cache-invalidation.md
+  s_248f83f833fb51::t_407e0e096e084e 1-24
+frontend/src/practice/problems/multi-region-active-active/given.proschi
+  s_248f83f833fb51::t_ee1fe47dae6e73 33-38,42-47,51-54
+  s_248f83f833fb51::t_61932168659245 13-15,19
+  s_248f83f833fb51::t_ba0f43f8dd5376 1-12,16-18,20-32,39-41,48-50,57
+  s_248f83f833fb51::t_2cde0efbd94eac 55-56
+frontend/src/practice/problems/multi-region-active-active/solution.proschi
+  s_248f83f833fb51::t_d521b9a3b248d7 1-2,7,12,26,28,30-52,55,57,61,64,67,69,73,76-81,90,99-104,107,109,113,116,119,121,125,128-129
+  s_248f83f833fb51::t_0e993c7bb594db 13-15,29,53-54,59,62-63,65-66,71,74-75,82-89,91-98,105-106,111,114-115,117-118,123,126-127
+  s_248f83f833fb51::t_ee1fe47dae6e73 4-6,9-11,16-25,27,56,58,60,68,70,72,108,110,112,120,122,124
+  s_248f83f833fb51::t_7582731c63847c 3,8
+frontend/src/practice/problems/multi-region-active-active/wrong/standby-region.proschi
+  s_248f83f833fb51::t_180d6aac443066 1-113
+frontend/src/practice/problems/multi-region-active-active/wrong/synchronous-replication.proschi
+  s_248f83f833fb51::t_01825553d9b11d 13,18
+  s_248f83f833fb51::t_742cd7e5e37307 1-12,14-17,19-113
+frontend/src/practice/problems/multi-region-active-active/problem.md
+  s_248f83f833fb51::t_d2519ba449a88c 1-2,4-57,59-133
+  s_248f83f833fb51::t_5484d90f9a1e78 3
+  s_248f83f833fb51::t_db763ccbcc24e9 58
+frontend/src/practice/roadmapStages.ts
+  s_248f83f833fb51::t_8a160ead52dcbd 78
+frontend/src/practice/problems/multi-region-active-active/wrong/sized-for-half.proschi
+  s_248f83f833fb51::t_a7da638c066643 7
+  s_248f83f833fb51::t_5046b8efef15c4 1-6,8-114
+frontend/src/practice/problems/multi-region-active-active/wrong/one-database.proschi
+  s_248f83f833fb51::t_21f97a809eb47a 74
+  s_248f83f833fb51::t_cc827b85f4752f 1-73,75-109
+frontend/src/practice/problems/multi-region-active-active/lesson.md
+  s_248f83f833fb51::t_24700345d93647 1-16,18-47,49-132,134,136-183
+  s_248f83f833fb51::t_97ffc95d47261a 135
+  s_248f83f833fb51::t_6c9979ad6206b6 17
+  s_248f83f833fb51::t_f572f99cfce9d6 48
+  s_248f83f833fb51::t_7fd1ae285b905c 133
+frontend/src/practice/problems/multi-region-active-active/interview.md
+  s_248f83f833fb51::t_f31ee1cb2f781e 1-83
+frontend/src/practice/problems/multi-region-active-active/starter.proschi
+  s_248f83f833fb51::t_46fdfbad894f67 1-31
+frontend/src/practice/cards/ids.lock
+  s_248f83f833fb51::t_46630d1ced650b 180-181
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "309c84704a6dd604d9decf7a0b0084f36eec2586",
+  "prompts": {},
+  "sessions": {
+    "s_248f83f833fb51": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2d46bc96-3c9a-4511-a065-8673803644a9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
