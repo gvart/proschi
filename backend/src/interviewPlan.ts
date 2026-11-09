@@ -8,7 +8,7 @@ import { HttpError, json, rateLimit, readJson } from './http';
 
 /**
  * The interview-date plan (interview_plan, Max; docs/design/paid-plans.md
- * P54): the browser builds the schedule (frontend/src/learn/interviewPlan.ts);
+ * P55): the browser builds the schedule (frontend/src/learn/interviewPlan.ts);
  * the account keeps the date and minutes, so every device shows the same
  * plan, and today's list as last built, so the evening reminder can name
  * what is left (src/reminders.ts). Migration 0034.

@@ -3,7 +3,7 @@ import { expect, test } from './fixtures';
 import { dayFromNow, mockPlanApi } from './interviewPlan';
 
 /**
- * The interview-date plan on the roadmap (interview_plan, Max; P54), in the
+ * The interview-date plan on the roadmap (interview_plan, Max; P55), in the
  * build with accounts and paid plans (API mocked): Max picks a date and gets
  * the days left, a strip of every day and today's list, kept on the account;
  * today's items tick off from what was done. Pro sees a short teaser with

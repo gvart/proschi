@@ -10,7 +10,7 @@ import { loadJson, saveJson } from '../../services/storage';
  * (so its ticks stay put, and its open problems carry over to the next day,
  * learn/interviewPlan.ts) and what was ticked by hand. Signed in on Max, the
  * date and minutes are the account's too (GET and PUT
- * /api/me/interview-plan, docs/design/paid-plans.md P54), with today's list
+ * /api/me/interview-plan, docs/design/paid-plans.md P55), with today's list
  * for the evening reminder.
  */
 

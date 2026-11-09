@@ -10,7 +10,7 @@ const PlanPanel = lazy(() => import('./PlanPanel'));
 
 /**
  * The interview-date plan on the roadmap (feature `interview_plan`, Max;
- * docs/design/paid-plans.md P54): the plan with the feature; else, where
+ * docs/design/paid-plans.md P55): the plan with the feature; else, where
  * paid plans are on, a short teaser with the way to Max; else nothing. It
  * costs nothing to run, so a build without paid plans follows the server
  * for it (an account on Max set by hand gets it), like interview_report.

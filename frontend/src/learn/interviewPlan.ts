@@ -4,7 +4,7 @@ import { daysBetween, isDay } from './review';
 
 /**
  * The interview-date plan (feature `interview_plan`, Max;
- * docs/design/paid-plans.md P54): a day-by-day schedule from today to the
+ * docs/design/paid-plans.md P55): a day-by-day schedule from today to the
  * interview, built from the rule-based next steps (nextSteps.ts) and the
  * roadmap's order. Pure and deterministic like the rest of src/learn, so the
  * page builds it and the Worker's reminder (backend/src/reminders.ts) reads
@@ -15,7 +15,8 @@ import { daysBetween, isDay } from './review';
  *
  *   learn      the first half or so: due cards, then problems for the
  *              weakest skills (nextSteps' retry, practise and finish), then
- *              the roadmap's next unsolved problems, to the day's minutes;
+ *              the roadmap's next unsolved problems, to the day's minutes
+ *              (a problem counts PROBLEM_MINUTES; tutorials, `skip`, never);
  *   mock       about 30% (1 to MAX_MOCK days): a solo mock interview on an
  *              unsolved medium or hard problem, then cards and a problem if
  *              the minutes allow;
@@ -77,6 +78,8 @@ export interface PlanInput extends Pick<NextStepsInput, 'topics' | 'due' | 'prob
   carry?: readonly string[];
   /** Today's list when it was made earlier today: kept as is. */
   pinned?: readonly PlanItem[];
+  /** Problems never to plan: the tutorials (practice/roadmapStages.ts OPTIONAL_STEPS). */
+  skip?: readonly string[];
 }
 
 export const DEFAULT_MINUTES = 45;
@@ -84,6 +87,12 @@ export const MIN_MINUTES = 15;
 export const MAX_MINUTES = 240;
 /** The furthest interview date, in days from today. */
 export const MAX_DAYS = 180;
+/**
+ * About how long a whole problem takes in the plan: reading it, a design, a
+ * few runs and the fixes (the problems carry no time of their own, so by
+ * difficulty). Longer than nextSteps' MINUTES, which sizes one step.
+ */
+export const PROBLEM_MINUTES = { easy: 20, medium: 35, hard: 45 } as const;
 /** A solo mock interview's default length (practice/modes/session.ts DEFAULT_DURATION). */
 export const MOCK_MINUTES = 45;
 export const MAX_MOCK = 10;
@@ -145,7 +154,9 @@ export function buildPlan(input: PlanInput): PlanDay[] {
   const { today, settings } = input;
   if (!isDay(today) || today > settings.date) return [];
   const start = settings.start <= today ? settings.start : today;
-  const byId = new Map(input.problems.map((p) => [p.id, p]));
+  const skip = new Set(input.skip);
+  const problems = input.problems.filter((p) => !skip.has(p.id));
+  const byId = new Map(problems.map((p) => [p.id, p]));
   const solved = new Set(input.solved);
   /** Problems on a day before: done by then, as far as later days know. */
   const planned = new Set<string>();
@@ -154,13 +165,14 @@ export function buildPlan(input: PlanInput): PlanDay[] {
   const open = (id: string) => byId.has(id) && !solved.has(id) && !planned.has(id);
   const problemItem = (id: string, reason: string, extra: Partial<PlanItem> = {}): PlanItem => {
     const p = byId.get(id)!;
-    return { kind: 'problem', key: `problem:${id}`, problem: id, title: p.title, reason, minutes: MINUTES[p.difficulty], ...extra };
+    return { kind: 'problem', key: `problem:${id}`, problem: id, title: p.title, reason, minutes: PROBLEM_MINUTES[p.difficulty], ...extra };
   };
 
   /** Problems for the weakest skills, then the roadmap's next ones, in order. */
   const learning = (): PlanItem[] => {
     const steps = nextSteps({
       ...input,
+      problems,
       solved: [...solved, ...planned],
       exclude: [...planned],
       omit: ['review', 'challenge'],

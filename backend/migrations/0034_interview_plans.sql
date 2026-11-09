@@ -1,5 +1,5 @@
 -- The interview-date plan (interview_plan, Max; docs/design/paid-plans.md
--- P54, frontend/src/learn/interviewPlan.ts): the date and minutes a day the
+-- P55, frontend/src/learn/interviewPlan.ts): the date and minutes a day the
 -- learner picked, and today's list as the browser last built it, so the
 -- evening reminder (src/reminders.ts) can name what is left. The schedule
 -- itself is built in the browser.

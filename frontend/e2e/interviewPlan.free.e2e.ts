@@ -5,7 +5,7 @@ import { dayFromNow, mockPlanApi } from './interviewPlan';
 /**
  * The interview-date plan in the build with accounts but no paid plans: it
  * costs nothing to run, so it follows the server like interview_report
- * (P53, P54): an account on Max set by hand keeps it; any other sees neither
+ * (P53, P55): an account on Max set by hand keeps it; any other sees neither
  * the plan nor a way to Max.
  */
 

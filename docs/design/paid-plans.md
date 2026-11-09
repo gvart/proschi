@@ -597,7 +597,9 @@ id; don't rewrite old ones.
   **review** (about 20%, at most 5) and a **rest** day before the
   interview. Learn days fill the minutes with the due cards, then the
   rule-based next steps' problems for the weakest skills (`nextSteps.ts`),
-  then the roadmap's next unsolved ones; a mock day is an interview on your
+  then the roadmap's next unsolved ones (a problem counts 20, 35 or 45
+  minutes by difficulty, so an hour is the cards and one or two problems;
+  the tutorial is never planned); a mock day is an interview on your
   own on an unsolved medium or hard problem of a weak skill, a new one each
   day; review days are the due cards and two topics' cards, weakest first.
   Only today is built from real state, later days as if each planned

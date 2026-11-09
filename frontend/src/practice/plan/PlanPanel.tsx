@@ -23,13 +23,14 @@ import { loadHistory } from '../modes/store';
 import { soloSummaryCounts } from '../interview/record';
 import { setupHref } from '../interview/links';
 import type { Progress } from '../progress';
+import { OPTIONAL_STEPS } from '../roadmapStages';
 import type { Account } from '../useAccount';
 import { learnerInput } from '../hub/learnerInput';
 import { useTodayCards } from '../hub/todayCards';
 import { deleteAccountPlan, mergeAccountPlan, putAccountPlan, setPlanSettings, updatePlan, usePlanState, type PlanState, type TodayList } from './planStore';
 
 /**
- * The interview-date plan (Max; learn/interviewPlan.ts, P54) on the roadmap:
+ * The interview-date plan (Max; learn/interviewPlan.ts, P55) on the roadmap:
  * pick the date and the minutes a day, then see the days left, a strip of
  * every day to the interview coloured by phase, and today's list, ticked off
  * from what was done (a solve, the cards reviewed, an interview on your own
@@ -214,7 +215,7 @@ function Plan({
   const days = useMemo(() => {
     if (!input) return undefined;
     const carry = pinned ? undefined : carryOver(state.last, today, new Set(input.solved));
-    return buildPlan({ ...input, today, settings, roadmap, carry, pinned });
+    return buildPlan({ ...input, today, settings, roadmap, carry, pinned, skip: OPTIONAL_STEPS });
   }, [input, today, settings, roadmap, pinned, state.last]);
   // Today's list, once made, stays for the day.
   const first = days?.[0];

@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { addDays } from '../../frontend/src/learn/interviewPlan';
 import { call, resetDatabase, signedInUser } from './helpers';
 
-/** The interview-date plan's route (src/interviewPlan.ts, P54): Max only, validated, exported and deleted. */
+/** The interview-date plan's route (src/interviewPlan.ts, P55): Max only, validated, exported and deleted. */
 
 const setPlan = (id: string, plan: string) => env.DB.prepare('UPDATE users SET plan = ? WHERE id = ?').bind(plan, id).run();
 const today = () => new Date().toISOString().slice(0, 10);

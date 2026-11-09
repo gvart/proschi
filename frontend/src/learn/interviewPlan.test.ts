@@ -61,15 +61,27 @@ describe('interview plan days', () => {
   });
 
   it('fills learning days with problems for the weakest skill first, within the minutes', () => {
-    const days = plan({ due: { total: 6, byTopic: { caching: 6 } } });
+    const due = { total: 6, byTopic: { caching: 6 } };
+    // 45 minutes: the cards and one medium problem (35 min).
+    expect(plan({ due })[0].items.map((i) => i.key)).toEqual(['cards:due', 'problem:kv']);
+    // An hour: the cards and two problems, a medium and an easy one.
+    const days = plan({ due, settings: { ...base.settings, minutes: 60 } });
     expect(days[0].items.map((i) => i.key)).toEqual(['cards:due', 'problem:kv', 'problem:url-shortener']);
-    expect(days[0].items[0]).toMatchObject({ title: 'Review 6 due cards', count: 6, minutes: 3 });
+    expect(days[0].items.map((i) => i.minutes)).toEqual([3, 35, 20]);
+    expect(days[0].items[0]).toMatchObject({ title: 'Review 6 due cards', count: 6 });
     expect(days[0].items[1].reason).toMatch(/Sharding, your weakest skill/);
-    expect(days[0].items.reduce((n, i) => n + i.minutes, 0)).toBeLessThanOrEqual(45);
     // Later days go on with what is left, never repeating a problem.
     const problemsPlanned = days.flatMap((d) => d.items.filter((i) => i.kind === 'problem').map((i) => i.problem));
     expect(new Set(problemsPlanned).size).toBe(problemsPlanned.length);
     expect(days[1].items[0].problem).toBe('feed');
+    expect(days[1].items[0].minutes).toBe(45);
+  });
+
+  it('never plans a tutorial', () => {
+    const withTutorial = { ...base, problems: [{ id: 'hello', title: 'Hello', difficulty: 'easy' as const }, ...problems], roadmap: ['hello', ...base.roadmap] };
+    expect(buildPlan(withTutorial).some((d) => d.items.some((i) => i.problem === 'hello'))).toBe(true);
+    const days = buildPlan({ ...withTutorial, skip: ['hello'], carry: ['hello'] });
+    expect(days.some((d) => d.items.some((i) => i.problem === 'hello'))).toBe(false);
   });
 
   it('gives each mock day an interview on a different unsolved medium or hard problem', () => {
