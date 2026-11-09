@@ -1,0 +1,63 @@
+title "Uber API Gateway" "One edge tier in front of many services: authenticates, blocks and routes every call from the rider app"
+
+rider   "Rider App"       [Mobile App] "Every call the app makes goes to the edge"
+auth    "Auth Service"    [Service]    x3 @Identity "Validates a session token and returns who it belongs to"
+pricing "Pricing Service" [Service]    x6 @Pricing "Fare estimates"
+trips   "Trips Service"   [Service]    x3 @Trips "Creates trip requests"
+users   "Users Service"   [Service]    x3 @Users "Rider profiles"
+
+capacity {
+  pricing 10k rps
+  trips   5k rps
+  users   10k rps
+}
+
+traffic {
+  "Get fare estimate" 30k rps mix "Session cached" 93%, "Session not cached" 5%, "Blocked" 2%
+  "Request trip"      4k rps  mix "Session cached" 95%, "Session not cached" 5%
+  "Get rider profile" 6k rps  mix "Session cached" 95%, "Session not cached" 5%
+}
+
+requirements {
+  p99 "Get fare estimate" < 100ms
+  p99 "Request trip" < 100ms
+  p99 "Get rider profile" < 100ms
+  availability >= 99.95%
+  survive any node failure
+  cost <= 2800 usd/month
+}
+
+test "Every call enters through the edge" {
+  "Get fare estimate" starts at rider
+  "Request trip" starts at rider
+  "Get rider profile" starts at rider
+  "Get fare estimate" calls any loadbalancer before any gateway
+  "Get fare estimate" calls any gateway before pricing
+  "Request trip" calls any gateway before trips
+  "Get rider profile" calls any gateway before users
+  no path from rider to any service
+}
+
+test "Sessions are checked from a cache" {
+  "Get fare estimate" calls any cache before auth
+  "Request trip" calls any cache before auth
+  "Get rider profile" calls any cache before auth
+  "Get fare estimate" scenario "Session cached" never calls auth
+  "Request trip" scenario "Session cached" never calls auth
+  "Get rider profile" scenario "Session cached" never calls auth
+  "Get fare estimate" scenario "Session not cached" calls auth
+}
+
+test "The session is checked before the call is routed" {
+  "Get fare estimate" calls any cache before pricing
+  "Request trip" calls any cache before trips
+  "Get rider profile" calls any cache before users
+  pricing never calls auth
+  trips never calls auth
+  users never calls auth
+}
+
+test "Blocked riders never reach a backend" {
+  "Get fare estimate" scenario "Blocked" never calls pricing
+  "Get fare estimate" scenario "Blocked" responds 403
+}
