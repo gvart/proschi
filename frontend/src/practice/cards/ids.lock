@@ -161,6 +161,9 @@ low-selectivity-index
 lru-vs-lfu-scan
 lsm-fast-reads
 lsm-write-path
+media-processing-generate-once
+media-processing-separate-pools
+media-processing-upload-never-waits
 merkle-tree
 message-ordering
 metadata-vs-content

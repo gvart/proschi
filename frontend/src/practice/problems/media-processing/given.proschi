@@ -1,0 +1,60 @@
+title "File Previews and Thumbnails" "Generates each file's thumbnail and preview once, in the background, and serves them many times from a CDN"
+
+user      "User"           [Actor]
+originals "Uploaded Files" [Object Storage] x4 @files "The files exactly as users uploaded them"
+
+capacity {
+  thumbnailer 100 rps latency 50ms cost 150 usd/month
+  previewer   40 rps latency 500ms cost 300 usd/month
+}
+
+traffic {
+  "Upload file"    1k rps
+  "Pre-warm"       1k rps  mix "Thumbnail and preview" 60%, "Thumbnail only" 40%
+  "View thumbnail" 50k rps mix "Edge hit" 95%, "Edge miss" 5%
+  "Open preview"   2k rps  mix "Edge hit" 80%, "Pre-warmed" 18%, "Generated on view" 2%
+}
+
+requirements {
+  p99 "Upload file" < 200ms
+  p99 "View thumbnail" < 100ms
+  p99 "Open preview" < 1500ms
+  p99 "Pre-warm" < 3s
+  availability "Upload file" >= 99.9%
+  availability "View thumbnail" >= 99.99%
+  durable "Upload file"
+  survive any node failure
+  cost <= 12500 usd/month
+}
+
+test "Uploads never wait for processing" {
+  "Upload file" starts at user
+  "Upload file" writes originals before responding
+  "Upload file" calls any queue
+  "Upload file" never waits for thumbnailer or previewer
+  "Upload file" never calls thumbnailer or previewer
+  "Pre-warm" starts at any queue
+}
+
+test "Each transformation has its own worker pool" {
+  "Pre-warm" calls originals before thumbnailer
+  "Pre-warm" scenario "Thumbnail and preview" calls previewer
+  "Pre-warm" scenario "Thumbnail only" never calls previewer
+  "Pre-warm" writes derived before responding
+  thumbnailer has replicas >= 2
+  previewer has replicas >= 2
+}
+
+test "Views are served from stored outputs" {
+  "View thumbnail" starts at user
+  "View thumbnail" calls any cdn before derived
+  "View thumbnail" never calls thumbnailer or previewer or originals
+  "Open preview" calls any cdn before derived
+  "Open preview" scenario "Pre-warmed" never calls previewer or originals
+  "Open preview" calls derived before previewer
+  "Open preview" scenario "Generated on view" writes derived before responding
+}
+
+test "Users reach only the API and the CDN" {
+  no path from user to originals or derived or thumbnailer or previewer
+}
