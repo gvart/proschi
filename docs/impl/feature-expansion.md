@@ -39,7 +39,7 @@ per-use LLM cost), and improve the language and the visual editor.
   interviews (`practice/history/SoloHistory.tsx`, `SkillTrends.tsx`,
   `backend/src/soloInterviews.ts`) and make the report printable for solo verdicts.
   verify: feature-state unit tests, e2e for Pro (history) and Max (report) gating. depends on: none
-- [ ] **2.2 L1 Editor quick wins** (`tooling/src/server.ts`, `analysis.ts`, and the web
+- [x] **2.2 L1 Editor quick wins** (`tooling/src/server.ts`, `analysis.ts`, and the web
   `CodeEditor` where shared):
   - rename for node ids, use cases and scenarios;
   - completion of quoted use case and scenario names after `traffic`/`mix`/`p99 "`/`scenario "`, plus `capacity` keywords;
