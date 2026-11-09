@@ -78,6 +78,8 @@ export interface NodeAnalysis {
   egressGbPerMonth: number;
   egressUsd: number;
   durable: boolean;
+  /** Down in a what-if (`AnalyzeOptions.failed`): its availability is 0. Absent otherwise. */
+  failed?: true;
 }
 
 export type Percentiles = Record<'p50' | 'p90' | 'p95' | 'p99' | 'p999', number>;
@@ -130,6 +132,18 @@ export interface AnalyzeOptions {
    * asks only for what it reads. All of them by default.
    */
   percentiles?: readonly Percentile[];
+  /**
+   * Requests per second to use instead of the `traffic` block's, by use case
+   * id (a what-if's `traffic "X" x3`, sim/whatif.ts). Scenario shares stay.
+   */
+  trafficRps?: ReadonlyMap<string, number>;
+  /**
+   * Node ids that are down (a what-if's `fail X`): their availability is 0,
+   * and the traffic of each scenario that needs one moves to the use case's
+   * fallback scenarios for it (§7.6). Without a fallback, that share of the
+   * use case's requests fails.
+   */
+  failed?: ReadonlySet<string>;
   /** Internal: the load on every team design of the document being analysed (sim/systems.ts), passed to the team designs' own analyses. */
   sharedSystems?: SharedSystemLoad;
 }
@@ -170,6 +184,8 @@ export const replicasOf = (node: DiagramNode): number => Math.max(1, node.replic
 export interface UseCaseTraffic {
   rps: number;
   shares: number[];
+  /** With failed nodes: the share of requests whose scenario needs a failed node and has no fallback, 0..1. Absent otherwise. */
+  stranded?: number;
 }
 
 /**
@@ -204,6 +220,45 @@ export function resolveTraffic(diagram: Diagram, warnings: string[] = []): Map<s
     result.set(useCase.id, { rps: entry.rps, shares: useCase.scenarios.length ? shares : [] });
   }
   return result;
+}
+
+/**
+ * `resolveTraffic` with the what-if options applied: `trafficRps` overrides
+ * the rates, and `failed` moves the shares of scenarios that need a failed
+ * node to their fallback scenarios. Without either option it is exactly
+ * `resolveTraffic`.
+ */
+export function trafficFor(diagram: Diagram, options: AnalyzeOptions = {}, warnings: string[] = []): Map<string, UseCaseTraffic> {
+  const traffic = resolveTraffic(diagram, warnings);
+  for (const [id, rps] of options.trafficRps ?? []) {
+    const t = traffic.get(id);
+    if (t) t.rps = Math.max(0, rps);
+  }
+  const failed = options.failed;
+  if (!failed?.size) return traffic;
+  for (const u of diagram.useCases) {
+    const t = traffic.get(u.id)!;
+    const down = (s: DiagramUseCase['scenarios'][number]) => pathNodes(u, s).filter((id) => failed.has(id));
+    const shares = [...t.shares];
+    let stranded = 0;
+    u.scenarios.forEach((s, i) => {
+      if (!(shares[i] > 0)) return;
+      const ids = down(s);
+      if (ids.length === 0) return;
+      // Fallbacks for the failed node this scenario needs, that do not need another failed node.
+      const targets = u.scenarios.filter((f) => f.outcome === 'success' && down(f).length === 0 && ids.every((id) => fallbacksFor(u, id).includes(f)));
+      if (targets.length === 0) {
+        stranded += shares[i];
+        return;
+      }
+      const indexes = targets.map((f) => u.scenarios.indexOf(f));
+      const weight = indexes.reduce((sum, j) => sum + t.shares[j], 0);
+      for (const j of indexes) shares[j] += shares[i] * (weight > 0 ? t.shares[j] / weight : 1 / indexes.length);
+      shares[i] = 0;
+    });
+    traffic.set(u.id, { ...t, shares, stranded: Math.min(1, stranded) });
+  }
+  return traffic;
 }
 
 /** Times the step happens per request (`x200 …`, §7.3); 1 when absent. */
@@ -574,7 +629,7 @@ export function analyze(diagram: Diagram, options: AnalyzeOptions = {}): Analysi
   const profiles = profilesOf(diagram, warnings);
   const kindOf = (id: string): Kind => profiles.get(id)?.kind ?? 'client';
 
-  const traffic = resolveTraffic(diagram, warnings);
+  const traffic = trafficFor(diagram, options, warnings);
   const load = computeLoad(diagram, traffic);
   const egress = computeEgressGb(diagram, traffic, kindOf);
   const bytes = computeBytesPerSecond(diagram, traffic);
@@ -591,7 +646,8 @@ export function analyze(diagram: Diagram, options: AnalyzeOptions = {}): Analysi
     hops.set(n.id, hop);
     const egressGbPerMonth = egress.get(n.id) ?? 0;
     const egressUsd = egressGbPerMonth * p.egressUsdPerGb;
-    const availability = replicatedAvailability(p.availability, replicas);
+    const down = options.failed?.has(n.id) ?? false;
+    const availability = down ? 0 : replicatedAvailability(p.availability, replicas);
     return {
       id: n.id,
       kind: p.kind,
@@ -603,11 +659,12 @@ export function analyze(diagram: Diagram, options: AnalyzeOptions = {}): Analysi
       waitProbability: hop.waitProbability,
       latencyMs: hopMean(hop),
       availability,
-      writeAvailability: p.writeScaling === 'shards' ? primaryAvailability(p.availability, replicas) : availability,
+      writeAvailability: down ? 0 : p.writeScaling === 'shards' ? primaryAvailability(p.availability, replicas) : availability,
       costUsd: replicas * p.shards * p.costUsd + egressUsd,
       egressGbPerMonth,
       egressUsd,
       durable: p.durable,
+      ...(down ? { failed: true as const } : {}),
     };
   });
   const nodeById = new Map(nodeResults.map((n) => [n.id, n]));
@@ -633,7 +690,7 @@ export function analyze(diagram: Diagram, options: AnalyzeOptions = {}): Analysi
   });
 
   const useCases: UseCaseAnalysis[] = diagram.useCases.map((u) => {
-    const { rps, shares } = traffic.get(u.id)!;
+    const { rps, shares, stranded } = traffic.get(u.id)!;
     const paths = u.scenarios.map((s) => pathOf(criticalPath(u, s)));
     const scenarios: ScenarioAnalysis[] = u.scenarios.map((s, i) => ({
       id: s.id,
@@ -660,7 +717,8 @@ export function analyze(diagram: Diagram, options: AnalyzeOptions = {}): Analysi
       if (!n && systems) return systemAvailability(u, id, systems.availability);
       return !n ? 1 : writes.has(id) ? n.writeAvailability : n.availability;
     };
-    return { id: u.id, name: u.name, rps, scenarios, percentiles, tailScenario, availability: useCaseAvailability(u, shares, availabilityOf) };
+    const availability = useCaseAvailability(u, shares, availabilityOf) * (1 - (stranded ?? 0));
+    return { id: u.id, name: u.name, rps, scenarios, percentiles, tailScenario, availability };
   });
 
   return {

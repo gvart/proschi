@@ -14,7 +14,7 @@ import {
   mainWrites,
   profilesOf,
   replicasOf,
-  resolveTraffic,
+  trafficFor,
   bandwidthBound,
   usageText,
   writeBound,
@@ -101,7 +101,7 @@ function makeRun(diagram: Diagram, analysis: Analysis, options: AnalyzeOptions =
     analysis,
     nodes: new Map(analysis.nodes.map((n) => [n.id, n])),
     useCases: new Map(analysis.useCases.map((u) => [u.id, u])),
-    shares: new Map([...resolveTraffic(diagram)].map(([id, t]) => [id, t.shares])),
+    shares: new Map([...trafficFor(diagram, options)].map(([id, t]) => [id, t.shares])),
     profiles: profilesOf(diagram),
     isWrite: (step) => access(step) === 'write',
     options,
@@ -334,7 +334,9 @@ function availability(run: Run, u: DiagramUseCase, minPercent: number): Check & 
     ? 'Add replicas to the nodes on the main path, or fallback scenarios that complete without them'
     : primaryBound
       ? `The weakest link is writing to ${nodeLabel(run.diagram, weakest.id)}: writes need its primary, ${formatAvailability(weakest.writeAvailability)} with failover${weakest.replicas < 2 ? ' (none without a second replica; add one)' : ` (a replica takes over, but about ${formatPercent(FAILOVER_SHARE)} of each outage is lost)`}. Move the writes to a partitioned store, or add a fallback scenario that calls it with -x and still completes`
-      : `The weakest link is ${nodeLabel(run.diagram, weakest.id)} at ${formatAvailability(effective(weakest))}: add a replica (x${weakest.replicas + 1}) or a fallback scenario that calls it with -x and still completes`;
+      : weakest.failed
+        ? `${nodeLabel(run.diagram, weakest.id)} is down in this what-if: add a fallback scenario in "${u.name}" that calls ${weakest.id} with -x and still completes`
+        : `The weakest link is ${nodeLabel(run.diagram, weakest.id)} at ${formatAvailability(effective(weakest))}: add a replica (x${weakest.replicas + 1}) or a fallback scenario that calls it with -x and still completes`;
   return { ...fail(message, hint), value };
 }
 
