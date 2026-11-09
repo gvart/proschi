@@ -14,10 +14,13 @@ parser, so they agree on what is valid.
 Every plugin is built on two pieces from the `proschi` package:
 
 - **The language server** (`proschi-language-server`): errors and warnings
-  as you type, quick fixes (add a missing connection, replace an unknown
-  tech stack), completion of keywords, node ids and tech stacks, hover, go
-  to definition, find references, outline, formatting, and failing
-  requirements and tests.
+  as you type; quick fixes (add a missing connection, replace an unknown
+  tech stack, remove a repeated capacity part, add a traffic line for a use
+  case without one, and the `x2` or `shards N` a failing requirement
+  suggests); completion of keywords, node ids, tech stacks, `capacity`
+  parts, and the use case and scenario names in quotes; rename of node ids,
+  use cases and scenarios; hover, go to definition, find references,
+  outline, formatting, and failing requirements and tests.
 - **The command line** (`proschi`): checks, formats, renders and tests files
   in CI and pre-commit hooks.
 
