@@ -101,21 +101,25 @@ export function Brief({ title, source, reveal, onRevealStart, footer, eyebrow = 
   );
 }
 
-/** The brief once read: pinned over the chat, compact, open in full on demand. */
-export function PinnedBrief({ title, source, defaultOpen = false }: { title: string; source: string; defaultOpen?: boolean }) {
+/**
+ * The brief once read: pinned over the chat, compact, open in full on demand.
+ * With `fill`, on wide screens it grows to its column's height instead and
+ * scrolls inside, always open; narrow screens keep the compact card.
+ */
+export function PinnedBrief({ title, source, defaultOpen = false, fill = false }: { title: string; source: string; defaultOpen?: boolean; fill?: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
   const id = useId();
   return (
-    <section aria-label="The brief" className="rounded-sm border-bw-1 border-ink bg-surface shadow-brutal-sm" data-testid="pinned-brief">
+    <section aria-label="The brief" className={`rounded-sm border-bw-1 border-ink bg-surface shadow-brutal-sm ${fill ? 'lg:flex lg:min-h-0 lg:flex-1 lg:flex-col' : ''}`} data-testid="pinned-brief">
       <div className="flex items-center gap-2 px-4 py-2.5">
-        <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted">The brief</p>
-        <h3 className="min-w-0 flex-1 truncate font-display text-base font-bold text-ink">{title}</h3>
-        <button type="button" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)} className="inline-flex items-center gap-1 text-xs font-semibold text-ink underline-offset-2 hover:underline">
+        <p className="shrink-0 text-[11px] font-bold uppercase tracking-[0.08em] text-muted">The brief</p>
+        <h3 className={`min-w-0 flex-1 truncate font-display text-base font-bold text-ink ${fill ? 'lg:whitespace-normal' : ''}`}>{title}</h3>
+        <button type="button" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)} className={`inline-flex items-center gap-1 text-xs font-semibold text-ink underline-offset-2 hover:underline ${fill ? 'lg:hidden' : ''}`}>
           {open ? 'Collapse' : 'Read it all'}
           <ChevronDown size={14} aria-hidden="true" className={`transition-transform ${open ? 'rotate-180' : ''}`} />
         </button>
       </div>
-      <div id={id} className={`border-t border-ink/15 px-4 py-3 ${open ? 'max-h-[45vh]' : 'max-h-[5.5rem] [mask-image:linear-gradient(to_bottom,black_55%,transparent)]'} overflow-y-auto`}>
+      <div id={id} className={`border-t border-ink/15 px-4 py-3 ${open ? 'max-h-[45vh]' : 'max-h-[5.5rem] [mask-image:linear-gradient(to_bottom,black_55%,transparent)]'} ${fill ? 'lg:max-h-none lg:min-h-0 lg:flex-1 lg:[mask-image:none]' : ''} overflow-y-auto`}>
         <Markdown source={source} />
       </div>
     </section>
@@ -174,7 +178,7 @@ export interface Scoring {
  * calculator. On your own the problem's questions are rows checked against
  * their range ("2 of 3 in range").
  */
-export function Worksheet({ rows, onChange, readOnly = false, scoring }: { rows: WorksheetRow[]; onChange?: (rows: WorksheetRow[]) => void; readOnly?: boolean; scoring?: Scoring }) {
+export function Worksheet({ rows, onChange, readOnly = false, scoring, fill = false }: { rows: WorksheetRow[]; onChange?: (rows: WorksheetRow[]) => void; readOnly?: boolean; scoring?: Scoring; /** On wide screens, fill the column: the rows scroll, the calculator stays at the bottom. */ fill?: boolean }) {
   const set = (id: string, patch: Partial<WorksheetRow>) => onChange?.(rows.map((r) => (r.id === id ? { ...r, ...patch } : r)));
   const add = () => onChange?.([...rows, { id: `c${Date.now().toString(36)}`, label: '', expression: '', unit: '' }]);
   const remove = (id: string) => onChange?.(rows.filter((r) => r.id !== id));
@@ -188,8 +192,8 @@ export function Worksheet({ rows, onChange, readOnly = false, scoring }: { rows:
   const inRange = scoring ? scored.filter((i) => scoring.answers[Number(i)].correct).length : 0;
 
   return (
-    <section aria-labelledby="worksheet-title" className="rounded-sm border-bw-1 border-ink bg-surface shadow-brutal-sm" data-testid="worksheet">
-      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b-bw-1 border-ink px-4 py-3">
+    <section aria-labelledby="worksheet-title" className={`rounded-sm border-bw-1 border-ink bg-surface shadow-brutal-sm ${fill ? 'lg:flex lg:min-h-0 lg:flex-col' : ''}`} data-testid="worksheet">
+      <div className="flex shrink-0 flex-wrap items-baseline gap-x-3 gap-y-1 border-b-bw-1 border-ink px-4 py-3">
         <h3 id="worksheet-title" className="text-base font-bold text-ink">
           Estimation worksheet
         </h3>
@@ -202,25 +206,27 @@ export function Worksheet({ rows, onChange, readOnly = false, scoring }: { rows:
           Numbers to know
         </a>
       </div>
-      <ol className="divide-y divide-ink/10">
-        {rows.map((row) => {
-          const q = questionOf(row);
-          const question = q !== undefined ? scoring?.questions[q] : undefined;
-          return (
-            <li key={row.id} data-testid="worksheet-row">
-              <Row row={row} question={question} answer={q !== undefined ? scoring?.answers[q] : undefined} readOnly={readOnly} onChange={(patch) => set(row.id, patch)} onRemove={question ? undefined : () => remove(row.id)} onCheck={q !== undefined && scoring ? (v) => scoring.onCheck(q, v) : undefined} />
-            </li>
-          );
-        })}
-      </ol>
-      {!readOnly && (
-        <div className="flex flex-wrap items-center gap-2 border-t border-ink/10 px-4 py-2.5">
-          <button type="button" onClick={add} className="inline-flex items-center gap-1 rounded-sm px-1.5 py-1 text-sm font-semibold text-ink hover:bg-ink/5">
-            <Plus size={15} aria-hidden="true" />
-            Add row
-          </button>
-        </div>
-      )}
+      <div className={fill ? 'lg:min-h-0 lg:flex-1 lg:overflow-y-auto' : ''}>
+        <ol className="divide-y divide-ink/10">
+          {rows.map((row) => {
+            const q = questionOf(row);
+            const question = q !== undefined ? scoring?.questions[q] : undefined;
+            return (
+              <li key={row.id} data-testid="worksheet-row">
+                <Row row={row} question={question} answer={q !== undefined ? scoring?.answers[q] : undefined} readOnly={readOnly} onChange={(patch) => set(row.id, patch)} onRemove={question ? undefined : () => remove(row.id)} onCheck={q !== undefined && scoring ? (v) => scoring.onCheck(q, v) : undefined} />
+              </li>
+            );
+          })}
+        </ol>
+        {!readOnly && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-ink/10 px-4 py-2.5">
+            <button type="button" onClick={add} className="inline-flex items-center gap-1 rounded-sm px-1.5 py-1 text-sm font-semibold text-ink hover:bg-ink/5">
+              <Plus size={15} aria-hidden="true" />
+              Add row
+            </button>
+          </div>
+        )}
+      </div>
       {!readOnly && <CalculatorLine />}
     </section>
   );
@@ -342,20 +348,22 @@ function Row({ row, question, answer, readOnly, onChange, onRemove, onCheck }: {
   );
 }
 
-/** A scratch calculator under the rows: an expression and its value. */
+/** A scratch calculator under the rows: an expression across the card, and its value. */
 function CalculatorLine() {
   const [text, setText] = useState('');
   const value = calc(text);
   return (
-    <div className="flex flex-wrap items-center gap-2 border-t-bw-1 border-ink bg-paper px-4 py-2.5">
-      <Calculator size={15} aria-hidden="true" className="text-muted" />
-      <label htmlFor="ws-calc" className="text-xs font-bold uppercase tracking-[0.08em] text-muted">
+    <div className="shrink-0 space-y-1.5 border-t-bw-1 border-ink bg-paper px-4 py-3">
+      <label htmlFor="ws-calc" className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.08em] text-muted">
+        <Calculator size={15} aria-hidden="true" />
         Calculator
       </label>
-      <input id="ws-calc" value={text} onChange={(e) => setText(e.target.value.slice(0, 120))} placeholder="100M / 86400" autoComplete="off" spellCheck={false} className={`min-w-[8rem] flex-1 font-mono ${field}`} />
-      <output htmlFor="ws-calc" className="min-w-[5rem] font-mono text-sm font-bold tabular-nums text-ink" data-testid="calc-result">
-        {text.trim() ? (value !== undefined ? `= ${shortNumber(value)}` : '…') : ''}
-      </output>
+      <div className="flex items-center gap-3">
+        <input id="ws-calc" value={text} onChange={(e) => setText(e.target.value.slice(0, 120))} placeholder="100M / 86400" autoComplete="off" spellCheck={false} className={`min-w-0 flex-1 font-mono ${field}`} />
+        <output htmlFor="ws-calc" className="min-w-[5rem] shrink-0 font-mono text-lg font-bold tabular-nums text-ink" data-testid="calc-result">
+          {text.trim() ? (value !== undefined ? `= ${shortNumber(value)}` : '…') : ''}
+        </output>
+      </div>
     </div>
   );
 }

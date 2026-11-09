@@ -156,6 +156,12 @@ test.describe('the interview room on your own', () => {
     await expect(page.getByRole('heading', { level: 2, name: 'Back-of-the-envelope numbers' })).toBeFocused();
     await expect.poll(() => cues(page)).toContain('phase');
     await expect(page.getByTestId('requirements')).toContainText('p99 of a redirect under 50 ms');
+    // On a desktop the brief fills the rest of its column, open and scrolling inside, and the worksheet the other one.
+    const viewport = page.viewportSize()!;
+    const pinned = page.getByTestId('pinned-brief');
+    await expect(pinned.getByRole('button', { name: 'Read it all' })).toBeHidden();
+    expect((await pinned.boundingBox())!.height).toBeGreaterThanOrEqual(viewport.height * 0.4);
+    expect((await page.getByTestId('worksheet').boundingBox())!.height).toBeGreaterThanOrEqual(viewport.height * 0.6);
     const sheet = page.getByTestId('worksheet');
     await sheet.getByLabel('How many short codes are created in a year at 100 a second?').fill('100 * 86400 * 365');
     await expect(sheet.getByText('= 3.15B codes')).toBeVisible();
