@@ -152,4 +152,34 @@ describe('language server with imports', () => {
       "There is already a node 'gateway'",
     );
   });
+
+  it('renames in the open documents that import the declaring file', async () => {
+    const infraOpened = nextDiagnostics(infraUri);
+    await connection.sendNotification('textDocument/didOpen', { textDocument: { uri: infraUri, languageId: 'proschi', version: 10, text: infraText } });
+    await infraOpened;
+    // From the declaring file: its own uses, and those of shop.proschi, which is open and imports it.
+    const edit = (await connection.sendRequest('textDocument/rename', { textDocument: { uri: infraUri }, position: { line: 2, character: 2 }, newName: 'ordering' })) as {
+      changes: Record<string, { range: { start: { line: number; character: number } } }[]>;
+    };
+    expect(Object.keys(edit.changes).sort()).toEqual([infraUri, shopUri].sort());
+    expect(edit.changes[infraUri].map((e) => [e.range.start.line, e.range.start.character])).toEqual([
+      [2, 0],
+      [3, 11],
+    ]);
+    expect(edit.changes[shopUri].map((e) => [e.range.start.line, e.range.start.character])).toEqual([[3, 13]]);
+
+    // A use case declared in shop.proschi, renamed from a system's expose line in another open document.
+    const teamUri = pathToFileURL(join(dir, 'platform.proschi')).href;
+    const teamOpened = nextDiagnostics(teamUri);
+    await connection.sendNotification('textDocument/didOpen', {
+      textDocument: { uri: teamUri, languageId: 'proschi', version: 1, text: 'system shop "Shop" {\n  from "shop.proschi"\n  expose gateway -> "Order"\n}\n' },
+    });
+    await teamOpened;
+    const renamed = (await connection.sendRequest('textDocument/rename', { textDocument: { uri: teamUri }, position: { line: 2, character: 22 }, newName: 'Checkout' })) as {
+      changes: Record<string, { range: { start: { line: number; character: number } }; newText: string }[]>;
+    };
+    expect(Object.keys(renamed.changes).sort()).toEqual([shopUri, teamUri].sort());
+    expect(renamed.changes[teamUri].map((e) => [e.range.start.line, e.range.start.character, e.newText])).toEqual([[2, 21, 'Checkout']]);
+    expect(renamed.changes[shopUri].map((e) => [e.range.start.line, e.range.start.character])).toEqual([[2, 9]]);
+  });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyze, complete, cursorFixes, definition, hover, outline, quickFix, references, rename, renameTarget, semanticTokens, testQuickFix, toRange, type RenameResult, type TextEdit } from '../src/analysis';
+import { analyze, complete, cursorFixes, definition, hover, outline, quickFix, references, rename, renameEdits, renameTarget, semanticTokens, testQuickFix, toRange, type RenameResult, type TextEdit } from '../src/analysis';
 
 const doc = `title "Shop"
 
@@ -320,7 +320,38 @@ describe('rename', () => {
     const s = analyze(src, { resolve: () => ({ path: '/p/infra.proschi', source: 'api [REST API]\n' }) });
     const result = rename(s, { line: 2, character: 10 }, 'gateway') as RenameResult;
     expect(result.edits).toEqual([{ range: { start: { line: 2, character: 9 }, end: { line: 2, character: 12 } }, newText: 'gateway' }]);
-    expect(result.declaredIn).toEqual({ file: '/p/infra.proschi', position: { line: 0, character: 0 } });
+    expect(result).toMatchObject({ symbol: { kind: 'node', id: 'api' }, declaredIn: '/p/infra.proschi' });
+    // A document that declares a node of that id itself has a different node.
+    expect(renameEdits(analyze('api [Go]\n'), result.symbol, 'gateway', '/p/infra.proschi')).toEqual([]);
+    expect(renameEdits(analyze('api [Go]\n'), result.symbol, 'gateway')).toHaveLength(1);
+  });
+
+  it("renames a team use case from a system's expose line", () => {
+    const team = 'api [REST API]\nusecase "Place order" {\n  api -> api : POST\n}\n';
+    const src = 'system orders "Orders" {\n  from "orders.proschi"\n  expose api "Orders API" -> "Place order"\n}\n';
+    const s = analyze(src, { resolve: (p) => (p === 'orders.proschi' ? { path: '/p/orders.proschi', source: team } : undefined) });
+    const pos = { line: 2, character: 32 };
+    expect(renameTarget(s, pos)?.placeholder).toBe('Place order');
+    const result = rename(s, pos, 'Order') as RenameResult;
+    expect(result).toMatchObject({ symbol: { kind: 'usecase', name: 'Place order' }, declaredIn: '/p/orders.proschi' });
+    expect(applyEdits(src, result.edits)).toContain('expose api "Orders API" -> "Order"');
+    // In the team file itself, the header.
+    expect(applyEdits(team, renameEdits(analyze(team), result.symbol, 'Order'))).toContain('usecase "Order" {');
+    // As a use case of this document, nothing here.
+    expect(renameEdits(s, result.symbol, 'Order')).toEqual([]);
+  });
+
+  it('renames a use case in what-if traffic', () => {
+    const src = 'a [Actor]\nb [REST API]\na -> b\nusecase "U" {\n  a -> b\n}\ntraffic {\n  "U" 1k rps\n}\nwhatif "Spike" {\n  traffic "U" x10\n  fail b\n}\n';
+    const s = analyze(src);
+    expect(s.diagnostics).toEqual([]);
+    const renamed = applyEdits(src, (rename(s, { line: 3, character: 10 }, 'Read') as RenameResult).edits);
+    expect(renamed).toContain('  traffic "Read" x10');
+    expect(renamed).toContain('whatif "Spike" {');
+    expect(analyze(renamed).diagnostics).toEqual([]);
+    // Completed there too.
+    const typing = src.replace('traffic "U" x10', 'traffic "');
+    expect(complete(analyze(typing), { line: 10, character: 11 }).map((i) => i.label)).toEqual(['U']);
   });
 
   it('has nothing to rename on keywords, labels and free strings', () => {

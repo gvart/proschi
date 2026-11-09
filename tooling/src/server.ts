@@ -38,6 +38,7 @@ import {
   quickFix,
   references,
   rename,
+  renameEdits,
   renameTarget,
   semanticTokens,
   testQuickFix,
@@ -246,9 +247,10 @@ connection.onReferences((params) => {
 connection.onPrepareRename(withDoc(null, (analysis, { position }) => renameTarget(analysis, position)));
 
 /**
- * Renames in the document; a node declared in an imported file on disk is
- * renamed there too, with its uses in that file. Other files that import it
- * are not searched.
+ * Renames in the document, in the file that declares the symbol when that is
+ * another file on disk, and in every open document that imports that file
+ * (or has it as a system's team file). Files that are not open are not
+ * searched: the server has no index of the workspace.
  */
 connection.onRenameRequest((params) => {
   const doc = documents.get(params.textDocument.uri);
@@ -258,10 +260,22 @@ connection.onRenameRequest((params) => {
   if ('error' in result) throw new ResponseError(ErrorCodes.InvalidParams, result.error);
   const changes: Record<string, LspTextEdit[]> = { [params.textDocument.uri]: result.edits };
   const declared = result.declaredIn;
-  if (declared && isAbsolute(declared.file)) {
-    const text = openText(declared.file) ?? readFileSync(declared.file, 'utf8');
-    const there = rename(analyze(text, { path: declared.file, resolve: fileResolver({ entry: declared.file, read: openText }) }), declared.position, params.newName);
-    if (there && 'edits' in there) changes[uriOf(declared.file)] = there.edits;
+  // Remote imports (git, https) come from the sync cache and are not edited.
+  if (declared !== undefined && !isAbsolute(declared)) return { changes };
+  const home = declared ?? pathOf(params.textDocument.uri);
+  if (declared) {
+    const open = documents.all().find((d) => pathOf(d.uri) === declared);
+    const there = open ? analysisOf(open) : analyze(readFileSync(declared, 'utf8'), { path: declared, resolve: fileResolver({ entry: declared, read: openText }) });
+    changes[uriOf(declared)] = renameEdits(there, result.symbol, params.newName);
+  }
+  if (!home) return { changes };
+  for (const other of documents.all()) {
+    if (other.uri in changes || pathOf(other.uri) === home) continue;
+    const analysis = analysisOf(other);
+    const uses = (analysis.result.imports ?? []).some((i) => i.resolved === home) || (analysis.diagram.systems ?? []).some((s) => s.resolved === home);
+    if (!uses) continue;
+    const edits = renameEdits(analysis, result.symbol, params.newName, home);
+    if (edits.length) changes[other.uri] = edits;
   }
   return { changes };
 });
