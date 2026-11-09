@@ -54,12 +54,12 @@ test.describe('landing page', () => {
     await expect(canvasNodes(page).filter({ hasText: 'Session Cache' })).toBeVisible();
   });
 
-  test('practice shows a few featured problems and links all 29', async ({ page }) => {
+  test('practice shows a few featured problems and links all 40', async ({ page }) => {
     const practice = page.getByRole('region', { name: 'Practice system design' });
     await expect(practice.getByRole('listitem')).toHaveCount(3);
-    await expect(practice.getByText('29 system design problems.')).toBeVisible();
+    await expect(practice.getByText('40 system design problems.')).toBeVisible();
     await expect(practice.getByRole('link', { name: /URL shortener/i })).toHaveAttribute('href', './practice/url-shortener/');
-    await expect(practice.getByRole('link', { name: 'All 29 problems' })).toHaveAttribute('href', './practice/');
+    await expect(practice.getByRole('link', { name: 'All 40 problems' })).toHaveAttribute('href', './practice/');
   });
 
   test('the featured problems are in the page without JavaScript', async ({ browser }) => {
