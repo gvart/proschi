@@ -1,0 +1,42 @@
+frontend/e2e/interviewPlan.ts
+  s_f355061868c346::t_59fb039aeada2d 6-7
+  s_f355061868c346::t_20763ecba82764 1-5,8-22
+frontend/e2e/interviewPlan.free.e2e.ts
+  s_f355061868c346::t_a782e286e2ff4b 1-26
+frontend/src/practice/plan/InterviewPlan.tsx
+  s_f355061868c346::t_c74bd3fc83e771 1-51
+frontend/src/practice/PracticeApp.tsx
+  s_f355061868c346::t_87e0cc16807a45 10,81-82,383-388
+frontend/e2e/interviewPlan.accounts.e2e.ts
+  s_f355061868c346::t_8572db63c2a1e5 49
+  s_f355061868c346::t_29619a80d098f4 1-40,42-45,47-48,50-127
+  s_f355061868c346::t_0662b05bcd201e 41,46
+frontend/src/practice/hub/RuleSteps.tsx
+  s_f355061868c346::t_e240a903fa401b 7
+  s_f355061868c346::t_27ad577c194a22 60
+frontend/src/practice/hub/learnerInput.ts
+  s_f355061868c346::t_e240a903fa401b 1-30
+frontend/src/practice/plan/planStore.test.ts
+  s_f355061868c346::t_c09de2bfe56d47 1-20
+frontend/src/practice/plan/PlanPanel.tsx
+  s_f355061868c346::t_5f9257ab962f58 3,287,301,345,362-365,368
+  s_f355061868c346::t_34a1a3603988f3 1-2,4-286,288-300,302-344,346-361,366-367,369-398
+frontend/src/practice/plan/planStore.ts
+  s_f355061868c346::t_6e9abc86d7f0c3 1-113
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f9287f63614adf18cccff2ab78507a27c032d899",
+  "prompts": {},
+  "sessions": {
+    "s_f355061868c346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd556674-4248-429d-bf5c-2b361bc86c62",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
