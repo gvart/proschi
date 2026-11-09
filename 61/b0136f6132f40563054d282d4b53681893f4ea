@@ -1,0 +1,57 @@
+frontend/src/practice/hub/recentMistakes.ts
+  s_f355061868c346::t_4f7ecd1a76c344 23-26
+  s_f355061868c346::t_b9f537211178df 1-22,27-38
+frontend/src/practice/hub/todayCards.ts
+  s_f355061868c346::t_8f8931ece08262 1-33
+docs/PRIVACY.md
+  s_f355061868c346::t_6c31a80d5dbddc 29
+frontend/src/learn/nextSteps.test.ts
+  s_f355061868c346::t_208599809b69cf 47-48
+  s_f355061868c346::t_4fde28b8a38bd6 1-31,33-46,49-70,73-88
+  s_f355061868c346::t_4f805bd9eaeabf 32,71-72
+frontend/e2e/nextSteps.accounts.e2e.ts
+  s_f355061868c346::t_cb8505975f428e 1-36
+frontend/src/practice/PracticeApp.tsx
+  s_f355061868c346::t_0988ed307ba4cf 253-258,344,380
+frontend/src/practice/hub/NextSteps.tsx
+  s_f355061868c346::t_2e438cee3300a6 1-14
+frontend/src/practice/hub/recentMistakes.test.ts
+  s_f355061868c346::t_78aaeed1f2eba1 1-28
+frontend/e2e/nextSteps.e2e.ts
+  s_f355061868c346::t_2d4e7cd05cdf96 1-47,49-51
+  s_f355061868c346::t_e99d5e93f9fea0 48
+frontend/src/learn/nextSteps.ts
+  s_f355061868c346::t_b3c7735788104e 1-166
+frontend/src/practice/hub/DueCards.tsx
+  s_f355061868c346::t_617295f2eff3e5 6,8-12
+  s_f355061868c346::t_8f8931ece08262 2,4
+frontend/src/practice/hub/RuleSteps.tsx
+  s_f355061868c346::t_8f8931ece08262 10,38
+  s_f355061868c346::t_a1ff9c825830c7 1-9,11-37,39-115
+frontend/src/practice/MistakePanel.tsx
+  s_f355061868c346::t_c4cddd1cc30df4 53-57
+  s_f355061868c346::t_a01160d68fc117 10
+frontend/src/practice/hub/HomeExtras.tsx
+  s_f355061868c346::t_dfa8f3d1856321 26
+  s_f355061868c346::t_bd5ceedc425812 1-2,4,8,22-24,48,59-60,63-64,70-88
+frontend/e2e/billingOff.free.e2e.ts
+  s_f355061868c346::t_d2e71f1f12bec1 100,104-107
+frontend/src/practice/history/NextForYou.tsx
+  s_f355061868c346::t_05b270528c6ab1 1,6-7,15-16,19-21,67-71,75,87-90,92-95,100-119,121-123,125-132,139-149
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "61b0136f6132f40563054d282d4b53681893f4ea",
+  "prompts": {},
+  "sessions": {
+    "s_f355061868c346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd556674-4248-429d-bf5c-2b361bc86c62",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
