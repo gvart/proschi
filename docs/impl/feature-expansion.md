@@ -63,7 +63,7 @@ per-use LLM cost), and improve the language and the visual editor.
   - the bottleneck node and the p99 path highlighted, and clicking one in Results focuses it on the canvas;
   - the overlay on by default when there's a `traffic` block, with a legend.
   verify: overlay unit tests, e2e. depends on: 1.1
-- [ ] **3.3 L2 Inline sim results**: inlay hints in the language server (`62% · $400/mo` after each node)
+- [x] **3.3 L2 Inline sim results**: inlay hints in the language server (`62% · $400/mo` after each node)
   and code lens (`p99 38 ms ✓` above each use case). Mirror them in the web editor if cheap.
   verify: tooling tests. depends on: none
 
