@@ -180,6 +180,9 @@ multi-leader-conflicts
 multipart-upload
 mvcc
 n-plus-one-queries
+nearby-search-balance-by-load
+nearby-search-move-between-geoshards
+nearby-search-shards-per-search
 negative-caching
 never-reject-an-add
 new-connection-latency

@@ -1,0 +1,16 @@
+import "problem.proschi"
+
+# Add the geo router, the geoshards, the change stream, the indexer and the
+# use cases "Recommend", "Update location" and "Index location".
+api   "Recommendations API" [REST API]      x2
+index "User Index"          [Elasticsearch] x2
+
+app -> api
+api -> index
+
+usecase "Recommend" {
+  app    -> api   : GET /recs?radius=50mi
+  api    -> index : _search users within 50 miles, filtered by age
+  index --> api   : candidates
+  api   --> app   : 200 recommendations
+}

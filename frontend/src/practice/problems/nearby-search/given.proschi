@@ -1,0 +1,52 @@
+title "Nearby Search" "Finds recommendations within a user's search radius from a location-sharded index balanced by load"
+
+app      "Tinder App" [Actor]    "Opens recommendations and reports the user's location"
+profiles "Profiles"   [DynamoDB] x3 @source "The source of truth for every user's profile and last known location"
+
+traffic {
+  "Recommend"       6k rps mix "Dense metro" 40%, "Elsewhere" 60%
+  "Update location" 3k rps
+  "Index location"  3k rps mix "Dense metro" 40%, "Elsewhere" 55%, "Moved geoshard" 5%
+}
+
+requirements {
+  p99 "Recommend" < 150ms
+  p99 "Update location" < 80ms
+  availability "Recommend" >= 99.9%
+  availability "Update location" >= 99.9%
+  durable "Update location"
+  survive any node failure
+  cost <= 13500 usd/month
+}
+
+test "Searches go through the geo router" {
+  "Recommend" starts at app
+  "Recommend" calls router before any search
+  "Recommend" never calls profiles
+  no path from any client to any search
+}
+
+test "A search visits only the geoshards around the searcher" {
+  "Recommend" scenario "Dense metro" calls metro
+  "Recommend" scenario "Dense metro" never calls regional
+  "Recommend" scenario "Elsewhere" calls regional
+  "Recommend" scenario "Elsewhere" never calls metro
+}
+
+test "Location updates reach the geoshards through the stream" {
+  "Update location" starts at app
+  "Update location" writes profiles before responding
+  "Update location" calls any broker
+  "Update location" never calls any search
+  "Index location" starts at any broker
+}
+
+test "A user who moves leaves the old geoshard" {
+  "Index location" scenario "Moved geoshard" calls regional
+  "Index location" scenario "Moved geoshard" calls metro
+}
+
+test "Every geoshard has a replica" {
+  metro has replicas >= 2
+  regional has replicas >= 2
+}

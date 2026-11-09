@@ -75,6 +75,6 @@ export const ROADMAP: RoadmapStage[] = [
     id: 'scale',
     title: 'Geo, media and hot spots at scale',
     why: 'Large systems modelled on real companies, where location, bandwidth and hot partitions decide the design. Each needs most of what came before.',
-    problems: ['ride-matching', 'video-streaming', 'discord-messages'],
+    problems: ['ride-matching', 'video-streaming', 'discord-messages', 'nearby-search'],
   },
 ];
