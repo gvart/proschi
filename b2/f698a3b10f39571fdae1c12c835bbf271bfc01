@@ -1,0 +1,45 @@
+frontend/src/practice/problems/search-indexing/wrong/search-the-database.proschi
+  s_248f83f833fb51::t_6c261fb68edf04 1-71
+frontend/src/practice/cards/databases/search-indexing-bulk-requests.md
+  s_248f83f833fb51::t_6c261fb68edf04 1-27
+frontend/src/practice/problems/search-indexing/given.proschi
+  s_248f83f833fb51::t_6c261fb68edf04 1-56
+frontend/src/practice/roadmapStages.ts
+  s_248f83f833fb51::t_6c261fb68edf04 54
+frontend/src/practice/problems/search-indexing/lesson.md
+  s_248f83f833fb51::t_6c261fb68edf04 1-162
+frontend/src/practice/problems/search-indexing/problem.md
+  s_248f83f833fb51::t_6c261fb68edf04 1-110
+frontend/src/practice/problems/search-indexing/wrong/one-write-per-change.proschi
+  s_248f83f833fb51::t_6c261fb68edf04 1-60
+frontend/src/practice/problems/search-indexing/wrong/shards-without-replicas.proschi
+  s_248f83f833fb51::t_6c261fb68edf04 1-72
+frontend/src/practice/problems/search-indexing/starter.proschi
+  s_248f83f833fb51::t_6c261fb68edf04 1-16
+frontend/src/practice/problems/search-indexing/wrong/index-inside-the-edit.proschi
+  s_248f83f833fb51::t_6c261fb68edf04 1-72
+frontend/src/practice/problems/search-indexing/interview.md
+  s_248f83f833fb51::t_6c261fb68edf04 1-83
+frontend/src/practice/cards/sharding/search-indexing-shards-vs-replicas.md
+  s_248f83f833fb51::t_6c261fb68edf04 1-27
+frontend/src/practice/problems/search-indexing/solution.proschi
+  s_248f83f833fb51::t_6c261fb68edf04 1-102
+frontend/src/practice/cards/ids.lock
+  s_248f83f833fb51::t_e4d4bd57ab93f0 250-251
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b2f698a3b10f39571fdae1c12c835bbf271bfc01",
+  "prompts": {},
+  "sessions": {
+    "s_248f83f833fb51": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2d46bc96-3c9a-4511-a065-8673803644a9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
