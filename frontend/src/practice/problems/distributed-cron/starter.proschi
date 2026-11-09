@@ -1,0 +1,12 @@
+import "problem.proschi"
+
+# Add the job queue, the worker pool (id workers), the run-state database,
+# the connections and the use case "Run script".
+scheduler "Scheduler" [Go] @cron "Reads the cron strings and fires due scripts"
+
+clock -> scheduler : minute tick
+
+usecase "Fire" {
+  clock      -> scheduler : tick 09:00, nightly-report is due
+  scheduler --> clock     : ok
+}

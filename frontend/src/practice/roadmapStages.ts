@@ -51,7 +51,7 @@ export const ROADMAP: RoadmapStage[] = [
     id: 'async',
     title: 'Queues and async work',
     why: 'Answer the user first and do slow or failure-prone work later: queues, workers and retries. The fan-out and streaming patterns that follow are built on them.',
-    problems: ['job-queue', 'file-storage', 'media-processing', 'notification-fanout', 'web-crawler'],
+    problems: ['job-queue', 'file-storage', 'media-processing', 'notification-fanout', 'web-crawler', 'distributed-cron'],
   },
   {
     id: 'fan-out',

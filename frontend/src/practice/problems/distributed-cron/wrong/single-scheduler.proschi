@@ -1,0 +1,48 @@
+# expect-fail: A standby scheduler is ready to take over
+# expect-fail: availability of Fire ≥ 99.9%
+# mistake: One scheduler instance with no standby
+# explain: Moving the scripts to workers removed one single point of failure, but a lone scheduler is another: while it is down or being redeployed, no script fires at all. Run a second scheduler pod on standby and let leader election pick which one fires.
+# lesson: leader-election-and-a-standby
+# cards: active-active-vs-active-passive, leader-lease, availability-in-series
+# The right pieces, but only one scheduler pod: when it restarts, nothing is scheduled.
+import "problem.proschi"
+
+scheduler "Scheduled Job Conductor" [Go]    @cron "Parses the cron strings and enqueues due runs"
+jobs      "Job Queue"               [Kafka] x3 @jobs "Durable queue of script runs"
+workers   "Job Workers"             [Go]    x30 @jobs "Run one script per job"
+runs      "Script Runs"             [MySQL] x2 @cron "One row per run"
+
+clock     -> scheduler : minute tick
+scheduler -> runs      : SQL
+scheduler -> jobs      : produce
+jobs      -> workers   : consume
+workers   -> runs      : SQL
+workers   -> backend   : the script's work
+
+usecase "Fire" "The scheduler finds a due script and hands its run to the job queue" {
+  clock     -> scheduler : tick 09:00, nightly-report is due
+  scheduler -> runs      : SELECT active runs WHERE script = 'nightly-report'
+
+  alt "Enqueued" when "no run of the script is enqueued or in progress" {
+    runs      --> scheduler : none
+    scheduler  -> runs      : INSERT run state = enqueued
+    runs      --> scheduler : run 5521
+    scheduler  -> jobs      : ENQUEUE run 5521
+    jobs      --> scheduler : ack
+    scheduler --> clock     : enqueued
+  } alt "Already running" when "the previous run has not finished yet" {
+    runs      --> scheduler : run 5490 in progress
+    scheduler --> clock     : skipped
+  }
+}
+
+usecase "Run script" "A worker takes a run from the queue and executes the script" {
+  jobs     -> workers : run 5521 nightly-report
+  workers  -> runs    : UPDATE run 5521 SET state = in_progress
+  runs    --> workers : ok
+  workers  -> backend : run nightly-report
+  backend --> workers : done
+  workers  -> runs    : UPDATE run 5521 SET state = done
+  runs    --> workers : ok
+  workers --> jobs    : ack
+}
