@@ -1,0 +1,82 @@
+frontend/src/sim/tests.ts
+  s_f355061868c346::t_e28b303ae8e414 41,181,209-210,227-228,524-550
+  s_f355061868c346::t_0323103d93190b 551-552
+frontend/src/components/Playground/proschiLanguage.test.ts
+  s_f355061868c346::t_887b5623ce142a 162-171
+tooling/src/simulation.ts
+  s_f355061868c346::t_bd04111fd5a4a3 11-12,400-413,475,480-482
+  s_f355061868c346::t_3fdaaf08dfdfbb 483-484
+tooling/test/grammar.test.ts
+  s_f355061868c346::t_0642c4c261a49f 127-139
+frontend/src/sim/overlay.ts
+  s_f355061868c346::t_3ddb05fb733366 24-27,125,128-129
+  s_f355061868c346::t_0478852801bc90 126
+tooling/src/analysis.ts
+  s_f355061868c346::t_bd04111fd5a4a3 29,307,352,986
+frontend/src/dsl/parser.ts
+  s_f355061868c346::t_63168565429e06 163,1633-1645,1734,1777-1784,1889
+tooling/test/model-upgrades.test.ts
+  s_f355061868c346::t_5023c56d51df0c 179
+  s_f355061868c346::t_be30abfc91bca5 5
+  s_f355061868c346::t_f9d3ef4ed53100 136-178,180-182
+frontend/src/sim/format.ts
+  s_f355061868c346::t_c321efa77caa8a 40-56
+tooling/schema/proschi-diagram.schema.json
+  s_f355061868c346::t_be30abfc91bca5 1275-1299,1389-1392
+frontend/src/components/Analysis/AnalysisPanel.tsx
+  s_f355061868c346::t_eb8fcc220fce95 5,146
+  s_f355061868c346::t_f583e035b0d0fd 147
+frontend/src/sim/analyze.ts
+  s_f355061868c346::t_fdf40506ff2d79 904,940
+  s_f355061868c346::t_c321efa77caa8a 5,93-94,106-130,953-957
+  s_f355061868c346::t_d43df933e5ce14 958
+tooling/src/schema.ts
+  s_f355061868c346::t_bd04111fd5a4a3 273-276,298
+tooling/test/schema.test.ts
+  s_f355061868c346::t_be30abfc91bca5 62-69
+frontend/src/dsl/types.ts
+  s_f355061868c346::t_63168565429e06 373-375,421-426
+frontend/src/dsl/diff.ts
+  s_f355061868c346::t_c321efa77caa8a 197-198,210-211
+frontend/src/components/Playground/proschiLanguage.ts
+  s_f355061868c346::t_bd04111fd5a4a3 44
+frontend/src/components/Analysis/Queues.tsx
+  s_f355061868c346::t_40e969cb840f44 1-49
+frontend/src/hld/hld.ts
+  s_f355061868c346::t_c321efa77caa8a 217
+frontend/src/sim/queue.test.ts
+  s_f355061868c346::t_b9fe6d7b420418 1-13,15-119
+  s_f355061868c346::t_11b3abc4611c0a 14
+tooling/grammar/proschi.tmLanguage.json
+  s_f355061868c346::t_bd04111fd5a4a3 476
+frontend/src/dsl/sections.test.ts
+  s_f355061868c346::t_e19ef3ae2665e2 273,282
+tooling/src/proschi.ts
+  s_f355061868c346::t_bd04111fd5a4a3 38-39,122
+frontend/src/sim/index.ts
+  s_f355061868c346::t_e28b303ae8e414 13-14,55
+docs/GRAMMAR.md
+  s_f355061868c346::t_7690eaf6d94255 52-53,62-63
+docs/HLD.md
+  s_f355061868c346::t_179ddd2cb53fa5 241,378-436
+docs/TESTS.md
+  s_f355061868c346::t_281559ee91b275 69,80
+frontend/src/docs/model.html
+  s_f355061868c346::t_d1871db52aa130 141-146,157-160,788-792
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "84ddf7506ff2ff505dcf9f222cd3840d856ba18e",
+  "prompts": {},
+  "sessions": {
+    "s_f355061868c346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd556674-4248-429d-bf5c-2b361bc86c62",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
