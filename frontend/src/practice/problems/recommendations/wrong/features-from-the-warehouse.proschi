@@ -1,0 +1,50 @@
+# expect-fail: Features are precomputed and read from an online store
+# expect-fail: p99 of Load Explore < 300 ms
+# mistake: Reading features from the offline warehouse on every request
+# explain: A warehouse query takes about half a second and a warehouse node answers a few hundred a second, so 1k Explore loads a second saturate it and one query alone costs more than the latency budget.
+# explain: Compute features offline in batches, load them into a key-value store or cache, and read them there in one batched call per request.
+# lesson: precomputed-features-and-embeddings
+# cards: recommendations-precomputed-features, oltp-vs-olap, slowest-operation
+# No feature store: the Explore API asks the warehouse for the features of 500 posts on every request.
+import "problem.proschi"
+
+explore    "Explore API"         [gRPC]          x3 @serving "Runs retrieval, queries features and calls the rankers"
+retrieval  "Candidate Retrieval" [Service]       x3 @serving "Samples 500 eligible posts from similar accounts"
+embeddings "Account Embeddings"  [Search Engine] x2 @serving "Nearest-neighbour index over account embeddings"
+light      "First-pass Ranker"   [gRPC]          x8 @ranking "Distilled model: 500 down to 150"
+medium     "Second-pass Ranker"  [gRPC]          x10 @ranking "Lightweight network: 150 down to 50"
+heavy      "Final Ranker"        [gRPC]          x15 @ranking "Deep network: 50 down to 25"
+
+user      -> explore    : HTTPS
+explore   -> retrieval  : gRPC
+retrieval -> embeddings : KNN query
+explore   -> warehouse  : SQL
+explore   -> light      : gRPC
+explore   -> medium     : gRPC
+explore   -> heavy      : gRPC
+pipeline  -> warehouse  : SQL
+pipeline  -> embeddings : bulk load
+
+usecase "Load Explore" "The features of each candidate are queried from the warehouse" {
+  user        -> explore    : GET /explore
+  explore     -> retrieval  : GET candidates for the user
+  retrieval   -> embeddings : KNN accounts near the user's seed accounts
+  embeddings --> retrieval  : similar accounts
+  retrieval  --> explore    : 500 eligible posts from those accounts
+  explore     -> warehouse  : SELECT features of 500 posts and of the user
+  warehouse  --> explore    : features
+  explore     -> light      : x500 SCORE with the distilled model
+  light      --> explore    : best 150
+  explore     -> medium     : x150 SCORE with the lightweight network
+  medium     --> explore    : best 50
+  explore     -> heavy      : x50 SCORE with the deep network
+  heavy      --> explore    : best 25, ordered by expected value
+  explore    --> user       : 200 page of 25 posts
+}
+
+usecase "Refresh features" "The offline pipeline rebuilds the embeddings in batches" {
+  pipeline    -> warehouse  : SELECT a batch of recent interactions
+  warehouse  --> pipeline   : rows
+  pipeline    -> embeddings : UPSERT a batch of account embeddings
+  embeddings --> pipeline   : ok
+}
