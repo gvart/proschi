@@ -28,7 +28,7 @@ per-use LLM cost), and improve the language and the visual editor.
 ## Work items
 
 ### Iteration 1: groundwork
-- [ ] **1.1 Split Playground**: move `DiagramView` and `FilesRail` out of
+- [x] **1.1 Split Playground**: move `DiagramView` and `FilesRail` out of
   `frontend/src/components/Playground/Playground.tsx` into their own files. No
   behaviour change.
   verify: lint, tsc, unit tests, full e2e green. depends on: none
