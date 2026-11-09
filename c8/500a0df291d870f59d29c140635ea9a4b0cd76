@@ -1,0 +1,32 @@
+frontend/e2e/exports.accounts.e2e.ts
+  s_f355061868c346::t_9e804f540ba22f 28,52-53,166
+frontend/src/learn/progressExport.test.ts
+  s_f355061868c346::t_9e804f540ba22f 11-12,39
+backend/src/certificates.ts
+  s_f355061868c346::t_9e804f540ba22f 11,69,82-83
+backend/src/progressExport.ts
+  s_f355061868c346::t_9e804f540ba22f 10,64-65,72-73
+backend/test/certificates.test.ts
+  s_f355061868c346::t_92a21d60eefbea 3,157-185
+  s_f355061868c346::t_fc8758d1d93d00 186-187
+frontend/src/learn/progressExport.ts
+  s_f355061868c346::t_9e804f540ba22f 13-15,58-59
+backend/src/verify.ts
+  s_f355061868c346::t_9e804f540ba22f 25-43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c8500a0df291d870f59d29c140635ea9a4b0cd76",
+  "prompts": {},
+  "sessions": {
+    "s_f355061868c346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd556674-4248-429d-bf5c-2b361bc86c62",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
