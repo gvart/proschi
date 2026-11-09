@@ -258,7 +258,18 @@ export function diagramSchema() {
           availability: object({ kind: { const: 'availability' }, useCase: str, minPercent: percent, loc }, ['kind', 'minPercent', 'loc']),
           durable: object({ kind: { const: 'durable' }, useCase: str, loc }, ['kind', 'useCase', 'loc']),
           survive: object({ kind: { const: 'survive' }, target: { oneOf: [{ const: 'any' }, selector] }, loc }, ['kind', 'target', 'loc']),
-          cost: object({ kind: { const: 'cost' }, maxUsdPerMonth: num, loc }, ['kind', 'maxUsdPerMonth', 'loc']),
+          cost: object(
+            {
+              kind: { const: 'cost' },
+              maxUsdPerMonth: num,
+              scope: {
+                description: 'Left out: the whole design. `@Payments`: the nodes the team owns; `.edge`: the nodes with the tag or inside a group with it; `group checkout`: the nodes inside the group.',
+                oneOf: [object({ team: str }, ['team']), object({ tag: str }, ['tag']), object({ group: str }, ['group'])],
+              },
+              loc,
+            },
+            ['kind', 'maxUsdPerMonth', 'loc'],
+          ),
         } satisfies Record<Requirement['kind'], unknown>),
       },
       capacity: object(

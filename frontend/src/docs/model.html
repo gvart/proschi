@@ -288,8 +288,15 @@ A(U) = Π over nodes n on the main path of
           Egress follows the average rate of a traffic line with <code>peak</code>, since the month is mostly not
           the peak hour.
         </p>
+        <p>
+          The cost splits by owner: a node counts whole for its team (<code>@Payments</code>), for every group it is
+          inside and for its tag and its groups' tags. A budget such as <code>cost @Payments &lt;= 500 usd/month</code>
+          checks one of those sums.
+        </p>
       </div>
-      <pre class="formula" tabindex="0"><code>cost = Σ over nodes  replicas × shards × cost(n) + egress cost(n)</code></pre>
+      <pre class="formula" tabindex="0"><code>cost      = Σ over nodes  replicas × shards × cost(n) + egress cost(n)
+cost(@T)  = Σ over nodes owned by T   the same
+cost(g)   = Σ over nodes inside group g   the same</code></pre>
     </li>
 
     <li class="rule" id="failures">
@@ -752,6 +759,13 @@ traffic {
       <tr>
         <th scope="row">Third-party limits <span class="tag tag--opt">optimistic</span></th>
         <td>External systems are free, take 1k requests a second per replica and never rate-limit you.</td>
+      </tr>
+      <tr>
+        <th scope="row">Shared costs <span class="tag">either way</span></th>
+        <td>
+          A node counts whole for its one team. A database two teams share, a platform team's charge-back or a
+          split by usage are not modelled; give the node the team that pays for it.
+        </td>
       </tr>
       <tr>
         <th scope="row">Real cloud pricing <span class="tag">either way</span></th>

@@ -367,7 +367,15 @@ export type Requirement =
   | { kind: 'availability'; useCase?: string; minPercent: number; loc: SourceLoc }
   | { kind: 'durable'; useCase: string; loc: SourceLoc }
   | { kind: 'survive'; target: Selector | 'any'; loc: SourceLoc }
-  | { kind: 'cost'; maxUsdPerMonth: number; loc: SourceLoc };
+  /** `cost <= 3000 usd/month`, or with `scope` a budget for part of the design: `cost @Payments <= 500 usd/month`. */
+  | { kind: 'cost'; maxUsdPerMonth: number; scope?: CostScope; loc: SourceLoc };
+
+/**
+ * Whose cost a scoped budget covers: the nodes a team owns (`@Payments`),
+ * the nodes with a legend tag (`.edge`, or inside a group with it), or the
+ * nodes inside a group (`group checkout`, nested groups included).
+ */
+export type CostScope = { team: string } | { tag: string } | { group: string };
 
 /** One line of `capacity { … }`: per-replica overrides of the default profile. */
 export interface CapacityOverride {

@@ -51,6 +51,14 @@ describe('JSON Schema', () => {
     expect(validate(result), JSON.stringify(validate.errors, null, 2)).toBe(true);
   });
 
+  it('describes scoped budgets', () => {
+    const source =
+      'group g {\n  api [REST API] @Pay .hot\n}\nlegend {\n  hot "Hot" red\n}\nrequirements {\n  cost @Pay <= 500 usd/month\n  cost .hot <= 5 usd/month\n  cost group g <= 1k usd/month\n}';
+    const result = JSON.parse(JSON.stringify(parse(source)));
+    expect(result.diagram.requirements.map((r: { scope: unknown }) => r.scope)).toEqual([{ team: 'Pay' }, { tag: 'hot' }, { group: 'g' }]);
+    expect(validate(result), JSON.stringify(validate.errors, null, 2)).toBe(true);
+  });
+
   it('describes cache hit rates, in capacity and what-ifs, and info diagnostics', () => {
     const source =
       'api [REST API]\ncache [Redis]\napi -> cache\nusecase "U" {\n  api -> cache : GET\n}\ntraffic {\n  "U" 1k rps mix "U" 100%\n}\ncapacity {\n  cache hit 90%\n}\nwhatif "Cold" {\n  cache hit 40%\n}';

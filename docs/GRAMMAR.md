@@ -49,7 +49,8 @@ requirement  = percentile , [ string , [ "scenario" , string ] ] , "<" , quantit
              | "availability" , [ string ] , ">=" , quantity
              | "durable" , string
              | "survive" , ( "any" , "node" , "failure" | "failure" , "of" , selector )
-             | "cost" , "<=" , quantity ;
+             | "cost" , [ cost-scope ] , "<=" , quantity ;
+cost-scope   = team | tag | "group" , id ;              (* a budget for a team's, a tag's or a group's nodes *)
 percentile   = "p50" | "p90" | "p95" | "p99" | "p999" ;
 capacity     = "capacity" , "{" , { id , { capacity-part } } , "}" ;
 capacity-part = quantity | "reads" , quantity | "writes" , quantity | "shards" , integer | "size" , ( "S" | "M" | "L" )

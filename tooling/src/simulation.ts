@@ -6,6 +6,7 @@
  */
 import {
   HOT,
+  costBreakdown,
   formatAvailability,
   formatMs,
   formatPercent,
@@ -388,6 +389,7 @@ export function capacityReport(diagram: Diagram, analysis: SimAnalysis, file: st
     ], 2),
     '',
     `Total cost: ${formatUsd(analysis.totalCostUsd)}${analysis.totalEgressUsd > 0 ? ` (${formatUsd(analysis.totalEgressUsd)} of it egress)` : ''}`,
+    ...costLines(diagram, analysis),
     '',
   );
 
@@ -405,6 +407,14 @@ export function capacityReport(diagram: Diagram, analysis: SimAnalysis, file: st
   lines.push(`Single points of failure: ${analysis.singlePointsOfFailure.join(', ') || 'none'}`);
   if (analysis.warnings.length) lines.push('', 'Warnings:', ...analysis.warnings.map((w) => `  ${w}`));
   return lines.join('\n');
+}
+
+/** `Cost by team: @Data $400, @Payments $250, no team $30`, and by group and tag; none when the design names neither. */
+function costLines(diagram: Diagram, analysis: SimAnalysis): string[] {
+  const b = costBreakdown(diagram, analysis);
+  const usd = (x: number) => formatUsd(x).replace('/month', '');
+  const line = (by: string, shares: { id: string; costUsd: number }[]) => (shares.length ? [`Cost by ${by}: ${shares.map((s) => `${s.id} ${usd(s.costUsd)}`).join(', ')}`] : []);
+  return [...line('team', b.unowned ? [...b.teams, b.unowned] : b.teams), ...line('group', b.groups), ...line('tag', b.tags)];
 }
 
 /**

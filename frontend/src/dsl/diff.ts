@@ -193,7 +193,7 @@ export function requirementKey(r: Requirement): string {
     case 'survive':
       return `survive ${canonical(r.target)}`;
     case 'cost':
-      return 'cost';
+      return r.scope ? `cost ${'team' in r.scope ? `@${r.scope.team}` : 'tag' in r.scope ? `.${r.scope.tag}` : `group ${r.scope.group}`}` : 'cost';
   }
 }
 

@@ -1221,6 +1221,47 @@
             "maxUsdPerMonth": {
               "type": "number"
             },
+            "scope": {
+              "description": "Left out: the whole design. `@Payments`: the nodes the team owns; `.edge`: the nodes with the tag or inside a group with it; `group checkout`: the nodes inside the group.",
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "team": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "team"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "tag": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "tag"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "group": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "group"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
             "loc": {
               "$ref": "#/$defs/loc"
             }

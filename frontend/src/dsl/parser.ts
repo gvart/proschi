@@ -12,6 +12,7 @@ import type {
   Assertion,
   BlockSpan,
   CapacityOverride,
+  CostScope,
   Constant,
   Decision,
   Diagnostic,
@@ -1652,15 +1653,57 @@ class Parser {
         return;
       }
       case 'cost': {
-        if (!this.expectOp(tokens, 1, ['<=', '<'], 'cost <= 3000 usd/month', line)) return;
-        const maxUsdPerMonth = this.quantityOf(tokens[2], 'usd/month', tokens[1], line);
-        if (maxUsdPerMonth === undefined || !this.expectEnd(tokens, 3, line)) return;
-        commit({ kind: 'cost', maxUsdPerMonth, loc });
+        // `cost @Payments <= …`, `cost .edge <= …`, `cost group checkout <= …`: a budget for part of the design.
+        const scoped = this.parseCostScope(tokens, line);
+        if (!scoped) return;
+        const at = scoped.next;
+        if (!this.expectOp(tokens, at, ['<=', '<'], scoped.scope ? 'cost @Payments <= 500 usd/month' : 'cost <= 3000 usd/month', line)) return;
+        const maxUsdPerMonth = this.quantityOf(tokens[at + 1], 'usd/month', tokens[at], line);
+        if (maxUsdPerMonth === undefined || !this.expectEnd(tokens, at + 2, line)) return;
+        commit({ kind: 'cost', maxUsdPerMonth, ...(scoped.scope ? { scope: scoped.scope } : {}), loc });
+        if (scoped.scope) this.checkCostScope(scoped.scope, this.locOf(tokens[at - 1], line));
         return;
       }
       default:
         this.error(`Unknown requirement '${word}'. ${help}`, this.locOf(first, line));
     }
+  }
+
+  /** What follows `cost` before its operator: nothing, `@team`, `.tag` or `group <id>`; the index after it. */
+  private parseCostScope(tokens: Token[], line: number): { scope?: CostScope; next: number } | undefined {
+    const t = tokens[1];
+    if (t?.kind === 'team') return { scope: { team: t.value }, next: 2 };
+    if (t?.kind === 'tag') return { scope: { tag: t.value }, next: 2 };
+    if (isWord(t, 'group')) {
+      const id = tokens[2];
+      if (id?.kind !== 'ident') {
+        this.error('Expected a group id after group, e.g. cost group checkout <= 500 usd/month', this.locOf(id ?? t, line));
+        return undefined;
+      }
+      return { scope: { group: id.value }, next: 3 };
+    }
+    if (t?.kind === 'string') {
+      const name = t.value.replace(/^@/, '');
+      this.error(`A budget names a team as @${name}, a tag as .${name} or a group as group ${name}, without quotes`, this.locOf(t, line));
+      return undefined;
+    }
+    return { next: 1 };
+  }
+
+  /** A scoped budget that covers no node is a warning: an unknown team, tag or group. */
+  private checkCostScope(scope: CostScope, loc: SourceLoc) {
+    this.deferred.push(() => {
+      const nodes = [...this.nodes.values()];
+      if ('team' in scope) {
+        if (!nodes.some((n) => n.ownerTeam === scope.team)) this.warning(`No node is owned by @${scope.team}; give nodes the team with @${scope.team} after their name`, loc);
+      } else if ('tag' in scope) {
+        if (!nodes.some((n) => n.tag === scope.tag)) this.warning(`No node or group has the tag .${scope.tag}`, loc);
+      } else {
+        const group = this.nodes.get(scope.group);
+        if (!group) this.warning(`Unknown group '${scope.group}'`, loc);
+        else if (group.kind !== 'group') this.warning(`'${scope.group}' is not a group; a budget covers a team (@team), a tag (.tag) or a group (group <id>)`, loc);
+      }
+    });
   }
 
   /** `db 20k rps latency 4ms availability 99.95% cost 400 usd/month durable`, parts in any order. */

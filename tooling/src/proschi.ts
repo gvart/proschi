@@ -31,6 +31,7 @@ export { EXPORT_CSP, buildHld, toHtml as hldToHtml, toMarkdown as hldToMarkdown,
 // `analyze` is the editor's simulation; tooling's own analysis.ts has an `analyze` for documents.
 export {
   analyze as simulate,
+  costBreakdown,
   requirementFixes,
   runTests,
   formatAvailability,

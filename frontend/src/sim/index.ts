@@ -13,6 +13,7 @@ export {
   type ScenarioAnalysis,
   type UseCaseAnalysis,
 } from './analyze';
+export { costBreakdown, scopedCost, type CostBreakdown, type CostShare } from './cost';
 export { runTests, requirementFixes, requirementName, type AssertionResult, type TestFix, type TestResult } from './tests';
 export {
   findWhatIf,

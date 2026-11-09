@@ -1,4 +1,4 @@
-import type { Assertion, Diagram, DiagramScenario, DiagramStep, DiagramUseCase, FlowTest, Percentile, Requirement, Selector, SourceLoc } from '../dsl/types';
+import type { Assertion, CostScope, Diagram, DiagramScenario, DiagramStep, DiagramUseCase, FlowTest, Percentile, Requirement, Selector, SourceLoc } from '../dsl/types';
 import { editDistance } from '../catalog/componentCatalog';
 import { requestLabel } from '../dsl/sequence';
 import { accessIn } from './access';
@@ -37,6 +37,7 @@ import {
   selectorText,
   writesBeforeResponse,
 } from './flow';
+import { scopedCost } from './cost';
 import { formatAvailability, formatMs, formatPercent, formatRps, formatUsd } from './format';
 import type { Profile } from './profiles';
 
@@ -203,7 +204,7 @@ export function requirementName(r: Requirement): string {
     case 'survive':
       return r.target === 'any' ? 'survive any node failure' : `survive failure of ${selectorText(r.target)}`;
     case 'cost':
-      return `cost ≤ ${formatUsd(r.maxUsdPerMonth)}`;
+      return `cost${r.scope ? ` of ${scopeText(r.scope)}` : ''} ≤ ${formatUsd(r.maxUsdPerMonth)}`;
   }
 }
 
@@ -219,7 +220,7 @@ function requirement(run: Run, r: Requirement): Check {
     case 'survive':
       return survive(run, r.target);
     case 'cost':
-      return cost(run, r.maxUsdPerMonth);
+      return r.scope ? budget(run, r.scope, r.maxUsdPerMonth) : cost(run, r.maxUsdPerMonth);
   }
 }
 
@@ -513,6 +514,22 @@ function cost(run: Run, max: number): Check {
   const egressHint =
     egress > total / 2 ? ' Most of it is egress: serve repeated downloads from a CDN ($0.02/GB) instead of storage ($0.09/GB), or send fewer bytes.' : '';
   return fail(message, `Biggest items: ${top.join(', ')}. Drop replicas on nodes with low utilisation or pick cheaper techs.${egressHint}`);
+}
+
+/** `@Payments`, `.edge`, `group checkout`. */
+const scopeText = (scope: CostScope) => ('team' in scope ? `@${scope.team}` : 'tag' in scope ? `.${scope.tag}` : `group ${scope.group}`);
+
+/** A scoped budget: the cost of the team's, tag's or group's nodes against its limit. */
+function budget(run: Run, scope: CostScope, max: number): Check {
+  const share = scopedCost(run.diagram, run.analysis, scope);
+  const what = scopeText(scope);
+  if (share.nodes.length === 0) return fail(`No node is covered by ${what}`, 'team' in scope ? `Give nodes the team with ${what} after their name` : 'tag' in scope ? `Tag nodes or groups with ${what}` : `Add nodes inside ${what}`);
+  const ofWhich = share.egressUsd > 0 ? `, ${formatUsd(share.egressUsd)} of it egress` : '';
+  const message = `${what} costs ${formatUsd(share.costUsd)}${ofWhich} (limit ${formatUsd(max)})`;
+  if (share.costUsd <= max) return pass(message);
+  const nodes = new Map(run.analysis.nodes.map((n) => [n.id, n]));
+  const top = share.nodes.slice(0, 3).map((id) => `${id} ${formatUsd(nodes.get(id)!.costUsd)}`);
+  return fail(message, `Biggest items: ${top.join(', ')}. Drop replicas on nodes with low utilisation, pick cheaper techs, or move work to another team's budget.`);
 }
 
 // ---------------------------------------------------------------- test blocks
