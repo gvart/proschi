@@ -153,6 +153,7 @@ lfu-weakness
 linearizability
 littles-law-concurrency
 load-shedding
+load-shedding-at-the-gateway
 log-compaction
 log-volume-per-day
 log-vs-queue

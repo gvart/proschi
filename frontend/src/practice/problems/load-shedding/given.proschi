@@ -1,0 +1,47 @@
+title "Load Shedding" "Keeps playback up during a traffic spike by shedding the least important requests at the Zuul gateway"
+
+device "Member Device" [Actor]    "Phones, TVs and browsers running the Netflix app"
+api    "API Service"   [REST API] x8 @api "The shared backend behind the gateway; answers playback, progress markers and logs, and cannot scale out mid-spike"
+
+traffic {
+  "Start playback" 6k rps
+  "Save progress"  4k rps  mix "Served" 50%, "Shed" 50%
+  "Send logs"      10k rps mix "Served" 10%, "Shed" 90%
+}
+
+requirements {
+  p99 "Start playback" < 100ms
+  p99 "Save progress" < 150ms
+  p99 "Send logs" < 150ms
+  availability "Start playback" >= 99.99%
+  survive any node failure
+  cost <= 1600 usd/month
+}
+
+test "Every request goes through Zuul" {
+  "Start playback" starts at device
+  "Save progress" starts at device
+  "Send logs" starts at device
+  "Start playback" calls zuul before api
+  "Save progress" every scenario calls zuul
+  "Send logs" every scenario calls zuul
+  no path from device to api
+}
+
+test "Shed requests never reach the API service" {
+  "Save progress" has scenario "Shed"
+  "Send logs" has scenario "Shed"
+  "Save progress" scenario "Shed" never calls api
+  "Send logs" scenario "Shed" never calls api
+  "Save progress" scenario "Shed" responds 503
+  "Send logs" scenario "Shed" responds 503
+}
+
+test "Playback is never shed" {
+  "Start playback" every scenario calls api
+}
+
+test "Served requests are answered by the API service" {
+  "Save progress" scenario "Served" calls api
+  "Send logs" scenario "Served" calls api
+}
