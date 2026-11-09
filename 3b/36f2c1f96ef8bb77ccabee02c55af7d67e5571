@@ -1,0 +1,81 @@
+frontend/src/hld/html.ts
+  s_f355061868c346::t_4483bfb01409b3 124
+  s_f355061868c346::t_1bbc0e8f1f3c5d 11
+frontend/src/dsl/parser.ts
+  s_f355061868c346::t_4a86761f183ebe 1479-1504
+docs/HLD.md
+  s_f355061868c346::t_aba50f5c5f3dad 110,131,145,173-200
+  s_f355061868c346::t_5b8b1ba8e676b8 167-172
+tooling/schema/proschi-diagram.schema.json
+  s_f355061868c346::t_eb17058e1d7e93 1061-1066
+frontend/src/hld/markdown.ts
+  s_f355061868c346::t_4483bfb01409b3 72
+  s_f355061868c346::t_1bbc0e8f1f3c5d 11
+frontend/src/hld/hld.ts
+  s_f355061868c346::t_4483bfb01409b3 344
+  s_f355061868c346::t_4ab4f4008259dd 476-481
+  s_f355061868c346::t_1bbc0e8f1f3c5d 59-60
+frontend/src/sim/format.ts
+  s_f355061868c346::t_d03eae50a2b19f 13-18
+tooling/src/analysis.ts
+  s_f355061868c346::t_a70d01d302e677 273,352-361
+  s_f355061868c346::t_1b741cb83cbcb6 12,686-693
+  s_f355061868c346::t_1ee882c707be47 362-363,694
+frontend/src/sim/analyze.ts
+  s_f355061868c346::t_d03eae50a2b19f 99,101-102,190-191,225-226,270-280,651,710,738
+docs/GRAMMAR.md
+  s_f355061868c346::t_5b8b1ba8e676b8 44-45
+frontend/src/components/Hld/HldView.tsx
+  s_f355061868c346::t_1bbc0e8f1f3c5d 19
+  s_f355061868c346::t_4483bfb01409b3 199
+tooling/src/simulation.ts
+  s_f355061868c346::t_1bbc0e8f1f3c5d 13
+  s_f355061868c346::t_1b741cb83cbcb6 425-426,428
+  s_f355061868c346::t_4483bfb01409b3 391
+  s_f355061868c346::t_342ebc50e3a2d0 436
+tooling/src/proschi.ts
+  s_f355061868c346::t_1bbc0e8f1f3c5d 40
+frontend/src/sim/index.ts
+  s_f355061868c346::t_4483bfb01409b3 52
+frontend/src/dsl/diff.ts
+  s_f355061868c346::t_4483bfb01409b3 228
+frontend/src/components/Playground/proschiLanguage.ts
+  s_f355061868c346::t_a70d01d302e677 44
+tooling/grammar/proschi.tmLanguage.json
+  s_f355061868c346::t_a70d01d302e677 470
+tooling/src/schema.ts
+  s_f355061868c346::t_5b8b1ba8e676b8 233-234
+tooling/test/schema.test.ts
+  s_f355061868c346::t_5b8b1ba8e676b8 48-50
+frontend/src/docs/model.html
+  s_f355061868c346::t_7f1a595d025090 49-53,276-277,719-722
+frontend/src/components/Analysis/AnalysisPanel.tsx
+  s_f355061868c346::t_4483bfb01409b3 4,147
+plugin/hooks/register.js
+  s_f355061868c346::t_eb17058e1d7e93 2481-2504,4571-4572,4607-4610,4809,4864,4892
+tooling/test/analysis.test.ts
+  s_f355061868c346::t_342ebc50e3a2d0 260
+  s_f355061868c346::t_cb1af4c3af6e10 252-259,261-269
+plugin/hooks/layout.cjs
+  s_f355061868c346::t_eb17058e1d7e93 1-3,5-7,9,18,20,22,24-27,34
+frontend/src/dsl/types.ts
+  s_f355061868c346::t_4a86761f183ebe 347,349-354
+frontend/src/sim/peak.test.ts
+  s_f355061868c346::t_b33d428258b18f 1-85
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3b36f2c1f96ef8bb77ccabee02c55af7d67e5571",
+  "prompts": {},
+  "sessions": {
+    "s_f355061868c346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd556674-4248-429d-bf5c-2b361bc86c62",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
