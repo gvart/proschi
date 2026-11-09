@@ -60,6 +60,13 @@ whatif "Launch" {
     expect(diagram.whatifs).toBeUndefined();
   });
 
+  it('takes fractional traffic multipliers, but whole replicas', () => {
+    const { diagram, diagnostics } = parse(`${BASE}whatif "W" {\n  traffic "Read" x1.5\n  db x2.5\n}\nwhatif "Half" {\n  traffic "Read" x0.5\n}\n`);
+    expect(diagram.whatifs?.map((w) => w.changes.map((c) => ('multiply' in c ? c.multiply : undefined)))).toEqual([[1.5], [0.5]]);
+    expect(diagnostics.map((d) => [d.severity, d.line, d.message])).toEqual([['error', 16, 'Replicas are a whole number, e.g. db x4']]);
+    expect(format('whatif "W" {\ntraffic "Read"   x1.5\n}\n')).toBe('whatif "W" {\n  traffic "Read" x1.5\n}\n');
+  });
+
   it('reads `fail x2` as the replicas of a node called fail', () => {
     const { diagram } = parse(`fail [Service]\nwhatif "W" {\n  fail x2\n}`);
     expect(diagram.whatifs?.[0].changes[0]).toMatchObject({ kind: 'replicas', node: 'fail', replicas: 2 });

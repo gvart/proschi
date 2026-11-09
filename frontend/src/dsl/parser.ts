@@ -146,6 +146,8 @@ export const MAX_ALT_DEPTH = 16;
 const DIRECTIONS: LayoutDirection[] = ['down', 'right', 'up', 'left'];
 /** `x3` on a node declaration: its replica count. */
 const REPLICAS = /^x(\d+)$/;
+/** `x1.5` in a what-if's traffic line: a rate multiplier, whole or fractional. */
+const MULTIPLIER = /^x(\d+(?:\.\d+)?)$/;
 const PERCENTILES: Record<string, Percentile> = { p50: 50, p90: 90, p95: 95, p99: 99, p999: 99.9 };
 const FIELD_FLAGS = ['key', 'index', 'unique', 'optional'];
 const UNIT_EXAMPLES: Record<Quantity['unit'], string> = {
@@ -1935,6 +1937,10 @@ class Parser {
       whatif.changes.push({ kind: 'replicas', node: first.value, replicas, loc });
       return;
     }
+    if (first.kind === 'ident' && second?.kind === 'ident' && MULTIPLIER.test(second.value)) {
+      this.error(`Replicas are a whole number, e.g. ${first.value} x4`, this.locOf(second, line));
+      return;
+    }
     if (isWord(first, 'fail')) {
       if (second?.kind !== 'ident') {
         this.error('Expected the node that fails, e.g. fail cache', this.locOf(second ?? first, line));
@@ -1955,8 +1961,8 @@ class Parser {
         return;
       }
       let change: WhatIf['changes'][number];
-      if (third?.kind === 'ident' && REPLICAS.test(third.value)) {
-        const multiply = Number(REPLICAS.exec(third.value)![1]);
+      if (third?.kind === 'ident' && MULTIPLIER.test(third.value)) {
+        const multiply = Number(MULTIPLIER.exec(third.value)![1]);
         change = { kind: 'traffic', useCase: second.value, multiply, loc };
       } else {
         const rps = this.quantityOf(third, 'rps', second, line);
