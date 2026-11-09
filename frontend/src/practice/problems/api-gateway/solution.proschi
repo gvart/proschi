@@ -1,0 +1,110 @@
+import "problem.proschi"
+
+lb       "Load Balancer" [AWS Load Balancer] x2 @Edge "Spreads app connections over the gateway pool and drops unhealthy instances"
+gateway  "Edge Gateway"  [API Gateway]       x7 @Edge "Stateless instances built from the API config: protocol, middleware, routing"
+sessions "Edge Cache"    [Redis]             x2 @Edge "Recently validated sessions and short-term bans, each with a TTL"
+
+rider   -> lb       : HTTPS
+lb      -> gateway  : HTTP
+gateway -> sessions : RESP
+gateway -> auth     : Thrift
+gateway -> pricing  : Thrift
+gateway -> trips    : Thrift
+gateway -> users    : Thrift
+
+entity Session in sessions "A token the auth service validated recently" {
+  token   string key
+  user_id string
+  expires time
+}
+
+entity Ban in sessions "A rider or app version blocked by fraud and security systems" {
+  user_id string key
+  expires time
+}
+
+decision "One edge tier for every call" {
+  because "Authentication, bans, rate limits and routing are written once, as middleware, instead of in every backend service"
+  rejected "Apps call each service directly" "Every team re-implements auth and limits, and the apps must know the address of every service"
+}
+decision "Sessions served from a cache" {
+  because "Most calls carry a token validated seconds ago; a 1 ms cache read replaces a call to the auth service, which only sees the misses"
+  rejected "Ask the auth service on every call" "40k checks a second against a service sized for a few thousand: it saturates and every endpoint slows with it"
+}
+decision "A stateless gateway pool behind a load balancer" {
+  because "Any instance can serve any call, so the pool scales by adding instances and survives losing one"
+  rejected "A pool sized for the average load" "Losing one instance pushes the rest past 100% and the whole app goes down with it"
+}
+
+usecase "Get fare estimate" "A rider enters a destination and sees a price" {
+  rider   -> lb       : GET /v1/fare-estimate
+  lb      -> gateway  : GET /v1/fare-estimate
+  gateway -> sessions : MGET session:{token} ban:{user}
+
+  alt "Session cached" when "the token was validated recently and the rider is not blocked" {
+    sessions --> gateway : user 42
+    gateway   -> pricing : EstimateFare(pickup, dropoff)
+    pricing  --> gateway : fare
+    gateway  --> lb      : 200 fare
+    lb       --> rider   : 200 fare
+  } alt "Session not cached" when "no cached session for this token" {
+    sessions --> gateway  : nil
+    gateway   -> auth     : ValidateToken(token)
+    auth     --> gateway  : user 42
+    gateway   -> sessions : SET session:{token} EX 300
+    gateway   -> pricing  : EstimateFare(pickup, dropoff)
+    pricing  --> gateway  : fare
+    gateway  --> lb       : 200 fare
+    lb       --> rider    : 200 fare
+  } alt "Blocked" when "a short-term ban for this rider is in the cache" {
+    sessions --> gateway : banned
+    gateway  --> lb      : 403 blocked
+    lb       --> rider   : 403 blocked
+  }
+}
+
+usecase "Request trip" "A rider confirms the ride" {
+  rider   -> lb       : POST /v1/trips
+  lb      -> gateway  : POST /v1/trips
+  gateway -> sessions : MGET session:{token} ban:{user}
+
+  alt "Session cached" when "the token was validated recently" {
+    sessions --> gateway : user 42
+    gateway   -> trips   : CreateTrip(user 42, pickup, dropoff)
+    trips    --> gateway : trip 9001
+    gateway  --> lb      : 201 trip 9001
+    lb       --> rider   : 201 trip 9001
+  } alt "Session not cached" when "no cached session for this token" {
+    sessions --> gateway  : nil
+    gateway   -> auth     : ValidateToken(token)
+    auth     --> gateway  : user 42
+    gateway   -> sessions : SET session:{token} EX 300
+    gateway   -> trips    : CreateTrip(user 42, pickup, dropoff)
+    trips    --> gateway  : trip 9001
+    gateway  --> lb       : 201 trip 9001
+    lb       --> rider    : 201 trip 9001
+  }
+}
+
+usecase "Get rider profile" "The app loads the rider's name, rating and saved places" {
+  rider   -> lb       : GET /v1/me
+  lb      -> gateway  : GET /v1/me
+  gateway -> sessions : MGET session:{token} ban:{user}
+
+  alt "Session cached" when "the token was validated recently" {
+    sessions --> gateway : user 42
+    gateway   -> users   : GetProfile(user 42)
+    users    --> gateway : profile
+    gateway  --> lb      : 200 profile
+    lb       --> rider   : 200 profile
+  } alt "Session not cached" when "no cached session for this token" {
+    sessions --> gateway  : nil
+    gateway   -> auth     : ValidateToken(token)
+    auth     --> gateway  : user 42
+    gateway   -> sessions : SET session:{token} EX 300
+    gateway   -> users    : GetProfile(user 42)
+    users    --> gateway  : profile
+    gateway  --> lb       : 200 profile
+    lb       --> rider    : 200 profile
+  }
+}

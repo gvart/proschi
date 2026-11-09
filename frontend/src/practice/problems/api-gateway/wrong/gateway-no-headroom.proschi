@@ -1,0 +1,77 @@
+# expect-fail: survive any node failure
+# mistake: A gateway pool sized for the average load, with no room to lose an instance
+# explain: Five instances run at 80% and pass on a normal day, but every call in the app goes through the gateway, so losing one pushes the other four past 100% and every endpoint fails at once.
+# explain: Size the pool so it stays under about 70% busy with one instance gone.
+# lesson: the-gateway-must-not-become-the-bottleneck
+# cards: servers-for-peak-load, correlated-failures, api-gateway-scope
+# Five gateway instances: enough for 40k calls a second, but not once one of them dies.
+import "problem.proschi"
+
+lb       "Load Balancer" [AWS Load Balancer] x2
+gateway  "Edge Gateway"  [API Gateway]       x5
+sessions "Edge Cache"    [Redis]             x2
+
+rider   -> lb       : HTTPS
+lb      -> gateway  : HTTP
+gateway -> sessions : RESP
+gateway -> auth     : Thrift
+gateway -> pricing  : Thrift
+gateway -> trips    : Thrift
+gateway -> users    : Thrift
+
+usecase "Get fare estimate" {
+  rider     -> lb       : GET /v1/fare-estimate
+  lb        -> gateway  : GET /v1/fare-estimate
+  gateway   -> sessions : MGET session:{token} ban:{user}
+
+  alt "Session cached" {
+    gateway  -> pricing : EstimateFare(pickup, dropoff)
+    gateway --> lb      : 200 fare
+    lb      --> rider   : 200 fare
+  } alt "Session not cached" {
+    gateway  -> auth     : ValidateToken(token)
+    gateway  -> sessions : SET session:{token} EX 300
+    gateway  -> pricing  : EstimateFare(pickup, dropoff)
+    gateway --> lb       : 200 fare
+    lb      --> rider    : 200 fare
+  } alt "Blocked" {
+    gateway --> lb    : 403 blocked
+    lb      --> rider : 403 blocked
+  }
+}
+
+usecase "Request trip" {
+  rider     -> lb       : POST /v1/trips
+  lb        -> gateway  : POST /v1/trips
+  gateway   -> sessions : MGET session:{token} ban:{user}
+
+  alt "Session cached" {
+    gateway  -> trips : CreateTrip(user 42, pickup, dropoff)
+    gateway --> lb    : 201 trip 9001
+    lb      --> rider : 201 trip 9001
+  } alt "Session not cached" {
+    gateway  -> auth     : ValidateToken(token)
+    gateway  -> sessions : SET session:{token} EX 300
+    gateway  -> trips    : CreateTrip(user 42, pickup, dropoff)
+    gateway --> lb       : 201 trip 9001
+    lb      --> rider    : 201 trip 9001
+  }
+}
+
+usecase "Get rider profile" {
+  rider     -> lb       : GET /v1/me
+  lb        -> gateway  : GET /v1/me
+  gateway   -> sessions : MGET session:{token} ban:{user}
+
+  alt "Session cached" {
+    gateway  -> users : GetProfile(user 42)
+    gateway --> lb    : 200 profile
+    lb      --> rider : 200 profile
+  } alt "Session not cached" {
+    gateway  -> auth     : ValidateToken(token)
+    gateway  -> sessions : SET session:{token} EX 300
+    gateway  -> users    : GetProfile(user 42)
+    gateway --> lb       : 200 profile
+    lb      --> rider    : 200 profile
+  }
+}

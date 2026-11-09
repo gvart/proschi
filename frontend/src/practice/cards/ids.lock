@@ -6,6 +6,7 @@ active-active-vs-active-passive
 activity-bitmaps
 anycast
 api-gateway-scope
+api-gateway-session-cache
 async-failover-loss
 at-least-once-needs-idempotency
 authn-vs-authz
