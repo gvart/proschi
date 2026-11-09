@@ -161,16 +161,19 @@ export default function SoloRoom({ problem, engine, phone, interview, session, d
     );
   } else if (stage === 'estimate') {
     screen = (
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="mx-auto grid w-full max-w-6xl gap-5 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] lg:items-start">
-          <div className="space-y-4 lg:sticky lg:top-0">
+      <div className="min-h-0 flex-1 overflow-y-auto lg:flex lg:flex-col">
+        <div className="mx-auto grid w-full max-w-6xl gap-5 px-4 py-6 sm:px-6 lg:min-h-[36rem] lg:flex-1 lg:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
+          <div className="space-y-4 lg:flex lg:min-h-0 lg:flex-col">
             <StageHeading stage="estimate" title="Back-of-the-envelope numbers">
               An answer within the accepted range counts; the worked answer follows.
             </StageHeading>
-            <RequirementsCard items={requirements} collapsible={phone} empty="No questions answered: estimate from the brief." />
-            <PinnedBrief title="Full brief, with scale" source={problem.statement} />
+            {/* A long list scrolls, so the brief keeps most of the column. */}
+            <div className="lg:max-h-[40%] lg:shrink-0 lg:overflow-y-auto">
+              <RequirementsCard items={requirements} collapsible={phone} empty="No questions answered: estimate from the brief." />
+            </div>
+            <PinnedBrief title="Full brief, with scale" source={problem.statement} fill />
           </div>
-          <Worksheet rows={rows} onChange={setRows} scoring={scoring} />
+          <Worksheet rows={rows} onChange={setRows} scoring={scoring} fill />
         </div>
       </div>
     );
