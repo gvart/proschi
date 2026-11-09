@@ -1,0 +1,28 @@
+frontend/e2e/nextSteps.e2e.ts
+  s_f355061868c346::t_469fc068419cf6 7,18,20,22-24,27-28,32,36-37,44,46-47,50-54
+  s_f355061868c346::t_66aba9faf925ad 38-41
+frontend/src/practice/PracticeApp.tsx
+  s_f355061868c346::t_0aa45e44f052d6 266,357
+frontend/src/practice/hub/RuleSteps.tsx
+  s_f355061868c346::t_e04ffd5fa925b8 6-7,32,36,47-48,60
+frontend/src/practice/hub/HomeExtras.tsx
+  s_f355061868c346::t_0aa45e44f052d6 1-2,21,23-24,59-60
+frontend/e2e/nextSteps.accounts.e2e.ts
+  s_f355061868c346::t_66aba9faf925ad 5-6,25-26,31-32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "dc9d23b29a24b154bb40dbd8454651f4604e7427",
+  "prompts": {},
+  "sessions": {
+    "s_f355061868c346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd556674-4248-429d-bf5c-2b361bc86c62",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
