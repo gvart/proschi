@@ -68,7 +68,7 @@ export interface DiagramViewProps {
   /** The document has traffic to simulate, so the overlay can be turned on. */
   canOverlay: boolean;
   onToggleOverlay: () => void;
-  /** The live what-if's slider (components/WhatIf), under the overlay toggle while the overlay is on. */
+  /** The live what-if's pill (components/WhatIf), beside the overlay toggle while the overlay is on. */
   whatIfControl?: ReactNode;
   /** Right-click → Simulate down: takes a node down in the live what-if, or brings it back up. */
   onSimulateDown?: (id: string) => void;
@@ -522,6 +522,9 @@ export default function DiagramView({
       onEdit={onEdit}
       onDelete={deleteSelection}
       onClose={() => setClosedSettings(single.id)}
+      // A long press does not open the right-click menu on every touch screen, so phones get Simulate down here.
+      onSimulateDown={phone && onSimulateDown && selectedNode?.kind === 'component' && crumbs.length === 1 ? () => onSimulateDown(selectedNode.id) : undefined}
+      down={!!selectedNode && !!downIds?.includes(selectedNode.id)}
     />
   );
 
@@ -713,6 +716,7 @@ export default function DiagramView({
           <Panel position="top-right" className="flex flex-col items-end gap-2">
             {!playing && (
               <div className="flex items-center gap-1">
+                {overlay && whatIfControl}
                 {canOverlay && (
                   <button
                     type="button"
@@ -739,7 +743,6 @@ export default function DiagramView({
                 )}
               </div>
             )}
-            {overlay && !playing && whatIfControl}
             {overlay && !playing && <LoadLegend critical={overlay.critical} phone={phone} />}
             {diagram.legend && <Legend entries={diagram.legend} />}
           </Panel>

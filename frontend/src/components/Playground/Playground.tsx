@@ -1448,6 +1448,7 @@ export default function Playground() {
                     onSelect={selectDiagnostic}
                     onFocusNode={focusOnCanvas}
                     whatIf={whatIfOptions && <WhatIfImpact label={whatIfLabel(diagram, whatIf)} base={baseSimulation} now={simulation} onReset={() => setWhatIf(NO_WHATIF)} />}
+                    edgeTab={hasPartner && !phone}
                     whatIfs={<SavedWhatIfs diagram={diagram} previewing={whatIf.saved} onPreview={previewWhatIf} useCaseId={selectedUseCaseId} />}
                     review={
                       <ReviewPanel

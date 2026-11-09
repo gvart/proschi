@@ -37,7 +37,7 @@ test('Pro compares each saved what-if with the design and previews it on the can
   if (SHOTS) await shot(page, 'pro-whatifs');
 
   await rows.nth(0).getByRole('button', { name: 'Preview Launch day on the canvas' }).click();
-  await expect(page.getByTestId('whatif-badge')).toHaveText('What-if: Launch day');
+  await expect(page.getByTestId('whatif-open')).toHaveAccessibleName('What-if: Launch day');
   await expect(canvasNodes(page).filter({ hasText: 'Notes API' }).locator('.pc-node')).toHaveAttribute('data-bottleneck', 'true');
   await resultsTab(page).click();
   await expect(page.getByTestId('whatif-impact')).toContainText('What-if: Launch day');

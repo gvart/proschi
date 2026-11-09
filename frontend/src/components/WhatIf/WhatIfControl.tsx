@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BookmarkPlus, PenLine, Power, RotateCcw, SlidersHorizontal, X } from 'lucide-react';
 import type { Diagram } from '../../dsl/types';
 import { formatRps } from '../../sim/format';
@@ -13,7 +13,7 @@ interface WhatIfControlProps {
   onSave: () => void;
   /** Scales the traffic block's rates by the slider's multiplier. */
   onWriteTraffic: () => void;
-  /** A button that opens a bottom sheet, instead of the card on the canvas. */
+  /** The card opens as a bottom sheet instead of under the pill. */
   phone: boolean;
 }
 
@@ -21,35 +21,62 @@ interface WhatIfControlProps {
  * The live what-if on the canvas (docs/design/paid-plans.md P57): a slider
  * that multiplies all traffic from ×0.5 to ×10 and the nodes simulated down,
  * with a reset, "Save as what-if" and "Write to traffic". Shown while the
- * load overlay is on; it never edits the text by itself.
+ * load overlay is on, as a pill in the toolbar that opens the card (a bottom
+ * sheet on a phone), so it covers no node until it is used. It never edits
+ * the text by itself.
  */
 export default function WhatIfControl(props: WhatIfControlProps) {
-  const [sheet, setSheet] = useState(false);
-  const { diagram, whatIf, phone } = props;
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const { diagram, whatIf, onChange, phone } = props;
   const active = isActive(whatIf);
-  if (!phone) {
-    return (
-      <section aria-label="What-if" data-testid="whatif-control" className="pointer-events-auto w-64 rounded-sm border-bw-1 border-ink bg-surface px-3 py-2 text-ink shadow-brutal-sm">
-        <WhatIfBody {...props} />
-      </section>
-    );
-  }
+  // The card closes on a click elsewhere and on Escape, like a menu.
+  useEffect(() => {
+    if (!open || phone) return;
+    const onPointer = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('pointerdown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open, phone]);
+  const label = whatIfLabel(diagram, whatIf);
   return (
-    <>
+    <div ref={ref} className="relative flex items-center">
       <button
         type="button"
-        onClick={() => setSheet(true)}
-        aria-label={`What-if: ${active ? whatIfLabel(diagram, whatIf) : 'traffic'}`}
-        aria-pressed={active}
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        aria-label={active ? `What-if: ${label}` : 'What-if: traffic'}
+        title={active ? `What-if: ${label}` : 'Try more or less traffic, or nodes down, without editing the code'}
         data-testid="whatif-open"
-        className={`${toolButton} border-ink bg-surface shadow-brutal-sm aria-pressed:bg-pop-yellow aria-pressed:text-on-accent`}
+        data-active={active || undefined}
+        className={`${toolButton} border-ink bg-surface shadow-brutal-sm data-[active]:bg-pop-yellow data-[active]:text-on-accent`}
       >
         <SlidersHorizontal size={16} />
-        <span className="whitespace-nowrap tabular-nums">{whatIf.saved !== undefined ? 'What-if' : formatMultiplier(whatIf.multiplier)}</span>
-        {whatIf.failed.length > 0 && <span className="text-xs">· {whatIf.failed.length} down</span>}
+        <span className="max-w-[9rem] truncate whitespace-nowrap tabular-nums">
+          {whatIf.saved !== undefined ? whatIf.saved : !active ? formatMultiplier(whatIf.multiplier) : whatIf.multiplier !== 1 ? `What-if ${formatMultiplier(whatIf.multiplier)}` : 'What-if'}
+        </span>
+        {whatIf.saved === undefined && whatIf.failed.length > 0 && <span className="whitespace-nowrap text-xs">· {whatIf.failed.length} down</span>}
       </button>
-      {sheet && (
-        <div className="fixed inset-0 z-40 flex flex-col justify-end bg-black/40" onMouseDown={() => setSheet(false)}>
+      {active && (
+        <button type="button" onClick={() => onChange(NO_WHATIF)} aria-label="Reset the what-if" title="Back to the design as written" className={`${iconButton} ml-0.5`}>
+          <RotateCcw size={16} />
+        </button>
+      )}
+      {open && !phone && (
+        <section
+          aria-label="What-if"
+          data-testid="whatif-control"
+          className="absolute right-0 top-full z-20 mt-2 w-64 rounded-sm border-bw-1 border-ink bg-surface px-3 py-2 text-ink shadow-brutal-md"
+        >
+          <WhatIfBody {...props} />
+        </section>
+      )}
+      {open && phone && (
+        <div className="fixed inset-0 z-40 flex flex-col justify-end bg-black/40" onMouseDown={() => setOpen(false)}>
           <div
             role="dialog"
             aria-label="What-if"
@@ -58,7 +85,7 @@ export default function WhatIfControl(props: WhatIfControlProps) {
             onMouseDown={(e) => e.stopPropagation()}
           >
             <div className="mb-1 flex justify-end">
-              <button type="button" aria-label="Close" onClick={() => setSheet(false)} className={`${iconButton} !h-8 !w-8`}>
+              <button type="button" aria-label="Close" onClick={() => setOpen(false)} className={`${iconButton} !h-8 !w-8`}>
                 <X size={16} />
               </button>
             </div>
@@ -66,7 +93,7 @@ export default function WhatIfControl(props: WhatIfControlProps) {
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
 
