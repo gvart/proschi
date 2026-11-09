@@ -197,7 +197,7 @@ export function Pricing({ account, plan, estimates }: { account: Account; plan?:
             />
           }
           value={<Value credits={PLAN_CREDITS.max} when="a month" creditsWhen="a month" estimates={estimates} />}
-          items={['Everything in Pro', 'Deep verdict: the strongest model grades you, at its price', 'A printable interview report, on your own too, saved as PDF', 'Deep mode for Design partner too']}
+          items={['Everything in Pro', 'Deep verdict: the strongest model grades you, at its price', 'A printable interview report, on your own too, saved as PDF', 'An interview-date plan: a schedule for every day to your interview', 'Deep mode for Design partner too']}
           footer={planAction('max')}
         />
       </div>

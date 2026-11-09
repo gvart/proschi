@@ -589,3 +589,32 @@ id; don't rewrite old ones.
   way to Pro. Prices stay the same; the pricing page lists it under Pro. The
   command line (`proschi diff`, `proschi versions diff`) prints the same
   deltas ungated: it is local and open source.
+- **P55. An interview-date plan for Max, built in the browser.** On the
+  roadmap, `interview_plan` (Max) takes an interview date (tomorrow to 180
+  days ahead) and minutes a day (45 by default) and lays out every day to
+  it (`learn/interviewPlan.ts`, pure): the days from the day it was set
+  split into **learn** (the rest), **mock** (about 30%, at most 10 days),
+  **review** (about 20%, at most 5) and a **rest** day before the
+  interview. Learn days fill the minutes with the due cards, then the
+  rule-based next steps' problems for the weakest skills (`nextSteps.ts`),
+  then the roadmap's next unsolved ones (a problem counts 20, 35 or 45
+  minutes by difficulty, so an hour is the cards and one or two problems;
+  the tutorial is never planned); a mock day is an interview on your
+  own on an unsolved medium or hard problem of a weak skill, a new one each
+  day; review days are the due cards and two topics' cards, weakest first.
+  Only today is built from real state, later days as if each planned
+  problem were solved; today's list is fixed once made, and its items tick
+  off from what was done (a solve, the cards reviewed, a topic's card
+  reviewed, an interview on your own that counts; the rest day's recap by
+  hand). It re-flows: a new day starts with the last list's problems still
+  unsolved (at most two), and the phases keep their dates. It costs nothing
+  to run, so it is not metered: a build without paid plans follows the
+  server, like `interview_report` (P53); other plans see a short teaser
+  with the way to Max where paid plans are on. The account keeps the date,
+  minutes and start, and today's list as titles with done
+  (`interview_plans`, migration 0034; `GET`/`PUT`/`DELETE
+  /api/me/interview-plan`, the first two Max); the account's plan wins on
+  another browser. With email reminders on, the evening reminder names
+  what is left on today's list, and a Max account with something left and
+  no streak or cards reminder gets a plan reminder of its own (none on the
+  interview day). Prices stay the same.

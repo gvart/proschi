@@ -1,14 +1,10 @@
 import { useMemo, type ReactNode } from 'react';
-import deck from 'virtual:practice-cards';
-import problems from 'virtual:practice-listings';
 import { ArrowRight, Layers, Play, Puzzle, RotateCcw, Zap, type LucideIcon } from 'lucide-react';
-import { relatedProblems, skills as skillMap } from '../../learn/mastery';
 import { nextSteps, type NextStep, type NextStepKind } from '../../learn/nextSteps';
-import { overview } from '../../learn/review';
 import type { Progress } from '../progress';
 import type { Account } from '../useAccount';
 import { useTodayCards, type TodayCards } from './todayCards';
-import { loadMistakes } from './recentMistakes';
+import { learnerInput } from './learnerInput';
 import { useChallengeStatus } from './todayStatus';
 
 /**
@@ -60,20 +56,8 @@ export default function RuleSteps({ account, progress, skills, streak, exclude, 
   const challengeKnown = challenge.status === 'ready' || challenge.status === 'unknown';
   const steps = useMemo(() => {
     if (!today || !challengeKnown) return undefined;
-    const now = Math.floor(Date.now() / 1000);
-    const solved = Object.keys(progress).filter((id) => progress[id].status === 'solved');
-    const attempted = Object.keys(progress).filter((id) => progress[id].status === 'attempted');
-    const stats = overview(deck.cards, today.loaded.states, deck.topics, { now, deck: today.signedOut ? 'sample' : undefined });
-    const mastery = new Map(
-      (skills ?? skillMap({ cards: deck.cards, topics: deck.topics, states: today.loaded.states, now, problems, solved, estimateRatings: [] }).topics).map((t) => [t.topic, t.mastery]),
-    );
     return nextSteps({
-      topics: deck.topics.filter((t) => mastery.has(t.id)).map((t) => ({ id: t.id, title: t.title, mastery: mastery.get(t.id)!, related: relatedProblems(t.id, deck.cards, problems) })),
-      due: { total: stats.due, byTopic: Object.fromEntries(stats.topics.map((t) => [t.topic.id, t.due])) },
-      problems,
-      solved,
-      attempted,
-      mistakes: loadMistakes(),
+      ...learnerInput(progress, today, skills, Math.floor(Date.now() / 1000)),
       challengeDone: challenge.status === 'ready' ? challenge.played : undefined,
       streak,
       exclude,

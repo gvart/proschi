@@ -4,12 +4,21 @@ import { renderEmail, type EmailSpec } from './emailLayout';
 
 /**
  * What each email says (src/reminders.ts sends them; src/emailLayout.ts draws
- * them): the confirmation, the three reminders, and the reminder that pauses
+ * them): the confirmation, the four reminders, and the reminder that pauses
  * them. Only type imports, so scripts/email-preview.mjs can render these
  * outside the Worker with sample data.
  */
 
-export type Kind = 'streak' | 'cards' | 'recap';
+export type Kind = 'streak' | 'cards' | 'recap' | 'plan';
+
+/** The interview-date plan's today (interview_plan, Max; src/interviewPlan.ts). */
+export interface PlanToday {
+  /** Days to the interview, at least 1. */
+  daysLeft: number;
+  phase: 'learn' | 'mock' | 'review' | 'rest';
+  /** What is left on today's list, as the browser last built it; undefined when it was not opened today. */
+  items?: string[];
+}
 
 export interface ReminderData {
   streak?: Pick<Streak, 'current' | 'today'>;
@@ -18,6 +27,8 @@ export interface ReminderData {
   /** Titles of the topics most of the due cards are from, most first. */
   topics?: string[];
   recap?: WeeklyRecap;
+  /** With an interview-date plan: today's part of it, named in the evening reminders. */
+  plan?: PlanToday;
 }
 
 export interface RenderedEmail {
@@ -62,7 +73,23 @@ const WHY: Record<Kind, string> = {
   streak: 'You got this because you turned on streak reminders on your Proschi account page.',
   cards: 'You got this because you turned on cards-due reminders on your Proschi account page.',
   recap: 'You got this because you turned on the weekly recap on your Proschi account page.',
+  plan: 'You got this because you have an interview-date plan and turned on reminders on your Proschi account page.',
 };
+
+const PHASE: Record<PlanToday['phase'], string> = {
+  learn: 'learning and problems for your weakest skills',
+  mock: 'mock interviews',
+  review: 'review and light revision',
+  rest: 'a light recap and rest',
+};
+
+const interviewWhen = (p: PlanToday) => (p.daysLeft === 1 ? 'tomorrow' : `in ${plural(p.daysLeft, 'day')}`);
+
+/** "Your interview is in 9 days. Still on today's plan: A, B." for the evening reminders. */
+function planSentence(p: PlanToday): string {
+  const left = p.items === undefined ? `Today is for ${PHASE[p.phase]}.` : p.items.length ? `Still on today's plan: ${p.items.join(', ')}.` : "Today's plan is done.";
+  return `Your interview is ${interviewWhen(p)}. ${left}`;
+}
 
 function recapSentence(r: WeeklyRecap): string {
   const parts = [
@@ -76,6 +103,9 @@ function recapSentence(r: WeeklyRecap): string {
 }
 
 type Body = Omit<EmailSpec, 'footer'>;
+
+/** Adds the plan's line to a streak or cards reminder. */
+const withPlan = (body: Body, plan: PlanToday | undefined): Body => (plan ? { ...body, paragraphs: [...body.paragraphs, planSentence(plan)] } : body);
 
 function streakEmail(origin: string, data: ReminderData): Body {
   const s = data.streak!;
@@ -145,6 +175,22 @@ function recapEmail(origin: string, data: ReminderData): Body {
   };
 }
 
+function planEmail(origin: string, data: ReminderData): Body {
+  const p = data.plan!;
+  return {
+    subject: p.daysLeft === 1 ? '📅 Your interview is tomorrow: a light recap tonight' : `📅 ${p.daysLeft} days to your interview: today's plan`,
+    accent: 'blue',
+    preheader: planSentence(p),
+    badge: '📅 Interview plan',
+    headline: p.phase === 'rest' ? 'Recap, then rest' : "Today's plan is waiting",
+    hero: { value: String(p.daysLeft), label: p.daysLeft === 1 ? 'day to go' : 'days to go' },
+    paragraphs: [`Your interview is ${interviewWhen(p)}, and today is for ${PHASE[p.phase]}.`],
+    ...(p.items?.length ? { chips: { title: 'Still on today’s plan', items: p.items } } : {}),
+    cta: { label: 'Open today’s plan', url: `${origin}/practice/#/roadmap` },
+    kernel: 'Kernel drew up the runbook for the big day. Step one: today’s list. Step two: a nap on the keyboard. 🐾',
+  };
+}
+
 /** The reminder that pauses them (the PAUSE_AFTER-th unanswered in a row): says why, and how to resume. */
 function pausedEmail(kind: Kind, origin: string, data: ReminderData, body: Body): Body {
   const reason =
@@ -152,7 +198,9 @@ function pausedEmail(kind: Kind, origin: string, data: ReminderData, body: Body)
       ? `Your ${data.streak!.current}-day streak is still at risk tonight: today's goal isn't met yet.`
       : kind === 'cards'
         ? `${plural(data.due!, 'card')} ${data.due === 1 ? 'is' : 'are'} due today.`
-        : recapSentence(data.recap!);
+        : kind === 'plan'
+          ? planSentence(data.plan!)
+          : recapSentence(data.recap!);
   return {
     subject: '💤 We paused your Proschi reminders',
     accent: 'lilac',
@@ -177,7 +225,14 @@ export function reminderEmail(
   opts: { origin: string; unsubscribeUrl: string; paused?: boolean },
 ): RenderedEmail {
   const { origin } = opts;
-  let body = kind === 'streak' ? streakEmail(origin, data) : kind === 'cards' ? cardsEmail(origin, data) : recapEmail(origin, data);
+  let body =
+    kind === 'streak'
+      ? withPlan(streakEmail(origin, data), data.plan)
+      : kind === 'cards'
+        ? withPlan(cardsEmail(origin, data), data.plan)
+        : kind === 'plan'
+          ? planEmail(origin, data)
+          : recapEmail(origin, data);
   if (opts.paused) body = pausedEmail(kind, origin, data, body);
   return render({
     ...body,

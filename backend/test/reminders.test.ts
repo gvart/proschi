@@ -341,6 +341,7 @@ describe('the emails themselves', () => {
     streak: reminderEmail('streak', { streak: { current: 6, today: { day: '2026-10-06', reviews: 2, solves: 0 } }, goal: { reviews: 10, solves: 1 } }, { origin, unsubscribeUrl }),
     cards: reminderEmail('cards', { due: 12, topics: ['Caching', 'Queues'] }, { origin, unsubscribeUrl }),
     recap: reminderEmail('recap', { recap }, { origin, unsubscribeUrl }),
+    plan: reminderEmail('plan', { plan: { daysLeft: 9, phase: 'mock', items: ['Mock interview: Chat'] } }, { origin, unsubscribeUrl }),
     paused: reminderEmail('cards', { due: 7 }, { origin, unsubscribeUrl, paused: true }),
   };
   const all = { confirmation: confirmationEmail(`${origin}/api/email/confirm?token=abc`), ...reminders };
@@ -426,5 +427,59 @@ describe('what the reminders and pages show', () => {
     expect(html).toContain('Kernel');
     expect(html).not.toMatch(/<(script|img|link)\b/i);
     expect(html).not.toMatch(/https?:\/\//);
+  });
+});
+
+describe('the interview-date plan in the reminders', () => {
+  beforeEach(resetDatabase);
+
+  const plan = (userId: string, date: string, start: string, today?: { day: string; items: { title: string; done: boolean }[] }) =>
+    env.DB.prepare('INSERT INTO interview_plans (user_id, interview_date, minutes, start_day, today_day, today_items, updated_at) VALUES (?, ?, 45, ?, ?, ?, 0)')
+      .bind(userId, date, start, today?.day ?? null, today ? JSON.stringify(today.items) : null)
+      .run();
+  const setPlan = (id: string, p: string) => env.DB.prepare('UPDATE users SET plan = ? WHERE id = ?').bind(p, id).run();
+
+  it("sends a Max account its own reminder with what is left on today's plan, and names it in a streak reminder", async () => {
+    const mail = fakeMail();
+    const t = nowS();
+    const zone = zoneAt(19, t);
+    const today = localTime(zone, t)!.day;
+    const [left, streak, done, free] = [await signedInUser(), await signedInUser(), await signedInUser(), await signedInUser()];
+    for (const u of [left, streak, done, free]) {
+      await prefs(u.id, zone);
+      await setPlan(u.id, u === free ? 'free' : 'max');
+      await plan(u.id, addDays(today, 9), today, { day: today, items: [{ title: 'Try Chat', done: u === done }, { title: 'Review 6 due cards', done: u === done }] });
+    }
+    await solveOn(streak.id, addDays(today, -1));
+    // Free has the plan row (from Max days, say) but gets nothing; done has nothing left.
+    expect(await sendReminders(mail.env, t)).toBe(2);
+    const byTo = new Map(mail.sent.map((m) => [m.to, m]));
+    const own = byTo.get(`${left.id}@example.com`)!;
+    expect(own.subject).toBe("📅 9 days to your interview: today's plan");
+    expect(own.text).toContain('Try Chat, Review 6 due cards');
+    expect(own.text).toContain('https://proschi.app/practice/#/roadmap');
+    expect(own.text).toContain('interview-date plan');
+    expect(await row(left.id)).toMatchObject({ last_kind: 'plan' });
+    const withStreak = byTo.get(`${streak.id}@example.com`)!;
+    expect(withStreak.subject).toContain('streak');
+    expect(withStreak.text).toContain("Your interview is in 9 days. Still on today's plan: Try Chat, Review 6 due cards.");
+  });
+
+  it('says what today is for when the list was not opened today, and stops on the interview day', async () => {
+    const mail = fakeMail();
+    const t = nowS();
+    const zone = zoneAt(19, t);
+    const today = localTime(zone, t)!.day;
+    const [opened, onTheDay] = [await signedInUser(), await signedInUser()];
+    for (const u of [opened, onTheDay]) {
+      await prefs(u.id, zone);
+      await setPlan(u.id, 'max');
+    }
+    await plan(opened.id, addDays(today, 1), addDays(today, -3), { day: addDays(today, -1), items: [{ title: 'Old', done: false }] });
+    await plan(onTheDay.id, today, addDays(today, -3));
+    expect(await sendReminders(mail.env, t)).toBe(1);
+    expect(mail.sent[0].subject).toBe('📅 Your interview is tomorrow: a light recap tonight');
+    expect(mail.sent[0].text).toContain('today is for a light recap and rest');
+    expect(mail.sent[0].text).not.toContain('Old');
   });
 });

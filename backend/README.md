@@ -763,7 +763,10 @@ is in [docs/PRIVACY.md](../docs/PRIVACY.md#email-reminders)):
   `GET /api/me/activity`). At most 500 emails a run.
 - **What.** 19:xx local: *streak at risk* (current streak at least 1 and
   today's goal not met), else *cards due* (at least 5 cards with `due_at`
-  passed in `card_state`). Monday 09:xx local: the *weekly recap* of last week
+  passed in `card_state`), else, for a Max account with an interview-date
+  plan (`interview_plans`, `src/interviewPlan.ts`), the *plan* reminder
+  while today's list has something left or was not made today (none on the
+  interview day); the first two name what is left on the plan too. Monday 09:xx local: the *weekly recap* of last week
   (skipped when it is empty).
 - **Caps.** At most one email per user per local day, whatever the kind
   (`last_sent_day`). A reminder sent with no practice (card review, test run,

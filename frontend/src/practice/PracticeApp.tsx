@@ -7,6 +7,7 @@ import PaneLoading from '../components/PaneLoading';
 import ProblemList from './ProblemList';
 import Roadmap, { RoadmapBanner } from './RoadmapView';
 import NextForYou from './history/NextForYou';
+import InterviewPlan from './plan/InterviewPlan';
 import { verdictIdOf } from './history/api';
 import { FeaturesContext, useFeatures } from '../components/featureState';
 import { ROADMAP, roadmapAccess, roadmapFor, roadmapHref, roadmapState, roadmapTarget, routeLock } from './roadmap';
@@ -77,6 +78,8 @@ function PageLoading({ label }: { label: string }) {
 
 /** The roadmap's stages with the problems this build has. */
 const roadmap = roadmapFor(ROADMAP, problems.map((p) => p.id));
+/** The roadmap's problems in order, for the interview-date plan. */
+const roadmapOrder = roadmap.flatMap((s) => s.problems);
 
 /** The roadmap's "Read first" article. */
 const firstGuide = GUIDES[0] && { ...GUIDES[0], minutes: guideMinutes[GUIDES[0].id] };
@@ -377,7 +380,12 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
                 guide={firstGuide}
                 locked={target && lock && lock.kind !== 'open' ? { id: target.id, lock } : undefined}
                 read={lessonsReadIds}
-                nextForYou={<NextForYou problemTitle={(id) => problems.find((p) => p.id === id)?.title} steps={{ account, ...stepsData }} />}
+                nextForYou={
+                  <>
+                    <InterviewPlan account={account} progress={progress} skills={stepsData.skills} roadmap={roadmapOrder} />
+                    <NextForYou problemTitle={(id) => problems.find((p) => p.id === id)?.title} steps={{ account, ...stepsData }} />
+                  </>
+                }
               />
             )}
           </PracticeHub>
