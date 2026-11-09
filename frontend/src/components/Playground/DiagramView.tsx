@@ -1,31 +1,31 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import ReactFlow, { Background, BackgroundVariant, ControlButton, Controls, MiniMap, Panel, applyEdgeChanges, applyNodeChanges, getNodesBounds, getViewportForBounds, useReactFlow, useStoreApi } from 'reactflow';
+import ReactFlow, { Background, BackgroundVariant, Controls, Panel, applyEdgeChanges, applyNodeChanges, getNodesBounds, getViewportForBounds, useReactFlow, useStoreApi } from 'reactflow';
 import type { Edge, EdgeChange, Node, NodeChange } from 'reactflow';
-import { ArrowLeft, ChevronRight, Gauge, LayoutGrid, Map as MapIcon, Pencil, Trash2 } from 'lucide-react';
-import { CANVAS_EDGE } from '../../utils/canvasColors';
+import { ArrowLeft, ChevronRight, Pencil, Trash2 } from 'lucide-react';
 import { notify, prompt } from '../../design/dialogs';
 import { useToastClearance } from '../../design/toastClearance';
 import type { Diagram } from '../../dsl/types';
 import type { SimOverlay } from '../../sim/overlay';
 import type { CoverBand } from '../../onboarding/Tour';
-import Legend from '../Canvas/Legend';
 import ComponentNode from '../Canvas/ComponentNode';
 import GroupNode from '../Canvas/GroupNode';
 import SystemNode from '../Canvas/SystemNode';
 import TextNode from '../Canvas/TextNode';
 import type { SystemNodeData } from '../Canvas/systemActions';
 import { TECH_DRAG_TYPE } from '../Diagram/Palette';
-import { CanvasMenu, ConnectHint, PaletteDock, PaletteToggle, type CanvasMenuActions, type CanvasMenuState } from '../Diagram/CanvasEditing';
+import { CanvasMiniMap, CanvasTopBar, MiniMapButton, OverlayTools } from '../Diagram/CanvasTools';
+import { finderItemsOf, useNarrow, usePinDrag, useTopBarInset } from '../Diagram/canvasShared';
+import FlowsPanel, { type StepPick } from '../Diagram/FlowsPanel';
+import { CanvasMenu, ConnectHint, FlowsToggle, PaletteDock, PaletteToggle, type CanvasMenuActions, type CanvasMenuState } from '../Diagram/CanvasEditing';
 import { canvasKey, historyKey, useConnectHint, useMiniMap, usePaletteOpen, type CanvasKey } from '../Diagram/canvasEditState';
 import Inspector from '../Diagram/Inspector';
 import NodeFinder from '../Diagram/NodeFinder';
 import { FIT_MAX_ZOOM, FIT_VIEW_OPTIONS, useFitOnChange, type FitInset } from '../Diagram/useFitOnChange';
 import FlowParticles from '../Overlay/FlowParticles';
-import LoadLegend from '../Overlay/LoadLegend';
 import { PlaybackMiniMap } from '../UseCases/UseCasePlayback';
 import { PLAYBACK_EDGE_TYPES, type PlaybackView } from '../UseCases/playbackView';
 import { exportImage, fileNameFor, type PngScale } from './exportDiagram';
-import { iconButton, toolButton } from './ui';
+import { iconButton } from './ui';
 import type { Crumb } from './useSystemView';
 
 const nodeTypes = {
@@ -122,6 +122,8 @@ export interface DiagramViewProps {
   onCrumb: (path: string) => void;
   /** Navigates into a system box (double-click). */
   onOpenSystem: (id: string) => void;
+  /** Offers the Flows builder (use cases and scenarios without code, FlowsPanel.tsx) on this document's text. */
+  flows?: { source: string; diagram: Diagram; onChange: (next: string) => void };
 }
 
 /** Renders the parsed diagram. Canvas edits are written back to the text, which stays the source of truth. */
@@ -174,6 +176,7 @@ export default function DiagramView({
   focusInbound,
   onCrumb,
   onOpenSystem,
+  flows,
 }: DiagramViewProps) {
   const playing = playback.active;
   const { getNode, getNodes, getViewport, screenToFlowPosition, fitView, setViewport } = useReactFlow();
@@ -186,8 +189,16 @@ export default function DiagramView({
   const [sheet, setSheet] = useState(false);
   const [paletteFocus, setPaletteFocus] = useState(false);
   const canAdd = !playing && crumbs.length === 1;
-  const paletteOpen = canAdd && (phone ? sheet : docked);
+  // The Flows builder takes the palette's place beside the canvas (a sheet on phones), as on the practice canvas.
+  const [flowsShown, setFlowsShown] = usePaletteOpen('proschi.canvas.flows');
+  const flowsOpen = canAdd && !!flows && flowsShown;
+  /** The step being added in the Flows builder: node clicks pick its ends instead of selecting. */
+  const [pick, setPick] = useState<StepPick | null>(null);
+  const picking = flowsOpen && pick !== null;
+  const paletteOpen = canAdd && (phone ? sheet : docked) && !flowsOpen;
   const togglePalette = () => {
+    if (flowsOpen) setFlowsShown(false);
+    setPick(null);
     setPaletteFocus(!paletteOpen);
     if (phone) setSheet(!sheet);
     else setDocked(!docked);
@@ -210,7 +221,12 @@ export default function DiagramView({
   const selectionCount = selection.nodes.length + selection.edges.length;
   const hasSelection = !playing && selectionCount > 0;
   const singleNode = selection.nodes.length === 1 && selection.edges.length === 0 ? selection.nodes[0] : undefined;
-  const dragStartRef = useRef(new Map<string, { x: number; y: number }>());
+  const pinDrag = usePinDrag({
+    imported: importedNodes,
+    onMove: onMoveNodes,
+    restore: (back) => onNodesChange((current) => current.map((n) => (back.has(n.id) ? { ...n, position: back.get(n.id)! } : n))),
+    onNotice,
+  });
 
   /**
    * A dropped component is selected, so its settings open; one clicked in the palette is not, so
@@ -256,7 +272,7 @@ export default function DiagramView({
   }, [selectionKey, playing]);
 
   // What the code's cursor sits on wears a ring of its own (pc-linked in canvas.css), the selection untouched.
-  const linkedKey = linked.join('\n');
+  const linkedKey = (picking ? [pick.from, pick.to].filter((id): id is string => !!id) : linked).join('\n');
   const linkedIds = useMemo(() => new Set(linkedKey ? linkedKey.split('\n') : []), [linkedKey]);
   const linkedClass = (className: string | undefined) => (className ? `${className} pc-linked` : 'pc-linked');
   const drawnNodes = useMemo(
@@ -337,12 +353,7 @@ export default function DiagramView({
     return true;
   };
   /** The nodes the finder offers: those drawn, without groups and notes when connecting. */
-  const finderItems = () => {
-    const drawn = new Set(nodes.map((n) => n.id));
-    return diagram.nodes
-      .filter((n) => drawn.has(n.id) && (!finder?.connectFrom || (n.id !== finder.connectFrom && n.kind !== 'group' && n.kind !== 'text')))
-      .map((n) => ({ id: n.id, name: n.name, tech: n.techStack || undefined }));
-  };
+  const finderItems = () => finderItemsOf(diagram, nodes, finder?.connectFrom);
   const closeFinder = () => {
     setFinder(null);
     // Back on the canvas, so its keys work again.
@@ -496,7 +507,11 @@ export default function DiagramView({
   // No animated fit: d3-zoom reads the pane size on the transition's first tick, and a pane hidden by
   // then (phone Code/Diagram tabs) is 0×0, which interpolates the viewport to NaN. Nodes already glide via settle.
   // The exception: playback, the splitter and the palette resize a pane that stays shown, and there the diagram glides to its new fit.
-  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { wrapper: wrapperRef, inset, glide: `${playing ? 'playing' : ''}:${glideKey}:${paletteOpen}` });
+  // Below the top bar's buttons, tools and folded legend too, so no node of the fit sits under them.
+  const barInset = useTopBarInset(wrapperRef, `${nodes.length > 0}:${playing}:${crumbs.length}:${canOverlay}:${!!overlay}:${hasPinnedNodes}:${!!diagram.legend}`);
+  const narrow = useNarrow(wrapperRef);
+  const fitInset = useMemo(() => (barInset > (inset?.top ?? 0) ? { top: barInset, bottom: inset?.bottom } : inset), [barInset, inset]);
+  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { wrapper: wrapperRef, inset: fitInset, glide: `${playing ? 'playing' : ''}:${glideKey}:${paletteOpen}:${flowsOpen}` });
 
   const handleEdgesChange = useCallback(
     (changes: EdgeChange[]) => onEdgesChange((current) => applyEdgeChanges(changes, current)),
@@ -509,7 +524,24 @@ export default function DiagramView({
   );
 
   // With the palette docked, the settings take its place beside the canvas instead of covering the diagram.
-  const dockSettings = showSettings && paletteOpen && !phone;
+  const dockSettings = showSettings && (paletteOpen || flowsOpen) && !phone;
+  const toggleFlows = () => {
+    setPick(null);
+    if (!flowsOpen) {
+      selectOnly();
+      if (phone) setSheet(false);
+      else setDocked(false);
+    }
+    setFlowsShown(!flowsOpen);
+  };
+  const pickNode = (id: string) => {
+    if (!pick) return;
+    if (!pick.from || (pick.to && pick.from !== id)) setPick({ from: id });
+    else if (id !== pick.from) setPick({ ...pick, to: id });
+  };
+  const flowsPanel = flowsOpen && flows && (
+    <FlowsPanel source={flows.source} diagram={flows.diagram} onChange={flows.onChange} pick={pick} onPick={setPick} onClose={toggleFlows} />
+  );
   const inspector = showSettings && (
     <Inspector
       key={single.id}
@@ -539,7 +571,15 @@ export default function DiagramView({
         else onRedo();
       }}
     >
-    <PaletteDock open={paletteOpen} phone={phone} focus={paletteFocus} onAdd={(tech) => addComponent(tech)} onClose={closePalette} settings={dockSettings ? inspector : undefined} />
+    <PaletteDock
+      open={paletteOpen || (flowsOpen && !phone)}
+      flows={flowsPanel || undefined}
+      phone={phone}
+      focus={paletteFocus}
+      onAdd={(tech) => addComponent(tech)}
+      onClose={closePalette}
+      settings={dockSettings ? inspector : undefined}
+    />
     <div
       ref={wrapperRef}
       // Focusable, so the keys above work after a drop from the palette.
@@ -579,30 +619,13 @@ export default function DiagramView({
         // Playing a use case shows it over this canvas, read-only.
         nodesDraggable={!playing}
         nodesConnectable={!playing}
-        elementsSelectable={!playing}
+        elementsSelectable={!playing && !picking}
         onNodesChange={handleNodesChange}
         onEdgesChange={handleEdgesChange}
-        onNodeDragStart={(_event, _node, dragged) => {
-          dragStartRef.current = new Map(dragged.map((n) => [n.id, { ...n.position }]));
-        }}
-        onNodeDragStop={(_event, _node, dragged) => {
-          // A click is a drag that never moved; only real moves are written to the text.
-          const moved = dragged.filter((n) => {
-            const start = dragStartRef.current.get(n.id);
-            return !start || Math.abs(start.x - n.position.x) > 1 || Math.abs(start.y - n.position.y) > 1;
-          });
-          // Nodes from imported files snap back: their text is in another file.
-          const locked = moved.filter((n) => importedNodes.has(n.id));
-          if (locked.length > 0) {
-            const back = new Map(locked.map((n) => [n.id, dragStartRef.current.get(n.id)]));
-            onNodesChange((current) => current.map((n) => {
-              const start = back.get(n.id);
-              return start ? { ...n, position: start } : n;
-            }));
-            onNotice(`'${locked[0].id}' is declared in ${importedNodes.get(locked[0].id)}; move it there.`);
-          }
-          if (moved.length > locked.length) onMoveNodes(moved.map((n) => ({ id: n.id, position: n.position })));
-        }}
+        onNodeDragStart={pinDrag.onNodeDragStart}
+        onNodeDragStop={pinDrag.onNodeDragStop}
+        // While a Flows step is picked, a click picks its end instead of selecting.
+        onNodeClick={(_event, node) => picking && pickNode(node.id)}
         onConnect={(connection) => {
           if (!connection.source || !connection.target) return;
           dismissHint();
@@ -647,25 +670,43 @@ export default function DiagramView({
         {overlay && !playing && <FlowParticles flows={overlay.flows} nodes={overlay.nodes} />}
         <Controls showInteractive={false}>
           {/* The minimap is for wide screens; on a phone it would cover the diagram. */}
-          {!playing && !phone && (
-            <ControlButton className="[&>svg]:!fill-none aria-pressed:!bg-pop-yellow aria-pressed:!text-on-accent" onClick={() => setMiniMap(!miniMap)} aria-label="Minimap" aria-pressed={miniMap} title={miniMap ? 'Hide the minimap' : 'Show the minimap'}>
-              <MapIcon />
-            </ControlButton>
-          )}
+          {!playing && !phone && <MiniMapButton shown={miniMap} onToggle={() => setMiniMap(!miniMap)} />}
         </Controls>
         {playing && <PlaybackMiniMap view={playback} />}
-        {!playing && !phone && miniMap && <MiniMap pannable zoomable ariaLabel="Minimap" nodeColor={CANVAS_EDGE} maskColor="rgb(var(--c-paper) / 0.6)" />}
-        {!playing && crumbs.length > 1 && (
-          <Panel position="top-left">
-            <Breadcrumbs crumbs={crumbs} file={focusFile} readOnly={focusReadOnly} inbound={focusInbound} onPick={onCrumb} />
-          </Panel>
-        )}
-        {canAdd && (
-          <Panel position="top-left">
-            {/* While the settings stand in for the palette, the button brings the palette back. */}
-            <PaletteToggle open={paletteOpen && !dockSettings} onToggle={() => (dockSettings ? setClosedSettings(single.id) : togglePalette())} />
-          </Panel>
-        )}
+        {!playing && !phone && miniMap && <CanvasMiniMap />}
+        <CanvasTopBar
+          left={
+            !playing &&
+            (crumbs.length > 1 ? (
+              <Breadcrumbs crumbs={crumbs} file={focusFile} readOnly={focusReadOnly} inbound={focusInbound} onPick={onCrumb} />
+            ) : (
+              canAdd && (
+                <>
+                  {/* While the settings stand in for the palette, the button brings the palette back. */}
+                  <PaletteToggle open={paletteOpen && !dockSettings} onToggle={() => (dockSettings ? setClosedSettings(single.id) : togglePalette())} />
+                  {flows && <FlowsToggle open={flowsOpen && !dockSettings} onToggle={() => (dockSettings ? setClosedSettings(single.id) : toggleFlows())} />}
+                </>
+              )
+            ))
+          }
+          right={
+            nodes.length > 0 &&
+            (!playing || diagram.legend) && (
+              <OverlayTools
+                overlay={overlay}
+                canOverlay={canOverlay}
+                onToggleOverlay={onToggleOverlay}
+                whatIfControl={whatIfControl}
+                pinned={hasPinnedNodes}
+                onResetLayout={onResetLayout}
+                hideTools={playing}
+                phone={phone}
+                narrow={narrow}
+                legend={diagram.legend}
+              />
+            )
+          }
+        />
         {canAdd && !hintSeen && nodes.length >= 2 && edges.length === 0 && (
           <Panel position="top-center" className="max-md:!top-12">
             <ConnectHint onDismiss={dismissHint} />
@@ -709,48 +750,18 @@ export default function DiagramView({
         {/* The minimap takes this corner. */}
         {nodes.length > 0 && !playing && !miniMap && !(hasSelection && !showSettings) && (
           <Panel position="bottom-right" className="hidden md:block text-xs text-muted bg-paper/85 rounded-sm px-2 py-1">
-            Drag to pin · select to edit · drag dot to dot to connect · right-click for more · ? for shortcuts
-          </Panel>
-        )}
-        {nodes.length > 0 && (!playing || diagram.legend) && (
-          <Panel position="top-right" className="flex flex-col items-end gap-2">
-            {!playing && (
-              <div className="flex items-center gap-1">
-                {overlay && whatIfControl}
-                {canOverlay && (
-                  <button
-                    type="button"
-                    onClick={onToggleOverlay}
-                    aria-pressed={overlay !== undefined}
-                    title="Show how busy each node is and the requests flowing, at the traffic block's rates"
-                    className={`${toolButton} aria-pressed:border-ink aria-pressed:bg-pop-yellow aria-pressed:text-on-accent aria-pressed:shadow-brutal-sm`}
-                  >
-                    <Gauge size={16} />
-                    <span className="whitespace-nowrap">
-                      <span className="hidden sm:inline">Overlay: </span>load
-                    </span>
-                  </button>
-                )}
-                {hasPinnedNodes && (
-                  <button
-                    onClick={onResetLayout}
-                    title="Remove every pos x,y and lay the diagram out automatically"
-                    className={toolButton}
-                  >
-                    <LayoutGrid size={16} />
-                    Auto-layout
-                  </button>
-                )}
-              </div>
-            )}
-            {overlay && !playing && <LoadLegend critical={overlay.critical} phone={phone} />}
-            {diagram.legend && <Legend entries={diagram.legend} />}
+            {narrow ? '? for shortcuts' : 'Drag to pin · select to edit · drag dot to dot to connect · right-click for more · ? for shortcuts'}
           </Panel>
         )}
       </ReactFlow>
       {showSettings && !dockSettings && (
         <div data-canvas-cover className="pointer-events-none absolute inset-x-2 bottom-2 z-10 flex max-h-[55%] max-md:[[data-keyboard]_&]:max-h-[calc(100%-1rem)] md:inset-x-auto md:bottom-auto md:right-2 md:top-14 md:max-h-[calc(100%-4.5rem)] md:w-72">
           {inspector}
+        </div>
+      )}
+      {phone && flowsPanel && (
+        <div data-testid="flows-sheet" className="absolute inset-x-0 bottom-0 z-20 flex max-h-[55%] flex-col overflow-hidden rounded-t-brutal border-t-bw-2 border-ink bg-surface shadow-brutal-lg">
+          {flowsPanel}
         </div>
       )}
       {menu && <CanvasMenu menu={menu} onSettings={() => setClosedSettings(null)} onDelete={deleteSelection} onClose={closeMenu} actions={menuActions()} />}

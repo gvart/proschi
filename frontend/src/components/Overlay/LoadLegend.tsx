@@ -23,9 +23,12 @@ const BANDS = [
  * ring. A small card that folds to one line: open on the first view, then
  * folded unless the viewer opens it again (remembered).
  */
-export default function LoadLegend({ critical, phone }: { critical?: CriticalPathOverlay; phone: boolean }) {
+export default function LoadLegend({ critical, folded }: { critical?: CriticalPathOverlay; folded: boolean }) {
   const [stored] = useState(() => loadJson<boolean | null>(OPEN_KEY, null));
-  const [open, setOpen] = useState(stored ?? !phone);
+  /** Open or folded by this viewer (remembered), else nothing yet. */
+  const [chosen, setChosen] = useState<boolean | null>(stored);
+  // Open on the first view where there is room for it (not on a phone or in a narrow pane), then folded until opened.
+  const open = chosen ?? !folded;
   // Seen once: from the next view on it starts folded, until opened again.
   useEffect(() => {
     if (stored === null) saveJson(OPEN_KEY, false);
@@ -38,7 +41,7 @@ export default function LoadLegend({ critical, phone }: { critical?: CriticalPat
       onToggle={(e) => {
         const next = e.currentTarget.open;
         if (next === open) return;
-        setOpen(next);
+        setChosen(next);
         saveJson(OPEN_KEY, next);
       }}
     >
