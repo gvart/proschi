@@ -19,7 +19,7 @@ import { TECH_DRAG_TYPE } from './Palette';
 import { CanvasMenu, ConnectHint, FlowsToggle, PaletteDock, PaletteToggle, type CanvasMenuActions, type CanvasMenuState } from './CanvasEditing';
 import FlowsPanel, { type StepPick } from './FlowsPanel';
 import { canvasKey, historyKey, useConnectHint, useMiniMap, usePaletteOpen, type CanvasKey } from './canvasEditState';
-import { CanvasMiniMap, MiniMapButton, OverlayTools } from './CanvasTools';
+import { CanvasMiniMap, CanvasTopBar, MiniMapButton, OverlayTools } from './CanvasTools';
 import { finderItemsOf, useOverlayOn, usePinDrag, withEdgeLoads, withNodeLoads } from './canvasShared';
 import { useCanvasEdits } from './useCanvasEdits';
 import NodeFinder from './NodeFinder';
@@ -398,7 +398,9 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
           {overlay && <FlowParticles flows={overlay.flows} nodes={overlay.nodes} />}
           <Controls showInteractive={false}>{!phone && <MiniMapButton shown={miniMap} onToggle={() => setMiniMap(!miniMap)} />}</Controls>
           {!phone && miniMap && <CanvasMiniMap />}
-          <Panel position="top-left" className="flex flex-wrap gap-2">
+          <CanvasTopBar
+            left={
+              <>
             {/* While the settings stand in for the palette, the button brings the palette back. */}
             <PaletteToggle
               open={paletteOpen && !dockSettings}
@@ -412,15 +414,18 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
               }}
             />
             {flows && <FlowsToggle open={flowsOpen && !dockSettings} onToggle={() => (dockSettings ? setSettingsClosed(true) : toggleFlows())} />}
-          </Panel>
+              </>
+            }
+            right={
+              nodes.length > 0 &&
+              (canOverlay || pinned || diagram.legend) && (
+                <OverlayTools overlay={overlay} canOverlay={canOverlay} onToggleOverlay={toggleOverlay} pinned={pinned} onResetLayout={edits.resetLayout} phone={phone} legend={diagram.legend} />
+              )
+            }
+          />
           {!hintSeen && nodes.length >= 2 && edges.length === 0 && (
             <Panel position="top-center" className="max-md:!top-12">
               <ConnectHint onDismiss={dismissHint} />
-            </Panel>
-          )}
-          {nodes.length > 0 && (canOverlay || pinned || diagram.legend) && (
-            <Panel position="top-right" className="flex flex-col items-end gap-2">
-              <OverlayTools overlay={overlay} canOverlay={canOverlay} onToggleOverlay={toggleOverlay} pinned={pinned} onResetLayout={edits.resetLayout} phone={phone} legend={diagram.legend} />
             </Panel>
           )}
           {notice && (

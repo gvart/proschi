@@ -13,7 +13,7 @@ import SystemNode from '../Canvas/SystemNode';
 import TextNode from '../Canvas/TextNode';
 import type { SystemNodeData } from '../Canvas/systemActions';
 import { TECH_DRAG_TYPE } from '../Diagram/Palette';
-import { CanvasMiniMap, MiniMapButton, OverlayTools } from '../Diagram/CanvasTools';
+import { CanvasMiniMap, CanvasTopBar, MiniMapButton, OverlayTools } from '../Diagram/CanvasTools';
 import { finderItemsOf, usePinDrag } from '../Diagram/canvasShared';
 import FlowsPanel, { type StepPick } from '../Diagram/FlowsPanel';
 import { CanvasMenu, ConnectHint, FlowsToggle, PaletteDock, PaletteToggle, type CanvasMenuActions, type CanvasMenuState } from '../Diagram/CanvasEditing';
@@ -670,18 +670,38 @@ export default function DiagramView({
         </Controls>
         {playing && <PlaybackMiniMap view={playback} />}
         {!playing && !phone && miniMap && <CanvasMiniMap />}
-        {!playing && crumbs.length > 1 && (
-          <Panel position="top-left">
-            <Breadcrumbs crumbs={crumbs} file={focusFile} readOnly={focusReadOnly} inbound={focusInbound} onPick={onCrumb} />
-          </Panel>
-        )}
-        {canAdd && (
-          <Panel position="top-left" className="flex flex-wrap gap-2">
-            {/* While the settings stand in for the palette, the button brings the palette back. */}
-            <PaletteToggle open={paletteOpen && !dockSettings} onToggle={() => (dockSettings ? setClosedSettings(single.id) : togglePalette())} />
-            {flows && <FlowsToggle open={flowsOpen && !dockSettings} onToggle={() => (dockSettings ? setClosedSettings(single.id) : toggleFlows())} />}
-          </Panel>
-        )}
+        <CanvasTopBar
+          left={
+            !playing &&
+            (crumbs.length > 1 ? (
+              <Breadcrumbs crumbs={crumbs} file={focusFile} readOnly={focusReadOnly} inbound={focusInbound} onPick={onCrumb} />
+            ) : (
+              canAdd && (
+                <>
+                  {/* While the settings stand in for the palette, the button brings the palette back. */}
+                  <PaletteToggle open={paletteOpen && !dockSettings} onToggle={() => (dockSettings ? setClosedSettings(single.id) : togglePalette())} />
+                  {flows && <FlowsToggle open={flowsOpen && !dockSettings} onToggle={() => (dockSettings ? setClosedSettings(single.id) : toggleFlows())} />}
+                </>
+              )
+            ))
+          }
+          right={
+            nodes.length > 0 &&
+            (!playing || diagram.legend) && (
+              <OverlayTools
+                overlay={overlay}
+                canOverlay={canOverlay}
+                onToggleOverlay={onToggleOverlay}
+                whatIfControl={whatIfControl}
+                pinned={hasPinnedNodes}
+                onResetLayout={onResetLayout}
+                hideTools={playing}
+                phone={phone}
+                legend={diagram.legend}
+              />
+            )
+          }
+        />
         {canAdd && !hintSeen && nodes.length >= 2 && edges.length === 0 && (
           <Panel position="top-center" className="max-md:!top-12">
             <ConnectHint onDismiss={dismissHint} />
@@ -726,21 +746,6 @@ export default function DiagramView({
         {nodes.length > 0 && !playing && !miniMap && !(hasSelection && !showSettings) && (
           <Panel position="bottom-right" className="hidden md:block text-xs text-muted bg-paper/85 rounded-sm px-2 py-1">
             Drag to pin · select to edit · drag dot to dot to connect · right-click for more · ? for shortcuts
-          </Panel>
-        )}
-        {nodes.length > 0 && (!playing || diagram.legend) && (
-          <Panel position="top-right" className="flex flex-col items-end gap-2">
-            <OverlayTools
-              overlay={overlay}
-              canOverlay={canOverlay}
-              onToggleOverlay={onToggleOverlay}
-              whatIfControl={whatIfControl}
-              pinned={hasPinnedNodes}
-              onResetLayout={onResetLayout}
-              hideTools={playing}
-              phone={phone}
-              legend={diagram.legend}
-            />
           </Panel>
         )}
       </ReactFlow>

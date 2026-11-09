@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ControlButton, MiniMap } from 'reactflow';
+import { ControlButton, MiniMap, Panel } from 'reactflow';
 import { Gauge, LayoutGrid, Map as MapIcon } from 'lucide-react';
 import { CANVAS_EDGE } from '../../utils/canvasColors';
 import type { SimOverlay } from '../../sim/overlay';
@@ -76,4 +76,19 @@ export function MiniMapButton({ shown, onToggle }: { shown: boolean; onToggle: (
 
 export function CanvasMiniMap() {
   return <MiniMap pannable zoomable ariaLabel="Minimap" nodeColor={CANVAS_EDGE} maskColor="rgb(var(--c-paper) / 0.6)" />;
+}
+
+/**
+ * The canvas's top row: the editing buttons on the left, the overlay tools and legends on the right. One panel
+ * across the canvas, so in a narrow pane (practice's diagram column, the editor with the Flows builder docked)
+ * the right side wraps below the left instead of covering it.
+ */
+export function CanvasTopBar({ left, right }: { left?: ReactNode; right?: ReactNode }) {
+  if (!left && !right) return null;
+  return (
+    <Panel position="top-left" style={{ right: 0 }} className="pointer-events-none flex flex-wrap items-start gap-2">
+      {left && <div className="pointer-events-auto flex flex-wrap gap-2">{left}</div>}
+      {right && <div className="pointer-events-auto ml-auto flex flex-col items-end gap-2">{right}</div>}
+    </Panel>
+  );
 }
