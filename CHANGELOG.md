@@ -9,6 +9,13 @@ deployed from `main` and ships with the same changes. From 0.12.0 on,
 [release-please](https://github.com/googleapis/release-please) writes each
 section from the conventional commit titles of the merged pull requests.
 
+## [0.16.1](https://github.com/gvart/proschi/compare/tooling-v0.16.0...tooling-v0.16.1) (2026-11-09)
+
+
+### Fixed
+
+* **backend:** the full Turnstile site key ([#189](https://github.com/gvart/proschi/issues/189)) ([85685ff](https://github.com/gvart/proschi/commit/85685ff80b46dff6dd8110b6ae550825e2666728))
+
 ## [0.16.0](https://github.com/gvart/proschi/compare/tooling-v0.15.1...tooling-v0.16.0) (2026-11-09)
 
 
