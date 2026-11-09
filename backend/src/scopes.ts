@@ -66,6 +66,8 @@ export const TOKEN_ROUTES: readonly (readonly [method: string, path: string, sco
   ['POST', 'api/problems/*/runs', 'progress'],
   ['POST', 'api/me/import', 'progress'],
   ['POST', 'api/me/lessons', 'progress'],
+  ['GET', 'api/me/mistakes', 'progress'],
+  ['POST', 'api/me/mistakes', 'progress'],
   ['GET', 'api/me/activity', 'progress'],
   ['GET', 'api/me/achievements', 'progress'],
   ['POST', 'api/me/achievements/seen', 'progress'],

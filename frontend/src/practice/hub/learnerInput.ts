@@ -4,15 +4,16 @@ import { relatedProblems, skills as skillMap } from '../../learn/mastery';
 import type { NextStepsInput } from '../../learn/nextSteps';
 import { overview } from '../../learn/review';
 import type { Progress } from '../progress';
-import { loadMistakes } from './recentMistakes';
+import { loadMistakes, type RecentMistake } from './recentMistakes';
 import type { TodayCards } from './todayCards';
 
 /**
  * What the recommender knows of this learner (also the interview-date plan's,
  * plan/PlanPanel.tsx): the skill map, the cards due, the problems solved or
- * started and the mistakes kept in this browser.
+ * started and the mistakes kept in this browser (joined by the account's
+ * when signed in, recentMistakes.ts syncMistakes).
  */
-export function learnerInput(progress: Progress, today: TodayCards, skills: readonly { topic: string; mastery: number }[] | undefined, now: number): Pick<NextStepsInput, 'topics' | 'due' | 'problems' | 'solved' | 'attempted' | 'mistakes'> {
+export function learnerInput(progress: Progress, today: TodayCards, skills: readonly { topic: string; mastery: number }[] | undefined, now: number, mistakes: readonly RecentMistake[] = loadMistakes()): Pick<NextStepsInput, 'topics' | 'due' | 'problems' | 'solved' | 'attempted' | 'mistakes'> {
   const solved = Object.keys(progress).filter((id) => progress[id].status === 'solved');
   const attempted = Object.keys(progress).filter((id) => progress[id].status === 'attempted');
   const stats = overview(deck.cards, today.loaded.states, deck.topics, { now, deck: today.signedOut ? 'sample' : undefined });
@@ -25,6 +26,6 @@ export function learnerInput(progress: Progress, today: TodayCards, skills: read
     problems,
     solved,
     attempted,
-    mistakes: loadMistakes(),
+    mistakes,
   };
 }
