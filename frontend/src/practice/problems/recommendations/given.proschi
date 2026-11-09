@@ -1,0 +1,42 @@
+title "Explore Recommendations" "Ranks a personalized page of posts out of millions in a fraction of a second, spending the expensive model only on the few candidates that survive"
+
+user      "Instagram User"    [Mobile App]     "Opens the Explore tab"
+warehouse "Feature Warehouse" [Data Warehouse] x2 @offline "Logged interactions and the features and embeddings computed from them, hours old"
+pipeline  "Offline Pipeline"  [Worker]         x2 @offline "Recomputes account embeddings and per-post features from the warehouse in batches"
+
+capacity {
+  light  100k rps latency 5ms cost 200 usd/month
+  medium 25k rps latency 10ms cost 300 usd/month
+  heavy  5k rps latency 40ms cost 600 usd/month
+}
+
+traffic {
+  "Load Explore"     1k rps
+  "Refresh features" 50 rps
+}
+
+requirements {
+  p99 "Load Explore" < 300ms
+  availability "Load Explore" >= 99.95%
+  survive any node failure
+  cost <= 20000 usd/month
+}
+
+test "Retrieval first, then ranking from the cheapest model to the heaviest" {
+  "Load Explore" starts at user
+  "Load Explore" calls retrieval before light
+  "Load Explore" calls light before medium
+  "Load Explore" calls medium before heavy
+}
+
+test "Features are precomputed and read from an online store" {
+  "Load Explore" never calls warehouse
+  "Load Explore" calls features before light
+  "Refresh features" starts at pipeline
+  "Refresh features" calls warehouse before features
+  "Refresh features" calls warehouse before embeddings
+}
+
+test "Users reach only the Explore API" {
+  no path from user to retrieval or embeddings or features or light or medium or heavy or warehouse
+}

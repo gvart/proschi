@@ -1,0 +1,45 @@
+# expect-fail: Retrieval first, then ranking from the cheapest model to the heaviest
+# expect-fail: cost ≤ $20,000/month
+# mistake: Scoring every candidate with the most expensive model
+# explain: The deep model costs 20 times more per item than the distilled one, and here it scores all 500 candidates of every request: 500k scores a second, which takes about a hundred and twenty machines and blows the budget several times over.
+# explain: Put cheaper passes in front of it. A distilled model cuts 500 to 150, a lightweight network 150 to 50, and only those 50 reach the deep model.
+# lesson: the-ranking-funnel
+# cards: recommendations-ranking-funnel, recommendations-heavy-model-load, servers-for-peak-load
+# No first or second pass: the final ranker sees every candidate, sized to keep up.
+import "problem.proschi"
+
+explore    "Explore API"         [gRPC]          x3 @serving "Runs retrieval, reads features and calls the ranker"
+retrieval  "Candidate Retrieval" [Service]       x3 @serving "Samples 500 eligible posts from similar accounts"
+embeddings "Account Embeddings"  [Search Engine] x2 @serving "Nearest-neighbour index over account embeddings"
+features   "Feature Store"       [Redis]         x2 @serving "Precomputed features"
+heavy      "Final Ranker"        [gRPC]          x120 @ranking "Deep multi-task network, scoring all 500 candidates"
+
+user      -> explore    : HTTPS
+explore   -> retrieval  : gRPC
+retrieval -> embeddings : KNN query
+explore   -> features   : MGET
+explore   -> heavy      : gRPC
+pipeline  -> warehouse  : SQL
+pipeline  -> features   : bulk load
+pipeline  -> embeddings : bulk load
+
+usecase "Load Explore" "A user opens Explore and the deep model ranks every candidate" {
+  user        -> explore    : GET /explore
+  explore     -> retrieval  : GET candidates for the user
+  retrieval   -> embeddings : KNN accounts near the user's seed accounts
+  embeddings --> retrieval  : similar accounts
+  retrieval  --> explore    : 500 eligible posts from those accounts
+  explore     -> features   : MGET features of 500 posts and of the user
+  features   --> explore    : features
+  explore     -> heavy      : x500 SCORE with the deep network
+  heavy      --> explore    : best 25, ordered by expected value
+  explore    --> user       : 200 page of 25 posts
+}
+
+usecase "Refresh features" "The offline pipeline loads fresh features and embeddings in batches" {
+  pipeline    -> warehouse  : SELECT a batch of recent interactions
+  warehouse  --> pipeline   : rows
+  pipeline    -> features   : UPSERT features of a batch of posts
+  pipeline    -> embeddings : UPSERT a batch of account embeddings
+  embeddings --> pipeline   : ok
+}

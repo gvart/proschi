@@ -228,6 +228,9 @@ read-replicas-stable-pick
 read-write-ratio-first
 read-your-writes
 rebalance-effects
+recommendations-heavy-model-load
+recommendations-precomputed-features
+recommendations-ranking-funnel
 reconnect-storm
 red-and-use
 redis-vs-memcached
