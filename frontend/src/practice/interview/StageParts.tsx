@@ -234,15 +234,16 @@ export function Worksheet({ rows, onChange, readOnly = false, scoring, fill = fa
             );
           })}
         </ol>
-        {!readOnly && (
-          <div className="flex flex-wrap items-center gap-2 border-t border-ink/10 px-4 py-2.5">
-            <button type="button" onClick={add} className="inline-flex items-center gap-1 rounded-sm px-1.5 py-1 text-sm font-semibold text-ink hover:bg-ink/5">
-              <Plus size={15} aria-hidden="true" />
-              Add row
-            </button>
-          </div>
-        )}
       </div>
+      {/* Outside the scrolling rows, so it is never cut off against the calculator. */}
+      {!readOnly && (
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-ink/10 px-4 py-2.5">
+          <button type="button" onClick={add} className="inline-flex items-center gap-1 rounded-sm px-1.5 py-1 text-sm font-semibold text-ink hover:bg-ink/5">
+            <Plus size={15} aria-hidden="true" />
+            Add row
+          </button>
+        </div>
+      )}
       {!readOnly && <CalculatorLine />}
     </section>
   );

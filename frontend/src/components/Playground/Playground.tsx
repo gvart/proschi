@@ -170,7 +170,6 @@ const FILES_KEY = 'proschi.playground.files';
 const FILES_PINNED_FROM = 1440;
 /** "Overlay: load", on unless this viewer turned it off (false). */
 const OVERLAY_KEY = 'proschi.playground.overlay';
-const VIEW_LABEL: Record<View, string> = { diagram: 'Diagram', results: 'Results', hld: 'HLD' };
 
 function loadInitialState(): DocumentState {
   // A share link wins over `?example=`: once an example is edited, the address bar holds the edits.
@@ -1300,7 +1299,8 @@ export default function Playground() {
             onChange={setMobilePane}
             items={[
               { id: 'code', label: 'Code', icon: <Code2 size={16} />, badge: problemCount > 0 ? problemCount : undefined },
-              { id: 'diagram', label: playing ? 'Playback' : VIEW_LABEL[view], icon: <Network size={16} /> },
+              // Not named after the pane's own Diagram, Results and HLD tabs, which sit right under it.
+              { id: 'diagram', label: playing ? 'Playback' : 'Preview', icon: <Network size={16} /> },
             ]}
           />
           </div>

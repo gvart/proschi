@@ -207,7 +207,7 @@ test.describe('canvas editing on a phone', () => {
 
   test('there is no minimap to cover the diagram', async ({ page }) => {
     await page.goto('app/');
-    await page.getByRole('tab', { name: 'Diagram' }).first().click();
+    await page.getByRole('tab', { name: 'Preview' }).click();
     await waitForCanvas(page, 2);
     await expect(page.getByRole('button', { name: 'Minimap' })).toHaveCount(0);
     await expect(page.locator('.react-flow__minimap')).toHaveCount(0);

@@ -188,6 +188,17 @@ test.describe('Your next steps', () => {
     await expect(page).toHaveURL(/#\/review\/estimation$/);
   });
 
+  test('Pro without picks yet: when they come, and no way to Pro', async ({ page }) => {
+    await mockSignedIn(page, PRO);
+    await mockHistory(page, { full: true, total: 0, sessions: [] });
+    await page.route('**/api/roadmap/next', (route) => route.fulfill({ json: { next: null } }));
+    await page.goto('practice/#/roadmap');
+    const card = page.getByRole('region', { name: 'Your next steps' });
+    await expect(card.getByText('After your next mock interview, your next 3 steps are picked for you here')).toBeVisible();
+    await expect(card.getByText(/Pro picks/)).toHaveCount(0);
+    await expect(card.getByTestId('next-for-you-upgrade')).toHaveCount(0);
+  });
+
   test('free: the way to Pro instead of picks, without asking for them', async ({ page }) => {
     await mockSignedIn(page, FREE);
     const asked = await mockHistory(page, { full: false, total: 0, sessions: [] });
