@@ -51,6 +51,14 @@ describe('JSON Schema', () => {
     expect(validate(result), JSON.stringify(validate.errors, null, 2)).toBe(true);
   });
 
+  it('describes error rates and retries, in capacity and what-ifs', () => {
+    const source = 'api [REST API]\npay [Go]\napi -> pay\ncapacity {\n  pay errors 2% retries 3\n}\nwhatif "Bad deploy" {\n  pay errors 20%\n}';
+    const result = JSON.parse(JSON.stringify(parse(source)));
+    expect(result.diagram.capacity[0]).toMatchObject({ errorPercent: 2, retries: 3 });
+    expect(result.diagram.whatifs[0].changes[0]).toMatchObject({ kind: 'errors', percent: 20 });
+    expect(validate(result), JSON.stringify(validate.errors, null, 2)).toBe(true);
+  });
+
   it('describes scoped budgets', () => {
     const source =
       'group g {\n  api [REST API] @Pay .hot\n}\nlegend {\n  hot "Hot" red\n}\nrequirements {\n  cost @Pay <= 500 usd/month\n  cost .hot <= 5 usd/month\n  cost group g <= 1k usd/month\n}';

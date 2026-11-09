@@ -253,7 +253,9 @@ export type WhatIfChange =
   /** `db x4`: the node runs this many replicas. */
   | { kind: 'replicas'; node: string; replicas: number; loc: SourceLoc }
   /** `cache hit 40%`: the cache's hit rate (0..100), e.g. a cold cache. */
-  | { kind: 'hit'; node: string; percent: number; loc: SourceLoc };
+  | { kind: 'hit'; node: string; percent: number; loc: SourceLoc }
+  /** `pay errors 20%`: the node's error rate (0..100), e.g. a bad deploy. */
+  | { kind: 'errors'; node: string; percent: number; loc: SourceLoc };
 
 /** `whatif "Black Friday" { traffic "Checkout" x3; fail cache; db x4 }`: a variant of the design to simulate. */
 export interface WhatIf {
@@ -406,6 +408,14 @@ export interface CapacityOverride {
    * unless the use case splits hits and misses with a traffic `mix`.
    */
   hitPercent?: number;
+  /**
+   * `errors 2%`, 0..100: the share of calls to the node that fail with an
+   * error (a partial failure, not an outage). With `retries`, each failure is
+   * tried again, which adds load and latency and makes the call succeed more often.
+   */
+  errorPercent?: number;
+  /** `retries 3`: how many times a caller tries a failed call again, 0..5. */
+  retries?: number;
   loc: SourceLoc;
 }
 

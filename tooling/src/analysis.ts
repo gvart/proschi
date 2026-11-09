@@ -349,7 +349,7 @@ function capacityCompletions(analysis: Analysis, head: string, range: Range): Co
   if (/^\s*$/.test(head)) return analysis.diagram.nodes.map((n) => ({ label: n.id, kind: 'node', detail: describeNode(n), range }));
   const value = head.match(/\b(size|consistency)\s+$/)?.[1];
   if (value) return (value === 'size' ? ['S', 'M', 'L'] : ['strong', 'eventual']).map((label) => ({ label, kind: 'keyword', range }));
-  if (/\b(latency|availability|cost|timeout|reads|writes|shards|bandwidth|egress|hit)\s+$/.test(head)) return [];
+  if (/\b(latency|availability|cost|timeout|reads|writes|shards|bandwidth|egress|hit|errors|retries)\s+$/.test(head)) return [];
   const used = new Set(head.trim().split(/\s+/));
   return CAPACITY_PARTS.filter((p) => !used.has(p.label)).map((p) => ({ label: p.label, kind: 'keyword', detail: p.detail, snippet: p.snippet, range }));
 }

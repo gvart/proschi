@@ -309,7 +309,9 @@ function whatIfReport(diagram: Diagram, w: WhatIfResult, file: string): string {
         ? `fail ${c.node}`
         : c.kind === 'hit'
           ? `${c.node} hit ${c.percent}%`
-          : `${c.node} x${c.replicas}`,
+          : c.kind === 'errors'
+            ? `${c.node} errors ${c.percent}%`
+            : `${c.node} x${c.replicas}`,
   );
   const lines = [`What-if "${w.name}": ${changes.join(', ') || 'no changes'}`, '', capacityReport(diagram, w.analysis, file), ''];
   const reqs = w.results.filter((r) => !r.id.startsWith('test:'));
@@ -453,8 +455,16 @@ export function nodeSimulation(diagram: Diagram, nodeId: string): string | undef
     `Load ${formatRps(n.loadRps)} of ${formatRps(n.capacityRps)}${peak} (${formatPercent(n.utilization)} utilised${state})`,
     ...split,
     ...(hit !== undefined ? [`Hit rate ${hit}%: what it misses, ${Number((100 - hit).toFixed(6))}% of reads, goes on to the backing store`] : []),
+    ...(n.retry ? [retryLine(n.retry)] : []),
     `Latency ${formatMs(n.latencyMs)} per call · availability ${formatAvailability(n.availability)} · ${formatUsd(n.costUsd)}${n.replicas > 1 ? ` for ${n.replicas} replicas` : ''}${egress}`,
   ].join('  \n');
+}
+
+/** `Errors 2% · 3 retries: 1.02 calls a request (in the load), 99.99999% succeed in the end`, and the storm risk. */
+function retryLine(r: NonNullable<NodeAnalysis['retry']>): string {
+  const retries = r.retries === 0 ? 'no retries' : `${r.retries} ${r.retries === 1 ? 'retry' : 'retries'}`;
+  const calls = r.retries === 0 ? '' : `${Number(r.attempts.toPrecision(3))} calls a request (in the load), `;
+  return `Errors ${formatPercent(r.errorRate)} · ${retries}: ${calls}${formatAvailability(r.success)} succeed in the end${r.stormRisk ? ' — **retry storm risk**' : ''}`;
 }
 
 /**

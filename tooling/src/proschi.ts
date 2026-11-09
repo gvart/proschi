@@ -115,4 +115,6 @@ export const CAPACITY_PARTS: { label: string; detail: string; snippet: string }[
   { label: 'egress', detail: 'Price per GB sent out', snippet: 'egress ${1:0.05} usd/GB' },
   { label: 'timeout', detail: 'What a failed call to the node costs', snippet: 'timeout ${1:300ms}' },
   { label: 'hit', detail: 'Cache hit rate: the miss path takes the rest', snippet: 'hit ${1:90%}' },
+  { label: 'errors', detail: 'Share of calls that fail (a partial failure)', snippet: 'errors ${1:2%}' },
+  { label: 'retries', detail: 'Times a caller tries a failed call again (0 to 5)', snippet: 'retries ${1:3}' },
 ];

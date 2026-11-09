@@ -98,6 +98,7 @@ export function AnalysisBody({ diagram, analysis, onSelect, results, onFocusNode
                           {node && !node.implicit ? node.techStack : n.kind} · {n.kind}
                           {n.durable ? ' · durable' : ''}
                           {n.consistency ? ` · ${n.consistency}` : ''}
+                          {n.retry ? ` · ${formatPercent(n.retry.errorRate)} errors${n.retry.retries ? `, ${n.retry.retries} ${n.retry.retries === 1 ? 'retry' : 'retries'}` : ''}` : ''}
                         </span>
                       </button>
                       {onFocusNode && <ShowOnCanvas id={n.id} onFocusNode={onFocusNode} />}

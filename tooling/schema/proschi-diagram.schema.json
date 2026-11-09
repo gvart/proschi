@@ -1349,6 +1349,18 @@
           "maximum": 100,
           "description": "`hit`: the share of reads a cache answers itself; the miss path takes the rest."
         },
+        "errorPercent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "`errors`: the share of calls to the node that fail with an error."
+        },
+        "retries": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5,
+          "description": "`retries`: how many times a caller tries a failed call again."
+        },
         "loc": {
           "$ref": "#/$defs/loc"
         }
@@ -1628,6 +1640,33 @@
               "minimum": 0,
               "maximum": 100,
               "description": "`cache hit 40%`: the hit rate under this what-if."
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "node",
+            "percent",
+            "loc"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "errors"
+            },
+            "node": {
+              "type": "string"
+            },
+            "percent": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100,
+              "description": "`pay errors 20%`: the error rate under this what-if."
             },
             "loc": {
               "$ref": "#/$defs/loc"

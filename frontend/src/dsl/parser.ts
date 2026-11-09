@@ -160,7 +160,9 @@ const UNIT_EXAMPLES: Record<Quantity['unit'], string> = {
   MBps: 'a bandwidth, e.g. 500 MB/s or 1 GB/s',
   'usd/GB': 'a price per gigabyte, e.g. 0.05 usd/GB',
 };
-const CAPACITY_PARTS = 'a rate, reads, writes, shards, size, latency, availability, cost, durable or volatile, consistency, bandwidth, egress, timeout or hit';
+const CAPACITY_PARTS = 'a rate, reads, writes, shards, size, latency, availability, cost, durable or volatile, consistency, bandwidth, egress, timeout, hit, errors or retries';
+/** The most retries a capacity line takes: more only multiplies the variants, not the insight. */
+const MAX_RETRIES = 5;
 const ASSERTION_HELP =
   'Expected an assertion: "Use case" calls <node>, "Use case" writes <node> before responding, <node> calls <node>, no path from <node> to <node>, <node> has replicas >= 2, …';
 const ASSERTION_VERBS = 'calls, every scenario calls, never calls, never waits for, writes, responds, starts at, has scenario or handles failure of';
@@ -1747,6 +1749,28 @@ class Parser {
         override.hitPercent = value;
         hitLoc = this.locOf(t, line);
         i += 2;
+      } else if (isWord(t, 'errors')) {
+        // A partial failure: the share of calls that fail.
+        part = 'errors';
+        const value = this.quantityOf(tokens[i + 1], '%', t, line);
+        if (value === undefined) return;
+        if (value > 100) {
+          this.error('An error rate cannot be more than 100%', this.locOf(tokens[i + 1], line));
+          return;
+        }
+        override.errorPercent = value;
+        i += 2;
+      } else if (isWord(t, 'retries')) {
+        part = 'retries';
+        const n = tokens[i + 1];
+        const retries = isConstUse(n) ? this.countOf(n!, line) : n?.kind === 'number' ? Number(n.value) : NaN;
+        if (retries === undefined) return;
+        if (!Number.isInteger(retries) || retries < 0 || retries > MAX_RETRIES) {
+          this.error(`Expected a whole number of retries from 0 to ${MAX_RETRIES}, e.g. retries 3`, this.locOf(n ?? t, line));
+          return;
+        }
+        override.retries = retries;
+        i += 2;
       } else if (isWord(t, 'durable') || isWord(t, 'volatile')) {
         part = 'durable or volatile';
         override.durable = t.value === 'durable';
@@ -2033,7 +2057,7 @@ class Parser {
   private parseWhatIfLine(whatif: WhatIf, tokens: Token[], line: number) {
     const [first, second, third] = tokens;
     const loc = this.lineLoc(tokens, line);
-    const help = 'Expected a what-if change: traffic "Use case" x3, traffic "Use case" 50k rps, fail <node>, <node> x4 or <node> hit 40%';
+    const help = 'Expected a what-if change: traffic "Use case" x3, traffic "Use case" 50k rps, fail <node>, <node> x4, <node> hit 40% or <node> errors 20%';
     const checkNode = (id: Token) => {
       const idLoc = this.locOf(id, line);
       this.deferred.push(() => {
@@ -2078,6 +2102,22 @@ class Parser {
       }
       checkNode(first);
       whatif.changes.push({ kind: 'hit', node: first.value, percent, loc });
+      return;
+    }
+    // `<node> errors 20%`: a partial failure, such as a bad deploy.
+    if (first.kind === 'ident' && isWord(second, 'errors') && tokens.length > 2) {
+      const percent = this.quantityOf(third, '%', second, line);
+      if (percent === undefined || !this.expectEnd(tokens, 3, line)) return;
+      if (percent > 100) {
+        this.error('An error rate cannot be more than 100%', this.locOf(third, line));
+        return;
+      }
+      if (whatif.changes.some((c) => c.kind === 'errors' && c.node === first.value)) {
+        this.error(`The error rate of '${first.value}' is set twice in this what-if`, this.locOf(first, line));
+        return;
+      }
+      checkNode(first);
+      whatif.changes.push({ kind: 'errors', node: first.value, percent, loc });
       return;
     }
     if (isWord(first, 'fail')) {

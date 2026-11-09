@@ -53,6 +53,11 @@
           hits and misses with a <code>mix</code>. Latency follows too: see the percentiles below.
         </p>
         <p>
+          A node with an error rate and retries (<code>capacity { pay errors 2% retries 3 }</code>) gets each call
+          again when it fails: <code>1 + e + … + e^retries</code> calls a request. Only the node itself takes them;
+          what it calls is not repeated.
+        </p>
+        <p>
           With <code>peak</code> (<code>"Read" 20k rps peak x3</code>), <var>R</var> is the peak, 60k: load,
           utilisation, latency and requirements are all taken at the busiest hour. Only egress is costed at the
           average, 20k (rule 1.8).
@@ -63,7 +68,8 @@
           in every scenario s of every use case
 
 N(step) = the x&lt;N&gt; fan-out, 1 without one,
-          times 1 − hit on a cache's miss path</code></pre>
+          times 1 − hit on a cache's miss path,
+          times Σ e^k for k = 0..retries to a node with errors</code></pre>
     </li>
 
     <li class="rule" id="reads-writes">
@@ -193,6 +199,11 @@ hop(n) = base + C × base ÷ (c (1 − ρ))
           miss path, and a miss variant, weighted by the hit rate. The percentiles are those of an explicit
           <code>alt "Hit"</code> and <code>alt "Miss"</code> with a <code>mix</code> of the same shares.
         </p>
+        <p>
+          Retries split the path the same way: a hop to a node with error rate <var>e</var> takes
+          <var>k</var> + 1 attempts with probability <code>e^k (1 − e)</code>, every attempt with
+          <code>e^retries</code>, and each attempt costs the whole hop again, with no backoff.
+        </p>
       </div>
       <div class="figure">
         <pre class="formula" tabindex="0"><code>item   = fixed + Exp(tail)
@@ -269,6 +280,10 @@ egress cost     = egress GB × price of the node that sends it</code></pre>
           A fallback is a success scenario that calls the node with <code>-x</code> before the entry response and
           finishes without a successful synchronous call to it. Load does not affect availability.
         </p>
+        <p>
+          An error rate (<code>errors 2%</code>) fails that share of calls to a node that is up. With
+          <code>retries</code>, a call fails only when every attempt does.
+        </p>
       </div>
       <pre class="formula" tabindex="0"><code>A(n)       = 1 − (1 − a(n))^replicas
 A_write(n) = 1 − (1 − a(n)) × 0.1      single-primary, 2+ replicas
@@ -276,7 +291,8 @@ A_write(n) = 1 − (1 − a(n)) × 0.1      single-primary, 2+ replicas
 
 A(U) = Π over nodes n on the main path of
          A(n), or A_write(n) when the main path writes to it
-         1 − (1 − A(n)) × (1 − A(fallback))     with a fallback</code></pre>
+         1 − (1 − A(n)) × (1 − A(fallback))     with a fallback
+       × (1 − e(n)^(retries + 1))               with an error rate</code></pre>
     </li>
 
     <li class="rule" id="cost">
@@ -679,7 +695,9 @@ traffic {
         <td>
           A saturated node passes its full load on, and its latency stops at
           <span data-pin="const|maxSlowdown">20×</span>. Real queues grow, time out and push retries upstream. Kept
-          on purpose: throttling would hide the next bottleneck behind the first.
+          on purpose: throttling would hide the next bottleneck behind the first. Retries you declare add their
+          load at the error rate you give, and a hot node with retries gets a retry storm warning, but the error
+          rate does not rise by itself as the node saturates.
         </td>
       </tr>
       <tr>
@@ -718,12 +736,20 @@ traffic {
         <td>A hop costs the target's latency only: no round trip, no cross-zone or cross-region distance, no packet loss.</td>
       </tr>
       <tr>
-        <th scope="row">Retries and thundering herds <span class="tag tag--opt">optimistic</span></th>
-        <td>A failed call costs one timeout. Retry storms and a cold cache stampeding the database do not exist.</td>
+        <th scope="row">Retry storms and thundering herds <span class="tag tag--opt">optimistic</span></th>
+        <td>
+          Retries (<code>errors 2% retries 3</code>) add load, latency and availability at a fixed error rate,
+          with no backoff, jitter or retry budget. The error rate does not grow with saturation, so a retry storm
+          is only a warning on a hot node, and a cold cache stampeding the database does not exist.
+        </td>
       </tr>
       <tr>
         <th scope="row">Partial and grey failures <span class="tag tag--opt">optimistic</span></th>
-        <td>Nodes are up or down. A slow replica or a dependency failing 2% of calls is only representable as a scenario you write.</td>
+        <td>
+          A share of failing calls is an <code>errors</code> rate, independent per call. A slow replica, errors
+          that come in bursts or affect some keys only, and timeouts that differ from error responses are not
+          modelled.
+        </td>
       </tr>
       <tr>
         <th scope="row">Cache hit rate <span class="tag">either way</span></th>

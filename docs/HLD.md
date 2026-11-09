@@ -237,6 +237,7 @@ capacity {
 | `egress` | Price per GB sent to clients and third parties |
 | `timeout` | What a failed call to the node costs; 1 s by default |
 | `hit` | A cache's hit rate, which derives the load behind it: see below |
+| `errors`, `retries` | The share of calls that fail, and how often callers try again: see below |
 
 An unknown node id is a warning, and so are `shards` or `consistency` on a
 non-store. A repeated part, a rate with `reads` or `writes`, and a second
@@ -308,6 +309,70 @@ whatif "Cold cache" {
 - A rate over 100% is an error, and `hit` on a node that is not a cache or
   CDN is a warning. `cache hit 40%` in a [what-if](TESTS.md#what-ifs) tries
   another rate.
+
+### Retries and partial failure
+
+A dependency that is up can still fail some calls. `errors 2%` says how
+many, and `retries 3` how many times a caller tries a failed call again.
+Retries buy availability with load and latency.
+
+```proschi
+title "Checkout"
+
+user "Shopper"  [Browser]
+api  "Checkout" [REST API] x4
+pay  "Payments" [Go]       x2
+
+user -> api : HTTPS
+api  -> pay : gRPC
+
+usecase "Pay" {
+  user -> api : POST /checkout
+  api  -> pay : charge
+  api --> user : 201
+}
+
+traffic {
+  "Pay" 2k rps
+}
+
+capacity {
+  pay errors 2% retries 3
+}
+
+requirements {
+  availability "Pay" >= 99.9%
+  p99 "Pay" < 120ms
+}
+
+whatif "Bad deploy" {
+  pay errors 10%
+}
+```
+
+> **Try it:** without `retries 3`, 2% of payments fail and the
+> availability requirement breaks. With them, even the "Bad deploy" what-if
+> holds 99.9%, but Payments takes 1.11 calls a request and the p99 grows.
+
+- **Load.** A call fails with probability e, and each failure is tried
+  again, up to `retries` times. A request makes `1 + e + e² + … + e^retries`
+  calls on average, and the node gets that much more load. What it calls in
+  turn is not repeated: the failure happened in it.
+- **Availability.** A call fails only when every attempt does, with
+  probability `e^(retries + 1)`. A use case's availability is multiplied by
+  `1 − e^(retries + 1)` for each node on its main path with an error rate.
+  Without `retries`, `errors 2%` alone takes 2% off.
+- **Latency.** Each attempt takes the whole hop again, with no backoff. The
+  path is split into a variant per attempt count, k + 1 attempts with
+  probability `e^k (1 − e)` and all of them with `e^retries`, and mixed by
+  those shares, as cache hits and misses are.
+- **Retry storms.** A node with errors and retries that runs hot (70% or
+  more) gets a warning. When it saturates, more of its calls fail, and each
+  failure comes back up to `retries` more times, so its load can grow to
+  `retries + 1` times: the retries keep it saturated.
+- An error rate over 100% and retries outside 0 to 5 are errors.
+  `pay errors 10%` in a [what-if](TESTS.md#what-ifs) tries another rate,
+  with the retries the capacity line gives.
 
 ## Entities
 

@@ -289,6 +289,8 @@ export function diagramSchema() {
           egressUsdPerGb: { ...num, minimum: 0, description: '`egress`: price of data the node sends to clients and third parties (internet egress), in USD per GB.' },
           timeoutMs: { ...num, minimum: 0, description: '`timeout`: what a failed call (`-x`) to the node costs, in milliseconds.' },
           hitPercent: { ...percent, description: '`hit`: the share of reads a cache answers itself; the miss path takes the rest.' },
+          errorPercent: { ...percent, description: '`errors`: the share of calls to the node that fail with an error.' },
+          retries: { type: 'integer', minimum: 0, maximum: 5, description: '`retries`: how many times a caller tries a failed call again.' },
           loc,
         },
         ['node', 'loc'],
@@ -329,6 +331,7 @@ export function diagramSchema() {
           object({ kind: { const: 'fail' }, node: str, loc }, ['kind', 'node', 'loc']),
           object({ kind: { const: 'replicas' }, node: str, replicas: { type: 'integer', minimum: 1 }, loc }, ['kind', 'node', 'replicas', 'loc']),
           object({ kind: { const: 'hit' }, node: str, percent: { ...percent, description: '`cache hit 40%`: the hit rate under this what-if.' }, loc }, ['kind', 'node', 'percent', 'loc']),
+          object({ kind: { const: 'errors' }, node: str, percent: { ...percent, description: '`pay errors 20%`: the error rate under this what-if.' }, loc }, ['kind', 'node', 'percent', 'loc']),
         ],
       },
       assertion: {

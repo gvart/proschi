@@ -248,6 +248,7 @@ whatif "Database outage" {
 | `fail n` | Takes node `n` down. Its availability is 0. The traffic of each scenario that needs `n` moves to the use case's [fallback scenarios](SCENARIOS.md#error-paths-and-conditions) for it, the ones that call it with `-x` and still complete. Without a fallback, that share of requests fails. |
 | `n x4` | Runs `n` with that many replicas, for capacity, availability and cost. |
 | `cache hit 40%` | Sets the [hit rate](HLD.md#cache-hit-rate) of a cache, such as a cold one after a restart. |
+| `pay errors 20%` | Sets the [error rate](HLD.md#retries-and-partial-failure) of a node, such as after a bad deploy. Its `retries` stay. |
 
 [Constants](HLD.md#constants) work here too: `traffic "U" $rate`,
 `traffic "U" x$factor` and `n x$fleet`.

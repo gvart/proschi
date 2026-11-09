@@ -89,3 +89,47 @@ describe('cost per team, group or tag', () => {
     expect(r.out).toContain('Total cost: $650/month\nCost by team: @Data $400, @Payments $250\nCost by group: checkout $250\nCost by tag: .edge $250\n');
   });
 });
+
+const payments = `api [REST API] x4
+pay [Go] x2
+api -> pay
+usecase "Pay" {
+  api -> pay : charge
+}
+traffic {
+  "Pay" 1k rps
+}
+capacity {
+  pay 600 rps errors 5% retries 3
+}
+whatif "Bad deploy" {
+  pay errors 50%
+}
+`;
+
+describe('retries and partial failure', () => {
+  const a = analyze(payments);
+
+  it('hovers the node with its errors, retries and storm risk', () => {
+    expect(a.diagnostics).toEqual([]);
+    expect(hover(a, { line: 1, character: 1 })?.markdown).toContain('Errors 5% · 3 retries: 1.05 calls a request (in the load), 99.99937% succeed in the end — **retry storm risk**');
+  });
+
+  it('completes errors and retries among the capacity parts, and nothing after them', () => {
+    const typing = analyze(payments.replace('  pay 600 rps errors 5% retries 3', '  pay '));
+    const labels = complete(typing, { line: 10, character: 6 }).map((i) => i.label);
+    expect(labels).toContain('errors');
+    expect(labels).toContain('retries');
+    const value = analyze(payments.replace('  pay 600 rps errors 5% retries 3', '  pay errors '));
+    expect(complete(value, { line: 10, character: 13 })).toEqual([]);
+  });
+
+  it('prints the storm warning and the what-if error rate in proschi analyze', () => {
+    const file = join(dir, 'payments.proschi');
+    writeFileSync(file, payments);
+    const base = capture((out, err) => runAnalyze([file], out, err));
+    expect(base.out).toContain("'pay' risks a retry storm: it runs at 88% with 5% errors and 3 retries.");
+    const w = capture((out, err) => runAnalyze(['--whatif', 'Bad deploy', file], out, err));
+    expect(w.out).toContain('What-if "Bad deploy": pay errors 50%');
+  });
+});
