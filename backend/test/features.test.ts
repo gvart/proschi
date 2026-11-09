@@ -61,11 +61,15 @@ describe('features', () => {
       interview_report: { ok: false, reason: 'needs_pro' },
       design_diff: { ok: false, reason: 'needs_pro' },
       interview_plan: { ok: false, reason: 'needs_pro' },
+      data_export: { ok: false, reason: 'needs_pro' },
+      certificate: { ok: false, reason: 'needs_pro' },
+      pro_exports: { ok: false, reason: 'needs_pro' },
     });
     await setPlan(id, 'pro');
-    // Pro has every feature but Max's three.
+    // Pro has every feature but Max's.
+    const maxOnly = new Set(['deep_mode', 'interview_report', 'interview_plan', 'certificate']);
     expect(await plan()).toEqual(
-      Object.fromEntries(FEATURE_IDS.map((f) => [f, f === 'deep_mode' || f === 'interview_report' || f === 'interview_plan' ? { ok: false, reason: 'needs_pro' } : { ok: true }])),
+      Object.fromEntries(FEATURE_IDS.map((f) => [f, maxOnly.has(f) ? { ok: false, reason: 'needs_pro' } : { ok: true }])),
     );
     await setPlan(id, 'max');
     expect(await plan()).toEqual(Object.fromEntries(FEATURE_IDS.map((f) => [f, { ok: true }])));

@@ -25,6 +25,8 @@ import { exportRoadmapRecs } from './roadmap';
 import { exportInterviews } from './interviews';
 import { exportSoloInterviews } from './soloInterviews';
 import { exportInterviewPlan } from './interviewPlan';
+import { getProgressExport } from './progressExport';
+import { exportCertificate } from './certificates';
 import { exportPartnerSessions } from './partner';
 import { deleteFeedbackFiles, exportFeedback } from './feedback';
 import { parseScopes } from './scopes';
@@ -186,8 +188,11 @@ export async function deleteMe(request: Request, ctx: Ctx): Promise<Response> {
  * It is complete on purpose, data a paid feature gates included (every
  * verdict off interview_history, for one): it is the user's right of access
  * to their own data, not a feature (docs/design/paid-plans.md P23).
+ * `?view=progress` answers the learning data alone, shaped for a
+ * spreadsheet (Pro, src/progressExport.ts).
  */
 export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
+  if (new URL(request.url).searchParams.get('view') === 'progress') return getProgressExport(request, ctx);
   const { DB } = ctx.env;
   const user = await requireUser(request, ctx);
   await rateLimit(ctx.env.PROFILE_LIMITER, user.id, 'Too many account changes; wait a minute');
@@ -288,6 +293,8 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
     // Mock interviews finished on your own, as the browser sent them.
     soloInterviews: await exportSoloInterviews(DB, user.id),
     interviewPlan: await exportInterviewPlan(DB, user.id),
+    // The mastery certificate (Max) and whether embeds show Proschi's branding (Pro).
+    ...(await exportCertificate(ctx.env, user.id)),
     // Short links: the diagram of each; the preview image is at imageUrl.
     shares: await exportShares(DB, user.id, new URL(request.url).origin),
     // The editor's diagrams kept by cloud sync, with tombstones of deleted ones (kept 30 days).

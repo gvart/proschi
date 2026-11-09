@@ -27,6 +27,9 @@ export const FEATURES: Readonly<Record<FeatureId, { plans: readonly Plan[]; desc
   interview_report: { plans: ['max'], description: 'The printable interview report is part of Max' },
   design_diff: { plans: ['pro', 'max'], description: 'What a change does to cost, p99 and the checks, version against version, is part of Pro' },
   interview_plan: { plans: ['max'], description: 'The interview-date plan is part of Max' },
+  data_export: { plans: ['pro', 'max'], description: 'Your progress as JSON and CSV is part of Pro' },
+  certificate: { plans: ['max'], description: 'The mastery certificate is part of Max' },
+  pro_exports: { plans: ['pro', 'max'], description: 'Embeds without branding, 3x PNG and the HLD as PDF are part of Pro' },
 };
 
 /**

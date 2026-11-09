@@ -618,3 +618,29 @@ id; don't rewrite old ones.
   what is left on today's list, and a Max account with something left and
   no streak or cards reminder gets a plan reminder of its own (none on the
   interview day). Prices stay the same.
+- **P56. Export and proof cost nothing to run.** Three features join the
+  plans, none of them metered (`components/featureState.ts`), so a build
+  without paid plans follows the server for them as for P53: on for an
+  account on Pro or Max set by hand, left out with no way to a plan
+  otherwise; where paid plans are on, each shows as the way to its plan.
+  **`data_export` (Pro)**: the learning data alone, for a spreadsheet
+  (`GET /api/me/export?view=progress`, 402 otherwise; level, mastery per
+  topic, streaks, every problem with its solve and best designs, the
+  verdicts' pass and scores, interviews on your own and card states), as
+  JSON or, made in the browser, a zip of CSV files. The full export stays
+  on every plan (P23). **`pro_exports` (Pro)**: PNG at 3× from the Export
+  menu (2× stays every plan's), the HLD as PDF (its HTML page, with print
+  styles, printed by the browser) and embeds without Proschi's branding:
+  one switch per account (`users.embed_branding`, migration 0035), which
+  the short link's answer reports (`branding: false`) only while the
+  owner's plan has the feature, so a lapsed plan shows the branding again.
+  Hash embeds have no owner and keep it. **`certificate` (Max)**: a public
+  page at `/c/<id>` (a random id, not the user id; `certificates`,
+  migration 0035) with an Open Graph card (`backend/src/og.ts`), drawn
+  from the account's progress at each visit, so it can't say what the
+  account hasn't done. It shows the level and XP, readiness, mastery per
+  topic, problems solved, the longest streak, the issue date (first turned
+  on) and the id; its owner gets LinkedIn's add-certification link and
+  everyone a print layout (one landscape A4). Off, or a plan without it,
+  answers 404 at once; on again, the same id. Turning it on needs Max,
+  turning it off any plan.
