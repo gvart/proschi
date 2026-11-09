@@ -263,7 +263,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   // A new page checks for new badges (signed in, at most every few seconds).
   useEffect(() => refreshAchievements(), [route, refreshAchievements]);
   const unseen = achievements.state.status === 'ready' ? achievements.state.answer.achievements.filter((a) => a.unseen) : [];
-  // The free "Your next steps" (hub/RuleSteps.tsx), on the home and the roadmap: the skill map once known, else computed from the cards and solves.
+  // The free "Your next steps" (hub/RuleSteps.tsx), on the roadmap: the skill map once known, else computed from the cards and solves.
   const stepsData = {
     progress,
     skills: achievements.state.status === 'ready' ? achievements.state.answer.skills.topics : undefined,
@@ -354,7 +354,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
                 progress={progress}
                 stats={stats}
                 meta={<GoalSummary goal={goal} />}
-                top={<HomeExtras goal={goal} ask={asksGoal(goal, account.state.status, announcement)} account={account} next={next} nextTitle={next && problems.find((p) => p.id === next.id)?.title} streak={streak} steps={stepsData} />}
+                top={<HomeExtras goal={goal} ask={asksGoal(goal, account.state.status, announcement)} account={account} next={next} nextTitle={next && problems.find((p) => p.id === next.id)?.title} streak={streak} />}
               >
                 {leaderboard && <LeaderboardPanel leaderboard={leaderboard} />}
               </ProblemList>
