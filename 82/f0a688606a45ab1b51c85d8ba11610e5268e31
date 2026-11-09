@@ -1,0 +1,18 @@
+docs/impl/feature-expansion.md
+  h_bdd87144da84ba 104-105,107
+plugin/hooks/layout.cjs
+  h_bdd87144da84ba 1-3,5-7,9,18,20-22,24-27,38
+plugin/hooks/register.js
+  h_bdd87144da84ba 4272-4283,4288,4291,4296-4297,4300
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "82f0a688606a45ab1b51c85d8ba11610e5268e31",
+  "prompts": {},
+  "humans": {
+    "h_bdd87144da84ba": {
+      "author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
