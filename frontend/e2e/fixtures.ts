@@ -184,6 +184,24 @@ export const test = base.extend<{ errors: string[]; onboarding: 'seen' | 'fresh'
 
 export { expect };
 
+const MAC_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+
+/**
+ * How a test adds a canvas node to the selection on this host. React Flow
+ * picks its key from the page's user agent (Cmd on a Mac, Ctrl elsewhere),
+ * and a Mac host turns Ctrl+click into a right-click, so on a Mac the browser
+ * passes for one and Cmd+clicks; elsewhere it keeps its own user agent and
+ * Ctrl+clicks. Pass `userAgent` to `test.use` in specs that use multiSelectClick.
+ */
+export function multiSelectSetup(platform: string = process.platform): { userAgent?: string; modifier: 'Meta' | 'Control' } {
+  return platform === 'darwin' ? { userAgent: MAC_USER_AGENT, modifier: 'Meta' } : { modifier: 'Control' };
+}
+
+/** Adds `node` to the canvas selection, as Cmd/Ctrl+click does (see multiSelectSetup). */
+export async function multiSelectClick(node: Locator): Promise<void> {
+  await node.click({ modifiers: [multiSelectSetup().modifier] });
+}
+
 /** The React Flow nodes on the visible canvas. */
 export function canvasNodes(page: Page): Locator {
   return page.locator('.react-flow__node:visible');

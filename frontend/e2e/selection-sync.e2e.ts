@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { appendCode, canvasNodes, codeEditor, editorText, expect, test, waitForCanvas } from './fixtures';
+import { appendCode, canvasNodes, codeEditor, editorText, expect, multiSelectClick, multiSelectSetup, test, waitForCanvas } from './fixtures';
 
 /**
  * Two-way selection sync: a canvas selection shows its declaration in the code
@@ -59,8 +59,9 @@ const focusInCode = (page: Page) => page.evaluate(() => !!document.activeElement
 const clickLine = (page: Page, text: string) => page.locator('.cm-line:visible').filter({ hasText: text }).first().click();
 
 test.describe('selection sync', () => {
-  // React Flow adds to the selection with Cmd+click on a Mac; the test browser passes for one on every host.
-  test.use({ userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36' });
+  // Cmd+click on a Mac host, Ctrl+click elsewhere (see multiSelectSetup).
+  const { userAgent } = multiSelectSetup();
+  test.use(userAgent ? { userAgent } : {});
 
   test('selecting on the canvas selects the declaration in the code, and the canvas keeps the focus', async ({ page }) => {
     await newDiagram(page, PINNED, 3);
@@ -88,7 +89,7 @@ test.describe('selection sync', () => {
     await node(page, 'API').click();
     const apiLine = await lineOf(page, 'api "API"');
     await expect.poll(async () => (await editorSelection(page)).line).toBe(apiLine);
-    await node(page, 'Cache').click({ modifiers: ['Meta'] });
+    await multiSelectClick(node(page, 'Cache'));
     await expect(page.locator('.cm-linkedLine')).toHaveCount(2);
     await expect(page.locator('.cm-linkedLine')).toHaveText(['api "API" [REST API] pos 0,0', 'cache "Cache" [Redis] pos 300,0']);
     expect((await editorSelection(page)).line).toBe(apiLine);

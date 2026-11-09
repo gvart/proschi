@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { answerDialog, appendCode, canvasNodes, codeEditor, editorText, expect, test, waitForCanvas } from './fixtures';
+import { answerDialog, appendCode, canvasNodes, codeEditor, editorText, expect, multiSelectClick, multiSelectSetup, test, waitForCanvas } from './fixtures';
 
 /**
  * The canvas's editing basics: copy, paste and duplicate, moving a
@@ -42,14 +42,20 @@ async function focusCanvas(page: Page) {
 const PINNED = 'title "Shop"\napi "API" [REST API] pos 0,0\ndb "Orders DB" [PostgreSQL] pos 0,220\ncache "Cache" [Redis] pos 300,0\napi -> db : reads\napi -> cache\n';
 
 test.describe('canvas editing, copy and paste', () => {
-  // React Flow adds to the selection with Cmd+click on a Mac and Ctrl+click elsewhere, by the user agent; a Mac
-  // turns Ctrl+click into a right-click, so the test browser passes for a Mac and Cmd+clicks on every host.
-  test.use({ userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36' });
+  // Cmd+click on a Mac host, Ctrl+click elsewhere (see multiSelectSetup).
+  const { userAgent } = multiSelectSetup();
+  test.use(userAgent ? { userAgent } : {});
+
+  test('the multi-select key follows the host: Cmd on a Mac, Ctrl elsewhere', () => {
+    expect(multiSelectSetup('linux')).toEqual({ modifier: 'Control' });
+    expect(multiSelectSetup('win32')).toEqual({ modifier: 'Control' });
+    expect(multiSelectSetup('darwin')).toMatchObject({ modifier: 'Meta', userAgent: expect.stringContaining('Macintosh') });
+  });
 
   test('Ctrl+C and Ctrl+V copy the selected components with the connections between them, renamed and moved', async ({ page }) => {
     await newDiagram(page, PINNED, 3);
     await node(page, 'API').click();
-    await node(page, 'Orders DB').click({ modifiers: ['Meta'] });
+    await multiSelectClick(node(page, 'Orders DB'));
     await expect(page.getByRole('toolbar', { name: 'Selection' })).toContainText('2 selected');
     await page.keyboard.press('ControlOrMeta+c');
     await expect(page.getByRole('status').filter({ hasText: 'Copied 2 components' })).toBeVisible();
