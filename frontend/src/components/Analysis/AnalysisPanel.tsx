@@ -37,7 +37,8 @@ export default function AnalysisPanel(props: AnalysisPanelProps) {
 export function AnalysisBody({ diagram, analysis, onSelect, results, onFocusNode }: AnalysisPanelProps) {
   const byId = new Map(diagram.nodes.map((n) => [n.id, n]));
   const nodes = analysis.nodes.filter((n) => n.kind !== 'client' && n.kind !== 'other');
-  const saturated = nodes.filter((n) => n.saturated).length;
+  // A queue whose consumers fall behind counts too: its backlog grows, as its red badge on the canvas shows.
+  const saturated = nodes.filter((n) => n.saturated || (n.queue !== undefined && n.queue.utilization >= 1)).length;
   const busiest = busiestOf(analysis);
 
   return (

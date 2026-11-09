@@ -10,6 +10,7 @@ import {
   formatAvailability,
   formatCount,
   formatDuration,
+  formatQueue,
   formatMs,
   formatPercent,
   formatRps,
@@ -478,9 +479,7 @@ export function nodeSimulation(diagram: Diagram, nodeId: string): string | undef
 }
 
 /** `lag 0.8 ms`, or `backlog +3.6M/h` when the consumers fall behind. */
-export function queueText(q: NonNullable<NodeAnalysis['queue']>): string {
-  return q.backlogPerHour > 0 ? `backlog +${formatCount(q.backlogPerHour)}/h` : `lag ${formatDuration(q.lagMs)}`;
-}
+export const queueText = (q: NonNullable<NodeAnalysis['queue']>): string => formatQueue(q);
 
 /** `Errors 2% · 3 retries: 1.02 calls a request (in the load), 99.99999% succeed in the end`, and the storm risk. */
 function retryLine(r: NonNullable<NodeAnalysis['retry']>): string {

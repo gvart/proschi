@@ -6,6 +6,7 @@ import { analyze, queueOf } from './analyze';
 import { formatCount, formatDuration } from './format';
 import { analysisOverlay } from './overlay';
 import { runTests } from './tests';
+import { loadHintsOf } from '../components/Playground/loadHints';
 
 const orders = (extra = '', rps = '4k rps') => `
 user   [Browser]
@@ -103,6 +104,16 @@ describe('queue backlog and lag', () => {
     expect(node.utilization).toBeCloseTo(4 / 3, 12);
     const keeps = run(orders('capacity {\n  events drain 5k rps\n}'));
     expect(analysisOverlay(keeps.diagram, keeps.analysis).nodes.events).toMatchObject({ lagMs: expect.closeTo(0.8, 12), utilization: 0.8, saturated: false });
+  });
+
+  it('adds the backlog or lag to the web editor\'s load hint on the queue', () => {
+    const hint = (source: string) => {
+      const { diagram, analysis } = run(source);
+      return loadHintsOf(diagram, analysis).find((h) => h.line === diagram.nodes.find((n) => n.id === 'events')!.loc.line)!;
+    };
+    expect(hint(orders('capacity {\n  events drain 3k rps\n}'))).toMatchObject({ label: expect.stringMatching(/ · backlog \+3\.6M\/h$/), saturated: true });
+    expect(hint(orders('capacity {\n  events drain 5k rps\n}'))).toMatchObject({ label: expect.stringMatching(/ · lag 0\.8 ms$/), saturated: false });
+    expect(hint(orders()).label).not.toContain('lag');
   });
 
   it('formats long waits and message counts', () => {

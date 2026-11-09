@@ -2,9 +2,9 @@ import { Decoration, EditorView, WidgetType, type DecorationSet } from '@codemir
 import type { Extension } from '@codemirror/state';
 import type { Diagram } from '../../dsl/types';
 import type { Analysis } from '../../sim/analyze';
-import { formatPercent, formatUsd } from '../../sim/format';
+import { formatPercent, formatQueue, formatUsd } from '../../sim/format';
 
-/** `62% · $400/mo` after a node declaration, as the language server's inlay hints show it. */
+/** `62% · $400/mo` after a node declaration (`· lag 0.8 ms` on a queue with a drain rate), as the language server's inlay hints show it. */
 interface LoadHint {
   /** 1-based, as the parser counts lines. */
   line: number;
@@ -18,8 +18,10 @@ export function loadHintsOf(diagram: Diagram, analysis: Analysis): LoadHint[] {
   return diagram.nodes.flatMap((node) => {
     const n = sim.get(node.id);
     if (node.implicit || node.loc.file !== undefined || !n || n.kind === 'client' || n.kind === 'other') return [];
-    const label = `${formatPercent(n.utilization)}${n.saturated ? ' saturated' : ''} · ${formatUsd(n.costUsd).replace('/month', '/mo')}`;
-    return [{ line: node.loc.line, label, saturated: n.saturated }];
+    const label = `${formatPercent(n.utilization)}${n.saturated ? ' saturated' : ''} · ${formatUsd(n.costUsd).replace('/month', '/mo')}${n.queue ? ` · ${formatQueue(n.queue)}` : ''}`;
+    // A queue whose consumers fall behind is as red as a saturated node.
+    const saturated = n.saturated || (n.queue !== undefined && n.queue.utilization >= 1);
+    return [{ line: node.loc.line, label, saturated }];
   });
 }
 

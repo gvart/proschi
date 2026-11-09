@@ -52,4 +52,4 @@ export { analyzeSystems, contractOf, inboundLoad, type EntryContract, type Syste
 export { kindOf, KINDS } from '../dsl/kinds';
 export { profileOf, KIND_PROFILES, TECH_PROFILES, type Profile } from './profiles';
 export { SIM_VERSION } from './version';
-export { formatAvailability, formatCount, formatDuration, formatMs, formatPercent, formatRps, formatTraffic, formatUsd } from './format';
+export { formatAvailability, formatCount, formatDuration, formatQueue, formatMs, formatPercent, formatRps, formatTraffic, formatUsd } from './format';

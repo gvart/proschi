@@ -37,6 +37,7 @@ export {
   formatAvailability,
   formatCount,
   formatDuration,
+  formatQueue,
   formatMs,
   formatPercent,
   formatRps,

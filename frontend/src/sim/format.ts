@@ -54,6 +54,11 @@ export function formatCount(n: number): string {
   return trim(n, 0);
 }
 
+/** A queue with a drain rate, as inlay hints show it: `lag 0.8 ms`, or `backlog +3.6M/h` when its consumers fall behind. */
+export function formatQueue(q: { backlogPerHour: number; lagMs: number }): string {
+  return q.backlogPerHour > 0 ? `backlog +${formatCount(q.backlogPerHour)}/h` : `lag ${formatDuration(q.lagMs)}`;
+}
+
 /** `$1,250/month` */
 export function formatUsd(usd: number): string {
   return `$${Math.round(usd).toLocaleString('en-US')}/month`;
