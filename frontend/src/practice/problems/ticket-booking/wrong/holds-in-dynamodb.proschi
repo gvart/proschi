@@ -106,7 +106,7 @@ usecase "Confirm booking" "Pay for a held seat and book it" {
 
   alt "Paid" when "the hold is valid and the card is approved" {
     db       --> api      : valid
-    api       -> payments : POST /charges Idempotency-Key h-77
+    api       -> payments : POST /charges header Idempotency-Key
     payments --> api      : 201 approved
     api       -> db       : UpdateItem seat SET booked WHERE holdId = h-77; INSERT booking
     db       --> api      : 1 row
@@ -114,7 +114,7 @@ usecase "Confirm booking" "Pay for a held seat and book it" {
     lb       --> fan      : 201 {"bookingId": "b-301"}
   } alt "Payment declined" when "the provider declines the card" {
     db       --> api      : valid
-    api       -> payments : POST /charges Idempotency-Key h-77
+    api       -> payments : POST /charges header Idempotency-Key
     payments --> api      : 402 declined
     api      --> lb       : 402 {"error": "card_declined"}
     lb       --> fan      : 402 {"error": "card_declined"}

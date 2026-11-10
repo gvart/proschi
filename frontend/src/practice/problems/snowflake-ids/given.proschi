@@ -21,7 +21,6 @@ test "An id is made without a round trip to shared storage" {
 }
 
 test "Each generator claims its worker id once, at startup" {
-  "Start generator" calls zk
-  "Start generator" writes zk before responding
+  "Start generator" uses create on zk before responding
   "Get ID" never calls zk
 }
