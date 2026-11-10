@@ -1,3 +1,7 @@
+---
+updated: 2026-11-10
+---
+
 # Built-in types: messaging
 
 Message queues and brokers, with the operations that send and receive. Generated from [messaging.proschi](../../frontend/src/dsl/stdlib/messaging.proschi); [component types](../TYPES.md) explains how to read and extend them.

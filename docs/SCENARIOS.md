@@ -1,3 +1,7 @@
+---
+updated: 2026-11-10
+---
+
 # Scenarios
 
 One endpoint rarely has one outcome. Scenario blocks, written with `alt`,

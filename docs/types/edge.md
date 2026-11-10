@@ -1,3 +1,7 @@
+---
+updated: 2026-11-10
+---
+
 # Built-in types: edge
 
 DNS, CDNs, load balancers, API gateways and firewalls: what a request passes before it reaches a service. Generated from [edge.proschi](../../frontend/src/dsl/stdlib/edge.proschi); [component types](../TYPES.md) explains how to read and extend them.

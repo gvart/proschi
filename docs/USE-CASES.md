@@ -1,3 +1,7 @@
+---
+updated: 2026-11-10
+---
+
 # Use cases
 
 A use case is a request flow, written step by step over the architecture.

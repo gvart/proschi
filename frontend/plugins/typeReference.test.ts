@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { builtinTypes, parse } from '../src/dsl'
 import { readSite, renderFromDisk, splitAnnotations } from './docsSite'
-import { listedTypeNames, TYPE_PAGES, typeReferencePages } from './typeReference'
+import { listedTypeNames, stdlibUpdated, TYPE_PAGES, typeReferencePages } from './typeReference'
 
 /**
  * The built-in type reference (docs/types/, /docs/types-*): generated from
@@ -24,6 +24,11 @@ describe('the type reference', () => {
     expect(names.sort()).toEqual([...builtinTypes().values()].map((t) => t.name).sort())
     const markdown = [...pages.values()].join('\n')
     for (const t of builtinTypes().values()) expect(markdown, t.name).toMatch(new RegExp(`^#{2,3} ${t.name.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}$`, 'm'))
+  })
+
+  it('dates every page with the stdlib’s `# updated:` line in core.proschi', () => {
+    expect(stdlibUpdated()).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    for (const source of pages.keys()) expect(pages.get(source)!.startsWith(`---\nupdated: ${stdlibUpdated()}\n---\n`), source).toBe(true)
   })
 
   it('has a page in docs/site.json for every area', () => {

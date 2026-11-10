@@ -1,3 +1,7 @@
+---
+updated: 2026-11-10
+---
+
 # Writing practice problems
 
 The practice page (`frontend/practice/`, code in `frontend/src/practice/`)

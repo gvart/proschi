@@ -1,3 +1,7 @@
+---
+updated: 2026-11-10
+---
+
 # Grammar
 
 The whole Proschi syntax in EBNF, for tool builders and quick lookups. Each

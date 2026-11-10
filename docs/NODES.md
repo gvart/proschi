@@ -1,3 +1,7 @@
+---
+updated: 2026-11-10
+---
+
 # Nodes, groups and connections
 
 Nodes are the boxes of a Proschi diagram, groups frame several of them, and

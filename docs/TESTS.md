@@ -1,3 +1,7 @@
+---
+updated: 2026-11-10
+---
+
 # Requirements and tests
 
 Requirements check the numbers a design must meet: latency, availability,

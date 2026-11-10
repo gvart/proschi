@@ -52,5 +52,9 @@ Live at <https://proschi.app/>.
   VSX and JetBrains (`.github/workflows/release-please.yml`).
 - Before merging release-please's release PR, run `/blog-post`
   (`.claude/skills/blog-post/`) and include the post (`blog/`) in that PR.
+- Bump `updated: YYYY-MM-DD` in a docs page's front matter whenever its
+  content changes meaningfully (not for typo or formatting fixes). The type
+  reference (`docs/types/`) takes its date from the `# updated:` line in
+  `frontend/src/dsl/stdlib/core.proschi`: bump that when the types change.
 - Hard-coded problem counts (landing page, e2e tests, practice and tooling
   tests, `docs/PRACTICE.md`) must change whenever a problem is added.

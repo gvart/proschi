@@ -1,6 +1,6 @@
 import { builtinTypes, parseTypeDecls, typeKey, type ResolvedType, type TypeDecl, type TypeOp } from '../src/dsl'
 import { STDLIB_SOURCES } from '../src/dsl/stdlib/sources.gen'
-import { slugger } from './docsSite'
+import { isDate, slugger } from './docsSite'
 
 /**
  * The built-in type reference (/docs/types-*), generated from the stdlib
@@ -12,6 +12,9 @@ import { slugger } from './docsSite'
  * One page per area. A type is listed where its stdlib file puts it, in the
  * order the file declares it, with what it declares itself; what it inherits
  * is counted per ancestor, with a link there.
+ *
+ * Every page's "Last updated" date is the stdlib's: the `# updated:` line in
+ * core.proschi, bumped whenever the types change.
  */
 
 export interface TypePage {
@@ -120,6 +123,14 @@ function entries(): Entry[] {
   return out
 }
 
+/** The stdlib's `# updated: YYYY-MM-DD` line in core.proschi: the type reference's "Last updated" date. */
+export function stdlibUpdated(): string {
+  const core = STDLIB_SOURCES.find((s) => s.path === 'stdlib/core.proschi')?.source ?? ''
+  const date = /^# updated: (\S+)$/m.exec(core)?.[1]
+  if (!date || !isDate(date)) throw new Error('src/dsl/stdlib/core.proschi: needs a `# updated: YYYY-MM-DD` line')
+  return date
+}
+
 let cached: Map<string, string> | undefined
 
 /** The Markdown of every reference page, by source path (docs/-relative). The stdlib is read once per process, so this is too. */
@@ -160,6 +171,10 @@ function renderPages(): Map<string, string> {
     }
 
     const lines: string[] = [
+      '---',
+      `updated: ${stdlibUpdated()}`,
+      '---',
+      '',
       `# ${page.h1}`,
       '',
       `${page.lede} Generated from ${page.files.map((f) => `[${f.name}.proschi](../../frontend/src/dsl/stdlib/${f.name}.proschi)`).join(', ')}; [component types](../TYPES.md) explains how to read and extend them.`,

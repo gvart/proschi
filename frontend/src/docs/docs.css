@@ -443,6 +443,11 @@
   letter-spacing: -0.03em;
   text-wrap: balance;
 }
+.doc-updated {
+  margin: 14px 0 0;
+  font: 700 var(--fs-14) / 1.4 var(--font-sans);
+  color: rgb(var(--c-ink) / 0.75);
+}
 .doc-hero .lede,
 .lede p {
   margin: 20px 0 0;
@@ -1183,6 +1188,9 @@
 }
 .doc-html .lede {
   margin-top: 4px;
+}
+.doc-html .doc-updated {
+  margin: 14px 0 12px;
 }
 .doc-html .lede p + p {
   margin-top: 12px;

@@ -1,3 +1,7 @@
+---
+updated: 2026-11-09
+---
+
 # Editor support
 
 Proschi runs in your own editor and in CI as well as in the browser. The

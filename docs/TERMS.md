@@ -1,3 +1,7 @@
+---
+updated: 2026-11-09
+---
+
 # Terms
 
 Short version: Proschi's code is open source under the MIT license, and the

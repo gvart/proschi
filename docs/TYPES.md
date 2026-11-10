@@ -1,3 +1,7 @@
+---
+updated: 2026-11-10
+---
+
 # Component types
 
 The tech stack in a node's brackets names a type. The type says what kind

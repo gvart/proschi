@@ -1,3 +1,7 @@
+---
+updated: 2026-11-01
+---
+
 # Architecture diagrams you can play and test
 
 Proschi is a text language for architecture diagrams: you write the services

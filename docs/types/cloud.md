@@ -1,3 +1,7 @@
+---
+updated: 2026-11-10
+---
+
 # Built-in types: cloud providers
 
 The managed products of AWS, Google Cloud, Azure and Cloudflare. Each extends the generic type of its kind, or the product it is compatible with. Generated from [cloud-aws.proschi](../../frontend/src/dsl/stdlib/cloud-aws.proschi), [cloud-gcp.proschi](../../frontend/src/dsl/stdlib/cloud-gcp.proschi), [cloud-azure.proschi](../../frontend/src/dsl/stdlib/cloud-azure.proschi), [cloud-cloudflare.proschi](../../frontend/src/dsl/stdlib/cloud-cloudflare.proschi); [component types](../TYPES.md) explains how to read and extend them.

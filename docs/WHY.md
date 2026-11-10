@@ -1,3 +1,7 @@
+---
+updated: 2026-11-09
+---
+
 # Why architecture diagrams as text
 
 Proschi is a small text language for architecture diagrams and high-level

@@ -1,3 +1,7 @@
+---
+updated: 2026-11-01
+---
+
 # Agent skills
 
 Proschi ships skills for AI coding agents: Claude Code, Codex, Cursor,
