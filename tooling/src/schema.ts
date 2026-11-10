@@ -253,7 +253,17 @@ export function diagramSchema() {
           ),
           multiplier: { type: 'integer', minimum: 1, description: '`x200` at the start of the label: the step happens this many times per request (fan-out). Absent means 1.' },
           sizeBytes: { type: 'integer', minimum: 1, description: '`~2MB` at the start of the label: payload size in bytes (decimal units).' },
-          access: { enum: ['read', 'write'], description: 'From the HTTP method, or the first word of the label (INSERT, SET, PUBLISH, … write); every request step has one.' },
+          access: {
+            enum: ['read', 'write'],
+            description:
+              "From the target type's operation the label names, else from the HTTP method or the first word of the label (INSERT, SET, PUBLISH, … write); a forwarded frame takes its handler's. Every request step has one.",
+          },
+          op: object(
+            { name: str, access: { enum: ['read', 'write', 'forward'] }, latency: num, cost: num },
+            ['name', 'access'],
+            "The target type's operation the label names (its HTTP method or first words), when the target is typed and lists it.",
+          ),
+          headers: { type: 'array', items: str, description: '`GET /x header Authorization, If-None-Match`: the request headers named in the label.' },
         },
         ['stepOrder', 'stepName', 'fromServiceId', 'toServiceId', 'protocol', 'httpMethod', 'endpoint', 'requestFormat', 'responseFormat', 'executionType', 'isParallel', 'isConditional', 'access', 'loc'],
       ),

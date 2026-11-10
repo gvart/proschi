@@ -753,7 +753,8 @@
               "access": {
                 "enum": [
                   "read",
-                  "write"
+                  "write",
+                  "forward"
                 ]
               },
               "latency": {
@@ -1108,7 +1109,41 @@
             "read",
             "write"
           ],
-          "description": "From the HTTP method, or the first word of the label (INSERT, SET, PUBLISH, … write); every request step has one."
+          "description": "From the target type's operation the label names, else from the HTTP method or the first word of the label (INSERT, SET, PUBLISH, … write); a forwarded frame takes its handler's. Every request step has one."
+        },
+        "op": {
+          "type": "object",
+          "description": "The target type's operation the label names (its HTTP method or first words), when the target is typed and lists it.",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "access": {
+              "enum": [
+                "read",
+                "write",
+                "forward"
+              ]
+            },
+            "latency": {
+              "type": "number"
+            },
+            "cost": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "name",
+            "access"
+          ],
+          "additionalProperties": false
+        },
+        "headers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "`GET /x header Authorization, If-None-Match`: the request headers named in the label."
         }
       },
       "required": [

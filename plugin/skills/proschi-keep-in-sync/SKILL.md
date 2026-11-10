@@ -160,6 +160,6 @@ orders -> notify : HTTP                         # NOTIFY_URL in services/orders
 Then `fmt`, `check` and `test`. If the file has a `p99 "Place order"`
 target, compare `analyze` before and after: the new synchronous hop adds
 the notify service's latency to checkout. The code ignores the response, so
-the PR note also suggests `orders ->> events : OrderPlaced` with `notify`
+the PR note also suggests `orders ->> events : PUBLISH OrderPlaced` with `notify`
 consuming it, and a test that keeps it that way:
 `"Place order" never waits for notify`.
