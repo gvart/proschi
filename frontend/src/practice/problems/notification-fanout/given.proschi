@@ -44,12 +44,12 @@ test "Preferences are checked before anything is sent" {
 }
 
 test "Each channel goes out through its provider" {
-  "Deliver" scenario "Email" calls email
-  "Deliver" scenario "Push" calls push
-  "Deliver" scenario "SMS" calls sms
+  "Deliver" scenario "Email" uses SEND on email
+  "Deliver" scenario "Push" uses SEND on push
+  "Deliver" scenario "SMS" uses SEND on sms
 }
 
 test "SMS fails over to the backup provider" {
   "Deliver" handles failure of sms
-  "Deliver" scenario "SMS failover" calls smsBackup after sms
+  "Deliver" scenario "SMS failover" uses SEND on smsBackup after sms
 }
