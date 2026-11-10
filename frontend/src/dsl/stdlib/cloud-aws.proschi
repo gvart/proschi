@@ -1,0 +1,152 @@
+# Proschi standard library: Amazon Web Services. The rules are in core.proschi.
+
+# Edge
+
+type [AWS CloudFront] extends CDN {
+  op write MESSAGE   # forwards a WebSocket message
+  op write CreateInvalidation
+  doc "Amazon CloudFront, the CDN of AWS."
+}
+
+type [AWS Route53] extends DNS {
+  op write ChangeResourceRecordSets
+  doc "Amazon Route 53, the DNS service of AWS, with health checks and latency routing."
+}
+
+type [AWS Load Balancer] extends [Load Balancer] {
+  op write MESSAGE   # forwards a WebSocket message
+  doc "Elastic Load Balancing: an application (L7) or network (L4) load balancer on AWS."
+}
+
+type [AWS API Gateway] extends [API Gateway] {
+  doc "Amazon API Gateway, the managed API front door of AWS."
+}
+
+type [AWS WAF] extends WAF {
+  doc "AWS WAF, the web application firewall in front of CloudFront, load balancers and API Gateway."
+}
+
+type [AWS Global Accelerator] extends Edge {
+  doc "AWS Global Accelerator: anycast addresses that carry traffic over the AWS network to the nearest healthy region."
+}
+
+# Compute
+
+type [AWS EC2] extends VM {
+  doc "Amazon EC2, virtual machines on AWS."
+}
+
+type [AWS ECS] extends Docker {
+  doc "Amazon ECS, which runs containers on AWS."
+}
+
+type [AWS Fargate] extends Docker {
+  doc "AWS Fargate, containers on AWS without servers to manage."
+}
+
+type [AWS EKS] extends Kubernetes {
+  doc "Amazon EKS, managed Kubernetes on AWS."
+}
+
+type [AWS Lambda] extends Function {
+  doc "AWS Lambda, functions that run per request or event on AWS."
+}
+
+# Data
+
+type [AWS RDS] extends Database {
+  doc "Amazon RDS, managed relational databases on AWS (PostgreSQL, MySQL and others)."
+}
+
+type [AWS Aurora] extends Database {
+  doc "Amazon Aurora, the AWS relational database compatible with PostgreSQL and MySQL, on shared distributed storage."
+}
+
+type [AWS DynamoDB] extends DynamoDB {
+  doc "Amazon DynamoDB, the managed key-value and document database of AWS."
+}
+
+type [AWS DocumentDB] extends MongoDB {
+  doc "Amazon DocumentDB, the AWS document database compatible with MongoDB."
+}
+
+type [AWS Keyspaces] extends Cassandra {
+  doc "Amazon Keyspaces, the AWS wide-column database compatible with Cassandra."
+}
+
+type [AWS Neptune] extends GraphNoSql {
+  doc "Amazon Neptune, the graph database of AWS."
+}
+
+type [AWS ElastiCache] extends Redis {
+  doc "Amazon ElastiCache, managed Redis, Valkey or Memcached on AWS."
+}
+
+type [AWS OpenSearch] extends OpenSearch {
+  doc "Amazon OpenSearch Service, managed OpenSearch on AWS."
+}
+
+type [AWS Redshift] extends [Data Warehouse] {
+  doc "Amazon Redshift, the data warehouse of AWS."
+}
+
+type [AWS Athena] extends [Data Warehouse] {
+  op read  StartQueryExecution, GetQueryExecution, GetQueryResults
+  doc "Amazon Athena, SQL queries over files in S3."
+}
+
+type [AWS S3] extends [Object Storage] {
+  op read  GetObject, HeadObject, ListObjectsV2, ListObjects, GetObjectTagging, GetObjectAcl
+  op read  ListMultipartUploads, ListParts, SelectObjectContent, HeadBucket, ListBuckets
+  op write PutObject, CopyObject, DeleteObject, DeleteObjects, RestoreObject, PutObjectTagging, PutObjectAcl
+  op write CreateMultipartUpload, UploadPart, UploadPartCopy, CompleteMultipartUpload, AbortMultipartUpload
+  op write CreateBucket, DeleteBucket
+  doc "Amazon S3, the object storage of AWS."
+}
+
+type [AWS EBS] extends BlockStorage {
+  doc "Amazon EBS, block volumes for EC2 instances."
+}
+
+type [AWS EFS] extends SharedFileSystem {
+  doc "Amazon EFS, a shared NFS file system on AWS."
+}
+
+# Messaging
+
+type [AWS SQS] extends SQS {
+  doc "Amazon SQS, the managed message queue of AWS."
+}
+
+type [AWS SNS] extends [Message Broker] {
+  op write PublishBatch, CreateTopic, DeleteTopic
+  doc "Amazon SNS, the pub/sub topics of AWS that fan out to queues, functions and phones."
+}
+
+type [AWS EventBridge] extends [Message Broker] {
+  op write PutEvents, PutRule, PutTargets
+  doc "Amazon EventBridge, the AWS event bus that routes events by rules."
+}
+
+type [AWS Kinesis] extends [Message Broker] {
+  op read  GetRecords, GetShardIterator, SubscribeToShard, DescribeStream, ListShards
+  op write PutRecord, PutRecords
+  doc "Amazon Kinesis Data Streams, the partitioned stream of AWS."
+}
+
+type [AWS MSK] extends Kafka {
+  doc "Amazon MSK, managed Kafka on AWS."
+}
+
+# External
+
+type [AWS SES] extends [Email Service] {
+  op write SendEmail, SendRawEmail, SendBulkEmail
+  doc "Amazon SES, the email sending service of AWS."
+}
+
+type [AWS Cognito] extends [Auth Service] {
+  op read  GetUser
+  op write InitiateAuth, RespondToAuthChallenge, SignUp, ConfirmSignUp, GlobalSignOut
+  doc "Amazon Cognito, user sign-up and sign-in on AWS."
+}
