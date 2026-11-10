@@ -169,8 +169,55 @@ the top of `core.proschi`):
 - Profile numbers only where they equal what `sim/profiles.ts` gives the tech.
 - Run `npm run gen:stdlib` after editing.
 
-The seed holds `Component`, `Service`, `DataStore`, `Database`,
-`SqlDatabase`, `PostgreSQL`, `Cache`, `Redis` and `[REST API]`.
+Iteration 1's seed held `Component`, `Service`, `DataStore`, `Database`,
+`SqlDatabase`, `PostgreSQL`, `Cache`, `Redis` and `[REST API]`. Iteration 2
+replaced it with the full tree below; `DataStore` and `SqlDatabase` are gone,
+because their names are catalog aliases (`Datastore` is GCP Firestore,
+`SQL Database` is Database).
+
+### The tree (iteration 2)
+
+Every catalog tech has a concrete type of the same name, with the catalog's
+kind, so its icon and simulation stay as they were. Abstract types hold the
+shared vocabulary and carry no catalog name or alias. The files are `core`,
+`edge`, `compute`, `data`, `messaging`, `external` and `cloud-aws`,
+`cloud-gcp`, `cloud-azure`, `cloud-cloudflare`.
+
+- `Component`
+  - `Caller` (client): Actor, Browser, Mobile App. `Shape` (client):
+    Rectangle, Circle, Diamond, Cylinder, Cloud.
+  - `Annotation` and `Group` (other): the notes and the group boxes.
+  - `Edge` (edge): DNS, AWS Global Accelerator, and `HttpEdge` (the HTTP
+    methods, statuses and headers): CDN, Load Balancer, API Gateway, WAF and
+    their products. The ones that carry WebSockets (API Gateway, AWS Load
+    Balancer, Cloudflare, nginx, Envoy, HAProxy, …) add `MESSAGE`, a write
+    that forwards a WebSocket message.
+  - `Compute` (service; statuses and headers, no ops): Service, Worker,
+    `Platform` (VM, Docker, Kubernetes and the clouds' versions of them),
+    Function (and the serverless products). Under Service: the languages and
+    frameworks, gRPC, WebSocket, SOAP API, and `HttpService` (the HTTP
+    methods): REST API, GraphQL. Their own requests are named freely.
+  - `DataComponent` (plain verbs: READ, FETCH, LOOKUP; WRITE, SAVE, STORE,
+    RECORD, MARK, RESERVE, HOLD, BOOK): Database (SQL) with the relational
+    products and `DistributedSql`; NoSQL Database with DynamoDB,
+    `DocumentNoSql`, `WideColumnNoSql` and `GraphNoSql`; `CoordinationStore`
+    (etcd, ZooKeeper); Cache (Redis and the Redis-compatible stores,
+    Memcached, …); Search Engine; Data Warehouse and `TimeSeriesStore`;
+    Object Storage (S3, GCS, Azure Blob, R2, MinIO, …), `SharedFileSystem`
+    and `BlockStorage`.
+  - `Messaging` (SEND, PUBLISH, ENQUEUE, …; RECEIVE, SUBSCRIBE, …): Message
+    Queue (SQS, Azure Queue Storage, Redis Queue, ZeroMQ) and Message Broker
+    (Kafka, RabbitMQ, NATS, Pub/Sub, Kinesis, SNS, EventBridge, …).
+  - `External` (the HTTP methods, statuses and headers): Third Party API,
+    Payment Gateway, Auth Service, `Notifier` (email, SMS, push), Analytics
+    Service, Google Maps, OpenAI and their products.
+
+Op names are unique along a chain, ignoring case. Each verb of
+`WRITE_VERBS` (dsl/access.ts) is a write op of some type. Where an op of the
+target's type matches a practice step, its access is the step's access today,
+except for Redis LPOP, PFADD and ZINCRBY: these are writes that the verb list
+reads (`stdlib.test.ts` lists them). No type sets profile numbers or op
+multipliers yet, so the simulation is unchanged.
 
 ## Public API
 
