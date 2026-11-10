@@ -1,0 +1,37 @@
+frontend/src/practice/problems/rate-limiter/given.proschi
+  s_ccb8935595dc4e::t_bb3d99901b9da9 21
+frontend/src/practice/problems/search-autocomplete/given.proschi
+  s_ccb8935595dc4e::t_bb3d99901b9da9 30
+frontend/src/practice/problems/read-replicas/given.proschi
+  s_ccb8935595dc4e::t_bb3d99901b9da9 38,43-44
+frontend/src/practice/problems/search-autocomplete/starter.proschi
+  s_ccb8935595dc4e::t_bb3d99901b9da9 12
+frontend/src/practice/problems/ride-matching/problem.md
+  s_ccb8935595dc4e::t_71ee0f5378e540 6-7
+frontend/src/practice/problems/read-replicas/problem.md
+  s_ccb8935595dc4e::t_71ee0f5378e540 7-8
+frontend/src/practice/problems/search-autocomplete/problem.md
+  s_ccb8935595dc4e::t_71ee0f5378e540 6-7
+frontend/src/practice/problems/rate-limiter/problem.md
+  s_ccb8935595dc4e::t_71ee0f5378e540 6-7
+frontend/src/practice/problems/recommendations/given.proschi
+  s_ccb8935595dc4e::t_bb3d99901b9da9 36-37
+frontend/src/practice/problems/recommendations/problem.md
+  s_ccb8935595dc4e::t_71ee0f5378e540 7-8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d555c8b92b00a1ae5aaf6f08fb2c8df78beb85d5",
+  "prompts": {},
+  "sessions": {
+    "s_ccb8935595dc4e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0e2b8447-0e71-4063-8d52-5e5b5302fc2f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
