@@ -12,6 +12,21 @@ them.
 - The same errors and warnings as the web editor, as you type
 - Completion for keywords, node ids, the 108 tech stacks, `capacity` parts and
   the use case and scenario names in quotes
+- [Component types](https://proschi.app/docs/types/): every tech has a
+  built-in type with its operations, statuses and headers, and you declare
+  your own with `extends`. Completion and hover for types and operations,
+  and a warning for an operation the target's type doesn't know:
+
+  ```proschi
+  type LedgerDb extends PostgreSQL { op write APPEND }
+
+  api    "Payments API" [REST API]
+  ledger "Ledger"       [LedgerDb]
+
+  usecase "Pay" {
+    api -> ledger : APPEND entry
+  }
+  ```
 - Rename (*F2*) of node ids, use cases and scenarios, with their references
   in every `.proschi` file of the workspace that imports them
 - Quick fixes: add a missing connection or a traffic line, fix a tech stack,
