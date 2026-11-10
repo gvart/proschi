@@ -93,6 +93,19 @@ describe('analysis', () => {
     expect(labels('requirements {\n  \n}', 1, 2)).not.toContain('"Use case" starts at');
   });
 
+  it('completes the operations, headers and methods typed assertions name, and hovers them', () => {
+    const text = 'api [REST API]\ndb [PostgreSQL]\ntest "T" {\n  "U" uses \n  "U" sends header \n  "U" calls api with \n  "U" uses INSERT on db\n  "U" sends header Idempotency-Key to api\n}';
+    const t = analyze(text);
+    const labels = (line: number) => complete(t, { line, character: text.split('\n')[line].length }).map((i) => i.label);
+    expect(labels(3)).toEqual(expect.arrayContaining(['SELECT', 'INSERT', 'GET', 'POST']));
+    expect(labels(4)).toEqual(expect.arrayContaining(['Authorization', 'Idempotency-Key']));
+    expect(labels(5)).toEqual(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
+    expect(hover(t, { line: 6, character: 12 })?.markdown).toMatch(/^\*\*INSERT\*\* · write operation of `PostgreSQL`/);
+    expect(hover(t, { line: 7, character: 22 })?.markdown).toMatch(/^\*\*Idempotency-Key\*\* · request header of `REST API`/);
+    const forms = complete(analyze('api [REST API]\ntest "T" {\n  \n}'), { line: 2, character: 2 }).map((i) => i.label);
+    expect(forms).toEqual(expect.arrayContaining(['"Use case" calls … with', '"Use case" uses … on', '"Use case" sends header … to']));
+  });
+
   it('offers only alt after a closing brace', () => {
     const items = complete(analyze('usecase "U" {\n  alt "A" {\n  } a'), { line: 2, character: 5 });
     expect(items.map((i) => i.label)).toEqual(['alt']);

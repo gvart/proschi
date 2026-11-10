@@ -1933,6 +1933,25 @@
             "target": {
               "$ref": "#/$defs/selector"
             },
+            "match": {
+              "type": "object",
+              "description": "What a step must be: `with GET /urls/{code}` (method, path), `uses INSERT on` (op), `sends header Authorization to` (header).",
+              "properties": {
+                "method": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "op": {
+                  "type": "string"
+                },
+                "header": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
             "quantifier": {
               "enum": [
                 "some",
@@ -1968,6 +1987,25 @@
             "first": {
               "$ref": "#/$defs/selector"
             },
+            "match": {
+              "type": "object",
+              "description": "What a step must be: `with GET /urls/{code}` (method, path), `uses INSERT on` (op), `sends header Authorization to` (header).",
+              "properties": {
+                "method": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "op": {
+                  "type": "string"
+                },
+                "header": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
             "then": {
               "$ref": "#/$defs/selector"
             },
@@ -1980,6 +2018,53 @@
             "useCase",
             "first",
             "then",
+            "loc"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "beforeResponding"
+            },
+            "useCase": {
+              "type": "string"
+            },
+            "scenario": {
+              "type": "string"
+            },
+            "target": {
+              "$ref": "#/$defs/selector"
+            },
+            "match": {
+              "type": "object",
+              "description": "What a step must be: `with GET /urls/{code}` (method, path), `uses INSERT on` (op), `sends header Authorization to` (header).",
+              "properties": {
+                "method": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "op": {
+                  "type": "string"
+                },
+                "header": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "useCase",
+            "target",
+            "match",
             "loc"
           ],
           "additionalProperties": false
@@ -2177,6 +2262,25 @@
             },
             "target": {
               "$ref": "#/$defs/selector"
+            },
+            "match": {
+              "type": "object",
+              "description": "What a step must be: `with GET /urls/{code}` (method, path), `uses INSERT on` (op), `sends header Authorization to` (header).",
+              "properties": {
+                "method": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "op": {
+                  "type": "string"
+                },
+                "header": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
             },
             "after": {
               "$ref": "#/$defs/selector"

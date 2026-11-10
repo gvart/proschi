@@ -561,6 +561,10 @@ export function complete(analysis: Analysis, pos: Position): CompletionItem[] {
     detail: describeNode(n),
     range,
   }));
+  if (!atLineStart && inTestBlock(analysis.lines, pos.line)) {
+    const typed = assertionValueCompletions(analysis, before, pos);
+    if (typed) return typed;
+  }
   if (!atLineStart) return nodes;
   // Inside a test block a line is an assertion, never a statement.
   if (inTestBlock(analysis.lines, pos.line) && !/\}/.test(before)) {
@@ -576,6 +580,68 @@ export function complete(analysis: Analysis, pos: Position): CompletionItem[] {
     range,
   }));
   return afterBrace ? keywords : [...keywords, ...nodes];
+}
+
+/** The types of the diagram's nodes, once each: what `uses` and `sends header` in an assertion can name. */
+function nodeTypes(analysis: Analysis): ResolvedType[] {
+  const seen = new Map<string, ResolvedType>();
+  for (const n of analysis.diagram.nodes) if (n.resolvedType) seen.set(n.resolvedType.name, n.resolvedType);
+  return [...seen.values()];
+}
+
+/**
+ * In a test assertion: the operations of the diagram's node types after
+ * `uses`, their headers after `sends header`, the HTTP methods after
+ * `calls <node> with`. Null elsewhere.
+ */
+function assertionValueCompletions(analysis: Analysis, before: string, pos: Position): CompletionItem[] | null {
+  const rangeOf = (partial: string) => ({ start: { line: pos.line, character: pos.character - partial.length }, end: pos });
+  const op = /\buses\s+(\w*)$/.exec(before);
+  if (op) {
+    const items = new Map<string, CompletionItem>();
+    for (const t of nodeTypes(analysis)) {
+      for (const o of t.ops) {
+        if (!items.has(o.name.toLowerCase())) items.set(o.name.toLowerCase(), { label: o.name, kind: 'op', detail: [o.access, multipliers(o), t.name].filter(Boolean).join(' · '), range: rangeOf(op[1]) });
+      }
+    }
+    return [...items.values()];
+  }
+  const header = /\bsends\s+header\s+([\w-]*)$/.exec(before);
+  if (header) {
+    const names = new Map<string, string>();
+    for (const t of nodeTypes(analysis)) for (const h of t.headers) if (!names.has(h.toLowerCase())) names.set(h.toLowerCase(), `${h}|${t.name}`);
+    return [...names.values()].map((v) => {
+      const [label, type] = v.split('|');
+      return { label, kind: 'header' as const, detail: `header of ${type}`, range: rangeOf(header[1]) };
+    });
+  }
+  const sends = /\bsends\s+(\w*)$/.exec(before);
+  if (sends) return [{ label: 'header', kind: 'keyword', detail: 'sends header <Name> to <node>', range: rangeOf(sends[1]) }];
+  const method = /\bcalls\s+\S+\s+with\s+([A-Za-z]*)$/.exec(before);
+  if (method) return HTTP_METHODS.map((m) => ({ label: m, kind: 'op' as const, detail: 'HTTP method, then a path: GET /items/{id}', range: rangeOf(method[1]) }));
+  return null;
+}
+
+/** The operation or header a test assertion names (`uses INSERT on`, `sends header X to`), for hover. */
+function assertionValueAt(analysis: Analysis, pos: Position): { markdown: string; range: Range } | null {
+  if (!inTestBlock(analysis.lines, pos.line)) return null;
+  const line = analysis.lines[pos.line] ?? '';
+  const m = /\b(uses\s+|sends\s+header\s+)("[^"]*"|[\w-]+)/.exec(line);
+  if (!m) return null;
+  const start = m.index + m[1].length;
+  const end = start + m[2].length;
+  if (pos.character < start || pos.character > end) return null;
+  const name = m[2].replace(/^"|"$/g, '').toLowerCase();
+  const range = { start: { line: pos.line, character: start }, end: { line: pos.line, character: end } };
+  const types = nodeTypes(analysis);
+  if (m[1].startsWith('uses')) {
+    const owners = types.filter((t) => t.ops.some((o) => o.name.toLowerCase() === name));
+    if (!owners.length) return { markdown: `No node type in this diagram has an operation \`${m[2]}\`; the assertion fails.`, range };
+    const op = owners[0].ops.find((o) => o.name.toLowerCase() === name)!;
+    return { markdown: [`**${op.name}** · ${op.access} operation of ${owners.map((t) => `\`${t.name}\``).join(', ')}`, '', 'Holds when a step to the node names this operation.'].join('\n'), range };
+  }
+  const owners = types.filter((t) => t.headers.some((h) => h.toLowerCase() === name));
+  return { markdown: [`**${m[2]}** · request header${owners.length ? ` of ${owners.map((t) => `\`${t.name}\``).join(', ')}` : ''}`, '', 'Holds when a request to the node names it: `GET /path header Name`.'].join('\n'), range };
 }
 
 const PERCENTILE = 'p50|p90|p95|p99|p999';
@@ -1032,6 +1098,8 @@ export function hover(analysis: Analysis, pos: Position): { markdown: string; ra
   if (type) return { markdown: typeHover(type.type), range: type.range };
   const op = opAt(analysis, pos);
   if (op) return op;
+  const asserted = assertionValueAt(analysis, pos);
+  if (asserted) return asserted;
   const hit = nodeAt(analysis, pos);
   if (!hit) return null;
   const n = hit.node;
