@@ -54,8 +54,8 @@ type [GCP Spanner] extends [Distributed SQL Database] {
 }
 
 type [GCP Firestore] extends [Document NoSQL Database] {
-  op read  GetDocument, ListDocuments, BatchGetDocuments, RunQuery, RunAggregationQuery, Listen
-  op write CreateDocument, UpdateDocument, DeleteDocument, BatchWrite, Commit, BeginTransaction
+  op read  GetDocument, ListDocuments, BatchGetDocuments, RunQuery, RunAggregationQuery, Listen, BeginTransaction
+  op write CreateDocument, UpdateDocument, DeleteDocument, BatchWrite, Commit
   doc "Firestore, Google Cloud's serverless document database."
 }
 

@@ -12,8 +12,10 @@ abstract type Data {
 type Database extends Data {
   kind database
   protocol SQL
-  op read  SELECT, WITH, EXPLAIN, SHOW, BEGIN, ROLLBACK
-  op write INSERT, UPDATE, DELETE, UPSERT, MERGE, TRUNCATE, COMMIT, LOCK
+  op read  SELECT, WITH, EXPLAIN, SHOW
+  op write INSERT, UPDATE, DELETE, UPSERT, MERGE, TRUNCATE, LOCK
+  # Transaction control: the statements inside carry the reads and writes.
+  op read  BEGIN, COMMIT, ROLLBACK
   op write CREATE, ALTER, DROP
   doc "A relational database queried with SQL, whose product does not matter."
 }
@@ -206,8 +208,8 @@ type Redis extends Cache {
   op read  XREAD, XREADGROUP, XRANGE, XREVRANGE, XLEN, XPENDING, XINFO
   op write XADD, XACK, XCLAIM, XAUTOCLAIM, XDEL, XTRIM, XGROUP
   # Transactions and scripts
-  op read  MULTI, WATCH, UNWATCH, DISCARD, PING
-  op write EXEC, EVAL, EVALSHA, FCALL
+  op read  MULTI, EXEC, DISCARD, WATCH, UNWATCH, PING
+  op write EVAL, EVALSHA, FCALL
   doc "Redis, the in-memory data store, used as a cache."
 }
 

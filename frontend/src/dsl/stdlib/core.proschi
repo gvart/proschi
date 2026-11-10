@@ -28,6 +28,16 @@
 #   upper-case plain words (WRITE, SEND) are not repeated by its children.
 #   A child declares an inherited op again only to change it, as DynamoDB's
 #   Scan gives the key-value SCAN its multipliers.
+# - Transaction control is `op read`: an op that only opens, commits, rolls
+#   back or discards a transaction (SQL BEGIN, COMMIT, ROLLBACK; Redis MULTI,
+#   EXEC, DISCARD; Spanner and Firestore BeginTransaction; Kafka
+#   AddPartitionsToTxn, EndTxn) carries no data of its own. The statements
+#   inside the transaction are steps of their own and carry its reads and
+#   writes, so a read-only transaction stays a read and a use case does not
+#   become a write by its BEGIN or COMMIT. An op that carries the
+#   transaction's data has that data's access: DynamoDB TransactWriteItems
+#   and TransactGetItems, Firestore Commit, etcd Txn, ZooKeeper multi, Cosmos
+#   DB TransactionalBatch. stdlib.test.ts checks both.
 # - A generic type (the catalog's [NoSQL Database], Cache, [Message Queue],
 #   [Object Storage], [Search Engine], CDN, …) or an abstract parent declares
 #   its family's standard vocabulary (key-value: GET, PUT, DELETE, SCAN;

@@ -130,8 +130,8 @@ Amazon RDS, managed relational databases on AWS (PostgreSQL, MySQL and others).
 - **Extends:** [Database](data.md#database) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `database`
 - **Protocol:** `SQL`
-- **Read:** 6 from [Database](data.md#database), 3 from [Data](data.md#data)
-- **Write:** 11 from [Database](data.md#database), 8 from [Data](data.md#data)
+- **Read:** 7 from [Database](data.md#database), 3 from [Data](data.md#data)
+- **Write:** 10 from [Database](data.md#database), 8 from [Data](data.md#data)
 
 ### AWS Aurora
 
@@ -140,8 +140,8 @@ Amazon Aurora, the AWS relational database compatible with PostgreSQL and MySQL,
 - **Extends:** [Database](data.md#database) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `database`
 - **Protocol:** `SQL`
-- **Read:** 6 from [Database](data.md#database), 3 from [Data](data.md#data)
-- **Write:** 11 from [Database](data.md#database), 8 from [Data](data.md#data)
+- **Read:** 7 from [Database](data.md#database), 3 from [Data](data.md#data)
+- **Write:** 10 from [Database](data.md#database), 8 from [Data](data.md#data)
 
 ### AWS DynamoDB
 
@@ -188,8 +188,8 @@ Amazon ElastiCache, managed Redis, Valkey or Memcached on AWS.
 - **Extends:** [Redis](data.md#redis) › [Cache](data.md#cache) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `cache`
 - **Protocol:** `RESP`
-- **Read:** 67 from [Redis](data.md#redis), 2 from [Cache](data.md#cache), 3 from [Data](data.md#data)
-- **Write:** 81 from [Redis](data.md#redis), 3 from [Cache](data.md#cache), 8 from [Data](data.md#data)
+- **Read:** 68 from [Redis](data.md#redis), 2 from [Cache](data.md#cache), 3 from [Data](data.md#data)
+- **Write:** 80 from [Redis](data.md#redis), 3 from [Cache](data.md#cache), 8 from [Data](data.md#data)
 
 ### AWS OpenSearch
 
@@ -291,8 +291,8 @@ Amazon MSK, managed Kafka on AWS.
 
 - **Extends:** [Kafka](messaging.md#kafka) › [Message Broker](messaging.md#message-broker) › [Messaging](messaging.md#messaging) › [Component](core.md#component)
 - **Kind:** `broker`
-- **Read:** 4 from [Kafka](messaging.md#kafka), 2 from [Message Broker](messaging.md#message-broker), 4 from [Messaging](messaging.md#messaging)
-- **Write:** 8 from [Kafka](messaging.md#kafka), 1 from [Message Broker](messaging.md#message-broker), 7 from [Messaging](messaging.md#messaging)
+- **Read:** 6 from [Kafka](messaging.md#kafka), 2 from [Message Broker](messaging.md#message-broker), 4 from [Messaging](messaging.md#messaging)
+- **Write:** 6 from [Kafka](messaging.md#kafka), 1 from [Message Broker](messaging.md#message-broker), 7 from [Messaging](messaging.md#messaging)
 
 ### AWS SES
 
@@ -423,8 +423,8 @@ Cloud SQL, managed PostgreSQL, MySQL and SQL Server on Google Cloud.
 - **Extends:** [Database](data.md#database) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `database`
 - **Protocol:** `SQL`
-- **Read:** 6 from [Database](data.md#database), 3 from [Data](data.md#data)
-- **Write:** 11 from [Database](data.md#database), 8 from [Data](data.md#data)
+- **Read:** 7 from [Database](data.md#database), 3 from [Data](data.md#data)
+- **Write:** 10 from [Database](data.md#database), 8 from [Data](data.md#data)
 
 ### GCP Spanner
 
@@ -433,8 +433,8 @@ Spanner, Google Cloud's globally distributed relational database with external c
 - **Extends:** [Distributed SQL Database](data.md#distributed-sql-database) › [Database](data.md#database) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `database`
 - **Protocol:** `SQL`
-- **Read:** `ExecuteSql`, `ExecuteStreamingSql`, `StreamingRead`, `BeginTransaction`, plus 6 from [Database](data.md#database), 3 from [Data](data.md#data)
-- **Write:** `ExecuteBatchDml`, plus 11 from [Database](data.md#database), 8 from [Data](data.md#data)
+- **Read:** `ExecuteSql`, `ExecuteStreamingSql`, `StreamingRead`, `BeginTransaction`, plus 7 from [Database](data.md#database), 3 from [Data](data.md#data)
+- **Write:** `ExecuteBatchDml`, plus 10 from [Database](data.md#database), 8 from [Data](data.md#data)
 
 ### GCP Firestore
 
@@ -442,8 +442,8 @@ Firestore, Google Cloud's serverless document database.
 
 - **Extends:** [Document NoSQL Database](data.md#document-nosql-database) › [NoSQL Database](data.md#nosql-database) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `database`
-- **Read:** `GetDocument`, `ListDocuments`, `BatchGetDocuments`, `RunQuery`, `RunAggregationQuery`, `Listen`, plus 2 from [NoSQL Database](data.md#nosql-database), 3 from [Data](data.md#data)
-- **Write:** `CreateDocument`, `UpdateDocument`, `DeleteDocument`, `BatchWrite`, `Commit`, `BeginTransaction`, plus 3 from [NoSQL Database](data.md#nosql-database), 8 from [Data](data.md#data)
+- **Read:** `GetDocument`, `ListDocuments`, `BatchGetDocuments`, `RunQuery`, `RunAggregationQuery`, `Listen`, `BeginTransaction`, plus 2 from [NoSQL Database](data.md#nosql-database), 3 from [Data](data.md#data)
+- **Write:** `CreateDocument`, `UpdateDocument`, `DeleteDocument`, `BatchWrite`, `Commit`, plus 3 from [NoSQL Database](data.md#nosql-database), 8 from [Data](data.md#data)
 
 ### GCP Bigtable
 
@@ -461,8 +461,8 @@ Memorystore, managed Redis and Memcached on Google Cloud.
 - **Extends:** [Redis](data.md#redis) › [Cache](data.md#cache) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `cache`
 - **Protocol:** `RESP`
-- **Read:** 67 from [Redis](data.md#redis), 2 from [Cache](data.md#cache), 3 from [Data](data.md#data)
-- **Write:** 81 from [Redis](data.md#redis), 3 from [Cache](data.md#cache), 8 from [Data](data.md#data)
+- **Read:** 68 from [Redis](data.md#redis), 2 from [Cache](data.md#cache), 3 from [Data](data.md#data)
+- **Write:** 80 from [Redis](data.md#redis), 3 from [Cache](data.md#cache), 8 from [Data](data.md#data)
 
 ### GCP BigQuery
 
@@ -641,8 +641,8 @@ Azure SQL Database, managed SQL Server on Azure.
 - **Extends:** [SQL Server](data.md#sql-server) › [Database](data.md#database) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `database`
 - **Protocol:** `SQL`
-- **Read:** 6 from [Database](data.md#database), 3 from [Data](data.md#data)
-- **Write:** 11 from [Database](data.md#database), 8 from [Data](data.md#data)
+- **Read:** 7 from [Database](data.md#database), 3 from [Data](data.md#data)
+- **Write:** 10 from [Database](data.md#database), 8 from [Data](data.md#data)
 
 ### Azure Database for PostgreSQL
 
@@ -651,8 +651,8 @@ Azure Database for PostgreSQL, managed PostgreSQL on Azure.
 - **Extends:** [PostgreSQL](data.md#postgresql) › [Database](data.md#database) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `database`
 - **Protocol:** `SQL`
-- **Read:** 1 from [PostgreSQL](data.md#postgresql), 6 from [Database](data.md#database), 3 from [Data](data.md#data)
-- **Write:** 3 from [PostgreSQL](data.md#postgresql), 11 from [Database](data.md#database), 8 from [Data](data.md#data)
+- **Read:** 1 from [PostgreSQL](data.md#postgresql), 7 from [Database](data.md#database), 3 from [Data](data.md#data)
+- **Write:** 3 from [PostgreSQL](data.md#postgresql), 10 from [Database](data.md#database), 8 from [Data](data.md#data)
 
 ### Azure Database for MySQL
 
@@ -661,8 +661,8 @@ Azure Database for MySQL, managed MySQL on Azure.
 - **Extends:** [MySQL](data.md#mysql) › [Database](data.md#database) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `database`
 - **Protocol:** `SQL`
-- **Read:** 6 from [Database](data.md#database), 3 from [Data](data.md#data)
-- **Write:** 1 from [MySQL](data.md#mysql), 11 from [Database](data.md#database), 8 from [Data](data.md#data)
+- **Read:** 7 from [Database](data.md#database), 3 from [Data](data.md#data)
+- **Write:** 1 from [MySQL](data.md#mysql), 10 from [Database](data.md#database), 8 from [Data](data.md#data)
 
 ### Azure Cosmos DB
 
@@ -680,8 +680,8 @@ Azure Cache for Redis, managed Redis on Azure.
 - **Extends:** [Redis](data.md#redis) › [Cache](data.md#cache) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `cache`
 - **Protocol:** `RESP`
-- **Read:** 67 from [Redis](data.md#redis), 2 from [Cache](data.md#cache), 3 from [Data](data.md#data)
-- **Write:** 81 from [Redis](data.md#redis), 3 from [Cache](data.md#cache), 8 from [Data](data.md#data)
+- **Read:** 68 from [Redis](data.md#redis), 2 from [Cache](data.md#cache), 3 from [Data](data.md#data)
+- **Write:** 80 from [Redis](data.md#redis), 3 from [Cache](data.md#cache), 8 from [Data](data.md#data)
 
 ### Azure AI Search
 
