@@ -1441,6 +1441,8 @@ var STDLIB_SOURCES = [
   { path: "stdlib/core.proschi", source: `# Proschi standard library: the root types. Bundled with the parser, so every
 # diagram sees them. The format is in docs/design/typed-components.md.
 #
+# updated: 2026-11-10
+#
 # Rules for stdlib files:
 # - Only \`type\` and \`abstract type\` blocks, blank lines and comments.
 # - A type named after a catalog tech stack (src/catalog/componentCatalog.ts)
@@ -1474,6 +1476,10 @@ var STDLIB_SOURCES = [
 #   are the design's own API (Service, Worker, gRPC, WebSocket, the
 #   languages, platforms and functions) declare no ops and stay open, and
 #   so does AWS Global Accelerator, which carries any TCP or UDP traffic.
+# - A change to the types in any stdlib file (a type, op, status, header,
+#   doc or parent; not a comment) bumps the \`updated:\` date above to that
+#   day. It is the "Last updated" date of every page of the built-in type
+#   reference (docs/types/, plugins/typeReference.ts).
 # - After editing, run \`npm run gen:stdlib\` to refresh sources.gen.ts.
 #
 # The top levels: Component, then Caller and Shape (clients), Annotation and
