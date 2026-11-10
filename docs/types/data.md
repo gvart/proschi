@@ -166,7 +166,7 @@ DynamoDB, the managed key-value and document database: reads by key or partition
 - **Extends:** [NoSQL Database](#nosql-database) › [DataComponent](#datacomponent) › [Component](core.md#component)
 - **Extended by:** [AWS DynamoDB](cloud.md#aws-dynamodb)
 - **Kind:** `database`
-- **Read:** `GetItem`, `BatchGetItem`, `Query`, `Scan`, `TransactGetItems`, `DescribeTable`, plus 1 from [NoSQL Database](#nosql-database), 3 from [DataComponent](#datacomponent)
+- **Read:** `GetItem`, `BatchGetItem`, `Query`, `TransactGetItems`, `DescribeTable`, `Scan` (latency ×10, cost ×25), plus 1 from [NoSQL Database](#nosql-database), 3 from [DataComponent](#datacomponent)
 - **Write:** `PutItem`, `UpdateItem`, `DeleteItem`, `BatchWriteItem`, `TransactWriteItems`, `ExecuteStatement`, `CreateTable`, `UpdateTable`, `DeleteTable`, plus 3 from [NoSQL Database](#nosql-database), 8 from [DataComponent](#datacomponent)
 
 ## DocumentNoSql
@@ -248,7 +248,7 @@ Apache HBase, the wide-column database on HDFS.
 
 - **Extends:** [WideColumnNoSql](#widecolumnnosql) › [NoSQL Database](#nosql-database) › [DataComponent](#datacomponent) › [Component](core.md#component)
 - **Kind:** `database`
-- **Read:** `Scan`, `Exists`, plus 1 from [NoSQL Database](#nosql-database), 3 from [DataComponent](#datacomponent)
+- **Read:** `Exists`, `Scan` (latency ×10, cost ×25), plus 1 from [NoSQL Database](#nosql-database), 3 from [DataComponent](#datacomponent)
 - **Write:** `Increment`, `Append`, `CheckAndMutate`, plus 3 from [NoSQL Database](#nosql-database), 8 from [DataComponent](#datacomponent)
 
 ## GraphNoSql

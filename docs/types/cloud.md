@@ -12,7 +12,7 @@ Amazon CloudFront, the CDN of AWS.
 - **Kind:** `cdn`
 - **Protocol:** `HTTP`
 - **Read:** 5 from [HttpEdge](edge.md#httpedge)
-- **Write:** `MESSAGE`, `CreateInvalidation`, plus 1 from [CDN](edge.md#cdn), 4 from [HttpEdge](edge.md#httpedge)
+- **Write:** `CreateInvalidation`, plus 1 from [CDN](edge.md#cdn), 4 from [HttpEdge](edge.md#httpedge)
 - **Statuses:** 61 from [HttpEdge](edge.md#httpedge)
 - **Headers:** 69 from [HttpEdge](edge.md#httpedge)
 
@@ -34,7 +34,7 @@ Elastic Load Balancing: an application (L7) or network (L4) load balancer on AWS
 - **Kind:** `loadbalancer`
 - **Protocol:** `HTTP`
 - **Read:** 5 from [HttpEdge](edge.md#httpedge)
-- **Write:** `MESSAGE`, plus 4 from [HttpEdge](edge.md#httpedge)
+- **Write:** 4 from [HttpEdge](edge.md#httpedge)
 - **Statuses:** 61 from [HttpEdge](edge.md#httpedge)
 - **Headers:** 69 from [HttpEdge](edge.md#httpedge)
 
@@ -46,7 +46,7 @@ Amazon API Gateway, the managed API front door of AWS.
 - **Kind:** `gateway`
 - **Protocol:** `HTTP`
 - **Read:** 5 from [HttpEdge](edge.md#httpedge)
-- **Write:** 1 from [API Gateway](edge.md#api-gateway), 4 from [HttpEdge](edge.md#httpedge)
+- **Write:** 4 from [HttpEdge](edge.md#httpedge)
 - **Statuses:** 61 from [HttpEdge](edge.md#httpedge)
 - **Headers:** 69 from [HttpEdge](edge.md#httpedge)
 
@@ -346,7 +346,7 @@ Cloud Load Balancing, Google Cloud's global and regional load balancers.
 - **Kind:** `loadbalancer`
 - **Protocol:** `HTTP`
 - **Read:** 5 from [HttpEdge](edge.md#httpedge)
-- **Write:** `MESSAGE`, plus 4 from [HttpEdge](edge.md#httpedge)
+- **Write:** 4 from [HttpEdge](edge.md#httpedge)
 - **Statuses:** 61 from [HttpEdge](edge.md#httpedge)
 - **Headers:** 69 from [HttpEdge](edge.md#httpedge)
 
@@ -358,7 +358,7 @@ Apigee, Google Cloud's API management platform.
 - **Kind:** `gateway`
 - **Protocol:** `HTTP`
 - **Read:** 5 from [HttpEdge](edge.md#httpedge)
-- **Write:** 1 from [API Gateway](edge.md#api-gateway), 4 from [HttpEdge](edge.md#httpedge)
+- **Write:** 4 from [HttpEdge](edge.md#httpedge)
 - **Statuses:** 61 from [HttpEdge](edge.md#httpedge)
 - **Headers:** 69 from [HttpEdge](edge.md#httpedge)
 
@@ -520,7 +520,7 @@ Azure Front Door, Azure's global entry point: CDN, load balancing and WAF at the
 - **Kind:** `cdn`
 - **Protocol:** `HTTP`
 - **Read:** 5 from [HttpEdge](edge.md#httpedge)
-- **Write:** `MESSAGE`, plus 1 from [CDN](edge.md#cdn), 4 from [HttpEdge](edge.md#httpedge)
+- **Write:** 1 from [CDN](edge.md#cdn), 4 from [HttpEdge](edge.md#httpedge)
 - **Statuses:** 61 from [HttpEdge](edge.md#httpedge)
 - **Headers:** 69 from [HttpEdge](edge.md#httpedge)
 
@@ -554,7 +554,7 @@ Azure Application Gateway, the L7 load balancer of Azure, with an optional WAF.
 - **Kind:** `loadbalancer`
 - **Protocol:** `HTTP`
 - **Read:** 5 from [HttpEdge](edge.md#httpedge)
-- **Write:** `MESSAGE`, plus 4 from [HttpEdge](edge.md#httpedge)
+- **Write:** 4 from [HttpEdge](edge.md#httpedge)
 - **Statuses:** 61 from [HttpEdge](edge.md#httpedge)
 - **Headers:** 69 from [HttpEdge](edge.md#httpedge)
 
@@ -566,7 +566,7 @@ Azure API Management, the API gateway and developer portal of Azure.
 - **Kind:** `gateway`
 - **Protocol:** `HTTP`
 - **Read:** 5 from [HttpEdge](edge.md#httpedge)
-- **Write:** 1 from [API Gateway](edge.md#api-gateway), 4 from [HttpEdge](edge.md#httpedge)
+- **Write:** 4 from [HttpEdge](edge.md#httpedge)
 - **Statuses:** 61 from [HttpEdge](edge.md#httpedge)
 - **Headers:** 69 from [HttpEdge](edge.md#httpedge)
 
@@ -762,7 +762,7 @@ Cloudflare, the CDN and edge network in front of the origin.
 - **Kind:** `cdn`
 - **Protocol:** `HTTP`
 - **Read:** 5 from [HttpEdge](edge.md#httpedge)
-- **Write:** `MESSAGE`, plus 1 from [CDN](edge.md#cdn), 4 from [HttpEdge](edge.md#httpedge)
+- **Write:** 1 from [CDN](edge.md#cdn), 4 from [HttpEdge](edge.md#httpedge)
 - **Statuses:** 61 from [HttpEdge](edge.md#httpedge)
 - **Headers:** 69 from [HttpEdge](edge.md#httpedge)
 

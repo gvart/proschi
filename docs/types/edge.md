@@ -71,7 +71,7 @@ One entry point for an API: routing, authentication and rate limits before the s
 - **Kind:** `gateway`
 - **Protocol:** `HTTP`
 - **Read:** 5 from [HttpEdge](#httpedge)
-- **Write:** `MESSAGE`, plus 4 from [HttpEdge](#httpedge)
+- **Write:** 4 from [HttpEdge](#httpedge)
 - **Statuses:** 61 from [HttpEdge](#httpedge)
 - **Headers:** 69 from [HttpEdge](#httpedge)
 
@@ -96,7 +96,7 @@ Fastly, the programmable CDN.
 - **Kind:** `cdn`
 - **Protocol:** `HTTP`
 - **Read:** 5 from [HttpEdge](#httpedge)
-- **Write:** `MESSAGE`, plus 1 from [CDN](#cdn), 4 from [HttpEdge](#httpedge)
+- **Write:** 1 from [CDN](#cdn), 4 from [HttpEdge](#httpedge)
 - **Statuses:** 61 from [HttpEdge](#httpedge)
 - **Headers:** 69 from [HttpEdge](#httpedge)
 
@@ -108,7 +108,7 @@ Akamai, the CDN and edge security platform.
 - **Kind:** `cdn`
 - **Protocol:** `HTTP`
 - **Read:** 5 from [HttpEdge](#httpedge)
-- **Write:** `MESSAGE`, plus 1 from [CDN](#cdn), 4 from [HttpEdge](#httpedge)
+- **Write:** 1 from [CDN](#cdn), 4 from [HttpEdge](#httpedge)
 - **Statuses:** 61 from [HttpEdge](#httpedge)
 - **Headers:** 69 from [HttpEdge](#httpedge)
 
@@ -120,7 +120,7 @@ nginx, the web server used as a reverse proxy and load balancer.
 - **Kind:** `loadbalancer`
 - **Protocol:** `HTTP`
 - **Read:** 5 from [HttpEdge](#httpedge)
-- **Write:** `MESSAGE`, plus 4 from [HttpEdge](#httpedge)
+- **Write:** 4 from [HttpEdge](#httpedge)
 - **Statuses:** 61 from [HttpEdge](#httpedge)
 - **Headers:** 69 from [HttpEdge](#httpedge)
 
@@ -132,7 +132,7 @@ Envoy, the L7 proxy behind most service meshes.
 - **Kind:** `loadbalancer`
 - **Protocol:** `HTTP`
 - **Read:** 5 from [HttpEdge](#httpedge)
-- **Write:** `MESSAGE`, plus 4 from [HttpEdge](#httpedge)
+- **Write:** 4 from [HttpEdge](#httpedge)
 - **Statuses:** 61 from [HttpEdge](#httpedge)
 - **Headers:** 69 from [HttpEdge](#httpedge)
 
@@ -144,7 +144,7 @@ HAProxy, the TCP and HTTP load balancer.
 - **Kind:** `loadbalancer`
 - **Protocol:** `HTTP`
 - **Read:** 5 from [HttpEdge](#httpedge)
-- **Write:** `MESSAGE`, plus 4 from [HttpEdge](#httpedge)
+- **Write:** 4 from [HttpEdge](#httpedge)
 - **Statuses:** 61 from [HttpEdge](#httpedge)
 - **Headers:** 69 from [HttpEdge](#httpedge)
 
@@ -156,7 +156,7 @@ Traefik, the reverse proxy that configures itself from containers.
 - **Kind:** `loadbalancer`
 - **Protocol:** `HTTP`
 - **Read:** 5 from [HttpEdge](#httpedge)
-- **Write:** `MESSAGE`, plus 4 from [HttpEdge](#httpedge)
+- **Write:** 4 from [HttpEdge](#httpedge)
 - **Statuses:** 61 from [HttpEdge](#httpedge)
 - **Headers:** 69 from [HttpEdge](#httpedge)
 
@@ -168,7 +168,7 @@ A Kubernetes ingress controller: routes outside HTTP traffic to the cluster's se
 - **Kind:** `loadbalancer`
 - **Protocol:** `HTTP`
 - **Read:** 5 from [HttpEdge](#httpedge)
-- **Write:** `MESSAGE`, plus 4 from [HttpEdge](#httpedge)
+- **Write:** 4 from [HttpEdge](#httpedge)
 - **Statuses:** 61 from [HttpEdge](#httpedge)
 - **Headers:** 69 from [HttpEdge](#httpedge)
 
@@ -180,7 +180,7 @@ Kong, the open source API gateway built on nginx.
 - **Kind:** `gateway`
 - **Protocol:** `HTTP`
 - **Read:** 5 from [HttpEdge](#httpedge)
-- **Write:** 1 from [API Gateway](#api-gateway), 4 from [HttpEdge](#httpedge)
+- **Write:** 4 from [HttpEdge](#httpedge)
 - **Statuses:** 61 from [HttpEdge](#httpedge)
 - **Headers:** 69 from [HttpEdge](#httpedge)
 
@@ -192,6 +192,6 @@ Spring Cloud Gateway, an API gateway for Spring services.
 - **Kind:** `gateway`
 - **Protocol:** `HTTP`
 - **Read:** 5 from [HttpEdge](#httpedge)
-- **Write:** 1 from [API Gateway](#api-gateway), 4 from [HttpEdge](#httpedge)
+- **Write:** 4 from [HttpEdge](#httpedge)
 - **Statuses:** 61 from [HttpEdge](#httpedge)
 - **Headers:** 69 from [HttpEdge](#httpedge)
