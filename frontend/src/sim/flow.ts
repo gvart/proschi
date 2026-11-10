@@ -185,7 +185,8 @@ export function selectNodes(diagram: Diagram, selector: Selector): DiagramNode[]
 export function matches(node: DiagramNode, selector: Selector, diagram?: Diagram): boolean {
   if (node.kind !== 'component') return false;
   if ('node' in selector) return node.id === selector.node;
-  if ('tech' in selector) return node.techStack.toLowerCase() === selector.tech.toLowerCase();
+  // `[LedgerDb]` may name a declared type: its nodes have the tech stack of their icon, a built-in tech.
+  if ('tech' in selector) return [node.techStack, node.resolvedType?.name].some((t) => t?.toLowerCase() === selector.tech.toLowerCase());
   if ('anyOf' in selector) return selector.anyOf.some((s) => matches(node, s, diagram));
   if ('consistency' in selector) {
     const override = diagram?.capacity?.find((o) => o.node === node.id);

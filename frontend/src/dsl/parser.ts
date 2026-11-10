@@ -1,11 +1,14 @@
 import type { ComponentType, TechName, TechStack } from '../types/canvas';
 import { findTech, suggestTech } from '../catalog/componentCatalog';
-import { BracketCounter, qualify, tokenizeLine, type Token } from './lexer';
+import { BracketCounter, qualify, stripTrailingComment, tokenizeLine, type Token } from './lexer';
 import { endpointGroupKey } from './paths';
 import { DATA_STORE_KINDS, KINDS, TYPE_OF_KIND, isDataStore, isKind, kindFromName, kindOf } from './kinds';
 import { parseQuantity } from './quantity';
 import { accessOf } from './access';
 import { COLOR_NAMES, editDistance, resolveColor, suggestColor } from './palette';
+import { lookupType, resolveTypes } from './typesys/resolve';
+import { loadStdlib } from './typesys/stdlib';
+import type { ResolvedType, TypeDecl, TypeProps, TypeTable } from './typesys/types';
 import type {
   FlowStep,
   Protocol,
@@ -93,7 +96,44 @@ type Frame =
   | { kind: 'par'; group: number; loc: SourceLoc }
   | SystemFrame
   | StubFrame
-  | SectionFrame;
+  | SectionFrame
+  | TypeFrame;
+
+/** A `type Name extends Parent {` block; `discard` when it is misplaced, so its lines are skipped. */
+interface TypeFrame {
+  kind: 'type';
+  decl: TypeDecl;
+  discard?: boolean;
+  loc: SourceLoc;
+}
+
+/** A node's `[Tech]`, resolved against the types once every file is read. */
+interface TechRef {
+  node: DiagramNode;
+  value: string;
+  loc: SourceLoc;
+}
+
+/** Profile numbers a type block may set, and the unit each takes besides a plain number. */
+const NUMBER_PROPS: Partial<Record<keyof TypeProps, Quantity['unit']>> = {
+  rps: 'rps',
+  readRps: 'rps',
+  writeRps: 'rps',
+  latencyMs: 'ms',
+  availability: '%',
+  costUsd: 'usd/month',
+  bandwidthMBps: 'MBps',
+  egressUsdPerGb: 'usd/GB',
+};
+const CHOICE_PROPS: Partial<Record<keyof TypeProps, readonly string[]>> = {
+  durable: ['true', 'false'],
+  consistency: ['strong', 'eventual'],
+  writeScaling: ['replicas', 'shards'],
+};
+const TYPE_LINES =
+  'kind, protocol, op, status, header, icon, doc or a profile number (rps, readRps, writeRps, writeScaling, latencyMs, availability, costUsd, durable, consistency, bandwidthMBps, egressUsdPerGb)';
+/** An HTTP header name, as `header` takes it unquoted. */
+const HEADER_NAME = /^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/;
 
 /** A multi-line `capacity {` inside a system. */
 interface StubFrame {
@@ -214,6 +254,19 @@ export function parse(source: string, options: ParseOptions = {}): ParseResult {
   return new Parser(source, options).run();
 }
 
+/**
+ * The `type` blocks of one file, unresolved: what the stdlib loader reads
+ * (typesys/stdlib.ts). Imports are not followed.
+ */
+export function parseTypeDecls(source: string, path: string): { decls: TypeDecl[]; diagnostics: Diagnostic[] } {
+  return new Parser(source, { path }, { chain: [path], teamFiles: new Map() }).readTypes();
+}
+
+/** The bundled stdlib types (src/dsl/stdlib), resolved once. */
+export function builtinTypes(): TypeTable {
+  return loadStdlib(parseTypeDecls).table;
+}
+
 /** Shared by the parser of a root document and the parsers of its systems' team files. */
 interface Scope {
   /** Files being read, outermost first, to find import and system cycles; ends with the team file. */
@@ -274,6 +327,14 @@ class Parser {
   private readonly deferred: (() => void)[] = [];
   private built: DiagramUseCase[] = [];
   private readonly options: ParseOptions;
+  /** `type` blocks of every file read so far, in order. */
+  private readonly typeDecls: TypeDecl[] = [];
+  /** Node techs, resolved by `resolveTypes` once every file is read. */
+  private readonly techRefs: TechRef[] = [];
+  /** Built-in and declared types; set by `resolveTypes`. */
+  private typeTable: TypeTable = new Map();
+  /** The declared (not built-in) types, resolved. */
+  private types: ResolvedType[] = [];
 
   constructor(source: string, options: ParseOptions, scope?: Scope) {
     this.options = options;
@@ -290,6 +351,7 @@ class Parser {
     // Implicit nodes are created only once every file is read, so a use case
     // file may refer to nodes its imports declare.
     this.parseFile();
+    this.resolveTypes();
     this.resolvePorts();
     this.createImplicitNodes();
     this.resolveTags();
@@ -320,6 +382,7 @@ class Parser {
       ...(this.systems.length ? { systems: this.systems } : {}),
       ...(this.whatifs.length ? { whatifs: this.whatifs } : {}),
       ...(this.constants.size ? { constants: [...this.constants.values()] } : {}),
+      ...(this.types.length ? { types: this.types } : {}),
     };
 
     const order = (d: Diagnostic) => this.fileOrder.get(d.file) ?? 0;
@@ -330,6 +393,12 @@ class Parser {
       ...(this.imports.length ? { imports: this.imports } : {}),
       ...(this.blocks.length ? { blocks: this.blocks } : {}),
     };
+  }
+
+  /** For `parseTypeDecls`: the file's type blocks and every problem found reading it. */
+  readTypes(): { decls: TypeDecl[]; diagnostics: Diagnostic[] } {
+    this.parseFile();
+    return { decls: this.typeDecls, diagnostics: this.diagnostics };
   }
 
   /** Reads the current file's lines and reports blocks it leaves open. */
@@ -357,7 +426,9 @@ class Parser {
                   ? `system '${frame.system.id}'`
                   : frame.kind === 'stub'
                     ? `the capacity of system '${frame.system.id}'`
-                    : sectionName(frame);
+                    : frame.kind === 'type'
+                      ? `type '${frame.decl.name}'`
+                      : sectionName(frame);
       this.error(`Missing } to close ${what}`, frame.loc);
       if (frame.kind === 'system') this.finishSystem(frame);
     }
@@ -366,6 +437,12 @@ class Parser {
   /** Parses the line at `index` and returns the index of the last line it consumed. */
   private parseLine(index: number): number {
     const line = index + 1;
+    // `header Content-Type, …`: header names have dashes, which the lexer does not read, so the line is read as text.
+    const typeFrame = this.top();
+    if (typeFrame?.kind === 'type' && /^\s*header(\s|$)/.test(this.lines[index])) {
+      if (!typeFrame.discard) this.parseHeaders(typeFrame.decl, this.lines[index], line);
+      return index;
+    }
     const { tokens: lexed, diagnostics } = tokenizeLine(this.lines[index], line);
     const tokens = qualify(lexed);
     this.diagnostics.push(...diagnostics.map((d) => ({ ...d, ...this.fileField() })));
@@ -412,6 +489,16 @@ class Parser {
       return index;
     }
 
+    if (top?.kind === 'type') {
+      if (first.kind === 'rbrace') {
+        this.stack.pop();
+        if (second) this.error('Unexpected input after }', loc(second));
+      } else if (!top.discard) {
+        this.parseTypeLine(top.decl, tokens, line);
+      }
+      return index;
+    }
+
     if (first.kind === 'rbrace') {
       if (this.stack.length === 0) this.error('Unmatched }', loc(first));
       else this.closeFrame();
@@ -444,6 +531,15 @@ class Parser {
         break;
       case 'usecase':
         this.parseUseCase(tokens, line);
+        break;
+      // Keywords only in the shape of a type header, so a node may still be called type or abstract.
+      case 'type':
+        if (isTypeHeader(tokens, 1)) this.parseType(tokens, 1, line);
+        else this.parseNode(tokens, line);
+        break;
+      case 'abstract':
+        if (isWord(second, 'type') && isTypeHeader(tokens, 2)) this.parseType(tokens, 2, line);
+        else this.parseNode(tokens, line);
         break;
       case 'par':
         this.parsePar(tokens, line);
@@ -1137,11 +1233,14 @@ class Parser {
         if (strings++ === 0) node.name = t.value;
         else node.description = t.value;
       } else if (t.kind === 'tech') {
-        const resolved = this.resolveTech(t, line);
-        node.type = resolved.type;
-        node.techStack = resolved.techStack;
-        if (resolved.inferredKind) node.inferredKind = resolved.inferredKind;
-        node.kind = resolved.type === 'text' ? 'text' : resolved.type === 'group' ? 'group' : 'component';
+        // A catalog tech is drawn as it right away; a type, or an unknown tech, once every file is read (resolveTypes).
+        const found = findTech(t.value);
+        if (found) {
+          node.type = found.type;
+          node.techStack = found.techStack;
+          node.kind = found.type === 'text' ? 'text' : found.type === 'group' ? 'group' : 'component';
+        }
+        this.techRefs.push({ node, value: t.value, loc: this.locOf(t, line) });
       } else if (t.kind === 'team') {
         node.ownerTeam = t.value;
       } else if (t.kind === 'ident' && t.value === 'pos') {
@@ -2409,9 +2508,13 @@ class Parser {
   /** Warns about a selector naming a tech stack that does not exist, and (once every file is read) a node that does not. */
   private checkSelectorLater({ atoms }: ParsedSelector) {
     for (const { selector, token, loc } of atoms) {
+      // Deferred: the selector may name a type declared further down or in another file.
       if ('tech' in selector && !findTech(token.value)) {
-        const suggestion = suggestTech(token.value);
-        this.warning(`Unknown tech stack '${token.value}'${suggestion ? `. Did you mean '${suggestion}'?` : ''}`, loc);
+        this.deferred.push(() => {
+          if (lookupType(this.typeTable, token.value)) return;
+          const suggestion = suggestTech(token.value);
+          this.warning(`Unknown tech stack '${token.value}'${suggestion ? `. Did you mean '${suggestion}'?` : ''}`, loc);
+        });
       }
       if ('node' in selector) {
         this.deferred.push(() => {
@@ -2683,19 +2786,281 @@ class Parser {
    * (`Postgress`: database), else a service; never a free, infinitely fast
    * client.
    */
-  private resolveTech(token: Token, line: number): { type: ComponentType; techStack: TechName; inferredKind?: Kind } {
-    const found = findTech(token.value);
+  private resolveTech(value: string, loc: SourceLoc): { type: ComponentType; techStack: TechName; inferredKind?: Kind } {
+    const found = findTech(value);
     if (found) return { type: found.type, techStack: found.techStack };
-    const text = token.value.trim();
+    const text = value.trim();
     if (!text) {
-      this.warning(`Empty tech stack; drawing a ${DEFAULT_TECH}`, this.locOf(token, line));
+      this.warning(`Empty tech stack; drawing a ${DEFAULT_TECH}`, loc);
       return { type: 'shape', techStack: DEFAULT_TECH };
     }
     const suggestion = suggestTech(text);
     const closest = suggestion && findTech(suggestion);
     const kind = kindFromName(text) ?? (closest ? kindOf({ kind: 'component', type: closest.type, techStack: closest.techStack }) : undefined) ?? 'service';
-    this.warning(unknownTechMessage(text, kind, suggestion), this.locOf(token, line));
+    this.warning(unknownTechMessage(text, kind, suggestion), loc);
     return { type: TYPE_OF_KIND[kind], techStack: text, inferredKind: kind };
+  }
+
+  /**
+   * Resolves the type blocks of every file against the stdlib, then each
+   * node's `[Tech]`: a type gives the node its kind and the icon of its
+   * nearest built-in ancestor (D5); anything else is resolved as before.
+   */
+  private resolveTypes() {
+    const resolution = resolveTypes(this.typeDecls, builtinTypes());
+    this.diagnostics.push(...resolution.diagnostics);
+    this.typeTable = resolution.table;
+    this.types = resolution.types;
+    for (const ref of this.techRefs) this.applyTech(ref);
+  }
+
+  private applyTech({ node, value, loc }: TechRef) {
+    const type = lookupType(this.typeTable, value);
+    if (!type) {
+      if (findTech(value)) return;
+      const resolved = this.resolveTech(value, loc);
+      node.type = resolved.type;
+      node.techStack = resolved.techStack;
+      if (resolved.inferredKind) node.inferredKind = resolved.inferredKind;
+      return;
+    }
+    node.resolvedType = type;
+    if (type.abstract) {
+      const concrete = [...this.typeTable.values()].find((t) => !t.abstract && t.parents[0] === type.name);
+      this.warning(`'${type.name}' is an abstract type; use a type that extends it${concrete ? `, like [${concrete.name}]` : ''}`, loc);
+    }
+    // An abstract type may have no kind: the node gets the one its name suggests, as an unknown tech would.
+    const kind = type.kind ?? kindFromName(type.name) ?? 'service';
+    const icon = findTech(type.icon ?? GENERIC_TECH[kind]);
+    if (icon) {
+      node.type = icon.type;
+      node.techStack = icon.techStack;
+      node.kind = icon.type === 'text' ? 'text' : icon.type === 'group' ? 'group' : 'component';
+    }
+    if (type.kind) delete node.inferredKind;
+    else node.inferredKind = kind;
+  }
+
+  /** `[abstract] type Name [extends Parent] {`, or a whole one-line block `… { op write APPEND }`; `at` is the name's index. */
+  private parseType(tokens: Token[], at: number, line: number) {
+    const nameToken = tokens[at];
+    const extendsAt = isWord(tokens[at + 1], 'extends') ? at + 1 : -1;
+    const parentToken = extendsAt === -1 ? undefined : tokens[extendsAt + 1];
+    const decl: TypeDecl = {
+      name: nameToken.value,
+      abstract: at === 2,
+      ...(parentToken && (parentToken.kind === 'ident' || parentToken.kind === 'tech') ? { parent: parentToken.value, parentLoc: this.locOf(parentToken, line) } : {}),
+      props: {},
+      ops: [],
+      statuses: [],
+      headers: [],
+      builtin: false,
+      loc: this.locOf(nameToken, line),
+    };
+    const braceAt = extendsAt === -1 ? at + 1 : extendsAt + 2;
+    const skip = () => {
+      // A broken header that opens a block: skip its lines rather than read them as nodes.
+      if (tokens[tokens.length - 1].kind === 'lbrace') this.stack.push({ kind: 'type', decl, discard: true, loc: decl.loc });
+    };
+    if (extendsAt !== -1 && decl.parent === undefined) {
+      this.error('Expected the parent type after extends, e.g. type LedgerDb extends PostgreSQL {', this.locOf(parentToken ?? tokens[extendsAt], line));
+      return skip();
+    }
+    if (tokens[braceAt]?.kind !== 'lbrace') {
+      this.error('Expected { after the type header, e.g. type LedgerDb extends PostgreSQL {', this.locOf(tokens[braceAt] ?? tokens[braceAt - 1], line));
+      return skip();
+    }
+    if (!decl.name.trim()) {
+      this.error('Expected a type name, e.g. type LedgerDb extends PostgreSQL {', decl.loc);
+      return skip();
+    }
+    if (this.stack.length > 0) {
+      this.error('Declare types at the top level, not inside a block', this.locOf(tokens[0], line));
+      return skip();
+    }
+    const last = tokens[tokens.length - 1];
+    if (last.kind === 'rbrace' && tokens.length > braceAt + 1) {
+      const body = tokens.slice(braceAt + 1, -1);
+      if (body.length) this.parseTypeLine(decl, body, line);
+    } else if (tokens.length > braceAt + 1) {
+      this.error('Expected the type body on the next lines, or on this one closed with }', this.locOf(tokens[braceAt + 1], line));
+      return skip();
+    } else {
+      this.stack.push({ kind: 'type', decl, loc: decl.loc });
+    }
+    this.typeDecls.push(decl);
+  }
+
+  /** One line of a type block: `kind database`, `op read SELECT`, `latencyMs 4`, … */
+  private parseTypeLine(decl: TypeDecl, tokens: Token[], line: number) {
+    const [key, value] = tokens;
+    const loc = (t: Token | undefined) => this.locOf(t ?? tokens[tokens.length - 1], line);
+    if (key.kind !== 'ident') {
+      this.error(`Expected a type property: ${TYPE_LINES}`, loc(key));
+      return;
+    }
+    const word = key.value;
+    const single = (kinds: Token['kind'][], example: string): string | undefined => {
+      if (!value || !kinds.includes(value.kind)) {
+        this.error(`Expected ${example}`, loc(value ?? key));
+        return undefined;
+      }
+      this.expectEnd(tokens, 2, line);
+      return value.value;
+    };
+    switch (word) {
+      case 'kind': {
+        const kind = single(['ident'], `a kind after kind: ${KINDS.join(', ')}`);
+        if (kind === undefined) return;
+        if (!isKind(kind)) this.error(`Unknown kind '${kind}'; use one of ${KINDS.join(', ')}`, loc(value));
+        else decl.kind = kind;
+        return;
+      }
+      case 'protocol': {
+        const protocol = single(['ident', 'string'], 'a protocol after protocol, e.g. protocol SQL');
+        if (protocol !== undefined) decl.protocol = protocol;
+        return;
+      }
+      case 'icon': {
+        const icon = single(['ident', 'tech', 'string'], 'a catalog tech after icon, e.g. icon PostgreSQL or icon [REST API]');
+        if (icon !== undefined) decl.icon = icon;
+        return;
+      }
+      case 'doc': {
+        const doc = single(['string'], 'a quoted description after doc, e.g. doc "Keeps the ledger"');
+        if (doc !== undefined) decl.doc = doc;
+        return;
+      }
+      case 'op':
+        this.parseTypeOp(decl, tokens, line);
+        return;
+      case 'status': {
+        const codes = this.readList(tokens, 1, line, ['number'], 'status codes, e.g. status 200, 201, 404');
+        for (const code of codes ?? []) {
+          const n = Number(code.value);
+          if (n < 100 || n > 599) this.error(`'${code.value}' is not an HTTP status code (100 to 599)`, loc(code));
+          else if (!decl.statuses.includes(n)) decl.statuses.push(n);
+        }
+        return;
+      }
+      case 'header': {
+        // Only in a one-line block; on a line of its own `header` is read as text (parseHeaders), which allows dashes.
+        const names = this.readList(tokens, 1, line, ['ident', 'string'], 'header names, e.g. header Authorization, "Content-Type"');
+        for (const name of names ?? []) if (!decl.headers.some((h) => h.toLowerCase() === name.value.toLowerCase())) decl.headers.push(name.value);
+        return;
+      }
+    }
+    if (Object.hasOwn(CHOICE_PROPS, word)) {
+      const prop = word as 'durable' | 'consistency' | 'writeScaling';
+      const choices = CHOICE_PROPS[prop]!;
+      const choice = single(['ident'], `${choices.join(' or ')} after ${prop}`);
+      if (choice === undefined) return;
+      if (!choices.includes(choice)) this.error(`Expected ${choices.join(' or ')} after ${prop}, not '${choice}'`, loc(value));
+      else if (prop === 'durable') decl.props.durable = choice === 'true';
+      else if (prop === 'consistency') decl.props.consistency = choice as 'strong' | 'eventual';
+      else decl.props.writeScaling = choice as 'replicas' | 'shards';
+      return;
+    }
+    if (Object.hasOwn(NUMBER_PROPS, word)) {
+      const prop = word as 'rps' | 'readRps' | 'writeRps' | 'latencyMs' | 'availability' | 'costUsd' | 'bandwidthMBps' | 'egressUsdPerGb';
+      const unit = NUMBER_PROPS[prop]!;
+      const example = prop === 'availability' ? 'a percentage after availability, e.g. availability 99.95%' : `a number after ${prop}, e.g. ${prop} ${unit === 'rps' ? '20k' : '4'}`;
+      if (!value || (value.kind !== 'number' && value.kind !== 'quantity')) {
+        this.error(`Expected ${example}`, loc(value ?? key));
+        return;
+      }
+      this.expectEnd(tokens, 2, line);
+      const q = parseQuantity(value.value);
+      if ('error' in q) {
+        this.error(q.error, loc(value));
+        return;
+      }
+      if (q.unit !== undefined && q.unit !== unit) {
+        this.error(`Expected ${example}, not ${kindName(q.unit)}`, loc(value));
+        return;
+      }
+      if (prop !== 'availability') decl.props[prop] = q.value;
+      else if (q.unit === '%' && q.value > 0 && q.value <= 100) decl.props.availability = Number((q.value / 100).toPrecision(12));
+      else this.error(`Expected ${example}`, loc(value));
+      return;
+    }
+    this.error(`Unknown type property '${word}'; use ${TYPE_LINES}`, loc(key));
+  }
+
+  /** `op read SELECT, Scan latency 8 cost 2`: operations with their access and optional multipliers. */
+  private parseTypeOp(decl: TypeDecl, tokens: Token[], line: number) {
+    const access = tokens[1];
+    if (!isWord(access, 'read') && !isWord(access, 'write')) {
+      this.error('Expected read or write after op, e.g. op read SELECT', this.locOf(access ?? tokens[0], line));
+      return;
+    }
+    let end = 2;
+    while (end < tokens.length && !isWord(tokens[end], 'latency') && !isWord(tokens[end], 'cost')) end++;
+    const example = `operation names after op ${access.value}, e.g. op ${access.value} ${access.value === 'read' ? 'SELECT' : 'INSERT, UPDATE'}`;
+    const names = this.readList(tokens.slice(0, end), 2, line, ['ident', 'string'], example);
+    if (!names) return;
+    const multipliers: { latency?: number; cost?: number } = {};
+    for (let i = end; i < tokens.length; i += 2) {
+      const [word, number] = [tokens[i], tokens[i + 1]];
+      if (!isWord(word, 'latency') && !isWord(word, 'cost')) {
+        this.error(`Unexpected ${describe(word)}; an op ends with latency <n> and cost <n>`, this.locOf(word, line));
+        return;
+      }
+      const q = number && (number.kind === 'number' || number.kind === 'quantity') ? parseQuantity(number.value) : undefined;
+      if (!q || 'error' in q || q.unit !== undefined || q.value <= 0) {
+        this.error(`Expected a multiplier after ${word.value}, e.g. ${word.value} 2 or ${word.value} 0.5`, this.locOf(number ?? word, line));
+        return;
+      }
+      multipliers[word.value as 'latency' | 'cost'] = q.value;
+    }
+    for (const name of names) {
+      const op = { name: name.value, access: access.value as 'read' | 'write', ...multipliers };
+      const at = decl.ops.findIndex((o) => o.name === op.name);
+      if (at === -1) decl.ops.push(op);
+      else decl.ops[at] = op;
+    }
+  }
+
+  /** `header Authorization, Content-Type`, read from the line's text. */
+  private parseHeaders(decl: TypeDecl, text: string, line: number) {
+    const keyword = text.indexOf('header');
+    const start = keyword + 'header'.length;
+    const body = stripTrailingComment(text.slice(start));
+    if (!body.trim()) {
+      this.error('Expected header names, e.g. header Authorization, Content-Type', { line, col: keyword + 1, length: 6, ...this.fileField() });
+      return;
+    }
+    let col = start + 1;
+    for (const part of body.split(',')) {
+      const raw = part.trim();
+      const name = raw.length > 1 && raw.startsWith('"') && raw.endsWith('"') ? raw.slice(1, -1) : raw;
+      const loc = { line, col: col + part.indexOf(raw), length: Math.max(1, raw.length), ...this.fileField() };
+      col += part.length + 1;
+      if (!HEADER_NAME.test(name)) this.error(`Expected a header name, e.g. Content-Type${raw ? `, not '${raw}'` : ''}`, loc);
+      else if (!decl.headers.some((h) => h.toLowerCase() === name.toLowerCase())) decl.headers.push(name);
+    }
+  }
+
+  /** Comma-separated tokens of `kinds` from `tokens[from]` to the end; undefined (after an error) when malformed. */
+  private readList(tokens: Token[], from: number, line: number, kinds: Token['kind'][], example: string): Token[] | undefined {
+    const items: Token[] = [];
+    for (let i = from; i < tokens.length; i += 2) {
+      const [item, sep] = [tokens[i], tokens[i + 1]];
+      if (!kinds.includes(item.kind)) {
+        this.error(`Expected ${example}`, this.locOf(item, line));
+        return undefined;
+      }
+      items.push(item);
+      if (sep && (sep.kind !== 'comma' || i + 2 >= tokens.length)) {
+        this.error(sep.kind === 'comma' ? 'Expected another name after ,' : `Expected , or the end of the line, not ${describe(sep)}`, this.locOf(sep, line));
+        return undefined;
+      }
+    }
+    if (!items.length) {
+      this.error(`Expected ${example}`, this.locOf(tokens[from - 1], line));
+      return undefined;
+    }
+    return items;
   }
 
   private useCaseId(name: string): string {
@@ -2871,6 +3236,12 @@ const KIND_NAMES: Record<Quantity['unit'], string> = {
 /** What kind of value a constant is, for messages. */
 export function kindName(unit: Quantity['unit'] | undefined): string {
   return unit ? KIND_NAMES[unit] : 'a plain number';
+}
+
+/** `Name {` or `Name extends …` at `tokens[at]`, the name a plain or `[bracketed]` word: the shape of a type header. */
+function isTypeHeader(tokens: Token[], at: number): boolean {
+  const [name, next] = [tokens[at], tokens[at + 1]];
+  return (name?.kind === 'ident' || name?.kind === 'tech') && (next?.kind === 'lbrace' || isWord(next, 'extends'));
 }
 
 function isWord(token: Token | undefined, word: string): boolean {

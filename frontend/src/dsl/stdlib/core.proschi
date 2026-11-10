@@ -1,0 +1,25 @@
+# Proschi standard library: the root types. Bundled with the parser, so every
+# diagram sees them. The format is in docs/design/typed-components.md.
+#
+# Rules for stdlib files:
+# - Only `type` and `abstract type` blocks, blank lines and comments.
+# - A type named after a catalog tech stack (src/catalog/componentCatalog.ts)
+#   is drawn with that tech's icon and must have the kind the catalog gives it
+#   (stdlib.test.ts checks both).
+# - Simulation numbers (latencyMs, rps, …) go here only when they equal what
+#   sim/profiles.ts already gives the tech, so diagrams simulate as before.
+# - After editing, run `npm run gen:stdlib` to refresh sources.gen.ts.
+
+abstract type Component {
+  doc "Anything drawn on the diagram: the root of every type"
+}
+
+type Service {
+  kind service
+  protocol HTTP
+  doc "A program you run that answers requests"
+}
+
+abstract type DataStore {
+  doc "Something that keeps data: a database, cache, queue or bucket"
+}

@@ -1060,7 +1060,7 @@ var BY_TYPE = {
 };
 function kindOf(node) {
   if (node.kind !== "component") return "other";
-  return node.inferredKind ?? BY_TECH.get(node.techStack) ?? BY_TYPE[node.type] ?? "other";
+  return node.inferredKind ?? node.resolvedType?.kind ?? BY_TECH.get(node.techStack) ?? BY_TYPE[node.type] ?? "other";
 }
 var TYPE_OF_KIND = {
   client: "shape",
@@ -1283,7 +1283,183 @@ function editDistance2(a, b) {
   return row[b.length];
 }
 
+// ../frontend/src/dsl/typesys/types.ts
+var ROOT_TYPE = "Component";
+
+// ../frontend/src/dsl/typesys/resolve.ts
+var typeKey = techKey;
+function lookupType(table, name) {
+  const own = table.get(typeKey(name));
+  if (own && !own.builtin) return own;
+  const tech = findTech(name);
+  return tech ? table.get(typeKey(tech.techStack)) : own;
+}
+function techNamed(name) {
+  const tech = findTech(name);
+  return tech && typeKey(tech.techStack) === typeKey(name) ? tech.techStack : void 0;
+}
+function resolveTypes(decls, base = /* @__PURE__ */ new Map()) {
+  const diagnostics = [];
+  const error = (message, loc) => diagnostics.push({ severity: "error", message, ...loc });
+  const warning = (message, loc) => diagnostics.push({ severity: "warning", message, ...loc });
+  const byKey2 = /* @__PURE__ */ new Map();
+  const order = [];
+  for (const decl of decls) {
+    const key = typeKey(decl.name);
+    const builtin = base.get(key);
+    const first = byKey2.get(key);
+    if (builtin) error(`Type '${decl.name}' is built in${builtin.name === decl.name ? "" : ` as '${builtin.name}'`}; extend it under another name`, decl.loc);
+    else if (first) error(`Duplicate type '${decl.name}' (first declared ${where(first.loc, decl.loc)})`, decl.loc);
+    else {
+      byKey2.set(key, decl);
+      order.push(decl);
+    }
+  }
+  const table = new Map(base);
+  const resolving = [];
+  const broken = /* @__PURE__ */ new Set();
+  const resolve = (decl) => {
+    const key = typeKey(decl.name);
+    const done = table.get(key);
+    if (done) return done;
+    let parent;
+    const parentName = decl.parent ?? (typeKey(decl.name) === typeKey(ROOT_TYPE) ? void 0 : ROOT_TYPE);
+    if (parentName !== void 0) {
+      const parentKey = typeKey(parentName);
+      const parentDecl = byKey2.get(parentKey);
+      const cycleStart = !parentDecl ? -1 : parentDecl === decl ? resolving.length : resolving.indexOf(parentDecl);
+      if (cycleStart !== -1) {
+        const names = [...resolving.slice(cycleStart), decl, parentDecl].map((d) => d.name);
+        error(`Type cycle: ${names.join(" \u2192 ")}`, decl.parentLoc ?? decl.loc);
+        parent = table.get(typeKey(ROOT_TYPE));
+        broken.add(key);
+      } else if (parentDecl) {
+        resolving.push(decl);
+        parent = resolve(parentDecl);
+        resolving.pop();
+        if (broken.has(parentKey)) broken.add(key);
+      } else {
+        parent = base.get(parentKey) ?? lookupType(base, parentName) ?? catalogType(parentName, table);
+        if (!parent) {
+          broken.add(key);
+          const suggestion = suggestType(parentName, [...table.values()].map((t) => t.name).concat([...byKey2.values()].map((d) => d.name)));
+          error(`Unknown parent type '${parentName}'${suggestion ? `. Did you mean '${suggestion}'?` : ""}`, decl.parentLoc ?? decl.loc);
+          parent = table.get(typeKey(ROOT_TYPE));
+        }
+      }
+    }
+    let icon = decl.icon;
+    if (icon !== void 0) {
+      const tech = findTech(icon);
+      if (!tech) {
+        const suggestion = suggestTech(icon);
+        warning(`Unknown icon '${icon}'${suggestion ? ` (did you mean '${suggestion}'?)` : ""}; the type keeps its inherited icon`, decl.loc);
+      }
+      icon = tech?.techStack;
+    }
+    if (icon === void 0 && decl.builtin) icon = techNamed(decl.name);
+    const shadowed = decl.builtin ? void 0 : findTech(decl.name);
+    if (shadowed) warning(`Type '${decl.name}' has the name of the catalog tech '${shadowed.techStack}'; [${decl.name}] now means this type`, decl.loc);
+    icon ??= parent?.icon;
+    const kind = decl.kind ?? parent?.kind;
+    if (!decl.abstract && !kind && !broken.has(key)) error(`Type '${decl.name}' needs a kind: declare one (kind database) or extend a type that has one`, decl.loc);
+    const ownOps = new Set(decl.ops.map((o) => o.name));
+    const resolved = {
+      name: decl.name,
+      abstract: decl.abstract,
+      builtin: decl.builtin,
+      parents: parent ? [parent.name, ...parent.parents] : [],
+      ...kind ? { kind } : {},
+      props: { ...parent?.props, ...decl.props },
+      ops: [...parent?.ops.filter((o) => !ownOps.has(o.name)) ?? [], ...decl.ops].map((o) => ({ ...o })),
+      statuses: union(parent?.statuses ?? [], decl.statuses),
+      headers: union(parent?.headers ?? [], decl.headers, (h2) => h2.toLowerCase()),
+      ...pick("protocol", decl.protocol ?? parent?.protocol),
+      ...pick("icon", icon),
+      ...pick("doc", decl.doc ?? parent?.doc),
+      loc: decl.loc
+    };
+    table.set(key, resolved);
+    return resolved;
+  };
+  const types = order.map(resolve);
+  return { table, types, diagnostics };
+}
+function catalogType(name, table) {
+  const tech = findTech(name);
+  if (!tech) return void 0;
+  const root = table.get(typeKey(ROOT_TYPE));
+  return {
+    name: tech.techStack,
+    abstract: false,
+    builtin: true,
+    parents: root ? [root.name, ...root.parents] : [],
+    kind: kindOf({ kind: "component", type: tech.type, techStack: tech.techStack }),
+    props: {},
+    ops: [],
+    statuses: [],
+    headers: [],
+    icon: tech.techStack,
+    loc: { line: 1, col: 1, length: 0, file: "catalog" }
+  };
+}
+function pick(key, value) {
+  return value === void 0 ? {} : { [key]: value };
+}
+function union(inherited, own, key = (v) => v) {
+  const seen = new Set(inherited.map(key));
+  return [...inherited, ...own.filter((v) => !seen.has(key(v)) && seen.add(key(v)))];
+}
+function where(first, later) {
+  return first.file === later.file ? `on line ${first.line}` : `in ${first.file ?? "the root document"} on line ${first.line}`;
+}
+function suggestType(name, names) {
+  const key = typeKey(name);
+  let best;
+  let bestDistance = Math.max(2, Math.floor(key.length / 3)) + 1;
+  for (const candidate of names) {
+    const d = editDistance(key, typeKey(candidate));
+    if (d < bestDistance) [best, bestDistance] = [candidate, d];
+  }
+  return best;
+}
+
+// ../frontend/src/dsl/stdlib/sources.gen.ts
+var STDLIB_SOURCES = [
+  { path: "stdlib/core.proschi", source: '# Proschi standard library: the root types. Bundled with the parser, so every\n# diagram sees them. The format is in docs/design/typed-components.md.\n#\n# Rules for stdlib files:\n# - Only `type` and `abstract type` blocks, blank lines and comments.\n# - A type named after a catalog tech stack (src/catalog/componentCatalog.ts)\n#   is drawn with that tech\'s icon and must have the kind the catalog gives it\n#   (stdlib.test.ts checks both).\n# - Simulation numbers (latencyMs, rps, \u2026) go here only when they equal what\n#   sim/profiles.ts already gives the tech, so diagrams simulate as before.\n# - After editing, run `npm run gen:stdlib` to refresh sources.gen.ts.\n\nabstract type Component {\n  doc "Anything drawn on the diagram: the root of every type"\n}\n\ntype Service {\n  kind service\n  protocol HTTP\n  doc "A program you run that answers requests"\n}\n\nabstract type DataStore {\n  doc "Something that keeps data: a database, cache, queue or bucket"\n}\n' },
+  { path: "stdlib/data.proschi", source: '# Proschi standard library: data stores. The rules are in core.proschi.\n\ntype Database extends DataStore {\n  kind database\n  doc "A database whose product does not matter"\n}\n\nabstract type SqlDatabase extends Database {\n  protocol SQL\n  op read  SELECT\n  op write INSERT, UPDATE, DELETE\n  doc "A relational database, queried with SQL"\n}\n\ntype PostgreSQL extends SqlDatabase {\n  doc "PostgreSQL, the open source relational database"\n}\n\ntype Cache extends DataStore {\n  kind cache\n  doc "An in-memory key-value cache"\n}\n\ntype Redis extends Cache {\n  protocol RESP\n  op read  GET, MGET, HGET\n  op write SET, DEL, HSET, EXPIRE\n  doc "Redis, the in-memory data store, used as a cache"\n}\n' },
+  { path: "stdlib/services.proschi", source: '# Proschi standard library: services. The rules are in core.proschi.\n\ntype [REST API] extends Service {\n  op read  GET, HEAD\n  op write POST, PUT, PATCH, DELETE\n  status 200, 201, 204, 400, 401, 403, 404, 409, 500, 503\n  header Authorization, Content-Type\n  doc "A service with a REST interface over HTTP"\n}\n' }
+];
+
+// ../frontend/src/dsl/typesys/stdlib.ts
+var cached;
+function loadStdlib(read2) {
+  if (!cached) {
+    const files = STDLIB_SOURCES.map(({ source, path }) => read2(source, path));
+    const resolution = resolveTypes(files.flatMap((f) => f.decls.map((d) => ({ ...d, builtin: true }))));
+    cached = { ...resolution, diagnostics: [...files.flatMap((f) => f.diagnostics), ...resolution.diagnostics] };
+  }
+  return cached;
+}
+
 // ../frontend/src/dsl/parser.ts
+var NUMBER_PROPS = {
+  rps: "rps",
+  readRps: "rps",
+  writeRps: "rps",
+  latencyMs: "ms",
+  availability: "%",
+  costUsd: "usd/month",
+  bandwidthMBps: "MBps",
+  egressUsdPerGb: "usd/GB"
+};
+var CHOICE_PROPS = {
+  durable: ["true", "false"],
+  consistency: ["strong", "eventual"],
+  writeScaling: ["replicas", "shards"]
+};
+var TYPE_LINES = "kind, protocol, op, status, header, icon, doc or a profile number (rps, readRps, writeRps, writeScaling, latencyMs, availability, costUsd, durable, consistency, bandwidthMBps, egressUsdPerGb)";
+var HEADER_NAME = /^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/;
 var HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
 var DEFAULT_TECH = "Rectangle";
 var DEFAULT_GROUP_TECH = "Logical Group";
@@ -1333,6 +1509,12 @@ function unknownTechMessage(tech, kind, suggestion) {
 }
 function parse(source, options = {}) {
   return new Parser(source, options).run();
+}
+function parseTypeDecls(source, path) {
+  return new Parser(source, { path }, { chain: [path], teamFiles: /* @__PURE__ */ new Map() }).readTypes();
+}
+function builtinTypes() {
+  return loadStdlib(parseTypeDecls).table;
 }
 var Parser = class _Parser {
   // Per-file state, swapped while an imported file is read.
@@ -1385,6 +1567,14 @@ var Parser = class _Parser {
   deferred = [];
   built = [];
   options;
+  /** `type` blocks of every file read so far, in order. */
+  typeDecls = [];
+  /** Node techs, resolved by `resolveTypes` once every file is read. */
+  techRefs = [];
+  /** Built-in and declared types; set by `resolveTypes`. */
+  typeTable = /* @__PURE__ */ new Map();
+  /** The declared (not built-in) types, resolved. */
+  types = [];
   constructor(source, options, scope2) {
     this.options = options;
     this.lines = source.split("\n");
@@ -1396,6 +1586,7 @@ var Parser = class _Parser {
   }
   run() {
     this.parseFile();
+    this.resolveTypes();
     this.resolvePorts();
     this.createImplicitNodes();
     this.resolveTags();
@@ -1422,7 +1613,8 @@ var Parser = class _Parser {
       ...Object.keys(this.layout).length ? { layout: this.layout } : {},
       ...this.systems.length ? { systems: this.systems } : {},
       ...this.whatifs.length ? { whatifs: this.whatifs } : {},
-      ...this.constants.size ? { constants: [...this.constants.values()] } : {}
+      ...this.constants.size ? { constants: [...this.constants.values()] } : {},
+      ...this.types.length ? { types: this.types } : {}
     };
     const order = (d) => this.fileOrder.get(d.file) ?? 0;
     this.diagnostics.sort((a, b) => order(a) - order(b) || a.line - b.line || a.col - b.col);
@@ -1432,6 +1624,11 @@ var Parser = class _Parser {
       ...this.imports.length ? { imports: this.imports } : {},
       ...this.blocks.length ? { blocks: this.blocks } : {}
     };
+  }
+  /** For `parseTypeDecls`: the file's type blocks and every problem found reading it. */
+  readTypes() {
+    this.parseFile();
+    return { decls: this.typeDecls, diagnostics: this.diagnostics };
   }
   /** Reads the current file's lines and reports blocks it leaves open. */
   parseFile() {
@@ -1443,7 +1640,7 @@ var Parser = class _Parser {
       i = this.parseLine(i);
     }
     for (const frame2 of this.stack) {
-      const what = frame2.kind === "group" ? `group '${frame2.id}'` : frame2.kind === "usecase" ? `usecase '${frame2.useCase.name}'` : frame2.kind === "alt" ? `alt '${frame2.name}'` : frame2.kind === "par" ? "par block" : frame2.kind === "system" ? `system '${frame2.system.id}'` : frame2.kind === "stub" ? `the capacity of system '${frame2.system.id}'` : sectionName(frame2);
+      const what = frame2.kind === "group" ? `group '${frame2.id}'` : frame2.kind === "usecase" ? `usecase '${frame2.useCase.name}'` : frame2.kind === "alt" ? `alt '${frame2.name}'` : frame2.kind === "par" ? "par block" : frame2.kind === "system" ? `system '${frame2.system.id}'` : frame2.kind === "stub" ? `the capacity of system '${frame2.system.id}'` : frame2.kind === "type" ? `type '${frame2.decl.name}'` : sectionName(frame2);
       this.error(`Missing } to close ${what}`, frame2.loc);
       if (frame2.kind === "system") this.finishSystem(frame2);
     }
@@ -1451,6 +1648,11 @@ var Parser = class _Parser {
   /** Parses the line at `index` and returns the index of the last line it consumed. */
   parseLine(index) {
     const line = index + 1;
+    const typeFrame = this.top();
+    if (typeFrame?.kind === "type" && /^\s*header(\s|$)/.test(this.lines[index])) {
+      if (!typeFrame.discard) this.parseHeaders(typeFrame.decl, this.lines[index], line);
+      return index;
+    }
     const { tokens: lexed, diagnostics } = tokenizeLine(this.lines[index], line);
     const tokens = qualify(lexed);
     this.diagnostics.push(...diagnostics.map((d) => ({ ...d, ...this.fileField() })));
@@ -1488,6 +1690,15 @@ var Parser = class _Parser {
       this.parseSystemLine(top, tokens, line);
       return index;
     }
+    if (top?.kind === "type") {
+      if (first.kind === "rbrace") {
+        this.stack.pop();
+        if (second) this.error("Unexpected input after }", loc(second));
+      } else if (!top.discard) {
+        this.parseTypeLine(top.decl, tokens, line);
+      }
+      return index;
+    }
     if (first.kind === "rbrace") {
       if (this.stack.length === 0) this.error("Unmatched }", loc(first));
       else this.closeFrame();
@@ -1516,6 +1727,15 @@ var Parser = class _Parser {
         break;
       case "usecase":
         this.parseUseCase(tokens, line);
+        break;
+      // Keywords only in the shape of a type header, so a node may still be called type or abstract.
+      case "type":
+        if (isTypeHeader(tokens, 1)) this.parseType(tokens, 1, line);
+        else this.parseNode(tokens, line);
+        break;
+      case "abstract":
+        if (isWord(second, "type") && isTypeHeader(tokens, 2)) this.parseType(tokens, 2, line);
+        else this.parseNode(tokens, line);
         break;
       case "par":
         this.parsePar(tokens, line);
@@ -2161,11 +2381,13 @@ var Parser = class _Parser {
         if (strings++ === 0) node.name = t.value;
         else node.description = t.value;
       } else if (t.kind === "tech") {
-        const resolved = this.resolveTech(t, line);
-        node.type = resolved.type;
-        node.techStack = resolved.techStack;
-        if (resolved.inferredKind) node.inferredKind = resolved.inferredKind;
-        node.kind = resolved.type === "text" ? "text" : resolved.type === "group" ? "group" : "component";
+        const found = findTech(t.value);
+        if (found) {
+          node.type = found.type;
+          node.techStack = found.techStack;
+          node.kind = found.type === "text" ? "text" : found.type === "group" ? "group" : "component";
+        }
+        this.techRefs.push({ node, value: t.value, loc: this.locOf(t, line) });
       } else if (t.kind === "team") {
         node.ownerTeam = t.value;
       } else if (t.kind === "ident" && t.value === "pos") {
@@ -3358,8 +3580,11 @@ var Parser = class _Parser {
   checkSelectorLater({ atoms }) {
     for (const { selector, token, loc } of atoms) {
       if ("tech" in selector && !findTech(token.value)) {
-        const suggestion = suggestTech(token.value);
-        this.warning(`Unknown tech stack '${token.value}'${suggestion ? `. Did you mean '${suggestion}'?` : ""}`, loc);
+        this.deferred.push(() => {
+          if (lookupType(this.typeTable, token.value)) return;
+          const suggestion = suggestTech(token.value);
+          this.warning(`Unknown tech stack '${token.value}'${suggestion ? `. Did you mean '${suggestion}'?` : ""}`, loc);
+        });
       }
       if ("node" in selector) {
         this.deferred.push(() => {
@@ -3604,19 +3829,271 @@ var Parser = class _Parser {
    * (`Postgress`: database), else a service; never a free, infinitely fast
    * client.
    */
-  resolveTech(token, line) {
-    const found = findTech(token.value);
+  resolveTech(value, loc) {
+    const found = findTech(value);
     if (found) return { type: found.type, techStack: found.techStack };
-    const text = token.value.trim();
+    const text = value.trim();
     if (!text) {
-      this.warning(`Empty tech stack; drawing a ${DEFAULT_TECH}`, this.locOf(token, line));
+      this.warning(`Empty tech stack; drawing a ${DEFAULT_TECH}`, loc);
       return { type: "shape", techStack: DEFAULT_TECH };
     }
     const suggestion = suggestTech(text);
     const closest = suggestion && findTech(suggestion);
     const kind = kindFromName(text) ?? (closest ? kindOf({ kind: "component", type: closest.type, techStack: closest.techStack }) : void 0) ?? "service";
-    this.warning(unknownTechMessage(text, kind, suggestion), this.locOf(token, line));
+    this.warning(unknownTechMessage(text, kind, suggestion), loc);
     return { type: TYPE_OF_KIND[kind], techStack: text, inferredKind: kind };
+  }
+  /**
+   * Resolves the type blocks of every file against the stdlib, then each
+   * node's `[Tech]`: a type gives the node its kind and the icon of its
+   * nearest built-in ancestor (D5); anything else is resolved as before.
+   */
+  resolveTypes() {
+    const resolution = resolveTypes(this.typeDecls, builtinTypes());
+    this.diagnostics.push(...resolution.diagnostics);
+    this.typeTable = resolution.table;
+    this.types = resolution.types;
+    for (const ref of this.techRefs) this.applyTech(ref);
+  }
+  applyTech({ node, value, loc }) {
+    const type = lookupType(this.typeTable, value);
+    if (!type) {
+      if (findTech(value)) return;
+      const resolved = this.resolveTech(value, loc);
+      node.type = resolved.type;
+      node.techStack = resolved.techStack;
+      if (resolved.inferredKind) node.inferredKind = resolved.inferredKind;
+      return;
+    }
+    node.resolvedType = type;
+    if (type.abstract) {
+      const concrete = [...this.typeTable.values()].find((t) => !t.abstract && t.parents[0] === type.name);
+      this.warning(`'${type.name}' is an abstract type; use a type that extends it${concrete ? `, like [${concrete.name}]` : ""}`, loc);
+    }
+    const kind = type.kind ?? kindFromName(type.name) ?? "service";
+    const icon = findTech(type.icon ?? GENERIC_TECH[kind]);
+    if (icon) {
+      node.type = icon.type;
+      node.techStack = icon.techStack;
+      node.kind = icon.type === "text" ? "text" : icon.type === "group" ? "group" : "component";
+    }
+    if (type.kind) delete node.inferredKind;
+    else node.inferredKind = kind;
+  }
+  /** `[abstract] type Name [extends Parent] {`, or a whole one-line block `… { op write APPEND }`; `at` is the name's index. */
+  parseType(tokens, at, line) {
+    const nameToken = tokens[at];
+    const extendsAt = isWord(tokens[at + 1], "extends") ? at + 1 : -1;
+    const parentToken = extendsAt === -1 ? void 0 : tokens[extendsAt + 1];
+    const decl = {
+      name: nameToken.value,
+      abstract: at === 2,
+      ...parentToken && (parentToken.kind === "ident" || parentToken.kind === "tech") ? { parent: parentToken.value, parentLoc: this.locOf(parentToken, line) } : {},
+      props: {},
+      ops: [],
+      statuses: [],
+      headers: [],
+      builtin: false,
+      loc: this.locOf(nameToken, line)
+    };
+    const braceAt = extendsAt === -1 ? at + 1 : extendsAt + 2;
+    const skip = () => {
+      if (tokens[tokens.length - 1].kind === "lbrace") this.stack.push({ kind: "type", decl, discard: true, loc: decl.loc });
+    };
+    if (extendsAt !== -1 && decl.parent === void 0) {
+      this.error("Expected the parent type after extends, e.g. type LedgerDb extends PostgreSQL {", this.locOf(parentToken ?? tokens[extendsAt], line));
+      return skip();
+    }
+    if (tokens[braceAt]?.kind !== "lbrace") {
+      this.error("Expected { after the type header, e.g. type LedgerDb extends PostgreSQL {", this.locOf(tokens[braceAt] ?? tokens[braceAt - 1], line));
+      return skip();
+    }
+    if (!decl.name.trim()) {
+      this.error("Expected a type name, e.g. type LedgerDb extends PostgreSQL {", decl.loc);
+      return skip();
+    }
+    if (this.stack.length > 0) {
+      this.error("Declare types at the top level, not inside a block", this.locOf(tokens[0], line));
+      return skip();
+    }
+    const last = tokens[tokens.length - 1];
+    if (last.kind === "rbrace" && tokens.length > braceAt + 1) {
+      const body = tokens.slice(braceAt + 1, -1);
+      if (body.length) this.parseTypeLine(decl, body, line);
+    } else if (tokens.length > braceAt + 1) {
+      this.error("Expected the type body on the next lines, or on this one closed with }", this.locOf(tokens[braceAt + 1], line));
+      return skip();
+    } else {
+      this.stack.push({ kind: "type", decl, loc: decl.loc });
+    }
+    this.typeDecls.push(decl);
+  }
+  /** One line of a type block: `kind database`, `op read SELECT`, `latencyMs 4`, … */
+  parseTypeLine(decl, tokens, line) {
+    const [key, value] = tokens;
+    const loc = (t) => this.locOf(t ?? tokens[tokens.length - 1], line);
+    if (key.kind !== "ident") {
+      this.error(`Expected a type property: ${TYPE_LINES}`, loc(key));
+      return;
+    }
+    const word = key.value;
+    const single = (kinds, example) => {
+      if (!value || !kinds.includes(value.kind)) {
+        this.error(`Expected ${example}`, loc(value ?? key));
+        return void 0;
+      }
+      this.expectEnd(tokens, 2, line);
+      return value.value;
+    };
+    switch (word) {
+      case "kind": {
+        const kind = single(["ident"], `a kind after kind: ${KINDS.join(", ")}`);
+        if (kind === void 0) return;
+        if (!isKind(kind)) this.error(`Unknown kind '${kind}'; use one of ${KINDS.join(", ")}`, loc(value));
+        else decl.kind = kind;
+        return;
+      }
+      case "protocol": {
+        const protocol = single(["ident", "string"], "a protocol after protocol, e.g. protocol SQL");
+        if (protocol !== void 0) decl.protocol = protocol;
+        return;
+      }
+      case "icon": {
+        const icon = single(["ident", "tech", "string"], "a catalog tech after icon, e.g. icon PostgreSQL or icon [REST API]");
+        if (icon !== void 0) decl.icon = icon;
+        return;
+      }
+      case "doc": {
+        const doc = single(["string"], 'a quoted description after doc, e.g. doc "Keeps the ledger"');
+        if (doc !== void 0) decl.doc = doc;
+        return;
+      }
+      case "op":
+        this.parseTypeOp(decl, tokens, line);
+        return;
+      case "status": {
+        const codes = this.readList(tokens, 1, line, ["number"], "status codes, e.g. status 200, 201, 404");
+        for (const code of codes ?? []) {
+          const n = Number(code.value);
+          if (n < 100 || n > 599) this.error(`'${code.value}' is not an HTTP status code (100 to 599)`, loc(code));
+          else if (!decl.statuses.includes(n)) decl.statuses.push(n);
+        }
+        return;
+      }
+      case "header": {
+        const names = this.readList(tokens, 1, line, ["ident", "string"], 'header names, e.g. header Authorization, "Content-Type"');
+        for (const name of names ?? []) if (!decl.headers.some((h2) => h2.toLowerCase() === name.value.toLowerCase())) decl.headers.push(name.value);
+        return;
+      }
+    }
+    if (Object.hasOwn(CHOICE_PROPS, word)) {
+      const prop = word;
+      const choices = CHOICE_PROPS[prop];
+      const choice = single(["ident"], `${choices.join(" or ")} after ${prop}`);
+      if (choice === void 0) return;
+      if (!choices.includes(choice)) this.error(`Expected ${choices.join(" or ")} after ${prop}, not '${choice}'`, loc(value));
+      else if (prop === "durable") decl.props.durable = choice === "true";
+      else if (prop === "consistency") decl.props.consistency = choice;
+      else decl.props.writeScaling = choice;
+      return;
+    }
+    if (Object.hasOwn(NUMBER_PROPS, word)) {
+      const prop = word;
+      const unit = NUMBER_PROPS[prop];
+      const example = prop === "availability" ? "a percentage after availability, e.g. availability 99.95%" : `a number after ${prop}, e.g. ${prop} ${unit === "rps" ? "20k" : "4"}`;
+      if (!value || value.kind !== "number" && value.kind !== "quantity") {
+        this.error(`Expected ${example}`, loc(value ?? key));
+        return;
+      }
+      this.expectEnd(tokens, 2, line);
+      const q = parseQuantity(value.value);
+      if ("error" in q) {
+        this.error(q.error, loc(value));
+        return;
+      }
+      if (q.unit !== void 0 && q.unit !== unit) {
+        this.error(`Expected ${example}, not ${kindName(q.unit)}`, loc(value));
+        return;
+      }
+      if (prop !== "availability") decl.props[prop] = q.value;
+      else if (q.unit === "%" && q.value > 0 && q.value <= 100) decl.props.availability = Number((q.value / 100).toPrecision(12));
+      else this.error(`Expected ${example}`, loc(value));
+      return;
+    }
+    this.error(`Unknown type property '${word}'; use ${TYPE_LINES}`, loc(key));
+  }
+  /** `op read SELECT, Scan latency 8 cost 2`: operations with their access and optional multipliers. */
+  parseTypeOp(decl, tokens, line) {
+    const access = tokens[1];
+    if (!isWord(access, "read") && !isWord(access, "write")) {
+      this.error("Expected read or write after op, e.g. op read SELECT", this.locOf(access ?? tokens[0], line));
+      return;
+    }
+    let end = 2;
+    while (end < tokens.length && !isWord(tokens[end], "latency") && !isWord(tokens[end], "cost")) end++;
+    const example = `operation names after op ${access.value}, e.g. op ${access.value} ${access.value === "read" ? "SELECT" : "INSERT, UPDATE"}`;
+    const names = this.readList(tokens.slice(0, end), 2, line, ["ident", "string"], example);
+    if (!names) return;
+    const multipliers = {};
+    for (let i = end; i < tokens.length; i += 2) {
+      const [word, number] = [tokens[i], tokens[i + 1]];
+      if (!isWord(word, "latency") && !isWord(word, "cost")) {
+        this.error(`Unexpected ${describe(word)}; an op ends with latency <n> and cost <n>`, this.locOf(word, line));
+        return;
+      }
+      const q = number && (number.kind === "number" || number.kind === "quantity") ? parseQuantity(number.value) : void 0;
+      if (!q || "error" in q || q.unit !== void 0 || q.value <= 0) {
+        this.error(`Expected a multiplier after ${word.value}, e.g. ${word.value} 2 or ${word.value} 0.5`, this.locOf(number ?? word, line));
+        return;
+      }
+      multipliers[word.value] = q.value;
+    }
+    for (const name of names) {
+      const op = { name: name.value, access: access.value, ...multipliers };
+      const at = decl.ops.findIndex((o) => o.name === op.name);
+      if (at === -1) decl.ops.push(op);
+      else decl.ops[at] = op;
+    }
+  }
+  /** `header Authorization, Content-Type`, read from the line's text. */
+  parseHeaders(decl, text, line) {
+    const keyword = text.indexOf("header");
+    const start2 = keyword + "header".length;
+    const body = stripTrailingComment(text.slice(start2));
+    if (!body.trim()) {
+      this.error("Expected header names, e.g. header Authorization, Content-Type", { line, col: keyword + 1, length: 6, ...this.fileField() });
+      return;
+    }
+    let col = start2 + 1;
+    for (const part of body.split(",")) {
+      const raw = part.trim();
+      const name = raw.length > 1 && raw.startsWith('"') && raw.endsWith('"') ? raw.slice(1, -1) : raw;
+      const loc = { line, col: col + part.indexOf(raw), length: Math.max(1, raw.length), ...this.fileField() };
+      col += part.length + 1;
+      if (!HEADER_NAME.test(name)) this.error(`Expected a header name, e.g. Content-Type${raw ? `, not '${raw}'` : ""}`, loc);
+      else if (!decl.headers.some((h2) => h2.toLowerCase() === name.toLowerCase())) decl.headers.push(name);
+    }
+  }
+  /** Comma-separated tokens of `kinds` from `tokens[from]` to the end; undefined (after an error) when malformed. */
+  readList(tokens, from, line, kinds, example) {
+    const items = [];
+    for (let i = from; i < tokens.length; i += 2) {
+      const [item, sep] = [tokens[i], tokens[i + 1]];
+      if (!kinds.includes(item.kind)) {
+        this.error(`Expected ${example}`, this.locOf(item, line));
+        return void 0;
+      }
+      items.push(item);
+      if (sep && (sep.kind !== "comma" || i + 2 >= tokens.length)) {
+        this.error(sep.kind === "comma" ? "Expected another name after ," : `Expected , or the end of the line, not ${describe(sep)}`, this.locOf(sep, line));
+        return void 0;
+      }
+    }
+    if (!items.length) {
+      this.error(`Expected ${example}`, this.locOf(tokens[from - 1], line));
+      return void 0;
+    }
+    return items;
   }
   useCaseId(name) {
     const base = slug(name) || "usecase";
@@ -3747,6 +4224,10 @@ var KIND_NAMES = {
 };
 function kindName(unit) {
   return unit ? KIND_NAMES[unit] : "a plain number";
+}
+function isTypeHeader(tokens, at) {
+  const [name, next] = [tokens[at], tokens[at + 1]];
+  return (name?.kind === "ident" || name?.kind === "tech") && (next?.kind === "lbrace" || isWord(next, "extends"));
 }
 function isWord(token, word) {
   return token?.kind === "ident" && token.value === word;
@@ -4175,7 +4656,11 @@ var SIZES = {
 };
 function profileOf(node, override) {
   const kind = kindOf(node);
-  const base = (Object.hasOwn(TECH_PROFILES, node.techStack) ? TECH_PROFILES[node.techStack] : void 0) ?? KIND_PROFILES[kind];
+  const type = node.resolvedType;
+  const techRow = Object.hasOwn(TECH_PROFILES, node.techStack) && (!type || kindOf({ ...node, resolvedType: void 0 }) === kind) ? TECH_PROFILES[node.techStack] : void 0;
+  const props = type?.props ?? {};
+  const sides = props.rps !== void 0 ? { readRps: props.readRps ?? props.rps, writeRps: props.writeRps ?? props.rps } : {};
+  const base = { ...techRow ?? KIND_PROFILES[kind], ...props, ...sides };
   const size = SIZES[override?.size ?? "S"];
   const baseRead = (base.readRps ?? base.rps) * size.capacity;
   const baseWrite = (base.writeRps ?? base.rps) * size.capacity;
@@ -4305,7 +4790,7 @@ function selectNodes(diagram, selector) {
 function matches(node, selector, diagram) {
   if (node.kind !== "component") return false;
   if ("node" in selector) return node.id === selector.node;
-  if ("tech" in selector) return node.techStack.toLowerCase() === selector.tech.toLowerCase();
+  if ("tech" in selector) return [node.techStack, node.resolvedType?.name].some((t) => t?.toLowerCase() === selector.tech.toLowerCase());
   if ("anyOf" in selector) return selector.anyOf.some((s) => matches(node, s, diagram));
   if ("consistency" in selector) {
     const override = diagram?.capacity?.find((o) => o.node === node.id);
@@ -4654,16 +5139,16 @@ function analyzeSystem(system, sent, options) {
   const sharedInboundRps = [...sentToTeam.values()].reduce((sum, rps) => sum + rps, 0);
   result.callers = shared?.callers ?? (totalInboundRps > 0 ? [{ path: system.id, rps: totalInboundRps }] : []);
   result.sharedInboundRps = sharedInboundRps;
-  let cached = options.sharedSystems?.analyses.get(key);
-  if (!cached) {
+  let cached2 = options.sharedSystems?.analyses.get(key);
+  if (!cached2) {
     const combined = sharedInboundRps > 0 ? withExtraTraffic(team, sentToTeam, system.loc) : team;
     const nested = { timeoutMs: options.timeoutMs, ...options.sharedSystems ? { sharedSystems: options.sharedSystems } : {} };
-    cached = { combined, analysis: sharedInboundRps > 0 ? analyze(combined, nested) : contract.baseline };
-    options.sharedSystems?.analyses.set(key, cached);
+    cached2 = { combined, analysis: sharedInboundRps > 0 ? analyze(combined, nested) : contract.baseline };
+    options.sharedSystems?.analyses.set(key, cached2);
   }
-  const { analysis } = cached;
+  const { analysis } = cached2;
   result.analysis = analysis;
-  result.overlay = analysisOverlay(cached.combined, analysis);
+  result.overlay = analysisOverlay(cached2.combined, analysis);
   const busiest = analysis.nodes.reduce((best, n) => !best || n.utilization > best.utilization ? n : best, void 0);
   result.utilization = busiest?.utilization ?? 0;
   result.busiest = busiest?.id;
@@ -5573,17 +6058,17 @@ function writesCheck(run, u, scenarios, accept, what) {
     return pass(`${label} writes to ${what} before responding`);
   }
   const details = gaps.map((s) => ({ s, gap: writeGap(run, u, s, accept) }));
-  const where = (s) => u.scenarios.length > 1 ? `"${s.name}"` : `"${u.name}"`;
+  const where2 = (s) => u.scenarios.length > 1 ? `"${s.name}"` : `"${u.name}"`;
   const text = (s, gap) => {
     switch (gap.kind) {
       case "async":
-        return `${where(s)} writes to ${what} only asynchronously: ${stepText(gap.step)}`;
+        return `${where2(s)} writes to ${what} only asynchronously: ${stepText(gap.step)}`;
       case "after":
-        return `${where(s)} writes to ${what} only after responding: ${stepText(gap.step)}`;
+        return `${where2(s)} writes to ${what} only after responding: ${stepText(gap.step)}`;
       case "read":
-        return `${where(s)} only reads from ${what} before responding: ${stepText(gap.step)} is a read`;
+        return `${where2(s)} only reads from ${what} before responding: ${stepText(gap.step)} is a read`;
       case "none":
-        return `${where(s)} never writes to ${what} before responding`;
+        return `${where2(s)} never writes to ${what} before responding`;
     }
   };
   const message = details.map(({ s, gap }) => text(s, gap)).join("; ");
@@ -5837,9 +6322,9 @@ function before(run, a) {
     checked++;
     const ix = order.findIndex((m) => first.has(m.to));
     if (ix < 0 || ix > iy) {
-      const where = sc.scenarios.length > 1 || a.scenario ? `In ${quote(s.name)}` : `In ${quote(sc.u.name)}`;
+      const where2 = sc.scenarios.length > 1 || a.scenario ? `In ${quote(s.name)}` : `In ${quote(sc.u.name)}`;
       return fail(
-        ix < 0 ? `${where}, ${order[iy].to} is called (${stepText(order[iy].step)}) but ${x} never is` : `${where}, ${order[iy].to} is called (${stepText(order[iy].step)}) before ${order[ix].to} (${stepText(order[ix].step)})`,
+        ix < 0 ? `${where2}, ${order[iy].to} is called (${stepText(order[iy].step)}) but ${x} never is` : `${where2}, ${order[iy].to} is called (${stepText(order[iy].step)}) before ${order[ix].to} (${stepText(order[ix].step)})`,
         `Call ${x} before the first call to ${y}`
       );
     }
@@ -5855,9 +6340,9 @@ function neverWaits(run, a) {
   for (const s of sc.scenarios) {
     const hop = criticalPath(sc.u, s).flat().find((h2) => !h2.async && ids.has(h2.target));
     if (hop) {
-      const where = sc.scenarios.length > 1 ? quote(s.name) : sc.label;
+      const where2 = sc.scenarios.length > 1 ? quote(s.name) : sc.label;
       return fail(
-        `${where} waits for ${nodeLabel(run.diagram, hop.target)} before responding: ${stepText(hop.step)}${hop.failed ? " times out on the request path" : " is synchronous"}`,
+        `${where2} waits for ${nodeLabel(run.diagram, hop.target)} before responding: ${stepText(hop.step)}${hop.failed ? " times out on the request path" : " is synchronous"}`,
         `Send it with ->> (through a queue if it must not be lost), or move it after the line that answers the entry request`
       );
     }
@@ -5881,9 +6366,9 @@ function after(run, a) {
     if (ix < 0 || iy < 0) continue;
     checked++;
     if (iy < ix) {
-      const where = sc.scenarios.length > 1 || a.scenario ? `In ${quote(s.name)}` : `In ${quote(sc.u.name)}`;
+      const where2 = sc.scenarios.length > 1 || a.scenario ? `In ${quote(s.name)}` : `In ${quote(sc.u.name)}`;
       return fail(
-        `${where}, the last call to ${y} (${stepText(order[iy].step)}) comes before the first call to ${x} (${stepText(order[ix].step)})`,
+        `${where2}, the last call to ${y} (${stepText(order[iy].step)}) comes before the first call to ${x} (${stepText(order[ix].step)})`,
         `Call ${y} after ${x}: move the step to ${order[iy].to} below the call to ${order[ix].to}`
       );
     }
@@ -5911,10 +6396,10 @@ function senderCalls(run, a) {
     for (const s of u.scenarios) {
       const step = s.steps.find((st) => from.has(st.fromServiceId) && to.has(st.toServiceId));
       if (!step) continue;
-      const where = u.scenarios.length > 1 ? `${quote(u.name)} scenario ${quote(s.name)}` : quote(u.name);
-      if (a.quantifier === "some") return pass(`${x} calls ${y}${within}: ${stepText(step)} in ${where}`);
+      const where2 = u.scenarios.length > 1 ? `${quote(u.name)} scenario ${quote(s.name)}` : quote(u.name);
+      if (a.quantifier === "some") return pass(`${x} calls ${y}${within}: ${stepText(step)} in ${where2}`);
       return fail(
-        `${x} calls ${y}${within}: ${stepText(step)} in ${where}`,
+        `${x} calls ${y}${within}: ${stepText(step)} in ${where2}`,
         `Let another node make this call (e.g. the client uploads to storage with a presigned URL), or remove the step`
       );
     }
@@ -5965,8 +6450,8 @@ function noPath(run, from, to) {
     for (const s of u.scenarios) {
       const step = s.steps.find((st) => sources.has(st.fromServiceId) && targets.has(st.toServiceId));
       if (step) {
-        const where = u.scenarios.length > 1 ? `${quote(u.name)} scenario ${quote(s.name)}` : quote(u.name);
-        return fail(`The step ${step.fromServiceId} -> ${step.toServiceId} in ${where} (${lineOf(step.loc)}) goes directly from ${x} to ${y}`, hint);
+        const where2 = u.scenarios.length > 1 ? `${quote(u.name)} scenario ${quote(s.name)}` : quote(u.name);
+        return fail(`The step ${step.fromServiceId} -> ${step.toServiceId} in ${where2} (${lineOf(step.loc)}) goes directly from ${x} to ${y}`, hint);
       }
     }
   }
@@ -7533,12 +8018,12 @@ async function diagramView($, d, viewId, written, file) {
     doc = loadDocument(source);
     documents.set(key, doc);
   }
-  const where = file ?? "The diagram";
+  const where2 = file ?? "The diagram";
   if (doc.errors.length > 0) {
     const [first] = doc.errors;
-    return { error: `${where} has errors (line ${first.line}: ${first.message})${file ? `: run \`npx proschi check ${file}\`` : ""}.` };
+    return { error: `${where2} has errors (line ${first.line}: ${first.message})${file ? `: run \`npx proschi check ${file}\`` : ""}.` };
   }
-  if (doc.diagram.nodes.length === 0) return { error: `${where} has no components to draw.` };
+  if (doc.diagram.nodes.length === 0) return { error: `${where2} has no components to draw.` };
   const layout = layouts.get(key);
   if (!layout) {
     requestLayout($, key, source);
@@ -7553,8 +8038,8 @@ async function diagramView($, d, viewId, written, file) {
     scenes.set(sceneKey, scene);
   }
   const picks = doc.diagram.useCases.flatMap((u) => u.scenarios.map((s) => pickOf(u, s)));
-  const pick = picks.find((p) => p.value === player.pick) ?? picks[0];
-  const playing = player.mode === "play" ? pick : void 0;
+  const pick2 = picks.find((p) => p.value === player.pick) ?? picks[0];
+  const playing = player.mode === "play" ? pick2 : void 0;
   const steps = playing?.scenario.steps ?? [];
   const step = Math.max(0, Math.min(player.step, steps.length - 1));
   const width = Math.min(Math.max(40, d.columns), Math.max(scene.columns, BARS_WIDTH));
@@ -7568,7 +8053,7 @@ async function diagramView($, d, viewId, written, file) {
   const lost = lostImports(written, keyOf(written));
   const hasSystems = systems.length > 0 || player.focus !== void 0;
   const roomy = view.width >= 79;
-  return { element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, playing ? playerHeader($, view, playing, player) : doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, grid.columns > d.columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", grid.columns, " columns wide, wider than the ", d.columns, " here: ", view.inPane ? "widen the window" : "use \u26F6 Focus or a wider window", " to see it whole."), lost.some((name) => !importReasons.has(name)) && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u26A0 Not found, so drawn as plain boxes: ", lost.filter((name) => !importReasons.has(name)).join(", ")), lost.filter((name) => importReasons.has(name)).map((name) => /* @__PURE__ */ h(ui.Text, { key: `lost-${name}`, dimColor: true }, "\u26A0 ", importReasons.get(name))), doc.notes.map((note) => /* @__PURE__ */ h(ui.Text, { color: "yellow" }, "\u26A0 ", note.text, note.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true }, " \u2192 ", note.hint))), /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() })), hasSystems && !playing && systemBar($, view, doc, systems, selected, player), playing ? stepPanel($, view, playing, step, player) : pick && useCaseBar($, view, doc, pick, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: roomy ? "\u29C9 Copy source" : "\u29C9 Source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: roomy ? "\u29C9 Copy share link" : "\u29C9 Link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: roomy ? "\u2197 Open in Proschi" : "\u2197 Open", variant: "primary", onPress: (press) => void openLink($, press.surface, link) }), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `focus-${viewId}`, label: "\u26F6 Focus", onPress: () => focus($, view, file ? basename(file) : doc.diagram.title ?? "diagram", file ? { file } : { source }) }))), systems: hasSystems };
+  return { element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, playing ? playerHeader($, view, playing, player) : doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, grid.columns > d.columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", grid.columns, " columns wide, wider than the ", d.columns, " here: ", view.inPane ? "widen the window" : "use \u26F6 Focus or a wider window", " to see it whole."), lost.some((name) => !importReasons.has(name)) && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u26A0 Not found, so drawn as plain boxes: ", lost.filter((name) => !importReasons.has(name)).join(", ")), lost.filter((name) => importReasons.has(name)).map((name) => /* @__PURE__ */ h(ui.Text, { key: `lost-${name}`, dimColor: true }, "\u26A0 ", importReasons.get(name))), doc.notes.map((note) => /* @__PURE__ */ h(ui.Text, { color: "yellow" }, "\u26A0 ", note.text, note.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true }, " \u2192 ", note.hint))), /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() })), hasSystems && !playing && systemBar($, view, doc, systems, selected, player), playing ? stepPanel($, view, playing, step, player) : pick2 && useCaseBar($, view, doc, pick2, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: roomy ? "\u29C9 Copy source" : "\u29C9 Source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: roomy ? "\u29C9 Copy share link" : "\u29C9 Link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: roomy ? "\u2197 Open in Proschi" : "\u2197 Open", variant: "primary", onPress: (press) => void openLink($, press.surface, link) }), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `focus-${viewId}`, label: "\u26F6 Focus", onPress: () => focus($, view, file ? basename(file) : doc.diagram.title ?? "diagram", file ? { file } : { source }) }))), systems: hasSystems };
 }
 function selectable(scene, focus2) {
   return [...scene.nodes.values()].map((n) => n.node).filter((n) => n.kind === "system" || n.kind === "group" && n.system === n.id).map((n) => ({ id: n.id, path: focus2 !== void 0 ? `${focus2}.${n.id}` : n.id, name: n.name, expanded: n.kind === "group" }));
@@ -7621,7 +8106,7 @@ function lostImports(source, key) {
 var EXPLORE = { long: ["\u2261 Explore use cases", "\u2261 Hide explorer"], short: ["\u2261 Explore", "\u2261 Hide"] };
 var toggle = (labels, open) => labels[open ? 1 : 0].padEnd(Math.max(...labels.map((l) => l.length)));
 var cut = (text, room) => text.length <= room ? text : `${text.slice(0, Math.max(0, room - 1))}\u2026`;
-function useCaseBar($, view, doc, pick, player) {
+function useCaseBar($, view, doc, pick2, player) {
   const { ui } = view.d;
   const groups = groupByEndpoint(doc.diagram.useCases);
   const count = (u) => `${u.scenarios.length} scenario${u.scenarios.length === 1 ? "" : "s"}`;
@@ -7636,7 +8121,7 @@ function useCaseBar($, view, doc, pick, player) {
     ui.Select,
     {
       key: `uc-${view.viewId}`,
-      value: pick.useCase.id,
+      value: pick2.useCase.id,
       options,
       onSelect: (id) => {
         const u = doc.diagram.useCases.find((c) => c.id === id);
@@ -7644,8 +8129,8 @@ function useCaseBar($, view, doc, pick, player) {
       }
     }
   ));
-  const buttons = /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Button, { key: `play-${view.viewId}`, label: "\u25B6 Play", variant: "primary", ...hotkey(view, "p"), onPress: () => start($, view, pick) }), /* @__PURE__ */ h(ui.Button, { key: `explore-${view.viewId}`, label: explore, ...hotkey(view, "x"), onPress: () => void setPlayer($, view, (p) => ({ ...p, explorer: !p.explorer })) }));
-  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: PINK, paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Box, { flexDirection: oneRow ? "row" : "column", gap: oneRow ? 1 : 0 }, select, buttons), player.explorer && groups.map((g) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, g.label && /* @__PURE__ */ h(ui.Text, { bold: true, color: "cyan" }, g.label), g.useCases.map((u) => /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap", paddingLeft: g.label ? 2 : 0 }, /* @__PURE__ */ h(ui.Text, { bold: u.id === pick.useCase.id }, u.name), u.scenarios.map((s) => /* @__PURE__ */ h(ui.Button, { key: `x-${view.viewId}-${u.id}-${s.id}`, onPress: () => start($, view, pickOf(u, s)) }, scenarioLabel(ui, u, s))))))));
+  const buttons = /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Button, { key: `play-${view.viewId}`, label: "\u25B6 Play", variant: "primary", ...hotkey(view, "p"), onPress: () => start($, view, pick2) }), /* @__PURE__ */ h(ui.Button, { key: `explore-${view.viewId}`, label: explore, ...hotkey(view, "x"), onPress: () => void setPlayer($, view, (p) => ({ ...p, explorer: !p.explorer })) }));
+  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: PINK, paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Box, { flexDirection: oneRow ? "row" : "column", gap: oneRow ? 1 : 0 }, select, buttons), player.explorer && groups.map((g) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, g.label && /* @__PURE__ */ h(ui.Text, { bold: true, color: "cyan" }, g.label), g.useCases.map((u) => /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap", paddingLeft: g.label ? 2 : 0 }, /* @__PURE__ */ h(ui.Text, { bold: u.id === pick2.useCase.id }, u.name), u.scenarios.map((s) => /* @__PURE__ */ h(ui.Button, { key: `x-${view.viewId}-${u.id}-${s.id}`, onPress: () => start($, view, pickOf(u, s)) }, scenarioLabel(ui, u, s))))))));
 }
 function scenarioLabel(ui, u, s, current) {
   const error = s.outcome === "error";
@@ -7653,11 +8138,11 @@ function scenarioLabel(ui, u, s, current) {
   const name = u.scenarios.length > 1 ? s.name : "Play";
   return /* @__PURE__ */ h(ui.Text, { color: error ? "red" : "green", bold: current === true }, current === void 0 ? "" : current ? "\u25B8 " : "  ", error ? "\u2717" : "\u2713", " ", name, status ? ` \xB7 ${status}` : "");
 }
-function playerHeader($, view, pick, player) {
+function playerHeader($, view, pick2, player) {
   const { ui } = view.d;
-  const { useCase } = pick;
+  const { useCase } = pick2;
   return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: PINK, paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Button, { key: `back-${view.viewId}`, label: "\u2190 Diagram", ...hotkey(view, "d"), onPress: () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })) }), /* @__PURE__ */ h(ui.Text, { bold: true, wrap: "truncate-end" }, useCase.name), /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\xB7 Playback mode \xB7 read only")), useCase.scenarios.length > 1 && /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap" }, useCase.scenarios.map((s) => {
-    const current = s.id === pick.scenario.id;
+    const current = s.id === pick2.scenario.id;
     return /* @__PURE__ */ h(ui.Button, { key: `sc-${view.viewId}-${s.id}`, variant: current ? "primary" : void 0, dimColor: !current, onPress: () => start($, view, pickOf(useCase, s), player.isPlaying) }, scenarioLabel(ui, useCase, s, current));
   })));
 }
@@ -7723,9 +8208,9 @@ function stepRows(ui, view, steps, at) {
   });
   return { nodes, height };
 }
-function stepPanel($, view, pick, step, player) {
+function stepPanel($, view, pick2, step, player) {
   const { ui } = view.d;
-  const { scenario } = pick;
+  const { scenario } = pick2;
   const steps = scenario.steps;
   const total = steps.length;
   const go = (to, isPlaying = false) => {
@@ -7752,9 +8237,9 @@ function stepPanel($, view, pick, step, player) {
   ), /* @__PURE__ */ h(ui.Button, { key: `next-${view.viewId}`, label: "\u203A", ...hotkey(view, "n"), onPress: () => go(step + 1) }), /* @__PURE__ */ h(ui.Button, { key: `end-${view.viewId}`, label: "\u21E5", ...hotkey(view, "e"), onPress: () => go(total - 1) }), /* @__PURE__ */ h(ui.Text, null, counter), bar > 0 && /* @__PURE__ */ h(ui.Text, null, /* @__PURE__ */ h(ui.Text, { color: YELLOW }, "\u2501".repeat(filled)), /* @__PURE__ */ h(ui.Text, { dimColor: true }, "\u2501".repeat(bar - filled))), /* @__PURE__ */ h(ui.Button, { key: `exit-${view.viewId}`, label: exit, dimColor: true, onPress: () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })) })));
 }
 var hotkey = (view, key) => view.inPane ? { hotkey: key } : {};
-function start($, view, pick, isPlaying = true) {
+function start($, view, pick2, isPlaying = true) {
   reveal($, view);
-  void setPlayer($, view, (p) => ({ ...p, pick: pick.value, step: 0, isPlaying, mode: "play" }), pick.scenario.steps);
+  void setPlayer($, view, (p) => ({ ...p, pick: pick2.value, step: 0, isPlaying, mode: "play" }), pick2.scenario.steps);
 }
 function reveal($, view) {
   void scroll($, view.inPane ? { to: { key: view.anchorKey }, in: PANE, block: "start" } : { to: { requestId: view.d.requestId }, block: "start" });

@@ -40,14 +40,15 @@ const BY_TYPE: Partial<Record<ComponentType, Kind>> = {
 };
 
 /**
- * The kind of a node: from its tech stack, falling back to its component type.
+ * The kind of a node: from its type (docs/design/typed-components.md), else
+ * its tech stack, falling back to its component type.
  * Shapes (an `Actor`, or a node without a tech) are clients, except the `Note`
  * shape; groups and text nodes are `other`. A tech the catalog does not know
  * has the kind the parser inferred from its name, never `client`.
  */
-export function kindOf(node: Pick<DiagramNode, 'kind' | 'type' | 'techStack' | 'inferredKind'>): Kind {
+export function kindOf(node: Pick<DiagramNode, 'kind' | 'type' | 'techStack' | 'inferredKind' | 'resolvedType'>): Kind {
   if (node.kind !== 'component') return 'other';
-  return node.inferredKind ?? BY_TECH.get(node.techStack) ?? BY_TYPE[node.type] ?? 'other';
+  return node.inferredKind ?? node.resolvedType?.kind ?? BY_TECH.get(node.techStack) ?? BY_TYPE[node.type] ?? 'other';
 }
 
 /** The component type an inferred kind is drawn as. */

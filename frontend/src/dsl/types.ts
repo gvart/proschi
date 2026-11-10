@@ -1,4 +1,5 @@
 import type { ComponentType, TechName } from '../types/canvas';
+import type { ResolvedType } from './typesys/types';
 
 // Use case steps, as the parser produces them and the player animates them.
 export type ExecutionType = 'SYNC_REQUEST_RESPONSE' | 'ASYNC_FIRE_AND_FORGET' | 'ASYNC_REQUEST_RESPONSE';
@@ -99,6 +100,13 @@ export interface DiagramNode {
    * nothing matches). The parser warns about such a node.
    */
   inferredKind?: Kind;
+  /**
+   * The type `[Tech]` names, built in (src/dsl/stdlib) or declared with
+   * `type` (docs/design/typed-components.md). For a declared type,
+   * `techStack` and `type` are those of its icon, its nearest built-in
+   * ancestor; the type's own name is `resolvedType.name`.
+   */
+  resolvedType?: ResolvedType;
   ownerTeam?: string;
   description?: string;
   /** Id of the enclosing `group`, if any. */
@@ -226,6 +234,8 @@ export interface Diagram {
   whatifs?: WhatIf[];
   /** `let name = value` constants, in order; absent when there are none. Their uses are already replaced by their values. */
   constants?: Constant[];
+  /** `type` blocks of the document and its imports, resolved, in order; absent when there are none. Built-in types are not listed. */
+  types?: ResolvedType[];
 }
 
 /**

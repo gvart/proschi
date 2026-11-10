@@ -68,7 +68,7 @@ export function quote(text: string): string {
 }
 
 // Words the parser reads as keywords where an id could stand.
-const KEYWORDS = new Set(['title', 'import', 'group', 'usecase', 'par', 'alt', 'when', 'in', 'traffic', 'requirements', 'capacity', 'entity', 'decision', 'test', 'pos']);
+const KEYWORDS = new Set(['title', 'import', 'group', 'usecase', 'par', 'alt', 'when', 'in', 'traffic', 'requirements', 'capacity', 'entity', 'decision', 'test', 'pos', 'type', 'abstract']);
 
 /**
  * Maps foreign ids (Mermaid ids, participant names) to valid, unique Proschi
