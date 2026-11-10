@@ -1,0 +1,76 @@
+frontend/src/practice/problems/file-storage/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 6-7
+frontend/src/practice/problems/cdn-tiered-cache/wrong/every-edge-fills-from-origin.proschi
+  s_ccb8935595dc4e::t_411ae99cf2ec73 38
+frontend/src/practice/problems/job-queue/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 7-8
+frontend/src/practice/problems/api-gateway/given.proschi
+  s_ccb8935595dc4e::t_5e2063582ff72e 49-51
+frontend/src/practice/problems/api-gateway/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 7-8
+frontend/src/practice/problems/cdn-tiered-cache/wrong/single-upper-tier.proschi
+  s_ccb8935595dc4e::t_411ae99cf2ec73 40,42
+frontend/src/practice/problems/cdn-tiered-cache/solution.proschi
+  s_ccb8935595dc4e::t_411ae99cf2ec73 45,47
+frontend/src/practice/problems/config-push/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 7-8
+frontend/src/practice/problems/github-repo-replication/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 7-8
+frontend/src/practice/problems/multi-region-active-active/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 7-8
+frontend/src/practice/problems/ad-click-aggregator/wrong/publish-before-checkpoint.proschi
+  s_ccb8935595dc4e::t_ad929318d2a67c 54
+frontend/src/practice/problems/chat/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 6-7
+frontend/src/practice/problems/cdn-tiered-cache/wrong/purge-edge-first.proschi
+  s_ccb8935595dc4e::t_411ae99cf2ec73 40,42
+frontend/src/practice/problems/metrics-ingest/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 7-8
+frontend/src/practice/problems/cdn-tiered-cache/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 7-8
+  s_ccb8935595dc4e::t_411ae99cf2ec73 13
+frontend/src/practice/problems/cdn-tiered-cache/wrong/upper-down-goes-to-origin.proschi
+  s_ccb8935595dc4e::t_411ae99cf2ec73 47,49
+frontend/src/practice/problems/chat/given.proschi
+  s_ccb8935595dc4e::t_048d690cd7ba5e 31-32
+frontend/src/practice/problems/load-shedding/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 7-8
+frontend/src/practice/problems/discord-messages/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 7-8
+frontend/src/practice/problems/ad-click-aggregator/given.proschi
+  s_ccb8935595dc4e::t_b5e1349c545004 44,56-57,62
+frontend/src/practice/problems/distributed-kv/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 6-7
+frontend/src/practice/problems/hello-proschi/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 7-8
+frontend/src/practice/problems/cdn-tiered-cache/given.proschi
+  s_ccb8935595dc4e::t_411ae99cf2ec73 39-40
+frontend/src/practice/problems/nearby-search/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 7-8
+frontend/src/practice/problems/flash-sale/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 7-8
+frontend/src/practice/problems/ad-click-aggregator/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 7-8
+frontend/src/practice/problems/media-processing/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 7-8
+frontend/src/practice/problems/distributed-cron/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 7-8
+frontend/src/practice/problems/collaborative-docs/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 6-7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "eb8d2824b1a9ecfe0659d8bc733c9073f26cf994",
+  "prompts": {},
+  "sessions": {
+    "s_ccb8935595dc4e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0e2b8447-0e71-4063-8d52-5e5b5302fc2f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
