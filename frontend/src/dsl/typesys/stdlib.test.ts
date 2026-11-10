@@ -142,6 +142,8 @@ const ACCESS_CHANGES = [
   // User types of the problems: a consumed record spends budget, a ref update and its replication, a TAO write and invalidation.
   'BudgetService AdAggregate read→write',
   'BudgetService AdEvent read→write',
+  // cdn-tiered-cache: a purge clears a cached asset.
+  'Cloudflare PURGE read→write',
   'GitFileServer PREPARE read→write',
   'GitFileServer REPLICATE read→write',
   'Redis LPOP read→write',
