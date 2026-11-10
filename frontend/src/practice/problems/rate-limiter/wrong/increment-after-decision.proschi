@@ -29,16 +29,16 @@ decision "Fixed one-minute windows" because "Simplest correct answer for 100 req
 
 usecase "Call API" "A client calls the protected API" {
   client    -> gateway  : GET /orders
-  gateway   -> limiter  : check client-42
+  gateway   -> limiter  : POST /checks {"client": "client-42"}
   limiter   -> counters : GET rate:client-42
   counters --> limiter  : 37
 
   alt "Allowed" when "the client made at most 100 calls this minute" {
-    limiter --> gateway : 200 allow
+    limiter --> gateway  : 200 allow
     limiter ->> counters : INCR rate:client-42
-    gateway  -> orders  : GET /orders
-    orders  --> gateway : 200 {"orders": []}
-    gateway --> client  : 200 {"orders": []}
+    gateway  -> orders   : GET /orders
+    orders  --> gateway  : 200 {"orders": []}
+    gateway --> client   : 200 {"orders": []}
   } alt "Limited" when "the client is over its limit" {
     limiter --> gateway : 429
     gateway --> client  : 429 {"error": "rate_limited"}

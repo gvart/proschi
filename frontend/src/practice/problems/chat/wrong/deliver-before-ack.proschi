@@ -48,25 +48,25 @@ decision "Route between gateways with pub/sub" because "Each gateway subscribes 
 decision "Deliver after the ack" because "Delivery and push notifications (200 ms) never hold up the sender"
 
 usecase "Send message" "Send a message to another user" {
-  sender    -> lb       : SEND {"to": "bob", "text": "On my way"}
+  sender    -> lb       : MESSAGE SEND {"to": "bob", "text": "On my way"}
   lb        -> ws       : SEND
   ws        -> messages : INSERT Message m_77
   messages --> ws       : ok
   ws        -> presence : GET presence:bob
 
   alt "Online" when "the recipient has a WebSocket open" {
-    presence --> ws        : gateway ws-7
-    ws        -> broker    : PUBLISH gateway.ws-7 m_77
-    broker   --> ws        : ok
-    ws        -> recipient : MESSAGE m_77
-    recipient --> ws       : delivered
-    ws --> lb : ACK {"id": "m_77"}
-    lb --> sender : ACK {"id": "m_77"}
+    presence  --> ws        : gateway ws-7
+    ws         -> broker    : PUBLISH gateway.ws-7 m_77
+    broker    --> ws        : ok
+    ws         -> recipient : MESSAGE m_77
+    recipient --> ws        : delivered
+    ws        --> lb        : ACK {"id": "m_77"}
+    lb        --> sender    : ACK {"id": "m_77"}
   } alt "Offline" when "the recipient has no connection" {
-    presence --> ws   : nil
-    ws --> lb : ACK {"id": "m_77"}
-    lb --> sender : ACK {"id": "m_77"}
-    ws       ->> push : notify bob "New message"
+    presence --> ws     : nil
+    ws       --> lb     : ACK {"id": "m_77"}
+    lb       --> sender : ACK {"id": "m_77"}
+    ws       ->> push   : notify bob "New message"
   }
 }
 

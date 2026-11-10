@@ -31,7 +31,7 @@ decision "Base62 codes from a counter" because "Short, unique, no collisions to 
 usecase "Shorten" "Create a short code for a long URL" {
   visitor -> lb      : POST /links json {"target": "https://example.com/a/long/path"}
   lb      -> api     : POST /links
-  api     -> db      : INSERT Url
+  api     -> db      : PutItem Url
   db     --> api     : ok
   api    --> lb      : 201 {"code": "aZ3x9"}
   lb     --> visitor : 201 {"code": "aZ3x9"}
@@ -45,9 +45,9 @@ usecase "Redirect" "Send a visitor to the target of a code" {
   alt "Cache hit" when "the code was opened recently" {
     cache --> api : target
   } alt "Cache miss" when "the code is not cached" {
-    cache --> api   : nil
-    api    -> db    : GetItem Url
-    db    --> api   : target
+    cache --> api : nil
+    api    -> db  : GetItem Url
+    db    --> api : target
   }
   api --> lb      : 302 Location
   lb  --> visitor : 302 Location

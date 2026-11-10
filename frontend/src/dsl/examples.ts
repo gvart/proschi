@@ -167,12 +167,17 @@ usecase "Log out" {
 
 export const eventDrivenExample = `title "Event-Driven Checkout"
 
-checkout  "Checkout Service"  [REST API]        @payments
+# A REST service that also consumes order events: the event is one of its operations.
+type InventoryService extends [REST API] {
+  op write OrderPaid
+}
+
+checkout  "Checkout Service"  [REST API]         @payments
 payments  "Payment Provider"  [Payment Gateway]
-bus       "Order Events"      [Kafka]           @platform
-inventory "Inventory Service" [REST API]        @warehouse
-email     "Notifier"          [Email Service]   @growth
-ledger    "Ledger DB"         [PostgreSQL]      @payments
+bus       "Order Events"      [Kafka]            @platform
+inventory "Inventory Service" [InventoryService] @warehouse
+email     "Notifier"          [Email Service]    @growth
+ledger    "Ledger DB"         [PostgreSQL]       @payments
 
 checkout -> payments  : charge
 checkout -> bus       : publish
@@ -184,10 +189,10 @@ usecase "Pay for an order" {
   checkout  -> payments : POST /charges json {"amount": 4999, "currency": "EUR"}
   payments --> checkout : 201 {"chargeId": "ch_1"}
   checkout  -> ledger   : INSERT payment
-  checkout ->> bus      : OrderPaid {"orderId": "o-7"}
+  checkout ->> bus      : PUBLISH OrderPaid {"orderId": "o-7"}
   par {
     bus -> inventory : OrderPaid
-    bus -> email     : OrderPaid
+    bus -> email     : SEND receipt for OrderPaid
   }
 }
 `;

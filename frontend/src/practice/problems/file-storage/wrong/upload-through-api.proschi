@@ -74,7 +74,7 @@ usecase "Upload" "Stream the bytes through the API" {
   blobs   --> api      : 200
   api     --> lb       : 200
   lb      --> user     : 200
-  blobs   ->> events   : ObjectCreated 9a1
+  blobs   ->> events   : SEND ObjectCreated 9a1
   events  ->> finisher : ObjectCreated 9a1
   finisher -> meta     : UPDATE File status=ready
   meta    --> finisher : ok

@@ -57,7 +57,7 @@ decision "Cursors are not operations" because "Cursor moves are twice as frequen
 decision "Snapshots every few hundred operations" because "Opening a document reads one snapshot and the short tail of operations after it, never the whole history"
 
 usecase "Edit" "An editor types; the change is ordered, stored, acknowledged and shown to the others" {
-  editor    -> lb            : OP insert "a" at 120, base revision 41
+  editor    -> lb            : MESSAGE OP insert "a" at 120, base revision 41
   lb        -> gateways      : OP insert "a" at 120, base revision 41
   gateways  -> collab        : APPLY op to doc 42, base revision 41
   collab    -> oplog         : INSERT Operation doc 42 revision 43 (transformed)
@@ -69,7 +69,7 @@ usecase "Edit" "An editor types; the change is ordered, stored, acknowledged and
 }
 
 usecase "Move cursor" "An editor moves the cursor or selects text; the others see it" {
-  editor    -> lb            : CURSOR doc 42 at 120
+  editor    -> lb            : MESSAGE CURSOR doc 42 at 120
   lb        -> gateways      : CURSOR doc 42 at 120
   gateways ->> bus           : PUBLISH doc.42.presence cursor 120
   gateways --> lb            : ok

@@ -60,7 +60,7 @@ decision "3 shards, each with 2 replicas" because "Shards split the index into p
 
 usecase "Search" "A diner searches for stores and dishes" {
   diner      -> searchapi : GET /search?q=tacos&lat=37.77&lng=-122.42
-  searchapi  -> search    : match "tacos" near the diner, open now
+  searchapi  -> search    : _search match "tacos" near the diner, open now
   search    --> searchapi : top 50 stores
   searchapi --> diner     : 200 results
 }

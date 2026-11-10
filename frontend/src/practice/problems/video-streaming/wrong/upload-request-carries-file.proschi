@@ -71,7 +71,7 @@ usecase "Upload video" "A creator registers a video and uploads the file straigh
   api    --> lb      : 201 {"videoId": "v-9", "uploadUrl": "https://bucket.s3.amazonaws.com/originals/v-9.mp4?X-Amz-Signature=…"}
   lb     --> creator : 201 {"videoId": "v-9", "uploadUrl": "https://bucket.s3.amazonaws.com/originals/v-9.mp4?X-Amz-Signature=…"}
   creator -> bucket  : ~2GB PUT /originals/v-9.mp4
-  bucket ->> jobs    : ObjectCreated {"key": "originals/v-9.mp4"}
+  bucket ->> jobs    : SEND ObjectCreated {"key": "originals/v-9.mp4"}
   bucket --> creator : 200
 }
 

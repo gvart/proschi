@@ -13,7 +13,7 @@ idgen  -> zk    : claim worker id
 
 usecase "Get ID" "A service asks for a new id" {
   tweets -> idgen  : GET next id
-  idgen  -> zk     : GET /snowflake/workers/37
+  idgen  -> zk     : getData /snowflake/workers/37
   zk    --> idgen  : still ours
   idgen --> tweets : 200 {"id": 1541815603606036480}
 }

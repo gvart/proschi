@@ -1,5 +1,10 @@
 title "Replicated Git Storage" "Keeps every repository on three file servers; a push commits on a quorum, a fetch reads one up-to-date replica"
 
+# Each file server takes part in the replicated update of a repository's refs.
+type GitFileServer extends [NoSQL Database] {
+  op write PREPARE, COMMIT, REPLICATE
+}
+
 dev    "Developer"     [Actor]
 routes "Replica Table" [MySQL] x4 @git "Which file servers hold each repository, and each replica's checksum"
 

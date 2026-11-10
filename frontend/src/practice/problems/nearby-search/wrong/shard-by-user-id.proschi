@@ -27,8 +27,8 @@ changes -> indexer  : consume
 indexer -> users    : index
 
 usecase "Recommend" "A user opens the app and gets people within their search radius" {
-  app    -> api    : GET /recs?radius=50mi
-  api    -> router : Search(lat 40.73, lng -73.99, radius 50mi, age 25-35)
+  app -> api    : GET /recs?radius=50mi
+  api -> router : Search(lat 40.73, lng -73.99, radius 50mi, age 25-35)
 
   alt "Dense metro" {
     router -> users  : x7 _search users within 50 miles, on every shard
@@ -44,7 +44,7 @@ usecase "Recommend" "A user opens the app and gets people within their search ra
 
 usecase "Update location" "The app reports where the user is now" {
   app       -> api      : PUT /me/location {"lat": 40.73, "lng": -73.99}
-  api       -> profiles : UPDATE user 7731 SET lat, lng
+  api       -> profiles : UpdateItem user 7731 SET lat, lng
   profiles --> api      : ok
   api      ->> changes  : PUBLISH LocationChanged user 7731
   api      --> app      : 204
