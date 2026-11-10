@@ -94,7 +94,9 @@ export function toMermaidSequence(diagram: Diagram, useCaseId: string, scenarioI
 
 function nodeLabel(node: DiagramNode): string {
   if (node.kind === 'text') return escapeMermaid(node.description ?? node.name, true);
-  const tech = node.implicit ? '' : `<br/>[${escapeMermaid(node.techStack, true)}]`;
+  // A declared type is shown by its own name, not its icon's tech stack.
+  const techName = node.resolvedType && !node.resolvedType.builtin ? node.resolvedType.name : node.techStack;
+  const tech = node.implicit ? '' : `<br/>[${escapeMermaid(techName, true)}]`;
   return `${escapeMermaid(node.name, true)}${tech}`;
 }
 
