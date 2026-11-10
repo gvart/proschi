@@ -74,14 +74,15 @@ type Vitess extends [Distributed SQL Database] {
 
 type [NoSQL Database] extends Data {
   kind database
-  op read  GET
+  # The key-value vocabulary every product has under its own names.
+  op read  GET, SCAN
   op write PUT, SET, DELETE
   doc "A non-relational database that partitions data by key, whose product does not matter."
 }
 
 type DynamoDB extends [NoSQL Database] {
   op read  GetItem, BatchGetItem, Query, TransactGetItems, DescribeTable
-  op read  Scan latency 10 cost 25
+  op read  Scan latency 10 cost 25 # replaces the key-value SCAN: it reads the whole table
   op write PutItem, UpdateItem, DeleteItem, BatchWriteItem, TransactWriteItems
   op write ExecuteStatement, CreateTable, UpdateTable, DeleteTable
   doc "DynamoDB, the managed key-value and document database: reads by key or partition, a Scan reads the whole table."
@@ -125,7 +126,7 @@ type ScyllaDB extends Cassandra {
 
 type HBase extends [Wide-Column NoSQL Database] {
   op read  Exists
-  op read  Scan latency 10 cost 25
+  op read  Scan latency 10 cost 25 # replaces the key-value SCAN: it reads the whole table
   op write Increment, Append, CheckAndMutate
   doc "Apache HBase, the wide-column database on HDFS."
 }
@@ -143,18 +144,20 @@ type Neo4j extends [Graph NoSQL Database] {
 
 abstract type [Coordination Store] extends Data {
   kind database
+  op read  GET, WATCH
+  op write PUT, DELETE
   doc "A small, strongly consistent store for configuration, leader election and locks."
 }
 
 type etcd extends [Coordination Store] {
-  op read  Range, Watch, LeaseTimeToLive
-  op write Put, DeleteRange, Txn, Compact, LeaseGrant, LeaseRevoke, LeaseKeepAlive
+  op read  Range, LeaseTimeToLive
+  op write DeleteRange, Txn, Compact, LeaseGrant, LeaseRevoke, LeaseKeepAlive
   doc "etcd, the consistent key-value store behind Kubernetes."
 }
 
 type ZooKeeper extends [Coordination Store] {
   op read  getData, getChildren, exists, getACL, sync
-  op write create, setData, delete, setACL, multi
+  op write create, setData, setACL, multi
   doc "Apache ZooKeeper, the coordination service of znodes and watches."
 }
 
@@ -238,13 +241,13 @@ type Aerospike extends Cache {
 
 type [Search Engine] extends Data {
   kind search
-  op read  Search, KNN
+  op read  Search, Get, KNN
   op write Index, Upsert, Delete
   doc "A full-text search index, whose product does not matter."
 }
 
 type Elasticsearch extends [Search Engine] {
-  op read  Get, Mget, Count, MultiSearch, Scroll, Explain, _search, _msearch, _count
+  op read  Mget, Count, MultiSearch, Scroll, Explain, _search, _msearch, _count
   op write Bulk, Update, Create, UpdateByQuery, DeleteByQuery, Reindex, Refresh, _bulk, _doc, _update
   doc "Elasticsearch, the distributed search engine on Lucene."
 }

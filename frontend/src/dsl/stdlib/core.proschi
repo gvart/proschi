@@ -24,6 +24,16 @@
 #   step has today (dsl/access.ts); stdlib.test.ts checks it.
 # - Op names are unique along a type's chain, ignoring case: a parent's
 #   upper-case plain words (WRITE, SEND) are not repeated by its children.
+#   A child declares an inherited op again only to change it, as DynamoDB's
+#   Scan gives the key-value SCAN its multipliers.
+# - A generic type (the catalog's [NoSQL Database], Cache, [Message Queue],
+#   [Object Storage], [Search Engine], CDN, …) or an abstract parent declares
+#   its family's standard vocabulary (key-value: GET, PUT, DELETE, SCAN;
+#   queue: SEND, RECEIVE, ACK; objects: GET, PUT, DELETE, LIST), so every
+#   product inherits it and adds its own API's names. Types whose requests
+#   are the design's own API (Service, Worker, gRPC, WebSocket, the
+#   languages, platforms and functions) declare no ops and stay open, and
+#   so does AWS Global Accelerator, which carries any TCP or UDP traffic.
 # - After editing, run `npm run gen:stdlib` to refresh sources.gen.ts.
 #
 # The top levels: Component, then Caller and Shape (clients), Annotation and

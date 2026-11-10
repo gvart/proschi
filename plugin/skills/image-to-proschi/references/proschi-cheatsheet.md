@@ -119,7 +119,7 @@ api    "API"    [REST API]
 ledger "Ledger" [LedgerDb]
 api -> ledger : APPEND
 ```
-`[Tech]` names a type. Body lines: `kind`, `op read|write|forward A, B [latency x] [cost y]`, `status`, `header`, `doc "…"`. A step label starts with an op of the target's type, which decides read or write: `INSERT` to PostgreSQL, `PUBLISH X` to Kafka, `SEND X` to SQS, an HTTP method to a REST API, `MESSAGE` through a WebSocket load balancer (it forwards; the next step's op decides). An unknown op warns. Types without ops (Service, Worker) take any label. Headers follow the path: `GET /x header Authorization, If-None-Match`.
+`[Tech]` names a type. Body lines: `kind`, `op read|write|forward A, B [latency x] [cost y]`, `status`, `header`, `doc "…"`. A step label starts with an op of the target's type, which decides read or write: `INSERT` to PostgreSQL, `PUBLISH X` to Kafka, `SEND X` to SQS, an HTTP method to a REST API, `MESSAGE` through a WebSocket load balancer (it forwards; the next step's op decides). An unknown op warns. Generic types have their family's ops, which products inherit: `GET`, `PUT`, `DELETE`, `SCAN` on `[Key-Value Store]`, `GET`, `SET` on `Cache`, `GET`, `PUT`, `LIST` on `Object Storage`. Types without ops (Service, Worker, gRPC, Function) take any label. Headers follow the path: `GET /x header Authorization, If-None-Match`.
 
 ## Use cases
 

@@ -100,7 +100,7 @@ names; a `capacity { … }` override on a node still wins over them.
   an abstract type with no kind.
 - A child inherits everything. Its own scalars (props, `kind`, `protocol`,
   `icon`, `doc`) override; `op`, `status` and `header` lists add up, and an own
-  `op` with an inherited op's name replaces it. `abstract` is not inherited.
+  `op` with an inherited op's name, ignoring case, replaces it. `abstract` is not inherited.
   There is no removal syntax yet.
 - Errors: a type cycle (`Type cycle: A → B → A`), an unknown parent (with a
   suggestion), a duplicate type name, a redeclared built-in type, and a
@@ -285,7 +285,20 @@ type keep the old rules and get no new warnings.
   use it: `type SessionServer extends WebSocket` with the lines `op write OP`
   and `op read CURSOR`, then `gateways [SessionServer]`. From then on a label
   that names none of them warns. A type with ops is closed, and its children
-  inherit the ops, so they are closed too.
+  inherit the ops, so they are closed too. AWS Global Accelerator is open as
+  well: it carries any TCP or UDP traffic.
+- **Generic vocabularies.** Where a family of products shares a standard
+  vocabulary, the generic type or the abstract parent declares it, and the
+  products inherit it next to their own API's names: key-value
+  (`[NoSQL Database]`, so `[Key-Value Store]`): `GET`, `SCAN`, `PUT`, `SET`,
+  `DELETE`; `[Coordination Store]`: `GET`, `WATCH`, `PUT`, `DELETE`; queues
+  and brokers (`Messaging`): `SEND`, `RECEIVE`, `ACK`, …; `[Object Storage]`:
+  `GET`, `HEAD`, `LIST`, `PUT`, `DELETE`, `UPLOAD`; `[Search Engine]`:
+  `Search`, `Get`, `KNN`, `Index`, `Upsert`, `Delete`; `CDN`: the HTTP
+  methods and `PURGE`. A product declares an inherited op again only to
+  change it: DynamoDB's and HBase's `Scan` replace `SCAN` with the
+  multipliers of a full-table read. An own op replaces an inherited one of
+  the same name ignoring case (D3), as labels match ops.
 
 - **Lookup.** If the label starts with an HTTP method, the method is looked up.
   Otherwise the label's first words are (after `x<N>` / `~size` and an opening

@@ -27,14 +27,14 @@ requirements {
 
 test "Edge requests read the local copy" {
   "Serve request" starts at visitor
-  "Serve request" every scenario calls local
+  "Serve request" every scenario uses GET on local
   "Serve request" never calls root
   "Serve request" never calls mains
 }
 
 test "A change is written once, then copied in the background" {
   "Change config" starts at customer
-  "Change config" writes root before responding
+  "Change config" uses PUT on root before responding
   "Change config" never waits for mains or local
 }
 
@@ -42,4 +42,6 @@ test "Changes reach the edge through the main nodes" {
   root calls mains
   mains calls local
   no path from root to local
+  "Change config" uses PUT on mains
+  "Change config" uses PUT on local
 }

@@ -154,7 +154,7 @@ Amazon DocumentDB, the AWS document database compatible with MongoDB.
 
 - **Extends:** [MongoDB](data.md#mongodb) › [Document NoSQL Database](data.md#document-nosql-database) › [NoSQL Database](data.md#nosql-database) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `database`
-- **Read:** 7 from [MongoDB](data.md#mongodb), 1 from [NoSQL Database](data.md#nosql-database), 3 from [Data](data.md#data)
+- **Read:** 7 from [MongoDB](data.md#mongodb), 2 from [NoSQL Database](data.md#nosql-database), 3 from [Data](data.md#data)
 - **Write:** 12 from [MongoDB](data.md#mongodb), 3 from [NoSQL Database](data.md#nosql-database), 8 from [Data](data.md#data)
 
 ### AWS Keyspaces
@@ -164,7 +164,7 @@ Amazon Keyspaces, the AWS wide-column database compatible with Cassandra.
 - **Extends:** [Cassandra](data.md#cassandra) › [Wide-Column NoSQL Database](data.md#wide-column-nosql-database) › [NoSQL Database](data.md#nosql-database) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `database`
 - **Protocol:** `CQL`
-- **Read:** 1 from [Cassandra](data.md#cassandra), 1 from [NoSQL Database](data.md#nosql-database), 3 from [Data](data.md#data)
+- **Read:** 1 from [Cassandra](data.md#cassandra), 2 from [NoSQL Database](data.md#nosql-database), 3 from [Data](data.md#data)
 - **Write:** 5 from [Cassandra](data.md#cassandra), 2 from [NoSQL Database](data.md#nosql-database), 8 from [Data](data.md#data)
 
 ### AWS Neptune
@@ -174,7 +174,7 @@ Amazon Neptune, the graph database of AWS.
 - **Extends:** [Graph NoSQL Database](data.md#graph-nosql-database) › [NoSQL Database](data.md#nosql-database) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `database`
 - **Protocol:** `Cypher`
-- **Read:** 4 from [Graph NoSQL Database](data.md#graph-nosql-database), 1 from [NoSQL Database](data.md#nosql-database), 3 from [Data](data.md#data)
+- **Read:** 4 from [Graph NoSQL Database](data.md#graph-nosql-database), 2 from [NoSQL Database](data.md#nosql-database), 3 from [Data](data.md#data)
 - **Write:** 6 from [Graph NoSQL Database](data.md#graph-nosql-database), 1 from [NoSQL Database](data.md#nosql-database), 8 from [Data](data.md#data)
 
 ### AWS ElastiCache
@@ -193,7 +193,7 @@ Amazon OpenSearch Service, managed OpenSearch on AWS.
 
 - **Extends:** [OpenSearch](data.md#opensearch) › [Elasticsearch](data.md#elasticsearch) › [Search Engine](data.md#search-engine) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `search`
-- **Read:** 9 from [Elasticsearch](data.md#elasticsearch), 2 from [Search Engine](data.md#search-engine), 3 from [Data](data.md#data)
+- **Read:** 8 from [Elasticsearch](data.md#elasticsearch), 3 from [Search Engine](data.md#search-engine), 3 from [Data](data.md#data)
 - **Write:** 10 from [Elasticsearch](data.md#elasticsearch), 3 from [Search Engine](data.md#search-engine), 8 from [Data](data.md#data)
 
 ### AWS Redshift
@@ -438,7 +438,7 @@ Firestore, Google Cloud's serverless document database.
 
 - **Extends:** [Document NoSQL Database](data.md#document-nosql-database) › [NoSQL Database](data.md#nosql-database) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `database`
-- **Read:** `GetDocument`, `ListDocuments`, `BatchGetDocuments`, `RunQuery`, `RunAggregationQuery`, `Listen`, plus 1 from [NoSQL Database](data.md#nosql-database), 3 from [Data](data.md#data)
+- **Read:** `GetDocument`, `ListDocuments`, `BatchGetDocuments`, `RunQuery`, `RunAggregationQuery`, `Listen`, plus 2 from [NoSQL Database](data.md#nosql-database), 3 from [Data](data.md#data)
 - **Write:** `CreateDocument`, `UpdateDocument`, `DeleteDocument`, `BatchWrite`, `Commit`, `BeginTransaction`, plus 3 from [NoSQL Database](data.md#nosql-database), 8 from [Data](data.md#data)
 
 ### GCP Bigtable
@@ -447,7 +447,7 @@ Bigtable, Google Cloud's wide-column database for large, low-latency workloads.
 
 - **Extends:** [Wide-Column NoSQL Database](data.md#wide-column-nosql-database) › [NoSQL Database](data.md#nosql-database) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `database`
-- **Read:** `ReadRows`, `SampleRowKeys`, plus 1 from [NoSQL Database](data.md#nosql-database), 3 from [Data](data.md#data)
+- **Read:** `ReadRows`, `SampleRowKeys`, plus 2 from [NoSQL Database](data.md#nosql-database), 3 from [Data](data.md#data)
 - **Write:** `MutateRow`, `MutateRows`, `CheckAndMutateRow`, `ReadModifyWriteRow`, plus 3 from [NoSQL Database](data.md#nosql-database), 8 from [Data](data.md#data)
 
 ### GCP Memorystore
@@ -666,7 +666,7 @@ Azure Cosmos DB, Azure's globally distributed multi-model database.
 
 - **Extends:** [Document NoSQL Database](data.md#document-nosql-database) › [NoSQL Database](data.md#nosql-database) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `database`
-- **Read:** `ReadItem`, `ReadMany`, `QueryItems`, `ReadChangeFeed`, plus 1 from [NoSQL Database](data.md#nosql-database), 3 from [Data](data.md#data)
+- **Read:** `ReadItem`, `ReadMany`, `QueryItems`, `ReadChangeFeed`, plus 2 from [NoSQL Database](data.md#nosql-database), 3 from [Data](data.md#data)
 - **Write:** `CreateItem`, `UpsertItem`, `ReplaceItem`, `PatchItem`, `DeleteItem`, `TransactionalBatch`, plus 3 from [NoSQL Database](data.md#nosql-database), 8 from [Data](data.md#data)
 
 ### Azure Cache for Redis
@@ -685,7 +685,7 @@ Azure AI Search, the managed search service of Azure, with vector search.
 
 - **Extends:** [Search Engine](data.md#search-engine) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `search`
-- **Read:** 2 from [Search Engine](data.md#search-engine), 3 from [Data](data.md#data)
+- **Read:** 3 from [Search Engine](data.md#search-engine), 3 from [Data](data.md#data)
 - **Write:** 3 from [Search Engine](data.md#search-engine), 8 from [Data](data.md#data)
 
 ### Azure Blob Storage

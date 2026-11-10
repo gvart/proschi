@@ -156,7 +156,7 @@ A non-relational database that partitions data by key, whose product does not ma
 - **Extends:** [Data](#data) › [Component](core.md#component)
 - **Extended by:** [DynamoDB](#dynamodb), [Document NoSQL Database](#document-nosql-database), [Wide-Column NoSQL Database](#wide-column-nosql-database), [Graph NoSQL Database](#graph-nosql-database)
 - **Kind:** `database`
-- **Read:** `GET`, plus 3 from [Data](#data)
+- **Read:** `GET`, `SCAN`, plus 3 from [Data](#data)
 - **Write:** `PUT`, `SET`, `DELETE`, plus 8 from [Data](#data)
 
 ## DynamoDB
@@ -178,7 +178,7 @@ A NoSQL database that stores JSON-like documents and queries their fields.
 - **Extended by:** [MongoDB](#mongodb), [CouchDB](#couchdb), [Couchbase](#couchbase), [GCP Firestore](cloud.md#gcp-firestore), [Azure Cosmos DB](cloud.md#azure-cosmos-db)
 - **Kind:** `database`
 - **Icon:** `NoSQL Database`
-- **Read:** 1 from [NoSQL Database](#nosql-database), 3 from [Data](#data)
+- **Read:** 2 from [NoSQL Database](#nosql-database), 3 from [Data](#data)
 - **Write:** 3 from [NoSQL Database](#nosql-database), 8 from [Data](#data)
 
 ## MongoDB
@@ -188,7 +188,7 @@ MongoDB, the document database.
 - **Extends:** [Document NoSQL Database](#document-nosql-database) › [NoSQL Database](#nosql-database) › [Data](#data) › [Component](core.md#component)
 - **Extended by:** [AWS DocumentDB](cloud.md#aws-documentdb)
 - **Kind:** `database`
-- **Read:** `find`, `findOne`, `aggregate`, `countDocuments`, `estimatedDocumentCount`, `distinct`, `watch`, plus 1 from [NoSQL Database](#nosql-database), 3 from [Data](#data)
+- **Read:** `find`, `findOne`, `aggregate`, `countDocuments`, `estimatedDocumentCount`, `distinct`, `watch`, plus 2 from [NoSQL Database](#nosql-database), 3 from [Data](#data)
 - **Write:** `insertOne`, `insertMany`, `updateOne`, `updateMany`, `replaceOne`, `deleteOne`, `deleteMany`, `findOneAndUpdate`, `findOneAndReplace`, `findOneAndDelete`, `bulkWrite`, `createIndex`, plus 3 from [NoSQL Database](#nosql-database), 8 from [Data](#data)
 
 ## CouchDB
@@ -197,7 +197,7 @@ Apache CouchDB, a document database with an HTTP API and multi-primary replicati
 
 - **Extends:** [Document NoSQL Database](#document-nosql-database) › [NoSQL Database](#nosql-database) › [Data](#data) › [Component](core.md#component)
 - **Kind:** `database`
-- **Read:** 1 from [NoSQL Database](#nosql-database), 3 from [Data](#data)
+- **Read:** 2 from [NoSQL Database](#nosql-database), 3 from [Data](#data)
 - **Write:** 3 from [NoSQL Database](#nosql-database), 8 from [Data](#data)
 
 ## Couchbase
@@ -206,7 +206,7 @@ Couchbase, a document database with a built-in cache.
 
 - **Extends:** [Document NoSQL Database](#document-nosql-database) › [NoSQL Database](#nosql-database) › [Data](#data) › [Component](core.md#component)
 - **Kind:** `database`
-- **Read:** `lookupIn`, `exists`, `query`, plus 1 from [NoSQL Database](#nosql-database), 3 from [Data](#data)
+- **Read:** `lookupIn`, `exists`, `query`, plus 2 from [NoSQL Database](#nosql-database), 3 from [Data](#data)
 - **Write:** `upsert`, `insert`, `replace`, `remove`, `mutateIn`, `touch`, `increment`, `decrement`, plus 3 from [NoSQL Database](#nosql-database), 8 from [Data](#data)
 
 ## Wide-Column NoSQL Database
@@ -218,7 +218,7 @@ A NoSQL database of rows with many columns, partitioned by key and sorted within
 - **Extended by:** [Cassandra](#cassandra), [HBase](#hbase), [GCP Bigtable](cloud.md#gcp-bigtable)
 - **Kind:** `database`
 - **Icon:** `NoSQL Database`
-- **Read:** 1 from [NoSQL Database](#nosql-database), 3 from [Data](#data)
+- **Read:** 2 from [NoSQL Database](#nosql-database), 3 from [Data](#data)
 - **Write:** 3 from [NoSQL Database](#nosql-database), 8 from [Data](#data)
 
 ## Cassandra
@@ -229,7 +229,7 @@ Apache Cassandra, the wide-column database queried with CQL.
 - **Extended by:** [ScyllaDB](#scylladb), [AWS Keyspaces](cloud.md#aws-keyspaces)
 - **Kind:** `database`
 - **Protocol:** `CQL`
-- **Read:** `SELECT`, plus 1 from [NoSQL Database](#nosql-database), 3 from [Data](#data)
+- **Read:** `SELECT`, plus 2 from [NoSQL Database](#nosql-database), 3 from [Data](#data)
 - **Write:** `INSERT`, `UPDATE`, `DELETE`, `BATCH`, `TRUNCATE`, plus 2 from [NoSQL Database](#nosql-database), 8 from [Data](#data)
 
 ## ScyllaDB
@@ -239,7 +239,7 @@ ScyllaDB, a Cassandra-compatible database written in C++.
 - **Extends:** [Cassandra](#cassandra) › [Wide-Column NoSQL Database](#wide-column-nosql-database) › [NoSQL Database](#nosql-database) › [Data](#data) › [Component](core.md#component)
 - **Kind:** `database`
 - **Protocol:** `CQL`
-- **Read:** 1 from [Cassandra](#cassandra), 1 from [NoSQL Database](#nosql-database), 3 from [Data](#data)
+- **Read:** 1 from [Cassandra](#cassandra), 2 from [NoSQL Database](#nosql-database), 3 from [Data](#data)
 - **Write:** 5 from [Cassandra](#cassandra), 2 from [NoSQL Database](#nosql-database), 8 from [Data](#data)
 
 ## HBase
@@ -261,7 +261,7 @@ A graph database: nodes and relationships, queried by pattern.
 - **Kind:** `database`
 - **Protocol:** `Cypher`
 - **Icon:** `NoSQL Database`
-- **Read:** `MATCH`, `OPTIONAL`, `RETURN`, `CALL`, plus 1 from [NoSQL Database](#nosql-database), 3 from [Data](#data)
+- **Read:** `MATCH`, `OPTIONAL`, `RETURN`, `CALL`, plus 2 from [NoSQL Database](#nosql-database), 3 from [Data](#data)
 - **Write:** `CREATE`, `MERGE`, `DELETE`, `DETACH`, `SET`, `REMOVE`, plus 1 from [NoSQL Database](#nosql-database), 8 from [Data](#data)
 
 ## Neo4j
@@ -271,7 +271,7 @@ Neo4j, the graph database queried with Cypher.
 - **Extends:** [Graph NoSQL Database](#graph-nosql-database) › [NoSQL Database](#nosql-database) › [Data](#data) › [Component](core.md#component)
 - **Kind:** `database`
 - **Protocol:** `Cypher`
-- **Read:** 4 from [Graph NoSQL Database](#graph-nosql-database), 1 from [NoSQL Database](#nosql-database), 3 from [Data](#data)
+- **Read:** 4 from [Graph NoSQL Database](#graph-nosql-database), 2 from [NoSQL Database](#nosql-database), 3 from [Data](#data)
 - **Write:** 6 from [Graph NoSQL Database](#graph-nosql-database), 1 from [NoSQL Database](#nosql-database), 8 from [Data](#data)
 
 ## Coordination Store
@@ -282,8 +282,8 @@ A small, strongly consistent store for configuration, leader election and locks.
 - **Extends:** [Data](#data) › [Component](core.md#component)
 - **Extended by:** [etcd](#etcd), [ZooKeeper](#zookeeper)
 - **Kind:** `database`
-- **Read:** 3 from [Data](#data)
-- **Write:** 8 from [Data](#data)
+- **Read:** `GET`, `WATCH`, plus 3 from [Data](#data)
+- **Write:** `PUT`, `DELETE`, plus 8 from [Data](#data)
 
 ## etcd
 
@@ -291,8 +291,8 @@ etcd, the consistent key-value store behind Kubernetes.
 
 - **Extends:** [Coordination Store](#coordination-store) › [Data](#data) › [Component](core.md#component)
 - **Kind:** `database`
-- **Read:** `Range`, `Watch`, `LeaseTimeToLive`, plus 3 from [Data](#data)
-- **Write:** `Put`, `DeleteRange`, `Txn`, `Compact`, `LeaseGrant`, `LeaseRevoke`, `LeaseKeepAlive`, plus 8 from [Data](#data)
+- **Read:** `Range`, `LeaseTimeToLive`, plus 2 from [Coordination Store](#coordination-store), 3 from [Data](#data)
+- **Write:** `DeleteRange`, `Txn`, `Compact`, `LeaseGrant`, `LeaseRevoke`, `LeaseKeepAlive`, plus 2 from [Coordination Store](#coordination-store), 8 from [Data](#data)
 
 ## ZooKeeper
 
@@ -300,8 +300,8 @@ Apache ZooKeeper, the coordination service of znodes and watches.
 
 - **Extends:** [Coordination Store](#coordination-store) › [Data](#data) › [Component](core.md#component)
 - **Kind:** `database`
-- **Read:** `getData`, `getChildren`, `exists`, `getACL`, `sync`, plus 3 from [Data](#data)
-- **Write:** `create`, `setData`, `delete`, `setACL`, `multi`, plus 8 from [Data](#data)
+- **Read:** `getData`, `getChildren`, `exists`, `getACL`, `sync`, plus 2 from [Coordination Store](#coordination-store), 3 from [Data](#data)
+- **Write:** `create`, `setData`, `setACL`, `multi`, plus 2 from [Coordination Store](#coordination-store), 8 from [Data](#data)
 
 ## Cache
 
@@ -388,7 +388,7 @@ A full-text search index, whose product does not matter.
 - **Extends:** [Data](#data) › [Component](core.md#component)
 - **Extended by:** [Elasticsearch](#elasticsearch), [Solr](#solr), [Meilisearch](#meilisearch), [Typesense](#typesense), [Algolia](#algolia), [Azure AI Search](cloud.md#azure-ai-search)
 - **Kind:** `search`
-- **Read:** `Search`, `KNN`, plus 3 from [Data](#data)
+- **Read:** `Search`, `Get`, `KNN`, plus 3 from [Data](#data)
 - **Write:** `Index`, `Upsert`, `Delete`, plus 8 from [Data](#data)
 
 ## Elasticsearch
@@ -398,7 +398,7 @@ Elasticsearch, the distributed search engine on Lucene.
 - **Extends:** [Search Engine](#search-engine) › [Data](#data) › [Component](core.md#component)
 - **Extended by:** [OpenSearch](#opensearch)
 - **Kind:** `search`
-- **Read:** `Get`, `Mget`, `Count`, `MultiSearch`, `Scroll`, `Explain`, `_search`, `_msearch`, `_count`, plus 2 from [Search Engine](#search-engine), 3 from [Data](#data)
+- **Read:** `Mget`, `Count`, `MultiSearch`, `Scroll`, `Explain`, `_search`, `_msearch`, `_count`, plus 3 from [Search Engine](#search-engine), 3 from [Data](#data)
 - **Write:** `Bulk`, `Update`, `Create`, `UpdateByQuery`, `DeleteByQuery`, `Reindex`, `Refresh`, `_bulk`, `_doc`, `_update`, plus 3 from [Search Engine](#search-engine), 8 from [Data](#data)
 
 ## OpenSearch
@@ -408,7 +408,7 @@ OpenSearch, the open source fork of Elasticsearch.
 - **Extends:** [Elasticsearch](#elasticsearch) › [Search Engine](#search-engine) › [Data](#data) › [Component](core.md#component)
 - **Extended by:** [AWS OpenSearch](cloud.md#aws-opensearch)
 - **Kind:** `search`
-- **Read:** 9 from [Elasticsearch](#elasticsearch), 2 from [Search Engine](#search-engine), 3 from [Data](#data)
+- **Read:** 8 from [Elasticsearch](#elasticsearch), 3 from [Search Engine](#search-engine), 3 from [Data](#data)
 - **Write:** 10 from [Elasticsearch](#elasticsearch), 3 from [Search Engine](#search-engine), 8 from [Data](#data)
 
 ## Solr
@@ -417,7 +417,7 @@ Apache Solr, the search server on Lucene.
 
 - **Extends:** [Search Engine](#search-engine) › [Data](#data) › [Component](core.md#component)
 - **Kind:** `search`
-- **Read:** 2 from [Search Engine](#search-engine), 3 from [Data](#data)
+- **Read:** 3 from [Search Engine](#search-engine), 3 from [Data](#data)
 - **Write:** 3 from [Search Engine](#search-engine), 8 from [Data](#data)
 
 ## Meilisearch
@@ -426,7 +426,7 @@ Meilisearch, a fast search engine for search-as-you-type.
 
 - **Extends:** [Search Engine](#search-engine) › [Data](#data) › [Component](core.md#component)
 - **Kind:** `search`
-- **Read:** 2 from [Search Engine](#search-engine), 3 from [Data](#data)
+- **Read:** 3 from [Search Engine](#search-engine), 3 from [Data](#data)
 - **Write:** 3 from [Search Engine](#search-engine), 8 from [Data](#data)
 
 ## Typesense
@@ -435,7 +435,7 @@ Typesense, an in-memory search engine that tolerates typos.
 
 - **Extends:** [Search Engine](#search-engine) › [Data](#data) › [Component](core.md#component)
 - **Kind:** `search`
-- **Read:** 2 from [Search Engine](#search-engine), 3 from [Data](#data)
+- **Read:** 3 from [Search Engine](#search-engine), 3 from [Data](#data)
 - **Write:** 3 from [Search Engine](#search-engine), 8 from [Data](#data)
 
 ## Algolia
@@ -444,7 +444,7 @@ Algolia, the hosted search API.
 
 - **Extends:** [Search Engine](#search-engine) › [Data](#data) › [Component](core.md#component)
 - **Kind:** `search`
-- **Read:** 2 from [Search Engine](#search-engine), 3 from [Data](#data)
+- **Read:** 3 from [Search Engine](#search-engine), 3 from [Data](#data)
 - **Write:** 3 from [Search Engine](#search-engine), 8 from [Data](#data)
 
 ## Data Warehouse

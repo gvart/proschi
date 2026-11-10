@@ -119,6 +119,11 @@ ledger "Ledger" [LedgerDb]
     expect(ops.findIndex((o) => o.name === 'INSERT')).toBeLessThan(ops.length - 2);
   });
 
+  it('replaces an inherited op whatever its case, as steps match ops', () => {
+    const ops = nodeOf('type Slow extends PostgreSQL { op read select latency 4 }\ns [Slow]', 's').resolvedType!.ops;
+    expect(ops.filter((o) => o.name.toLowerCase() === 'select')).toEqual([{ name: 'select', access: 'read', latency: 4 }]);
+  });
+
   it('draws a node of a declared type with its nearest built-in icon', () => {
     const node = nodeOf(ledger, 'ledger');
     expect(node).toMatchObject({ kind: 'component', type: 'database', techStack: 'PostgreSQL' });
