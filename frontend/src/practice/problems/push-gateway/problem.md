@@ -4,6 +4,8 @@ summary: "Netflix's Zuul Push: persistent connections, a registry, and Kafka in 
 difficulty: medium
 company: Netflix
 tags: [websocket, queues, routing, real-world]
+version: 2
+strict: true
 hints:
   - "Dozens of backend services want to push messages, and none of them should know which server holds a device's connection, or wait for it. What can take the message from them right away?"
   - "A push server only knows the connections it holds itself. Something has to say which server holds a given customer's connection: the push server writes that on every connect, and the message processor reads it before delivering."

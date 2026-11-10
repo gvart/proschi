@@ -3,6 +3,8 @@ title: Pastebin
 summary: Object storage for bodies, a CDN for hot reads.
 difficulty: easy
 tags: [object-storage, cdn, read-heavy]
+version: 2
+strict: true
 hints:
   - Pastes can be 10 MB and add up to 80 TB. Which kind of store is built for large blobs, and what is left for the database?
   - Reads come in bursts for the same link, and a popular paste must load in 30 ms. What can answer them before they reach your servers at all?

@@ -35,13 +35,13 @@ test "Views are filtered before they are counted" {
 
 test "Unique viewers go into a HyperLogLog in Redis, not a database" {
   "Count view" starts at any queue
-  "Count view" every scenario calls any cache
+  "Count view" every scenario uses PFADD on any cache
   "Count view" scenario "Counter in Redis" never calls any database
   "Count view" scenario "Counter evicted" calls any database before any cache
 }
 
 test "Redis serves the counts; the database is a backup written in batches" {
   "Persist counts" calls any database after any cache
-  "Read count" calls any cache
+  "Read count" uses PFCOUNT on any cache
   "Read count" never calls any database
 }

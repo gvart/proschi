@@ -34,11 +34,11 @@ test "Reads are answered by the follower tier" {
 test "Only the leader tier talks to MySQL" {
   "Write" calls followers before leaders
   "Write" calls leaders before db
-  "Write" writes db before responding
+  "Write" uses INSERT on db before responding
   no path from followers to db
 }
 
 test "The leader updates the other followers after the commit" {
-  "Write" calls followers after db
+  "Write" uses INVALIDATE on followers after db
   in "Write" leaders calls followers
 }

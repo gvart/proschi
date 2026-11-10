@@ -4,6 +4,8 @@ summary: "Instagram Explore's ranking funnel: 500 candidates, then ever heavier 
 difficulty: hard
 company: Meta
 tags: [ranking, machine-learning, caching, read-heavy, estimation, real-world]
+version: 2
+strict: true
 hints:
   - "The deep model is the best ranker and the most expensive one: 5k items a second per machine. How many machines would it take to score all 500 candidates of 1k requests a second? What if it only saw the best 50?"
   - "Put the passes in a row. Retrieval returns 500 posts; a distilled model (light) scores them all and keeps 150; a lightweight network (medium) keeps 50; the deep network (heavy) orders the last 25. A label like x500 SCORE counts 500 calls of load for one step."

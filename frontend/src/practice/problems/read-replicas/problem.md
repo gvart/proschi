@@ -4,6 +4,8 @@ summary: "Shopify's MySQL: reads spread over replicas behind ProxySQL, writes an
 difficulty: medium
 company: Shopify
 tags: [replication, read-heavy, real-world]
+version: 2
+strict: true
 hints:
   - "Count the load first: 60k reads and 3k writes a second. A MySQL primary takes about 5k writes, so the writes fit on one. What about the reads?"
   - "A replica holds a full copy of the data and can answer any read, but replication is asynchronous: it may be a little behind. Which of the three use cases can live with that, and which cannot?"
