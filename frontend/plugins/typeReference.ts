@@ -145,7 +145,7 @@ function renderPages(): Map<string, string> {
       return `[${text(name)}](${file}#${e.anchor})`
     }
 
-    /** What `e` inherits of a list, counted per ancestor that declares it: ", plus 6 from Database, 3 from DataComponent". */
+    /** What `e` inherits of a list, counted per ancestor that declares it: ", plus 6 from Database, 3 from Data". */
     const inherited = <T>(e: Entry, own: T[], all: T[], declared: (d: TypeDecl) => T[], same: (a: T, b: T) => boolean): string => {
       const counts = new Map<string, number>()
       for (const item of all) {

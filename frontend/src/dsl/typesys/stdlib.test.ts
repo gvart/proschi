@@ -48,7 +48,7 @@ describe('the stdlib tree', () => {
 
   it('has the top levels under Component', () => {
     expect(children(byName.get('Component')!).map((t) => t.name).sort()).toEqual(
-      ['Annotation', 'Caller', 'Compute', 'DataComponent', 'Edge', 'External', 'Group', 'Messaging', 'Shape'].sort(),
+      ['Annotation', 'Caller', 'Compute', 'Data', 'Edge', 'External', 'Group', 'Messaging', 'Shape'].sort(),
     );
   });
 

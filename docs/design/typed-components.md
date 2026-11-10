@@ -166,6 +166,16 @@ the top of `core.proschi`):
 
 - Only `type` and `abstract type` blocks, blank lines and comments.
 - A type named after a catalog tech has the tech's kind (and so its icon).
+- The types the catalog does not know are abstract, and their names are no
+  catalog name or alias. A top level under `Component` is one word: a layer
+  of a design (`Edge`, `Compute`, `Data`, `Messaging`, `External`) or a
+  family of drawings (`Caller`, `Shape`, `Annotation`, `Group`). Below it, a
+  type is named in English words like a catalog tech, in brackets when there
+  are several, with acronyms as the catalog writes them (SQL, NoSQL, HTTP):
+  `[Coordination Store]`, `Platform`. A type that narrows another one ends
+  with that type's name: `[HTTP Service]` under Service, `[Document NoSQL
+  Database]` under NoSQL Database, `[Distributed SQL Database]` under
+  Database.
 - Profile numbers only where they equal what `sim/profiles.ts` gives the tech.
 - Run `npm run gen:stdlib` after editing. It also rewrites the built-in type
   reference in `docs/types/` (`npm run gen:type-docs`, plugins/typeReference.ts),
@@ -189,7 +199,7 @@ shared vocabulary and carry no catalog name or alias. The files are `core`,
   - `Caller` (client): Actor, Browser, Mobile App. `Shape` (client):
     Rectangle, Circle, Diamond, Cylinder, Cloud.
   - `Annotation` and `Group` (other): the notes and the group boxes.
-  - `Edge` (edge): DNS, AWS Global Accelerator, and `HttpEdge` (the HTTP
+  - `Edge` (edge): DNS, AWS Global Accelerator, and `[HTTP Edge]` (the HTTP
     methods, statuses and headers): CDN, Load Balancer, API Gateway, WAF and
     their products. The ones that carry WebSockets (API Gateway, AWS Load
     Balancer, Cloudflare, nginx, Envoy, HAProxy, …) add `MESSAGE`, a write
@@ -197,16 +207,17 @@ shared vocabulary and carry no catalog name or alias. The files are `core`,
   - `Compute` (service; statuses and headers, no ops): Service, Worker,
     `Platform` (VM, Docker, Kubernetes and the clouds' versions of them),
     Function (and the serverless products). Under Service: the languages and
-    frameworks, gRPC, WebSocket, SOAP API, and `HttpService` (the HTTP
+    frameworks, gRPC, WebSocket, SOAP API, and `[HTTP Service]` (the HTTP
     methods): REST API, GraphQL. Their own requests are named freely.
-  - `DataComponent` (plain verbs: READ, FETCH, LOOKUP; WRITE, SAVE, STORE,
+  - `Data` (plain verbs: READ, FETCH, LOOKUP; WRITE, SAVE, STORE,
     RECORD, MARK, RESERVE, HOLD, BOOK): Database (SQL) with the relational
-    products and `DistributedSql`; NoSQL Database with DynamoDB,
-    `DocumentNoSql`, `WideColumnNoSql` and `GraphNoSql`; `CoordinationStore`
+    products and `[Distributed SQL Database]`; NoSQL Database with DynamoDB,
+    `[Document NoSQL Database]`, `[Wide-Column NoSQL Database]` and
+    `[Graph NoSQL Database]`; `[Coordination Store]`
     (etcd, ZooKeeper); Cache (Redis and the Redis-compatible stores,
-    Memcached, …); Search Engine; Data Warehouse and `TimeSeriesStore`;
-    Object Storage (S3, GCS, Azure Blob, R2, MinIO, …), `SharedFileSystem`
-    and `BlockStorage`.
+    Memcached, …); Search Engine; Data Warehouse and `[Time Series Store]`;
+    Object Storage (S3, GCS, Azure Blob, R2, MinIO, …), `[Shared File System]`
+    and `[Block Storage]`.
   - `Messaging` (SEND, PUBLISH, ENQUEUE, …; RECEIVE, SUBSCRIBE, …): Message
     Queue (SQS, Azure Queue Storage, Redis Queue, ZeroMQ) and Message Broker
     (Kafka, RabbitMQ, NATS, Pub/Sub, Kinesis, SNS, EventBridge, …).

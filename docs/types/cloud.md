@@ -8,13 +8,13 @@ The managed products of AWS, Google Cloud, Azure and Cloudflare. Each extends th
 
 Amazon CloudFront, the CDN of AWS.
 
-- **Extends:** [CDN](edge.md#cdn) › [HttpEdge](edge.md#httpedge) › [Edge](edge.md#edge) › [Component](core.md#component)
+- **Extends:** [CDN](edge.md#cdn) › [HTTP Edge](edge.md#http-edge) › [Edge](edge.md#edge) › [Component](core.md#component)
 - **Kind:** `cdn`
 - **Protocol:** `HTTP`
-- **Read:** 5 from [HttpEdge](edge.md#httpedge)
-- **Write:** `CreateInvalidation`, plus 1 from [CDN](edge.md#cdn), 4 from [HttpEdge](edge.md#httpedge)
-- **Statuses:** 61 from [HttpEdge](edge.md#httpedge)
-- **Headers:** 69 from [HttpEdge](edge.md#httpedge)
+- **Read:** 5 from [HTTP Edge](edge.md#http-edge)
+- **Write:** `CreateInvalidation`, plus 1 from [CDN](edge.md#cdn), 4 from [HTTP Edge](edge.md#http-edge)
+- **Statuses:** 61 from [HTTP Edge](edge.md#http-edge)
+- **Headers:** 69 from [HTTP Edge](edge.md#http-edge)
 
 ### AWS Route53
 
@@ -30,37 +30,37 @@ Amazon Route 53, the DNS service of AWS, with health checks and latency routing.
 
 Elastic Load Balancing: an application (L7) or network (L4) load balancer on AWS.
 
-- **Extends:** [Load Balancer](edge.md#load-balancer) › [HttpEdge](edge.md#httpedge) › [Edge](edge.md#edge) › [Component](core.md#component)
+- **Extends:** [Load Balancer](edge.md#load-balancer) › [HTTP Edge](edge.md#http-edge) › [Edge](edge.md#edge) › [Component](core.md#component)
 - **Kind:** `loadbalancer`
 - **Protocol:** `HTTP`
-- **Read:** 5 from [HttpEdge](edge.md#httpedge)
-- **Write:** 4 from [HttpEdge](edge.md#httpedge)
-- **Statuses:** 61 from [HttpEdge](edge.md#httpedge)
-- **Headers:** 69 from [HttpEdge](edge.md#httpedge)
+- **Read:** 5 from [HTTP Edge](edge.md#http-edge)
+- **Write:** 4 from [HTTP Edge](edge.md#http-edge)
+- **Statuses:** 61 from [HTTP Edge](edge.md#http-edge)
+- **Headers:** 69 from [HTTP Edge](edge.md#http-edge)
 
 ### AWS API Gateway
 
 Amazon API Gateway, the managed API front door of AWS.
 
-- **Extends:** [API Gateway](edge.md#api-gateway) › [HttpEdge](edge.md#httpedge) › [Edge](edge.md#edge) › [Component](core.md#component)
+- **Extends:** [API Gateway](edge.md#api-gateway) › [HTTP Edge](edge.md#http-edge) › [Edge](edge.md#edge) › [Component](core.md#component)
 - **Kind:** `gateway`
 - **Protocol:** `HTTP`
-- **Read:** 5 from [HttpEdge](edge.md#httpedge)
-- **Write:** 4 from [HttpEdge](edge.md#httpedge)
-- **Statuses:** 61 from [HttpEdge](edge.md#httpedge)
-- **Headers:** 69 from [HttpEdge](edge.md#httpedge)
+- **Read:** 5 from [HTTP Edge](edge.md#http-edge)
+- **Write:** 4 from [HTTP Edge](edge.md#http-edge)
+- **Statuses:** 61 from [HTTP Edge](edge.md#http-edge)
+- **Headers:** 69 from [HTTP Edge](edge.md#http-edge)
 
 ### AWS WAF
 
 AWS WAF, the web application firewall in front of CloudFront, load balancers and API Gateway.
 
-- **Extends:** [WAF](edge.md#waf) › [HttpEdge](edge.md#httpedge) › [Edge](edge.md#edge) › [Component](core.md#component)
+- **Extends:** [WAF](edge.md#waf) › [HTTP Edge](edge.md#http-edge) › [Edge](edge.md#edge) › [Component](core.md#component)
 - **Kind:** `edge`
 - **Protocol:** `HTTP`
-- **Read:** 5 from [HttpEdge](edge.md#httpedge)
-- **Write:** 4 from [HttpEdge](edge.md#httpedge)
-- **Statuses:** 61 from [HttpEdge](edge.md#httpedge)
-- **Headers:** 69 from [HttpEdge](edge.md#httpedge)
+- **Read:** 5 from [HTTP Edge](edge.md#http-edge)
+- **Write:** 4 from [HTTP Edge](edge.md#http-edge)
+- **Statuses:** 61 from [HTTP Edge](edge.md#http-edge)
+- **Headers:** 69 from [HTTP Edge](edge.md#http-edge)
 
 ### AWS Global Accelerator
 
@@ -123,127 +123,127 @@ AWS Lambda, functions that run per request or event on AWS.
 
 Amazon RDS, managed relational databases on AWS (PostgreSQL, MySQL and others).
 
-- **Extends:** [Database](data.md#database) › [DataComponent](data.md#datacomponent) › [Component](core.md#component)
+- **Extends:** [Database](data.md#database) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `database`
 - **Protocol:** `SQL`
-- **Read:** 6 from [Database](data.md#database), 3 from [DataComponent](data.md#datacomponent)
-- **Write:** 11 from [Database](data.md#database), 8 from [DataComponent](data.md#datacomponent)
+- **Read:** 6 from [Database](data.md#database), 3 from [Data](data.md#data)
+- **Write:** 11 from [Database](data.md#database), 8 from [Data](data.md#data)
 
 ### AWS Aurora
 
 Amazon Aurora, the AWS relational database compatible with PostgreSQL and MySQL, on shared distributed storage.
 
-- **Extends:** [Database](data.md#database) › [DataComponent](data.md#datacomponent) › [Component](core.md#component)
+- **Extends:** [Database](data.md#database) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `database`
 - **Protocol:** `SQL`
-- **Read:** 6 from [Database](data.md#database), 3 from [DataComponent](data.md#datacomponent)
-- **Write:** 11 from [Database](data.md#database), 8 from [DataComponent](data.md#datacomponent)
+- **Read:** 6 from [Database](data.md#database), 3 from [Data](data.md#data)
+- **Write:** 11 from [Database](data.md#database), 8 from [Data](data.md#data)
 
 ### AWS DynamoDB
 
 Amazon DynamoDB, the managed key-value and document database of AWS.
 
-- **Extends:** [DynamoDB](data.md#dynamodb) › [NoSQL Database](data.md#nosql-database) › [DataComponent](data.md#datacomponent) › [Component](core.md#component)
+- **Extends:** [DynamoDB](data.md#dynamodb) › [NoSQL Database](data.md#nosql-database) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `database`
-- **Read:** 6 from [DynamoDB](data.md#dynamodb), 1 from [NoSQL Database](data.md#nosql-database), 3 from [DataComponent](data.md#datacomponent)
-- **Write:** 9 from [DynamoDB](data.md#dynamodb), 3 from [NoSQL Database](data.md#nosql-database), 8 from [DataComponent](data.md#datacomponent)
+- **Read:** 6 from [DynamoDB](data.md#dynamodb), 1 from [NoSQL Database](data.md#nosql-database), 3 from [Data](data.md#data)
+- **Write:** 9 from [DynamoDB](data.md#dynamodb), 3 from [NoSQL Database](data.md#nosql-database), 8 from [Data](data.md#data)
 
 ### AWS DocumentDB
 
 Amazon DocumentDB, the AWS document database compatible with MongoDB.
 
-- **Extends:** [MongoDB](data.md#mongodb) › [DocumentNoSql](data.md#documentnosql) › [NoSQL Database](data.md#nosql-database) › [DataComponent](data.md#datacomponent) › [Component](core.md#component)
+- **Extends:** [MongoDB](data.md#mongodb) › [Document NoSQL Database](data.md#document-nosql-database) › [NoSQL Database](data.md#nosql-database) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `database`
-- **Read:** 7 from [MongoDB](data.md#mongodb), 1 from [NoSQL Database](data.md#nosql-database), 3 from [DataComponent](data.md#datacomponent)
-- **Write:** 12 from [MongoDB](data.md#mongodb), 3 from [NoSQL Database](data.md#nosql-database), 8 from [DataComponent](data.md#datacomponent)
+- **Read:** 7 from [MongoDB](data.md#mongodb), 1 from [NoSQL Database](data.md#nosql-database), 3 from [Data](data.md#data)
+- **Write:** 12 from [MongoDB](data.md#mongodb), 3 from [NoSQL Database](data.md#nosql-database), 8 from [Data](data.md#data)
 
 ### AWS Keyspaces
 
 Amazon Keyspaces, the AWS wide-column database compatible with Cassandra.
 
-- **Extends:** [Cassandra](data.md#cassandra) › [WideColumnNoSql](data.md#widecolumnnosql) › [NoSQL Database](data.md#nosql-database) › [DataComponent](data.md#datacomponent) › [Component](core.md#component)
+- **Extends:** [Cassandra](data.md#cassandra) › [Wide-Column NoSQL Database](data.md#wide-column-nosql-database) › [NoSQL Database](data.md#nosql-database) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `database`
 - **Protocol:** `CQL`
-- **Read:** 1 from [Cassandra](data.md#cassandra), 1 from [NoSQL Database](data.md#nosql-database), 3 from [DataComponent](data.md#datacomponent)
-- **Write:** 5 from [Cassandra](data.md#cassandra), 2 from [NoSQL Database](data.md#nosql-database), 8 from [DataComponent](data.md#datacomponent)
+- **Read:** 1 from [Cassandra](data.md#cassandra), 1 from [NoSQL Database](data.md#nosql-database), 3 from [Data](data.md#data)
+- **Write:** 5 from [Cassandra](data.md#cassandra), 2 from [NoSQL Database](data.md#nosql-database), 8 from [Data](data.md#data)
 
 ### AWS Neptune
 
 Amazon Neptune, the graph database of AWS.
 
-- **Extends:** [GraphNoSql](data.md#graphnosql) › [NoSQL Database](data.md#nosql-database) › [DataComponent](data.md#datacomponent) › [Component](core.md#component)
+- **Extends:** [Graph NoSQL Database](data.md#graph-nosql-database) › [NoSQL Database](data.md#nosql-database) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `database`
 - **Protocol:** `Cypher`
-- **Read:** 4 from [GraphNoSql](data.md#graphnosql), 1 from [NoSQL Database](data.md#nosql-database), 3 from [DataComponent](data.md#datacomponent)
-- **Write:** 6 from [GraphNoSql](data.md#graphnosql), 1 from [NoSQL Database](data.md#nosql-database), 8 from [DataComponent](data.md#datacomponent)
+- **Read:** 4 from [Graph NoSQL Database](data.md#graph-nosql-database), 1 from [NoSQL Database](data.md#nosql-database), 3 from [Data](data.md#data)
+- **Write:** 6 from [Graph NoSQL Database](data.md#graph-nosql-database), 1 from [NoSQL Database](data.md#nosql-database), 8 from [Data](data.md#data)
 
 ### AWS ElastiCache
 
 Amazon ElastiCache, managed Redis, Valkey or Memcached on AWS.
 
-- **Extends:** [Redis](data.md#redis) › [Cache](data.md#cache) › [DataComponent](data.md#datacomponent) › [Component](core.md#component)
+- **Extends:** [Redis](data.md#redis) › [Cache](data.md#cache) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `cache`
 - **Protocol:** `RESP`
-- **Read:** 67 from [Redis](data.md#redis), 2 from [Cache](data.md#cache), 3 from [DataComponent](data.md#datacomponent)
-- **Write:** 81 from [Redis](data.md#redis), 3 from [Cache](data.md#cache), 8 from [DataComponent](data.md#datacomponent)
+- **Read:** 67 from [Redis](data.md#redis), 2 from [Cache](data.md#cache), 3 from [Data](data.md#data)
+- **Write:** 81 from [Redis](data.md#redis), 3 from [Cache](data.md#cache), 8 from [Data](data.md#data)
 
 ### AWS OpenSearch
 
 Amazon OpenSearch Service, managed OpenSearch on AWS.
 
-- **Extends:** [OpenSearch](data.md#opensearch) › [Elasticsearch](data.md#elasticsearch) › [Search Engine](data.md#search-engine) › [DataComponent](data.md#datacomponent) › [Component](core.md#component)
+- **Extends:** [OpenSearch](data.md#opensearch) › [Elasticsearch](data.md#elasticsearch) › [Search Engine](data.md#search-engine) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `search`
-- **Read:** 9 from [Elasticsearch](data.md#elasticsearch), 2 from [Search Engine](data.md#search-engine), 3 from [DataComponent](data.md#datacomponent)
-- **Write:** 10 from [Elasticsearch](data.md#elasticsearch), 3 from [Search Engine](data.md#search-engine), 8 from [DataComponent](data.md#datacomponent)
+- **Read:** 9 from [Elasticsearch](data.md#elasticsearch), 2 from [Search Engine](data.md#search-engine), 3 from [Data](data.md#data)
+- **Write:** 10 from [Elasticsearch](data.md#elasticsearch), 3 from [Search Engine](data.md#search-engine), 8 from [Data](data.md#data)
 
 ### AWS Redshift
 
 Amazon Redshift, the data warehouse of AWS.
 
-- **Extends:** [Data Warehouse](data.md#data-warehouse) › [DataComponent](data.md#datacomponent) › [Component](core.md#component)
+- **Extends:** [Data Warehouse](data.md#data-warehouse) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `analytics`
 - **Protocol:** `SQL`
-- **Read:** 4 from [Data Warehouse](data.md#data-warehouse), 3 from [DataComponent](data.md#datacomponent)
-- **Write:** 9 from [Data Warehouse](data.md#data-warehouse), 8 from [DataComponent](data.md#datacomponent)
+- **Read:** 4 from [Data Warehouse](data.md#data-warehouse), 3 from [Data](data.md#data)
+- **Write:** 9 from [Data Warehouse](data.md#data-warehouse), 8 from [Data](data.md#data)
 
 ### AWS Athena
 
 Amazon Athena, SQL queries over files in S3.
 
-- **Extends:** [Data Warehouse](data.md#data-warehouse) › [DataComponent](data.md#datacomponent) › [Component](core.md#component)
+- **Extends:** [Data Warehouse](data.md#data-warehouse) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `analytics`
 - **Protocol:** `SQL`
-- **Read:** `StartQueryExecution`, `GetQueryExecution`, `GetQueryResults`, plus 4 from [Data Warehouse](data.md#data-warehouse), 3 from [DataComponent](data.md#datacomponent)
-- **Write:** 9 from [Data Warehouse](data.md#data-warehouse), 8 from [DataComponent](data.md#datacomponent)
+- **Read:** `StartQueryExecution`, `GetQueryExecution`, `GetQueryResults`, plus 4 from [Data Warehouse](data.md#data-warehouse), 3 from [Data](data.md#data)
+- **Write:** 9 from [Data Warehouse](data.md#data-warehouse), 8 from [Data](data.md#data)
 
 ### AWS S3
 
 Amazon S3, the object storage of AWS.
 
-- **Extends:** [Object Storage](data.md#object-storage) › [DataComponent](data.md#datacomponent) › [Component](core.md#component)
+- **Extends:** [Object Storage](data.md#object-storage) › [Data](data.md#data) › [Component](core.md#component)
 - **Extended by:** [MinIO](data.md#minio), [Cloudflare R2](#cloudflare-r2)
 - **Kind:** `storage`
 - **Protocol:** `HTTP`
-- **Read:** `GetObject`, `HeadObject`, `ListObjectsV2`, `ListObjects`, `GetObjectTagging`, `GetObjectAcl`, `ListMultipartUploads`, `ListParts`, `SelectObjectContent`, `HeadBucket`, `ListBuckets`, plus 3 from [Object Storage](data.md#object-storage), 3 from [DataComponent](data.md#datacomponent)
-- **Write:** `PutObject`, `CopyObject`, `DeleteObject`, `DeleteObjects`, `RestoreObject`, `PutObjectTagging`, `PutObjectAcl`, `CreateMultipartUpload`, `UploadPart`, `UploadPartCopy`, `CompleteMultipartUpload`, `AbortMultipartUpload`, `CreateBucket`, `DeleteBucket`, plus 3 from [Object Storage](data.md#object-storage), 8 from [DataComponent](data.md#datacomponent)
+- **Read:** `GetObject`, `HeadObject`, `ListObjectsV2`, `ListObjects`, `GetObjectTagging`, `GetObjectAcl`, `ListMultipartUploads`, `ListParts`, `SelectObjectContent`, `HeadBucket`, `ListBuckets`, plus 3 from [Object Storage](data.md#object-storage), 3 from [Data](data.md#data)
+- **Write:** `PutObject`, `CopyObject`, `DeleteObject`, `DeleteObjects`, `RestoreObject`, `PutObjectTagging`, `PutObjectAcl`, `CreateMultipartUpload`, `UploadPart`, `UploadPartCopy`, `CompleteMultipartUpload`, `AbortMultipartUpload`, `CreateBucket`, `DeleteBucket`, plus 3 from [Object Storage](data.md#object-storage), 8 from [Data](data.md#data)
 
 ### AWS EBS
 
 Amazon EBS, block volumes for EC2 instances.
 
-- **Extends:** [BlockStorage](data.md#blockstorage) › [DataComponent](data.md#datacomponent) › [Component](core.md#component)
+- **Extends:** [Block Storage](data.md#block-storage) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `storage`
-- **Read:** 3 from [DataComponent](data.md#datacomponent)
-- **Write:** 8 from [DataComponent](data.md#datacomponent)
+- **Read:** 3 from [Data](data.md#data)
+- **Write:** 8 from [Data](data.md#data)
 
 ### AWS EFS
 
 Amazon EFS, a shared NFS file system on AWS.
 
-- **Extends:** [SharedFileSystem](data.md#sharedfilesystem) › [DataComponent](data.md#datacomponent) › [Component](core.md#component)
+- **Extends:** [Shared File System](data.md#shared-file-system) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `storage`
-- **Read:** 2 from [SharedFileSystem](data.md#sharedfilesystem), 3 from [DataComponent](data.md#datacomponent)
-- **Write:** 1 from [SharedFileSystem](data.md#sharedfilesystem), 8 from [DataComponent](data.md#datacomponent)
+- **Read:** 2 from [Shared File System](data.md#shared-file-system), 3 from [Data](data.md#data)
+- **Write:** 1 from [Shared File System](data.md#shared-file-system), 8 from [Data](data.md#data)
 
 ### AWS SQS
 
@@ -320,13 +320,13 @@ Amazon Cognito, user sign-up and sign-in on AWS.
 
 Cloud CDN, the CDN of Google Cloud.
 
-- **Extends:** [CDN](edge.md#cdn) › [HttpEdge](edge.md#httpedge) › [Edge](edge.md#edge) › [Component](core.md#component)
+- **Extends:** [CDN](edge.md#cdn) › [HTTP Edge](edge.md#http-edge) › [Edge](edge.md#edge) › [Component](core.md#component)
 - **Kind:** `cdn`
 - **Protocol:** `HTTP`
-- **Read:** 5 from [HttpEdge](edge.md#httpedge)
-- **Write:** 1 from [CDN](edge.md#cdn), 4 from [HttpEdge](edge.md#httpedge)
-- **Statuses:** 61 from [HttpEdge](edge.md#httpedge)
-- **Headers:** 69 from [HttpEdge](edge.md#httpedge)
+- **Read:** 5 from [HTTP Edge](edge.md#http-edge)
+- **Write:** 1 from [CDN](edge.md#cdn), 4 from [HTTP Edge](edge.md#http-edge)
+- **Statuses:** 61 from [HTTP Edge](edge.md#http-edge)
+- **Headers:** 69 from [HTTP Edge](edge.md#http-edge)
 
 ### GCP Cloud DNS
 
@@ -342,25 +342,25 @@ Cloud DNS, the DNS service of Google Cloud.
 
 Cloud Load Balancing, Google Cloud's global and regional load balancers.
 
-- **Extends:** [Load Balancer](edge.md#load-balancer) › [HttpEdge](edge.md#httpedge) › [Edge](edge.md#edge) › [Component](core.md#component)
+- **Extends:** [Load Balancer](edge.md#load-balancer) › [HTTP Edge](edge.md#http-edge) › [Edge](edge.md#edge) › [Component](core.md#component)
 - **Kind:** `loadbalancer`
 - **Protocol:** `HTTP`
-- **Read:** 5 from [HttpEdge](edge.md#httpedge)
-- **Write:** 4 from [HttpEdge](edge.md#httpedge)
-- **Statuses:** 61 from [HttpEdge](edge.md#httpedge)
-- **Headers:** 69 from [HttpEdge](edge.md#httpedge)
+- **Read:** 5 from [HTTP Edge](edge.md#http-edge)
+- **Write:** 4 from [HTTP Edge](edge.md#http-edge)
+- **Statuses:** 61 from [HTTP Edge](edge.md#http-edge)
+- **Headers:** 69 from [HTTP Edge](edge.md#http-edge)
 
 ### GCP Apigee
 
 Apigee, Google Cloud's API management platform.
 
-- **Extends:** [API Gateway](edge.md#api-gateway) › [HttpEdge](edge.md#httpedge) › [Edge](edge.md#edge) › [Component](core.md#component)
+- **Extends:** [API Gateway](edge.md#api-gateway) › [HTTP Edge](edge.md#http-edge) › [Edge](edge.md#edge) › [Component](core.md#component)
 - **Kind:** `gateway`
 - **Protocol:** `HTTP`
-- **Read:** 5 from [HttpEdge](edge.md#httpedge)
-- **Write:** 4 from [HttpEdge](edge.md#httpedge)
-- **Statuses:** 61 from [HttpEdge](edge.md#httpedge)
-- **Headers:** 69 from [HttpEdge](edge.md#httpedge)
+- **Read:** 5 from [HTTP Edge](edge.md#http-edge)
+- **Write:** 4 from [HTTP Edge](edge.md#http-edge)
+- **Statuses:** 61 from [HTTP Edge](edge.md#http-edge)
+- **Headers:** 69 from [HTTP Edge](edge.md#http-edge)
 
 ### GCP Compute Engine
 
@@ -416,78 +416,78 @@ App Engine, Google Cloud's managed platform for web apps.
 
 Cloud SQL, managed PostgreSQL, MySQL and SQL Server on Google Cloud.
 
-- **Extends:** [Database](data.md#database) › [DataComponent](data.md#datacomponent) › [Component](core.md#component)
+- **Extends:** [Database](data.md#database) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `database`
 - **Protocol:** `SQL`
-- **Read:** 6 from [Database](data.md#database), 3 from [DataComponent](data.md#datacomponent)
-- **Write:** 11 from [Database](data.md#database), 8 from [DataComponent](data.md#datacomponent)
+- **Read:** 6 from [Database](data.md#database), 3 from [Data](data.md#data)
+- **Write:** 11 from [Database](data.md#database), 8 from [Data](data.md#data)
 
 ### GCP Spanner
 
 Spanner, Google Cloud's globally distributed relational database with external consistency.
 
-- **Extends:** [DistributedSql](data.md#distributedsql) › [Database](data.md#database) › [DataComponent](data.md#datacomponent) › [Component](core.md#component)
+- **Extends:** [Distributed SQL Database](data.md#distributed-sql-database) › [Database](data.md#database) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `database`
 - **Protocol:** `SQL`
-- **Read:** `ExecuteSql`, `ExecuteStreamingSql`, `StreamingRead`, `BeginTransaction`, plus 6 from [Database](data.md#database), 3 from [DataComponent](data.md#datacomponent)
-- **Write:** `ExecuteBatchDml`, plus 11 from [Database](data.md#database), 8 from [DataComponent](data.md#datacomponent)
+- **Read:** `ExecuteSql`, `ExecuteStreamingSql`, `StreamingRead`, `BeginTransaction`, plus 6 from [Database](data.md#database), 3 from [Data](data.md#data)
+- **Write:** `ExecuteBatchDml`, plus 11 from [Database](data.md#database), 8 from [Data](data.md#data)
 
 ### GCP Firestore
 
 Firestore, Google Cloud's serverless document database.
 
-- **Extends:** [DocumentNoSql](data.md#documentnosql) › [NoSQL Database](data.md#nosql-database) › [DataComponent](data.md#datacomponent) › [Component](core.md#component)
+- **Extends:** [Document NoSQL Database](data.md#document-nosql-database) › [NoSQL Database](data.md#nosql-database) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `database`
-- **Read:** `GetDocument`, `ListDocuments`, `BatchGetDocuments`, `RunQuery`, `RunAggregationQuery`, `Listen`, plus 1 from [NoSQL Database](data.md#nosql-database), 3 from [DataComponent](data.md#datacomponent)
-- **Write:** `CreateDocument`, `UpdateDocument`, `DeleteDocument`, `BatchWrite`, `Commit`, `BeginTransaction`, plus 3 from [NoSQL Database](data.md#nosql-database), 8 from [DataComponent](data.md#datacomponent)
+- **Read:** `GetDocument`, `ListDocuments`, `BatchGetDocuments`, `RunQuery`, `RunAggregationQuery`, `Listen`, plus 1 from [NoSQL Database](data.md#nosql-database), 3 from [Data](data.md#data)
+- **Write:** `CreateDocument`, `UpdateDocument`, `DeleteDocument`, `BatchWrite`, `Commit`, `BeginTransaction`, plus 3 from [NoSQL Database](data.md#nosql-database), 8 from [Data](data.md#data)
 
 ### GCP Bigtable
 
 Bigtable, Google Cloud's wide-column database for large, low-latency workloads.
 
-- **Extends:** [WideColumnNoSql](data.md#widecolumnnosql) › [NoSQL Database](data.md#nosql-database) › [DataComponent](data.md#datacomponent) › [Component](core.md#component)
+- **Extends:** [Wide-Column NoSQL Database](data.md#wide-column-nosql-database) › [NoSQL Database](data.md#nosql-database) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `database`
-- **Read:** `ReadRows`, `SampleRowKeys`, plus 1 from [NoSQL Database](data.md#nosql-database), 3 from [DataComponent](data.md#datacomponent)
-- **Write:** `MutateRow`, `MutateRows`, `CheckAndMutateRow`, `ReadModifyWriteRow`, plus 3 from [NoSQL Database](data.md#nosql-database), 8 from [DataComponent](data.md#datacomponent)
+- **Read:** `ReadRows`, `SampleRowKeys`, plus 1 from [NoSQL Database](data.md#nosql-database), 3 from [Data](data.md#data)
+- **Write:** `MutateRow`, `MutateRows`, `CheckAndMutateRow`, `ReadModifyWriteRow`, plus 3 from [NoSQL Database](data.md#nosql-database), 8 from [Data](data.md#data)
 
 ### GCP Memorystore
 
 Memorystore, managed Redis and Memcached on Google Cloud.
 
-- **Extends:** [Redis](data.md#redis) › [Cache](data.md#cache) › [DataComponent](data.md#datacomponent) › [Component](core.md#component)
+- **Extends:** [Redis](data.md#redis) › [Cache](data.md#cache) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `cache`
 - **Protocol:** `RESP`
-- **Read:** 67 from [Redis](data.md#redis), 2 from [Cache](data.md#cache), 3 from [DataComponent](data.md#datacomponent)
-- **Write:** 81 from [Redis](data.md#redis), 3 from [Cache](data.md#cache), 8 from [DataComponent](data.md#datacomponent)
+- **Read:** 67 from [Redis](data.md#redis), 2 from [Cache](data.md#cache), 3 from [Data](data.md#data)
+- **Write:** 81 from [Redis](data.md#redis), 3 from [Cache](data.md#cache), 8 from [Data](data.md#data)
 
 ### GCP BigQuery
 
 BigQuery, Google Cloud's serverless data warehouse.
 
-- **Extends:** [Data Warehouse](data.md#data-warehouse) › [DataComponent](data.md#datacomponent) › [Component](core.md#component)
+- **Extends:** [Data Warehouse](data.md#data-warehouse) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `analytics`
 - **Protocol:** `SQL`
-- **Read:** 4 from [Data Warehouse](data.md#data-warehouse), 3 from [DataComponent](data.md#datacomponent)
-- **Write:** 9 from [Data Warehouse](data.md#data-warehouse), 8 from [DataComponent](data.md#datacomponent)
+- **Read:** 4 from [Data Warehouse](data.md#data-warehouse), 3 from [Data](data.md#data)
+- **Write:** 9 from [Data Warehouse](data.md#data-warehouse), 8 from [Data](data.md#data)
 
 ### GCP Cloud Storage
 
 Cloud Storage, the object storage of Google Cloud.
 
-- **Extends:** [Object Storage](data.md#object-storage) › [DataComponent](data.md#datacomponent) › [Component](core.md#component)
+- **Extends:** [Object Storage](data.md#object-storage) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `storage`
 - **Protocol:** `HTTP`
-- **Read:** 3 from [Object Storage](data.md#object-storage), 3 from [DataComponent](data.md#datacomponent)
-- **Write:** `Insert`, `Patch`, `Update`, `Copy`, `Compose`, `Rewrite`, plus 3 from [Object Storage](data.md#object-storage), 8 from [DataComponent](data.md#datacomponent)
+- **Read:** 3 from [Object Storage](data.md#object-storage), 3 from [Data](data.md#data)
+- **Write:** `Insert`, `Patch`, `Update`, `Copy`, `Compose`, `Rewrite`, plus 3 from [Object Storage](data.md#object-storage), 8 from [Data](data.md#data)
 
 ### GCP Persistent Disk
 
 Persistent Disk, block volumes for Compute Engine.
 
-- **Extends:** [BlockStorage](data.md#blockstorage) › [DataComponent](data.md#datacomponent) › [Component](core.md#component)
+- **Extends:** [Block Storage](data.md#block-storage) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `storage`
-- **Read:** 3 from [DataComponent](data.md#datacomponent)
-- **Write:** 8 from [DataComponent](data.md#datacomponent)
+- **Read:** 3 from [Data](data.md#data)
+- **Write:** 8 from [Data](data.md#data)
 
 ### GCP Pub/Sub
 
@@ -504,25 +504,25 @@ Pub/Sub, Google Cloud's global messaging service of topics and subscriptions.
 
 Azure CDN, the content delivery network of Azure.
 
-- **Extends:** [CDN](edge.md#cdn) › [HttpEdge](edge.md#httpedge) › [Edge](edge.md#edge) › [Component](core.md#component)
+- **Extends:** [CDN](edge.md#cdn) › [HTTP Edge](edge.md#http-edge) › [Edge](edge.md#edge) › [Component](core.md#component)
 - **Kind:** `cdn`
 - **Protocol:** `HTTP`
-- **Read:** 5 from [HttpEdge](edge.md#httpedge)
-- **Write:** 1 from [CDN](edge.md#cdn), 4 from [HttpEdge](edge.md#httpedge)
-- **Statuses:** 61 from [HttpEdge](edge.md#httpedge)
-- **Headers:** 69 from [HttpEdge](edge.md#httpedge)
+- **Read:** 5 from [HTTP Edge](edge.md#http-edge)
+- **Write:** 1 from [CDN](edge.md#cdn), 4 from [HTTP Edge](edge.md#http-edge)
+- **Statuses:** 61 from [HTTP Edge](edge.md#http-edge)
+- **Headers:** 69 from [HTTP Edge](edge.md#http-edge)
 
 ### Azure Front Door
 
 Azure Front Door, Azure's global entry point: CDN, load balancing and WAF at the edge.
 
-- **Extends:** [CDN](edge.md#cdn) › [HttpEdge](edge.md#httpedge) › [Edge](edge.md#edge) › [Component](core.md#component)
+- **Extends:** [CDN](edge.md#cdn) › [HTTP Edge](edge.md#http-edge) › [Edge](edge.md#edge) › [Component](core.md#component)
 - **Kind:** `cdn`
 - **Protocol:** `HTTP`
-- **Read:** 5 from [HttpEdge](edge.md#httpedge)
-- **Write:** 1 from [CDN](edge.md#cdn), 4 from [HttpEdge](edge.md#httpedge)
-- **Statuses:** 61 from [HttpEdge](edge.md#httpedge)
-- **Headers:** 69 from [HttpEdge](edge.md#httpedge)
+- **Read:** 5 from [HTTP Edge](edge.md#http-edge)
+- **Write:** 1 from [CDN](edge.md#cdn), 4 from [HTTP Edge](edge.md#http-edge)
+- **Statuses:** 61 from [HTTP Edge](edge.md#http-edge)
+- **Headers:** 69 from [HTTP Edge](edge.md#http-edge)
 
 ### Azure DNS
 
@@ -538,37 +538,37 @@ Azure DNS, the DNS service of Azure.
 
 Azure Load Balancer, the L4 load balancer of Azure.
 
-- **Extends:** [Load Balancer](edge.md#load-balancer) › [HttpEdge](edge.md#httpedge) › [Edge](edge.md#edge) › [Component](core.md#component)
+- **Extends:** [Load Balancer](edge.md#load-balancer) › [HTTP Edge](edge.md#http-edge) › [Edge](edge.md#edge) › [Component](core.md#component)
 - **Kind:** `loadbalancer`
 - **Protocol:** `HTTP`
-- **Read:** 5 from [HttpEdge](edge.md#httpedge)
-- **Write:** 4 from [HttpEdge](edge.md#httpedge)
-- **Statuses:** 61 from [HttpEdge](edge.md#httpedge)
-- **Headers:** 69 from [HttpEdge](edge.md#httpedge)
+- **Read:** 5 from [HTTP Edge](edge.md#http-edge)
+- **Write:** 4 from [HTTP Edge](edge.md#http-edge)
+- **Statuses:** 61 from [HTTP Edge](edge.md#http-edge)
+- **Headers:** 69 from [HTTP Edge](edge.md#http-edge)
 
 ### Azure Application Gateway
 
 Azure Application Gateway, the L7 load balancer of Azure, with an optional WAF.
 
-- **Extends:** [Load Balancer](edge.md#load-balancer) › [HttpEdge](edge.md#httpedge) › [Edge](edge.md#edge) › [Component](core.md#component)
+- **Extends:** [Load Balancer](edge.md#load-balancer) › [HTTP Edge](edge.md#http-edge) › [Edge](edge.md#edge) › [Component](core.md#component)
 - **Kind:** `loadbalancer`
 - **Protocol:** `HTTP`
-- **Read:** 5 from [HttpEdge](edge.md#httpedge)
-- **Write:** 4 from [HttpEdge](edge.md#httpedge)
-- **Statuses:** 61 from [HttpEdge](edge.md#httpedge)
-- **Headers:** 69 from [HttpEdge](edge.md#httpedge)
+- **Read:** 5 from [HTTP Edge](edge.md#http-edge)
+- **Write:** 4 from [HTTP Edge](edge.md#http-edge)
+- **Statuses:** 61 from [HTTP Edge](edge.md#http-edge)
+- **Headers:** 69 from [HTTP Edge](edge.md#http-edge)
 
 ### Azure API Management
 
 Azure API Management, the API gateway and developer portal of Azure.
 
-- **Extends:** [API Gateway](edge.md#api-gateway) › [HttpEdge](edge.md#httpedge) › [Edge](edge.md#edge) › [Component](core.md#component)
+- **Extends:** [API Gateway](edge.md#api-gateway) › [HTTP Edge](edge.md#http-edge) › [Edge](edge.md#edge) › [Component](core.md#component)
 - **Kind:** `gateway`
 - **Protocol:** `HTTP`
-- **Read:** 5 from [HttpEdge](edge.md#httpedge)
-- **Write:** 4 from [HttpEdge](edge.md#httpedge)
-- **Statuses:** 61 from [HttpEdge](edge.md#httpedge)
-- **Headers:** 69 from [HttpEdge](edge.md#httpedge)
+- **Read:** 5 from [HTTP Edge](edge.md#http-edge)
+- **Write:** 4 from [HTTP Edge](edge.md#http-edge)
+- **Statuses:** 61 from [HTTP Edge](edge.md#http-edge)
+- **Headers:** 69 from [HTTP Edge](edge.md#http-edge)
 
 ### Azure VM
 
@@ -634,87 +634,87 @@ Azure Logic Apps, workflows of connectors that run on triggers.
 
 Azure SQL Database, managed SQL Server on Azure.
 
-- **Extends:** [SQL Server](data.md#sql-server) › [Database](data.md#database) › [DataComponent](data.md#datacomponent) › [Component](core.md#component)
+- **Extends:** [SQL Server](data.md#sql-server) › [Database](data.md#database) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `database`
 - **Protocol:** `SQL`
-- **Read:** 6 from [Database](data.md#database), 3 from [DataComponent](data.md#datacomponent)
-- **Write:** 11 from [Database](data.md#database), 8 from [DataComponent](data.md#datacomponent)
+- **Read:** 6 from [Database](data.md#database), 3 from [Data](data.md#data)
+- **Write:** 11 from [Database](data.md#database), 8 from [Data](data.md#data)
 
 ### Azure Database for PostgreSQL
 
 Azure Database for PostgreSQL, managed PostgreSQL on Azure.
 
-- **Extends:** [PostgreSQL](data.md#postgresql) › [Database](data.md#database) › [DataComponent](data.md#datacomponent) › [Component](core.md#component)
+- **Extends:** [PostgreSQL](data.md#postgresql) › [Database](data.md#database) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `database`
 - **Protocol:** `SQL`
-- **Read:** 1 from [PostgreSQL](data.md#postgresql), 6 from [Database](data.md#database), 3 from [DataComponent](data.md#datacomponent)
-- **Write:** 3 from [PostgreSQL](data.md#postgresql), 11 from [Database](data.md#database), 8 from [DataComponent](data.md#datacomponent)
+- **Read:** 1 from [PostgreSQL](data.md#postgresql), 6 from [Database](data.md#database), 3 from [Data](data.md#data)
+- **Write:** 3 from [PostgreSQL](data.md#postgresql), 11 from [Database](data.md#database), 8 from [Data](data.md#data)
 
 ### Azure Database for MySQL
 
 Azure Database for MySQL, managed MySQL on Azure.
 
-- **Extends:** [MySQL](data.md#mysql) › [Database](data.md#database) › [DataComponent](data.md#datacomponent) › [Component](core.md#component)
+- **Extends:** [MySQL](data.md#mysql) › [Database](data.md#database) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `database`
 - **Protocol:** `SQL`
-- **Read:** 6 from [Database](data.md#database), 3 from [DataComponent](data.md#datacomponent)
-- **Write:** 1 from [MySQL](data.md#mysql), 11 from [Database](data.md#database), 8 from [DataComponent](data.md#datacomponent)
+- **Read:** 6 from [Database](data.md#database), 3 from [Data](data.md#data)
+- **Write:** 1 from [MySQL](data.md#mysql), 11 from [Database](data.md#database), 8 from [Data](data.md#data)
 
 ### Azure Cosmos DB
 
 Azure Cosmos DB, Azure's globally distributed multi-model database.
 
-- **Extends:** [DocumentNoSql](data.md#documentnosql) › [NoSQL Database](data.md#nosql-database) › [DataComponent](data.md#datacomponent) › [Component](core.md#component)
+- **Extends:** [Document NoSQL Database](data.md#document-nosql-database) › [NoSQL Database](data.md#nosql-database) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `database`
-- **Read:** `ReadItem`, `ReadMany`, `QueryItems`, `ReadChangeFeed`, plus 1 from [NoSQL Database](data.md#nosql-database), 3 from [DataComponent](data.md#datacomponent)
-- **Write:** `CreateItem`, `UpsertItem`, `ReplaceItem`, `PatchItem`, `DeleteItem`, `TransactionalBatch`, plus 3 from [NoSQL Database](data.md#nosql-database), 8 from [DataComponent](data.md#datacomponent)
+- **Read:** `ReadItem`, `ReadMany`, `QueryItems`, `ReadChangeFeed`, plus 1 from [NoSQL Database](data.md#nosql-database), 3 from [Data](data.md#data)
+- **Write:** `CreateItem`, `UpsertItem`, `ReplaceItem`, `PatchItem`, `DeleteItem`, `TransactionalBatch`, plus 3 from [NoSQL Database](data.md#nosql-database), 8 from [Data](data.md#data)
 
 ### Azure Cache for Redis
 
 Azure Cache for Redis, managed Redis on Azure.
 
-- **Extends:** [Redis](data.md#redis) › [Cache](data.md#cache) › [DataComponent](data.md#datacomponent) › [Component](core.md#component)
+- **Extends:** [Redis](data.md#redis) › [Cache](data.md#cache) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `cache`
 - **Protocol:** `RESP`
-- **Read:** 67 from [Redis](data.md#redis), 2 from [Cache](data.md#cache), 3 from [DataComponent](data.md#datacomponent)
-- **Write:** 81 from [Redis](data.md#redis), 3 from [Cache](data.md#cache), 8 from [DataComponent](data.md#datacomponent)
+- **Read:** 67 from [Redis](data.md#redis), 2 from [Cache](data.md#cache), 3 from [Data](data.md#data)
+- **Write:** 81 from [Redis](data.md#redis), 3 from [Cache](data.md#cache), 8 from [Data](data.md#data)
 
 ### Azure AI Search
 
 Azure AI Search, the managed search service of Azure, with vector search.
 
-- **Extends:** [Search Engine](data.md#search-engine) › [DataComponent](data.md#datacomponent) › [Component](core.md#component)
+- **Extends:** [Search Engine](data.md#search-engine) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `search`
-- **Read:** 2 from [Search Engine](data.md#search-engine), 3 from [DataComponent](data.md#datacomponent)
-- **Write:** 3 from [Search Engine](data.md#search-engine), 8 from [DataComponent](data.md#datacomponent)
+- **Read:** 2 from [Search Engine](data.md#search-engine), 3 from [Data](data.md#data)
+- **Write:** 3 from [Search Engine](data.md#search-engine), 8 from [Data](data.md#data)
 
 ### Azure Blob Storage
 
 Azure Blob Storage, the object storage of Azure.
 
-- **Extends:** [Object Storage](data.md#object-storage) › [DataComponent](data.md#datacomponent) › [Component](core.md#component)
+- **Extends:** [Object Storage](data.md#object-storage) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `storage`
 - **Protocol:** `HTTP`
-- **Read:** `GetBlob`, `GetBlobProperties`, `GetBlobMetadata`, `GetBlockList`, `ListBlobs`, `ListContainers`, plus 3 from [Object Storage](data.md#object-storage), 3 from [DataComponent](data.md#datacomponent)
-- **Write:** `PutBlob`, `PutBlock`, `PutBlockList`, `PutPage`, `AppendBlock`, `CopyBlob`, `DeleteBlob`, `SetBlobMetadata`, `SetBlobProperties`, `SnapshotBlob`, `LeaseBlob`, `CreateContainer`, `DeleteContainer`, plus 3 from [Object Storage](data.md#object-storage), 8 from [DataComponent](data.md#datacomponent)
+- **Read:** `GetBlob`, `GetBlobProperties`, `GetBlobMetadata`, `GetBlockList`, `ListBlobs`, `ListContainers`, plus 3 from [Object Storage](data.md#object-storage), 3 from [Data](data.md#data)
+- **Write:** `PutBlob`, `PutBlock`, `PutBlockList`, `PutPage`, `AppendBlock`, `CopyBlob`, `DeleteBlob`, `SetBlobMetadata`, `SetBlobProperties`, `SnapshotBlob`, `LeaseBlob`, `CreateContainer`, `DeleteContainer`, plus 3 from [Object Storage](data.md#object-storage), 8 from [Data](data.md#data)
 
 ### Azure Files
 
 Azure Files, managed SMB and NFS file shares on Azure.
 
-- **Extends:** [SharedFileSystem](data.md#sharedfilesystem) › [DataComponent](data.md#datacomponent) › [Component](core.md#component)
+- **Extends:** [Shared File System](data.md#shared-file-system) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `storage`
-- **Read:** 2 from [SharedFileSystem](data.md#sharedfilesystem), 3 from [DataComponent](data.md#datacomponent)
-- **Write:** 1 from [SharedFileSystem](data.md#sharedfilesystem), 8 from [DataComponent](data.md#datacomponent)
+- **Read:** 2 from [Shared File System](data.md#shared-file-system), 3 from [Data](data.md#data)
+- **Write:** 1 from [Shared File System](data.md#shared-file-system), 8 from [Data](data.md#data)
 
 ### Azure Disk Storage
 
 Azure Managed Disks, block volumes for Azure virtual machines.
 
-- **Extends:** [BlockStorage](data.md#blockstorage) › [DataComponent](data.md#datacomponent) › [Component](core.md#component)
+- **Extends:** [Block Storage](data.md#block-storage) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `storage`
-- **Read:** 3 from [DataComponent](data.md#datacomponent)
-- **Write:** 8 from [DataComponent](data.md#datacomponent)
+- **Read:** 3 from [Data](data.md#data)
+- **Write:** 8 from [Data](data.md#data)
 
 ### Azure Queue Storage
 
@@ -758,13 +758,13 @@ Azure Event Grid, Azure's event routing service.
 
 Cloudflare, the CDN and edge network in front of the origin.
 
-- **Extends:** [CDN](edge.md#cdn) › [HttpEdge](edge.md#httpedge) › [Edge](edge.md#edge) › [Component](core.md#component)
+- **Extends:** [CDN](edge.md#cdn) › [HTTP Edge](edge.md#http-edge) › [Edge](edge.md#edge) › [Component](core.md#component)
 - **Kind:** `cdn`
 - **Protocol:** `HTTP`
-- **Read:** 5 from [HttpEdge](edge.md#httpedge)
-- **Write:** 1 from [CDN](edge.md#cdn), 4 from [HttpEdge](edge.md#httpedge)
-- **Statuses:** 61 from [HttpEdge](edge.md#httpedge)
-- **Headers:** 69 from [HttpEdge](edge.md#httpedge)
+- **Read:** 5 from [HTTP Edge](edge.md#http-edge)
+- **Write:** 1 from [CDN](edge.md#cdn), 4 from [HTTP Edge](edge.md#http-edge)
+- **Statuses:** 61 from [HTTP Edge](edge.md#http-edge)
+- **Headers:** 69 from [HTTP Edge](edge.md#http-edge)
 
 ### Cloudflare Workers
 
@@ -780,8 +780,8 @@ Cloudflare Workers, functions that run at Cloudflare's edge locations.
 
 Cloudflare R2, object storage with the S3 API and no egress fees.
 
-- **Extends:** [AWS S3](#aws-s3) › [Object Storage](data.md#object-storage) › [DataComponent](data.md#datacomponent) › [Component](core.md#component)
+- **Extends:** [AWS S3](#aws-s3) › [Object Storage](data.md#object-storage) › [Data](data.md#data) › [Component](core.md#component)
 - **Kind:** `storage`
 - **Protocol:** `HTTP`
-- **Read:** 11 from [AWS S3](#aws-s3), 3 from [Object Storage](data.md#object-storage), 3 from [DataComponent](data.md#datacomponent)
-- **Write:** 14 from [AWS S3](#aws-s3), 3 from [Object Storage](data.md#object-storage), 8 from [DataComponent](data.md#datacomponent)
+- **Read:** 11 from [AWS S3](#aws-s3), 3 from [Object Storage](data.md#object-storage), 3 from [Data](data.md#data)
+- **Write:** 14 from [AWS S3](#aws-s3), 3 from [Object Storage](data.md#object-storage), 8 from [Data](data.md#data)

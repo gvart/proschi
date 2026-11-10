@@ -59,7 +59,7 @@ change them for every node that uses it, where a
 ## Declare a type
 
 ```proschi fragment
-abstract type Store extends DataComponent {
+abstract type Store extends Data {
   kind database
 }
 type OrderStore extends Store { op write RESERVE }
@@ -157,7 +157,7 @@ title "Three stores"
 
 type Ledger extends PostgreSQL {}
 type Archive extends Ledger { icon [AWS S3] }
-type Bag extends DataComponent { kind storage }
+type Bag extends Data { kind storage }
 
 ledger  "Ledger"  [Ledger]
 archive "Archive" [Archive]

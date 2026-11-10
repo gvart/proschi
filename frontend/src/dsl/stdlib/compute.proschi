@@ -35,17 +35,17 @@ type Worker extends Compute {
 
 # Interfaces.
 
-abstract type HttpService extends Service {
+abstract type [HTTP Service] extends Service {
   op read  GET, HEAD, OPTIONS, TRACE, CONNECT
   op write POST, PUT, PATCH, DELETE
   doc "A service whose requests are HTTP methods: GET, HEAD and OPTIONS read, POST, PUT, PATCH and DELETE write."
 }
 
-type [REST API] extends HttpService {
+type [REST API] extends [HTTP Service] {
   doc "A service with a REST interface: resources over HTTP methods and status codes."
 }
 
-type GraphQL extends HttpService {
+type GraphQL extends [HTTP Service] {
   protocol GraphQL
   op read  query, subscription
   op write mutation

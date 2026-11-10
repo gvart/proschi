@@ -8,6 +8,16 @@
 #   (stdlib.test.ts checks both). Every catalog tech has a type.
 # - An abstract type, or any type the catalog does not know, must not share
 #   a name or an alias with a catalog tech: the catalog name always wins.
+# - Names of the types the catalog does not know, all abstract:
+#   - a top level under Component is one word: a layer of a design (Edge,
+#     Compute, Data, Messaging, External) or a family of drawings (Caller,
+#     Shape, Annotation, Group);
+#   - below it, a type is named in English words like a catalog tech, in
+#     brackets when there are several, with acronyms written as the catalog
+#     writes them (SQL, NoSQL, HTTP): [Coordination Store], Platform;
+#   - a type that narrows another one ends with that type's name:
+#     [HTTP Service] under Service, [Document NoSQL Database] under
+#     [NoSQL Database], [Distributed SQL Database] under Database.
 # - Simulation numbers (latencyMs, rps, …) go here only when they equal what
 #   sim/profiles.ts already gives the tech, so diagrams simulate as before.
 # - An op a practice problem's step already uses must have the access that
@@ -17,7 +27,7 @@
 # - After editing, run `npm run gen:stdlib` to refresh sources.gen.ts.
 #
 # The top levels: Component, then Caller and Shape (clients), Annotation and
-# Group (drawing aids), Edge, Compute, DataComponent, Messaging and External.
+# Group (drawing aids), Edge, Compute, Data, Messaging and External.
 
 abstract type Component {
   doc "Anything drawn on the diagram: the root of every type."

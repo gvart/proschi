@@ -6,7 +6,7 @@ abstract type Edge {
   doc "What a request passes through before it reaches a service: DNS, a CDN, a load balancer or a gateway."
 }
 
-abstract type HttpEdge extends Edge {
+abstract type [HTTP Edge] extends Edge {
   protocol HTTP
   op read  GET, HEAD, OPTIONS, TRACE, CONNECT
   op write POST, PUT, PATCH, DELETE
@@ -39,24 +39,24 @@ type DNS extends Edge {
   doc "A DNS service: turns a host name into the addresses to connect to."
 }
 
-type CDN extends HttpEdge {
+type CDN extends [HTTP Edge] {
   kind cdn
   op write PURGE
   doc "A content delivery network: caches responses at edge locations near the users."
 }
 
-type [Load Balancer] extends HttpEdge {
+type [Load Balancer] extends [HTTP Edge] {
   kind loadbalancer
   doc "Spreads requests over the replicas behind it and stops sending to unhealthy ones."
 }
 
-type [API Gateway] extends HttpEdge {
+type [API Gateway] extends [HTTP Edge] {
   op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
   kind gateway
   doc "One entry point for an API: routing, authentication and rate limits before the services."
 }
 
-type WAF extends HttpEdge {
+type WAF extends [HTTP Edge] {
   doc "A web application firewall: blocks malicious requests at the edge."
 }
 

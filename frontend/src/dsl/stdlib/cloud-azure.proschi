@@ -68,7 +68,7 @@ type [Azure Database for MySQL] extends MySQL {
   doc "Azure Database for MySQL, managed MySQL on Azure."
 }
 
-type [Azure Cosmos DB] extends DocumentNoSql {
+type [Azure Cosmos DB] extends [Document NoSQL Database] {
   op read  ReadItem, ReadMany, QueryItems, ReadChangeFeed
   op write CreateItem, UpsertItem, ReplaceItem, PatchItem, DeleteItem, TransactionalBatch
   doc "Azure Cosmos DB, Azure's globally distributed multi-model database."
@@ -89,11 +89,11 @@ type [Azure Blob Storage] extends [Object Storage] {
   doc "Azure Blob Storage, the object storage of Azure."
 }
 
-type [Azure Files] extends SharedFileSystem {
+type [Azure Files] extends [Shared File System] {
   doc "Azure Files, managed SMB and NFS file shares on Azure."
 }
 
-type [Azure Disk Storage] extends BlockStorage {
+type [Azure Disk Storage] extends [Block Storage] {
   doc "Azure Managed Disks, block volumes for Azure virtual machines."
 }
 

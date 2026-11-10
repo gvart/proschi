@@ -47,19 +47,19 @@ type [GCP Cloud SQL] extends Database {
   doc "Cloud SQL, managed PostgreSQL, MySQL and SQL Server on Google Cloud."
 }
 
-type [GCP Spanner] extends DistributedSql {
+type [GCP Spanner] extends [Distributed SQL Database] {
   op read  ExecuteSql, ExecuteStreamingSql, StreamingRead, BeginTransaction
   op write ExecuteBatchDml
   doc "Spanner, Google Cloud's globally distributed relational database with external consistency."
 }
 
-type [GCP Firestore] extends DocumentNoSql {
+type [GCP Firestore] extends [Document NoSQL Database] {
   op read  GetDocument, ListDocuments, BatchGetDocuments, RunQuery, RunAggregationQuery, Listen
   op write CreateDocument, UpdateDocument, DeleteDocument, BatchWrite, Commit, BeginTransaction
   doc "Firestore, Google Cloud's serverless document database."
 }
 
-type [GCP Bigtable] extends WideColumnNoSql {
+type [GCP Bigtable] extends [Wide-Column NoSQL Database] {
   op read  ReadRows, SampleRowKeys
   op write MutateRow, MutateRows, CheckAndMutateRow, ReadModifyWriteRow
   doc "Bigtable, Google Cloud's wide-column database for large, low-latency workloads."
@@ -78,7 +78,7 @@ type [GCP Cloud Storage] extends [Object Storage] {
   doc "Cloud Storage, the object storage of Google Cloud."
 }
 
-type [GCP Persistent Disk] extends BlockStorage {
+type [GCP Persistent Disk] extends [Block Storage] {
   doc "Persistent Disk, block volumes for Compute Engine."
 }
 

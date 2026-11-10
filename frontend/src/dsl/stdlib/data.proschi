@@ -1,7 +1,7 @@
 # Proschi standard library: components that keep data. Queues and brokers
 # are in messaging.proschi. The rules are in core.proschi.
 
-abstract type DataComponent {
+abstract type Data {
   op read  READ, FETCH, LOOKUP
   op write WRITE, SAVE, STORE, RECORD, MARK, RESERVE, HOLD, BOOK
   doc "A component that keeps data: a database, cache, search index, warehouse or bucket."
@@ -9,7 +9,7 @@ abstract type DataComponent {
 
 # Relational databases.
 
-type Database extends DataComponent {
+type Database extends Data {
   kind database
   protocol SQL
   op read  SELECT, WITH, EXPLAIN, SHOW, BEGIN, ROLLBACK
@@ -50,29 +50,29 @@ type TimescaleDB extends PostgreSQL {
   doc "TimescaleDB, PostgreSQL extended for time series."
 }
 
-abstract type DistributedSql extends Database {
+abstract type [Distributed SQL Database] extends Database {
   doc "A relational database that shards and replicates itself across nodes, keeping transactions."
 }
 
-type CockroachDB extends DistributedSql {
+type CockroachDB extends [Distributed SQL Database] {
   doc "CockroachDB, a distributed SQL database that speaks the PostgreSQL protocol."
 }
 
-type YugabyteDB extends DistributedSql {
+type YugabyteDB extends [Distributed SQL Database] {
   doc "YugabyteDB, a distributed SQL database compatible with PostgreSQL."
 }
 
-type TiDB extends DistributedSql {
+type TiDB extends [Distributed SQL Database] {
   doc "TiDB, a distributed SQL database compatible with MySQL."
 }
 
-type Vitess extends DistributedSql {
+type Vitess extends [Distributed SQL Database] {
   doc "Vitess, which shards MySQL behind one SQL endpoint."
 }
 
 # NoSQL databases.
 
-type [NoSQL Database] extends DataComponent {
+type [NoSQL Database] extends Data {
   kind database
   op read  GET
   op write PUT, SET, DELETE
@@ -87,32 +87,32 @@ type DynamoDB extends [NoSQL Database] {
   doc "DynamoDB, the managed key-value and document database: reads by key or partition, a Scan reads the whole table."
 }
 
-abstract type DocumentNoSql extends [NoSQL Database] {
+abstract type [Document NoSQL Database] extends [NoSQL Database] {
   doc "A NoSQL database that stores JSON-like documents and queries their fields."
 }
 
-type MongoDB extends DocumentNoSql {
+type MongoDB extends [Document NoSQL Database] {
   op read  find, findOne, aggregate, countDocuments, estimatedDocumentCount, distinct, watch
   op write insertOne, insertMany, updateOne, updateMany, replaceOne, deleteOne, deleteMany
   op write findOneAndUpdate, findOneAndReplace, findOneAndDelete, bulkWrite, createIndex
   doc "MongoDB, the document database."
 }
 
-type CouchDB extends DocumentNoSql {
+type CouchDB extends [Document NoSQL Database] {
   doc "Apache CouchDB, a document database with an HTTP API and multi-primary replication."
 }
 
-type Couchbase extends DocumentNoSql {
+type Couchbase extends [Document NoSQL Database] {
   op read  lookupIn, exists, query
   op write upsert, insert, replace, remove, mutateIn, touch, increment, decrement
   doc "Couchbase, a document database with a built-in cache."
 }
 
-abstract type WideColumnNoSql extends [NoSQL Database] {
+abstract type [Wide-Column NoSQL Database] extends [NoSQL Database] {
   doc "A NoSQL database of rows with many columns, partitioned by key and sorted within a partition."
 }
 
-type Cassandra extends WideColumnNoSql {
+type Cassandra extends [Wide-Column NoSQL Database] {
   protocol CQL
   op read  SELECT
   op write INSERT, UPDATE, DELETE, BATCH, TRUNCATE
@@ -123,36 +123,36 @@ type ScyllaDB extends Cassandra {
   doc "ScyllaDB, a Cassandra-compatible database written in C++."
 }
 
-type HBase extends WideColumnNoSql {
+type HBase extends [Wide-Column NoSQL Database] {
   op read  Exists
   op read  Scan latency 10 cost 25
   op write Increment, Append, CheckAndMutate
   doc "Apache HBase, the wide-column database on HDFS."
 }
 
-abstract type GraphNoSql extends [NoSQL Database] {
+abstract type [Graph NoSQL Database] extends [NoSQL Database] {
   protocol Cypher
   op read  MATCH, OPTIONAL, RETURN, CALL
   op write CREATE, MERGE, DELETE, DETACH, SET, REMOVE
   doc "A graph database: nodes and relationships, queried by pattern."
 }
 
-type Neo4j extends GraphNoSql {
+type Neo4j extends [Graph NoSQL Database] {
   doc "Neo4j, the graph database queried with Cypher."
 }
 
-abstract type CoordinationStore extends DataComponent {
+abstract type [Coordination Store] extends Data {
   kind database
   doc "A small, strongly consistent store for configuration, leader election and locks."
 }
 
-type etcd extends CoordinationStore {
+type etcd extends [Coordination Store] {
   op read  Range, Watch, LeaseTimeToLive
   op write Put, DeleteRange, Txn, Compact, LeaseGrant, LeaseRevoke, LeaseKeepAlive
   doc "etcd, the consistent key-value store behind Kubernetes."
 }
 
-type ZooKeeper extends CoordinationStore {
+type ZooKeeper extends [Coordination Store] {
   op read  getData, getChildren, exists, getACL, sync
   op write create, setData, delete, setACL, multi
   doc "Apache ZooKeeper, the coordination service of znodes and watches."
@@ -160,7 +160,7 @@ type ZooKeeper extends CoordinationStore {
 
 # Caches.
 
-type Cache extends DataComponent {
+type Cache extends Data {
   kind cache
   op read  GET, MGET
   op write SET, DELETE, EXPIRE
@@ -236,7 +236,7 @@ type Aerospike extends Cache {
 
 # Search.
 
-type [Search Engine] extends DataComponent {
+type [Search Engine] extends Data {
   kind search
   op read  Search, KNN
   op write Index, Upsert, Delete
@@ -271,7 +271,7 @@ type Algolia extends [Search Engine] {
 
 # Analytics.
 
-type [Data Warehouse] extends DataComponent {
+type [Data Warehouse] extends Data {
   kind analytics
   protocol SQL
   op read  SELECT, WITH, EXPLAIN, SHOW
@@ -299,24 +299,24 @@ type Databricks extends [Data Warehouse] {
   doc "Databricks, the lakehouse platform on Spark."
 }
 
-abstract type TimeSeriesStore extends DataComponent {
+abstract type [Time Series Store] extends Data {
   kind analytics
   op read  QUERY, SELECT
   op write INSERT
   doc "A database of timestamped measurements, queried over time ranges."
 }
 
-type InfluxDB extends TimeSeriesStore {
+type InfluxDB extends [Time Series Store] {
   doc "InfluxDB, the time series database."
 }
 
-type Prometheus extends TimeSeriesStore {
+type Prometheus extends [Time Series Store] {
   doc "Prometheus, the monitoring system and its time series store."
 }
 
 # Files and objects.
 
-type [Object Storage] extends DataComponent {
+type [Object Storage] extends Data {
   kind storage
   protocol HTTP
   op read  GET, HEAD, LIST
@@ -332,18 +332,18 @@ type Ceph extends [Object Storage] {
   doc "Ceph, the distributed object, block and file storage."
 }
 
-abstract type SharedFileSystem extends DataComponent {
+abstract type [Shared File System] extends Data {
   kind storage
   op read  OPEN, LIST
   op write APPEND
   doc "A file system many machines mount at once."
 }
 
-type HDFS extends SharedFileSystem {
+type HDFS extends [Shared File System] {
   doc "HDFS, the Hadoop distributed file system."
 }
 
-abstract type BlockStorage extends DataComponent {
+abstract type [Block Storage] extends Data {
   kind storage
   doc "A disk attached to one machine."
 }

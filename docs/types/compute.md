@@ -19,7 +19,7 @@ Code you run: a service, a worker, a function or the platform it runs on; its ow
 A program you run that answers requests, whatever it is written in.
 
 - **Extends:** [Compute](#compute) › [Component](core.md#component)
-- **Extended by:** [HttpService](#httpservice), [gRPC](#grpc), [WebSocket](#websocket), [SOAP API](#soap-api), [Java](#java), [Kotlin](#kotlin), [Go](#go), [Node.js](#nodejs), [Python](#python), [Ruby on Rails](#ruby-on-rails), [.NET](#net), [PHP](#php), [Rust](#rust), [Elixir](#elixir)
+- **Extended by:** [HTTP Service](#http-service), [gRPC](#grpc), [WebSocket](#websocket), [SOAP API](#soap-api), [Java](#java), [Kotlin](#kotlin), [Go](#go), [Node.js](#nodejs), [Python](#python), [Ruby on Rails](#ruby-on-rails), [.NET](#net), [PHP](#php), [Rust](#rust), [Elixir](#elixir)
 - **Kind:** `service`
 - **Protocol:** `HTTP`
 - **Statuses:** 61 from [Compute](#compute)
@@ -35,7 +35,7 @@ A background program that takes jobs or events from a queue and processes them.
 - **Statuses:** 61 from [Compute](#compute)
 - **Headers:** 69 from [Compute](#compute)
 
-## HttpService
+## HTTP Service
 
 A service whose requests are HTTP methods: GET, HEAD and OPTIONS read, POST, PUT, PATCH and DELETE write.
 
@@ -54,11 +54,11 @@ A service whose requests are HTTP methods: GET, HEAD and OPTIONS read, POST, PUT
 
 A service with a REST interface: resources over HTTP methods and status codes.
 
-- **Extends:** [HttpService](#httpservice) › [Service](#service) › [Compute](#compute) › [Component](core.md#component)
+- **Extends:** [HTTP Service](#http-service) › [Service](#service) › [Compute](#compute) › [Component](core.md#component)
 - **Kind:** `service`
 - **Protocol:** `HTTP`
-- **Read:** 5 from [HttpService](#httpservice)
-- **Write:** 4 from [HttpService](#httpservice)
+- **Read:** 5 from [HTTP Service](#http-service)
+- **Write:** 4 from [HTTP Service](#http-service)
 - **Statuses:** 61 from [Compute](#compute)
 - **Headers:** 69 from [Compute](#compute)
 
@@ -66,11 +66,11 @@ A service with a REST interface: resources over HTTP methods and status codes.
 
 A service with a GraphQL interface: queries read, mutations write.
 
-- **Extends:** [HttpService](#httpservice) › [Service](#service) › [Compute](#compute) › [Component](core.md#component)
+- **Extends:** [HTTP Service](#http-service) › [Service](#service) › [Compute](#compute) › [Component](core.md#component)
 - **Kind:** `service`
 - **Protocol:** `GraphQL`
-- **Read:** `query`, `subscription`, plus 5 from [HttpService](#httpservice)
-- **Write:** `mutation`, plus 4 from [HttpService](#httpservice)
+- **Read:** `query`, `subscription`, plus 5 from [HTTP Service](#http-service)
+- **Write:** `mutation`, plus 4 from [HTTP Service](#http-service)
 - **Statuses:** 61 from [Compute](#compute)
 - **Headers:** 69 from [Compute](#compute)
 
