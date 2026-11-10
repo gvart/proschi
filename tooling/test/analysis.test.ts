@@ -35,7 +35,8 @@ describe('analysis', () => {
   it('completes tech stacks inside brackets and closes the bracket', () => {
     const items = complete(analyze('db [Postg'), { line: 0, character: 9 });
     const pg = items.find((i) => i.label === 'PostgreSQL')!;
-    expect(pg).toMatchObject({ kind: 'tech', insertText: 'PostgreSQL]', range: { start: { line: 0, character: 4 } } });
+    // PostgreSQL is a built-in type now, so it completes as one.
+    expect(pg).toMatchObject({ kind: 'type', insertText: 'PostgreSQL]', range: { start: { line: 0, character: 4 } } });
     expect(complete(analyze('db [Postg]'), { line: 0, character: 9 }).find((i) => i.label === 'PostgreSQL')?.insertText).toBe('PostgreSQL');
     // The whole catalog, with aliases to filter on: typing S3 finds AWS S3.
     expect(items.length).toBeGreaterThan(200);

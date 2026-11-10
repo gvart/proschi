@@ -354,6 +354,71 @@ describe('TextMate grammar', () => {
     expect(lines[9][0]).toEqual(['from', 'variable.other.node.proschi']);
   });
 
+  it('scopes type blocks: header, body properties, ops and headers', () => {
+    const lines = tokenize(
+      [
+        'abstract type Store extends [REST API] {',
+        '  kind database   # a kind',
+        '  op read  SELECT, Scan latency 8 cost 2',
+        '  header Authorization, Content-Type',
+        '  status 200, 404',
+        '  latencyMs 4',
+        '  durable true',
+        '  doc "Keeps things"',
+        '}',
+        'type LedgerDb extends Store { op write APPEND }',
+        'type = 3',
+        'usecase "U" {',
+        '  web -> api : GET /x header Authorization, Idempotency-Key',
+        '}',
+      ].join('\n'),
+    );
+    expect(lines[0]).toEqual([
+      ['abstract', 'storage.modifier.abstract.proschi'],
+      ['type', 'storage.type.type.proschi'],
+      ['Store', 'entity.name.type.proschi'],
+      ['extends', 'storage.modifier.extends.proschi'],
+      ['[REST API]', 'entity.other.inherited-class.proschi'],
+      ['{', 'punctuation.section.block.begin.proschi'],
+    ]);
+    expect(lines[1]).toEqual([
+      ['kind', 'keyword.other.type-property.proschi'],
+      ['database', 'constant.language.kind.proschi'],
+      ['# a kind', 'comment.line.number-sign.proschi'],
+    ]);
+    expect(lines[2].slice(0, 5)).toEqual([
+      ['op', 'keyword.other.type-property.proschi'],
+      ['read', 'storage.modifier.access.proschi'],
+      ['SELECT', 'entity.name.function.operation.proschi'],
+      [',', 'punctuation.separator.comma.proschi'],
+      ['Scan', 'entity.name.function.operation.proschi'],
+    ]);
+    expect(scopeOf([lines[2]], 'latency')).toBe('keyword.other.multiplier.proschi');
+    expect(scopeOf([lines[2]], '8')).toBe('constant.numeric.proschi');
+    expect(scopeOf([lines[2]], 'cost')).toBe('keyword.other.multiplier.proschi');
+    expect(scopeOf([lines[3]], 'Content-Type')).toBe('support.type.property-name.header.proschi');
+    expect(lines[4].slice(0, 2)).toEqual([
+      ['status', 'keyword.other.type-property.proschi'],
+      ['200', 'constant.numeric.proschi'],
+    ]);
+    expect(lines[5][0]).toEqual(['latencyMs', 'keyword.other.type-property.proschi']);
+    expect(lines[6][1]).toEqual(['true', 'constant.language.proschi']);
+    expect(scopeOf([lines[7]], 'doc')).toBe('keyword.other.type-property.proschi');
+    expect(lines[8]).toEqual([['}', 'punctuation.section.block.end.proschi']]);
+    // A one-line body.
+    expect(lines[9].slice(4)).toEqual([
+      ['{', 'punctuation.section.block.begin.proschi'],
+      ['op', 'keyword.other.type-property.proschi'],
+      ['write', 'storage.modifier.access.proschi'],
+      ['APPEND', 'entity.name.function.operation.proschi'],
+      ['}', 'punctuation.section.block.end.proschi'],
+    ]);
+    // Outside a type header, type is a node id.
+    expect(lines[10][0]).toEqual(['type', 'variable.other.node.proschi']);
+    expect(scopeOf([lines[12]], 'header')).toBe('keyword.other.header.proschi');
+    expect(scopeOf([lines[12]], 'Authorization, Idempotency-Key')).toBe('support.type.property-name.header.proschi');
+  });
+
   it.each(examples.map((e) => [e.id, e.source]))('tokenizes the %s example without leaving a block open', (_id, source) => {
     let state = vsctm.INITIAL;
     for (const line of source.split('\n')) state = grammar.tokenizeLine(line, state).ruleStack;
