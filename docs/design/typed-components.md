@@ -208,3 +208,50 @@ interface ResolvedType {
 - `kindOf(node)` prefers the type's kind; `profileOf(node)` (sim/profiles.ts)
   lays the type's props over the tech's row (or the kind's row, when the type
   changes the kind) before any `capacity` override.
+
+---
+
+## Typed operations in steps
+
+Iteration 3 implements D7. It applies to request steps (`->`, `->>`, `-x`)
+whose target node has a `resolvedType` with at least one `op`. Nodes without a
+type, and types without ops, keep the old rules and get no new warnings.
+
+- **Lookup.** If the label starts with an HTTP method, the method is looked up.
+  Otherwise the label's first words are (after `x<N>` / `~size` and an opening
+  quote). Matching ignores case, and an op name may be several words
+  (`op read "full scan"`), with the longest match winning. `typesys/ops.ts`
+  has `findOp(type, text)`, `opWord`, `suggestOp`, `findHeader` and
+  `suggestHeader`.
+- **Match.** `step.op = { name, access, latency?, cost? }` stores the canonical
+  name, and `step.access` is the op's access. The op wins even where the old
+  verb list (`WRITE_VERBS`) said otherwise: Redis `DEL` and `LPOP` write. A
+  request to a queue or a broker is still a write (`sim/access.ts`).
+- **No match.** A warning at the word: `PostgreSQL has no operation 'persist'.
+  Its operations are SELECT, INSERT, …. Treated as a comment.` When an op name
+  is within a few edits of the word, the warning says `Did you mean INSERT?`
+  instead of listing the ops. The step has no `op`. Its access is what
+  `accessOf` gives, so a verb that wrote before (`SAVE`) still writes, and the
+  warning ends `Treated as a write, as before.`
+- **Statuses.** A response `api --> client : 418` is checked against the
+  responder's (the request target's) `statuses`, if the type lists any:
+  `REST API has no status 418; it answers 200, 201, …`.
+- **Headers.** An HTTP label can name request headers right after the
+  endpoint, using the same keyword as the type property:
+  `GET /feed header Authorization, If-None-Match json {...}`. The clause is
+  the lowercase `header`, then comma-separated names (letters, digits and
+  dashes). A description or a payload can follow it. The names are stored in
+  `step.headers` and checked against the target type's `headers`, if it lists
+  any (`… has no header 'X'. Did you mean …?`). A label without the clause
+  parses as before.
+- **Strict mode.** `parse(source, { strictOps: true })` reports every one of
+  these problems as an error, not a warning. The option is passed on to team
+  files. Problem front matter `strict: true` will turn it on (iteration 5).
+- **Simulation.** An op's `latency` multiplies the target's service time (the
+  fixed part and the tail of the hop, not the payload transfer) on the
+  critical path. Its `cost` multiplies the load the step puts on the target
+  (`computeLoad`). There is no per-request price in the model: a node's
+  monthly cost is replicas × its profile cost, so `cost` reaches money through
+  utilisation and the replicas it needs. The load of system ports
+  (`sim/systems.ts`) does not apply `cost`. With no multipliers, every number
+  stays the same.

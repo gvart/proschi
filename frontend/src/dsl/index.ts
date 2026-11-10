@@ -1,4 +1,4 @@
-export { builtinTypes, parse, parseSize, parseStepLabel, parseTypeDecls } from './parser';
+export { HTTP_METHODS, builtinTypes, parse, parseSize, parseStepLabel, parseTypeDecls } from './parser';
 export { lookupType, resolveTypes, techNamed, typeKey, type TypeResolution } from './typesys/resolve';
 export { ROOT_TYPE, type ResolvedType, type TypeDecl, type TypeOp, type TypeProps, type TypeTable } from './typesys/types';
 export { WRITE_METHODS, WRITE_VERBS, accessOf, type Access } from './access';

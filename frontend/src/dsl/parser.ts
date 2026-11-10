@@ -174,7 +174,8 @@ interface SectionFrame {
   loc: SourceLoc;
 }
 
-const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+/** HTTP methods a step label may start with: `GET /items`. */
+export const HTTP_METHODS: readonly string[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 const DEFAULT_TECH: TechStack = 'Rectangle';
 const DEFAULT_GROUP_TECH: TechStack = 'Logical Group';
 /** What a collapsed system is drawn as until a renderer knows the `system` kind. */
