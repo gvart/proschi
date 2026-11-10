@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { EditorState, Text } from '@codemirror/state';
 import { StringStream } from '@codemirror/language';
 import { CompletionContext } from '@codemirror/autocomplete';
-import { builtinTypes, parse } from '../../dsl';
+import { builtinTypes, mapResolver, parse, type Diagram } from '../../dsl';
 import { proschiCompletions, proschiStreamParser, toCmDiagnostics } from './proschiLanguage';
 
 /** [text, style] for each non-blank token of one line. */
@@ -439,5 +439,20 @@ describe('types', () => {
     expect(complete(`${api}  web -> api : GET /x `, true)!.options.map((o) => o.label)).toEqual(['header']);
     // A connection label outside a use case stays free text.
     expect(complete(`db "DB" [${withOps.name}]\na -> db : `, true)).toBeNull();
+  });
+
+  it("offers the imported file's types and their ops from the page's parse", () => {
+    const given = 'type Session extends WebSocket {\n  op write OP\n  op read CURSOR\n}\neditor [Browser]\n';
+    const doc = 'import "problem.proschi"\ngw [Session]\neditor -> gw\nusecase "U" {\n  editor -> gw : ';
+    const parsed = parse(doc, { path: 'solution.proschi', resolve: mapResolver({ 'problem.proschi': given }) }).diagram;
+    const at = (text: string, getDiagram?: () => Diagram) =>
+      proschiCompletions(() => [], undefined, getDiagram)(new CompletionContext(EditorState.create({ doc: text }), text.length, true));
+    const labels = (text: string, getDiagram?: () => Diagram) => at(text, getDiagram)?.options.map((o) => o.label);
+    expect(labels(doc, () => parsed)).toEqual(['OP', 'CURSOR']);
+    expect(labels('x [Se', () => parsed)).toContain('Session');
+    expect(labels('type Mine extends ', () => parsed)).toContain('Session');
+    // Parsed alone, the document cannot see the imported type.
+    expect(at(doc)).toBeNull();
+    expect(labels('x [Se')).not.toContain('Session');
   });
 });

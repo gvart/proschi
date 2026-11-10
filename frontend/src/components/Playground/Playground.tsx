@@ -1352,7 +1352,7 @@ export default function Playground() {
             {team && <TeamFileBar team={team} up={systems.crumbs[systems.crumbs.length - 2]} onBack={systems.goTo} />}
             {/* Hidden, not unmounted, while a team file is shown, so the document keeps its cursor and undo history. */}
             <div className="flex-1 min-h-0" hidden={!!team}>
-              <CodeEditor ref={editorRef} value={source} onChange={typeSource} diagnostics={rootDiagnostics} nodeIds={nodeIds} extensions={codeHints} onCursor={(line) => followCursor(undefined, line)} />
+              <CodeEditor ref={editorRef} value={source} onChange={typeSource} diagnostics={rootDiagnostics} nodeIds={nodeIds} diagram={diagram} extensions={codeHints} onCursor={(line) => followCursor(undefined, line)} />
             </div>
             {team && (
               <div className="flex-1 min-h-0">
@@ -1364,6 +1364,7 @@ export default function Playground() {
                   readOnly={!!team.readOnly}
                   diagnostics={teamDiagnostics}
                   nodeIds={shown.nodes.map((n) => n.id)}
+                  diagram={shown}
                   onCursor={(line) => followCursor(team.path, line)}
                 />
               </div>

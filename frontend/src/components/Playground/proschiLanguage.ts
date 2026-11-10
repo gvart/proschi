@@ -230,7 +230,10 @@ const assertionOptions: Completion[] = [
   ['${node} has replicas >= ${min}', 'node has replicas >=', 'minimum replica count'],
 ].map(([template, label, detail]) => snippetCompletion(template, { label, type: 'keyword', detail }));
 
-/** The diagram of a document, parsed once per version of it, for what completion needs of its types. */
+/**
+ * The diagram of a document, parsed once per version of it, for what completion needs of its types,
+ * when the editor's page gives it no parse of its own (one without imports).
+ */
 const diagrams = new WeakMap<Text, Diagram>();
 function diagramOf(doc: Text): Diagram {
   let diagram = diagrams.get(doc);
@@ -241,10 +244,10 @@ function diagramOf(doc: Text): Diagram {
 /** A type name as written outside brackets: bare when it is a word, else in brackets. */
 const bareTypeName = (name: string) => (/^[A-Za-z_]\w*$/.test(name) ? name : `[${name}]`);
 
-/** The document's types, then the built-in ones (abstract marked, the doc as detail); `apply` inserts a name. */
-function typeOptions(doc: Text, apply: (name: string) => Completion['apply']): Completion[] {
+/** The document's types (its imports' too), then the built-in ones (abstract marked, the doc as detail); `apply` inserts a name. */
+function typeOptions(diagram: Diagram, apply: (name: string) => Completion['apply']): Completion[] {
   const builtin = [...builtinTypes().values()];
-  return [...(diagramOf(doc).types ?? []), ...builtin].map((t: ResolvedType) => ({
+  return [...(diagram.types ?? []), ...builtin].map((t: ResolvedType) => ({
     label: t.name,
     type: 'class',
     detail: [t.abstract ? 'abstract' : '', t.doc ?? `extends ${t.parents[0] ?? 'nothing'}`].filter(Boolean).join(' · '),
@@ -297,11 +300,11 @@ const STEP = /^\s*(?:\}\s*)?([A-Za-z_]\w*)\s*(->>|-->|->|-x)\s*([A-Za-z_]\w*)\s*
  * methods, for an HTTP type), the sender type's statuses on a response, and
  * the target's headers after `METHOD /path header`.
  */
-function stepOptions(doc: Text, before: string, pos: number, lineNumber: number): CompletionResult | null {
+function stepOptions(diagram: () => Diagram, doc: Text, before: string, pos: number, lineNumber: number): CompletionResult | null {
   const m = STEP.exec(before);
   if (!m || !openBlocks(doc, lineNumber).some((b) => /^\s*usecase\b/.test(b))) return null;
   const [, from, arrow, to, label] = m;
-  const typeOf = (id: string) => diagramOf(doc).nodes.find((n) => n.id === id)?.resolvedType;
+  const typeOf = (id: string) => diagram().nodes.find((n) => n.id === id)?.resolvedType;
   if (arrow === '-->') {
     const t = typeOf(from);
     if (!t || !/^\d*$/.test(label)) return null;
@@ -343,22 +346,27 @@ export interface TechChoice {
   detail?: string;
 }
 
-/** Completes tech stacks inside [ ] and node ids / keywords elsewhere; `getTechs` narrows the techs offered when it returns a list. */
-export function proschiCompletions(getNodeIds: () => string[], getTechs?: () => readonly TechChoice[] | undefined) {
+/**
+ * Completes tech stacks inside [ ] and node ids / keywords elsewhere; `getTechs` narrows the techs offered when it returns a list.
+ * `getDiagram` is the page's own parse of the document, with its imports resolved (a practice problem's given, other
+ * diagrams), so their types and nodes are offered too; without one, completion parses the document alone.
+ */
+export function proschiCompletions(getNodeIds: () => string[], getTechs?: () => readonly TechChoice[] | undefined, getDiagram?: () => Diagram | undefined) {
   return (ctx: CompletionContext): CompletionResult | null => {
+    const diagram = () => getDiagram?.() ?? diagramOf(ctx.state.doc);
     const line = ctx.state.doc.lineAt(ctx.pos);
     const before = line.text.slice(0, ctx.pos - line.from);
 
     const tech = before.match(/\[([^\]]*)$/);
     if (tech) {
       const only = getTechs?.();
-      const options = only ? only.map((t) => ({ label: t.tech, type: 'type', detail: t.detail, apply: applyTech(t.tech) })) : [...typeOptions(ctx.state.doc, applyTech), ...untypedTechOptions()];
+      const options = only ? only.map((t) => ({ label: t.tech, type: 'type', detail: t.detail, apply: applyTech(t.tech) })) : [...typeOptions(diagram(), applyTech), ...untypedTechOptions()];
       return { from: ctx.pos - tech[1].length, options, validFor: /^[\w ./-]*$/ };
     }
     const parent = before.match(/^\s*(?:abstract\s+)?type\s+(?:\[[^\]]*\]|\w+)\s+extends\s+(\w*)$/);
-    if (parent) return { from: ctx.pos - parent[1].length, options: typeOptions(ctx.state.doc, bareTypeName), validFor: /^\w*$/ };
+    if (parent) return { from: ctx.pos - parent[1].length, options: typeOptions(diagram(), bareTypeName), validFor: /^\w*$/ };
 
-    const step = stepOptions(ctx.state.doc, before, ctx.pos, line.number);
+    const step = stepOptions(diagram, ctx.state.doc, before, ctx.pos, line.number);
     if (step) return step;
     // Other labels after ':' are free text.
     if (/^[^"#]*:/.test(before)) return null;
@@ -386,7 +394,7 @@ export function proschiCompletions(getNodeIds: () => string[], getTechs?: () => 
     if (atLineStart && inTest) return { from, options: [...assertionOptions, ...ids], validFor: /^\w*$/ };
     // `uses INSERT on db`, `sends header Authorization to api`: what the diagram's node types offer.
     if (inTest && /\b(?:uses|sends\s+header)\s+$/.test(head)) {
-      const types = [...new Map(diagramOf(ctx.state.doc).nodes.flatMap((n) => (n.resolvedType ? [[n.resolvedType.name, n.resolvedType] as const] : []))).values()];
+      const types = [...new Map(diagram().nodes.flatMap((n) => (n.resolvedType ? [[n.resolvedType.name, n.resolvedType] as const] : []))).values()];
       const names = /\buses\s+$/.test(head)
         ? types.flatMap((t) => t.ops.map((o) => ({ label: o.name, type: 'function', detail: `${o.access} · ${t.name}` })))
         : types.flatMap((t) => t.headers.map((h) => ({ label: h, type: 'property', detail: t.name })));
