@@ -1,0 +1,20 @@
+.github/workflows/site.yml
+  s_ccb8935595dc4e::t_c043020c9aa315 84,88
+  s_ccb8935595dc4e::t_6af34dd5763141 57-58,60,63-66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8c26925f9b0add3152957bc3bca5a9ebdea066db",
+  "prompts": {},
+  "sessions": {
+    "s_ccb8935595dc4e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0e2b8447-0e71-4063-8d52-5e5b5302fc2f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
