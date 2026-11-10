@@ -218,6 +218,11 @@ describe('live examples', () => {
     }
   })
 
+  it('the typed steps example warns about load on PostgreSQL, as its try-it says', () => {
+    const typed = rendered.get('use-cases')!.examples.find((e) => e.includes('SELECT posts'))!
+    expect(parse(typed.replace('SELECT posts', 'load posts')).diagnostics.map((d) => d.message)).toEqual([expect.stringMatching(/^PostgreSQL has no operation 'load'\./)])
+  })
+
   it('the org guide flags Order Processing at 2k rps and nothing at 1k, as it says', () => {
     const [org] = rendered.get('systems')!.examples
     const failing = (source: string) => runTests(parse(source).diagram).filter((t) => !t.passed).map((t) => t.id)

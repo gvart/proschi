@@ -48,7 +48,9 @@ The label is free text, but some shapes have a meaning:
 - **HTTP.** A label that starts with GET, POST, PUT, PATCH, DELETE, HEAD or
   OPTIONS and a path sets the endpoint. The path may have placeholders such
   as `/orders/{id}`.
-- **Payload.** After the path, a body that starts with `{`, `[` or `<` is
+- **Headers.** Right after the path, `header` and comma-separated names
+  list the request's headers: `GET /feed header Authorization, If-None-Match`.
+- **Payload.** After the path (and any headers), a body that starts with `{`, `[` or `<` is
   JSON or XML, or name it with `json`, `xml` or `text`. A JSON body may span
   lines until its brackets balance.
 - **Status.** On a response, a leading three-digit number is the status
@@ -79,11 +81,13 @@ Responses and connection labels take no prefixes.
 The simulation counts reads and writes apart, since a store takes far fewer
 writes than reads. Each request step is one or the other:
 
-1. **With an HTTP method:** POST, PUT, PATCH and DELETE write. GET, HEAD and
+1. **When the target's type lists operations**, the operation the label
+   names decides. See [typed operations](#typed-operations).
+2. **With an HTTP method:** POST, PUT, PATCH and DELETE write. GET, HEAD and
    OPTIONS read.
-2. **Otherwise the first word of the label decides**, after any prefixes,
+3. **Otherwise the first word of the label decides**, after any prefixes,
    ignoring case, whole words only. The verbs below write.
-3. **Everything else reads**: SELECT, QUERY, SCAN, FETCH, an event name
+4. **Everything else reads**: SELECT, QUERY, SCAN, FETCH, an event name
    such as OrderPlaced, and so on.
 
 | Write verbs | Typical labels |
@@ -101,6 +105,53 @@ Words that only start like a verb (Stored, Booking, Notification) read.
 A step's protocol is inferred too: messaging for an async arrow or a queue
 or broker target; REST for an HTTP method (or GraphQL, gRPC or SOAP when the
 target's tech says so); "other" for the rest.
+
+## Typed operations
+
+A node's [component type](TYPES.md) may list the operations its clients
+send. A request to such a node names one with its HTTP method, or with the
+first words of its label after any prefixes, ignoring case:
+
+```proschi
+title "Typed steps"
+
+user "Reader"   [Browser]
+api  "Feed API" [REST API]
+db   "Posts DB" [PostgreSQL]
+
+user -> api : HTTPS
+api  -> db  : SQL
+
+usecase "Read the feed" {
+  user -> api : GET /feed header Authorization
+  api  -> db  : SELECT posts
+  api --> user : 200
+}
+```
+
+> **Try it:** change `SELECT posts` to `load posts`, and Proschi warns
+> that PostgreSQL has no operation `load`.
+
+- **The operation decides the access.** `op read` makes the step a read and
+  `op write` a write, even where the verb table above says otherwise:
+  Redis `DEL` and `LPOP` write. A request to a queue or a broker always
+  writes.
+- **Forwarding.** An `op forward` operation, such as `MESSAGE` on the load
+  balancers and gateways, passes a WebSocket frame on. The step takes the
+  access of the next step its target sends, the one that handles the frame.
+- **Unknown operations warn.** A label that names none of the type's
+  operations gets a warning at the word, with a suggestion or the list of
+  operations. The step keeps the access the verb table gives it. See
+  [fix an unknown operation](TYPES.md#fix-an-unknown-operation).
+- **Statuses and headers are checked.** A response's status must be one the
+  responding type lists, and each header in `header …` one the target's
+  type lists, when the type lists any. Otherwise they warn too.
+- **Open vocabularies.** A type with no operations, such as `[Service]` or
+  `[Go]`, takes any label, read by the verb table. So does a node whose
+  tech stack is not in the catalog.
+
+An operation's `latency` and `cost` multipliers change that step's time and
+load on the target; see [operations](TYPES.md#operations-reads-and-writes).
 
 ## Steps follow the architecture
 

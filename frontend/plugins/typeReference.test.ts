@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { builtinTypes } from '../src/dsl'
-import { readSite, renderFromDisk } from './docsSite'
+import { builtinTypes, parse } from '../src/dsl'
+import { readSite, renderFromDisk, splitAnnotations } from './docsSite'
 import { listedTypeNames, TYPE_PAGES, typeReferencePages } from './typeReference'
 
 /**
@@ -51,5 +51,21 @@ describe('the type reference', () => {
     const html = renderFromDisk(docsDir, site, page).article
     expect(html).toContain('<h2 id="postgresql">')
     expect(html).toContain('<p class="kicker">Type reference</p>')
+  })
+})
+
+describe('the component types page', () => {
+  const md = readFileSync(`${docsDir}TYPES.md`, 'utf8')
+  const warnings = (source: string) => parse(source).diagnostics.map((d) => d.message)
+
+  it('warns about persist on LedgerDb, as its try-it says', () => {
+    const { code } = splitAnnotations(/```proschi annotated\n([\s\S]*?)\n```/.exec(md)![1])
+    expect(warnings(code)).toEqual([])
+    expect(warnings(code.replace('APPEND payment', 'persist payment'))).toEqual([expect.stringMatching(/^LedgerDb has no operation 'persist'\./)])
+  })
+
+  it('quotes the unknown-operation warning as the parser writes it', () => {
+    const quoted = /```text\n(PostgreSQL has no operation[^\n]*)\n```/.exec(md)![1]
+    expect(warnings('api [REST API]\ndb [PostgreSQL]\napi -> db\nusecase "u" {\n  api -> db : persist order\n}')).toEqual([quoted])
   })
 })

@@ -35,7 +35,7 @@ A node is an id followed by optional parts, in any order:
 | id | `api` | Letters, digits and underscores, not starting with a digit. |
 | first string | `"Notes API"` | The display name. Without it the box shows the id. |
 | second string | `"Reads and writes notes"` | The description. |
-| tech stack | `[REST API]` | A technology from the catalog. It sets the icon, the [kind](TESTS.md#selectors-and-kinds) and the default simulation numbers. See [Tech stacks](#tech-stacks). |
+| tech stack | `[REST API]` | A technology from the catalog, or a [type of your own](TYPES.md). It sets the icon, the [kind](TESTS.md#selectors-and-kinds), the default simulation numbers and the operations steps may name. See [Tech stacks](#tech-stacks). |
 | owner | `@Platform` | The team that owns the node. |
 | replicas | `x3` | The number of instances that share the load. |
 
@@ -96,6 +96,11 @@ matter (route 53, nodejs, PostgreSQL 16).
 | Edge | `AWS CloudFront`, `Fastly`, `Akamai`, `Cloudflare`, `AWS Load Balancer`, `nginx`, `Envoy`, `HAProxy`, `Kubernetes Ingress`, `AWS API Gateway`, `Kong`, `AWS Route53`, `AWS WAF` |
 | External | `Stripe`, `PayPal`, `Twilio`, `SendGrid`, `Auth0`, `Okta`, `APNs`, `FCM`, `Payment Gateway`, `Third Party API` |
 
+Each tech is also a built-in [component type](TYPES.md), listed in the
+[type reference](TYPES.md#built-in-types) with its operations. Declare a type that
+extends one (`type LedgerDb extends PostgreSQL { … }`) to give your nodes
+their own numbers and operations.
+
 ### When the catalog lacks your tech
 
 An unknown tech is a warning, not an error. The node keeps your text and
@@ -119,4 +124,5 @@ description.
 
 - [Colors, legend and layout](STYLING.md): style the boxes and steer where
   they go.
+- [Component types](TYPES.md): declare your own types and operations.
 - [Use cases](USE-CASES.md): request flows over these connections.

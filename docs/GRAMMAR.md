@@ -10,13 +10,31 @@ its brackets balance. Whitespace between tokens is ignored.
 document     = { line } ;
 line         = [ statement ] [ comment ] newline ;
 
-statement    = title | import | node | connection
+statement    = title | import | type | node | connection
              | group-open | system | usecase-open | par-open | alt-open | close
              | traffic | requirements | capacity | entity | decision | test | whatif | legend
              | direction | layout | let ;
 
 title        = "title" , ( string | id ) , [ string ] ;   (* 2nd string: summary *)
 import       = "import" , string ;                      (* a relative path, git: or https:// source *)
+type         = [ "abstract" ] , "type" , type-name , [ "extends" , type-name ] , "{" ,
+               ( [ type-prop ] , "}"                    (* one line: { op write APPEND } or {} *)
+               | newline , { [ type-prop ] , [ comment ] , newline } , "}" ) ;
+type-name    = id | tech ;                              (* LedgerDb, [REST API]; extends also takes a catalog alias *)
+type-prop    = "kind" , kind
+             | ( "rps" | "readRps" | "writeRps" | "latencyMs" | "availability" | "costUsd"
+               | "bandwidthMBps" | "egressUsdPerGb" ) , quantity
+             | "durable" , ( "true" | "false" ) | "consistency" , ( "strong" | "eventual" )
+             | "writeScaling" , ( "replicas" | "shards" )
+             | "protocol" , ( id | string )
+             | "op" , ( "read" | "write" | "forward" ) , op-name , { "," , op-name } ,
+               { ( "latency" | "cost" ) , number }      (* multipliers, for each name on the line *)
+             | "status" , digit , digit , digit , { "," , digit , digit , digit }   (* 100 to 599 *)
+             | "header" , header-name , { "," , header-name }
+             | "icon" , ( id | tech )                   (* a catalog tech *)
+             | "doc" , string ;
+op-name      = id | string ;                            (* "full scan": several words *)
+header-name  = letter , { letter | digit | "-" } ;      (* Content-Type; quote it in a one-line body *)
 node         = id , { string | tech | team | position | replicas | color | tag | "critical" | rank } ;  (* 1st string: name, 2nd: description *)
 connection   = ref , arrow , ref , [ tag ] , [ ":" , label ] ;
 ref          = id | id , "." , id ;                      (* orders.api: an entry point; one token, no spaces *)
@@ -104,6 +122,10 @@ team         = "@" , { letter | digit | "_" | "-" } ;
 integer      = [ "-" ] , digit , { digit } ;
 comment      = "#" , { character } ;            (* only where a token can start *)
 label        = [ label-prefix , [ label-prefix ] ] , { character } ;  (* to end of line; see below *)
+http-label   = method , path , [ "header" , header-name , { "," , header-name } ] , { character } ;
+                                                         (* GET /feed header Authorization, If-None-Match json {...} *)
+method       = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS" ;
+path         = "/" , { character - whitespace } ;
 label-prefix = ( "x" , digit , { digit } | "~" , number , size-unit ) , whitespace ;  (* requests only *)
 size-unit    = "B" | "KB" | "MB" | "GB" | "TB" ;
 ```
@@ -116,6 +138,7 @@ size-unit    = "B" | "KB" | "MB" | "GB" | "TB" ;
 | `title` | ✓ | | | |
 | `let` | ✓ | | | |
 | `import` | ✓ | | | |
+| `type`, `abstract type` | ✓ | | | |
 | node | ✓ | ✓ | | |
 | `group` | ✓ | ✓ | | |
 | `system` | ✓ | ✓ | | |
@@ -139,10 +162,18 @@ size-unit    = "B" | "KB" | "MB" | "GB" | "TB" ;
 - A label is read as [Use case steps](USE-CASES.md#use-case-steps)
   describes: optional `x<N>` and `~<size>` prefixes on a request, an
   optional HTTP method and path, an optional `json`, `xml` or `text`
-  payload, and on a response a leading status code.
+  payload, and on a response a leading status code. A request label with
+  a method and path may name headers (`http-label`).
+- A `type` block holds one property per line; its `{` ends the header
+  line, and its `}` stands alone. A request to a node whose type lists
+  operations names one with its method or its first words; see
+  [typed operations](USE-CASES.md#typed-operations) and
+  [component types](TYPES.md).
 - The grammar describes syntax only. The parser also checks meaning:
   duplicate ids and constants, unknown constants and constants of the
-  wrong kind, unknown tech stacks (a warning), responses without a
+  wrong kind, unknown tech stacks (a warning), type cycles, unknown parent
+  types, operations, statuses and headers a type does not list (warnings),
+  responses without a
   matching request, steps between nodes the architecture does not connect,
   import cycles, missing files and files outside the project root, edges to
   a system's internal nodes, and unknown use cases, scenarios and nodes in

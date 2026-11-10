@@ -163,6 +163,17 @@ describe('landing page snippets', () => {
     expect(cls('  blobs bandwidth 500 MB/s egress 0.05 usd/GB', true)).toEqual([['bandwidth', 'keyword'], ['500 MB/s', 'number'], ['egress', 'keyword'], ['0.05 usd/GB', 'number']]);
   });
 
+  it('highlights type blocks: the header words and property names as keywords, op names plain', () => {
+    const lines = highlightLines(['type LedgerDb extends PostgreSQL {', '  op read READ, "full scan" latency 2', '  status 200, 409', '}', 'type x3', 'abstract type [Ledger Store] { op write APPEND }']);
+    const cls = (i: number) => lines[i].filter((seg) => seg.cls).map((seg) => [seg.text.trim(), seg.cls]);
+    expect(cls(0)).toEqual([['type', 'keyword'], ['extends', 'keyword']]);
+    expect(cls(1)).toEqual([['op', 'keyword'], ['read', 'keyword'], ['"full scan"', 'string'], ['latency', 'keyword'], ['2', 'number']]);
+    expect(cls(2)).toEqual([['status', 'keyword'], ['200', 'number'], ['409', 'number']]);
+    // A node called type is not a type block, and the block ended at its brace.
+    expect(cls(4)).toEqual([]);
+    expect(cls(5)).toEqual([['abstract', 'keyword'], ['type', 'keyword'], ['[Ledger Store]', 'tech'], ['op', 'keyword'], ['write', 'keyword']]);
+  });
+
   it('are in canonical format', () => {
     for (const source of snippets()) expect(format(`${source}\n`)).toBe(`${source}\n`);
   });
