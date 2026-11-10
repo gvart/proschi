@@ -1,0 +1,97 @@
+frontend/src/dsl/typesys/types.ts
+  s_ccb8935595dc4e::t_a495647ce09a21 28-34,38
+frontend/src/practice/problems/collaborative-docs/given.proschi
+  s_ccb8935595dc4e::t_9f0aea07e72164 3-8
+frontend/src/dsl/typedStepsCompat.test.ts
+  s_ccb8935595dc4e::t_68f845d843589d 44,46
+plugin/skills/code-to-usecases/references/proschi-cheatsheet.md
+  s_ccb8935595dc4e::t_bb0384a6b92d39 122
+frontend/src/dsl/stdlib/cloud-gcp.proschi
+  s_ccb8935595dc4e::t_a262a909b069bc 14
+frontend/src/dsl/typesys/stdlib.test.ts
+  s_ccb8935595dc4e::t_6fabf0a82e2e13 150-151
+  s_ccb8935595dc4e::t_53554fda825810 128,169-170
+  s_ccb8935595dc4e::t_0035e625e782d7 140
+plugin/skills/image-to-proschi/references/proschi-cheatsheet.md
+  s_ccb8935595dc4e::t_bb0384a6b92d39 122
+frontend/src/dsl/typedSteps.test.ts
+  s_ccb8935595dc4e::t_cc98e259e19f77 143-189
+frontend/src/components/Playground/proschiLanguage.test.ts
+  s_ccb8935595dc4e::t_1ca8d1ed5dcc6a 420
+plugin/skills/proschi-capacity-plan/references/proschi-cheatsheet.md
+  s_ccb8935595dc4e::t_bb0384a6b92d39 122
+tooling/src/analysis.ts
+  s_ccb8935595dc4e::t_bb0384a6b92d39 337,339,486
+plugin/skills/proschi-keep-in-sync/references/proschi-cheatsheet.md
+  s_ccb8935595dc4e::t_bb0384a6b92d39 122
+frontend/src/practice/problems/collaborative-docs/wrong/same-server-delivery.proschi
+  s_ccb8935595dc4e::t_5ea658aa59769d 77
+  s_ccb8935595dc4e::t_9f0aea07e72164 10
+tooling/grammar/proschi.tmLanguage.json
+  s_ccb8935595dc4e::t_bb0384a6b92d39 709-710
+frontend/src/practice/problems/collaborative-docs/wrong/cursors-in-the-log.proschi
+  s_ccb8935595dc4e::t_9f0aea07e72164 10
+  s_ccb8935595dc4e::t_5ea658aa59769d 70,84
+frontend/src/practice/problems/collaborative-docs/wrong/replay-whole-log.proschi
+  s_ccb8935595dc4e::t_9f0aea07e72164 11
+  s_ccb8935595dc4e::t_5ea658aa59769d 60,70
+frontend/src/dsl/stdlib/cloud-azure.proschi
+  s_ccb8935595dc4e::t_a262a909b069bc 10,23
+plugin/skills/proschi-hld-doc/references/proschi-cheatsheet.md
+  s_ccb8935595dc4e::t_bb0384a6b92d39 122
+tooling/src/proschi.ts
+  s_ccb8935595dc4e::t_bb0384a6b92d39 134
+frontend/src/dsl/stdlib/cloud-cloudflare.proschi
+  s_ccb8935595dc4e::t_a262a909b069bc 4
+frontend/src/sim/access.ts
+  s_ccb8935595dc4e::t_a495647ce09a21 12-13
+frontend/src/practice/problems/collaborative-docs/solution.proschi
+  s_ccb8935595dc4e::t_9f0aea07e72164 4
+  s_ccb8935595dc4e::t_5ea658aa59769d 64,74
+tooling/src/schema.ts
+  s_ccb8935595dc4e::t_bb0384a6b92d39 168
+frontend/src/practice/problems/collaborative-docs/wrong/ack-before-log.proschi
+  s_ccb8935595dc4e::t_9f0aea07e72164 11
+  s_ccb8935595dc4e::t_5ea658aa59769d 67,77
+docs/design/typed-components.md
+  s_ccb8935595dc4e::t_02542c85776978 272-273
+  s_ccb8935595dc4e::t_05202456b97b46 88,265-271,274-275,293-312
+frontend/src/dsl/parser.ts
+  s_ccb8935595dc4e::t_a495647ce09a21 12,2759,2777-2778,3067,3070-3071,3076,3094,3411-3432
+  s_ccb8935595dc4e::t_47562d556ef35b 3433-3434
+plugin/skills/infra-to-proschi/references/proschi-cheatsheet.md
+  s_ccb8935595dc4e::t_bb0384a6b92d39 122
+frontend/src/dsl/stdlib/cloud-aws.proschi
+  s_ccb8935595dc4e::t_a262a909b069bc 6,17
+frontend/src/components/Playground/proschiLanguage.ts
+  s_ccb8935595dc4e::t_bb0384a6b92d39 160-161,375
+frontend/src/dsl/stdlib/edge.proschi
+  s_ccb8935595dc4e::t_a262a909b069bc 54,66,71,76,81,86,91,96
+frontend/src/practice/problems/collaborative-docs/starter.proschi
+  s_ccb8935595dc4e::t_b4bb6feb962054 4
+frontend/src/practice/problems/collaborative-docs/wrong/broadcast-before-ack.proschi
+  s_ccb8935595dc4e::t_9f0aea07e72164 10
+  s_ccb8935595dc4e::t_5ea658aa59769d 67,83
+frontend/src/dsl/stdlib/sources.gen.ts
+  s_ccb8935595dc4e::t_a262a909b069bc 5-8,11
+frontend/src/dsl/typesys/typesys.test.ts
+  s_ccb8935595dc4e::t_1ca8d1ed5dcc6a 208
+plugin/skills/proschi-design-review/references/proschi-cheatsheet.md
+  s_ccb8935595dc4e::t_bb0384a6b92d39 122
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d3ad0fb62d1240df242b4c616ced577ae6a28fb6",
+  "prompts": {},
+  "sessions": {
+    "s_ccb8935595dc4e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0e2b8447-0e71-4063-8d52-5e5b5302fc2f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
