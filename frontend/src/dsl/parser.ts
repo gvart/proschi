@@ -4,11 +4,12 @@ import { BracketCounter, qualify, stripTrailingComment, tokenizeLine, type Token
 import { endpointGroupKey } from './paths';
 import { DATA_STORE_KINDS, KINDS, TYPE_OF_KIND, isDataStore, isKind, kindFromName, kindOf } from './kinds';
 import { parseQuantity } from './quantity';
-import { accessOf } from './access';
+import { accessOf, type Access } from './access';
 import { COLOR_NAMES, editDistance, resolveColor, suggestColor } from './palette';
 import { lookupType, resolveTypes } from './typesys/resolve';
 import { loadStdlib } from './typesys/stdlib';
-import type { ResolvedType, TypeDecl, TypeProps, TypeTable } from './typesys/types';
+import { findHeader, findOp, opWord, suggestHeader, suggestOp } from './typesys/ops';
+import type { ResolvedType, TypeDecl, TypeOp, TypeProps, TypeTable } from './typesys/types';
 import type {
   FlowStep,
   Protocol,
@@ -62,6 +63,8 @@ interface RawStep {
   multiplier?: number;
   /** `~2MB` at the start of the label, in bytes (§7.3). */
   sizeBytes?: number;
+  /** Column of the label's text after its prefixes, for diagnostics about its words. */
+  labelCol?: number;
   loc: SourceLoc;
 }
 
@@ -1033,7 +1036,7 @@ class Parser {
     let result = this.teamFiles.get(target.path);
     if (!result) {
       const scope: Scope = { chain: [...this.chain, target.path], teamFiles: this.teamFiles };
-      result = new Parser(target.source, { path: target.path, resolve: this.options.resolve }, scope).run();
+      result = new Parser(target.source, { path: target.path, resolve: this.options.resolve, ...(this.options.strictOps ? { strictOps: true } : {}) }, scope).run();
       this.teamFiles.set(target.path, result);
       for (const d of result.diagnostics) {
         if (!this.fileOrder.has(d.file)) this.fileOrder.set(d.file, this.fileOrder.size);
@@ -1332,7 +1335,7 @@ class Parser {
       const body = this.currentBody()!;
       body.openAlt = undefined;
       // Fan-out and payload size prefixes belong to requests; a response label is read as before.
-      const prefixes = arrow === '-->' ? { rest: label } : this.readLabelPrefixes(label, labelToken!, line);
+      const prefixes = arrow === '-->' ? { rest: label, col: labelToken && this.labelStart(labelToken, line) } : this.readLabelPrefixes(label, labelToken!, line);
       body.items.push({
         kind: 'step',
         step: {
@@ -1343,6 +1346,7 @@ class Parser {
           parallelGroup: top.kind === 'par' ? top.group : undefined,
           ...(prefixes.multiplier !== undefined ? { multiplier: prefixes.multiplier } : {}),
           ...(prefixes.sizeBytes !== undefined ? { sizeBytes: prefixes.sizeBytes } : {}),
+          ...(prefixes.col !== undefined ? { labelCol: prefixes.col } : {}),
           loc,
         },
       });
@@ -1370,12 +1374,10 @@ class Parser {
    * prefix must be followed by whitespace or end the label, so `xml …` and
    * `x-request-id` are ordinary labels. Problems are reported at the prefix.
    */
-  private readLabelPrefixes(label: string, token: Token | undefined, line: number): { rest: string; multiplier?: number; sizeBytes?: number } {
-    const out: { rest: string; multiplier?: number; sizeBytes?: number } = { rest: label };
+  private readLabelPrefixes(label: string, token: Token | undefined, line: number): { rest: string; multiplier?: number; sizeBytes?: number; col?: number } {
+    const out: { rest: string; multiplier?: number; sizeBytes?: number; col?: number } = { rest: label };
     if (!token) return out;
-    // Column of the label's first character: the label token starts at ':' and its value is trimmed.
-    const after = this.lines[line - 1].slice(token.col);
-    const base = token.col + 1 + (after.length - after.trimStart().length);
+    const base = this.labelStart(token, line);
     let offset = 0;
     for (;;) {
       const rest = label.slice(offset);
@@ -1399,7 +1401,14 @@ class Parser {
       offset += label.slice(offset).length - label.slice(offset).trimStart().length;
     }
     out.rest = label.slice(offset);
+    out.col = base + offset;
     return out;
+  }
+
+  /** Column of a label's first character: the label token starts at ':' and its value is trimmed. */
+  private labelStart(token: Token, line: number): number {
+    const after = this.lines[line - 1].slice(token.col);
+    return token.col + 1 + (after.length - after.trimStart().length);
   }
 
   // ---- HLD sections: traffic, requirements, capacity, entity, decision, test (docs/design/hld-and-practice.md §1) ----
@@ -2695,7 +2704,10 @@ class Parser {
           request.deferredResponse = { after: steps.length, ...(step.parallelGroup !== undefined ? { group: step.parallelGroup } : {}) };
         }
         const status = step.label.match(/^(\d{3})\b\s*([\s\S]*)$/);
-        if (status) request.statusCode = Number(status[1]);
+        if (status) {
+          request.statusCode = Number(status[1]);
+          this.checkStatus(this.nodes.get(respFrom)?.resolvedType, request.statusCode, this.labelLoc(step, 0, 3));
+        }
         const payload = splitPayload(status ? status[2] : step.label);
         const body = payload.body ?? payload.text;
         if (body) {
@@ -2712,6 +2724,8 @@ class Parser {
       const port = toPort ?? this.onlyEntry(to, step.loc);
       const target = this.nodes.get(to);
       const isAsync = step.arrow === '->>';
+      const typed = this.typedOp(target?.resolvedType, label.method, step);
+      if (label.headers) this.checkHeaders(target?.resolvedType, label.headers, step);
       steps.push({
         id: `${prefix}-${steps.length + 1}`,
         stepOrder: steps.length,
@@ -2733,13 +2747,72 @@ class Parser {
         loc: step.loc,
         ...(step.multiplier !== undefined ? { multiplier: step.multiplier } : {}),
         ...(step.sizeBytes !== undefined ? { sizeBytes: step.sizeBytes } : {}),
-        access: accessOf(label.method, step.label),
+        access: typed.access,
+        ...(typed.op ? { op: typed.op } : {}),
+        ...(label.headers ? { headers: label.headers } : {}),
         ...(port !== undefined ? { toPort: port } : {}),
         ...(fromPort !== undefined ? { fromPort } : {}),
       });
     }
 
     return steps;
+  }
+
+  /**
+   * The access of a request step and the operation of its target's type it
+   * names (docs/design/typed-components.md, "Typed operations in steps"). A
+   * typed target with operations looks up the HTTP method or the label's first
+   * words; a match decides the access. Otherwise the step reads as before
+   * (`accessOf`), with a warning when the target is typed: the label is a
+   * comment, unless its verb was already a write, which it stays.
+   */
+  private typedOp(type: ResolvedType | undefined, method: string | undefined, step: RawStep): { access: Access; op?: TypeOp } {
+    const access = accessOf(method, step.label);
+    if (!type || type.ops.length === 0) return { access };
+    const word = method ?? opWord(step.label);
+    if (!word) return { access };
+    const op = method ? type.ops.find((o) => o.name.toUpperCase() === method) : findOp(type, step.label);
+    if (op) return { access: op.access, op: { ...op } };
+    const suggestion = suggestOp(type, word);
+    const ops = type.ops.map((o) => o.name);
+    const hint = suggestion ? `Did you mean ${suggestion}?` : `Its operations are ${ops.slice(0, 8).join(', ')}${ops.length > 8 ? ', …' : ''}.`;
+    const effect = access === 'write' ? 'Treated as a write, as before.' : 'Treated as a comment.';
+    const lead = step.label.length - step.label.trimStart().length + (!method && /^\s*"/.test(step.label) ? 1 : 0);
+    this.typeProblem(`${type.name} has no operation '${word}'. ${hint} ${effect}`, this.labelLoc(step, lead, word.length));
+    return { access };
+  }
+
+  /** `200` on a response: one of the responder's type's statuses, when it lists any. */
+  private checkStatus(type: ResolvedType | undefined, code: number, loc: SourceLoc) {
+    if (!type || type.statuses.length === 0 || type.statuses.includes(code)) return;
+    this.typeProblem(`${type.name} has no status ${code}; it answers ${type.statuses.join(', ')}`, loc);
+  }
+
+  /** `header A, B` in a label: each one of the target's type's headers, when it lists any. */
+  private checkHeaders(type: ResolvedType | undefined, headers: string[], step: RawStep) {
+    if (!type || type.headers.length === 0) return;
+    const clause = step.label.search(/\sheader\s/);
+    for (const h of headers) {
+      if (findHeader(type, h)) continue;
+      const suggestion = suggestHeader(type, h);
+      const at = step.label.indexOf(h, clause + 1);
+      this.typeProblem(
+        `${type.name} has no header '${h}'. ${suggestion ? `Did you mean ${suggestion}?` : `Its headers are ${type.headers.join(', ')}.`}`,
+        this.labelLoc(step, Math.max(0, at), h.length),
+      );
+    }
+  }
+
+  /** `length` characters at `offset` in a step's label; the whole step when the label's column is unknown. */
+  private labelLoc(step: RawStep, offset: number, length: number): SourceLoc {
+    if (step.labelCol === undefined) return step.loc;
+    return { line: step.loc.line, col: step.labelCol + offset, length, ...(step.loc.file !== undefined ? { file: step.loc.file } : {}) };
+  }
+
+  /** A typed-step problem: a warning, or an error with `strictOps`. */
+  private typeProblem(message: string, loc: SourceLoc) {
+    if (this.options.strictOps) this.errorOnce(message, loc);
+    else this.warning(message, loc);
   }
 
   /**
@@ -3304,14 +3377,21 @@ interface StepLabel {
   description?: string;
   format?: PayloadFormat;
   body?: string;
+  /** `header A, B` right after the endpoint. */
+  headers?: string[];
 }
 
-/** Parses `POST /orders json {...}` or free text such as `INSERT order`. */
+/** `header Authorization, If-None-Match` right after an endpoint, then the rest of the label. */
+const HEADER_CLAUSE = /^header\s+([A-Za-z0-9-]+(?:\s*,\s*[A-Za-z0-9-]+)*)(?=\s|$)\s*([\s\S]*)$/;
+
+/** Parses `POST /orders json {...}`, `GET /feed header Authorization` or free text such as `INSERT order`. */
 export function parseStepLabel(input: string): StepLabel {
   const http = input.trim().match(/^([A-Z]+)\s+(\S+)\s*([\s\S]*)$/);
   if (http && HTTP_METHODS.includes(http[1])) {
-    const payload = splitPayload(http[3]);
+    const clause = HEADER_CLAUSE.exec(http[3]);
+    const payload = splitPayload(clause ? clause[2] : http[3]);
     return {
+      ...(clause ? { headers: clause[1].split(',').map((h) => h.trim()) } : {}),
       name: `${http[1]} ${http[2]}`,
       method: http[1],
       endpoint: http[2],

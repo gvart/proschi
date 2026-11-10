@@ -238,7 +238,7 @@ c [C]
     const source = `type LedgerDb extends PostgreSQL {}
 db [LedgerDb]
 usecase "Pay" {
-  db -> db : x
+  db -> db : SELECT x
 }
 test "t" {
   "Pay" calls [LedgerDb]

@@ -1,5 +1,5 @@
 import type { ComponentType, TechName } from '../types/canvas';
-import type { ResolvedType } from './typesys/types';
+import type { ResolvedType, TypeOp } from './typesys/types';
 
 // Use case steps, as the parser produces them and the player animates them.
 export type ExecutionType = 'SYNC_REQUEST_RESPONSE' | 'ASYNC_FIRE_AND_FORGET' | 'ASYNC_REQUEST_RESPONSE';
@@ -65,6 +65,10 @@ export type DiagramStep = FlowStep & {
   toPort?: string;
   /** `orders.api -> …`: the entry point of the sending system. */
   fromPort?: string;
+  /** The target type's operation the label names (`INSERT`, `GET`), when the target is typed and lists it. */
+  op?: TypeOp;
+  /** `GET /x header Authorization, If-None-Match`: request headers named in the label. */
+  headers?: string[];
 };
 
 /**
@@ -528,4 +532,11 @@ export interface ParseOptions {
   path?: string;
   /** Loads imported files and the team files of `system … { from "…" }`; without it, they only produce a warning. */
   resolve?: ImportResolver;
+  /**
+   * Report a step label that names no operation of its target's type, a
+   * status the responder's type does not list, or a header the target's type
+   * does not list, as an error instead of a warning (problem front matter
+   * `strict: true`).
+   */
+  strictOps?: boolean;
 }
