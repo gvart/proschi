@@ -23,7 +23,7 @@ decision "Fixed one-minute windows" because "Simplest correct answer for 100 req
 
 usecase "Call API" "A client calls the protected API" {
   client    -> gateway  : GET /orders
-  gateway   -> limiter  : check client-42
+  gateway   -> limiter  : POST /checks {"client": "client-42"}
   limiter   -> counters : INCR rate:client-42
   counters --> limiter  : 37
 

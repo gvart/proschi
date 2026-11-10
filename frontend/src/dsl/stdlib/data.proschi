@@ -80,7 +80,8 @@ type [NoSQL Database] extends DataComponent {
 }
 
 type DynamoDB extends [NoSQL Database] {
-  op read  GetItem, BatchGetItem, Query, Scan, TransactGetItems, DescribeTable
+  op read  GetItem, BatchGetItem, Query, TransactGetItems, DescribeTable
+  op read  Scan latency 10 cost 25
   op write PutItem, UpdateItem, DeleteItem, BatchWriteItem, TransactWriteItems
   op write ExecuteStatement, CreateTable, UpdateTable, DeleteTable
   doc "DynamoDB, the managed key-value and document database: reads by key or partition, a Scan reads the whole table."
@@ -123,7 +124,8 @@ type ScyllaDB extends Cassandra {
 }
 
 type HBase extends WideColumnNoSql {
-  op read  Scan, Exists
+  op read  Exists
+  op read  Scan latency 10 cost 25
   op write Increment, Append, CheckAndMutate
   doc "Apache HBase, the wide-column database on HDFS."
 }

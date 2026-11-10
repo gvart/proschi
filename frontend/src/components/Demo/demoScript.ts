@@ -44,7 +44,7 @@ export const DEMO_SCRIPT: DemoStep[] = [
       '',
       '  alt "Placed" {',
       '    api  -> db     : INSERT order',
-      '    api ->> events : OrderPlaced {"orderId": "o-1"}',
+      '    api ->> events : PUBLISH OrderPlaced {"orderId": "o-1"}',
       '    api --> web    : 201 {"orderId": "o-1"}',
       '  } alt "DB down" {',
       '    api  -x db  : INSERT order',

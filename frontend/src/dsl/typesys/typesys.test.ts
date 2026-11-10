@@ -205,7 +205,7 @@ c [C]
       "error 2: Unknown kind 'blob'; use one of client, edge, cdn, loadbalancer, gateway, dns, service, function, cache, database, search, analytics, queue, broker, storage, external, other",
       'error 4: Expected a number after latencyMs, e.g. latencyMs 4, not a rate',
       'error 5: Expected a percentage after availability, e.g. availability 99.95%',
-      'error 6: Expected read or write after op, e.g. op read SELECT',
+      'error 6: Expected read, write or forward after op, e.g. op read SELECT',
       'error 7: Expected a multiplier after latency, e.g. latency 2 or latency 0.5',
       "error 8: '99' is not an HTTP status code (100 to 599)",
       expect.stringMatching(/^error 9: Unknown type property 'colour'; use kind, protocol, op/),
@@ -239,7 +239,7 @@ c [C]
     const source = `type LedgerDb extends PostgreSQL {}
 db [LedgerDb]
 usecase "Pay" {
-  db -> db : x
+  db -> db : SELECT x
 }
 test "t" {
   "Pay" calls [LedgerDb]

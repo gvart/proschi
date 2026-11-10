@@ -39,7 +39,7 @@ usecase "Load Explore" "A user opens Explore and the deep model ranks every cand
 usecase "Refresh features" "The offline pipeline loads fresh features and embeddings in batches" {
   pipeline    -> warehouse  : SELECT a batch of recent interactions
   warehouse  --> pipeline   : rows
-  pipeline    -> features   : UPSERT features of a batch of posts
+  pipeline    -> features   : MSET features of a batch of posts
   pipeline    -> embeddings : UPSERT a batch of account embeddings
   embeddings --> pipeline   : ok
 }

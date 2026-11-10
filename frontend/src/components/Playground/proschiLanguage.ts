@@ -5,7 +5,7 @@ import type { Text } from '@codemirror/state';
 import type { Diagnostic as CmDiagnostic } from '@codemirror/lint';
 import { componentCatalog } from '../../catalog/componentCatalog';
 import { COLOR_NAMES } from '../../dsl/palette';
-import { KINDS, builtinTypes, parse, typeKey, type Diagnostic, type Diagram, type ResolvedType } from '../../dsl';
+import { HTTP_METHODS, KINDS, builtinTypes, parse, typeKey, type Diagnostic, type Diagram, type ResolvedType } from '../../dsl';
 
 interface LexState {
   inLabel: boolean;
@@ -157,8 +157,8 @@ function typeToken(stream: Parameters<StreamParser<LexState>['token']>[0], state
   if (header && /(?:^\s*(?:abstract\s+)?type|\bextends)\s+$/.test(before) && stream.match(/^[A-Za-z_]\w*/)) return 'typeName';
   // A body line, or a one-line body after `{`.
   if ((state.inType ? /^\s*$/ : /\{\s*$/).test(before) && stream.match(TYPE_WORD)) return 'keyword';
-  if (/(?:^|\{)\s*op\s+$/.test(before) && stream.match(/^(?:read|write)\b/)) return 'keyword';
-  if (/(?:^|\{)\s*op\s+(?:read|write)\b/.test(before) && stream.match(/^(?:latency|cost)\b/)) return 'keyword';
+  if (/(?:^|\{)\s*op\s+$/.test(before) && stream.match(/^(?:read|write|forward)\b/)) return 'keyword';
+  if (/(?:^|\{)\s*op\s+(?:read|write|forward)\b/.test(before) && stream.match(/^(?:latency|cost)\b/)) return 'keyword';
   if (/(?:^|\{)\s*kind\s+$/.test(before) && stream.match(/^[A-Za-z_]\w*/)) return 'atom';
   if (/(?:^|\{)\s*(?:durable|consistency|writeScaling)\s+$/.test(before) && stream.match(/^[A-Za-z_]\w*/)) return 'atom';
   if (/(?:^|\{)\s*header\s+(?:[\w-]+\s*,\s*)*$/.test(before) && stream.match(/^[\w-]+/)) return 'propertyName';
@@ -284,7 +284,6 @@ function openBlocks(doc: Text, number: number): string[] {
   return stack;
 }
 
-const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 /** `a -> b : label`: the step's nodes, arrow and its label so far. */
 const STEP = /^\s*(?:\}\s*)?([A-Za-z_]\w*)\s*(->>|-->|->|-x)\s*([A-Za-z_]\w*)\s*:\s*(.*)$/;
 
@@ -373,7 +372,7 @@ export function proschiCompletions(getNodeIds: () => string[], getTechs?: () => 
     if (blocks.length && /^\s*(?:abstract\s+)?type\b/.test(blocks[blocks.length - 1])) {
       if (atLineStart) return { from, options: typeBodyOptions, validFor: /^\w*$/ };
       if (/^\s*kind\s+$/.test(head)) return { from, options: KINDS.map((k) => ({ label: k, type: 'enum' })), validFor: /^\w*$/ };
-      if (/^\s*op\s+$/.test(head)) return { from, options: ['read', 'write'].map((label) => ({ label, type: 'keyword' })), validFor: /^\w*$/ };
+      if (/^\s*op\s+$/.test(head)) return { from, options: ['read', 'write', 'forward'].map((label) => ({ label, type: 'keyword' })), validFor: /^\w*$/ };
       return null;
     }
 

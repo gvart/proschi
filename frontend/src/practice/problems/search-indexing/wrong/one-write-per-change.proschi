@@ -28,7 +28,7 @@ searchapi -> search    : _search
 
 usecase "Search" "A diner searches for stores and dishes" {
   diner      -> searchapi : GET /search?q=tacos
-  searchapi  -> search    : match "tacos" near the diner, open now
+  searchapi  -> search    : _search match "tacos" near the diner, open now
   search    --> searchapi : top 50 stores
   searchapi --> diner     : 200 results
 }

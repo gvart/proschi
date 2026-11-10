@@ -417,7 +417,7 @@ describe('types', () => {
   it('offers property words, kinds and op access in a type body', () => {
     expect(complete('type X {\n  ', true)?.options.map((o) => o.label)).toEqual(expect.arrayContaining(['kind', 'op', 'header', 'doc', 'latencyMs']));
     expect(complete('type X {\n  kind ', true)?.options).toHaveLength(17);
-    expect(complete('type X {\n  op ', true)?.options.map((o) => o.label)).toEqual(['read', 'write']);
+    expect(complete('type X {\n  op ', true)?.options.map((o) => o.label)).toEqual(['read', 'write', 'forward']);
     expect(complete('type X {\n}\nus')?.options.map((o) => o.label)).toContain('usecase');
     expect(complete('ty')?.options.map((o) => o.label)).toEqual(expect.arrayContaining(['type', 'abstract type']));
   });

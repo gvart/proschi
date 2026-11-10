@@ -26,7 +26,7 @@ usecase "Create order" {
   alt "Created" {
     par {
       orders -> ordersDb : INSERT order
-      orders ->> events  : OrderCreated {"orderId": "o-1"}
+      orders ->> events  : PUBLISH OrderCreated {"orderId": "o-1"}
     }
     orders --> gateway : 201 {"status": "pending"}
   } alt "Invalid payload" {

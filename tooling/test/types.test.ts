@@ -76,7 +76,7 @@ describe('types in the language server', () => {
     const kinds = labels('type X {\n  kind \n}', { line: 1, character: 7 });
     expect(kinds).toHaveLength(17);
     expect(kinds).toContain('database');
-    expect(labels('type X {\n  op \n}', { line: 1, character: 5 })).toEqual(['read', 'write']);
+    expect(labels('type X {\n  op \n}', { line: 1, character: 5 })).toEqual(['read', 'write', 'forward']);
     // After the block, keywords again.
     expect(labels('type X {\n}\n', { line: 2, character: 0 })).toContain('usecase');
     expect(labels('t', { line: 0, character: 1 })).toEqual(expect.arrayContaining(['type', 'abstract type']));

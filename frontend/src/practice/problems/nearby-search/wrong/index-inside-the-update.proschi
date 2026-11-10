@@ -41,9 +41,9 @@ usecase "Recommend" "A user opens the app and gets people within their search ra
 }
 
 usecase "Update location" "The app reports where the user is now, and the API reindexes it" {
-  app      -> api      : PUT /me/location {"lat": 40.73, "lng": -73.99}
-  api      -> profiles : UPDATE user 7731 SET lat, lng, cellId
-  api      -> regional : DELETE user 7731 from the old geoshard
-  api      -> metro    : UPSERT user 7731 into the new geoshard
-  api     --> app      : 204
+  app  -> api      : PUT /me/location {"lat": 40.73, "lng": -73.99}
+  api  -> profiles : UpdateItem user 7731 SET lat, lng, cellId
+  api  -> regional : DELETE user 7731 from the old geoshard
+  api  -> metro    : UPSERT user 7731 into the new geoshard
+  api --> app      : 204
 }

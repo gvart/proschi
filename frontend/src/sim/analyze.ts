@@ -529,6 +529,12 @@ export function averageTraffic(traffic: Map<string, UseCaseTraffic>): Map<string
 /** Times the step happens per request (`x200 …`, §7.3); 1 when absent. */
 export const multiplierOf = (step: DiagramStep): number => (step.multiplier !== undefined && step.multiplier > 0 ? step.multiplier : 1);
 
+/** The `latency` multiplier of the target type's operation a step names (`op read Scan latency 8`); 1 without one. */
+export const opLatencyOf = (step: DiagramStep): number => (step.op?.latency !== undefined && step.op.latency > 0 ? step.op.latency : 1);
+
+/** The `cost` multiplier of the operation a step names: how many requests of load one call puts on the target; 1 without one. */
+export const opCostOf = (step: DiagramStep): number => (step.op?.cost !== undefined && step.op.cost > 0 ? step.op.cost : 1);
+
 /** Requests per second a node receives, split by access (§7.2). */
 export interface Load {
   read: number;
@@ -557,16 +563,18 @@ export function forEachStepRate(diagram: Diagram, traffic: Map<string, UseCaseTr
 }
 
 /**
- * `R · m(s) · multiplier` on the target of every request step that gets
- * through (`->`, `->>`; not `-x`), split into reads and writes (§2.2, §7.2,
- * §7.3).
+ * `R · m(s) · multiplier · cost` on the target of every request step that
+ * gets through (`->`, `->>`; not `-x`), split into reads and writes (§2.2,
+ * §7.2, §7.3). `cost` is the `cost` multiplier of the target type's operation
+ * the step names (1 without one): a costlier operation uses more of the
+ * node's capacity, and so of the replicas its monthly cost pays for.
  */
 export function computeLoad(diagram: Diagram, traffic: Map<string, UseCaseTraffic>): Map<string, Load> {
   const load = new Map<string, Load>();
   const access = accessIn(diagram);
   forEachStepRate(diagram, traffic, (step, rate) => {
     const entry = load.get(step.toServiceId) ?? { read: 0, write: 0 };
-    entry[access(step)] += rate * multiplierOf(step);
+    entry[access(step)] += rate * multiplierOf(step) * opCostOf(step);
     load.set(step.toServiceId, entry);
   });
   return load;
@@ -971,7 +979,9 @@ export function analyze(diagram: Diagram, options: AnalyzeOptions = {}): Analysi
       part.map((h) => {
         if (h.failed) return { fixedMs: timeoutOf(h.target), tailMs: 0 };
         const hop = systems?.hop(h.target, h.step.toPort) ?? hops.get(h.target) ?? { fixedMs: 0, tailMs: 0 };
-        const item = { fixedMs: transferMs(h.step, bandwidthOf) + hop.fixedMs, tailMs: hop.tailMs };
+        // The operation's `latency` multiplier scales the target's service time, not the transfer.
+        const op = opLatencyOf(h.step);
+        const item = { fixedMs: transferMs(h.step, bandwidthOf) + hop.fixedMs * op, tailMs: hop.tailMs * op };
         // A retry variant: each attempt takes the whole hop again (no backoff).
         return h.attempts === undefined ? item : { fixedMs: item.fixedMs * h.attempts, tailMs: item.tailMs * h.attempts };
       }),

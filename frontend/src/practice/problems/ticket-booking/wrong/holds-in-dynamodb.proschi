@@ -9,7 +9,7 @@ import "problem.proschi"
 lb    "Load Balancer" [AWS Load Balancer] x2 @platform
 api   "Booking API"   [REST API]          x20 @tickets "Seat maps, holds and bookings"
 cache "Seat Maps"     [Redis]             x2 @tickets "Rendered seat map per event, 2 s TTL"
-db    "Seats DB"      [DynamoDB]        x2 @tickets "Seats, holds and bookings, sharded by seat; the only source of truth"
+db    "Seats DB"      [DynamoDB]          x2 @tickets "Seats, holds and bookings, sharded by seat; the only source of truth"
 
 capacity {
   db shards 2
@@ -75,7 +75,7 @@ usecase "View seats" "Load the seat map of an event" {
     cache --> api : seat map
   } alt "Cache miss" when "the map expired" {
     cache --> api   : nil
-    api    -> db    : SELECT seats of e1
+    api    -> db    : Query seats of e1
     db    --> api   : 48,000 rows
     api   ->> cache : SET seatmap:e1 EX 2
   }
@@ -86,7 +86,7 @@ usecase "View seats" "Load the seat map of an event" {
 usecase "Hold seat" "Hold one seat for 10 minutes" {
   fan -> lb  : POST /events/e1/holds json {"seat": "A-12"}
   lb  -> api : POST /events/e1/holds
-  api -> db  : UPDATE seat SET held, holdExpires = now() + 10 min WHERE free OR holdExpires < now()
+  api -> db  : UpdateItem seat SET held, holdExpires = now() + 10 min WHERE free OR holdExpires < now()
 
   alt "Held" when "the seat was free or its hold expired" {
     db  --> api : 1 row
@@ -102,13 +102,13 @@ usecase "Hold seat" "Hold one seat for 10 minutes" {
 usecase "Confirm booking" "Pay for a held seat and book it" {
   fan -> lb  : POST /holds/h-77/confirm json {"card": "tok_visa"}
   lb  -> api : POST /holds/h-77/confirm
-  api -> db  : SELECT hold h-77 WHERE heldBy = fan AND holdExpires > now()
+  api -> db  : Query hold h-77 WHERE heldBy = fan AND holdExpires > now()
 
   alt "Paid" when "the hold is valid and the card is approved" {
     db       --> api      : valid
     api       -> payments : POST /charges Idempotency-Key h-77
     payments --> api      : 201 approved
-    api       -> db       : UPDATE seat SET booked WHERE holdId = h-77; INSERT booking
+    api       -> db       : UpdateItem seat SET booked WHERE holdId = h-77; INSERT booking
     db       --> api      : 1 row
     api      --> lb       : 201 {"bookingId": "b-301"}
     lb       --> fan      : 201 {"bookingId": "b-301"}

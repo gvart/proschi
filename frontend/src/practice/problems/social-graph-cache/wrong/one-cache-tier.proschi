@@ -8,7 +8,7 @@
 # One cache tier in front of MySQL, memcache style: every cache server reads and writes the database.
 import "problem.proschi"
 
-followers "TAO Followers" [Cache] x16 @tao "Answer the web tier; forward misses and writes to the shard's leader"
+followers "TAO Followers" [TAO] x16 @tao "Answer the web tier; forward misses and writes to the shard's leader"
 
 capacity {
   db shards 3

@@ -180,7 +180,7 @@ describe('a practice problem solved with the visual edits alone', () => {
     }
     src = addConnection(src, 'visitor', 'lb');
     src = addUseCase(src, 'Shorten');
-    for (const s of [req('visitor', 'lb', 'POST /links'), req('lb', 'api', 'POST /links'), req('api', 'db', 'INSERT Url'), res('db', 'api', 'ok'), res('api', 'lb', '201'), res('lb', 'visitor', '201')]) {
+    for (const s of [req('visitor', 'lb', 'POST /links'), req('lb', 'api', 'POST /links'), req('api', 'db', 'PutItem Url'), res('db', 'api', 'ok'), res('api', 'lb', '201'), res('lb', 'visitor', '201')]) {
       src = ok(addStep(src, 'Shorten', s));
     }
     src = addUseCase(src, 'Redirect');

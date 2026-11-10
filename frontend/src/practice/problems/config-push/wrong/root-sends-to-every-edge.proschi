@@ -28,5 +28,5 @@ usecase "Change config" {
   api      -> root     : SET key
   root    --> api      : seq 1024
   api     --> customer : 200
-  root    ->> local    : ~2KB x200 APPEND log entry 1024
+  root    ->> local    : ~2KB x200 PUT log entry 1024
 }

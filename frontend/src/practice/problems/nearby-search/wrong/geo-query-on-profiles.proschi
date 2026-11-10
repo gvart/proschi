@@ -38,10 +38,10 @@ usecase "Recommend" "A user opens the app and gets people within their search ra
 }
 
 usecase "Update location" "The app reports where the user is now" {
-  app      -> api      : PUT /me/location {"lat": 40.73, "lng": -73.99}
-  api      -> profiles : UPDATE user 7731 SET lat, lng, cellId
-  api     ->> changes  : PUBLISH LocationChanged user 7731
-  api     --> app      : 204
+  app  -> api      : PUT /me/location {"lat": 40.73, "lng": -73.99}
+  api  -> profiles : UpdateItem user 7731 SET lat, lng, cellId
+  api ->> changes  : PUBLISH LocationChanged user 7731
+  api --> app      : 204
 }
 
 usecase "Index location" "The indexer puts the user in the geoshard that owns their S2 cell" {

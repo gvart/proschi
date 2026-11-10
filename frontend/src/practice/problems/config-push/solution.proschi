@@ -47,6 +47,6 @@ usecase "Change config" "A customer changes a setting; the change reaches every 
   api      -> root     : SET key
   root    --> api      : seq 1024
   api     --> customer : 200
-  root    ->> mains    : ~2KB x6 APPEND log entry 1024
-  mains   ->> local    : ~2KB x200 APPEND log entry 1024
+  root    ->> mains    : ~2KB x6 PUT log entry 1024
+  mains   ->> local    : ~2KB x200 PUT log entry 1024
 }

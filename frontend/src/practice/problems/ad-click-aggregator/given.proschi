@@ -1,9 +1,14 @@
 title "Ad Click Aggregator" "Counts every ad impression and click exactly once, for advertiser dashboards and budgets"
 
-app        "Uber Eats App"     [Actor]      "Reports an event for every ad shown (impression) and tapped (click)"
-advertiser "Advertiser"        [Actor]      "A restaurant's ads dashboard: impressions, clicks and spend per campaign"
-budget     "Ad Budget Service" [REST API]   x2 @billing "Spends each campaign's budget and paces its ads; already exists"
-ledger     "Budget Ledger"     [PostgreSQL] x2 @billing "Spend per campaign, and every record UUID already applied; already exists"
+# The budget service is a REST API that also consumes ad records from Kafka.
+type BudgetService extends [REST API] {
+  op write AdAggregate, AdEvent
+}
+
+app        "Uber Eats App"     [Actor]         "Reports an event for every ad shown (impression) and tapped (click)"
+advertiser "Advertiser"        [Actor]         "A restaurant's ads dashboard: impressions, clicks and spend per campaign"
+budget     "Ad Budget Service" [BudgetService] x2 @billing "Spends each campaign's budget and paces its ads; already exists"
+ledger     "Budget Ledger"     [PostgreSQL]    x2 @billing "Spend per campaign, and every record UUID already applied; already exists"
 
 budget -> ledger : SQL
 

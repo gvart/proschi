@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { componentCatalog, findTech } from '../../catalog/componentCatalog';
 import { problems } from '../../practice/catalog';
 import { parseSolution } from '../../practice/workspace';
-import { WRITE_VERBS } from '../access';
+import { WRITE_VERBS, accessOf } from '../access';
 import { builtinTypes, parse } from '../index';
 import { kindOf } from '../kinds';
 import { lookupType, techNamed } from './resolve';
@@ -125,7 +125,7 @@ describe('the stdlib vocabularies', () => {
     expectOps('Memcached', ['GET', 'GETS'], ['SET', 'ADD', 'CAS', 'DELETE']);
     expectOps('Payment Gateway', [], ['CHARGE', 'REFUND']);
     // Edges that carry WebSockets forward a MESSAGE; plain HTTP edges do not.
-    for (const name of ['AWS Load Balancer', 'API Gateway', 'AWS API Gateway', 'Cloudflare', 'nginx', 'Envoy', 'HAProxy']) expectOps(name, [], ['MESSAGE']);
+    for (const name of ['AWS Load Balancer', 'API Gateway', 'AWS API Gateway', 'Cloudflare', 'nginx', 'Envoy', 'HAProxy']) expect(findOp(byName.get(name)!, 'MESSAGE')?.access, name).toBe('forward');
     for (const name of ['CDN', 'Load Balancer', 'WAF', 'DNS']) expect(findOp(byName.get(name)!, 'MESSAGE'), name).toBeUndefined();
   });
 });
@@ -136,7 +136,22 @@ describe('the stdlib vocabularies', () => {
  * These are real writes that the verb list reads; when step access comes
  * from the type's ops, they become writes.
  */
-const ACCESS_CHANGES = ['Redis LPOP read→write', 'Redis PFADD read→write', 'Redis ZINCRBY read→write'];
+const ACCESS_CHANGES = [
+  // A WebSocket frame the load balancer forwards: it writes when its handler does (chat's SEND, a document's OP).
+  'AWS Load Balancer MESSAGE read→write',
+  // User types of the problems: a consumed record spends budget, a ref update and its replication, a TAO write and invalidation.
+  'BudgetService AdAggregate read→write',
+  'BudgetService AdEvent read→write',
+  'GitFileServer PREPARE read→write',
+  'GitFileServer REPLICATE read→write',
+  'Redis LPOP read→write',
+  'Redis PFADD read→write',
+  'Redis ZINCRBY read→write',
+  // collaborative-docs: an edit is stored; a cursor (SessionServer CURSOR) is a read.
+  'SessionServer OP read→write',
+  'TAO INVALIDATE read→write',
+  'TAO assoc_add read→write',
+];
 
 describe('the stdlib and the practice problems', () => {
   it('agrees with the access steps have today, except for the listed real writes', () => {
@@ -144,14 +159,17 @@ describe('the stdlib and the practice problems', () => {
     for (const p of problems) {
       for (const source of [p.solution, p.starter, ...(p.wrong ?? []).map((w) => w.source)]) {
         const { diagram } = parseSolution(p, source);
+        const solution = source === p.solution;
         const nodes = new Map(diagram.nodes.map((n) => [n.id, n]));
         for (const step of diagram.useCases.flatMap((u) => u.scenarios.flatMap((s) => s.steps))) {
           const type = nodes.get(step.toServiceId)?.resolvedType;
           const word = step.httpMethod || /^\s*"?([A-Za-z_]+)/.exec(step.stepName.replace(/^((x\d+|~\S+)\s+)*/, ''))?.[1];
           const op = type && word ? findOp(type, word) : undefined;
-          if (op && step.access && op.access !== step.access) changes.add(`${type!.name} ${op.name} ${step.access}→${op.access}`);
-          // An op's multipliers would change the simulation of a step that uses it today.
-          if (op) expect(op.latency ?? op.cost, `${p.id}: ${type!.name} ${op.name}`).toBeUndefined();
+          const before = accessOf(step.httpMethod || undefined, step.stepName);
+          // The access the step gets: the op's, or for a forwarded frame its handler's.
+          if (op && step.access !== before) changes.add(`${type!.name} ${op.name} ${before}→${step.access}`);
+          // An op's multipliers would change the simulation of a reference solution.
+          if (op && solution) expect(op.latency ?? op.cost, `${p.id}: ${type!.name} ${op.name}`).toBeUndefined();
         }
       }
     }
