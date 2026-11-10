@@ -13,9 +13,10 @@ import { settleNodes } from './settle';
  * the view can fit the final layout. With `everyLayout` it changes after every
  * new layout instead: for read-only canvases, which should re-fit whenever the
  * layout moves (edges added between the same nodes reshape it too). `busy` is
- * true from a change until its layout is applied, glide included.
+ * true from a change until its layout is applied, glide included. `overlay`:
+ * the canvas can show the load overlay, which the layout keeps room for (layoutDiagram).
  */
-export function useAutoLayout(diagram: Diagram, apply: (nodes: Node[]) => void, { everyLayout = false } = {}): { settled: number; busy: boolean } {
+export function useAutoLayout(diagram: Diagram, apply: (nodes: Node[]) => void, { everyLayout = false, overlay = false } = {}): { settled: number; busy: boolean } {
   const shown = useRef<{ nodes: Node[]; provisional: boolean }>({ nodes: [], provisional: false });
   const [settled, setSettled] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -37,7 +38,7 @@ export function useAutoLayout(diagram: Diagram, apply: (nodes: Node[]) => void, 
       });
       show(from, true);
     }
-    layoutDiagram(diagram)
+    layoutDiagram(diagram, { overlay })
       .then((laidOut) => {
         if (cancelled) return;
         if (!from) {
@@ -61,19 +62,19 @@ export function useAutoLayout(diagram: Diagram, apply: (nodes: Node[]) => void, 
       cancelled = true;
       cancelSettle();
     };
-  }, [diagram, apply, everyLayout]);
+  }, [diagram, apply, everyLayout, overlay]);
   return { settled, busy };
 }
 
 /**
  * React Flow nodes and edges of a diagram, laid out again whenever it changes, for read-only canvases;
  * `settled` changes after every layout (useAutoLayout's `everyLayout`), so a fit key built on it re-fits;
- * `busy` until a layout is applied, glide included.
+ * `busy` until a layout is applied, glide included; `overlay` as for useAutoLayout.
  */
-export function useDiagramLayout(diagram: Diagram): { nodes: Node[]; edges: Edge[]; settled: number; busy: boolean } {
+export function useDiagramLayout(diagram: Diagram, { overlay = false } = {}): { nodes: Node[]; edges: Edge[]; settled: number; busy: boolean } {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   useEffect(() => setEdges(withEdgeStyles(diagram, toFlowEdges(diagram))), [diagram]);
-  const { settled, busy } = useAutoLayout(diagram, setNodes, { everyLayout: true });
+  const { settled, busy } = useAutoLayout(diagram, setNodes, { everyLayout: true, overlay });
   return { nodes, edges, settled, busy };
 }

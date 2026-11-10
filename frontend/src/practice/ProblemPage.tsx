@@ -266,7 +266,8 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   const { diagram, diagnostics } = parsed;
   const rootDiagnostics = useMemo(() => diagnostics.filter((d) => d.file === undefined), [diagnostics]);
   const nodeIds = useMemo(() => diagram.nodes.map((n) => n.id), [diagram]);
-  const { nodes, edges, settled, busy: layoutBusy } = useDiagramLayout(diagram);
+  // The canvas's load overlay (EditableCanvas) can show once the design has traffic.
+  const { nodes, edges, settled, busy: layoutBusy } = useDiagramLayout(diagram, { overlay: (diagram.traffic?.length ?? 0) > 0 });
 
   const [running, setRunning] = useState(false);
   const runTimer = useRef<ReturnType<typeof setTimeout>>(undefined);

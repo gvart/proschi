@@ -544,7 +544,7 @@ export default function Playground() {
       });
     });
   }, []);
-  const { settled: layoutSettled, busy: layoutBusy } = useAutoLayout(shown, showLaidOut);
+  const { settled: layoutSettled, busy: layoutBusy } = useAutoLayout(shown, showLaidOut, { overlay: canOverlay });
 
   const stopPlaying = () => {
     setPlaying(false);
