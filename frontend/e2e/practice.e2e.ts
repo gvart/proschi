@@ -168,7 +168,8 @@ test.describe('practice', () => {
     await page.keyboard.press('Escape');
     await appendCode(page, ']\neditor -> probe\nusecase "Probe" {\n  editor -> gateways : ');
     await page.keyboard.press('Control+Space');
-    await expect(options.locator('.cm-completionLabel')).toHaveText(['OP', 'CURSOR']);
+    // The step's target is a SessionServer: its ops, and nothing else (the editor lists them sorted).
+    await expect(options.locator('.cm-completionLabel')).toHaveText(['CURSOR', 'OP']);
   });
 
   test("a problem's own page shows the statement and opens it in practice", async ({ page }) => {
