@@ -1,0 +1,21 @@
+docs/PRACTICE.md
+  s_f355061868c346::t_ab3b83e5dc9b81 98,230-231
+docs/design/paid-plans.md
+  s_f355061868c346::t_9409342aaa51d1 548,550-552,667-673
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "dfb8c5c6ad78712dc570cec68333404ab570500f",
+  "prompts": {},
+  "sessions": {
+    "s_f355061868c346": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bd556674-4248-429d-bf5c-2b361bc86c62",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
