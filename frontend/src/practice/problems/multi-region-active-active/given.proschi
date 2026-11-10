@@ -43,6 +43,10 @@ test "Writes replicate to the other region asynchronously" {
   "Save progress" scenario "West" writes westDb before responding
   "Save progress" scenario "East" calls westDb
   "Save progress" scenario "West" calls eastDb
+  "Save progress" scenario "East" uses DELETE on eastCache
+  "Save progress" scenario "East" uses DELETE on westCache
+  "Save progress" scenario "West" uses DELETE on westCache
+  "Save progress" scenario "West" uses DELETE on eastCache
   "Save progress" scenario "East" never waits for westZuul or westApi or westCache or westDb
   "Save progress" scenario "West" never waits for eastZuul or eastApi or eastCache or eastDb
 }
