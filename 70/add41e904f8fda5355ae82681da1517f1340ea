@@ -1,0 +1,23 @@
+frontend/src/dsl/index.ts
+  s_ccb8935595dc4e::t_89695b82a4cd2c 1
+docs/design/typed-components.md
+  s_ccb8935595dc4e::t_16d56d4d3a24e8 211-257
+frontend/src/dsl/parser.ts
+  s_ccb8935595dc4e::t_058d488b60735b 177-178
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "70add41e904f8fda5355ae82681da1517f1340ea",
+  "prompts": {},
+  "sessions": {
+    "s_ccb8935595dc4e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0e2b8447-0e71-4063-8d52-5e5b5302fc2f",
+        "model": "unknown"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
