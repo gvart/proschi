@@ -1,0 +1,977 @@
+frontend/src/dsl/typesys/types.ts
+  s_ccb8935595dc4e::t_f8a8f4d8ccff47 1-27,35-37,39-94
+  s_ccb8935595dc4e::t_a495647ce09a21 28-34,38
+frontend/src/dsl/typesys/resolve.ts
+  s_ccb8935595dc4e::t_a06ad5ce114505 2,66-67,85,90,92-93,95,108,119,144-167
+  s_ccb8935595dc4e::t_2e3a225b52ed6c 10-15,19,21,24-29,113-114
+  s_ccb8935595dc4e::t_f5e8ee03d9d049 115
+  s_ccb8935595dc4e::t_9bd8fb3ed2e595 1,71,73,80,82,84,98,189
+  s_ccb8935595dc4e::t_1220820f6fdc5f 3-9,16-18,20,22-23,30-65,68-70,72,74-79,81,83,86-89,91,94,96-97,99-107,109-112,116-118,120,123-129,131-143,168-188,190-193
+  s_ccb8935595dc4e::t_32e7b32c3b7d2d 121-122,130
+frontend/src/dsl/typesys/stdlib.ts
+  s_ccb8935595dc4e::t_942e49fbed014c 1-23
+frontend/src/dsl/types.ts
+  s_ccb8935595dc4e::t_af5e7fce8825aa 107-113,241-242
+  s_ccb8935595dc4e::t_e04cdaa899525e 68-71,552-558
+  s_ccb8935595dc4e::t_6d38a2d19b6526 2
+  s_ccb8935595dc4e::t_3d6653028856b6 469-481,484-489,500
+frontend/src/dsl/stdlib/core.proschi
+  s_ccb8935595dc4e::t_299bd2fa344493 1-3,6-9,23-24,43,47-48,130-131,134-135,138
+  s_ccb8935595dc4e::t_2544eb0ecf9220 10-12,25-28,44-45,49-129,132-133,136-137
+  s_ccb8935595dc4e::t_d4d9bb7991a43f 13-22
+  s_ccb8935595dc4e::t_8e628cc1bdf64a 46
+  s_ccb8935595dc4e::t_44b0b16a14f6a4 29-38
+  s_ccb8935595dc4e::t_1c4f198983f5f0 4-5,39-42
+frontend/src/dsl/kinds.ts
+  s_ccb8935595dc4e::t_e92c9fa3c84e23 43-44,49,51
+frontend/scripts/gen-stdlib.mjs
+  s_ccb8935595dc4e::t_c9443af97eb38a 1-2,4-8,18,20-23
+  s_ccb8935595dc4e::t_ceda773f508e81 3,9-17,19,24-25
+frontend/src/dsl/stdlib/data.proschi
+  s_ccb8935595dc4e::t_175949526f9212 3,8-9,14,118,121-122,125-126,167,171-174,352
+  s_ccb8935595dc4e::t_b3017c990bd4e0 330-333
+  s_ccb8935595dc4e::t_26490fc3a01e1d 1-2,5-7,10-11,13,18-22,24-52,54-56,58-60,62-64,66-68,70-74,76,79-83,86,88-90,92-94,99-101,103-105,109-111,113-115,117,120,123-124,131-133,135,138-140,142-144,146,149-151,155-157,161-165,168-170,211-227,229-241,243,245-249,252-276,278-279,282-304,306,309-311,313-315,317-321,323-329,334-337,339-344,346-348,350-351
+  s_ccb8935595dc4e::t_27082220f89d17 15-17,23,87,96-98,107-108,119,130,136-137,159,175-210,228,251,280-281,307-308
+  s_ccb8935595dc4e::t_9cdb98fa5b1f8a 84,128
+  s_ccb8935595dc4e::t_8e628cc1bdf64a 4,12,53,57,61,65,69,75,91,95,102,106,112,116,127,134,141,145,152,158,166,242,277,305,312,316,322,338,345,349
+  s_ccb8935595dc4e::t_44b0b16a14f6a4 85,129
+  s_ccb8935595dc4e::t_32e7b32c3b7d2d 77-78,147-148,153-154,160,244,250
+frontend/src/dsl/stdlib/sources.gen.ts
+  s_ccb8935595dc4e::t_cdf2f420f50533 1-3,14
+  s_ccb8935595dc4e::t_625aeb5acf741f 12-13
+  s_ccb8935595dc4e::t_a262a909b069bc 7
+  s_ccb8935595dc4e::t_c1953b63e5a63a 5-6,8-9,11
+  s_ccb8935595dc4e::t_44b0b16a14f6a4 10
+  s_ccb8935595dc4e::t_1c4f198983f5f0 4
+frontend/src/sim/flow.ts
+  s_ccb8935595dc4e::t_cf1d44776f8c96 189
+  s_ccb8935595dc4e::t_8d13a52d16694d 2,203-230
+  s_ccb8935595dc4e::t_bc785f65495527 4,190-194
+  s_ccb8935595dc4e::t_5f927fe0cf3d03 231
+frontend/src/sim/profiles.ts
+  s_ccb8935595dc4e::t_e92c9fa3c84e23 130-134,137-140,142-143
+  s_ccb8935595dc4e::t_0e15322c42c7eb 141
+frontend/src/dsl/parser.ts
+  s_ccb8935595dc4e::t_a06ad5ce114505 3120
+  s_ccb8935595dc4e::t_f7c7e8f039658d 3,9-10,103-140,262-274,335-342,359,390,403-408,434-436,445-450,497-506,540-548,1241-1248,2572,2574-2578,2926-2927,2929,2931,2937,2941-3119,3121-3126,3128-3129,3132-3135,3137-3153,3155-3202,3378-3382
+  s_ccb8935595dc4e::t_63905e31ecb2d6 3383
+  s_ccb8935595dc4e::t_47542fe76b4e80 7,67-68,1041,1340,1351,1379-1380,1382,1406,1410-1415,2759-2760,2763,2805-2807,2823-2836,2839,2841-2843,2845-2850,2853-2875,2878,2880-2881,3444-3445,3448-3451,3455-3456,3458
+  s_ccb8935595dc4e::t_e61d445138b125 2844
+  s_ccb8935595dc4e::t_f7d61a66cd30a1 2876-2877,2879
+  s_ccb8935595dc4e::t_058d488b60735b 178-179
+  s_ccb8935595dc4e::t_8bdd19d58c0fff 2851-2852
+  s_ccb8935595dc4e::t_53a94ed11f9f7e 11
+  s_ccb8935595dc4e::t_a761db82280810 2840
+  s_ccb8935595dc4e::t_a495647ce09a21 12,2813,2837-2838,3127,3130-3131,3136,3154,3492-3513
+  s_ccb8935595dc4e::t_47562d556ef35b 3514-3515
+  s_ccb8935595dc4e::t_f53406c4f7c8eb 48
+  s_ccb8935595dc4e::t_c4a3c4ceaeabb9 2761-2762,2780-2783,2818-2819
+  s_ccb8935595dc4e::t_a76f340a389f2f 2821,3472-3491
+  s_ccb8935595dc4e::t_10b49e798e5217 213,2401-2432,2434-2457,2459-2461,2463,2465,2468-2471,2483-2485
+  s_ccb8935595dc4e::t_469be3d7f1cc39 2817,2820
+  s_ccb8935595dc4e::t_47ec7443a03161 2822
+  s_ccb8935595dc4e::t_2f2b35f255deab 3471
+frontend/src/dsl/mermaid.ts
+  s_ccb8935595dc4e::t_6314dfbeae1ada 97-99
+frontend/src/dsl/typesys/typesys.test.ts
+  s_ccb8935595dc4e::t_a06ad5ce114505 189-192,195,224-226,239
+  s_ccb8935595dc4e::t_b77cb3182f7851 8,132,290-291,339-340
+  s_ccb8935595dc4e::t_861b4109172d28 15
+  s_ccb8935595dc4e::t_6318558cc472bc 180
+  s_ccb8935595dc4e::t_1bc6e7dfdd7c80 52-54,57-60,62-63,65-68
+  s_ccb8935595dc4e::t_4fee8acbf17bce 1-7,9-14,16-40,42-45,47-51,55-56,69-99,101-112,114-116,125-131,134,136-161,163-173,175-179,181-182,185-188,193-194,196-212,214-223,227-238,240-246,248-289,292-304,306-317,319-338,341-342
+  s_ccb8935595dc4e::t_c38397e83f6956 247
+  s_ccb8935595dc4e::t_07bc1bbbb4c03f 61,64,113,117-119,174,183-184
+  s_ccb8935595dc4e::t_1ca8d1ed5dcc6a 213
+  s_ccb8935595dc4e::t_bc1cf3bc8e5f8e 41,46,100,133,135,162,305,318
+  s_ccb8935595dc4e::t_80bc956ef1d470 122-126
+frontend/src/dsl/diff.ts
+  s_ccb8935595dc4e::t_6314dfbeae1ada 146
+  s_ccb8935595dc4e::t_da73a7914cde6c 147
+frontend/src/dsl/importDesign.ts
+  s_ccb8935595dc4e::t_6314dfbeae1ada 71
+frontend/src/dsl/format.ts
+  s_ccb8935595dc4e::t_1db7e0cbc7a67c 63,226-232,250-252
+tooling/schema/proschi-diagram.schema.json
+  s_ccb8935595dc4e::t_812bd3bca20349 250-256,561-564,654-755,758-808
+  s_ccb8935595dc4e::t_2eddebd52e96ca 809-812
+  s_ccb8935595dc4e::t_903d6250d7c8cc 756-757
+  s_ccb8935595dc4e::t_bfe3cb591bb9be 1112-1146
+  s_ccb8935595dc4e::t_cb46c832c5d677 1936-1954,1990-2008,2025-2071,2266-2283
+  s_ccb8935595dc4e::t_961a48c9efc6e4 2284
+plugin/hooks/register.js
+  s_ccb8935595dc4e::t_6dc24ca2ba452a 1075,1298-1377,1379-1385,1387-1440,2038-2050,2106-2122,2173-2178,2230-2237,2249,2276-2277,2288-2292,2303,2311-2315,2353-2361,2391-2399,3044-3050,4294-4298,4611-4612,4614,4616,4622,4625-4803,4805-4806,4809-4812,4814-4876,5007-5010,5472-5476,5980-5981,5984-5985,5987,5989,6902,6906,6908,6910,6912,7219,7221,7260,7262,7289,7291,7319-7320,7322,7373-7374,8941,8944,8946,8961-8962,8976,9029,9044,9052-9053,9061,9063,9065,9131,9133,9160,9162
+  s_ccb8935595dc4e::t_903d6250d7c8cc 1575-1644,1646-1665,1667-1669,1671-1762,1764-1768,1770-1774,1776-1793,1795-1805,1808-1815,1817-1848,1850-1854,1856-1859,1861-1865,1867-2037,2051-2104,2866,3134,3145,3174,3198,3201-3205,4462-4463,4466,4506-4508,4513,4521-4573,4804,4807-4808,4813,5042,5046-5047,5049,5074-5090,5316-5317,6265-6266,6286,6534-6535
+  s_ccb8935595dc4e::t_cb46c832c5d677 887-891,893-899,2146,4133-4160,4162-4184,4186-4188,4190,4192,4195-4198,4210-4212,4464-4465,4482-4484,4516-4520,5061-5073,5606-5609,5617-5638,6881,6884,7080-7081,7125-7167,7172,7174,7178-7179,7181,7185-7186,7191-7192,7195-7199,7206,7209-7210,7217,7227-7250,7275,7278-7280,7285,7297,7302
+  s_ccb8935595dc4e::t_dbcf5529ed0ee1 1441-1466,1477-1574,1645,1666,1670,1763,1769,1775,1794,1806,1816,1849,1855,1860,1866
+  s_ccb8935595dc4e::t_bab155054302db 1378,1386,1467-1476,1807
+plugin/hooks/layout.cjs
+  s_ccb8935595dc4e::t_6dc24ca2ba452a 10-17,25-30,44-45,60,64-65,336-337,540-541,561-562,565,566,645-646,700,804,818-819,825-826,853,857-860,996,997,1050,1343-1345,1347-1349,1351-1352
+  s_ccb8935595dc4e::t_903d6250d7c8cc 31-33,46-49,61-62,66-231,233-261,263-265,267-335,338-377,379-398,400-402,404-493,495-499,501-505,507-524,526-539,542-560,563-564,567-572,574-578,580-582,584-644,647-689,691-697,699,701-738,740-742,744-746,748-750,752-754,756-760,762,765-770,772-776,778-780,782-787,789-791,793-797,799-801,803,805-812,814,816-817,821-824,828-830,832,835-837,841-843,845,847-851,854-856,861-927,929,931-935,937-962,964-990,992-995,999-1001,1003-1007,1009-1023,1025-1030,1032-1034,1036-1046,1048-1049,1051-1079,1081-1085,1087-1090,1092-1096,1098-1338,1346,1350
+  s_ccb8935595dc4e::t_cb46c832c5d677 8,19,1339-1340
+  s_ccb8935595dc4e::t_dbcf5529ed0ee1 34-43,63,232,262,266,378,399,403,494,500,506,525,573,579,583,690,698,739,743,747,751,755,761,777,781,788,792,798,802,813,820,827,831,838,844,852,928,963,991,998,1002,1008,1024,1031,1035,1047,1080,1086,1091,1097
+  s_ccb8935595dc4e::t_bab155054302db 1-3,5-7,9,18,20-22,24,50-59,763-764,771,815,833-834,839-840,846,930,936,1341-1342,1353
+tooling/src/schema.ts
+  s_ccb8935595dc4e::t_812bd3bca20349 104,128,148-173,175-184
+  s_ccb8935595dc4e::t_1ac6d6381a47a8 185
+  s_ccb8935595dc4e::t_bb0384a6b92d39 174
+  s_ccb8935595dc4e::t_174d2fde305e5a 262-272
+  s_ccb8935595dc4e::t_bf6c1a482fe94a 26-31
+  s_ccb8935595dc4e::t_6ea3765dfd5a7c 401-403,411
+frontend/src/dsl/index.ts
+  s_ccb8935595dc4e::t_bdf7d31be0d939 2-3
+  s_ccb8935595dc4e::t_89695b82a4cd2c 1
+docs/design/typed-components.md
+  s_ccb8935595dc4e::t_eb035cafc8e96a 1-87,89-102,104-168,179,234-270
+  s_ccb8935595dc4e::t_a31ac8028765ac 204-206
+  s_ccb8935595dc4e::t_029d63d8957b6d 184-201,203,207-209,211,213,217,221-233
+  s_ccb8935595dc4e::t_16d56d4d3a24e8 271-277,302-318,339-351,364-371
+  s_ccb8935595dc4e::t_02542c85776978 285-286
+  s_ccb8935595dc4e::t_05202456b97b46 88,278-284,287,319-338
+  s_ccb8935595dc4e::t_3b3466e6b217ae 180-182
+  s_ccb8935595dc4e::t_ed8f14fffc9ceb 352-363,372-467
+  s_ccb8935595dc4e::t_f1786c76f46849 169-178,202,210,212,214-216,218-220
+  s_ccb8935595dc4e::t_7288b33fa86720 103,288-301
+tooling/grammar/proschi.tmLanguage.json
+  s_ccb8935595dc4e::t_43d0bc5f66a6bb 13-14,284-295,673-708,711-821
+  s_ccb8935595dc4e::t_ba7c5659128814 12,822
+  s_ccb8935595dc4e::t_bb0384a6b92d39 709-710
+  s_ccb8935595dc4e::t_49f9c92091fe1d 491
+tooling/src/proschi.ts
+  s_ccb8935595dc4e::t_93b03f94b15c95 8-10,70-71,135-138,140-156
+  s_ccb8935595dc4e::t_a16e331c71d652 7
+  s_ccb8935595dc4e::t_bb0384a6b92d39 139
+  s_ccb8935595dc4e::t_49f9c92091fe1d 99-103
+tooling/src/analysis.ts
+  s_ccb8935595dc4e::t_b12e7e7e758efb 1244-1254
+  s_ccb8935595dc4e::t_0ce0c4dd1844dd 5,7-8,10,20,25,27,34,36
+  s_ccb8935595dc4e::t_e2fbc7f490fc6a 789-791
+  s_ccb8935595dc4e::t_2411c5398c247b 236-314,321-336,338,340-485,487-494,500-501,526,528-534,551
+  s_ccb8935595dc4e::t_b3857cffecdb79 961-966
+  s_ccb8935595dc4e::t_82ee830df3d77a 149-155,159
+  s_ccb8935595dc4e::t_36c030195fe9d2 1155,1161,1191-1198
+  s_ccb8935595dc4e::t_a59da389b4ff8b 1003-1010
+  s_ccb8935595dc4e::t_2bf2a47ea97e82 1065-1068
+  s_ccb8935595dc4e::t_dbb98a0ca0d437 1097-1100
+  s_ccb8935595dc4e::t_731c15bb75eca1 807-808
+  s_ccb8935595dc4e::t_52e2f9816170cf 1233
+  s_ccb8935595dc4e::t_ba727a08a78008 315-320
+  s_ccb8935595dc4e::t_def2bf1730fb60 947-948
+  s_ccb8935595dc4e::t_bb0384a6b92d39 337,339,486
+  s_ccb8935595dc4e::t_49f9c92091fe1d 564-567,585-646,1101-1102
+tooling/test/types.test.ts
+  s_ccb8935595dc4e::t_55b4c557a7b3c6 1-78,80-97,99,101-135,137,139-151,161-162
+  s_ccb8935595dc4e::t_94cc92ea018679 138
+  s_ccb8935595dc4e::t_db997a80ffd67f 152-160
+  s_ccb8935595dc4e::t_a30b840f7670c9 98,100,136
+  s_ccb8935595dc4e::t_bfe3cb591bb9be 79
+tooling/src/server.ts
+  s_ccb8935595dc4e::t_6c3f1e27c4d63f 260-263,275,390
+tooling/test/analysis.test.ts
+  s_ccb8935595dc4e::t_a30b840f7670c9 38-39
+  s_ccb8935595dc4e::t_877f7da9325e76 103
+  s_ccb8935595dc4e::t_7de36ba5c13bd7 96-102,104-108
+tooling/test/grammar.test.ts
+  s_ccb8935595dc4e::t_d6313f1cba2c0a 357-421
+frontend/src/dsl/typesys/ops.ts
+  s_ccb8935595dc4e::t_aacd3f6ca63e59 1,25-81
+  s_ccb8935595dc4e::t_81e00d3f9328f6 2-24
+frontend/src/dsl/typedStepsCompat.test.ts
+  s_ccb8935595dc4e::t_0a333df483608e 21
+  s_ccb8935595dc4e::t_b4fe04190c8284 1
+  s_ccb8935595dc4e::t_62db2d3c7f23fe 2-10,16-20,22-25,28-32,50-51,53,55-56
+  s_ccb8935595dc4e::t_e38d0d23f09114 11-15,26-27,33-43,45,47-49,52,54
+  s_ccb8935595dc4e::t_68f845d843589d 44,46
+frontend/src/sim/access.ts
+  s_ccb8935595dc4e::t_c8dbc0a606d1e1 11
+  s_ccb8935595dc4e::t_a495647ce09a21 12-13
+frontend/src/dsl/typedSteps.test.ts
+  s_ccb8935595dc4e::t_e2d745ee9d7fa4 12,21,103
+  s_ccb8935595dc4e::t_5bf98425155124 122,124
+  s_ccb8935595dc4e::t_eb49725dd75c84 1-11,13-20,22-56,58-65,67,69-88,91-92,94-102,104-121,125,129-142,190-228
+  s_ccb8935595dc4e::t_3a817d44331af5 66,68,89-90,93,123,126,128
+  s_ccb8935595dc4e::t_9cf2d2f47fdb31 57,127
+  s_ccb8935595dc4e::t_cc98e259e19f77 143-189
+frontend/src/sim/analyze.ts
+  s_ccb8935595dc4e::t_c8dbc0a606d1e1 532-537,566-570,577,982-984
+frontend/src/components/Playground/proschiLanguage.test.ts
+  s_ccb8935595dc4e::t_5e1e7296bc63ab 5
+  s_ccb8935595dc4e::t_526d4697ad590e 351-427,429-443
+  s_ccb8935595dc4e::t_1ca8d1ed5dcc6a 428
+  s_ccb8935595dc4e::t_6d3086af874108 339-346
+frontend/src/components/Playground/proschiLanguage.ts
+  s_ccb8935595dc4e::t_ce9df8b1ae25a2 18-19,38-45,70-71,94-97,116-117,150-159,162-167,188-189,233-259,262-291,292-328,355,358-359,361-363,375-379,381-382
+  s_ccb8935595dc4e::t_81a7edb1b3340d 260-261
+  s_ccb8935595dc4e::t_25f874aa179cfa 383
+  s_ccb8935595dc4e::t_a16e331c71d652 8
+  s_ccb8935595dc4e::t_bb0384a6b92d39 160-161,380
+  s_ccb8935595dc4e::t_49f9c92091fe1d 54,217-221
+  s_ccb8935595dc4e::t_f369132c094823 385-395
+plugin/skills/code-to-usecases/references/proschi-cheatsheet.md
+  s_ccb8935595dc4e::t_8f45510285d886 115-121,123
+  s_ccb8935595dc4e::t_bb7c7cbb577f92 130
+  s_ccb8935595dc4e::t_325ce92141bdbf 122
+plugin/skills/image-to-proschi/references/proschi-cheatsheet.md
+  s_ccb8935595dc4e::t_8f45510285d886 115-121,123
+  s_ccb8935595dc4e::t_bb7c7cbb577f92 130
+  s_ccb8935595dc4e::t_325ce92141bdbf 122
+plugin/skills/proschi-hld-doc/references/proschi-cheatsheet.md
+  s_ccb8935595dc4e::t_8f45510285d886 115-121,123
+  s_ccb8935595dc4e::t_bb7c7cbb577f92 130
+  s_ccb8935595dc4e::t_325ce92141bdbf 122
+plugin/skills/proschi-capacity-plan/references/proschi-cheatsheet.md
+  s_ccb8935595dc4e::t_8f45510285d886 115-121,123
+  s_ccb8935595dc4e::t_bb7c7cbb577f92 130
+  s_ccb8935595dc4e::t_325ce92141bdbf 122
+plugin/skills/infra-to-proschi/references/proschi-cheatsheet.md
+  s_ccb8935595dc4e::t_8f45510285d886 115-121,123
+  s_ccb8935595dc4e::t_bb7c7cbb577f92 130
+  s_ccb8935595dc4e::t_325ce92141bdbf 122
+plugin/skills/proschi-keep-in-sync/references/proschi-cheatsheet.md
+  s_ccb8935595dc4e::t_8f45510285d886 115-121,123
+  s_ccb8935595dc4e::t_bb7c7cbb577f92 130
+  s_ccb8935595dc4e::t_325ce92141bdbf 122
+plugin/skills/proschi-design-review/references/proschi-cheatsheet.md
+  s_ccb8935595dc4e::t_8f45510285d886 115-121,123
+  s_ccb8935595dc4e::t_bb7c7cbb577f92 130
+  s_ccb8935595dc4e::t_325ce92141bdbf 122
+frontend/src/dsl/stdlib/cloud-azure.proschi
+  s_ccb8935595dc4e::t_f09f236bfdb499 1-9,11-22,24-70,72-91,93-95,97-123
+  s_ccb8935595dc4e::t_a262a909b069bc 10,23
+  s_ccb8935595dc4e::t_8e628cc1bdf64a 71,92,96
+frontend/src/dsl/stdlib/external.proschi
+  s_ccb8935595dc4e::t_ccfa82aaed6930 7-26
+  s_ccb8935595dc4e::t_fce5c12f99509b 31
+  s_ccb8935595dc4e::t_458f09fa0cc79f 1-6,27-30,32-121
+frontend/src/dsl/stdlib/cloud-gcp.proschi
+  s_ccb8935595dc4e::t_d5fed8dedc6cf5 51-52
+  s_ccb8935595dc4e::t_d4fefc2fa56db1 1-13,15-49,53-55,57-61,63-80,82-91
+  s_ccb8935595dc4e::t_a262a909b069bc 14
+  s_ccb8935595dc4e::t_8e628cc1bdf64a 50,56,62,81
+frontend/src/dsl/stdlib/edge.proschi
+  s_ccb8935595dc4e::t_43fbd0b48c95bd 11,13-30
+  s_ccb8935595dc4e::t_602a3f42d7a77e 1-8,10,12,31-41,43-47,49-52,55-58,60-65,67-70,72-75,77-80,82-85,87-90,92-95,97-106
+  s_ccb8935595dc4e::t_a262a909b069bc 54,66,71,76,81,86,91,96
+  s_ccb8935595dc4e::t_8e628cc1bdf64a 9,42,48,53,59
+frontend/src/dsl/stdlib/cloud-aws.proschi
+  s_ccb8935595dc4e::t_7d41fa5741eff7 1-5,7-16,18-76,78-106,108-110,112-121,123-152
+  s_ccb8935595dc4e::t_b3017c990bd4e0 122
+  s_ccb8935595dc4e::t_a262a909b069bc 6,17
+  s_ccb8935595dc4e::t_8e628cc1bdf64a 77,107,111
+frontend/src/dsl/stdlib/messaging.proschi
+  s_ccb8935595dc4e::t_2fb9da2a89fde8 44-45
+  s_ccb8935595dc4e::t_85653df8622a95 1-43,46-73
+frontend/src/dsl/stdlib/compute.proschi
+  s_ccb8935595dc4e::t_43fbd0b48c95bd 7-24
+  s_ccb8935595dc4e::t_ed73d50cf7effa 1-6,26-36,43,45-47,49-56,58-61,63-151
+  s_ccb8935595dc4e::t_bd2c0d6e825d82 25,37,39-42,57,62
+  s_ccb8935595dc4e::t_8e628cc1bdf64a 38,44,48
+frontend/src/dsl/stdlib/cloud-cloudflare.proschi
+  s_ccb8935595dc4e::t_4c0ee43b488f50 1-3,5-14
+  s_ccb8935595dc4e::t_a262a909b069bc 4
+frontend/src/dsl/typesys/stdlib.test.ts
+  s_ccb8935595dc4e::t_0ccf70d9a3f7d6 152,154
+  s_ccb8935595dc4e::t_7834bf75a006ef 8
+  s_ccb8935595dc4e::t_f562af27636efa 1-4,6-7,9-50,52-105,131-151,155-163,182-188,190-194,200-205
+  s_ccb8935595dc4e::t_68a34ae5f5e3f4 164,166-169,172-176,179-181
+  s_ccb8935595dc4e::t_5d7deffa368a48 5,189,195,198-199
+  s_ccb8935595dc4e::t_6fabf0a82e2e13 177-178
+  s_ccb8935595dc4e::t_53554fda825810 153,196-197
+  s_ccb8935595dc4e::t_0035e625e782d7 165
+  s_ccb8935595dc4e::t_fa7f94428b2960 170-171
+  s_ccb8935595dc4e::t_bc1cf3bc8e5f8e 51
+  s_ccb8935595dc4e::t_80bc956ef1d470 106-130
+frontend/src/practice/problems/nearby-search/wrong/index-inside-the-update.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 44-48
+frontend/src/practice/problems/file-storage/wrong/upload-through-api.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 77
+frontend/src/practice/problems/rate-limiter/lesson.md
+  s_ccb8935595dc4e::t_bd50c33e6c24a3 178
+frontend/src/practice/problems/notion-sharding/wrong/one-big-database.proschi
+  s_ccb8935595dc4e::t_d67b06a87db1ad 18-19
+frontend/src/practice/problems/video-streaming/wrong/upload-request-carries-file.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 74
+frontend/src/practice/problems/ride-matching/wrong/locations-in-sharded-database.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 58,75
+frontend/src/practice/problems/notion-sharding/wrong/direct-connections.proschi
+  s_ccb8935595dc4e::t_d67b06a87db1ad 19
+frontend/src/practice/problems/file-storage/solution.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 65
+frontend/src/practice/problems/search-indexing/wrong/index-inside-the-edit.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 32
+frontend/src/practice/problems/search-autocomplete/solution.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 64,66
+frontend/src/practice/problems/video-streaming/wrong/segments-from-storage.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 74
+frontend/src/practice/problems/search-autocomplete/wrong/rebuild-from-search-api.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 70,72
+  s_ccb8935595dc4e::t_06e82b0a4414ce 78-82
+frontend/src/practice/problems/rate-limiter/solution.proschi
+  s_ccb8935595dc4e::t_bd50c33e6c24a3 26
+frontend/src/practice/problems/search-indexing/wrong/shards-without-replicas.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 33
+frontend/src/practice/problems/ad-click-aggregator/given.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 8-9,11
+  s_ccb8935595dc4e::t_20c80d2c6a9376 3-7,10
+  s_ccb8935595dc4e::t_b5e1349c545004 44,56-57,62
+frontend/src/practice/problems/social-graph-cache/wrong/followers-write-mysql.proschi
+  s_ccb8935595dc4e::t_cd52726410cfa3 9-10
+frontend/src/practice/problems/snowflake-ids/wrong/coordinates-every-id.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 16
+frontend/src/practice/problems/search-autocomplete/wrong/search-waits-for-query-log.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 68-75
+frontend/src/practice/problems/search-autocomplete/wrong/suggestions-without-cdn.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 73,75
+frontend/src/practice/problems/rate-limiter/wrong/increment-after-decision.proschi
+  s_ccb8935595dc4e::t_bd50c33e6c24a3 32
+  s_ccb8935595dc4e::t_06e82b0a4414ce 37,39-41
+frontend/src/practice/problems/ticket-booking/wrong/holds-in-dynamodb.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 78,89,105,111
+  s_ccb8935595dc4e::t_06e82b0a4414ce 12
+  s_ccb8935595dc4e::t_ba006e5892a87f 109,117
+frontend/src/practice/problems/recommendations/wrong/heavy-model-on-every-candidate.proschi
+  s_ccb8935595dc4e::t_8a80d926eb070a 42
+frontend/src/practice/problems/video-streaming/wrong/transcode-while-waiting.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 67-77
+frontend/src/practice/problems/view-counting/wrong/row-per-viewer.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 76
+frontend/src/practice/problems/video-streaming/wrong/upload-through-api.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 75
+frontend/src/practice/problems/nearby-search/wrong/equal-area-geoshards.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 47-50
+frontend/src/practice/problems/recommendations/wrong/funnel-that-never-narrows.proschi
+  s_ccb8935595dc4e::t_8a80d926eb070a 49
+frontend/src/practice/problems/collaborative-docs/wrong/cursors-in-the-log.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 61,75
+  s_ccb8935595dc4e::t_9f0aea07e72164 10
+  s_ccb8935595dc4e::t_5ea658aa59769d 70,84
+frontend/src/practice/problems/url-shortener/solution.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 28
+frontend/src/practice/problems/config-push/wrong/root-sends-to-every-edge.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 31
+  s_ccb8935595dc4e::t_bab155054302db 28
+frontend/src/practice/problems/recommendations/solution.proschi
+  s_ccb8935595dc4e::t_8a80d926eb070a 67
+frontend/src/practice/problems/chat/solution.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 45
+frontend/src/practice/problems/search-indexing/solution.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 63
+frontend/src/practice/problems/multi-region-active-active/solution.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 88,97
+frontend/src/practice/problems/social-graph-cache/solution.proschi
+  s_ccb8935595dc4e::t_cd52726410cfa3 3-4
+frontend/src/practice/problems/multi-region-active-active/wrong/synchronous-replication.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 69,78
+frontend/src/practice/problems/multi-region-active-active/wrong/sized-for-half.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 73,82
+frontend/src/practice/problems/ride-matching/wrong/trips-in-nosql.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 57,72,74
+frontend/src/practice/problems/news-feed/wrong/fan-out-in-request.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 68
+  s_ccb8935595dc4e::t_bd50c33e6c24a3 13
+frontend/src/practice/problems/rate-limiter/wrong/client-bypasses-limiter.proschi
+  s_ccb8935595dc4e::t_bd50c33e6c24a3 33
+frontend/src/practice/problems/ride-matching/solution.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 51,68
+frontend/src/practice/problems/view-counting/wrong/read-count-from-cassandra.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 74
+frontend/src/practice/problems/github-repo-replication/given.proschi
+  s_ccb8935595dc4e::t_cd52726410cfa3 3-7
+  s_ccb8935595dc4e::t_5f066e26050f6a 34-35,43
+frontend/src/practice/problems/multi-region-active-active/wrong/standby-region.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 72,81
+frontend/src/practice/problems/video-streaming/wrong/load-balancer-instead-of-cdn.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 74
+frontend/src/practice/problems/video-streaming/wrong/jobs-without-queue.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 74
+frontend/src/practice/problems/social-graph-cache/wrong/one-cache-tier.proschi
+  s_ccb8935595dc4e::t_cd52726410cfa3 11
+frontend/src/practice/problems/github-repo-replication/solution.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 3
+  s_ccb8935595dc4e::t_cd52726410cfa3 4
+frontend/src/practice/problems/notification-fanout/wrong/worker-polls-queue.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 9-10,45
+frontend/src/practice/problems/collaborative-docs/solution.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 55,69
+  s_ccb8935595dc4e::t_9f0aea07e72164 4
+  s_ccb8935595dc4e::t_5ea658aa59769d 64,74
+frontend/src/practice/problems/ride-matching/wrong/locations-in-database.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 58,75
+frontend/src/practice/problems/notion-sharding/solution.proschi
+  s_ccb8935595dc4e::t_d67b06a87db1ad 45-46
+frontend/src/practice/problems/config-push/wrong/single-root.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 33-34
+  s_ccb8935595dc4e::t_bab155054302db 30
+frontend/src/practice/problems/notion-sharding/starter.proschi
+  s_ccb8935595dc4e::t_d67b06a87db1ad 13-14
+frontend/src/practice/problems/nearby-search/wrong/shard-by-user-id.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 47
+  s_ccb8935595dc4e::t_06e82b0a4414ce 30-31
+frontend/src/practice/problems/github-repo-replication/wrong/read-any-replica-blindly.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 9
+  s_ccb8935595dc4e::t_cd52726410cfa3 10
+frontend/src/practice/problems/config-push/wrong/wait-for-every-edge.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 30-31
+  s_ccb8935595dc4e::t_bab155054302db 29
+frontend/src/practice/problems/payments/wrong/idempotency-keys-in-redis.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 11
+  s_ccb8935595dc4e::t_e0f227874bd60a 60
+  s_ccb8935595dc4e::t_8a80d926eb070a 68,88,94
+  s_ccb8935595dc4e::t_cb46c832c5d677 64,78,90
+frontend/src/practice/problems/chat/wrong/deliver-before-ack.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 51
+  s_ccb8935595dc4e::t_06e82b0a4414ce 58-64,66-69
+frontend/src/practice/problems/config-push/solution.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 50-51
+  s_ccb8935595dc4e::t_bab155054302db 47
+frontend/src/practice/problems/collaborative-docs/wrong/replay-whole-log.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 51,65
+  s_ccb8935595dc4e::t_9f0aea07e72164 11
+  s_ccb8935595dc4e::t_5ea658aa59769d 60,70
+frontend/src/practice/problems/url-shortener/wrong/miss-never-fills-cache.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 34
+  s_ccb8935595dc4e::t_06e82b0a4414ce 48-50
+frontend/src/practice/problems/view-counting/wrong/count-in-request.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 77
+frontend/src/practice/problems/recommendations/wrong/same-size-pool-for-every-model.proschi
+  s_ccb8935595dc4e::t_8a80d926eb070a 50
+frontend/src/practice/problems/social-graph-cache/wrong/no-invalidation.proschi
+  s_ccb8935595dc4e::t_cd52726410cfa3 9-10
+frontend/src/practice/problems/collaborative-docs/wrong/ack-before-log.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 59,72
+  s_ccb8935595dc4e::t_9f0aea07e72164 11
+  s_ccb8935595dc4e::t_5ea658aa59769d 67,77
+frontend/src/practice/problems/news-feed/wrong/two-feed-cache-nodes.proschi
+  s_ccb8935595dc4e::t_bd50c33e6c24a3 13
+  s_ccb8935595dc4e::t_5131cc2d692c78 67
+frontend/src/practice/problems/github-repo-replication/starter.proschi
+  s_ccb8935595dc4e::t_cd52726410cfa3 5
+frontend/src/practice/problems/github-repo-replication/wrong/read-every-replica.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 9
+  s_ccb8935595dc4e::t_cd52726410cfa3 10
+frontend/src/dsl/examples.ts
+  s_ccb8935595dc4e::t_1681d1e21a07d2 170-175,177-178,192,195
+  s_ccb8935595dc4e::t_9bf90c7b757390 179-180
+  s_ccb8935595dc4e::t_1421a01e58f2b4 31,114,363
+frontend/src/practice/problems/collaborative-docs/wrong/broadcast-before-ack.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 61,78
+  s_ccb8935595dc4e::t_9f0aea07e72164 10
+  s_ccb8935595dc4e::t_5ea658aa59769d 67,83
+frontend/src/practice/problems/search-indexing/wrong/one-write-per-change.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 31
+frontend/src/practice/problems/nearby-search/wrong/geo-query-on-profiles.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 41-44
+frontend/src/practice/problems/notification-fanout/solution.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 3-4
+frontend/src/practice/problems/social-graph-cache/given.proschi
+  s_ccb8935595dc4e::t_cd52726410cfa3 3-8
+  s_ccb8935595dc4e::t_ba006e5892a87f 37,42
+frontend/src/practice/problems/collaborative-docs/wrong/same-server-delivery.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 60,72
+  s_ccb8935595dc4e::t_5ea658aa59769d 77
+  s_ccb8935595dc4e::t_9f0aea07e72164 10
+frontend/src/practice/problems/notion-sharding/wrong/shard-by-block-id.proschi
+  s_ccb8935595dc4e::t_d67b06a87db1ad 21-22
+frontend/src/practice/problems/social-graph-cache/starter.proschi
+  s_ccb8935595dc4e::t_cd52726410cfa3 5
+frontend/src/practice/problems/notion-sharding/wrong/replicas-instead-of-shards.proschi
+  s_ccb8935595dc4e::t_d67b06a87db1ad 21-22
+frontend/src/practice/problems/nearby-search/solution.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 82
+frontend/src/practice/problems/ride-matching/wrong/request-waits-for-offer-queue.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 57,74
+frontend/src/practice/problems/github-repo-replication/wrong/ack-after-one-replica.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 11
+  s_ccb8935595dc4e::t_cd52726410cfa3 12
+frontend/src/practice/problems/file-storage/wrong/load-balancer-instead-of-cdn.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 12
+  s_ccb8935595dc4e::t_5131cc2d692c78 71
+frontend/src/practice/problems/video-streaming/solution.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 68
+frontend/src/practice/problems/social-graph-cache/wrong/too-few-shards.proschi
+  s_ccb8935595dc4e::t_cd52726410cfa3 9-10
+frontend/src/practice/problems/notification-fanout/wrong/notifier-calls-provider-inline.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 9-10
+frontend/src/practice/problems/news-feed/solution.proschi
+  s_ccb8935595dc4e::t_bd50c33e6c24a3 7
+  s_ccb8935595dc4e::t_5131cc2d692c78 61
+frontend/src/practice/problems/view-counting/solution.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 87
+frontend/src/practice/problems/file-storage/wrong/download-from-bucket.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 72
+frontend/src/components/Demo/demoScript.ts
+  s_ccb8935595dc4e::t_685c497f52791e 47
+docs/SCENARIOS.md
+  s_ccb8935595dc4e::t_685c497f52791e 35,94
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+frontend/index.html
+  s_ccb8935595dc4e::t_6290c592bbc8fe 127
+frontend/src/dsl/editFlows.test.ts
+  s_ccb8935595dc4e::t_685c497f52791e 183
+frontend/src/dsl/imports.test.ts
+  s_ccb8935595dc4e::t_29fca4519b45d2 144
+frontend/src/dsl/importMermaid.test.ts
+  s_ccb8935595dc4e::t_f63de211bd6111 130-132
+frontend/src/playground/droneStartup.ts
+  s_ccb8935595dc4e::t_511f330b190b7f 63,65,125
+  s_ccb8935595dc4e::t_7c5df27a73cb2e 171-172
+frontend/src/dsl/parser.test.ts
+  s_ccb8935595dc4e::t_5eaffd1ffb49fa 35
+frontend/src/dsl/importFixtures/sequence.mmd
+  s_ccb8935595dc4e::t_685c497f52791e 26
+docs/LANGUAGE.md
+  s_ccb8935595dc4e::t_685c497f52791e 33
+  s_ccb8935595dc4e::t_d44d5c5a129f06 65,90-91
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+frontend/src/dsl/importFixtures/sequence.proschi
+  s_ccb8935595dc4e::t_685c497f52791e 27
+frontend/src/practice/problems/collaborative-docs/given.proschi
+  s_ccb8935595dc4e::t_9f0aea07e72164 3-8
+  s_ccb8935595dc4e::t_964bf4797adde0 37,47-48
+frontend/src/practice/problems/collaborative-docs/starter.proschi
+  s_ccb8935595dc4e::t_b4bb6feb962054 4
+plugin/skills/code-to-usecases/SKILL.md
+  s_ccb8935595dc4e::t_bb7c7cbb577f92 58,189
+plugin/skills/proschi-keep-in-sync/SKILL.md
+  s_ccb8935595dc4e::t_bb7c7cbb577f92 163
+plugin/skills/proschi-design-review/SKILL.md
+  s_ccb8935595dc4e::t_bb7c7cbb577f92 137,165
+frontend/docs/types-core/index.html
+  s_ccb8935595dc4e::t_0ebbff0f5a0271 1-35
+frontend/docs/types-cloud/index.html
+  s_ccb8935595dc4e::t_0ebbff0f5a0271 1-35
+docs/types/data.md
+  s_ccb8935595dc4e::t_8abfdb84df92d4 5-8,10-14,16-22,25-26,29-33,35-37,40-44,46-48,51-55,57-58,61-65,67-68,71-75,77-78,81-85,87-89,92-96,98-99,102,104-107,109-112,115-119,121-122,125-129,131-132,135-139,141-142,145-149,151-152,155-159,162,165-169,171-172,175,177-180,182-184,187-191,193-194,197-201,203,206-210,212,215,217-220,222-224,227-231,233-235,238-242,244-245,248-252,254,257,259-262,264-267,270-274,276-277,280,282-285,287-288,291-295,297,300-304,306,309-313,315-316,319-323,325-327,330-334,336-337,340-344,346-347,350-354,356-357,360-364,366,369-373,375,378-382,384,387-391,393-394,397-401,403-404,407-411,413-414,417-421,423,426-430,432,435-439,441,444-448,450,453-457,459-461,464-468,470-471,474-478,480-481,484-488,490-491,494-498,500-501,504-508,510-511,514,516-519,521-522,525-529,531,534-538,540,543-547,549-551,554-558,560-561,564-568,570-571,574,576-579,581-582,585-589,591,594,596-599,601-602
+  s_ccb8935595dc4e::t_c1953b63e5a63a 9,15,23-24,27-28,34,38-39,45,49-50,56,59-60,66,69-70,76,79-80,86,90-91,97,100-101,103,108,113-114,120,123-124,130,133-134,140,143-144,150,153-154,160-161,164,170,173-174,176,181,186,192,196,202,205,211,214,216,221,226,232,237,243,247,253,255-256,258,263,269,275,279,281,286,296,305,314,317-318,324,328-329,335,338-339,345,348-349,355,358-359,365,367-368,374,376-377,383,385-386,392,396,402,406,412,416,422,425,431,434,440,443,449,452,458,462-463,469,472-473,479,482-483,489,492-493,499,502-503,509,512-513,515,520,523-524,530,532-533,539,541-542,548,552-553,559,562-563,569,572-573,575,580,583-584,590,592-593,595,600,603-604
+  s_ccb8935595dc4e::t_44b0b16a14f6a4 163,185,195,204,213,225,236,246,268,278,289-290,298-299,307-308,395,405,415,424,433,442,451
+  s_ccb8935595dc4e::t_1c4f198983f5f0 1-4
+docs/site.json
+  s_ccb8935595dc4e::t_3958059b797c3f 34-81,257
+  s_ccb8935595dc4e::t_12b23bc1d28c7e 245
+  s_ccb8935595dc4e::t_e105b0f2f9a72f 258-268
+docs/types/core.md
+  s_ccb8935595dc4e::t_8abfdb84df92d4 5-13,15-162
+  s_ccb8935595dc4e::t_c1953b63e5a63a 14
+  s_ccb8935595dc4e::t_1c4f198983f5f0 1-4
+frontend/scripts/gen-type-docs.mjs
+  s_ccb8935595dc4e::t_accf18b38721ad 10-12
+  s_ccb8935595dc4e::t_f2d2638825838b 1-9,13-17
+docs/types/external.md
+  s_ccb8935595dc4e::t_8abfdb84df92d4 5-54,57-66,69-78,81-90,93-115,118-127,130-155,157-167,169-179,181-192,194-204,206-217,219-229,231-241,243-280
+  s_ccb8935595dc4e::t_98d654c1b97e7b 55-56,67-68,79-80,91-92,116-117,128-129,156,168,180,193,205,218,230,242
+  s_ccb8935595dc4e::t_1c4f198983f5f0 1-4
+docs/types/cloud.md
+  s_ccb8935595dc4e::t_8abfdb84df92d4 5-14,16-17,22-36,38-39,44-48,50-51,56-60,62-63,68-129,131-132,135-139,141-142,145-149,151,154-158,160,163-167,169-170,173-177,179-180,183-187,189-190,193-197,199,202-206,208-209,212-216,218-219,222-226,228-230,233-237,239,242-246,248,251-257,260-266,269-275,278-284,287-293,296-304,306-315,318-326,328-329,334-348,350-351,356-360,362-363,368-422,424-425,428-432,434-435,438-442,444,447-451,453,456-460,462-463,466-470,472-473,476-480,482-483,486-490,492,495-501,504-510,512-513,518-522,524-525,530-544,546-547,552-556,558-559,564-568,570-571,576-640,642-643,646-650,652-653,656-660,662-663,666-670,672,675-679,681-682,685-689,691,694-698,700-701,704-708,710,713-717,719,722-728,730-737,740-746,749-755,758-764,766-767,772-786,788-789
+  s_ccb8935595dc4e::t_98d654c1b97e7b 258-259,267-268,276-277,285-286,294-295,305,316-317,502-503,729,738-739,747-748,756-757
+  s_ccb8935595dc4e::t_c1953b63e5a63a 15,18-21,37,40-43,49,52-55,61,64-67,130,133-134,140,143-144,150,152-153,159,162,168,172,178,182,188,191-192,198,201,207,210-211,217,220-221,227,231-232,238,240-241,247,249-250,327,330-333,349,352-355,361,364-367,423,426-427,433,436-437,443,446,452,455,461,464-465,471,474-475,481,484-485,491,493-494,511,514-517,523,526-529,545,548-551,557,560-563,569,572-575,641,644-645,651,654-655,661,664-665,671,674,680,683-684,690,693,699,702-703,709,711-712,718,720-721,765,768-771,787,790-791
+  s_ccb8935595dc4e::t_44b0b16a14f6a4 161,171,181,200,445,454,673,692
+  s_ccb8935595dc4e::t_1c4f198983f5f0 1-4
+frontend/docs/types/index.html
+  s_ccb8935595dc4e::t_0ebbff0f5a0271 1-35
+frontend/docs/types-external/index.html
+  s_ccb8935595dc4e::t_0ebbff0f5a0271 1-35
+frontend/docs/types-messaging/index.html
+  s_ccb8935595dc4e::t_0ebbff0f5a0271 1-35
+frontend/plugins/typeReference.test.ts
+  s_ccb8935595dc4e::t_12b13c4c7b28bc 1-2,6-28,34-41,43-44,46-48,50-53,55-60
+  s_ccb8935595dc4e::t_98d654c1b97e7b 54
+  s_ccb8935595dc4e::t_991cfc04ebfeec 3-4,61-75
+  s_ccb8935595dc4e::t_00b85d65eb0768 76
+  s_ccb8935595dc4e::t_bc1cf3bc8e5f8e 42,45,49
+  s_ccb8935595dc4e::t_d66ac1e09321f4 5,29-31
+  s_ccb8935595dc4e::t_6df046d0e6ef6d 32-33
+frontend/package.json
+  s_ccb8935595dc4e::t_4a9e2623ee5dcc 15
+  s_ccb8935595dc4e::t_98d654c1b97e7b 16
+frontend/e2e/docs.e2e.ts
+  s_ccb8935595dc4e::t_3f1927e8ad825a 139
+  s_ccb8935595dc4e::t_d1c99ebd896110 130-138,140-142
+docs/types/compute.md
+  s_ccb8935595dc4e::t_8abfdb84df92d4 5-25,27-41,43-60,62-63,66-72,74-75,78-307
+  s_ccb8935595dc4e::t_c1953b63e5a63a 26,42,61,64-65,73,76-77
+  s_ccb8935595dc4e::t_1c4f198983f5f0 1-4
+docs/types/edge.md
+  s_ccb8935595dc4e::t_8abfdb84df92d4 5-14,16-17,19-46,48-50,55-59,61-63,68-72,74-76,81-85,87-89,94-98,100-101,106-110,112-113,118-122,124-125,130-134,136-137,142-146,148-149,154-158,160-161,166-170,172-173,178-182,184-185,190-194,196-197
+  s_ccb8935595dc4e::t_c1953b63e5a63a 15,18,47,51-54,60,64-67,73,77-80,86,90-93,99,102-105,111,114-117,123,126-129,135,138-141,147,150-153,159,162-165,171,174-177,183,186-189,195,198-201
+  s_ccb8935595dc4e::t_1c4f198983f5f0 1-4
+frontend/plugins/typeReference.ts
+  s_ccb8935595dc4e::t_f8f224ffd21711 1-2,4-14,18-125,137,143-158,160-167,170-173,178-217
+  s_ccb8935595dc4e::t_0ebbff0f5a0271 134-136,138-142
+  s_ccb8935595dc4e::t_777996b6ba6ad0 168-169
+  s_ccb8935595dc4e::t_bc1cf3bc8e5f8e 159
+  s_ccb8935595dc4e::t_1c4f198983f5f0 3,15-17,126-133,174-177
+docs/types/messaging.md
+  s_ccb8935595dc4e::t_8abfdb84df92d4 5-45,47-55,57-64,66-74,77-83,86-93,96-102,105-111,114-120
+  s_ccb8935595dc4e::t_98d654c1b97e7b 46,56,65,75-76,84-85,94-95,103-104,112-113,121-122
+  s_ccb8935595dc4e::t_1c4f198983f5f0 1-4
+frontend/plugins/docsSite.ts
+  s_ccb8935595dc4e::t_39d15eee72ed9d 6,32-33,571,573-574
+  s_ccb8935595dc4e::t_53a5df76c78f93 37-40,89-90,93-121,426,428,452,456,548,562,630
+  s_ccb8935595dc4e::t_c56a564f138b1c 441
+frontend/docs/types-data/index.html
+  s_ccb8935595dc4e::t_0ebbff0f5a0271 1-35
+docs/TYPES.md
+  s_ccb8935595dc4e::t_40d97dffc93a39 5-19,21-65,67-75,77-83,86-106,108-129,136-145,147-163,165-206,210-216,218-219,225-268,293-297
+  s_ccb8935595dc4e::t_ae86c7197ef8f7 76,84-85
+  s_ccb8935595dc4e::t_7117f2bb6d03a5 20
+  s_ccb8935595dc4e::t_eefdcfaae5c04e 217
+  s_ccb8935595dc4e::t_af11804200528d 130-135,146,220-224
+  s_ccb8935595dc4e::t_11df0f34c0f1c2 207-209
+  s_ccb8935595dc4e::t_bc1cf3bc8e5f8e 66,164
+  s_ccb8935595dc4e::t_7288b33fa86720 107,269-278,280-291
+  s_ccb8935595dc4e::t_52580921ab9f72 279
+  s_ccb8935595dc4e::t_7e8a3fa657b797 292
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+frontend/plugins/docsSite.test.ts
+  s_ccb8935595dc4e::t_98d654c1b97e7b 65-66
+  s_ccb8935595dc4e::t_8d8af04d4c9f2d 228-232
+  s_ccb8935595dc4e::t_d66ac1e09321f4 6,80-86,302-325
+  s_ccb8935595dc4e::t_6c1acc7b3ab526 326-327
+frontend/docs/types-compute/index.html
+  s_ccb8935595dc4e::t_0ebbff0f5a0271 1-35
+frontend/docs/types-edge/index.html
+  s_ccb8935595dc4e::t_0ebbff0f5a0271 1-35
+frontend/src/landing/highlight.ts
+  s_ccb8935595dc4e::t_d00c7dcdcbd556 34-51,54,58,68,70-74
+docs/NODES.md
+  s_ccb8935595dc4e::t_d44d5c5a129f06 42,103,105-107,131
+  s_ccb8935595dc4e::t_e61d35dc775435 104
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/GRAMMAR.md
+  s_ccb8935595dc4e::t_53b72226852020 17,24-41,129-132,145,169-175,178-180
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+frontend/src/landing/landing.test.ts
+  s_ccb8935595dc4e::t_37dd2558157fb5 166-176
+docs/USE-CASES.md
+  s_ccb8935595dc4e::t_6ab4e89d9f0818 136-137
+  s_ccb8935595dc4e::t_4d1f3869b8885b 55-57,88-90,92,94,113-135,138-158
+  s_ccb8935595dc4e::t_36fab046564ff5 159
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+frontend/src/sim/typedAssertions.test.ts
+  s_ccb8935595dc4e::t_ae18cd782c302d 1-36,43-66,68-81,83-138,141-187
+  s_ccb8935595dc4e::t_049eb3af985d08 37-42,67,82
+  s_ccb8935595dc4e::t_cc53c4a0fe7936 139-140
+frontend/src/dsl/sections.test.ts
+  s_ccb8935595dc4e::t_f3625912cfe03b 430-431,449
+frontend/src/sim/tests.ts
+  s_ccb8935595dc4e::t_bfa354d9d3cedb 1,28,39,376,379,630-631,679-736,741,743,747-748,751,755-756,761-762,765-769,777,780-781,788,800-830,867,870-872,877,889,894
+frontend/src/hld/hld.ts
+  s_ccb8935595dc4e::t_2f74a0c135d505 13
+  s_ccb8935595dc4e::t_6ea3765dfd5a7c 222-229,234,236-238,254
+frontend/src/dsl/lexer.ts
+  s_ccb8935595dc4e::t_63d6095ccf20f4 16,154-160,162-169
+frontend/src/dsl/typedPorts.test.ts
+  s_ccb8935595dc4e::t_451f19029c636e 5-8,10-11,14,22-24,32,39,53,57-58,60,63-68
+  s_ccb8935595dc4e::t_ab4dafce770587 1-4,9,12-13,15-21,25-31,33-38,40-52,54-56,59,61-62,69-71
+frontend/src/dsl/view.test.ts
+  s_ccb8935595dc4e::t_7c5df27a73cb2e 31,43
+frontend/src/practice/problemFiles.test.ts
+  s_ccb8935595dc4e::t_83fdebd97397ae 244
+  s_ccb8935595dc4e::t_9a6532368c69f7 64-67,140-142,176,241-243,245-250
+  s_ccb8935595dc4e::t_64377b0aee5498 251
+frontend/src/practice/validate.ts
+  s_ccb8935595dc4e::t_c1d8cb6a76e520 102,105
+frontend/src/practice/types.ts
+  s_ccb8935595dc4e::t_c1d8cb6a76e520 49-54
+frontend/src/practice/frontMatter.ts
+  s_ccb8935595dc4e::t_c1d8cb6a76e520 19-23,26,63,77
+frontend/src/practice/problemFiles.ts
+  s_ccb8935595dc4e::t_c1d8cb6a76e520 69,71,104-105,117
+frontend/src/practice/workspace.ts
+  s_ccb8935595dc4e::t_c1d8cb6a76e520 19,51-57
+frontend/src/practice/problems/payments/lesson.md
+  s_ccb8935595dc4e::t_cb46c832c5d677 107,163
+frontend/src/practice/problems/url-shortener/problem.md
+  s_ccb8935595dc4e::t_cb46c832c5d677 6-7
+frontend/src/practice/problems/payments/solution.proschi
+  s_ccb8935595dc4e::t_cb46c832c5d677 58,72,84
+frontend/src/practice/problems/payments/given.proschi
+  s_ccb8935595dc4e::t_cb46c832c5d677 61-66
+frontend/src/practice/problems/payments/wrong/check-then-insert.proschi
+  s_ccb8935595dc4e::t_cb46c832c5d677 64,78,90
+frontend/src/practice/problems/payments/wrong/replay-asks-gateway.proschi
+  s_ccb8935595dc4e::t_cb46c832c5d677 64,80,92
+frontend/src/practice/problems/payments/problem.md
+  s_ccb8935595dc4e::t_cb46c832c5d677 6-7
+frontend/src/practice/problems/payments/wrong/scheduler-polls-pending.proschi
+  s_ccb8935595dc4e::t_cb46c832c5d677 64,78,89
+frontend/src/practice/problems/payments/wrong/succeeded-before-ledger.proschi
+  s_ccb8935595dc4e::t_cb46c832c5d677 64,78,90
+frontend/src/practice/problems/url-shortener/given.proschi
+  s_ccb8935595dc4e::t_cb46c832c5d677 20,25,34
+docs/PRACTICE.md
+  s_ccb8935595dc4e::t_60aaa82af17e4b 50,72,80-84,510-554,574-578
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/TESTS.md
+  s_ccb8935595dc4e::t_de41b95ef09bbe 173-175,190-274,381
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+frontend/src/practice/problems/pastebin/given.proschi
+  s_ccb8935595dc4e::t_b13d0ef3b36d0f 22,31,38
+frontend/src/practice/problems/pastebin/problem.md
+  s_ccb8935595dc4e::t_71ee0f5378e540 6-7
+frontend/src/practice/problems/notification-fanout/given.proschi
+  s_ccb8935595dc4e::t_b13d0ef3b36d0f 47-49,54
+frontend/src/practice/problems/notification-fanout/problem.md
+  s_ccb8935595dc4e::t_71ee0f5378e540 6-7
+frontend/src/practice/problems/notion-sharding/given.proschi
+  s_ccb8935595dc4e::t_b13d0ef3b36d0f 33
+frontend/src/practice/problems/push-gateway/problem.md
+  s_ccb8935595dc4e::t_71ee0f5378e540 7-8
+frontend/src/practice/problems/news-feed/problem.md
+  s_ccb8935595dc4e::t_71ee0f5378e540 6-7
+frontend/src/practice/problems/notion-sharding/problem.md
+  s_ccb8935595dc4e::t_71ee0f5378e540 7-8
+frontend/src/practice/problems/notification-fanout/starter.proschi
+  s_ccb8935595dc4e::t_b13d0ef3b36d0f 10
+frontend/src/practice/problems/rate-limiter/given.proschi
+  s_ccb8935595dc4e::t_bb3d99901b9da9 21
+frontend/src/practice/problems/search-autocomplete/given.proschi
+  s_ccb8935595dc4e::t_bb3d99901b9da9 30
+frontend/src/practice/problems/read-replicas/given.proschi
+  s_ccb8935595dc4e::t_bb3d99901b9da9 38,43-44
+frontend/src/practice/problems/search-autocomplete/starter.proschi
+  s_ccb8935595dc4e::t_bb3d99901b9da9 12
+frontend/src/practice/problems/ride-matching/problem.md
+  s_ccb8935595dc4e::t_71ee0f5378e540 6-7
+frontend/src/practice/problems/read-replicas/problem.md
+  s_ccb8935595dc4e::t_71ee0f5378e540 7-8
+frontend/src/practice/problems/search-autocomplete/problem.md
+  s_ccb8935595dc4e::t_71ee0f5378e540 6-7
+frontend/src/practice/problems/rate-limiter/problem.md
+  s_ccb8935595dc4e::t_71ee0f5378e540 6-7
+frontend/src/practice/problems/recommendations/given.proschi
+  s_ccb8935595dc4e::t_bb3d99901b9da9 36-37
+frontend/src/practice/problems/recommendations/problem.md
+  s_ccb8935595dc4e::t_71ee0f5378e540 7-8
+frontend/src/practice/problems/file-storage/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 6-7
+frontend/src/practice/problems/cdn-tiered-cache/wrong/every-edge-fills-from-origin.proschi
+  s_ccb8935595dc4e::t_411ae99cf2ec73 38
+frontend/src/practice/problems/job-queue/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 7-8
+frontend/src/practice/problems/api-gateway/given.proschi
+  s_ccb8935595dc4e::t_5e2063582ff72e 49-51
+frontend/src/practice/problems/api-gateway/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 7-8
+frontend/src/practice/problems/cdn-tiered-cache/wrong/single-upper-tier.proschi
+  s_ccb8935595dc4e::t_411ae99cf2ec73 40,42
+frontend/src/practice/problems/cdn-tiered-cache/solution.proschi
+  s_ccb8935595dc4e::t_411ae99cf2ec73 45,47
+frontend/src/practice/problems/config-push/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 7-8
+  s_ccb8935595dc4e::t_bab155054302db 63-65
+frontend/src/practice/problems/github-repo-replication/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 7-8
+frontend/src/practice/problems/multi-region-active-active/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 7-8
+frontend/src/practice/problems/ad-click-aggregator/wrong/publish-before-checkpoint.proschi
+  s_ccb8935595dc4e::t_ad929318d2a67c 54
+frontend/src/practice/problems/chat/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 6-7
+frontend/src/practice/problems/cdn-tiered-cache/wrong/purge-edge-first.proschi
+  s_ccb8935595dc4e::t_411ae99cf2ec73 40,42
+frontend/src/practice/problems/metrics-ingest/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 7-8
+frontend/src/practice/problems/cdn-tiered-cache/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 7-8
+  s_ccb8935595dc4e::t_411ae99cf2ec73 13
+frontend/src/practice/problems/cdn-tiered-cache/wrong/upper-down-goes-to-origin.proschi
+  s_ccb8935595dc4e::t_411ae99cf2ec73 47,49
+frontend/src/practice/problems/chat/given.proschi
+  s_ccb8935595dc4e::t_048d690cd7ba5e 31-32
+frontend/src/practice/problems/load-shedding/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 7-8
+frontend/src/practice/problems/discord-messages/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 7-8
+frontend/src/practice/problems/distributed-kv/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 6-7
+frontend/src/practice/problems/hello-proschi/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 7-8
+frontend/src/practice/problems/cdn-tiered-cache/given.proschi
+  s_ccb8935595dc4e::t_411ae99cf2ec73 39-40
+frontend/src/practice/problems/nearby-search/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 7-8
+frontend/src/practice/problems/flash-sale/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 7-8
+frontend/src/practice/problems/ad-click-aggregator/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 7-8
+frontend/src/practice/problems/media-processing/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 7-8
+frontend/src/practice/problems/distributed-cron/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 7-8
+frontend/src/practice/problems/collaborative-docs/problem.md
+  s_ccb8935595dc4e::t_a6a69860a60b3d 6-7
+frontend/src/practice/problems/search-indexing/given.proschi
+  s_ccb8935595dc4e::t_ba006e5892a87f 35,41
+frontend/src/practice/problems/ticket-booking/solution.proschi
+  s_ccb8935595dc4e::t_ba006e5892a87f 103,111
+frontend/src/practice/problems/snowflake-ids/problem.md
+  s_ccb8935595dc4e::t_71ee0f5378e540 6-7
+frontend/src/practice/problems/social-graph-cache/problem.md
+  s_ccb8935595dc4e::t_71ee0f5378e540 6-7
+frontend/src/practice/problems/snowflake-ids/given.proschi
+  s_ccb8935595dc4e::t_ba006e5892a87f 24
+frontend/src/practice/problems/search-indexing/problem.md
+  s_ccb8935595dc4e::t_71ee0f5378e540 7-8
+frontend/src/practice/problems/ticket-booking/given.proschi
+  s_ccb8935595dc4e::t_ba006e5892a87f 27
+frontend/src/practice/problems/ticket-booking/wrong/hold-checks-cache.proschi
+  s_ccb8935595dc4e::t_ba006e5892a87f 111,119
+frontend/src/practice/problems/ticket-booking/wrong/replicas-instead-of-shards.proschi
+  s_ccb8935595dc4e::t_ba006e5892a87f 106,114
+frontend/src/practice/problems/ticket-booking/wrong/book-before-charge.proschi
+  s_ccb8935595dc4e::t_ba006e5892a87f 111,117
+frontend/src/practice/problems/ticket-booking/problem.md
+  s_ccb8935595dc4e::t_71ee0f5378e540 6-7
+frontend/src/practice/problems/shopping-cart/problem.md
+  s_ccb8935595dc4e::t_71ee0f5378e540 6-7
+frontend/src/practice/problems/distributed-kv/given.proschi
+  s_ccb8935595dc4e::t_e4391a5eb9d79e 34
+frontend/src/practice/problems/distributed-cron/given.proschi
+  s_ccb8935595dc4e::t_c7d2dbde3fb343 40,44-45
+frontend/src/practice/problems/chat/lesson.md
+  s_ccb8935595dc4e::t_c7d2dbde3fb343 42
+frontend/src/practice/problems/discord-messages/given.proschi
+  s_ccb8935595dc4e::t_c7d2dbde3fb343 40,51
+frontend/src/practice/problems/view-counting/problem.md
+  s_ccb8935595dc4e::t_71ee0f5378e540 6-7
+frontend/src/practice/problems/trending-topics/given.proschi
+  s_ccb8935595dc4e::t_2478c599f23868 40-41,43
+frontend/src/practice/problems/video-streaming/problem.md
+  s_ccb8935595dc4e::t_71ee0f5378e540 6-7
+frontend/src/practice/problems/web-crawler/problem.md
+  s_ccb8935595dc4e::t_71ee0f5378e540 6-7
+frontend/src/practice/problems/view-counting/given.proschi
+  s_ccb8935595dc4e::t_2478c599f23868 38,45
+frontend/src/practice/problems/trending-topics/problem.md
+  s_ccb8935595dc4e::t_71ee0f5378e540 7-8
+frontend/src/practice/problems/web-crawler/given.proschi
+  s_ccb8935595dc4e::t_2478c599f23868 29
+frontend/src/practice/problems/video-streaming/given.proschi
+  s_ccb8935595dc4e::t_2478c599f23868 41,52
+frontend/src/practice/problems/discord-messages/lesson.md
+  s_ccb8935595dc4e::t_be56803a7b1259 32,34
+frontend/src/practice/problems/job-queue/lesson.md
+  s_ccb8935595dc4e::t_af5839fa31676e 35
+frontend/src/practice/problems/flash-sale/lesson.md
+  s_ccb8935595dc4e::t_be56803a7b1259 38
+frontend/src/practice/problems/cdn-tiered-cache/lesson.md
+  s_ccb8935595dc4e::t_be56803a7b1259 29
+frontend/src/practice/problems/hello-proschi/given.proschi
+  s_ccb8935595dc4e::t_72de15e27756d4 17
+frontend/src/practice/problems/job-queue/given.proschi
+  s_ccb8935595dc4e::t_80ea2691375437 22
+frontend/src/practice/problems/github-repo-replication/lesson.md
+  s_ccb8935595dc4e::t_be56803a7b1259 29
+frontend/src/practice/problems/file-storage/lesson.md
+  s_ccb8935595dc4e::t_af5839fa31676e 38
+frontend/src/practice/problems/distributed-kv/lesson.md
+  s_ccb8935595dc4e::t_af5839fa31676e 32
+frontend/src/practice/problems/file-storage/given.proschi
+  s_ccb8935595dc4e::t_562ef53001b707 27
+frontend/src/practice/problems/flash-sale/given.proschi
+  s_ccb8935595dc4e::t_17c1cf92199f95 39-40,42
+frontend/src/practice/problems/collaborative-docs/lesson.md
+  s_ccb8935595dc4e::t_af5839fa31676e 45,47
+frontend/src/practice/problems/distributed-cron/lesson.md
+  s_ccb8935595dc4e::t_be56803a7b1259 26
+frontend/src/practice/problems/api-gateway/lesson.md
+  s_ccb8935595dc4e::t_be56803a7b1259 28
+frontend/src/practice/problems/nearby-search/given.proschi
+  s_ccb8935595dc4e::t_d819b15f26150c 45-46
+frontend/src/practice/problems/nearby-search/lesson.md
+  s_ccb8935595dc4e::t_000e56aa80b2fa 27
+frontend/src/practice/problems/multi-region-active-active/given.proschi
+  s_ccb8935595dc4e::t_d819b15f26150c 46-49
+frontend/src/practice/problems/media-processing/given.proschi
+  s_ccb8935595dc4e::t_bca845e45f45df 32,40
+frontend/src/practice/problems/media-processing/lesson.md
+  s_ccb8935595dc4e::t_651583ce76e9c2 34-35
+tooling/jetbrains/src/main/kotlin/app/proschi/jetbrains/lsp/ProschiHighlighting.kt
+  s_ccb8935595dc4e::t_3b715e8c09594b 68
+  s_ccb8935595dc4e::t_e48c79eb7ec503 24,27-31,39,58-62,66,70-71,75-76,79-80,85,89-95,100,103
+  s_ccb8935595dc4e::t_f40c9f7f448092 57,64,72-74,77-78,81-84
+tooling/jetbrains/README.md
+  s_ccb8935595dc4e::t_8d04903c645dec 14,16
+tooling/jetbrains/src/test/kotlin/app/proschi/jetbrains/ProschiPluginTest.kt
+  s_ccb8935595dc4e::t_582ffc4b6b194c 3,5,46-54
+  s_ccb8935595dc4e::t_6c54459d6e3682 55
+tooling/jetbrains/src/main/resources/META-INF/plugin.xml
+  s_ccb8935595dc4e::t_8d04903c645dec 13-19
+frontend/src/practice/problems/config-push/given.proschi
+  s_ccb8935595dc4e::t_bab155054302db 30,37,45-46
+frontend/src/practice/problems/config-push/wrong/read-the-central-store.proschi
+  s_ccb8935595dc4e::t_bab155054302db 27
+backend/test/profile.test.ts
+  s_ccb8935595dc4e::t_21a84a2d1fc9f9 6,29-31
+backend/test/hardening.test.ts
+  s_ccb8935595dc4e::t_21a84a2d1fc9f9 15-16,259,337
+README.md
+  s_ccb8935595dc4e::t_995f3c8780a37d 43-53,57
+  s_ccb8935595dc4e::t_7e857e83a2bac1 54-56
+tooling/README.md
+  s_ccb8935595dc4e::t_7ca668976ead01 46-62
+tooling/vscode/README.md
+  s_ccb8935595dc4e::t_f37d81de3c6d1a 19-29
+  s_ccb8935595dc4e::t_33f97b1b8f6582 15-18
+docs/CARDS.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+frontend/src/docs/docs.css
+  s_ccb8935595dc4e::t_cdf6a5468128e2 1192-1194
+  s_ccb8935595dc4e::t_bf7177b557672d 446-450
+docs/GAME.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+CLAUDE.md
+  s_ccb8935595dc4e::t_c378da56e7f99d 55-58
+docs/AGENT-SKILLS.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/EDITORS.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/QUICKSTART.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/README.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/TERMS.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/STYLING.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/PRIVACY.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+CONTRIBUTING.md
+  s_ccb8935595dc4e::t_c378da56e7f99d 389-393
+docs/HLD.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/SYSTEMS.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+frontend/src/docs/model.html
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+.claude/skills/docs-writer/SKILL.md
+  s_ccb8935595dc4e::t_15b60901e36a00 175-180
+  s_ccb8935595dc4e::t_c378da56e7f99d 29-40
+docs/VERSIONS.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/SHARING.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/WHY.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/IMPORTS.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/NUMBERS.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e282c1c2178400165f2521914e4ec6b17694fb92",
+  "prompts": {},
+  "sessions": {
+    "s_ccb8935595dc4e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0e2b8447-0e71-4063-8d52-5e5b5302fc2f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
