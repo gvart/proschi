@@ -1,0 +1,24 @@
+frontend/src/components/Playground/proschiLanguage.test.ts
+  s_ccb8935595dc4e::t_5e1e7296bc63ab 5
+  s_ccb8935595dc4e::t_526d4697ad590e 343-435
+frontend/src/components/Playground/proschiLanguage.ts
+  s_ccb8935595dc4e::t_ce9df8b1ae25a2 18-19,38-45,70-71,94-97,116-117,150-167,188-189,228-254,257-324,351,354-355,357-359,371-378
+  s_ccb8935595dc4e::t_81a7edb1b3340d 8,255-256
+  s_ccb8935595dc4e::t_25f874aa179cfa 379
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "72c34226ef330699818e5a1d878a85190acdf1b4",
+  "prompts": {},
+  "sessions": {
+    "s_ccb8935595dc4e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0e2b8447-0e71-4063-8d52-5e5b5302fc2f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
