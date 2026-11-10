@@ -23,7 +23,7 @@ You build the same shape, in two use cases:
 - **Fire** starts at the `clock`, the minute tick. The scheduler looks up the script's active runs; in `"Enqueued"` there are none, so it records a new run and enqueues it; in `"Already running"` the last run has not finished and nothing is enqueued.
 - **Run script** starts at the queue: a worker takes the run, marks it in progress, does the work against `backend` (Slack's systems), and marks it done.
 
-The tests check that the scheduler never reaches `backend`, that a run is written to a database before it is enqueued, and that the scheduler has a standby; the requirements add latency, availability, losing any machine and a budget.
+The tests check that the scheduler never reaches `backend`, that a run is inserted (`INSERT`) into a database before it is enqueued and updated (`UPDATE`) before and after the script runs, and that the scheduler has a standby; the requirements add latency, availability, losing any machine and a budget.
 
 ## Back-of-the-envelope
 

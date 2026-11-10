@@ -24,6 +24,7 @@ requirements {
 
 test "File bytes never pass through your servers" {
   in "Upload" user calls blobs
+  "Upload" uses PUT on blobs
   in "Upload" any service or any function never calls blobs
   in "Download" any service or any function never calls blobs
   "Upload" never calls any edge

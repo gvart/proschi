@@ -26,7 +26,7 @@ Two use cases:
 
 **What is given.** `dev`, the developer client, and `routes`, a MySQL table (four replicas) of which servers hold each repository and each replica's checksum. Such metadata usually already lives in a company's main database; the design is about the file servers.
 
-**What the tests check**: the node `fs` has at least three replicas, and only the proxy reaches `fs` or `routes`. A push writes `fs` and then `routes` before responding, handles the failure of `fs`, and still answers 2xx in the `"One replica down"` scenario. A fetch reads `routes` before `fs`.
+**What the tests check**: the node `fs` has at least three replicas, and only the proxy reaches `fs` or `routes`. A push sends `PREPARE` and `COMMIT` to `fs` and then writes `routes` before responding, handles the failure of `fs`, and still answers 2xx in the `"One replica down"` scenario. A fetch `SELECT`s from `routes` before it reads `fs`.
 
 The model simplifies: an `x3` write stands for three replicas each taking the update, a node's replicas share its load evenly, and replication lag, repair and "closest replica" choice are not modelled.
 
