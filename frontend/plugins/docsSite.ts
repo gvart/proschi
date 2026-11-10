@@ -3,6 +3,7 @@ import { dirname, join, posix, relative, sep } from 'node:path'
 import markdownIt, { type MarkdownIt, type Token } from 'markdown-it'
 import type { Plugin, ResolvedConfig } from 'vite'
 import { highlightLines } from '../src/landing/highlight'
+import { typeReferencePages } from './typeReference'
 
 /**
  * The docs section (/docs/): Markdown from the repository's docs/ folder,
@@ -28,6 +29,8 @@ import { highlightLines } from '../src/landing/highlight'
  *   try-it, so it reads as a prompt attached to that example.
  * - `anchorRedirects` in site.json maps a page's old anchors to their new
  *   home; the page carries its map in data-anchor-redirects (main.ts follows it).
+ * - The built-in type reference (docs/types/) is generated from the stdlib
+ *   at build time (plugins/typeReference.ts); its files on disk are copies.
  * - An image alone in a paragraph, `![alt](images/x.svg "Caption")`, becomes
  *   a figure with its size, lazily loaded, and the title as its caption. It
  *   must be an .svg or .png under docs/images/, published at /docs/images/.
@@ -527,8 +530,10 @@ export function readSite(docsDir: string): SiteConfig {
   return JSON.parse(readFileSync(join(docsDir, 'site.json'), 'utf8')) as SiteConfig
 }
 
+/** Renders a page from its source on disk, or, for the type reference (plugins/typeReference.ts), from the stdlib. */
 export function renderFromDisk(docsDir: string, config: SiteConfig, page: DocPage): RenderedPage {
-  return renderPage(config, page, readFileSync(join(docsDir, page.source), 'utf8'), docsDir)
+  const source = typeReferencePages().get(page.source) ?? readFileSync(join(docsDir, page.source), 'utf8')
+  return renderPage(config, page, source, docsDir)
 }
 
 /** The stub pages under `stubsDir` (frontend/docs), as rollup inputs: docs, docs/quickstart, … */
