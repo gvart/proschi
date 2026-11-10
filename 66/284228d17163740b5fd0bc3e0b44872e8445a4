@@ -1,0 +1,72 @@
+plugin/hooks/register.js
+  s_ccb8935595dc4e::t_bab155054302db 1378,1386,1467-1476,1807
+frontend/src/practice/problems/config-push/solution.proschi
+  s_ccb8935595dc4e::t_bab155054302db 47
+frontend/src/practice/problems/config-push/given.proschi
+  s_ccb8935595dc4e::t_bab155054302db 30,37,45-46
+plugin/skills/code-to-usecases/references/proschi-cheatsheet.md
+  s_ccb8935595dc4e::t_325ce92141bdbf 122
+plugin/skills/proschi-capacity-plan/references/proschi-cheatsheet.md
+  s_ccb8935595dc4e::t_325ce92141bdbf 122
+plugin/skills/proschi-keep-in-sync/references/proschi-cheatsheet.md
+  s_ccb8935595dc4e::t_325ce92141bdbf 122
+frontend/src/practice/problems/config-push/wrong/root-sends-to-every-edge.proschi
+  s_ccb8935595dc4e::t_bab155054302db 28
+frontend/src/dsl/stdlib/sources.gen.ts
+  s_ccb8935595dc4e::t_44b0b16a14f6a4 4,10
+plugin/skills/image-to-proschi/references/proschi-cheatsheet.md
+  s_ccb8935595dc4e::t_325ce92141bdbf 122
+docs/types/data.md
+  s_ccb8935595dc4e::t_44b0b16a14f6a4 159,181,191,200,209,221,232,242,264,274,285-286,294-295,303-304,391,401,411,420,429,438,447
+plugin/skills/infra-to-proschi/references/proschi-cheatsheet.md
+  s_ccb8935595dc4e::t_325ce92141bdbf 122
+docs/TYPES.md
+  s_ccb8935595dc4e::t_7288b33fa86720 103,265-274,276-287
+  s_ccb8935595dc4e::t_52580921ab9f72 275
+  s_ccb8935595dc4e::t_7e8a3fa657b797 288
+frontend/src/dsl/typesys/resolve.ts
+  s_ccb8935595dc4e::t_32e7b32c3b7d2d 121-122,130
+frontend/src/practice/problems/config-push/wrong/single-root.proschi
+  s_ccb8935595dc4e::t_bab155054302db 30
+frontend/src/practice/problems/config-push/wrong/read-the-central-store.proschi
+  s_ccb8935595dc4e::t_bab155054302db 27
+frontend/src/dsl/stdlib/data.proschi
+  s_ccb8935595dc4e::t_44b0b16a14f6a4 85,129
+  s_ccb8935595dc4e::t_32e7b32c3b7d2d 77-78,147-148,153-154,160,244,250
+frontend/src/dsl/typesys/typesys.test.ts
+  s_ccb8935595dc4e::t_80bc956ef1d470 122-126
+plugin/skills/proschi-design-review/references/proschi-cheatsheet.md
+  s_ccb8935595dc4e::t_325ce92141bdbf 122
+docs/design/typed-components.md
+  s_ccb8935595dc4e::t_7288b33fa86720 103,288-301
+frontend/src/dsl/typesys/stdlib.test.ts
+  s_ccb8935595dc4e::t_80bc956ef1d470 106-130
+frontend/src/practice/problems/config-push/problem.md
+  s_ccb8935595dc4e::t_bab155054302db 63-65
+frontend/src/practice/problems/config-push/wrong/wait-for-every-edge.proschi
+  s_ccb8935595dc4e::t_bab155054302db 29
+frontend/src/dsl/stdlib/core.proschi
+  s_ccb8935595dc4e::t_44b0b16a14f6a4 27-36
+docs/types/cloud.md
+  s_ccb8935595dc4e::t_44b0b16a14f6a4 157,167,177,196,441,450,669,688
+plugin/skills/proschi-hld-doc/references/proschi-cheatsheet.md
+  s_ccb8935595dc4e::t_325ce92141bdbf 122
+plugin/hooks/layout.cjs
+  s_ccb8935595dc4e::t_bab155054302db 1-3,5-7,9,18,20-22,24,50-59,763-764,771,815,833-834,839-840,846,930,936,1341-1342,1353
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "66284228d17163740b5fd0bc3e0b44872e8445a4",
+  "prompts": {},
+  "sessions": {
+    "s_ccb8935595dc4e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0e2b8447-0e71-4063-8d52-5e5b5302fc2f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
