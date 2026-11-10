@@ -168,8 +168,8 @@ orders -> payments.charge : charge
 orders -> feed.events : order placed
 
 usecase "Buy drone" {
-  shopper -> frontend.web : open shop
-  frontend -> orders.api : place order
+  shopper -> frontend.web : GET /
+  frontend -> orders.api : POST /orders
   orders -> warehouse.stock : reserve
   orders -> payments.charge : charge
   orders ->> feed.events : order placed

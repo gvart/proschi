@@ -104,7 +104,7 @@ client -> api : HTTPS
 api    -> db  : SQL
 
 usecase "Create order" {
-  client -> api : POST /orders Idempotency-Key k-91
+  client -> api : POST /orders header Idempotency-Key
   api    -> db  : INSERT order ON CONFLICT (key) DO NOTHING RETURNING *
   alt "New" {
     db    --> api    : inserted
@@ -160,7 +160,7 @@ usecase "Retry job" {
   queue   -> worker : RetryJob k-91
   worker  -> db     : SELECT job FOR UPDATE
   db     --> worker : pending
-  worker  -> ext    : POST /charges Idempotency-Key k-91
+  worker  -> ext    : POST /charges header Idempotency-Key
   ext    --> worker : 201
   worker  -> db     : UPDATE job done
   db     --> worker : ok

@@ -336,6 +336,14 @@ describe('proschiCompletions', () => {
     expect(complete('test "T" {\n}\nus')?.options.map((o) => o.label)).toContain('usecase');
   });
 
+  it('offers the operations and headers of the node types after uses and sends header', () => {
+    const ops = complete('db [PostgreSQL]\ntest "T" {\n  "U" uses ', true)?.options.map((o) => o.label);
+    expect(ops).toEqual(expect.arrayContaining(['SELECT', 'INSERT']));
+    const headers = complete('api [REST API]\ntest "T" {\n  "U" sends header ', true)?.options.map((o) => o.label);
+    expect(headers).toEqual(expect.arrayContaining(['Authorization', 'Idempotency-Key']));
+    expect(complete('test "T" {\n  ', true)?.options.map((o) => o.label)).toEqual(expect.arrayContaining(['"Use case" uses … on', '"Use case" sends header … to']));
+  });
+
   it('stays quiet inside labels', () => {
     expect(complete('a -> b : POST /ord')).toBeNull();
   });

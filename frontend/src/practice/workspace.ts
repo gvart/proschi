@@ -16,7 +16,7 @@ export const SOLUTION_FILE = 'solution.proschi';
 
 export const CAPACITY_MESSAGE = 'capacity is set by the problem; change the design (replicas, shards, caching) instead';
 
-export function problemResolver(problem: Problem): ImportResolver {
+export function problemResolver(problem: Pick<Problem, 'given'>): ImportResolver {
   return filesResolver({ [PROBLEM_FILE]: problem.given }, SOLUTION_FILE);
 }
 
@@ -48,9 +48,13 @@ export function enforceProblemCapacity(result: ParseResult): ParseResult {
   return { ...result, diagram, diagnostics: [...result.diagnostics, ...errors] };
 }
 
-/** Parses a solver's source against the problem, with the practice capacity rule applied. */
-export function parseSolution(problem: Problem, source: string): ParseResult {
-  return enforceProblemCapacity(parse(source, { path: SOLUTION_FILE, resolve: problemResolver(problem) }));
+/**
+ * Parses a solver's source against the problem, with the practice capacity
+ * rule applied; a `strict` problem parses with `strictOps`, so an unknown
+ * operation, status or header is an error and blocks the tests.
+ */
+export function parseSolution(problem: Pick<Problem, 'given' | 'strict'>, source: string): ParseResult {
+  return enforceProblemCapacity(parse(source, { path: SOLUTION_FILE, resolve: problemResolver(problem), ...(problem.strict ? { strictOps: true } : {}) }));
 }
 
 export interface RunResult {

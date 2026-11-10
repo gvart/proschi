@@ -43,6 +43,7 @@ summary: Cache-first redirects that survive losing any single machine.
 difficulty: easy
 tags: [caching, read-heavy, durability]
 order: 1
+strict: true
 hints:
   - Redirects outnumber shortening 100 to 1. What can answer a redirect without touching the database?
   - "One instance of anything is a single point of failure: use x2 or more on every component."
@@ -64,6 +65,7 @@ Design a service that turns long URLs into short codes …
 | `order` | no | A number: the position within its difficulty |
 | `hints` | yes | A list, from a nudge to nearly the answer; the page reveals them one at a time |
 | `version` | no | A whole number, 1 when absent. Bump it when a change to the given, the tests or the requirements can change whether a design solves the problem, or its cost or p99: proschi.app's global stats and the problem's leaderboards (cheapest and lowest-p99 passing designs) then count only solves of the new version, and a signed-in user's next run starts their stats for the problem over |
+| `strict` | no | `true` grades designs in [strict mode](#strict-mode-and-typed-tests): a step label that names no operation of its target's type, or a status or header the type does not list, is an error and the tests do not run. Absent or `false`: these are warnings |
 
 The list is sorted by difficulty (easy first), then `order` (problems without
 one come after those with one), then title.
@@ -71,11 +73,11 @@ one come after those with one), then title.
 The front matter is a strict subset of YAML: `key: value` lines, `#` comment
 lines, lists either as `[a, b]` on one line or as `  - item` lines under a
 key with no value. A value is a plain string, a `"double-quoted"` string (JSON
-escapes), a `'single-quoted'` string (`''` for a quote) or a number. A plain
-value that YAML could read differently is an error with its line number:
-quote it when it contains `: ` or ` #`, starts with one of
-``- ? : , [ ] { } # & * ! | > ' " % @ ` `` or reads as `true`, `no`, `null` and
-the like. Unknown fields and duplicate keys are errors too.
+escapes), a `'single-quoted'` string (`''` for a quote), a number, or `true`
+or `false`. A plain value that YAML could read differently is an error with
+its line number: quote it when it contains `: ` or ` #`, starts with one of
+``- ? : , [ ] { } # & * ! | > ' " % @ ` `` or reads as `yes`, `no`, `off`,
+`null` and the like. Unknown fields and duplicate keys are errors too.
 
 The **statement** is everything after the closing `---` (surrounding blank
 lines are dropped). It says what to build: a short context, then
@@ -501,6 +503,51 @@ nothing for a run of the untouched starter. The
 tests check that a run of each wrong design is matched to its own mistake,
 or to one of a design that fails exactly the same tests.
 
+## Strict mode and typed tests
+
+Every node with a [type](TYPES.md) knows its operations, statuses and
+headers. A problem can grade against them in two ways.
+
+**Typed tests.** The given's tests can name an operation, a request or a
+header instead of only a node (see [typed assertions](TESTS.md#typed-assertions)):
+
+```proschi fragment
+test "Misses fill the cache" {
+  "Redirect" scenario "Cache miss" uses SET on any cache after any database
+}
+test "Every charge sends the idempotency key" {
+  "Retry charge" sends header Idempotency-Key to gateway
+}
+test "Redirects redirect" {
+  "Redirect" calls any service with GET /{code}
+  "Redirect" responds 302
+}
+```
+
+Name operations a solver can reach whatever product they pick: `SET on any
+cache` holds for Redis and Memcached alike, because both inherit `SET` from
+`Cache`. `uses PutItem on any database` would force DynamoDB.
+
+**Strict mode.** With `strict: true` in the front matter, every design is
+parsed with `strictOps`: the solver's design in the editor, on the server
+when a solve is recorded, the reference solution, the starter and each wrong
+design. A step label that names no operation of its target's type
+(`api -> db : persist row` to a PostgreSQL), a response status the responder
+does not list, or a header the target does not list is then an error. The
+*Results* tab shows the errors instead of running the tests, so a solver must
+name a real operation in every step to a typed node. Nodes whose type has no
+operations (`Service`, `Worker`, the languages and frameworks) accept any
+label, strict or not.
+
+A step to a system's entry point (`orders.api`) is checked against the type
+of the node behind it: the sender of the mapped use case's first request, or
+its receiver when that sender is a client. A stub system, with a `capacity`
+block and no `from` file, has no node behind it, so steps to it are not
+checked.
+
+Bump `version` when you turn strict mode on: designs that solved the problem
+before may not any more.
+
 ## What `problem check` enforces
 
 `proschi problem check` and the frontend test suite apply the same rules,
@@ -520,8 +567,11 @@ defined once in `frontend/src/practice/validate.ts`:
   check passing on the reference solution.
 - Every use case in the given's `traffic` is named in bold in the statement
   and defined (`usecase "…"`) by the solution.
-- **given**: no `import`, parses without errors, in canonical format
-  (`proschi fmt`).
+- **given**: no `import`, parses without errors (with `strictOps` for a
+  strict problem), in canonical format (`proschi fmt`).
+- **strict problems**: the solution, the starter and every wrong design are
+  parsed with `strictOps`, as grading does, so an unknown operation, status
+  or header in any of them is an error and a violation.
 - **solution**: starts with the import, has no diagnostics at all (not even
   warnings), is in canonical format and passes every requirement and test.
 - **starter**: starts with the import, has no errors, and fails at least one

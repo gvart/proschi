@@ -23,6 +23,12 @@ const bool = { type: 'boolean' };
 const num = { type: 'number' };
 const percent = { type: 'number', minimum: 0, maximum: 100 };
 const selector = { $ref: '#/$defs/selector' };
+const stepMatch = {
+  type: 'object',
+  description: 'What a step must be: `with GET /urls/{code}` (method, path), `uses INSERT on` (op), `sends header Authorization to` (header).',
+  properties: { method: { type: 'string' }, path: { type: 'string' }, op: { type: 'string' }, header: { type: 'string' } },
+  additionalProperties: false,
+};
 const array = (ref: string, description?: string) => ({ type: 'array', items: { $ref: `#/$defs/${ref}` }, ...(description ? { description } : {}) });
 const file = { type: 'string', description: 'The imported file this is in; left out for the parsed file itself.' };
 const object = (properties: Record<string, unknown>, required: string[], description?: string) => ({
@@ -392,8 +398,9 @@ export function diagramSchema() {
       assertion: {
         description: 'One assertion line of a test.',
         oneOf: Object.values({
-          calls: object({ kind: { const: 'calls' }, useCase: str, scenario: str, target: selector, quantifier: { enum: ['some', 'every', 'never'] }, loc }, ['kind', 'useCase', 'target', 'quantifier', 'loc']),
-          before: object({ kind: { const: 'before' }, useCase: str, scenario: str, first: selector, then: selector, loc }, ['kind', 'useCase', 'first', 'then', 'loc']),
+          calls: object({ kind: { const: 'calls' }, useCase: str, scenario: str, target: selector, match: stepMatch, quantifier: { enum: ['some', 'every', 'never'] }, loc }, ['kind', 'useCase', 'target', 'quantifier', 'loc']),
+          before: object({ kind: { const: 'before' }, useCase: str, scenario: str, first: selector, match: stepMatch, then: selector, loc }, ['kind', 'useCase', 'first', 'then', 'loc']),
+          beforeResponding: object({ kind: { const: 'beforeResponding' }, useCase: str, scenario: str, target: selector, match: stepMatch, loc }, ['kind', 'useCase', 'target', 'match', 'loc']),
           writesBeforeResponding: object({ kind: { const: 'writesBeforeResponding' }, useCase: str, scenario: str, target: selector, loc }, ['kind', 'useCase', 'target', 'loc']),
           responds: object({ kind: { const: 'responds' }, useCase: str, scenario: str, status: { type: 'string', pattern: '^[1-5](\\d\\d|xx)$' }, loc }, ['kind', 'useCase', 'status', 'loc']),
           hasScenario: object({ kind: { const: 'hasScenario' }, useCase: str, scenario: str, loc }, ['kind', 'useCase', 'scenario', 'loc']),
@@ -401,7 +408,7 @@ export function diagramSchema() {
           noPath: object({ kind: { const: 'noPath' }, from: selector, to: selector, loc }, ['kind', 'from', 'to', 'loc']),
           replicas: object({ kind: { const: 'replicas' }, target: selector, min: { type: 'integer', minimum: 1 }, loc }, ['kind', 'target', 'min', 'loc']),
           neverWaits: object({ kind: { const: 'neverWaits' }, useCase: str, scenario: str, target: selector, loc }, ['kind', 'useCase', 'target', 'loc']),
-          after: object({ kind: { const: 'after' }, useCase: str, scenario: str, target: selector, after: selector, loc }, ['kind', 'useCase', 'target', 'after', 'loc']),
+          after: object({ kind: { const: 'after' }, useCase: str, scenario: str, target: selector, match: stepMatch, after: selector, loc }, ['kind', 'useCase', 'target', 'after', 'loc']),
           senderCalls: object({ kind: { const: 'senderCalls' }, useCase: str, from: selector, to: selector, quantifier: { enum: ['some', 'never'] }, loc }, ['kind', 'from', 'to', 'quantifier', 'loc']),
           startsAt: object({ kind: { const: 'startsAt' }, useCase: str, target: selector, loc }, ['kind', 'useCase', 'target', 'loc']),
         } satisfies Record<Assertion['kind'], unknown>),

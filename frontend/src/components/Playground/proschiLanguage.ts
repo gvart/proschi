@@ -51,7 +51,7 @@ export const SECTION_HEADER = new RegExp(
 export const ONE_LINE_DECISION = new RegExp(`^\\s*decision\\s+${STRING}\\s+because\\b`);
 /** Words with a meaning inside section blocks (docs/HLD.md). */
 const SECTION_WORDS =
-  /^(traffic|requirements|capacity|entity|decision|test|whatif|fail|mix|peak|hit|group|errors|retries|drain|lag|durable|volatile|survive|because|rejected|calls|before|after|never|every|waits|for|starts|at|or|responds|writes|reads|responding|handles|failure|path|replicas|any|strong|eventual|store|in|scenario|latency|availability|cost|shards|consistency|bandwidth|egress|timeout|no|from|to|has|of|node|key|index|unique|optional|p50|p90|p95|p99|p999)\b/;
+  /^(traffic|requirements|capacity|entity|decision|test|whatif|fail|mix|peak|hit|group|errors|retries|drain|lag|durable|volatile|survive|because|rejected|calls|uses|sends|header|with|on|before|after|never|every|waits|for|starts|at|or|responds|writes|reads|responding|handles|failure|path|replicas|any|strong|eventual|store|in|scenario|latency|availability|cost|shards|consistency|bandwidth|egress|timeout|no|from|to|has|of|node|key|index|unique|optional|p50|p90|p95|p99|p999)\b/;
 /** A number with an optional fraction and unit, attached or one space away: 120, 2.5, 50ms, 100k rps, 99.9 %. */
 const QUANTITY = /^-?\d+(?:\.\d+)?(?:[A-Za-z]+(?:\/[A-Za-z]+)?|%)?(?: (?:rps|rpm|rpd|ms|s|usd\/month|usd\/GB|MB\/s|GB\/s)\b| %)?/;
 /** `x200` (fan-out) and `~2MB` (payload size) at the start of a step label (§7.3). */
@@ -214,6 +214,11 @@ const assertionOptions: Completion[] = [
   ['"${Use case}" calls ${node} after ${other}', '"Use case" calls … after …', 'last call after first call'],
   ['"${Use case}" never waits for ${node}', '"Use case" never waits for', 'no synchronous call before responding'],
   ['"${Use case}" writes ${node} before responding', '"Use case" writes … before responding', 'durable before the answer'],
+  ['"${Use case}" calls ${node} with ${GET} ${/items/:id}','"Use case" calls … with', 'a request with this method and path'],
+  ['"${Use case}" uses ${INSERT} on ${node}', '"Use case" uses … on', "a step names this operation of the node's type"],
+  ['"${Use case}" uses ${INSERT} on ${node} before responding', '"Use case" uses … on … before responding', 'that operation before the answer'],
+  ['"${Use case}" never uses ${Scan} on ${node}', '"Use case" never uses … on', 'no step names this operation'],
+  ['"${Use case}" sends header ${Authorization} to ${node}', '"Use case" sends header … to', 'a request names this header'],
   ['"${Use case}" responds ${status}', '"Use case" responds', 'status of the entry response'],
   ['"${Use case}" starts at ${node}', '"Use case" starts at', 'who sends the entry request'],
   ['"${Use case}" has scenario "${Scenario}"', '"Use case" has scenario', 'the scenario exists'],
@@ -377,7 +382,17 @@ export function proschiCompletions(getNodeIds: () => string[], getTechs?: () => 
     }
 
     const ids: Completion[] = getNodeIds().map((id) => ({ label: id, type: 'variable' }));
-    if (atLineStart && inTestBlock(ctx.state.doc, line.number)) return { from, options: [...assertionOptions, ...ids], validFor: /^\w*$/ };
+    const inTest = inTestBlock(ctx.state.doc, line.number);
+    if (atLineStart && inTest) return { from, options: [...assertionOptions, ...ids], validFor: /^\w*$/ };
+    // `uses INSERT on db`, `sends header Authorization to api`: what the diagram's node types offer.
+    if (inTest && /\b(?:uses|sends\s+header)\s+$/.test(head)) {
+      const types = [...new Map(diagramOf(ctx.state.doc).nodes.flatMap((n) => (n.resolvedType ? [[n.resolvedType.name, n.resolvedType] as const] : []))).values()];
+      const names = /\buses\s+$/.test(head)
+        ? types.flatMap((t) => t.ops.map((o) => ({ label: o.name, type: 'function', detail: `${o.access} · ${t.name}` })))
+        : types.flatMap((t) => t.headers.map((h) => ({ label: h, type: 'property', detail: t.name })));
+      const unique = [...new Map(names.map((o) => [o.label.toLowerCase(), o])).values()];
+      return { from, options: unique, validFor: /^[\w-]*$/ };
+    }
     return { from, options: atLineStart ? [...keywordOptions, ...ids] : ids, validFor: /^\w*$/ };
   };
 }
