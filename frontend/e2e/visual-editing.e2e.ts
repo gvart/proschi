@@ -49,13 +49,20 @@ async function connect(page: Page, from: string, to: string) {
   await page.mouse.up();
 }
 
-/** Clicks the middle of a connection, the first by default (a straight edge is a zero-width path, which Playwright will not click). */
+/**
+ * Clicks halfway along a connection, the first by default (a straight edge is a zero-width path, which Playwright
+ * will not click; the middle of a bent one's box may lie off the line).
+ */
 async function clickConnection(page: Page, edge = page.locator('.react-flow__edge').first()) {
   await layoutSettled(page);
   const path = edge.locator('path.react-flow__edge-interaction');
   await expect(path).toHaveAttribute('d', /\d/);
-  const line = (await path.boundingBox())!;
-  await page.mouse.click(line.x + line.width / 2, line.y + line.height / 2);
+  const at = await path.evaluate((el) => {
+    const line = el as SVGPathElement;
+    const p = line.getPointAtLength(line.getTotalLength() / 2).matrixTransform(line.getScreenCTM()!);
+    return { x: p.x, y: p.y };
+  });
+  await page.mouse.click(at.x, at.y);
 }
 
 test.describe('visual editing', () => {

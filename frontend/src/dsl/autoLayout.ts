@@ -43,6 +43,8 @@ export interface LayoutOptions {
   elk?: Record<string, string>;
   /** The size a renderer draws a node at, when it differs from the default card (e.g. the canvas's system boxes). */
   nodeSize?: (node: DiagramNode) => { width: number; height: number } | undefined;
+  /** A chip the renderer draws on every edge (the canvas's load overlay), which the gap between layers must hold. */
+  edgeChip?: { width: number; height: number };
 }
 
 // ELK reads spacing from each container, so groups repeat it.
@@ -56,6 +58,17 @@ const SPACING = {
   'elk.layered.spacing.edgeEdgeBetweenLayers': '14',
 };
 
+/** Room between an edge chip and the layer on either side: a replica's stacked cards (8px) or a node's tag (10px), and a margin. */
+const CHIP_CLEARANCE = 19;
+
+/** SPACING, with layers far enough apart for `edgeChip` to sit between them, its long side across a horizontal flow. */
+function spacing(options: LayoutOptions): Record<string, string> {
+  const chip = options.edgeChip;
+  if (!chip) return SPACING;
+  const along = vertical(options.direction) ? chip.height : chip.width;
+  return { ...SPACING, 'elk.layered.spacing.nodeNodeBetweenLayers': String(Math.max(40, Math.ceil(along + 2 * CHIP_CLEARANCE))) };
+}
+
 /** `interactive`: the top level is layered by rank hints; `ranked`: some container is, and compaction would undo it. */
 function rootOptions(options: LayoutOptions, interactive = false, ranked = false): Record<string, string> {
   return {
@@ -63,7 +76,7 @@ function rootOptions(options: LayoutOptions, interactive = false, ranked = false
     'elk.direction': options.direction ?? 'DOWN',
     'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
     'elk.edgeRouting': 'ORTHOGONAL',
-    ...SPACING,
+    ...spacing(options),
     'elk.spacing.componentComponent': '72',
     // Declaration order steers the layout: what comes first goes first, and breaks ties.
     'elk.layered.considerModelOrder.strategy': 'PREFER_NODES',
@@ -98,7 +111,7 @@ function groupOptions(options: LevelOptions): Record<string, string> {
     'elk.nodeSize.constraints': 'MINIMUM_SIZE',
     // ELK applies this before turning its left-to-right layout to vertical, so a vertical layout needs it transposed.
     'elk.nodeSize.minimum': vertical(options.direction) ? '(200, 300)' : '(300, 200)',
-    ...SPACING,
+    ...spacing(options),
     ...(options.groupOrder ? FORCE_ORDER : {}),
   };
 }

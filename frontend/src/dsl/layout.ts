@@ -23,21 +23,48 @@ export const SYSTEM_NODE_SIZE = { width: 300, height: 168 };
 
 const CANVAS_SIZES: LayoutOptions = { nodeSize: (node: DiagramNode) => (node.kind === 'system' ? SYSTEM_NODE_SIZE : undefined) };
 
-async function place(diagram: Diagram): Promise<Layout> {
+/**
+ * A component under the load overlay (Canvas/ComponentNode.tsx): its replicas,
+ * load and bar under the name, in place of the team.
+ */
+const LOADED_NODE_SIZE = { width: 240, height: 90 };
+
+/**
+ * The overlay's chip on an edge with no label of its own (Canvas/RoutedEdge.tsx,
+ * one 18px line, about "10.5k rps · +70.5 ms" wide); a labelled edge's chip
+ * sits where the layout already kept room for its label.
+ */
+const LOAD_CHIP = { width: 146, height: 18 };
+
+/**
+ * With the load overlay, cards are laid out at the size they draw at, and
+ * layers kept far enough apart for each edge's chip.
+ */
+const OVERLAY_SIZES: LayoutOptions = {
+  nodeSize: (node: DiagramNode) => (node.kind === 'system' ? SYSTEM_NODE_SIZE : node.kind === 'component' ? LOADED_NODE_SIZE : undefined),
+  edgeChip: LOAD_CHIP,
+};
+
+async function place(diagram: Diagram, sizes: LayoutOptions): Promise<Layout> {
   if (useWorker) {
     try {
-      return await layoutGraph(diagram, workerElk, CANVAS_SIZES);
+      return await layoutGraph(diagram, workerElk, sizes);
     } catch (error) {
       if (!(error instanceof ElkWorkerUnavailable)) throw error;
       console.warn('Laying out on the main thread:', error);
       useWorker = false;
     }
   }
-  return layoutGraph(diagram, bundledElk, CANVAS_SIZES);
+  return layoutGraph(diagram, bundledElk, sizes);
 }
 
-export async function layoutDiagram(diagram: Diagram): Promise<Node<ComponentMetadata>[]> {
-  const { nodes, routes } = await place(diagram);
+/**
+ * `overlay`: the canvas can show the load overlay (the diagram has traffic),
+ * so the layout keeps room for it whether it is on or off: turning it on or off
+ * never moves the diagram.
+ */
+export async function layoutDiagram(diagram: Diagram, { overlay = false } = {}): Promise<Node<ComponentMetadata>[]> {
+  const { nodes, routes } = await place(diagram, overlay ? OVERLAY_SIZES : CANVAS_SIZES);
   return toFlowNodes(diagram, nodes, routes);
 }
 
