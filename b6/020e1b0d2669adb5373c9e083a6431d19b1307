@@ -1,0 +1,37 @@
+frontend/e2e/practice.e2e.ts
+  s_ccb8935595dc4e::t_8ebf752fb1d42f 3,159-171
+  s_ccb8935595dc4e::t_27ab387fd6516f 172-173
+frontend/src/components/Playground/CodeEditor.tsx
+  s_ccb8935595dc4e::t_407a1def99b7cf 8,38-39,104,115,122,136
+frontend/src/practice/interview/Room.tsx
+  s_ccb8935595dc4e::t_407a1def99b7cf 124
+frontend/src/practice/ProblemPage.tsx
+  s_ccb8935595dc4e::t_407a1def99b7cf 441
+tooling/test/types.test.ts
+  s_ccb8935595dc4e::t_39c6e7b76cb6e7 4,95-100
+  s_ccb8935595dc4e::t_044aa17b802f0e 101-102
+frontend/src/components/Playground/proschiLanguage.test.ts
+  s_ccb8935595dc4e::t_119b546e0fee5e 5,443-456
+  s_ccb8935595dc4e::t_923ec1b3c1d04f 457
+frontend/src/components/Playground/Playground.tsx
+  s_ccb8935595dc4e::t_407a1def99b7cf 1355,1367
+frontend/src/components/Playground/proschiLanguage.ts
+  s_ccb8935595dc4e::t_ed35eccd908411 303,307,369
+  s_ccb8935595dc4e::t_fb6c54e23fb3cf 233-236,247-248,250,349-354,356,363,367,397
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b6020e1b0d2669adb5373c9e083a6431d19b1307",
+  "prompts": {},
+  "sessions": {
+    "s_ccb8935595dc4e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0e2b8447-0e71-4063-8d52-5e5b5302fc2f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
