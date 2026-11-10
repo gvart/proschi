@@ -45,6 +45,7 @@ import type {
   ResolvedImport,
   Selector,
   SourceLoc,
+  StepMatch,
   SystemEntry,
   SystemStub,
   TrafficEntry,
@@ -209,7 +210,7 @@ const CAPACITY_PARTS = 'a rate, reads, writes, shards, size, latency, availabili
 const MAX_RETRIES = 5;
 const ASSERTION_HELP =
   'Expected an assertion: "Use case" calls <node>, "Use case" writes <node> before responding, <node> calls <node>, no path from <node> to <node>, <node> has replicas >= 2, …';
-const ASSERTION_VERBS = 'calls, every scenario calls, never calls, never waits for, writes, responds, starts at, has scenario or handles failure of';
+const ASSERTION_VERBS = 'calls, uses, sends header, every scenario calls, never calls, never waits for, writes, responds, starts at, has scenario or handles failure of';
 
 /** The generic catalog tech of each kind, named in the warning about an unknown tech. */
 const GENERIC_TECH: Record<Kind, string> = {
@@ -2397,26 +2398,77 @@ class Parser {
       return false;
     };
 
-    let assertion: Assertion | undefined;
-    if (isWord(verb, 'calls')) {
-      const target = selector(i + 1);
+    /**
+     * `calls X [with GET /path]`, `uses OP on X` or `sends header H to X` at
+     * `tokens[j]`: the target, what its steps must be, and where the clause ends.
+     */
+    const call = (j: number): { target: ParsedSelector; match?: StepMatch; next: number } | undefined => {
+      const word = tokens[j];
+      const nameAt = (k: number, what: string, example: string): string | undefined => {
+        const t = tokens[k];
+        if (t?.kind === 'ident' || t?.kind === 'string') return t.value;
+        this.error(`Expected ${what} here, e.g. ${example}`, this.locOf(t ?? tokens[tokens.length - 1], line));
+        return undefined;
+      };
+      if (isWord(word, 'uses')) {
+        const example = `"${useCase}" uses INSERT on db`;
+        const op = nameAt(j + 1, 'an operation', example);
+        if (op === undefined || !expectWords(j + 2, ['on'], example)) return;
+        const target = selector(j + 3);
+        return target && { target, match: { op }, next: target.next };
+      }
+      if (isWord(word, 'sends')) {
+        const example = `"${useCase}" sends header Authorization to api`;
+        if (!expectWords(j + 1, ['header'], example)) return;
+        const header = nameAt(j + 2, 'a header name', example);
+        if (header === undefined || !expectWords(j + 3, ['to'], example)) return;
+        const target = selector(j + 4);
+        return target && { target, match: { header }, next: target.next };
+      }
+      if (!isWord(word, 'calls')) {
+        this.error(`Expected calls, uses or sends header here, e.g. "${useCase}" never calls any database`, this.locOf(word ?? tokens[tokens.length - 1], line));
+        return;
+      }
+      const target = selector(j + 1);
       if (!target) return;
-      if (isWord(tokens[target.next], 'before')) {
-        const then = selector(target.next + 1);
+      if (!isWord(tokens[target.next], 'with')) return { target, next: target.next };
+      const [method, path] = [tokens[target.next + 1], tokens[target.next + 2]];
+      const example = `"${useCase}" calls api with GET /urls/{code}`;
+      if (method?.kind !== 'ident' || !HTTP_METHODS.includes(method.value.toUpperCase())) {
+        this.error(`Expected an HTTP method after with (${HTTP_METHODS.join(', ')}), e.g. ${example}`, this.locOf(method ?? tokens[target.next], line));
+        return;
+      }
+      if (path?.kind !== 'path') {
+        this.error(`Expected a path starting with / after ${method.value}, e.g. ${example}`, this.locOf(path ?? method, line));
+        return;
+      }
+      return { target, match: { method: method.value.toUpperCase(), path: path.value }, next: target.next + 3 };
+    };
+    const matchOf = (c: { match?: StepMatch }) => (c.match ? { match: c.match } : {});
+
+    let assertion: Assertion | undefined;
+    if (isWord(verb, 'calls') || isWord(verb, 'uses') || isWord(verb, 'sends')) {
+      const c = call(i);
+      if (!c) return;
+      const word = tokens[c.next];
+      if (isWord(word, 'before') && isWord(tokens[c.next + 1], 'responding')) {
+        assertion = done({ kind: 'beforeResponding', useCase, ...withScenario, target: c.target.selector, match: c.match ?? {}, loc }, c.next + 2);
+      } else if (isWord(word, 'before')) {
+        const then = selector(c.next + 1);
         if (!then) return;
-        assertion = done({ kind: 'before', useCase, ...withScenario, first: target.selector, then: then.selector, loc }, then.next);
-      } else if (isWord(tokens[target.next], 'after')) {
-        const after = selector(target.next + 1);
+        assertion = done({ kind: 'before', useCase, ...withScenario, first: c.target.selector, ...matchOf(c), then: then.selector, loc }, then.next);
+      } else if (isWord(word, 'after')) {
+        const after = selector(c.next + 1);
         if (!after) return;
-        assertion = done({ kind: 'after', useCase, ...withScenario, target: target.selector, after: after.selector, loc }, after.next);
+        assertion = done({ kind: 'after', useCase, ...withScenario, target: c.target.selector, ...matchOf(c), after: after.selector, loc }, after.next);
       } else {
-        assertion = done({ kind: 'calls', useCase, ...withScenario, target: target.selector, quantifier: 'some', loc }, target.next);
+        assertion = done({ kind: 'calls', useCase, ...withScenario, target: c.target.selector, ...matchOf(c), quantifier: 'some', loc }, c.next);
       }
     } else if (isWord(verb, 'every')) {
-      if (!expectWords(i + 1, ['scenario', 'calls'], `"${useCase}" every scenario calls any cache`)) return;
-      const target = selector(i + 3);
-      if (!target) return;
-      assertion = done({ kind: 'calls', useCase, ...withScenario, target: target.selector, quantifier: 'every', loc }, target.next);
+      if (!expectWords(i + 1, ['scenario'], `"${useCase}" every scenario calls any cache`)) return;
+      const c = call(i + 2);
+      if (!c) return;
+      assertion = done({ kind: 'calls', useCase, ...withScenario, target: c.target.selector, ...matchOf(c), quantifier: 'every', loc }, c.next);
     } else if (isWord(verb, 'never') && isWord(tokens[i + 1], 'waits')) {
       if (!expectWords(i + 2, ['for'], `"${useCase}" never waits for any queue`)) return;
       const target = selector(i + 3);
@@ -2428,10 +2480,9 @@ class Parser {
       if (!target) return;
       assertion = done({ kind: 'startsAt', useCase, target: target.selector, loc }, target.next);
     } else if (isWord(verb, 'never')) {
-      if (!expectWords(i + 1, ['calls'], `"${useCase}" never calls any database`)) return;
-      const target = selector(i + 2);
-      if (!target) return;
-      assertion = done({ kind: 'calls', useCase, ...withScenario, target: target.selector, quantifier: 'never', loc }, target.next);
+      const c = call(i + 1);
+      if (!c) return;
+      assertion = done({ kind: 'calls', useCase, ...withScenario, target: c.target.selector, ...matchOf(c), quantifier: 'never', loc }, c.next);
     } else if (isWord(verb, 'writes')) {
       const target = selector(i + 1);
       if (!target || !expectWords(target.next, ['before', 'responding'], `"${useCase}" writes db before responding`)) return;
@@ -2707,7 +2758,8 @@ class Parser {
         const status = step.label.match(/^(\d{3})\b\s*([\s\S]*)$/);
         if (status) {
           request.statusCode = Number(status[1]);
-          this.checkStatus(this.nodes.get(respFrom)?.resolvedType, request.statusCode, this.labelLoc(step, 0, 3));
+          const responder = request.toPort !== undefined ? this.portType(request.toServiceId, request.toPort) : this.nodes.get(respFrom)?.resolvedType;
+          this.checkStatus(responder, request.statusCode, this.labelLoc(step, 0, 3));
         }
         const payload = splitPayload(status ? status[2] : step.label);
         const body = payload.body ?? payload.text;
@@ -2725,8 +2777,10 @@ class Parser {
       const port = toPort ?? this.onlyEntry(to, step.loc);
       const target = this.nodes.get(to);
       const isAsync = step.arrow === '->>';
-      const typed = this.typedOp(target?.resolvedType, label.method, step);
-      if (label.headers) this.checkHeaders(target?.resolvedType, label.headers, step);
+      // A step to a system's entry point is checked against the type of the node behind it.
+      const type = port !== undefined ? this.portType(to, port) : target?.resolvedType;
+      const typed = this.typedOp(type, label.method, step);
+      if (label.headers) this.checkHeaders(type, label.headers, step);
       steps.push({
         id: `${prefix}-${steps.length + 1}`,
         stepOrder: steps.length,
@@ -2758,6 +2812,12 @@ class Parser {
 
     resolveForwards(steps);
     return steps;
+  }
+
+  /** The type behind entry point `port` of system `id` (see entryType). */
+  private portType(id: string, port: string): ResolvedType | undefined {
+    const system = this.systemById.get(id);
+    return system && entryType(system, port);
   }
 
   /**
@@ -3406,6 +3466,27 @@ export function parseStepLabel(input: string): StepLabel {
   }
   const payload = splitPayload(input);
   return { name: payload.text, format: payload.body ? payload.format : undefined, body: payload.body };
+}
+
+/**
+ * The type of the node an entry point leads to, where an expanded view
+ * reroutes it (dsl/view.ts): the sender of the mapped use case's first
+ * request, or its receiver when the sender is a client (the team file's
+ * stand-in for its callers), followed into a nested system. Undefined for a
+ * stub system: it has no team file, so no node and no type.
+ */
+function entryType(system: DiagramSystem, port: string): ResolvedType | undefined {
+  const useCaseId = system.entries.find((e) => e.id === port)?.useCaseId;
+  const team = system.diagram;
+  const first = team?.useCases.find((u) => u.id === useCaseId)?.steps[0];
+  if (!team || !first) return undefined;
+  const sender = team.nodes.find((n) => n.id === first.fromServiceId);
+  if (sender && kindOf(sender) !== 'client') return sender.resolvedType;
+  if (first.toPort !== undefined) {
+    const nested = team.systems?.find((s) => s.id === first.toServiceId);
+    return nested && entryType(nested, first.toPort);
+  }
+  return team.nodes.find((n) => n.id === first.toServiceId)?.resolvedType;
 }
 
 /**

@@ -13,6 +13,7 @@ export type TokenKind =
   | 'const'   // $peak, x$n: a constant's use, value as written (with the $ and any x)
   | 'tag'     // .planned: a legend entry, value without the dot
   | 'hex'     // #3b82f6 right after `color`, value with the '#'
+  | 'path'    // /urls/{code}: an HTTP path in a test assertion, up to the next space
   | 'comma'
   | 'lbrace'
   | 'rbrace';
@@ -150,7 +151,22 @@ export function tokenizeLine(text: string, line: number): { tokens: Token[]; dia
       continue;
     }
 
+    // `calls api with GET /urls/{code}`: a path is one token, braces and all.
+    if (ch === '/') {
+      while (i < text.length && !/\s/.test(text[i])) i++;
+      tokens.push({ kind: 'path', value: text.slice(start, i), col: start + 1, length: i - start });
+      continue;
+    }
+
     if (IDENT_START.test(ch)) {
+      // `sends header Idempotency-Key to api`: a header name right after `header` keeps its dashes.
+      const prev = tokens[tokens.length - 1];
+      const headerName = prev?.kind === 'ident' && prev.value === 'header' ? /^[A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)+/.exec(text.slice(i)) : null;
+      if (headerName) {
+        i += headerName[0].length;
+        tokens.push({ kind: 'ident', value: headerName[0], col: start + 1, length: i - start });
+        continue;
+      }
       while (i < text.length && IDENT_PART.test(text[i])) i++;
       // `x$n`: replicas or a multiplier given by a constant, one token.
       if (i === start + 1 && ch === 'x' && text[i] === '$' && IDENT_START.test(text[i + 1] ?? '')) {

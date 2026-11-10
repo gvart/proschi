@@ -466,10 +466,27 @@ export interface Decision {
   loc: SourceLoc;
 }
 
+/**
+ * What a step must be, besides going to the selected nodes (docs/TESTS.md,
+ * "Typed assertions"): `calls X with GET /urls/{code}` sets `method` and
+ * `path`, `uses INSERT on X` sets `op` (the canonical name of the step's
+ * resolved operation), `sends header Authorization to X` sets `header`.
+ */
+export interface StepMatch {
+  method?: string;
+  path?: string;
+  op?: string;
+  header?: string;
+}
+
 /** One assertion line inside `test "…" { … }` (docs/design/hld-and-practice.md §1.9). */
 export type Assertion =
-  | { kind: 'calls'; useCase: string; scenario?: string; target: Selector; quantifier: 'some' | 'every' | 'never'; loc: SourceLoc }
-  | { kind: 'before'; useCase: string; scenario?: string; first: Selector; then: Selector; loc: SourceLoc }
+  /** `match`: only steps to the target that are that request, operation or header count. */
+  | { kind: 'calls'; useCase: string; scenario?: string; target: Selector; match?: StepMatch; quantifier: 'some' | 'every' | 'never'; loc: SourceLoc }
+  /** `match` applies to the steps to `first`. */
+  | { kind: 'before'; useCase: string; scenario?: string; first: Selector; match?: StepMatch; then: Selector; loc: SourceLoc }
+  /** `U uses INSERT on db before responding`: every success scenario sends a matching synchronous, successful step to the target before the answer. */
+  | { kind: 'beforeResponding'; useCase: string; scenario?: string; target: Selector; match: StepMatch; loc: SourceLoc }
   | { kind: 'writesBeforeResponding'; useCase: string; scenario?: string; target: Selector; loc: SourceLoc }
   | { kind: 'responds'; useCase: string; scenario?: string; status: string; loc: SourceLoc }
   | { kind: 'hasScenario'; useCase: string; scenario: string; loc: SourceLoc }
@@ -480,7 +497,7 @@ export type Assertion =
   /** `U [scenario S] never waits for X`: no synchronous call to X before U's entry response. */
   | { kind: 'neverWaits'; useCase: string; scenario?: string; target: Selector; loc: SourceLoc }
   /** `U [scenario S] calls Y after X`: in every scenario calling both, the last call to Y follows the first call to X. */
-  | { kind: 'after'; useCase: string; scenario?: string; target: Selector; after: Selector; loc: SourceLoc }
+  | { kind: 'after'; useCase: string; scenario?: string; target: Selector; match?: StepMatch; after: Selector; loc: SourceLoc }
   /** `[in U] X calls Y` / `[in U] X never calls Y`: steps sent by X (not just reached). */
   | { kind: 'senderCalls'; useCase?: string; from: Selector; to: Selector; quantifier: 'some' | 'never'; loc: SourceLoc }
   /** `U starts at X`: U's entry request is sent by a node matching X. */
