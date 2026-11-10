@@ -76,6 +76,13 @@ describe('the stdlib tree', () => {
   it('sets no simulation numbers', () => {
     for (const t of types) expect(t.props, t.name).toEqual({});
   });
+
+  it('is read once: every parse shares the same table and types', () => {
+    const table = builtinTypes();
+    parse('db [PostgreSQL]');
+    expect(builtinTypes()).toBe(table);
+    expect(parse('db [PostgreSQL]').diagram.nodes[0].resolvedType).toBe(table.get('postgresql'));
+  });
 });
 
 describe('the stdlib vocabularies', () => {
