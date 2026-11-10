@@ -3,6 +3,8 @@ title: Rate Limiter
 summary: Reject over-limit callers before they reach the service.
 difficulty: easy
 tags: [caching, edge, protection]
+version: 2
+strict: true
 hints:
   - The counters must be shared by every limiter replica. Which kind of store answers in about a millisecond?
   - "Write the limit check before the call to the Orders API, and leave the call out of the \"Limited\" scenario altogether. The check is a write: INCR the counter and decide on the value it returns."

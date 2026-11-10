@@ -35,11 +35,11 @@ test "Queries go through ProxySQL" {
 }
 
 test "Catalog reads go to the replicas" {
-  "Read catalog" every scenario calls any database
+  "Read catalog" every scenario uses SELECT on any database
   "Read catalog" never calls primary
 }
 
 test "Writes and time-sensitive reads go to the primary" {
-  "Place order" writes primary before responding
-  "Check order" every scenario calls primary
+  "Place order" uses INSERT on primary before responding
+  "Check order" every scenario uses SELECT on primary
 }
