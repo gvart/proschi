@@ -1,6 +1,8 @@
 package app.proschi.jetbrains
 
+import app.proschi.jetbrains.lsp.ProschiColors
 import app.proschi.jetbrains.lsp.ProschiLspServerDescriptor
+import app.proschi.jetbrains.lsp.ProschiSemanticTokensSupport
 import app.proschi.jetbrains.settings.ProschiSettings
 import com.intellij.openapi.extensions.ExtensionPointName
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
@@ -40,5 +42,15 @@ class ProschiPluginTest : BasePlatformTestCase() {
         assertTrue(Files.isRegularFile(dir.resolve("package.json")))
         assertTrue(Files.isRegularFile(dir.resolve("language-configuration.json")))
         assertTrue(Files.isRegularFile(dir.resolve("syntaxes/proschi.tmLanguage.json")))
+    }
+
+    /** Every token type the server sends (TOKEN_TYPE in tooling/src/server.ts) has its own color. */
+    fun testSemanticTokenColors() {
+        val tokens = ProschiSemanticTokensSupport()
+        assertSame(ProschiColors.NODE, tokens.getTextAttributesKey("variable", emptyList()))
+        assertSame(ProschiColors.TECH, tokens.getTextAttributesKey("type", emptyList()))
+        assertSame(ProschiColors.TEAM, tokens.getTextAttributesKey("decorator", emptyList()))
+        assertSame(ProschiColors.TAG, tokens.getTextAttributesKey("enumMember", emptyList()))
+        assertSame(ProschiColors.CONSTANT, tokens.getTextAttributesKey("parameter", emptyList()))
     }
 }
