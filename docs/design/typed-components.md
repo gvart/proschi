@@ -167,7 +167,9 @@ the top of `core.proschi`):
 - Only `type` and `abstract type` blocks, blank lines and comments.
 - A type named after a catalog tech has the tech's kind (and so its icon).
 - Profile numbers only where they equal what `sim/profiles.ts` gives the tech.
-- Run `npm run gen:stdlib` after editing.
+- Run `npm run gen:stdlib` after editing. It also rewrites the built-in type
+  reference in `docs/types/` (`npm run gen:type-docs`, plugins/typeReference.ts),
+  which the docs build renders from the stdlib and a test keeps current.
 
 Iteration 1's seed held `Component`, `Service`, `DataStore`, `Database`,
 `SqlDatabase`, `PostgreSQL`, `Cache`, `Redis` and `[REST API]`. Iteration 2
