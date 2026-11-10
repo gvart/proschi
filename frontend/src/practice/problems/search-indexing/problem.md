@@ -4,6 +4,8 @@ summary: DoorDash's search, fed through Kafka so edits reach the index fast and 
 difficulty: medium
 company: DoorDash
 tags: [search, streaming, queues, async, replication, real-world]
+version: 2
+strict: true
 hints:
   - "Diners only read and merchants only write. What if those two paths never shared a node: queries answered from a search index alone, and edits written to the database alone?"
   - "How does an edit reach the index without the merchant waiting for it? Save it, publish a change event to Kafka, and answer. Indexers consume the stream, read the store's current rows from the database and update the search cluster a few seconds later."

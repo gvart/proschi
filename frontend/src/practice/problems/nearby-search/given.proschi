@@ -42,8 +42,8 @@ test "Location updates reach the geoshards through the stream" {
 }
 
 test "A user who moves leaves the old geoshard" {
-  "Index location" scenario "Moved geoshard" calls regional
-  "Index location" scenario "Moved geoshard" calls metro
+  "Index location" scenario "Moved geoshard" uses DELETE on regional
+  "Index location" scenario "Moved geoshard" uses UPSERT on metro
 }
 
 test "Every geoshard has a replica" {

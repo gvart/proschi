@@ -247,6 +247,13 @@
           },
           "description": "Entries of the `legend` block, in order."
         },
+        "types": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/resolvedType"
+          },
+          "description": "`type` blocks of the document and its imports, resolved, in order; built-in types are not listed."
+        },
         "layout": {
           "type": "object",
           "description": "Top-level layout hints; left out when the document uses none.",
@@ -551,6 +558,10 @@
           ],
           "description": "Only for a tech the catalog does not know: the kind the simulation gives the node, from the words in its name."
         },
+        "resolvedType": {
+          "$ref": "#/$defs/resolvedType",
+          "description": "The type `[Tech]` names, built in or declared with `type`; `techStack` is then that of its icon."
+        },
         "ownerTeam": {
           "type": "string"
         },
@@ -636,6 +647,165 @@
         "name",
         "type",
         "techStack",
+        "loc"
+      ],
+      "additionalProperties": false
+    },
+    "resolvedType": {
+      "type": "object",
+      "description": "A type merged with its ancestors (docs/design/typed-components.md).",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "abstract": {
+          "type": "boolean"
+        },
+        "builtin": {
+          "type": "boolean",
+          "description": "From the bundled stdlib, not the user's files."
+        },
+        "parents": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Ancestor names, the parent first, ending with `Component`."
+        },
+        "kind": {
+          "enum": [
+            "client",
+            "edge",
+            "cdn",
+            "loadbalancer",
+            "gateway",
+            "dns",
+            "service",
+            "function",
+            "cache",
+            "database",
+            "search",
+            "analytics",
+            "queue",
+            "broker",
+            "storage",
+            "external",
+            "other"
+          ]
+        },
+        "props": {
+          "type": "object",
+          "description": "Profile numbers the type sets, own over inherited.",
+          "properties": {
+            "rps": {
+              "type": "number"
+            },
+            "readRps": {
+              "type": "number"
+            },
+            "writeRps": {
+              "type": "number"
+            },
+            "writeScaling": {
+              "enum": [
+                "replicas",
+                "shards"
+              ]
+            },
+            "latencyMs": {
+              "type": "number"
+            },
+            "availability": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "costUsd": {
+              "type": "number"
+            },
+            "durable": {
+              "type": "boolean"
+            },
+            "consistency": {
+              "enum": [
+                "strong",
+                "eventual"
+              ]
+            },
+            "bandwidthMBps": {
+              "type": "number"
+            },
+            "egressUsdPerGb": {
+              "type": "number"
+            }
+          },
+          "required": [],
+          "additionalProperties": false
+        },
+        "ops": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "access": {
+                "enum": [
+                  "read",
+                  "write",
+                  "forward"
+                ]
+              },
+              "latency": {
+                "type": "number"
+              },
+              "cost": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "name",
+              "access"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "statuses": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          }
+        },
+        "headers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "protocol": {
+          "type": "string"
+        },
+        "icon": {
+          "type": "string",
+          "description": "The catalog tech stack the node is drawn with."
+        },
+        "doc": {
+          "type": "string"
+        },
+        "loc": {
+          "$ref": "#/$defs/loc"
+        }
+      },
+      "required": [
+        "name",
+        "abstract",
+        "builtin",
+        "parents",
+        "props",
+        "ops",
+        "statuses",
+        "headers",
         "loc"
       ],
       "additionalProperties": false
@@ -939,7 +1109,41 @@
             "read",
             "write"
           ],
-          "description": "From the HTTP method, or the first word of the label (INSERT, SET, PUBLISH, … write); every request step has one."
+          "description": "From the target type's operation the label names, else from the HTTP method or the first word of the label (INSERT, SET, PUBLISH, … write); a forwarded frame takes its handler's. Every request step has one."
+        },
+        "op": {
+          "type": "object",
+          "description": "The target type's operation the label names (its HTTP method or first words), when the target is typed and lists it.",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "access": {
+              "enum": [
+                "read",
+                "write",
+                "forward"
+              ]
+            },
+            "latency": {
+              "type": "number"
+            },
+            "cost": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "name",
+            "access"
+          ],
+          "additionalProperties": false
+        },
+        "headers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "`GET /x header Authorization, If-None-Match`: the request headers named in the label."
         }
       },
       "required": [
@@ -1729,6 +1933,25 @@
             "target": {
               "$ref": "#/$defs/selector"
             },
+            "match": {
+              "type": "object",
+              "description": "What a step must be: `with GET /urls/{code}` (method, path), `uses INSERT on` (op), `sends header Authorization to` (header).",
+              "properties": {
+                "method": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "op": {
+                  "type": "string"
+                },
+                "header": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
             "quantifier": {
               "enum": [
                 "some",
@@ -1764,6 +1987,25 @@
             "first": {
               "$ref": "#/$defs/selector"
             },
+            "match": {
+              "type": "object",
+              "description": "What a step must be: `with GET /urls/{code}` (method, path), `uses INSERT on` (op), `sends header Authorization to` (header).",
+              "properties": {
+                "method": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "op": {
+                  "type": "string"
+                },
+                "header": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
             "then": {
               "$ref": "#/$defs/selector"
             },
@@ -1776,6 +2018,53 @@
             "useCase",
             "first",
             "then",
+            "loc"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "beforeResponding"
+            },
+            "useCase": {
+              "type": "string"
+            },
+            "scenario": {
+              "type": "string"
+            },
+            "target": {
+              "$ref": "#/$defs/selector"
+            },
+            "match": {
+              "type": "object",
+              "description": "What a step must be: `with GET /urls/{code}` (method, path), `uses INSERT on` (op), `sends header Authorization to` (header).",
+              "properties": {
+                "method": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "op": {
+                  "type": "string"
+                },
+                "header": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "useCase",
+            "target",
+            "match",
             "loc"
           ],
           "additionalProperties": false
@@ -1973,6 +2262,25 @@
             },
             "target": {
               "$ref": "#/$defs/selector"
+            },
+            "match": {
+              "type": "object",
+              "description": "What a step must be: `with GET /urls/{code}` (method, path), `uses INSERT on` (op), `sends header Authorization to` (header).",
+              "properties": {
+                "method": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "op": {
+                  "type": "string"
+                },
+                "header": {
+                  "type": "string"
+                }
+              },
+              "additionalProperties": false
             },
             "after": {
               "$ref": "#/$defs/selector"

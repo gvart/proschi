@@ -51,7 +51,7 @@ usecase "Checkpoint" {
 }
 
 usecase "Load aggregates" {
-  aggregates -> pinot : INSERT ad_aggregates
+  aggregates -> pinot : UPSERT ad_aggregates by recordUuid
 }
 
 usecase "Update budget" {

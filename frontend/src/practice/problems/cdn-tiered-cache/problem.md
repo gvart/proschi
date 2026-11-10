@@ -4,11 +4,13 @@ summary: "Cloudflare's Tiered Cache: edge misses fill from an upper tier, not th
 difficulty: medium
 company: Cloudflare
 tags: [caching, cdn, availability, real-world]
+version: 2
+strict: true
 hints:
   - "Every edge data center caches on its own, so a popular asset is fetched from the origin once per data center. What if a data center that misses asked another data center first?"
   - "Put a second tier of data centers (id upper) between the edge and the origin. An edge miss asks the upper tier; only an upper-tier miss reaches the origin. With the given mix, the upper tier answers 6% of all requests and only 4% reach the origin."
   - "No connection from the edge or the visitor to the origin, not even as a fallback: when the upper tier is down, the origin would take every edge miss at once. Give the upper tier a second data center instead (x2)."
-  - "\"Purge\" clears the upper tier first, then every edge data center (a fan-out such as x300): an edge that missed in between would otherwise refill the old asset from the upper tier. The purge never touches the origin."
+  - "\"Purge\" sends PURGE to the upper tier first, then to every edge data center (a fan-out such as x300): an edge that missed in between would otherwise refill the old asset from the upper tier. The purge never touches the origin."
 ---
 
 A CDN data center that does not have an asset asks the origin for it. With

@@ -43,6 +43,23 @@ server reports failing requirements and tests as warnings and adds load to
 node hovers. The model and its default numbers:
 [Simulation and tests](https://github.com/gvart/proschi/blob/main/docs/EDITORS.md#simulation-and-tests).
 
+Components are typed: every tech has a built-in type with its operations,
+statuses and headers, and you declare your own with `extends`. `check` warns
+about a step whose operation the target's type doesn't know, and the
+language server completes types and operations and shows them on hover.
+[Component types](https://proschi.app/docs/types/):
+
+```proschi
+type LedgerDb extends PostgreSQL { op write APPEND }
+
+api    "Payments API" [REST API]
+ledger "Ledger"       [LedgerDb]
+
+usecase "Pay" {
+  api -> ledger : APPEND entry
+}
+```
+
 `problem check [--format text|github|json] [dir]` validates the practice
 problems, one folder each (front matter, given, starter, reference solution
 and the `wrong/` designs that must fail, each naming the mistake it makes,

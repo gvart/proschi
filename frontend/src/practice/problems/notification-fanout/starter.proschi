@@ -7,7 +7,7 @@ orders   -> notifier
 notifier -> email
 
 usecase "Notify" {
-  orders    -> notifier : OrderShipped {"userId": 42, "orderId": 981}
+  orders    -> notifier : POST /events {"type": "OrderShipped", "userId": 42, "orderId": 981}
   notifier  -> email    : send "Your order is on its way"
   email    --> notifier : 202
   notifier --> orders   : 200

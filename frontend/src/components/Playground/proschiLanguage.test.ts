@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { EditorState, Text } from '@codemirror/state';
 import { StringStream } from '@codemirror/language';
 import { CompletionContext } from '@codemirror/autocomplete';
-import { parse } from '../../dsl';
+import { builtinTypes, parse } from '../../dsl';
 import { proschiCompletions, proschiStreamParser, toCmDiagnostics } from './proschiLanguage';
 
 /** [text, style] for each non-blank token of one line. */
@@ -336,7 +336,108 @@ describe('proschiCompletions', () => {
     expect(complete('test "T" {\n}\nus')?.options.map((o) => o.label)).toContain('usecase');
   });
 
+  it('offers the operations and headers of the node types after uses and sends header', () => {
+    const ops = complete('db [PostgreSQL]\ntest "T" {\n  "U" uses ', true)?.options.map((o) => o.label);
+    expect(ops).toEqual(expect.arrayContaining(['SELECT', 'INSERT']));
+    const headers = complete('api [REST API]\ntest "T" {\n  "U" sends header ', true)?.options.map((o) => o.label);
+    expect(headers).toEqual(expect.arrayContaining(['Authorization', 'Idempotency-Key']));
+    expect(complete('test "T" {\n  ', true)?.options.map((o) => o.label)).toEqual(expect.arrayContaining(['"Use case" uses … on', '"Use case" sends header … to']));
+  });
+
   it('stays quiet inside labels', () => {
     expect(complete('a -> b : POST /ord')).toBeNull();
+  });
+});
+
+describe('types', () => {
+  // Type and op names come from the stdlib, so the tests follow whatever it ships.
+  const builtin = [...builtinTypes().values()];
+  const withOps = builtin.find((t) => !t.abstract && t.ops.length > 0 && /^\w+$/.test(t.name))!;
+  const http = builtin.find((t) => !t.abstract && t.statuses.length > 0 && t.headers.length > 0)!;
+
+  it('highlights type headers and bodies', () => {
+    const lines = highlightDoc(
+      [
+        `abstract type Store extends ${withOps.name} {`,
+        '  kind database',
+        '  op read SELECT, Scan latency 8 cost 2',
+        '  header Authorization, Content-Type',
+        '  doc "Keeps things"',
+        '}',
+        'type Ledger extends Store { op write APPEND }',
+        'type "T" [Go]',
+        'usecase "U" {',
+        '  a -> b : GET /x header Authorization, Idempotency-Key',
+        '}',
+      ].join('\n'),
+    );
+    expect(lines[0]).toEqual([
+      ['abstract', 'keyword'],
+      ['type', 'keyword'],
+      ['Store', 'typeName'],
+      ['extends', 'keyword'],
+      [withOps.name, 'typeName'],
+      ['{', 'brace'],
+    ]);
+    expect(lines[1]).toEqual([
+      ['kind', 'keyword'],
+      ['database', 'atom'],
+    ]);
+    expect(lines[2].slice(0, 3)).toEqual([
+      ['op', 'keyword'],
+      ['read', 'keyword'],
+      ['SELECT', 'variableName'],
+    ]);
+    expect(lines[2]).toContainEqual(['latency', 'keyword']);
+    expect(lines[2]).toContainEqual(['cost', 'keyword']);
+    expect(lines[3]).toEqual([
+      ['header', 'keyword'],
+      ['Authorization', 'propertyName'],
+      [',', 'punctuation'],
+      ['Content-Type', 'propertyName'],
+    ]);
+    expect(lines[4][0]).toEqual(['doc', 'keyword']);
+    expect(lines[6].slice(4)).toEqual([
+      ['{', 'brace'],
+      ['op', 'keyword'],
+      ['write', 'keyword'],
+      ['APPEND', 'variableName'],
+      ['}', 'brace'],
+    ]);
+    // Not a type header: a node called type.
+    expect(lines[7][0]).toEqual(['type', 'variableName']);
+    expect(lines[9]).toContainEqual(['header', 'keyword']);
+    expect(lines[9]).toContainEqual(['Idempotency-Key', 'propertyName']);
+  });
+
+  it('offers built-in and declared types in brackets and after extends', () => {
+    const options = complete('type Mine { kind cache }\nx [M')!.options;
+    expect(options[0]).toMatchObject({ label: 'Mine', type: 'class' });
+    expect(options.filter((o) => o.label === withOps.name)).toHaveLength(1);
+    expect(options.find((o) => o.label === 'Component')?.detail).toMatch(/^abstract/);
+    // Aliases still insert their tech.
+    expect(options.some((o) => o.detail?.startsWith('→'))).toBe(true);
+    const parents = complete('type X extends ')!;
+    expect(parents.from).toBe(15);
+    expect(parents.options.map((o) => o.label)).toContain(withOps.name);
+  });
+
+  it('offers property words, kinds and op access in a type body', () => {
+    expect(complete('type X {\n  ', true)?.options.map((o) => o.label)).toEqual(expect.arrayContaining(['kind', 'op', 'header', 'doc', 'latencyMs']));
+    expect(complete('type X {\n  kind ', true)?.options).toHaveLength(17);
+    expect(complete('type X {\n  op ', true)?.options.map((o) => o.label)).toEqual(['read', 'write', 'forward']);
+    expect(complete('type X {\n}\nus')?.options.map((o) => o.label)).toContain('usecase');
+    expect(complete('ty')?.options.map((o) => o.label)).toEqual(expect.arrayContaining(['type', 'abstract type']));
+  });
+
+  it("offers a step's operations, a response's statuses and the target's headers", () => {
+    const ops = complete(`db "DB" [${withOps.name}]\na -> db\nusecase "U" {\n  a -> db : `, true)!;
+    expect(ops.options.map((o) => o.label)).toEqual(withOps.ops.map((o) => o.name));
+    const api = `api "API" [${http.name}]\nweb -> api\nusecase "U" {\n`;
+    expect(complete(`${api}  api --> web : `, true)!.options.map((o) => o.label)).toEqual(http.statuses.map(String));
+    expect(complete(`${api}  web -> api : GET /x header `, true)!.options.map((o) => o.label)).toEqual(http.headers);
+    expect(complete(`${api}  web -> api : GET /x `, true)!.options.map((o) => o.label)).toEqual(['header']);
+    // A connection label outside a use case stays free text.
+    expect(complete(`db "DB" [${withOps.name}]\na -> db : `, true)).toBeNull();
   });
 });

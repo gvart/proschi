@@ -1,11 +1,15 @@
 import type { ComponentType, TechName, TechStack } from '../types/canvas';
 import { findTech, suggestTech } from '../catalog/componentCatalog';
-import { BracketCounter, qualify, tokenizeLine, type Token } from './lexer';
+import { BracketCounter, qualify, stripTrailingComment, tokenizeLine, type Token } from './lexer';
 import { endpointGroupKey } from './paths';
 import { DATA_STORE_KINDS, KINDS, TYPE_OF_KIND, isDataStore, isKind, kindFromName, kindOf } from './kinds';
 import { parseQuantity } from './quantity';
-import { accessOf } from './access';
+import { accessOf, type Access } from './access';
 import { COLOR_NAMES, editDistance, resolveColor, suggestColor } from './palette';
+import { lookupType, resolveTypes } from './typesys/resolve';
+import { loadStdlib } from './typesys/stdlib';
+import { findHeader, findOp, opNamesMostSpecificFirst, opWord, suggestHeader, suggestOp } from './typesys/ops';
+import type { OpAccess, ResolvedType, TypeDecl, TypeOp, TypeProps, TypeTable } from './typesys/types';
 import type {
   FlowStep,
   Protocol,
@@ -41,6 +45,7 @@ import type {
   ResolvedImport,
   Selector,
   SourceLoc,
+  StepMatch,
   SystemEntry,
   SystemStub,
   TrafficEntry,
@@ -59,6 +64,8 @@ interface RawStep {
   multiplier?: number;
   /** `~2MB` at the start of the label, in bytes (§7.3). */
   sizeBytes?: number;
+  /** Column of the label's text after its prefixes, for diagnostics about its words. */
+  labelCol?: number;
   loc: SourceLoc;
 }
 
@@ -93,7 +100,44 @@ type Frame =
   | { kind: 'par'; group: number; loc: SourceLoc }
   | SystemFrame
   | StubFrame
-  | SectionFrame;
+  | SectionFrame
+  | TypeFrame;
+
+/** A `type Name extends Parent {` block; `discard` when it is misplaced, so its lines are skipped. */
+interface TypeFrame {
+  kind: 'type';
+  decl: TypeDecl;
+  discard?: boolean;
+  loc: SourceLoc;
+}
+
+/** A node's `[Tech]`, resolved against the types once every file is read. */
+interface TechRef {
+  node: DiagramNode;
+  value: string;
+  loc: SourceLoc;
+}
+
+/** Profile numbers a type block may set, and the unit each takes besides a plain number. */
+const NUMBER_PROPS: Partial<Record<keyof TypeProps, Quantity['unit']>> = {
+  rps: 'rps',
+  readRps: 'rps',
+  writeRps: 'rps',
+  latencyMs: 'ms',
+  availability: '%',
+  costUsd: 'usd/month',
+  bandwidthMBps: 'MBps',
+  egressUsdPerGb: 'usd/GB',
+};
+const CHOICE_PROPS: Partial<Record<keyof TypeProps, readonly string[]>> = {
+  durable: ['true', 'false'],
+  consistency: ['strong', 'eventual'],
+  writeScaling: ['replicas', 'shards'],
+};
+const TYPE_LINES =
+  'kind, protocol, op, status, header, icon, doc or a profile number (rps, readRps, writeRps, writeScaling, latencyMs, availability, costUsd, durable, consistency, bandwidthMBps, egressUsdPerGb)';
+/** An HTTP header name, as `header` takes it unquoted. */
+const HEADER_NAME = /^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/;
 
 /** A multi-line `capacity {` inside a system. */
 interface StubFrame {
@@ -131,7 +175,8 @@ interface SectionFrame {
   loc: SourceLoc;
 }
 
-const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+/** HTTP methods a step label may start with: `GET /items`. */
+export const HTTP_METHODS: readonly string[] = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 const DEFAULT_TECH: TechStack = 'Rectangle';
 const DEFAULT_GROUP_TECH: TechStack = 'Logical Group';
 /** What a collapsed system is drawn as until a renderer knows the `system` kind. */
@@ -165,7 +210,7 @@ const CAPACITY_PARTS = 'a rate, reads, writes, shards, size, latency, availabili
 const MAX_RETRIES = 5;
 const ASSERTION_HELP =
   'Expected an assertion: "Use case" calls <node>, "Use case" writes <node> before responding, <node> calls <node>, no path from <node> to <node>, <node> has replicas >= 2, …';
-const ASSERTION_VERBS = 'calls, every scenario calls, never calls, never waits for, writes, responds, starts at, has scenario or handles failure of';
+const ASSERTION_VERBS = 'calls, uses, sends header, every scenario calls, never calls, never waits for, writes, responds, starts at, has scenario or handles failure of';
 
 /** The generic catalog tech of each kind, named in the warning about an unknown tech. */
 const GENERIC_TECH: Record<Kind, string> = {
@@ -212,6 +257,19 @@ export const DID_YOU_MEAN = /^Unknown tech stack '(.*)'\. Did you mean '([^']+)'
  */
 export function parse(source: string, options: ParseOptions = {}): ParseResult {
   return new Parser(source, options).run();
+}
+
+/**
+ * The `type` blocks of one file, unresolved: what the stdlib loader reads
+ * (typesys/stdlib.ts). Imports are not followed.
+ */
+export function parseTypeDecls(source: string, path: string): { decls: TypeDecl[]; diagnostics: Diagnostic[] } {
+  return new Parser(source, { path }, { chain: [path], teamFiles: new Map() }).readTypes();
+}
+
+/** The bundled stdlib types (src/dsl/stdlib), resolved once. */
+export function builtinTypes(): TypeTable {
+  return loadStdlib(parseTypeDecls).table;
 }
 
 /** Shared by the parser of a root document and the parsers of its systems' team files. */
@@ -274,6 +332,14 @@ class Parser {
   private readonly deferred: (() => void)[] = [];
   private built: DiagramUseCase[] = [];
   private readonly options: ParseOptions;
+  /** `type` blocks of every file read so far, in order. */
+  private readonly typeDecls: TypeDecl[] = [];
+  /** Node techs, resolved by `resolveTypes` once every file is read. */
+  private readonly techRefs: TechRef[] = [];
+  /** Built-in and declared types; set by `resolveTypes`. */
+  private typeTable: TypeTable = new Map();
+  /** The declared (not built-in) types, resolved. */
+  private types: ResolvedType[] = [];
 
   constructor(source: string, options: ParseOptions, scope?: Scope) {
     this.options = options;
@@ -290,6 +356,7 @@ class Parser {
     // Implicit nodes are created only once every file is read, so a use case
     // file may refer to nodes its imports declare.
     this.parseFile();
+    this.resolveTypes();
     this.resolvePorts();
     this.createImplicitNodes();
     this.resolveTags();
@@ -320,6 +387,7 @@ class Parser {
       ...(this.systems.length ? { systems: this.systems } : {}),
       ...(this.whatifs.length ? { whatifs: this.whatifs } : {}),
       ...(this.constants.size ? { constants: [...this.constants.values()] } : {}),
+      ...(this.types.length ? { types: this.types } : {}),
     };
 
     const order = (d: Diagnostic) => this.fileOrder.get(d.file) ?? 0;
@@ -330,6 +398,12 @@ class Parser {
       ...(this.imports.length ? { imports: this.imports } : {}),
       ...(this.blocks.length ? { blocks: this.blocks } : {}),
     };
+  }
+
+  /** For `parseTypeDecls`: the file's type blocks and every problem found reading it. */
+  readTypes(): { decls: TypeDecl[]; diagnostics: Diagnostic[] } {
+    this.parseFile();
+    return { decls: this.typeDecls, diagnostics: this.diagnostics };
   }
 
   /** Reads the current file's lines and reports blocks it leaves open. */
@@ -357,7 +431,9 @@ class Parser {
                   ? `system '${frame.system.id}'`
                   : frame.kind === 'stub'
                     ? `the capacity of system '${frame.system.id}'`
-                    : sectionName(frame);
+                    : frame.kind === 'type'
+                      ? `type '${frame.decl.name}'`
+                      : sectionName(frame);
       this.error(`Missing } to close ${what}`, frame.loc);
       if (frame.kind === 'system') this.finishSystem(frame);
     }
@@ -366,6 +442,12 @@ class Parser {
   /** Parses the line at `index` and returns the index of the last line it consumed. */
   private parseLine(index: number): number {
     const line = index + 1;
+    // `header Content-Type, …`: header names have dashes, which the lexer does not read, so the line is read as text.
+    const typeFrame = this.top();
+    if (typeFrame?.kind === 'type' && /^\s*header(\s|$)/.test(this.lines[index])) {
+      if (!typeFrame.discard) this.parseHeaders(typeFrame.decl, this.lines[index], line);
+      return index;
+    }
     const { tokens: lexed, diagnostics } = tokenizeLine(this.lines[index], line);
     const tokens = qualify(lexed);
     this.diagnostics.push(...diagnostics.map((d) => ({ ...d, ...this.fileField() })));
@@ -412,6 +494,16 @@ class Parser {
       return index;
     }
 
+    if (top?.kind === 'type') {
+      if (first.kind === 'rbrace') {
+        this.stack.pop();
+        if (second) this.error('Unexpected input after }', loc(second));
+      } else if (!top.discard) {
+        this.parseTypeLine(top.decl, tokens, line);
+      }
+      return index;
+    }
+
     if (first.kind === 'rbrace') {
       if (this.stack.length === 0) this.error('Unmatched }', loc(first));
       else this.closeFrame();
@@ -444,6 +536,15 @@ class Parser {
         break;
       case 'usecase':
         this.parseUseCase(tokens, line);
+        break;
+      // Keywords only in the shape of a type header, so a node may still be called type or abstract.
+      case 'type':
+        if (isTypeHeader(tokens, 1)) this.parseType(tokens, 1, line);
+        else this.parseNode(tokens, line);
+        break;
+      case 'abstract':
+        if (isWord(second, 'type') && isTypeHeader(tokens, 2)) this.parseType(tokens, 2, line);
+        else this.parseNode(tokens, line);
         break;
       case 'par':
         this.parsePar(tokens, line);
@@ -937,7 +1038,7 @@ class Parser {
     let result = this.teamFiles.get(target.path);
     if (!result) {
       const scope: Scope = { chain: [...this.chain, target.path], teamFiles: this.teamFiles };
-      result = new Parser(target.source, { path: target.path, resolve: this.options.resolve }, scope).run();
+      result = new Parser(target.source, { path: target.path, resolve: this.options.resolve, ...(this.options.strictOps ? { strictOps: true } : {}) }, scope).run();
       this.teamFiles.set(target.path, result);
       for (const d of result.diagnostics) {
         if (!this.fileOrder.has(d.file)) this.fileOrder.set(d.file, this.fileOrder.size);
@@ -1137,11 +1238,14 @@ class Parser {
         if (strings++ === 0) node.name = t.value;
         else node.description = t.value;
       } else if (t.kind === 'tech') {
-        const resolved = this.resolveTech(t, line);
-        node.type = resolved.type;
-        node.techStack = resolved.techStack;
-        if (resolved.inferredKind) node.inferredKind = resolved.inferredKind;
-        node.kind = resolved.type === 'text' ? 'text' : resolved.type === 'group' ? 'group' : 'component';
+        // A catalog tech is drawn as it right away; a type, or an unknown tech, once every file is read (resolveTypes).
+        const found = findTech(t.value);
+        if (found) {
+          node.type = found.type;
+          node.techStack = found.techStack;
+          node.kind = found.type === 'text' ? 'text' : found.type === 'group' ? 'group' : 'component';
+        }
+        this.techRefs.push({ node, value: t.value, loc: this.locOf(t, line) });
       } else if (t.kind === 'team') {
         node.ownerTeam = t.value;
       } else if (t.kind === 'ident' && t.value === 'pos') {
@@ -1233,7 +1337,7 @@ class Parser {
       const body = this.currentBody()!;
       body.openAlt = undefined;
       // Fan-out and payload size prefixes belong to requests; a response label is read as before.
-      const prefixes = arrow === '-->' ? { rest: label } : this.readLabelPrefixes(label, labelToken!, line);
+      const prefixes = arrow === '-->' ? { rest: label, col: labelToken && this.labelStart(labelToken, line) } : this.readLabelPrefixes(label, labelToken!, line);
       body.items.push({
         kind: 'step',
         step: {
@@ -1244,6 +1348,7 @@ class Parser {
           parallelGroup: top.kind === 'par' ? top.group : undefined,
           ...(prefixes.multiplier !== undefined ? { multiplier: prefixes.multiplier } : {}),
           ...(prefixes.sizeBytes !== undefined ? { sizeBytes: prefixes.sizeBytes } : {}),
+          ...(prefixes.col !== undefined ? { labelCol: prefixes.col } : {}),
           loc,
         },
       });
@@ -1271,12 +1376,10 @@ class Parser {
    * prefix must be followed by whitespace or end the label, so `xml …` and
    * `x-request-id` are ordinary labels. Problems are reported at the prefix.
    */
-  private readLabelPrefixes(label: string, token: Token | undefined, line: number): { rest: string; multiplier?: number; sizeBytes?: number } {
-    const out: { rest: string; multiplier?: number; sizeBytes?: number } = { rest: label };
+  private readLabelPrefixes(label: string, token: Token | undefined, line: number): { rest: string; multiplier?: number; sizeBytes?: number; col?: number } {
+    const out: { rest: string; multiplier?: number; sizeBytes?: number; col?: number } = { rest: label };
     if (!token) return out;
-    // Column of the label's first character: the label token starts at ':' and its value is trimmed.
-    const after = this.lines[line - 1].slice(token.col);
-    const base = token.col + 1 + (after.length - after.trimStart().length);
+    const base = this.labelStart(token, line);
     let offset = 0;
     for (;;) {
       const rest = label.slice(offset);
@@ -1300,7 +1403,14 @@ class Parser {
       offset += label.slice(offset).length - label.slice(offset).trimStart().length;
     }
     out.rest = label.slice(offset);
+    out.col = base + offset;
     return out;
+  }
+
+  /** Column of a label's first character: the label token starts at ':' and its value is trimmed. */
+  private labelStart(token: Token, line: number): number {
+    const after = this.lines[line - 1].slice(token.col);
+    return token.col + 1 + (after.length - after.trimStart().length);
   }
 
   // ---- HLD sections: traffic, requirements, capacity, entity, decision, test (docs/design/hld-and-practice.md §1) ----
@@ -2288,26 +2398,77 @@ class Parser {
       return false;
     };
 
-    let assertion: Assertion | undefined;
-    if (isWord(verb, 'calls')) {
-      const target = selector(i + 1);
+    /**
+     * `calls X [with GET /path]`, `uses OP on X` or `sends header H to X` at
+     * `tokens[j]`: the target, what its steps must be, and where the clause ends.
+     */
+    const call = (j: number): { target: ParsedSelector; match?: StepMatch; next: number } | undefined => {
+      const word = tokens[j];
+      const nameAt = (k: number, what: string, example: string): string | undefined => {
+        const t = tokens[k];
+        if (t?.kind === 'ident' || t?.kind === 'string') return t.value;
+        this.error(`Expected ${what} here, e.g. ${example}`, this.locOf(t ?? tokens[tokens.length - 1], line));
+        return undefined;
+      };
+      if (isWord(word, 'uses')) {
+        const example = `"${useCase}" uses INSERT on db`;
+        const op = nameAt(j + 1, 'an operation', example);
+        if (op === undefined || !expectWords(j + 2, ['on'], example)) return;
+        const target = selector(j + 3);
+        return target && { target, match: { op }, next: target.next };
+      }
+      if (isWord(word, 'sends')) {
+        const example = `"${useCase}" sends header Authorization to api`;
+        if (!expectWords(j + 1, ['header'], example)) return;
+        const header = nameAt(j + 2, 'a header name', example);
+        if (header === undefined || !expectWords(j + 3, ['to'], example)) return;
+        const target = selector(j + 4);
+        return target && { target, match: { header }, next: target.next };
+      }
+      if (!isWord(word, 'calls')) {
+        this.error(`Expected calls, uses or sends header here, e.g. "${useCase}" never calls any database`, this.locOf(word ?? tokens[tokens.length - 1], line));
+        return;
+      }
+      const target = selector(j + 1);
       if (!target) return;
-      if (isWord(tokens[target.next], 'before')) {
-        const then = selector(target.next + 1);
+      if (!isWord(tokens[target.next], 'with')) return { target, next: target.next };
+      const [method, path] = [tokens[target.next + 1], tokens[target.next + 2]];
+      const example = `"${useCase}" calls api with GET /urls/{code}`;
+      if (method?.kind !== 'ident' || !HTTP_METHODS.includes(method.value.toUpperCase())) {
+        this.error(`Expected an HTTP method after with (${HTTP_METHODS.join(', ')}), e.g. ${example}`, this.locOf(method ?? tokens[target.next], line));
+        return;
+      }
+      if (path?.kind !== 'path') {
+        this.error(`Expected a path starting with / after ${method.value}, e.g. ${example}`, this.locOf(path ?? method, line));
+        return;
+      }
+      return { target, match: { method: method.value.toUpperCase(), path: path.value }, next: target.next + 3 };
+    };
+    const matchOf = (c: { match?: StepMatch }) => (c.match ? { match: c.match } : {});
+
+    let assertion: Assertion | undefined;
+    if (isWord(verb, 'calls') || isWord(verb, 'uses') || isWord(verb, 'sends')) {
+      const c = call(i);
+      if (!c) return;
+      const word = tokens[c.next];
+      if (isWord(word, 'before') && isWord(tokens[c.next + 1], 'responding')) {
+        assertion = done({ kind: 'beforeResponding', useCase, ...withScenario, target: c.target.selector, match: c.match ?? {}, loc }, c.next + 2);
+      } else if (isWord(word, 'before')) {
+        const then = selector(c.next + 1);
         if (!then) return;
-        assertion = done({ kind: 'before', useCase, ...withScenario, first: target.selector, then: then.selector, loc }, then.next);
-      } else if (isWord(tokens[target.next], 'after')) {
-        const after = selector(target.next + 1);
+        assertion = done({ kind: 'before', useCase, ...withScenario, first: c.target.selector, ...matchOf(c), then: then.selector, loc }, then.next);
+      } else if (isWord(word, 'after')) {
+        const after = selector(c.next + 1);
         if (!after) return;
-        assertion = done({ kind: 'after', useCase, ...withScenario, target: target.selector, after: after.selector, loc }, after.next);
+        assertion = done({ kind: 'after', useCase, ...withScenario, target: c.target.selector, ...matchOf(c), after: after.selector, loc }, after.next);
       } else {
-        assertion = done({ kind: 'calls', useCase, ...withScenario, target: target.selector, quantifier: 'some', loc }, target.next);
+        assertion = done({ kind: 'calls', useCase, ...withScenario, target: c.target.selector, ...matchOf(c), quantifier: 'some', loc }, c.next);
       }
     } else if (isWord(verb, 'every')) {
-      if (!expectWords(i + 1, ['scenario', 'calls'], `"${useCase}" every scenario calls any cache`)) return;
-      const target = selector(i + 3);
-      if (!target) return;
-      assertion = done({ kind: 'calls', useCase, ...withScenario, target: target.selector, quantifier: 'every', loc }, target.next);
+      if (!expectWords(i + 1, ['scenario'], `"${useCase}" every scenario calls any cache`)) return;
+      const c = call(i + 2);
+      if (!c) return;
+      assertion = done({ kind: 'calls', useCase, ...withScenario, target: c.target.selector, ...matchOf(c), quantifier: 'every', loc }, c.next);
     } else if (isWord(verb, 'never') && isWord(tokens[i + 1], 'waits')) {
       if (!expectWords(i + 2, ['for'], `"${useCase}" never waits for any queue`)) return;
       const target = selector(i + 3);
@@ -2319,10 +2480,9 @@ class Parser {
       if (!target) return;
       assertion = done({ kind: 'startsAt', useCase, target: target.selector, loc }, target.next);
     } else if (isWord(verb, 'never')) {
-      if (!expectWords(i + 1, ['calls'], `"${useCase}" never calls any database`)) return;
-      const target = selector(i + 2);
-      if (!target) return;
-      assertion = done({ kind: 'calls', useCase, ...withScenario, target: target.selector, quantifier: 'never', loc }, target.next);
+      const c = call(i + 1);
+      if (!c) return;
+      assertion = done({ kind: 'calls', useCase, ...withScenario, target: c.target.selector, ...matchOf(c), quantifier: 'never', loc }, c.next);
     } else if (isWord(verb, 'writes')) {
       const target = selector(i + 1);
       if (!target || !expectWords(target.next, ['before', 'responding'], `"${useCase}" writes db before responding`)) return;
@@ -2409,9 +2569,13 @@ class Parser {
   /** Warns about a selector naming a tech stack that does not exist, and (once every file is read) a node that does not. */
   private checkSelectorLater({ atoms }: ParsedSelector) {
     for (const { selector, token, loc } of atoms) {
+      // Deferred: the selector may name a type declared further down or in another file.
       if ('tech' in selector && !findTech(token.value)) {
-        const suggestion = suggestTech(token.value);
-        this.warning(`Unknown tech stack '${token.value}'${suggestion ? `. Did you mean '${suggestion}'?` : ''}`, loc);
+        this.deferred.push(() => {
+          if (lookupType(this.typeTable, token.value)) return;
+          const suggestion = suggestTech(token.value);
+          this.warning(`Unknown tech stack '${token.value}'${suggestion ? `. Did you mean '${suggestion}'?` : ''}`, loc);
+        });
       }
       if ('node' in selector) {
         this.deferred.push(() => {
@@ -2592,7 +2756,11 @@ class Parser {
           request.deferredResponse = { after: steps.length, ...(step.parallelGroup !== undefined ? { group: step.parallelGroup } : {}) };
         }
         const status = step.label.match(/^(\d{3})\b\s*([\s\S]*)$/);
-        if (status) request.statusCode = Number(status[1]);
+        if (status) {
+          request.statusCode = Number(status[1]);
+          const responder = request.toPort !== undefined ? this.portType(request.toServiceId, request.toPort) : this.nodes.get(respFrom)?.resolvedType;
+          this.checkStatus(responder, request.statusCode, this.labelLoc(step, 0, 3));
+        }
         const payload = splitPayload(status ? status[2] : step.label);
         const body = payload.body ?? payload.text;
         if (body) {
@@ -2609,6 +2777,10 @@ class Parser {
       const port = toPort ?? this.onlyEntry(to, step.loc);
       const target = this.nodes.get(to);
       const isAsync = step.arrow === '->>';
+      // A step to a system's entry point is checked against the type of the node behind it.
+      const type = port !== undefined ? this.portType(to, port) : target?.resolvedType;
+      const typed = this.typedOp(type, label.method, step);
+      if (label.headers) this.checkHeaders(type, label.headers, step);
       steps.push({
         id: `${prefix}-${steps.length + 1}`,
         stepOrder: steps.length,
@@ -2630,13 +2802,81 @@ class Parser {
         loc: step.loc,
         ...(step.multiplier !== undefined ? { multiplier: step.multiplier } : {}),
         ...(step.sizeBytes !== undefined ? { sizeBytes: step.sizeBytes } : {}),
-        access: accessOf(label.method, step.label),
+        access: typed.access,
+        ...(typed.op ? { op: typed.op } : {}),
+        ...(label.headers ? { headers: label.headers } : {}),
         ...(port !== undefined ? { toPort: port } : {}),
         ...(fromPort !== undefined ? { fromPort } : {}),
       });
     }
 
+    resolveForwards(steps);
     return steps;
+  }
+
+  /** The type behind entry point `port` of system `id` (see entryType). */
+  private portType(id: string, port: string): ResolvedType | undefined {
+    const system = this.systemById.get(id);
+    return system && entryType(system, port);
+  }
+
+  /**
+   * The access of a request step and the operation of its target's type it
+   * names (docs/design/typed-components.md, "Typed operations in steps"). A
+   * typed target with operations looks up the HTTP method or the label's first
+   * words; a match decides the access. Otherwise the step reads as before
+   * (`accessOf`), with a warning when the target is typed: the label is a
+   * comment, unless its verb was already a write, which it stays.
+   */
+  private typedOp(type: ResolvedType | undefined, method: string | undefined, step: RawStep): { access: Access; op?: TypeOp } {
+    const access = accessOf(method, step.label);
+    if (!type || type.ops.length === 0) return { access };
+    const word = method ?? opWord(step.label);
+    if (!word) return { access };
+    const op = method ? type.ops.find((o) => o.name.toUpperCase() === method) : findOp(type, step.label);
+    // A forwarded frame takes its access from the step that handles it (resolveForwards); until then, the verb's.
+    if (op) return { access: op.access === 'forward' ? access : op.access, op: { ...op } };
+    const suggestion = suggestOp(type, word);
+    const ops = opNamesMostSpecificFirst(type, this.typeTable);
+    const hint = suggestion ? `Did you mean ${suggestion}?` : `Its operations are ${ops.slice(0, 8).join(', ')}${ops.length > 8 ? ', …' : ''}.`;
+    const effect = access === 'write' ? 'Treated as a write, as before.' : 'Treated as a comment.';
+    const lead = step.label.length - step.label.trimStart().length + (!method && /^\s*"/.test(step.label) ? 1 : 0);
+    this.typeProblem(`${type.name} has no operation '${word}'. ${hint} ${effect}`, this.labelLoc(step, lead, word.length));
+    return { access };
+  }
+
+  /** `200` on a response: one of the responder's type's statuses, when it lists any. */
+  private checkStatus(type: ResolvedType | undefined, code: number, loc: SourceLoc) {
+    if (!type || type.statuses.length === 0 || type.statuses.includes(code)) return;
+    const listed = type.statuses.length > 12 ? `${type.statuses.slice(0, 12).join(', ')}, …` : type.statuses.join(', ');
+    this.typeProblem(`${type.name} has no status ${code}; it answers ${listed}`, loc);
+  }
+
+  /** `header A, B` in a label: each one of the target's type's headers, when it lists any. */
+  private checkHeaders(type: ResolvedType | undefined, headers: string[], step: RawStep) {
+    if (!type || type.headers.length === 0) return;
+    const clause = step.label.search(/\sheader\s/);
+    for (const h of headers) {
+      if (findHeader(type, h)) continue;
+      const suggestion = suggestHeader(type, h);
+      const at = step.label.indexOf(h, clause + 1);
+      this.typeProblem(
+        `${type.name} has no header '${h}'. ${suggestion ? `Did you mean ${suggestion}?` : `Its headers are ${type.headers.join(', ')}.`}`,
+        this.labelLoc(step, Math.max(0, at), h.length),
+      );
+    }
+  }
+
+  /** `length` characters at `offset` in a step's label; the whole step when the label's column is unknown. */
+  private labelLoc(step: RawStep, offset: number, length: number): SourceLoc {
+    if (step.labelCol === undefined) return step.loc;
+    return { line: step.loc.line, col: step.labelCol + offset, length, ...(step.loc.file !== undefined ? { file: step.loc.file } : {}) };
+  }
+
+  /** A typed-step problem: a warning, or an error with `strictOps`. */
+  private typeProblem(message: string, loc: SourceLoc) {
+    if (this.options.strictOps) this.errorOnce(message, loc);
+    else this.warning(message, loc);
   }
 
   /**
@@ -2683,19 +2923,281 @@ class Parser {
    * (`Postgress`: database), else a service; never a free, infinitely fast
    * client.
    */
-  private resolveTech(token: Token, line: number): { type: ComponentType; techStack: TechName; inferredKind?: Kind } {
-    const found = findTech(token.value);
+  private resolveTech(value: string, loc: SourceLoc): { type: ComponentType; techStack: TechName; inferredKind?: Kind } {
+    const found = findTech(value);
     if (found) return { type: found.type, techStack: found.techStack };
-    const text = token.value.trim();
+    const text = value.trim();
     if (!text) {
-      this.warning(`Empty tech stack; drawing a ${DEFAULT_TECH}`, this.locOf(token, line));
+      this.warning(`Empty tech stack; drawing a ${DEFAULT_TECH}`, loc);
       return { type: 'shape', techStack: DEFAULT_TECH };
     }
     const suggestion = suggestTech(text);
     const closest = suggestion && findTech(suggestion);
     const kind = kindFromName(text) ?? (closest ? kindOf({ kind: 'component', type: closest.type, techStack: closest.techStack }) : undefined) ?? 'service';
-    this.warning(unknownTechMessage(text, kind, suggestion), this.locOf(token, line));
+    this.warning(unknownTechMessage(text, kind, suggestion), loc);
     return { type: TYPE_OF_KIND[kind], techStack: text, inferredKind: kind };
+  }
+
+  /**
+   * Resolves the type blocks of every file against the stdlib, then each
+   * node's `[Tech]`: a type gives the node its kind and the icon of its
+   * nearest built-in ancestor (D5); anything else is resolved as before.
+   */
+  private resolveTypes() {
+    const resolution = resolveTypes(this.typeDecls, builtinTypes());
+    this.diagnostics.push(...resolution.diagnostics);
+    this.typeTable = resolution.table;
+    this.types = resolution.types;
+    for (const ref of this.techRefs) this.applyTech(ref);
+  }
+
+  private applyTech({ node, value, loc }: TechRef) {
+    const type = lookupType(this.typeTable, value);
+    if (!type) {
+      if (findTech(value)) return;
+      const resolved = this.resolveTech(value, loc);
+      node.type = resolved.type;
+      node.techStack = resolved.techStack;
+      if (resolved.inferredKind) node.inferredKind = resolved.inferredKind;
+      return;
+    }
+    node.resolvedType = type;
+    if (type.abstract) {
+      const concrete = [...this.typeTable.values()].find((t) => !t.abstract && t.parents[0] === type.name);
+      this.warning(`'${type.name}' is an abstract type; use a type that extends it${concrete ? `, like [${concrete.name}]` : ''}`, loc);
+    }
+    // An abstract type may have no kind: the node gets the one its name suggests, as an unknown tech would.
+    const kind = type.kind ?? kindFromName(type.name) ?? 'service';
+    const icon = findTech(type.icon ?? GENERIC_TECH[kind]);
+    if (icon) {
+      node.type = icon.type;
+      node.techStack = icon.techStack;
+      node.kind = icon.type === 'text' ? 'text' : icon.type === 'group' ? 'group' : 'component';
+    }
+    if (type.kind) delete node.inferredKind;
+    else node.inferredKind = kind;
+  }
+
+  /** `[abstract] type Name [extends Parent] {`, or a whole one-line block `… { op write APPEND }`; `at` is the name's index. */
+  private parseType(tokens: Token[], at: number, line: number) {
+    const nameToken = tokens[at];
+    const extendsAt = isWord(tokens[at + 1], 'extends') ? at + 1 : -1;
+    const parentToken = extendsAt === -1 ? undefined : tokens[extendsAt + 1];
+    const decl: TypeDecl = {
+      name: nameToken.value,
+      abstract: at === 2,
+      ...(parentToken && (parentToken.kind === 'ident' || parentToken.kind === 'tech') ? { parent: parentToken.value, parentLoc: this.locOf(parentToken, line) } : {}),
+      props: {},
+      ops: [],
+      statuses: [],
+      headers: [],
+      builtin: false,
+      loc: this.locOf(nameToken, line),
+    };
+    const braceAt = extendsAt === -1 ? at + 1 : extendsAt + 2;
+    const skip = () => {
+      // A broken header that opens a block: skip its lines rather than read them as nodes.
+      if (tokens[tokens.length - 1].kind === 'lbrace') this.stack.push({ kind: 'type', decl, discard: true, loc: decl.loc });
+    };
+    if (extendsAt !== -1 && decl.parent === undefined) {
+      this.error('Expected the parent type after extends, e.g. type LedgerDb extends PostgreSQL {', this.locOf(parentToken ?? tokens[extendsAt], line));
+      return skip();
+    }
+    if (tokens[braceAt]?.kind !== 'lbrace') {
+      this.error('Expected { after the type header, e.g. type LedgerDb extends PostgreSQL {', this.locOf(tokens[braceAt] ?? tokens[braceAt - 1], line));
+      return skip();
+    }
+    if (!decl.name.trim()) {
+      this.error('Expected a type name, e.g. type LedgerDb extends PostgreSQL {', decl.loc);
+      return skip();
+    }
+    if (this.stack.length > 0) {
+      this.error('Declare types at the top level, not inside a block', this.locOf(tokens[0], line));
+      return skip();
+    }
+    const last = tokens[tokens.length - 1];
+    if (last.kind === 'rbrace' && tokens.length > braceAt + 1) {
+      const body = tokens.slice(braceAt + 1, -1);
+      if (body.length) this.parseTypeLine(decl, body, line);
+    } else if (tokens.length > braceAt + 1) {
+      this.error('Expected the type body on the next lines, or on this one closed with }', this.locOf(tokens[braceAt + 1], line));
+      return skip();
+    } else {
+      this.stack.push({ kind: 'type', decl, loc: decl.loc });
+    }
+    this.typeDecls.push(decl);
+  }
+
+  /** One line of a type block: `kind database`, `op read SELECT`, `latencyMs 4`, … */
+  private parseTypeLine(decl: TypeDecl, tokens: Token[], line: number) {
+    const [key, value] = tokens;
+    const loc = (t: Token | undefined) => this.locOf(t ?? tokens[tokens.length - 1], line);
+    if (key.kind !== 'ident') {
+      this.error(`Expected a type property: ${TYPE_LINES}`, loc(key));
+      return;
+    }
+    const word = key.value;
+    const single = (kinds: Token['kind'][], example: string): string | undefined => {
+      if (!value || !kinds.includes(value.kind)) {
+        this.error(`Expected ${example}`, loc(value ?? key));
+        return undefined;
+      }
+      this.expectEnd(tokens, 2, line);
+      return value.value;
+    };
+    switch (word) {
+      case 'kind': {
+        const kind = single(['ident'], `a kind after kind: ${KINDS.join(', ')}`);
+        if (kind === undefined) return;
+        if (!isKind(kind)) this.error(`Unknown kind '${kind}'; use one of ${KINDS.join(', ')}`, loc(value));
+        else decl.kind = kind;
+        return;
+      }
+      case 'protocol': {
+        const protocol = single(['ident', 'string'], 'a protocol after protocol, e.g. protocol SQL');
+        if (protocol !== undefined) decl.protocol = protocol;
+        return;
+      }
+      case 'icon': {
+        const icon = single(['ident', 'tech', 'string'], 'a catalog tech after icon, e.g. icon PostgreSQL or icon [REST API]');
+        if (icon !== undefined) decl.icon = icon;
+        return;
+      }
+      case 'doc': {
+        const doc = single(['string'], 'a quoted description after doc, e.g. doc "Keeps the ledger"');
+        if (doc !== undefined) decl.doc = doc;
+        return;
+      }
+      case 'op':
+        this.parseTypeOp(decl, tokens, line);
+        return;
+      case 'status': {
+        const codes = this.readList(tokens, 1, line, ['number'], 'status codes, e.g. status 200, 201, 404');
+        for (const code of codes ?? []) {
+          const n = Number(code.value);
+          if (n < 100 || n > 599) this.error(`'${code.value}' is not an HTTP status code (100 to 599)`, loc(code));
+          else if (!decl.statuses.includes(n)) decl.statuses.push(n);
+        }
+        return;
+      }
+      case 'header': {
+        // Only in a one-line block; on a line of its own `header` is read as text (parseHeaders), which allows dashes.
+        const names = this.readList(tokens, 1, line, ['ident', 'string'], 'header names, e.g. header Authorization, "Content-Type"');
+        for (const name of names ?? []) if (!decl.headers.some((h) => h.toLowerCase() === name.value.toLowerCase())) decl.headers.push(name.value);
+        return;
+      }
+    }
+    if (Object.hasOwn(CHOICE_PROPS, word)) {
+      const prop = word as 'durable' | 'consistency' | 'writeScaling';
+      const choices = CHOICE_PROPS[prop]!;
+      const choice = single(['ident'], `${choices.join(' or ')} after ${prop}`);
+      if (choice === undefined) return;
+      if (!choices.includes(choice)) this.error(`Expected ${choices.join(' or ')} after ${prop}, not '${choice}'`, loc(value));
+      else if (prop === 'durable') decl.props.durable = choice === 'true';
+      else if (prop === 'consistency') decl.props.consistency = choice as 'strong' | 'eventual';
+      else decl.props.writeScaling = choice as 'replicas' | 'shards';
+      return;
+    }
+    if (Object.hasOwn(NUMBER_PROPS, word)) {
+      const prop = word as 'rps' | 'readRps' | 'writeRps' | 'latencyMs' | 'availability' | 'costUsd' | 'bandwidthMBps' | 'egressUsdPerGb';
+      const unit = NUMBER_PROPS[prop]!;
+      const example = prop === 'availability' ? 'a percentage after availability, e.g. availability 99.95%' : `a number after ${prop}, e.g. ${prop} ${unit === 'rps' ? '20k' : '4'}`;
+      if (!value || (value.kind !== 'number' && value.kind !== 'quantity')) {
+        this.error(`Expected ${example}`, loc(value ?? key));
+        return;
+      }
+      this.expectEnd(tokens, 2, line);
+      const q = parseQuantity(value.value);
+      if ('error' in q) {
+        this.error(q.error, loc(value));
+        return;
+      }
+      if (q.unit !== undefined && q.unit !== unit) {
+        this.error(`Expected ${example}, not ${kindName(q.unit)}`, loc(value));
+        return;
+      }
+      if (prop !== 'availability') decl.props[prop] = q.value;
+      else if (q.unit === '%' && q.value > 0 && q.value <= 100) decl.props.availability = Number((q.value / 100).toPrecision(12));
+      else this.error(`Expected ${example}`, loc(value));
+      return;
+    }
+    this.error(`Unknown type property '${word}'; use ${TYPE_LINES}`, loc(key));
+  }
+
+  /** `op read SELECT, Scan latency 8 cost 2`: operations with their access (read, write or forward) and optional multipliers. */
+  private parseTypeOp(decl: TypeDecl, tokens: Token[], line: number) {
+    const access = tokens[1];
+    if (!isWord(access, 'read') && !isWord(access, 'write') && !isWord(access, 'forward')) {
+      this.error('Expected read, write or forward after op, e.g. op read SELECT', this.locOf(access ?? tokens[0], line));
+      return;
+    }
+    let end = 2;
+    while (end < tokens.length && !isWord(tokens[end], 'latency') && !isWord(tokens[end], 'cost')) end++;
+    const example = `operation names after op ${access.value}, e.g. op ${access.value} ${access.value === 'read' ? 'SELECT' : access.value === 'forward' ? 'MESSAGE' : 'INSERT, UPDATE'}`;
+    const names = this.readList(tokens.slice(0, end), 2, line, ['ident', 'string'], example);
+    if (!names) return;
+    const multipliers: { latency?: number; cost?: number } = {};
+    for (let i = end; i < tokens.length; i += 2) {
+      const [word, number] = [tokens[i], tokens[i + 1]];
+      if (!isWord(word, 'latency') && !isWord(word, 'cost')) {
+        this.error(`Unexpected ${describe(word)}; an op ends with latency <n> and cost <n>`, this.locOf(word, line));
+        return;
+      }
+      const q = number && (number.kind === 'number' || number.kind === 'quantity') ? parseQuantity(number.value) : undefined;
+      if (!q || 'error' in q || q.unit !== undefined || q.value <= 0) {
+        this.error(`Expected a multiplier after ${word.value}, e.g. ${word.value} 2 or ${word.value} 0.5`, this.locOf(number ?? word, line));
+        return;
+      }
+      multipliers[word.value as 'latency' | 'cost'] = q.value;
+    }
+    for (const name of names) {
+      const op = { name: name.value, access: access.value as OpAccess, ...multipliers };
+      const at = decl.ops.findIndex((o) => o.name === op.name);
+      if (at === -1) decl.ops.push(op);
+      else decl.ops[at] = op;
+    }
+  }
+
+  /** `header Authorization, Content-Type`, read from the line's text. */
+  private parseHeaders(decl: TypeDecl, text: string, line: number) {
+    const keyword = text.indexOf('header');
+    const start = keyword + 'header'.length;
+    const body = stripTrailingComment(text.slice(start));
+    if (!body.trim()) {
+      this.error('Expected header names, e.g. header Authorization, Content-Type', { line, col: keyword + 1, length: 6, ...this.fileField() });
+      return;
+    }
+    let col = start + 1;
+    for (const part of body.split(',')) {
+      const raw = part.trim();
+      const name = raw.length > 1 && raw.startsWith('"') && raw.endsWith('"') ? raw.slice(1, -1) : raw;
+      const loc = { line, col: col + part.indexOf(raw), length: Math.max(1, raw.length), ...this.fileField() };
+      col += part.length + 1;
+      if (!HEADER_NAME.test(name)) this.error(`Expected a header name, e.g. Content-Type${raw ? `, not '${raw}'` : ''}`, loc);
+      else if (!decl.headers.some((h) => h.toLowerCase() === name.toLowerCase())) decl.headers.push(name);
+    }
+  }
+
+  /** Comma-separated tokens of `kinds` from `tokens[from]` to the end; undefined (after an error) when malformed. */
+  private readList(tokens: Token[], from: number, line: number, kinds: Token['kind'][], example: string): Token[] | undefined {
+    const items: Token[] = [];
+    for (let i = from; i < tokens.length; i += 2) {
+      const [item, sep] = [tokens[i], tokens[i + 1]];
+      if (!kinds.includes(item.kind)) {
+        this.error(`Expected ${example}`, this.locOf(item, line));
+        return undefined;
+      }
+      items.push(item);
+      if (sep && (sep.kind !== 'comma' || i + 2 >= tokens.length)) {
+        this.error(sep.kind === 'comma' ? 'Expected another name after ,' : `Expected , or the end of the line, not ${describe(sep)}`, this.locOf(sep, line));
+        return undefined;
+      }
+    }
+    if (!items.length) {
+      this.error(`Expected ${example}`, this.locOf(tokens[from - 1], line));
+      return undefined;
+    }
+    return items;
   }
 
   private useCaseId(name: string): string {
@@ -2873,6 +3375,12 @@ export function kindName(unit: Quantity['unit'] | undefined): string {
   return unit ? KIND_NAMES[unit] : 'a plain number';
 }
 
+/** `Name {` or `Name extends …` at `tokens[at]`, the name a plain or `[bracketed]` word: the shape of a type header. */
+function isTypeHeader(tokens: Token[], at: number): boolean {
+  const [name, next] = [tokens[at], tokens[at + 1]];
+  return (name?.kind === 'ident' || name?.kind === 'tech') && (next?.kind === 'lbrace' || isWord(next, 'extends'));
+}
+
 function isWord(token: Token | undefined, word: string): boolean {
   return token?.kind === 'ident' && token.value === word;
 }
@@ -2933,14 +3441,21 @@ interface StepLabel {
   description?: string;
   format?: PayloadFormat;
   body?: string;
+  /** `header A, B` right after the endpoint. */
+  headers?: string[];
 }
 
-/** Parses `POST /orders json {...}` or free text such as `INSERT order`. */
+/** `header Authorization, If-None-Match` right after an endpoint, then the rest of the label. */
+const HEADER_CLAUSE = /^header\s+([A-Za-z0-9-]+(?:\s*,\s*[A-Za-z0-9-]+)*)(?=\s|$)\s*([\s\S]*)$/;
+
+/** Parses `POST /orders json {...}`, `GET /feed header Authorization` or free text such as `INSERT order`. */
 export function parseStepLabel(input: string): StepLabel {
   const http = input.trim().match(/^([A-Z]+)\s+(\S+)\s*([\s\S]*)$/);
   if (http && HTTP_METHODS.includes(http[1])) {
-    const payload = splitPayload(http[3]);
+    const clause = HEADER_CLAUSE.exec(http[3]);
+    const payload = splitPayload(clause ? clause[2] : http[3]);
     return {
+      ...(clause ? { headers: clause[1].split(',').map((h) => h.trim()) } : {}),
       name: `${http[1]} ${http[2]}`,
       method: http[1],
       endpoint: http[2],
@@ -2951,6 +3466,51 @@ export function parseStepLabel(input: string): StepLabel {
   }
   const payload = splitPayload(input);
   return { name: payload.text, format: payload.body ? payload.format : undefined, body: payload.body };
+}
+
+/**
+ * The type of the node an entry point leads to, where an expanded view
+ * reroutes it (dsl/view.ts): the sender of the mapped use case's first
+ * request, or its receiver when the sender is a client (the team file's
+ * stand-in for its callers), followed into a nested system. Undefined for a
+ * stub system: it has no team file, so no node and no type.
+ */
+function entryType(system: DiagramSystem, port: string): ResolvedType | undefined {
+  const useCaseId = system.entries.find((e) => e.id === port)?.useCaseId;
+  const team = system.diagram;
+  const first = team?.useCases.find((u) => u.id === useCaseId)?.steps[0];
+  if (!team || !first) return undefined;
+  const sender = team.nodes.find((n) => n.id === first.fromServiceId);
+  if (sender && kindOf(sender) !== 'client') return sender.resolvedType;
+  if (first.toPort !== undefined) {
+    const nested = team.systems?.find((s) => s.id === first.toServiceId);
+    return nested && entryType(nested, first.toPort);
+  }
+  return team.nodes.find((n) => n.id === first.toServiceId)?.resolvedType;
+}
+
+/**
+ * A step whose op is `forward` (a WebSocket frame through a load balancer)
+ * neither reads nor writes at its target: it reads or writes as the step
+ * that handles the frame does, the next one sent on from the target, through
+ * any further forwards. Without such a step it keeps the verb's access.
+ */
+function resolveForwards(steps: DiagramStep[]) {
+  const handler = (i: number, seen: Set<number>): DiagramStep | undefined => {
+    const step = steps[i];
+    for (let j = i + 1; j < steps.length; j++) {
+      if (steps[j].fromServiceId !== step.toServiceId) continue;
+      if (steps[j].op?.access !== 'forward' || seen.has(j)) return steps[j];
+      seen.add(j);
+      return handler(j, seen) ?? steps[j];
+    }
+    return undefined;
+  };
+  steps.forEach((step, i) => {
+    if (step.op?.access !== 'forward') return;
+    const next = handler(i, new Set([i]));
+    if (next && next.op?.access !== 'forward' && next.access) step.access = next.access;
+  });
 }
 
 const SIZE_UNITS: Record<string, number> = { B: 1, KB: 1e3, MB: 1e6, GB: 1e9, TB: 1e12 };

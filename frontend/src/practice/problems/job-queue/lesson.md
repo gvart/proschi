@@ -32,7 +32,7 @@ Slack ran all its background work through one Redis-backed job queue. When worke
 
 **What the tests check:**
 
-- *Enqueuing never touches Redis*: Enqueue starts at the web app, writes to a queue before answering, never calls a cache, and there is no connection at all from the web app to a cache.
+- *Enqueuing never touches Redis*: Enqueue starts at the web app, produces to a queue (`PRODUCE`) before answering, never calls a cache, and there is no connection at all from the web app to a cache.
 - *The web app enqueues through a stateless gateway*: on the Enqueue path a service comes before the queue, and the web app has no direct connection to any queue.
 - *Only the relay moves jobs from Kafka to Redis*: Relay starts at Kafka (a broker, which `any queue` also selects), its `"Relayed"` scenario writes to the cache before it finishes, and Run job starts at the workers and reads the cache, never Kafka.
 - *A full Redis leaves the job in Kafka*: Relay has a scenario where the call to the cache fails and the use case still completes.

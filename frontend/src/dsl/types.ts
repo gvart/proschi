@@ -1,4 +1,5 @@
 import type { ComponentType, TechName } from '../types/canvas';
+import type { ResolvedType, TypeOp } from './typesys/types';
 
 // Use case steps, as the parser produces them and the player animates them.
 export type ExecutionType = 'SYNC_REQUEST_RESPONSE' | 'ASYNC_FIRE_AND_FORGET' | 'ASYNC_REQUEST_RESPONSE';
@@ -64,6 +65,10 @@ export type DiagramStep = FlowStep & {
   toPort?: string;
   /** `orders.api -> …`: the entry point of the sending system. */
   fromPort?: string;
+  /** The target type's operation the label names (`INSERT`, `GET`), when the target is typed and lists it. */
+  op?: TypeOp;
+  /** `GET /x header Authorization, If-None-Match`: request headers named in the label. */
+  headers?: string[];
 };
 
 /**
@@ -99,6 +104,13 @@ export interface DiagramNode {
    * nothing matches). The parser warns about such a node.
    */
   inferredKind?: Kind;
+  /**
+   * The type `[Tech]` names, built in (src/dsl/stdlib) or declared with
+   * `type` (docs/design/typed-components.md). For a declared type,
+   * `techStack` and `type` are those of its icon, its nearest built-in
+   * ancestor; the type's own name is `resolvedType.name`.
+   */
+  resolvedType?: ResolvedType;
   ownerTeam?: string;
   description?: string;
   /** Id of the enclosing `group`, if any. */
@@ -226,6 +238,8 @@ export interface Diagram {
   whatifs?: WhatIf[];
   /** `let name = value` constants, in order; absent when there are none. Their uses are already replaced by their values. */
   constants?: Constant[];
+  /** `type` blocks of the document and its imports, resolved, in order; absent when there are none. Built-in types are not listed. */
+  types?: ResolvedType[];
 }
 
 /**
@@ -452,10 +466,27 @@ export interface Decision {
   loc: SourceLoc;
 }
 
+/**
+ * What a step must be, besides going to the selected nodes (docs/TESTS.md,
+ * "Typed assertions"): `calls X with GET /urls/{code}` sets `method` and
+ * `path`, `uses INSERT on X` sets `op` (the canonical name of the step's
+ * resolved operation), `sends header Authorization to X` sets `header`.
+ */
+export interface StepMatch {
+  method?: string;
+  path?: string;
+  op?: string;
+  header?: string;
+}
+
 /** One assertion line inside `test "…" { … }` (docs/design/hld-and-practice.md §1.9). */
 export type Assertion =
-  | { kind: 'calls'; useCase: string; scenario?: string; target: Selector; quantifier: 'some' | 'every' | 'never'; loc: SourceLoc }
-  | { kind: 'before'; useCase: string; scenario?: string; first: Selector; then: Selector; loc: SourceLoc }
+  /** `match`: only steps to the target that are that request, operation or header count. */
+  | { kind: 'calls'; useCase: string; scenario?: string; target: Selector; match?: StepMatch; quantifier: 'some' | 'every' | 'never'; loc: SourceLoc }
+  /** `match` applies to the steps to `first`. */
+  | { kind: 'before'; useCase: string; scenario?: string; first: Selector; match?: StepMatch; then: Selector; loc: SourceLoc }
+  /** `U uses INSERT on db before responding`: every success scenario sends a matching synchronous, successful step to the target before the answer. */
+  | { kind: 'beforeResponding'; useCase: string; scenario?: string; target: Selector; match: StepMatch; loc: SourceLoc }
   | { kind: 'writesBeforeResponding'; useCase: string; scenario?: string; target: Selector; loc: SourceLoc }
   | { kind: 'responds'; useCase: string; scenario?: string; status: string; loc: SourceLoc }
   | { kind: 'hasScenario'; useCase: string; scenario: string; loc: SourceLoc }
@@ -466,7 +497,7 @@ export type Assertion =
   /** `U [scenario S] never waits for X`: no synchronous call to X before U's entry response. */
   | { kind: 'neverWaits'; useCase: string; scenario?: string; target: Selector; loc: SourceLoc }
   /** `U [scenario S] calls Y after X`: in every scenario calling both, the last call to Y follows the first call to X. */
-  | { kind: 'after'; useCase: string; scenario?: string; target: Selector; after: Selector; loc: SourceLoc }
+  | { kind: 'after'; useCase: string; scenario?: string; target: Selector; match?: StepMatch; after: Selector; loc: SourceLoc }
   /** `[in U] X calls Y` / `[in U] X never calls Y`: steps sent by X (not just reached). */
   | { kind: 'senderCalls'; useCase?: string; from: Selector; to: Selector; quantifier: 'some' | 'never'; loc: SourceLoc }
   /** `U starts at X`: U's entry request is sent by a node matching X. */
@@ -518,4 +549,11 @@ export interface ParseOptions {
   path?: string;
   /** Loads imported files and the team files of `system … { from "…" }`; without it, they only produce a warning. */
   resolve?: ImportResolver;
+  /**
+   * Report a step label that names no operation of its target's type, a
+   * status the responder's type does not list, or a header the target's type
+   * does not list, as an error instead of a warning (problem front matter
+   * `strict: true`).
+   */
+  strictOps?: boolean;
 }

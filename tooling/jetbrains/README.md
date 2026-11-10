@@ -11,9 +11,9 @@ Install it from the
 
 | Feature | How |
 |---|---|
-| Syntax highlighting, bracket matching, auto-closing pairs, `#` comment toggling | The TextMate grammar (`tooling/grammar`) and the VS Code language configuration, loaded through IntelliJ's bundled TextMate plugin |
+| Syntax highlighting, bracket matching, auto-closing pairs, `#` comment toggling, including component types (`[abstract] type … extends …` and their `op read\|write\|forward`, `status` and `header` lines), the `header` clause of steps and the typed test assertions (`calls … with`, `uses … on`, `sends header … to`) | The TextMate grammar (`tooling/grammar`) and the VS Code language configuration, loaded through IntelliJ's bundled TextMate plugin |
 | File icon | The site's logo, for `*.proschi` in the project view, tabs and *Go to File* |
-| Errors and warnings as you type, quick fixes, completion, hover (*Quick Documentation*), go to definition, find usages, *Structure*, links on import paths | The Proschi language server (`proschi-language-server --stdio`) through the IDE's built-in LSP client |
+| Errors and warnings as you type, quick fixes, completion (types, their operations and headers too), hover (*Quick Documentation*), go to definition, find usages, *Structure*, links on import paths | The Proschi language server (`proschi-language-server --stdio`) through the IDE's built-in LSP client |
 | Formatting | *Code → Reformat Code* (Ctrl+Alt+L / ⌥⌘L) sends `textDocument/formatting` to the server. It is also in the *Proschi* menu |
 | *Tools → Proschi → Check File* | `proschi check <file>`; the result appears in a notification, with *Show output* for the full text |
 | *Tools → Proschi → Run Tests* | `proschi test <file>`: the file's requirements and test blocks against the simulation |

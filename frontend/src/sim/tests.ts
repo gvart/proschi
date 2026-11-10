@@ -1,4 +1,4 @@
-import type { Assertion, CostScope, Diagram, DiagramScenario, DiagramStep, DiagramUseCase, FlowTest, Percentile, Requirement, Selector, SourceLoc } from '../dsl/types';
+import type { Assertion, CostScope, Diagram, DiagramScenario, DiagramStep, DiagramUseCase, FlowTest, Percentile, Requirement, Selector, SourceLoc, StepMatch } from '../dsl/types';
 import { editDistance } from '../catalog/componentCatalog';
 import { requestLabel } from '../dsl/sequence';
 import { accessIn } from './access';
@@ -25,6 +25,7 @@ import {
   type UseCaseAnalysis,
 } from './analyze';
 import {
+  callText,
   criticalPath,
   fallbacksFor,
   findScenario,
@@ -35,6 +36,7 @@ import {
   requestOrder,
   selectNodes,
   selectorText,
+  stepMatches,
   writesBeforeResponse,
 } from './flow';
 import { scopedCost } from './cost';
@@ -371,10 +373,10 @@ function availability(run: Run, u: DiagramUseCase, minPercent: number): Check & 
 type WriteGap = { kind: 'async' | 'after' | 'read'; step: DiagramStep } | { kind: 'none' };
 
 /** Why a scenario does not write to an accepted node synchronously before responding, with the step that comes closest. */
-function writeGap(run: Run, u: DiagramUseCase, s: DiagramScenario, accept: (id: string) => boolean): WriteGap {
+function writeGap(run: Run, u: DiagramUseCase, s: DiagramScenario, accept: (id: string) => boolean, isWrite = run.isWrite): WriteGap {
   const { requests, beforeResponse } = requestOrder(u, s);
   const hits = requests.map((m, i) => ({ m, i })).filter(({ m }) => !m.failed && accept(m.to));
-  const writes = hits.filter(({ m }) => run.isWrite(m.step));
+  const writes = hits.filter(({ m }) => isWrite(m.step));
   const early = writes.find(({ m, i }) => m.async && i < beforeResponse);
   if (early) return { kind: 'async', step: early.m.step };
   const late = writes.find(({ i }) => i >= beforeResponse);
@@ -625,6 +627,8 @@ function assertion(run: Run, a: Assertion): Check {
       if (ids.size === 0) return noMatch(a.target);
       return writesCheck(run, sc.u, sc.scenarios, (id) => ids.has(id), selectorText(a.target));
     }
+    case 'beforeResponding':
+      return beforeResponding(run, a);
     case 'responds':
       return responds(run, a);
     case 'hasScenario': {
@@ -672,33 +676,97 @@ function noMatch(selector: Selector): Check {
   return fail(`No node matches ${selectorText(selector)}`, 'Use a node id, [Tech] or any <kind> (any cache, any database, …)');
 }
 
+/** `INSERT on db`, `GET /urls/{code} to api`, `header Authorization to api`, or just `db`: the call as a noun. */
+function callNoun(selector: Selector, match: StepMatch | undefined): string {
+  const target = selectorText(selector);
+  if (match?.op !== undefined) return `${match.op} on ${target}`;
+  if (match?.header !== undefined) return `header ${match.header} to ${target}`;
+  if (match?.method !== undefined) return `${match.method} ${match.path ?? ''} to ${target}`;
+  return target;
+}
+
+/** `calls db` → `call db`, for "does not call …". */
+const baseForm = (phrase: string) => phrase.replace(/^(\w+?)s\b/, '$1');
+
+/**
+ * A typed assertion that can never hold, because no selected node's type has
+ * the operation it names, or every selected node's type lists headers but not
+ * that one. Catches a misspelt `never uses Scna on …`, which would hold.
+ */
+function vocabularyGap(run: Run, ids: Set<string>, selector: Selector, match: StepMatch | undefined): Check | undefined {
+  if (match?.op === undefined && match?.header === undefined) return undefined;
+  const nodes = run.diagram.nodes.filter((n) => ids.has(n.id));
+  // A system's entry point takes the type of the node behind it, which its box does not carry.
+  if (nodes.some((n) => n.kind === 'system')) return undefined;
+  const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+  const what = selectorText(selector);
+  const types = nodes.map((n) => n.resolvedType);
+  const listed = (names: string[]) => `${names.slice(0, 8).join(', ')}${names.length > 8 ? ', …' : ''}`;
+  const { op, header } = match;
+  if (op !== undefined && !types.some((t) => t?.ops.some((o) => same(o.name, op)))) {
+    const ops = [...new Set(types.flatMap((t) => t?.ops.map((o) => o.name) ?? []))];
+    return fail(
+      `No node matching ${what} has an operation '${op}'`,
+      ops.length ? `Its operations are ${listed(ops)}` : `${what} has no typed operations; give it a type with op lines, or assert calls ${what} instead`,
+    );
+  }
+  if (header !== undefined && types.every((t) => t && t.headers.length > 0 && !t.headers.some((h) => same(h, header)))) {
+    const headers = [...new Set(types.flatMap((t) => t?.headers ?? []))];
+    return fail(`No node matching ${what} takes the header '${header}'`, `Its headers are ${listed(headers)}`);
+  }
+  return undefined;
+}
+
+/** How to make a step match: what to put in its label. */
+function matchHint(selector: Selector, match: StepMatch | undefined): string {
+  const what = selectorText(selector);
+  if (match?.op !== undefined) return `Add a step to ${what} whose label starts with ${match.op}`;
+  if (match?.header !== undefined) return `Name the header in a request to ${what}: GET /path header ${match.header}`;
+  if (match?.method !== undefined) return `Add a step to ${what} labelled ${match.method} ${match.path ?? ''}`.trimEnd();
+  return `Add a step to ${what}`;
+}
+
+/** `; its steps there are GetItem Url, …`: what the scenarios send to the target instead, when a typed assertion finds no match. */
+function otherSteps(scenarios: DiagramScenario[], ids: Set<string>, match: StepMatch | undefined): string {
+  if (!match) return '';
+  const steps = scenarios.flatMap((s) => s.steps.filter((step) => ids.has(step.toServiceId)));
+  const labels = [...new Set(steps.map((step) => requestLabel(step) || '(no label)'))];
+  return labels.length ? `; its steps there are ${labels.slice(0, 3).join(', ')}${labels.length > 3 ? ', …' : ''}` : '';
+}
+
 function calls(run: Run, a: Extract<Assertion, { kind: 'calls' }>): Check {
   const sc = scope(run, a.useCase, a.scenario);
   if (isCheck(sc)) return sc;
   const what = selectorText(a.target);
+  const phrase = callText(a.target, a.match);
   const ids = idsOf(run, a.target);
-  const called = (s: DiagramScenario) => s.steps.filter((step) => ids.has(step.toServiceId));
+  const called = (s: DiagramScenario) => s.steps.filter((step) => ids.has(step.toServiceId) && stepMatches(step, a.match));
   const calling = sc.scenarios.filter((s) => called(s).length > 0);
   const names = (list: DiagramScenario[]) => list.map((s) => quote(s.name)).join(', ');
   const multi = sc.scenarios.length > 1;
+  const gap = vocabularyGap(run, ids, a.target, a.match);
+  if (gap) return gap;
 
   if (a.quantifier === 'never') {
-    if (calling.length === 0) return pass(`${sc.label} never calls ${what}`);
+    if (calling.length === 0) return pass(`${sc.label} never ${phrase}`);
     const first = calling[0];
     const step = called(first)[0];
     return fail(
-      `${multi ? quote(first.name) : sc.label} calls ${nodeLabel(run.diagram, step.toServiceId)}: ${stepText(step)}`,
-      `Take the call to ${step.toServiceId} out of ${quote(first.name)}, e.g. serve it from a cache`,
+      `${multi ? quote(first.name) : sc.label} ${a.match ? phrase : `calls ${nodeLabel(run.diagram, step.toServiceId)}`}: ${stepText(step)}`,
+      a.match ? `Change or remove the step to ${step.toServiceId} in ${quote(first.name)}` : `Take the call to ${step.toServiceId} out of ${quote(first.name)}, e.g. serve it from a cache`,
     );
   }
   if (ids.size === 0) return noMatch(a.target);
   if (a.quantifier === 'some') {
-    if (calling.length) return pass(`${sc.label} calls ${what}${multi ? ` in ${names(calling)}` : ''}`);
-    return fail(`${sc.label} never calls ${what}`, `Add a step to ${what}`);
+    if (calling.length) return pass(`${sc.label} ${phrase}${multi ? ` in ${names(calling)}` : ''}`);
+    return fail(`${sc.label} never ${phrase}${otherSteps(sc.scenarios, ids, a.match)}`, matchHint(a.target, a.match));
   }
   const missing = sc.scenarios.filter((s) => !calling.includes(s));
-  if (missing.length === 0 && sc.scenarios.length) return pass(`Every scenario of ${sc.label} calls ${what}`);
-  return fail(`${sc.label} does not call ${what} in ${names(missing) || 'any scenario'}`, `Add a step to ${what} in ${names(missing) || 'a scenario'}`);
+  if (missing.length === 0 && sc.scenarios.length) return pass(`Every scenario of ${sc.label} ${phrase}`);
+  return fail(
+    `${sc.label} does not ${baseForm(phrase)} in ${names(missing) || 'any scenario'}${otherSteps(missing, ids, a.match)}`,
+    a.match ? `${matchHint(a.target, a.match)} in ${names(missing) || 'a scenario'}` : `Add a step to ${what} in ${names(missing) || 'a scenario'}`,
+  );
 }
 
 function before(run: Run, a: Extract<Assertion, { kind: 'before' }>): Check {
@@ -706,16 +774,18 @@ function before(run: Run, a: Extract<Assertion, { kind: 'before' }>): Check {
   if (isCheck(sc)) return sc;
   const first = idsOf(run, a.first);
   const then = idsOf(run, a.then);
-  const [x, y] = [selectorText(a.first), selectorText(a.then)];
+  const [x, y] = [callNoun(a.first, a.match), selectorText(a.then)];
   if (first.size === 0) return noMatch(a.first);
   if (then.size === 0) return noMatch(a.then);
+  const gap = vocabularyGap(run, first, a.first, a.match);
+  if (gap) return gap;
   let checked = 0;
   for (const s of sc.scenarios) {
     const order = requestOrder(sc.u, s).requests;
     const iy = order.findIndex((m) => then.has(m.to));
     if (iy < 0) continue;
     checked++;
-    const ix = order.findIndex((m) => first.has(m.to));
+    const ix = order.findIndex((m) => first.has(m.to) && stepMatches(m.step, a.match));
     if (ix < 0 || ix > iy) {
       const where = sc.scenarios.length > 1 || a.scenario ? `In ${quote(s.name)}` : `In ${quote(sc.u.name)}`;
       return fail(
@@ -727,7 +797,37 @@ function before(run: Run, a: Extract<Assertion, { kind: 'before' }>): Check {
     }
   }
   if (checked === 0) return fail(`${sc.label} never calls ${y}`, `Add a step to ${y} after the call to ${x}`);
-  return pass(`${sc.label} calls ${x} before ${y}${checked > 1 ? ` in all ${checked} scenarios that call ${y}` : ''}`);
+  return pass(`${sc.label} ${callText(a.first, a.match)} before ${y}${checked > 1 ? ` in all ${checked} scenarios that call ${y}` : ''}`);
+}
+
+/**
+ * `U uses INSERT on db before responding` (and `calls X [with …] before
+ * responding`, `sends header H to X before responding`): every success
+ * scenario sends a matching synchronous, successful step to X before the
+ * entry request is answered.
+ */
+function beforeResponding(run: Run, a: Extract<Assertion, { kind: 'beforeResponding' }>): Check {
+  const sc = scope(run, a.useCase, a.scenario);
+  if (isCheck(sc)) return sc;
+  const ids = idsOf(run, a.target);
+  if (ids.size === 0) return noMatch(a.target);
+  const gap = vocabularyGap(run, ids, a.target, a.match);
+  if (gap) return gap;
+  const phrase = callText(a.target, a.match);
+  const success = sc.scenarios.filter((s) => s.outcome === 'success');
+  if (success.length === 0) return fail(`${sc.label} has no success scenario to check`, 'Add a scenario whose entry request is answered with a 2xx');
+  const accept = (id: string) => ids.has(id);
+  const isMatch = (step: DiagramStep) => stepMatches(step, a.match);
+  const gaps = success.filter((s) => !writesBeforeResponse(sc.u, s, accept, isMatch));
+  if (gaps.length === 0) return pass(`${success.length === 1 ? sc.label : `Every success scenario of ${sc.label}`} ${phrase} before responding`);
+  const where = (s: DiagramScenario) => (sc.u.scenarios.length > 1 ? quote(s.name) : quote(sc.u.name));
+  const text = (s: DiagramScenario) => {
+    const g = writeGap(run, sc.u, s, accept, isMatch);
+    if (g.kind === 'async') return `${where(s)} ${phrase} only asynchronously: ${stepText(g.step)}`;
+    if (g.kind === 'after') return `${where(s)} ${phrase} only after responding: ${stepText(g.step)}`;
+    return `${where(s)} never ${phrase} before responding${otherSteps([s], ids, a.match)}`;
+  };
+  return fail(gaps.map(text).join('; '), `${matchHint(a.target, a.match)}, sent with -> before the line that answers the entry request`);
 }
 
 /**
@@ -764,14 +864,17 @@ function after(run: Run, a: Extract<Assertion, { kind: 'after' }>): Check {
   if (isCheck(sc)) return sc;
   const targets = idsOf(run, a.target);
   const firsts = idsOf(run, a.after);
-  const [y, x] = [selectorText(a.target), selectorText(a.after)];
+  const [y, x] = [callNoun(a.target, a.match), selectorText(a.after)];
   if (targets.size === 0) return noMatch(a.target);
   if (firsts.size === 0) return noMatch(a.after);
+  const gap = vocabularyGap(run, targets, a.target, a.match);
+  if (gap) return gap;
+  const isTarget = (m: { to: string; step: DiagramStep }) => targets.has(m.to) && stepMatches(m.step, a.match);
   let checked = 0;
   for (const s of sc.scenarios) {
     const order = requestOrder(sc.u, s).requests;
     const ix = order.findIndex((m) => firsts.has(m.to));
-    const iy = order.map((m) => targets.has(m.to)).lastIndexOf(true);
+    const iy = order.map(isTarget).lastIndexOf(true);
     if (ix < 0 || iy < 0) continue;
     checked++;
     if (iy < ix) {
@@ -783,12 +886,12 @@ function after(run: Run, a: Extract<Assertion, { kind: 'after' }>): Check {
     }
   }
   if (checked === 0) {
-    const callsY = sc.scenarios.some((s) => s.steps.some((step) => targets.has(step.toServiceId)));
+    const callsY = sc.scenarios.some((s) => s.steps.some((step) => targets.has(step.toServiceId) && stepMatches(step, a.match)));
     const callsX = sc.scenarios.some((s) => s.steps.some((step) => firsts.has(step.toServiceId)));
     const why = !callsY && !callsX ? `calls neither ${x} nor ${y}` : !callsY ? `never calls ${y}` : !callsX ? `never calls ${x}` : `never calls ${x} and ${y} in the same scenario`;
     return fail(`${sc.label} ${why}`, `Add a step to ${y} after the call to ${x}`);
   }
-  return pass(`${sc.label} calls ${y} after ${x}${checked > 1 ? ` in all ${checked} scenarios that call both` : ''}`);
+  return pass(`${sc.label} ${callText(a.target, a.match)} after ${x}${checked > 1 ? ` in all ${checked} scenarios that call both` : ''}`);
 }
 
 /** `[in U] X calls Y` / `[in U] X never calls Y` (§7.1): steps sent by a node matching X to one matching Y. */

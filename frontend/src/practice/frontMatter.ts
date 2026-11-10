@@ -16,13 +16,14 @@
  * ```
  *
  * Values are plain strings, "double-quoted" (JSON escapes) or 'single-quoted'
- * ('' is a quote) strings, numbers, flow lists `[a, "b"]` and block lists of
- * `  - item` lines. Anything a YAML parser could read differently (a plain
- * value with `: ` or ` #`, starting with an indicator, or reading as a
- * boolean/null) is an error, so every file this accepts means the same in YAML.
+ * ('' is a quote) strings, numbers, `true` and `false`, flow lists `[a, "b"]`
+ * and block lists of `  - item` lines. Anything a YAML parser could read
+ * differently (a plain value with `: ` or ` #`, starting with an indicator, or
+ * reading as another boolean or null: `yes`, `off`, `~`) is an error, so every
+ * file this accepts means the same in YAML.
  */
 
-export type FrontMatterValue = string | number | string[];
+export type FrontMatterValue = string | number | boolean | string[];
 
 export interface FrontMatter {
   data: Record<string, FrontMatterValue>;
@@ -59,7 +60,7 @@ export function frontMatterString(s: string): string {
 }
 
 /** Reads one scalar (the whole of `text`). */
-function scalar(text: string, line: number, inFlow: boolean): string | number {
+function scalar(text: string, line: number, inFlow: boolean): string | number | boolean {
   if (text.startsWith('"')) {
     if (!/^"(?:[^"\\]|\\.)*"$/.test(text)) throw new FrontMatterError(`Unterminated or malformed double-quoted string: ${text}`, line);
     try {
@@ -73,6 +74,7 @@ function scalar(text: string, line: number, inFlow: boolean): string | number {
     return text.slice(1, -1).replace(/''/g, "'");
   }
   if (NUMBER.test(text)) return Number(text);
+  if (text === 'true' || text === 'false') return text === 'true';
   if (!isPlainSafe(text, inFlow)) throw new FrontMatterError(`Ambiguous value ${JSON.stringify(text)}; put it in double quotes`, line);
   return text;
 }

@@ -4,6 +4,8 @@ summary: "Netflix's two US regions both serve, replicate asynchronously, and eit
 difficulty: hard
 company: Netflix
 tags: [availability, replication, real-world]
+version: 2
+strict: true
 hints:
   - "Two regions that both serve is half the design. The other half is the day one of them is evacuated: how much traffic does the surviving region carry then?"
   - "Build US-West as a mirror of US-East (westZuul, westApi, westCache, westDb). In Browse, the East scenarios touch only east nodes and the West scenarios only west nodes; Browse in failover sends each evacuated region's members to the other one."

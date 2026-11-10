@@ -32,6 +32,54 @@
       "description": "Declare nodes, groups and connections in Proschi: ids, display names, tech stacks from the catalog, replicas, owners and descriptions."
     },
     {
+      "slug": "types",
+      "title": "Component types and operations",
+      "source": "TYPES.md",
+      "description": "Proschi component types: declare your own with type and extends, add read and write operations, statuses, headers and icons, and fix unknown-op warnings."
+    },
+    {
+      "slug": "types-core",
+      "title": "Built-in types: clients, shapes and notes",
+      "source": "types/core.md",
+      "description": "Proschi's root type Component and the built-in client, shape, note and group types, with their parents, kinds and descriptions, generated from the stdlib."
+    },
+    {
+      "slug": "types-edge",
+      "title": "Built-in types: edge",
+      "source": "types/edge.md",
+      "description": "Proschi's built-in edge types: DNS, CDNs, load balancers, API gateways and WAFs, with their HTTP operations, statuses and headers, from the stdlib."
+    },
+    {
+      "slug": "types-compute",
+      "title": "Built-in types: compute",
+      "source": "types/compute.md",
+      "description": "Proschi's built-in compute types: services, workers, functions, frameworks and platforms, with their parents, statuses and headers, from the stdlib."
+    },
+    {
+      "slug": "types-data",
+      "title": "Built-in types: data",
+      "source": "types/data.md",
+      "description": "Proschi's built-in data types: SQL and NoSQL databases, caches, search, warehouses and storage, with every read and write operation, from the stdlib."
+    },
+    {
+      "slug": "types-messaging",
+      "title": "Built-in types: messaging",
+      "source": "types/messaging.md",
+      "description": "Proschi's built-in queue and broker types (SQS, Kafka, RabbitMQ, NATS, Pub/Sub and more) with their send and receive operations, generated from the stdlib."
+    },
+    {
+      "slug": "types-external",
+      "title": "Built-in types: external services",
+      "source": "types/external.md",
+      "description": "Proschi's built-in external service types: payments, auth, email, SMS, push, maps and AI, with their operations, statuses and headers, from the stdlib."
+    },
+    {
+      "slug": "types-cloud",
+      "title": "Built-in types: cloud providers",
+      "source": "types/cloud.md",
+      "description": "Proschi's built-in AWS, Google Cloud, Azure and Cloudflare types, each with the generic type it extends and its own operations, generated from the stdlib."
+    },
+    {
       "slug": "styling",
       "title": "Colors, legend and layout",
       "source": "STYLING.md",
@@ -194,6 +242,7 @@
       "items": [
         { "page": "language", "label": "Overview" },
         { "page": "nodes", "label": "Nodes and connections" },
+        { "page": "types", "label": "Component types" },
         { "page": "styling", "label": "Colors and layout" },
         { "page": "use-cases", "label": "Use cases" },
         { "page": "scenarios", "label": "Scenarios" },
@@ -203,6 +252,18 @@
         { "page": "hld", "label": "High-level design" },
         { "page": "tests", "label": "Requirements and tests" },
         { "page": "grammar", "label": "Grammar" }
+      ]
+    },
+    {
+      "title": "Type reference",
+      "items": [
+        { "page": "types-core", "label": "Clients and drawing" },
+        { "page": "types-edge", "label": "Edge" },
+        { "page": "types-compute", "label": "Compute" },
+        { "page": "types-data", "label": "Data" },
+        { "page": "types-messaging", "label": "Messaging" },
+        { "page": "types-external", "label": "External services" },
+        { "page": "types-cloud", "label": "Cloud providers" }
       ]
     },
     {

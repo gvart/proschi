@@ -31,8 +31,8 @@ Dropbox shows a thumbnail for every file and a browser preview for most document
 
 **What the tests check:**
 
-- *Uploads never wait for processing*: the upload writes `originals` before answering, sends to a queue, and never calls or waits for a worker pool. Pre-warm starts at the queue.
-- *Each transformation has its own worker pool*: pre-warm reads the original before rendering, calls `previewer` only in `"Thumbnail and preview"`, writes `derived` before it finishes, and both pools have at least two workers.
+- *Uploads never wait for processing*: the upload `PUT`s the file to `originals` before answering, sends to a queue, and never calls or waits for a worker pool. Pre-warm starts at the queue.
+- *Each transformation has its own worker pool*: pre-warm `GET`s the original before rendering, calls `previewer` only in `"Thumbnail and preview"`, writes `derived` before it finishes, and both pools have at least two workers.
 - *Views are served from stored outputs*: thumbnail views go to the CDN before `derived` and never reach a worker or the originals; a pre-warmed preview never reaches a worker; a preview generated on view checks `derived` first and stores its pages before answering.
 - *Users reach only the API and the CDN*.
 

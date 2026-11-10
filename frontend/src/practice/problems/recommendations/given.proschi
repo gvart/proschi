@@ -33,8 +33,8 @@ test "Features are precomputed and read from an online store" {
   "Load Explore" never calls warehouse
   "Load Explore" calls features before light
   "Refresh features" starts at pipeline
-  "Refresh features" calls warehouse before features
-  "Refresh features" calls warehouse before embeddings
+  "Refresh features" uses SELECT on warehouse before features
+  "Refresh features" uses SELECT on warehouse before embeddings
 }
 
 test "Users reach only the Explore API" {

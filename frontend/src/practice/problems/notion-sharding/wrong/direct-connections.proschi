@@ -16,7 +16,7 @@ web -> db : SQL to the workspace's shard
 
 usecase "Load page" "A user opens a page" {
   web -> db  : SELECT blocks WHERE space_id = $1 AND parent_id = $2
-  db --> web : 120 rows
+  db --> web : the 120 rows
 }
 
 usecase "Edit block" "A user types into a block" {

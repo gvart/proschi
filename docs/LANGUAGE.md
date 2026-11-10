@@ -26,7 +26,7 @@ usecase "Create order" {
   alt "Created" {
     par {
       orders -> ordersDb : INSERT order
-      orders ->> events  : OrderCreated {"orderId": "o-1"}
+      orders ->> events  : PUBLISH OrderCreated {"orderId": "o-1"}
     }
     orders --> gateway : 201 {"status": "pending"}
   } alt "Invalid payload" {
@@ -58,6 +58,7 @@ parts, except in a tech stack such as `[Redis]`, where they are literal.
 | Node | `id ["Name"] [Tech] [@team] ["Description"] [x3] …` | top level, group | [Nodes](NODES.md#declare-a-node) |
 | Group | `group id ["Name"] [Style] … { … }` | top level, group | [Groups](NODES.md#frame-nodes-with-a-group) |
 | Connection | `a -> b [.tag] [: label]` | top level, group | [Connections](NODES.md#connect-two-nodes) |
+| Type | `[abstract] type Name [extends Parent] { … }` | top level | [Component types](TYPES.md) |
 | Legend | `legend { … }` | top level | [Colors and legend](STYLING.md#colors-and-legend) |
 | Direction | `direction down\|right\|up\|left` | top level, group | [Steering the layout](STYLING.md#steering-the-layout) |
 | Ordered layout | `layout ordered` | top level | [Steering the layout](STYLING.md#steering-the-layout) |
@@ -82,6 +83,8 @@ The [grammar](GRAMMAR.md) has every statement in EBNF.
 
 - [Nodes, groups and connections](NODES.md): ids, names, tech stacks,
   replicas and owners.
+- [Component types](TYPES.md): what a tech stack names, your own types,
+  and the operations a node takes.
 - [Colors, legend and layout](STYLING.md): colors, tags, layout hints and
   what canvas edits write.
 - [Use cases](USE-CASES.md): step arrows, labels, payloads, fan-out, reads

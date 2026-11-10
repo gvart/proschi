@@ -37,8 +37,9 @@ test "Tweets are counted in the stream, in memory" {
 }
 
 test "Trends are ranked ahead of time and served from a cache" {
-  "Publish trends" calls any cache
-  "Get trends" calls any cache before any database
+  "Publish trends" uses SET on any cache
+  "Get trends" uses GET on any cache before any database
   "Get trends" scenario "Cache hit" never calls any database
+  "Get trends" scenario "Cache miss" uses SET on any cache after any database
   "Get trends" never calls tweetstore
 }

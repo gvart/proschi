@@ -1,0 +1,123 @@
+# Proschi standard library: Microsoft Azure. The rules are in core.proschi.
+
+# Edge
+
+type [Azure CDN] extends CDN {
+  doc "Azure CDN, the content delivery network of Azure."
+}
+
+type [Azure Front Door] extends CDN {
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
+  doc "Azure Front Door, Azure's global entry point: CDN, load balancing and WAF at the edge."
+}
+
+type [Azure DNS] extends DNS {
+  doc "Azure DNS, the DNS service of Azure."
+}
+
+type [Azure Load Balancer] extends [Load Balancer] {
+  doc "Azure Load Balancer, the L4 load balancer of Azure."
+}
+
+type [Azure Application Gateway] extends [Load Balancer] {
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
+  doc "Azure Application Gateway, the L7 load balancer of Azure, with an optional WAF."
+}
+
+type [Azure API Management] extends [API Gateway] {
+  doc "Azure API Management, the API gateway and developer portal of Azure."
+}
+
+# Compute
+
+type [Azure VM] extends VM {
+  doc "Azure Virtual Machines, virtual machines on Azure."
+}
+
+type [Azure AKS] extends Kubernetes {
+  doc "Azure Kubernetes Service, managed Kubernetes on Azure."
+}
+
+type [Azure Container Instances] extends Docker {
+  doc "Azure Container Instances, containers on Azure without servers to manage."
+}
+
+type [Azure App Service] extends Platform {
+  doc "Azure App Service, Azure's managed platform for web apps and APIs."
+}
+
+type [Azure Functions] extends Function {
+  doc "Azure Functions, functions that run per request or event on Azure."
+}
+
+type [Azure Logic Apps] extends Function {
+  doc "Azure Logic Apps, workflows of connectors that run on triggers."
+}
+
+# Data
+
+type [Azure SQL] extends [SQL Server] {
+  doc "Azure SQL Database, managed SQL Server on Azure."
+}
+
+type [Azure Database for PostgreSQL] extends PostgreSQL {
+  doc "Azure Database for PostgreSQL, managed PostgreSQL on Azure."
+}
+
+type [Azure Database for MySQL] extends MySQL {
+  doc "Azure Database for MySQL, managed MySQL on Azure."
+}
+
+type [Azure Cosmos DB] extends [Document NoSQL Database] {
+  op read  ReadItem, ReadMany, QueryItems, ReadChangeFeed
+  op write CreateItem, UpsertItem, ReplaceItem, PatchItem, DeleteItem, TransactionalBatch
+  doc "Azure Cosmos DB, Azure's globally distributed multi-model database."
+}
+
+type [Azure Cache for Redis] extends Redis {
+  doc "Azure Cache for Redis, managed Redis on Azure."
+}
+
+type [Azure AI Search] extends [Search Engine] {
+  doc "Azure AI Search, the managed search service of Azure, with vector search."
+}
+
+type [Azure Blob Storage] extends [Object Storage] {
+  op read  GetBlob, GetBlobProperties, GetBlobMetadata, GetBlockList, ListBlobs, ListContainers
+  op write PutBlob, PutBlock, PutBlockList, PutPage, AppendBlock, CopyBlob, DeleteBlob
+  op write SetBlobMetadata, SetBlobProperties, SnapshotBlob, LeaseBlob, CreateContainer, DeleteContainer
+  doc "Azure Blob Storage, the object storage of Azure."
+}
+
+type [Azure Files] extends [Shared File System] {
+  doc "Azure Files, managed SMB and NFS file shares on Azure."
+}
+
+type [Azure Disk Storage] extends [Block Storage] {
+  doc "Azure Managed Disks, block volumes for Azure virtual machines."
+}
+
+# Messaging
+
+type [Azure Queue Storage] extends [Message Queue] {
+  op read  GetMessages, PeekMessages
+  op write PutMessage, UpdateMessage, DeleteMessage, ClearMessages
+  doc "Azure Queue Storage, simple message queues in an Azure storage account."
+}
+
+type [Azure Service Bus] extends [Message Broker] {
+  op read  ReceiveMessages, PeekMessages
+  op write SendMessages, CompleteMessage, AbandonMessage, DeadLetterMessage, DeferMessage, ScheduleMessages
+  doc "Azure Service Bus, Azure's enterprise broker of queues and topics."
+}
+
+type [Azure Event Hubs] extends [Message Broker] {
+  op read  ReceiveEvents
+  op write SendEvents, UpdateCheckpoint
+  doc "Azure Event Hubs, Azure's partitioned event stream, with a Kafka endpoint."
+}
+
+type [Azure Event Grid] extends [Message Broker] {
+  op write PublishEvents
+  doc "Azure Event Grid, Azure's event routing service."
+}

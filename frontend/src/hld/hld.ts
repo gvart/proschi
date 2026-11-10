@@ -10,6 +10,7 @@ import type {
   Requirement,
   Selector,
   SourceLoc,
+  StepMatch,
 } from '../dsl/types';
 import type { Analysis, ScenarioAnalysis, TestResult } from './engine';
 import { kindOf } from '../dsl/kinds';
@@ -218,13 +219,23 @@ const REQUIREMENT_CATEGORY: Record<Requirement['kind'], TestResult['category']> 
 };
 
 /** An assertion as it is written in a `test` block. */
+/** `calls db`, `calls api with GET /urls/{code}`, `uses INSERT on db`, `sends header Authorization to api`. */
+function callLabel(target: Selector, match: StepMatch | undefined): string {
+  if (match?.op !== undefined) return `uses ${match.op} on ${selectorLabel(target)}`;
+  if (match?.header !== undefined) return `sends header ${match.header} to ${selectorLabel(target)}`;
+  if (match?.method !== undefined) return `calls ${selectorLabel(target)} with ${match.method} ${match.path ?? ''}`.trimEnd();
+  return `calls ${selectorLabel(target)}`;
+}
+
 export function assertionLabel(a: Assertion): string {
   const uc = 'useCase' in a ? `"${a.useCase}"${'scenario' in a && a.scenario && a.kind !== 'hasScenario' ? ` scenario "${a.scenario}"` : ''}` : '';
   switch (a.kind) {
     case 'calls':
-      return `${uc} ${a.quantifier === 'every' ? 'every scenario calls' : a.quantifier === 'never' ? 'never calls' : 'calls'} ${selectorLabel(a.target)}`;
+      return `${uc} ${a.quantifier === 'every' ? 'every scenario ' : a.quantifier === 'never' ? 'never ' : ''}${callLabel(a.target, a.match)}`;
     case 'before':
-      return `${uc} calls ${selectorLabel(a.first)} before ${selectorLabel(a.then)}`;
+      return `${uc} ${callLabel(a.first, a.match)} before ${selectorLabel(a.then)}`;
+    case 'beforeResponding':
+      return `${uc} ${callLabel(a.target, a.match)} before responding`;
     case 'writesBeforeResponding':
       return `${uc} writes ${selectorLabel(a.target)} before responding`;
     case 'responds':
@@ -240,7 +251,7 @@ export function assertionLabel(a: Assertion): string {
     case 'neverWaits':
       return `${uc} never waits for ${selectorLabel(a.target)}`;
     case 'after':
-      return `${uc} calls ${selectorLabel(a.target)} after ${selectorLabel(a.after)}`;
+      return `${uc} ${callLabel(a.target, a.match)} after ${selectorLabel(a.after)}`;
     case 'senderCalls':
       return `${a.useCase ? `in "${a.useCase}" ` : ''}${selectorLabel(a.from)} ${a.quantifier === 'never' ? 'never calls' : 'calls'} ${selectorLabel(a.to)}`;
     case 'startsAt':

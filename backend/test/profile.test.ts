@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { DAY } from '../../frontend/src/learn/fsrs';
 import { addDays } from '../../frontend/src/learn/streak';
 import type { PublicProfile } from '../src/profile';
+import { findProblem } from '../src/verify';
 import { clearStatsCache } from '../src/stats';
 import { call, resetDatabase, signedInUser, WINDOW_TIMEOUT, withinOneWindow } from './helpers';
 
@@ -25,9 +26,9 @@ async function activeUser(publicProfile: boolean) {
   await env.DB.batch([
     env.DB.prepare('UPDATE users SET daily_goal = 5, created_at = ? WHERE id = ?').bind(t - 40 * DAY + 1234, user.id),
     env.DB.prepare(
-      `INSERT INTO progress (user_id, problem_id, runs, source, first_run_at, updated_at, solved_at, solved_day, runs_to_solve, best_cost_usd, best_p99_ms)
-       VALUES (?, 'url-shortener', 2, ?, ?, ?, ?, ?, 2, 12.5, 80)`,
-    ).bind(user.id, SOURCE, t, t, t, today()),
+      `INSERT INTO progress (user_id, problem_id, runs, source, first_run_at, updated_at, solved_at, solved_day, runs_to_solve, best_cost_usd, best_p99_ms, problem_version)
+       VALUES (?, 'url-shortener', 2, ?, ?, ?, ?, ?, 2, 12.5, 80, ?)`,
+    ).bind(user.id, SOURCE, t, t, t, today(), findProblem('url-shortener')!.version ?? 1),
     env.DB.prepare(
       `INSERT INTO progress (user_id, problem_id, runs, source, first_run_at, updated_at, solved_at) VALUES (?, 'pastebin', 1, ?, ?, ?, NULL)`,
     ).bind(user.id, SOURCE, t, t),

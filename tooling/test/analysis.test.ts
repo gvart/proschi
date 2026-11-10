@@ -35,7 +35,8 @@ describe('analysis', () => {
   it('completes tech stacks inside brackets and closes the bracket', () => {
     const items = complete(analyze('db [Postg'), { line: 0, character: 9 });
     const pg = items.find((i) => i.label === 'PostgreSQL')!;
-    expect(pg).toMatchObject({ kind: 'tech', insertText: 'PostgreSQL]', range: { start: { line: 0, character: 4 } } });
+    // PostgreSQL is a built-in type now, so it completes as one.
+    expect(pg).toMatchObject({ kind: 'type', insertText: 'PostgreSQL]', range: { start: { line: 0, character: 4 } } });
     expect(complete(analyze('db [Postg]'), { line: 0, character: 9 }).find((i) => i.label === 'PostgreSQL')?.insertText).toBe('PostgreSQL');
     // The whole catalog, with aliases to filter on: typing S3 finds AWS S3.
     expect(items.length).toBeGreaterThan(200);
@@ -90,6 +91,19 @@ describe('analysis', () => {
     expect(inTest.find((i) => i.label === '"Use case" calls … after …')?.snippet).toBe('"${1:Use case}" calls ${2:node} after ${3:node}');
     expect(labels('api [REST API]\ntest "T" {\n}\n', 3, 0)).toContain('usecase');
     expect(labels('requirements {\n  \n}', 1, 2)).not.toContain('"Use case" starts at');
+  });
+
+  it('completes the operations, headers and methods typed assertions name, and hovers them', () => {
+    const text = 'api [REST API]\ndb [PostgreSQL]\ntest "T" {\n  "U" uses \n  "U" sends header \n  "U" calls api with \n  "U" uses INSERT on db\n  "U" sends header Idempotency-Key to api\n}';
+    const t = analyze(text);
+    const labels = (line: number) => complete(t, { line, character: text.split('\n')[line].length }).map((i) => i.label);
+    expect(labels(3)).toEqual(expect.arrayContaining(['SELECT', 'INSERT', 'GET', 'POST']));
+    expect(labels(4)).toEqual(expect.arrayContaining(['Authorization', 'Idempotency-Key']));
+    expect(labels(5)).toEqual(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']);
+    expect(hover(t, { line: 6, character: 12 })?.markdown).toMatch(/^\*\*INSERT\*\* · write operation of `PostgreSQL`/);
+    expect(hover(t, { line: 7, character: 22 })?.markdown).toMatch(/^\*\*Idempotency-Key\*\* · request header of `REST API`/);
+    const forms = complete(analyze('api [REST API]\ntest "T" {\n  \n}'), { line: 2, character: 2 }).map((i) => i.label);
+    expect(forms).toEqual(expect.arrayContaining(['"Use case" calls … with', '"Use case" uses … on', '"Use case" sends header … to']));
   });
 
   it('offers only alt after a closing brace', () => {

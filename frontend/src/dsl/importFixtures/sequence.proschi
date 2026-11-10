@@ -24,5 +24,5 @@ usecase "Checkout" {
     W --> U : 402 {"error": "declined"}
   }
   W -> D : UPDATE stock
-  W -> D : AUDIT
+  W -> D : INSERT audit
 }

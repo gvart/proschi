@@ -1,7 +1,7 @@
 import "problem.proschi"
 
-proxy "Spokes Proxy"     [Go]             x16 @git "Routes every Git request; replicates pushes and picks the replica for each read"
-fs    "Git File Servers" [NoSQL Database] x3 @git "Bare Git repositories on local disk; each repository on three servers"
+proxy "Spokes Proxy"     [Go]            x16 @git "Routes every Git request; replicates pushes and picks the replica for each read"
+fs    "Git File Servers" [GitFileServer] x3 @git "Bare Git repositories on local disk; each repository on three servers"
 
 capacity {
   fs shards 2

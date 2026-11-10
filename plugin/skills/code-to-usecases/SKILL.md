@@ -55,7 +55,7 @@ repositories, and write one step per network call:
 | SQL / ORM read, write | `svc -> db : SELECT order`, `svc -> db : INSERT order` (start with the verb: it decides read vs write) |
 | Cache get / set | `svc -> cache : LOOKUP product:{id}` / `svc -> cache : SET product:{id}`. Don't start a non-HTTP label with an HTTP verb: `GET key` is read as an HTTP GET to path `key` |
 | Synchronous HTTP / gRPC to another service | `svc -> other : GET /users/{id}` then `other --> svc : 200 {…}` |
-| Publish / enqueue / `.delay()` / `send` (not awaited for a result) | `svc ->> queue : OrderPlaced {"orderId": "o-1"}` |
+| Publish / enqueue / `.delay()` / `send` (not awaited for a result) | `svc ->> queue : PUBLISH OrderPlaced {"orderId": "o-1"}` |
 | The consumer of that message | after the entry response: `queue ->> worker : OrderPlaced`, then the worker's own steps |
 | `Promise.all`, `CompletableFuture.allOf`, `asyncio.gather`, goroutines + `WaitGroup` | `par { … }` around those steps |
 | Loop of N calls | `x<N>` prefix: `svc -> db : x20 SELECT item` |
@@ -186,7 +186,7 @@ usecase "Place order" {
     api     -> stripe   : CHARGE payment intent
     stripe --> api      : succeeded
     api     -> db       : INSERT order
-    api    ->> rabbit   : order-created {"orderId": "o-1"}
+    api    ->> rabbit   : PUBLISH order-created {"orderId": "o-1"}
     api    --> user     : 201 {"id": "o-1", "status": "paid"}
     rabbit ->> worker   : order-created {"orderId": "o-1"}
     worker  -> db       : SELECT order and user email

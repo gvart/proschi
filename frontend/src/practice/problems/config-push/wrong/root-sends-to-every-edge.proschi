@@ -25,8 +25,8 @@ usecase "Serve request" {
 
 usecase "Change config" {
   customer -> api      : PUT /zones/{id}/settings
-  api      -> root     : SET key
+  api      -> root     : PUT key
   root    --> api      : seq 1024
   api     --> customer : 200
-  root    ->> local    : ~2KB x200 APPEND log entry 1024
+  root    ->> local    : ~2KB x200 PUT log entry 1024
 }

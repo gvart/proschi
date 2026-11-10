@@ -60,9 +60,9 @@ events -> worker
 
 usecase "Place order" {
   caller -> gateway : POST /orders
-  gateway -> api : place order
+  gateway -> api : POST /orders
   api -> db : INSERT order
-  api ->> events : order placed
+  api ->> events : PUBLISH OrderPlaced
   api --> gateway : 201
 }
 
@@ -122,7 +122,7 @@ stream -> push
 
 usecase "Publish event" {
   caller -> ingest : POST /events
-  ingest ->> stream : event
+  ingest ->> stream : PUBLISH event
 }
 
 traffic {
@@ -168,8 +168,8 @@ orders -> payments.charge : charge
 orders -> feed.events : order placed
 
 usecase "Buy drone" {
-  shopper -> frontend.web : open shop
-  frontend -> orders.api : place order
+  shopper -> frontend.web : GET /
+  frontend -> orders.api : POST /orders
   orders -> warehouse.stock : reserve
   orders -> payments.charge : charge
   orders ->> feed.events : order placed

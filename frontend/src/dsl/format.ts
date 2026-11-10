@@ -60,7 +60,7 @@ const INDENT = '  ';
 /** Words that start a statement other than a node declaration. */
 const KEYWORDS = new Set(['title', 'import', 'group', 'usecase', 'par', 'alt']);
 /** Sections whose lines are laid out in aligned columns. */
-type Section = 'traffic' | 'requirements' | 'capacity' | 'entity' | 'decision' | 'test' | 'whatif';
+type Section = 'traffic' | 'requirements' | 'capacity' | 'entity' | 'decision' | 'test' | 'whatif' | 'type';
 
 interface Base {
   depth: number;
@@ -223,6 +223,13 @@ function sectionOpenedBy(tokens: Token[]): Section | undefined {
     case 'test':
     case 'whatif':
       return second?.kind === 'string' ? first.value : undefined;
+    // `type Name [extends Parent] {` and `abstract type …`, as the parser's isTypeHeader.
+    case 'type':
+    case 'abstract': {
+      const at = first.value === 'type' ? 1 : second?.kind === 'ident' && second.value === 'type' ? 2 : -1;
+      const [name, next] = [tokens[at], tokens[at + 1]];
+      return at !== -1 && (name?.kind === 'ident' || name?.kind === 'tech') && (next?.kind === 'lbrace' || (next?.kind === 'ident' && next.value === 'extends')) ? 'type' : undefined;
+    }
     default:
       return undefined;
   }
@@ -240,6 +247,9 @@ function sectionCells(section: Section, raw: string, tokens: Token[]): string[] 
       return first.kind === 'ident' && tokens.length > 1 ? [first.value, ...rest(1)] : undefined;
     case 'entity':
       return first.kind === 'ident' && second?.kind === 'ident' ? [first.value, second.value, ...rest(2)] : undefined;
+    // Runs of `op read|write names` line up their names; other type lines are written as they are.
+    case 'type':
+      return first.kind === 'ident' && first.value === 'op' && second?.kind === 'ident' && tokens.length > 2 ? [first.value, second.value, ...rest(2)] : undefined;
     default:
       return undefined;
   }

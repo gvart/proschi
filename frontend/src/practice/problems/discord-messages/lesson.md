@@ -29,9 +29,9 @@ The given declares `api` (the Discord API monolith, treated as the client), `mes
 Requirements: p99 of every use case under 60 ms; 99.99% availability; messages durable before the answer; survive any node failure; at most $42,000 a month, the 72 database nodes included. The tests check:
 
 - Every query goes through a node called `data`, and there is no path from the API to any database.
-- A joined read never calls a database, the first read calls `hot`, and the busy channel never touches `messages`.
+- A joined read never calls a database, the first read `SELECT`s from `hot`, and the busy channel never touches `messages`.
 - No use case calls a cache.
-- A send writes `messages` before responding.
+- A send `INSERT`s into `messages` before responding.
 
 ## Back-of-the-envelope
 

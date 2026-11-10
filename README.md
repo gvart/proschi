@@ -40,6 +40,21 @@ the language server and the editor plugins, so they always agree.
 - **Simulation and HLD**: traffic, replicas, shards, capacity and decisions
   turn a diagram into a design document with load, p99, availability and
   cost per node. [How the simulation works](https://proschi.app/docs/model/).
+- **[Component types](https://proschi.app/docs/types/)**: every tech has a
+  built-in type with its operations, statuses and headers, you declare your
+  own with `extends`, and a step with an operation its target doesn't know
+  gets a warning:
+
+  ```proschi
+  type LedgerDb extends PostgreSQL { op write APPEND }
+
+  api    "Payments API" [REST API]
+  ledger "Ledger"       [LedgerDb]
+
+  usecase "Pay" {
+    api -> ledger : APPEND entry
+  }
+  ```
 - **[Practice](https://proschi.app/practice/)**: system design problems (URL
   shortener, payments, chat, video streaming and more) whose tests tell you
   whether your design holds up, plus review cards and the Scale or Fail game.

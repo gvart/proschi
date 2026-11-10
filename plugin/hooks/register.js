@@ -884,7 +884,19 @@ function tokenizeLine(text, line) {
       tokens.push({ kind: "team", value: text.slice(start2 + 1, i), col: start2 + 1, length: i - start2 });
       continue;
     }
+    if (ch === "/") {
+      while (i < text.length && !/\s/.test(text[i])) i++;
+      tokens.push({ kind: "path", value: text.slice(start2, i), col: start2 + 1, length: i - start2 });
+      continue;
+    }
     if (IDENT_START.test(ch)) {
+      const prev = tokens[tokens.length - 1];
+      const headerName = prev?.kind === "ident" && prev.value === "header" ? /^[A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)+/.exec(text.slice(i)) : null;
+      if (headerName) {
+        i += headerName[0].length;
+        tokens.push({ kind: "ident", value: headerName[0], col: start2 + 1, length: i - start2 });
+        continue;
+      }
       while (i < text.length && IDENT_PART.test(text[i])) i++;
       if (i === start2 + 1 && ch === "x" && text[i] === "$" && IDENT_START.test(text[i + 1] ?? "")) {
         i += 2;
@@ -1060,7 +1072,7 @@ var BY_TYPE = {
 };
 function kindOf(node) {
   if (node.kind !== "component") return "other";
-  return node.inferredKind ?? BY_TECH.get(node.techStack) ?? BY_TYPE[node.type] ?? "other";
+  return node.inferredKind ?? node.resolvedType?.kind ?? BY_TECH.get(node.techStack) ?? BY_TYPE[node.type] ?? "other";
 }
 var TYPE_OF_KIND = {
   client: "shape",
@@ -1283,7 +1295,831 @@ function editDistance2(a, b) {
   return row[b.length];
 }
 
+// ../frontend/src/dsl/typesys/types.ts
+var ROOT_TYPE = "Component";
+
+// ../frontend/src/dsl/typesys/resolve.ts
+var typeKey = techKey;
+function lookupType(table, name) {
+  const own = table.get(typeKey(name));
+  if (own && !own.builtin) return own;
+  const tech = findTech(name);
+  return tech ? table.get(typeKey(tech.techStack)) : own;
+}
+function techNamed(name) {
+  const tech = findTech(name);
+  return tech && typeKey(tech.techStack) === typeKey(name) ? tech.techStack : void 0;
+}
+function resolveTypes(decls, base = /* @__PURE__ */ new Map()) {
+  const diagnostics = [];
+  const error = (message, loc) => diagnostics.push({ severity: "error", message, ...loc });
+  const warning = (message, loc) => diagnostics.push({ severity: "warning", message, ...loc });
+  const byKey2 = /* @__PURE__ */ new Map();
+  const order = [];
+  for (const decl of decls) {
+    const key = typeKey(decl.name);
+    const builtin = base.get(key);
+    const first = byKey2.get(key);
+    if (builtin) error(`Type '${decl.name}' is built in${builtin.name === decl.name ? "" : ` as '${builtin.name}'`}; extend it under another name`, decl.loc);
+    else if (first) error(`Duplicate type '${decl.name}' (first declared ${where(first.loc, decl.loc)})`, decl.loc);
+    else {
+      byKey2.set(key, decl);
+      order.push(decl);
+    }
+  }
+  const table = new Map(base);
+  const resolving = [];
+  const broken = /* @__PURE__ */ new Set();
+  const resolve = (decl) => {
+    const key = typeKey(decl.name);
+    const done = table.get(key);
+    if (done) return done;
+    let parent;
+    const parentName = decl.parent ?? (typeKey(decl.name) === typeKey(ROOT_TYPE) ? void 0 : ROOT_TYPE);
+    if (parentName !== void 0) {
+      const parentKey = typeKey(parentName);
+      const parentDecl = byKey2.get(parentKey);
+      const cycleStart = !parentDecl ? -1 : parentDecl === decl ? resolving.length : resolving.indexOf(parentDecl);
+      if (cycleStart !== -1) {
+        const names = [...resolving.slice(cycleStart), decl, parentDecl].map((d) => d.name);
+        error(`Type cycle: ${names.join(" \u2192 ")}`, decl.parentLoc ?? decl.loc);
+        parent = table.get(typeKey(ROOT_TYPE));
+        broken.add(key);
+      } else if (parentDecl) {
+        resolving.push(decl);
+        parent = resolve(parentDecl);
+        resolving.pop();
+        if (broken.has(parentKey)) broken.add(key);
+      } else {
+        parent = base.get(parentKey) ?? lookupType(base, parentName) ?? catalogType(parentName, table);
+        if (!parent) {
+          broken.add(key);
+          const suggestion = suggestType(parentName, [...table.values()].map((t) => t.name).concat([...byKey2.values()].map((d) => d.name)));
+          error(`Unknown parent type '${parentName}'${suggestion ? `. Did you mean '${suggestion}'?` : ""}`, decl.parentLoc ?? decl.loc);
+          parent = table.get(typeKey(ROOT_TYPE));
+        }
+      }
+    }
+    let icon = decl.icon;
+    if (icon !== void 0) {
+      const tech = findTech(icon);
+      if (!tech) {
+        const suggestion = suggestTech(icon);
+        warning(`Unknown icon '${icon}'${suggestion ? ` (did you mean '${suggestion}'?)` : ""}; the type keeps its inherited icon`, decl.loc);
+      }
+      icon = tech?.techStack;
+    }
+    if (icon === void 0 && decl.builtin) icon = techNamed(decl.name);
+    const shadowed = decl.builtin ? void 0 : findTech(decl.name);
+    if (shadowed) warning(`Type '${decl.name}' has the name of the catalog tech '${shadowed.techStack}'; [${decl.name}] now means this type`, decl.loc);
+    icon ??= parent?.icon;
+    const kind = decl.kind ?? parent?.kind;
+    if (!decl.abstract && !kind && !broken.has(key)) error(`Type '${decl.name}' needs a kind: declare one (kind database) or extend a type that has one`, decl.loc);
+    const ownOps = new Set(decl.ops.map((o) => o.name.toLowerCase()));
+    const resolved = {
+      name: decl.name,
+      abstract: decl.abstract,
+      builtin: decl.builtin,
+      parents: parent ? [parent.name, ...parent.parents] : [],
+      ...kind ? { kind } : {},
+      props: { ...parent?.props, ...decl.props },
+      ops: [...parent?.ops.filter((o) => !ownOps.has(o.name.toLowerCase())) ?? [], ...decl.ops].map((o) => ({ ...o })),
+      statuses: union(parent?.statuses ?? [], decl.statuses),
+      headers: union(parent?.headers ?? [], decl.headers, (h2) => h2.toLowerCase()),
+      ...pick("protocol", decl.protocol ?? parent?.protocol),
+      ...pick("icon", icon),
+      ...pick("doc", decl.doc ?? parent?.doc),
+      loc: decl.loc
+    };
+    table.set(key, resolved);
+    return resolved;
+  };
+  const types = order.map(resolve);
+  return { table, types, diagnostics };
+}
+function catalogType(name, table) {
+  const tech = findTech(name);
+  if (!tech) return void 0;
+  const root = table.get(typeKey(ROOT_TYPE));
+  return {
+    name: tech.techStack,
+    abstract: false,
+    builtin: true,
+    parents: root ? [root.name, ...root.parents] : [],
+    kind: kindOf({ kind: "component", type: tech.type, techStack: tech.techStack }),
+    props: {},
+    ops: [],
+    statuses: [],
+    headers: [],
+    icon: tech.techStack,
+    loc: { line: 1, col: 1, length: 0, file: "catalog" }
+  };
+}
+function pick(key, value) {
+  return value === void 0 ? {} : { [key]: value };
+}
+function union(inherited, own, key = (v) => v) {
+  const seen = new Set(inherited.map(key));
+  return [...inherited, ...own.filter((v) => !seen.has(key(v)) && seen.add(key(v)))];
+}
+function where(first, later) {
+  return first.file === later.file ? `on line ${first.line}` : `in ${first.file ?? "the root document"} on line ${first.line}`;
+}
+function suggestType(name, names) {
+  const key = typeKey(name);
+  let best;
+  let bestDistance = Math.max(2, Math.floor(key.length / 3)) + 1;
+  for (const candidate of names) {
+    const d = editDistance(key, typeKey(candidate));
+    if (d < bestDistance) [best, bestDistance] = [candidate, d];
+  }
+  return best;
+}
+
+// ../frontend/src/dsl/stdlib/sources.gen.ts
+var STDLIB_SOURCES = [
+  { path: "stdlib/core.proschi", source: `# Proschi standard library: the root types. Bundled with the parser, so every
+# diagram sees them. The format is in docs/design/typed-components.md.
+#
+# Rules for stdlib files:
+# - Only \`type\` and \`abstract type\` blocks, blank lines and comments.
+# - A type named after a catalog tech stack (src/catalog/componentCatalog.ts)
+#   is drawn with that tech's icon and must have the kind the catalog gives it
+#   (stdlib.test.ts checks both). Every catalog tech has a type.
+# - An abstract type, or any type the catalog does not know, must not share
+#   a name or an alias with a catalog tech: the catalog name always wins.
+# - Names of the types the catalog does not know, all abstract:
+#   - a top level under Component is one word: a layer of a design (Edge,
+#     Compute, Data, Messaging, External) or a family of drawings (Caller,
+#     Shape, Annotation, Group);
+#   - below it, a type is named in English words like a catalog tech, in
+#     brackets when there are several, with acronyms written as the catalog
+#     writes them (SQL, NoSQL, HTTP): [Coordination Store], Platform;
+#   - a type that narrows another one ends with that type's name:
+#     [HTTP Service] under Service, [Document NoSQL Database] under
+#     [NoSQL Database], [Distributed SQL Database] under Database.
+# - Simulation numbers (latencyMs, rps, \u2026) go here only when they equal what
+#   sim/profiles.ts already gives the tech, so diagrams simulate as before.
+# - An op a practice problem's step already uses must have the access that
+#   step has today (dsl/access.ts); stdlib.test.ts checks it.
+# - Op names are unique along a type's chain, ignoring case: a parent's
+#   upper-case plain words (WRITE, SEND) are not repeated by its children.
+#   A child declares an inherited op again only to change it, as DynamoDB's
+#   Scan gives the key-value SCAN its multipliers.
+# - A generic type (the catalog's [NoSQL Database], Cache, [Message Queue],
+#   [Object Storage], [Search Engine], CDN, \u2026) or an abstract parent declares
+#   its family's standard vocabulary (key-value: GET, PUT, DELETE, SCAN;
+#   queue: SEND, RECEIVE, ACK; objects: GET, PUT, DELETE, LIST), so every
+#   product inherits it and adds its own API's names. Types whose requests
+#   are the design's own API (Service, Worker, gRPC, WebSocket, the
+#   languages, platforms and functions) declare no ops and stay open, and
+#   so does AWS Global Accelerator, which carries any TCP or UDP traffic.
+# - After editing, run \`npm run gen:stdlib\` to refresh sources.gen.ts.
+#
+# The top levels: Component, then Caller and Shape (clients), Annotation and
+# Group (drawing aids), Edge, Compute, Data, Messaging and External.
+
+abstract type Component {
+  doc "Anything drawn on the diagram: the root of every type."
+}
+
+# Clients: who sends the first request.
+
+abstract type Caller {
+  kind client
+  doc "Whoever sends the first request: a person, a browser or an app."
+}
+
+type Actor extends Caller {
+  doc "A person who uses the system."
+}
+
+type Browser extends Caller {
+  doc "A web browser running the site's pages."
+}
+
+type [Mobile App] extends Caller {
+  doc "An iOS or Android app on the user's phone."
+}
+
+abstract type Shape {
+  kind client
+  doc "A plain shape, drawn without a product icon; it simulates as a client."
+}
+
+type Rectangle extends Shape {
+  doc "A plain rectangle."
+}
+
+type Circle extends Shape {
+  doc "A plain circle."
+}
+
+type Diamond extends Shape {
+  doc "A plain diamond, often used for a decision."
+}
+
+type Cylinder extends Shape {
+  doc "A plain cylinder, the usual sketch of storage."
+}
+
+type Cloud extends Shape {
+  doc "A plain cloud shape, for the internet or a provider you do not detail."
+}
+
+# Drawing aids: they take no part in the simulation.
+
+abstract type Annotation {
+  kind other
+  doc "A note on the diagram that takes no part in the simulation."
+}
+
+type Note extends Annotation {
+  doc "A note shape with text, for remarks next to the components."
+}
+
+type [Text Note] extends Annotation {
+  doc "Free text placed on the canvas."
+}
+
+type [Sticky Note] extends Annotation {
+  doc "A sticky note on the canvas."
+}
+
+type Comment extends Annotation {
+  doc "A review comment on the canvas."
+}
+
+abstract type Group {
+  kind other
+  doc "A box drawn around components that belong together."
+}
+
+type [Logical Group] extends Group {
+  doc "A box around components that form one part of the design."
+}
+
+type [Network Boundary] extends Group {
+  doc "A box around components in one network, such as a VPC or a subnet."
+}
+
+type [Security Zone] extends Group {
+  doc "A box around components that share one trust level."
+}
+
+type [Service Group] extends Group {
+  doc "A box around the components one team or service owns."
+}
+` },
+  { path: "stdlib/cloud-aws.proschi", source: '# Proschi standard library: Amazon Web Services. The rules are in core.proschi.\n\n# Edge\n\ntype [AWS CloudFront] extends CDN {\n  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it\n  op write CreateInvalidation\n  doc "Amazon CloudFront, the CDN of AWS."\n}\n\ntype [AWS Route53] extends DNS {\n  op write ChangeResourceRecordSets\n  doc "Amazon Route 53, the DNS service of AWS, with health checks and latency routing."\n}\n\ntype [AWS Load Balancer] extends [Load Balancer] {\n  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it\n  doc "Elastic Load Balancing: an application (L7) or network (L4) load balancer on AWS."\n}\n\ntype [AWS API Gateway] extends [API Gateway] {\n  doc "Amazon API Gateway, the managed API front door of AWS."\n}\n\ntype [AWS WAF] extends WAF {\n  doc "AWS WAF, the web application firewall in front of CloudFront, load balancers and API Gateway."\n}\n\ntype [AWS Global Accelerator] extends Edge {\n  doc "AWS Global Accelerator: anycast addresses that carry traffic over the AWS network to the nearest healthy region."\n}\n\n# Compute\n\ntype [AWS EC2] extends VM {\n  doc "Amazon EC2, virtual machines on AWS."\n}\n\ntype [AWS ECS] extends Docker {\n  doc "Amazon ECS, which runs containers on AWS."\n}\n\ntype [AWS Fargate] extends Docker {\n  doc "AWS Fargate, containers on AWS without servers to manage."\n}\n\ntype [AWS EKS] extends Kubernetes {\n  doc "Amazon EKS, managed Kubernetes on AWS."\n}\n\ntype [AWS Lambda] extends Function {\n  doc "AWS Lambda, functions that run per request or event on AWS."\n}\n\n# Data\n\ntype [AWS RDS] extends Database {\n  doc "Amazon RDS, managed relational databases on AWS (PostgreSQL, MySQL and others)."\n}\n\ntype [AWS Aurora] extends Database {\n  doc "Amazon Aurora, the AWS relational database compatible with PostgreSQL and MySQL, on shared distributed storage."\n}\n\ntype [AWS DynamoDB] extends DynamoDB {\n  doc "Amazon DynamoDB, the managed key-value and document database of AWS."\n}\n\ntype [AWS DocumentDB] extends MongoDB {\n  doc "Amazon DocumentDB, the AWS document database compatible with MongoDB."\n}\n\ntype [AWS Keyspaces] extends Cassandra {\n  doc "Amazon Keyspaces, the AWS wide-column database compatible with Cassandra."\n}\n\ntype [AWS Neptune] extends [Graph NoSQL Database] {\n  doc "Amazon Neptune, the graph database of AWS."\n}\n\ntype [AWS ElastiCache] extends Redis {\n  doc "Amazon ElastiCache, managed Redis, Valkey or Memcached on AWS."\n}\n\ntype [AWS OpenSearch] extends OpenSearch {\n  doc "Amazon OpenSearch Service, managed OpenSearch on AWS."\n}\n\ntype [AWS Redshift] extends [Data Warehouse] {\n  doc "Amazon Redshift, the data warehouse of AWS."\n}\n\ntype [AWS Athena] extends [Data Warehouse] {\n  op read  StartQueryExecution, GetQueryExecution, GetQueryResults\n  doc "Amazon Athena, SQL queries over files in S3."\n}\n\ntype [AWS S3] extends [Object Storage] {\n  op read  GetObject, HeadObject, ListObjectsV2, ListObjects, GetObjectTagging, GetObjectAcl\n  op read  ListMultipartUploads, ListParts, SelectObjectContent, HeadBucket, ListBuckets\n  op write PutObject, CopyObject, DeleteObject, DeleteObjects, RestoreObject, PutObjectTagging, PutObjectAcl\n  op write CreateMultipartUpload, UploadPart, UploadPartCopy, CompleteMultipartUpload, AbortMultipartUpload\n  op write CreateBucket, DeleteBucket\n  doc "Amazon S3, the object storage of AWS."\n}\n\ntype [AWS EBS] extends [Block Storage] {\n  doc "Amazon EBS, block volumes for EC2 instances."\n}\n\ntype [AWS EFS] extends [Shared File System] {\n  doc "Amazon EFS, a shared NFS file system on AWS."\n}\n\n# Messaging\n\ntype [AWS SQS] extends SQS {\n  doc "Amazon SQS, the managed message queue of AWS."\n}\n\ntype [AWS SNS] extends [Message Broker] {\n  op write PublishBatch, CreateTopic, DeleteTopic\n  doc "Amazon SNS, the pub/sub topics of AWS that fan out to queues, functions and phones."\n}\n\ntype [AWS EventBridge] extends [Message Broker] {\n  op write PutEvents, PutRule, PutTargets\n  doc "Amazon EventBridge, the AWS event bus that routes events by rules."\n}\n\ntype [AWS Kinesis] extends [Message Broker] {\n  op read  GetRecords, GetShardIterator, SubscribeToShard, DescribeStream, ListShards\n  op write PutRecord, PutRecords\n  doc "Amazon Kinesis Data Streams, the partitioned stream of AWS."\n}\n\ntype [AWS MSK] extends Kafka {\n  doc "Amazon MSK, managed Kafka on AWS."\n}\n\n# External\n\ntype [AWS SES] extends [Email Service] {\n  op write SendEmail, SendRawEmail, SendBulkEmail\n  doc "Amazon SES, the email sending service of AWS."\n}\n\ntype [AWS Cognito] extends [Auth Service] {\n  op read  GetUser\n  op write InitiateAuth, RespondToAuthChallenge, SignUp, ConfirmSignUp, GlobalSignOut\n  doc "Amazon Cognito, user sign-up and sign-in on AWS."\n}\n' },
+  { path: "stdlib/cloud-azure.proschi", source: `# Proschi standard library: Microsoft Azure. The rules are in core.proschi.
+
+# Edge
+
+type [Azure CDN] extends CDN {
+  doc "Azure CDN, the content delivery network of Azure."
+}
+
+type [Azure Front Door] extends CDN {
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
+  doc "Azure Front Door, Azure's global entry point: CDN, load balancing and WAF at the edge."
+}
+
+type [Azure DNS] extends DNS {
+  doc "Azure DNS, the DNS service of Azure."
+}
+
+type [Azure Load Balancer] extends [Load Balancer] {
+  doc "Azure Load Balancer, the L4 load balancer of Azure."
+}
+
+type [Azure Application Gateway] extends [Load Balancer] {
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
+  doc "Azure Application Gateway, the L7 load balancer of Azure, with an optional WAF."
+}
+
+type [Azure API Management] extends [API Gateway] {
+  doc "Azure API Management, the API gateway and developer portal of Azure."
+}
+
+# Compute
+
+type [Azure VM] extends VM {
+  doc "Azure Virtual Machines, virtual machines on Azure."
+}
+
+type [Azure AKS] extends Kubernetes {
+  doc "Azure Kubernetes Service, managed Kubernetes on Azure."
+}
+
+type [Azure Container Instances] extends Docker {
+  doc "Azure Container Instances, containers on Azure without servers to manage."
+}
+
+type [Azure App Service] extends Platform {
+  doc "Azure App Service, Azure's managed platform for web apps and APIs."
+}
+
+type [Azure Functions] extends Function {
+  doc "Azure Functions, functions that run per request or event on Azure."
+}
+
+type [Azure Logic Apps] extends Function {
+  doc "Azure Logic Apps, workflows of connectors that run on triggers."
+}
+
+# Data
+
+type [Azure SQL] extends [SQL Server] {
+  doc "Azure SQL Database, managed SQL Server on Azure."
+}
+
+type [Azure Database for PostgreSQL] extends PostgreSQL {
+  doc "Azure Database for PostgreSQL, managed PostgreSQL on Azure."
+}
+
+type [Azure Database for MySQL] extends MySQL {
+  doc "Azure Database for MySQL, managed MySQL on Azure."
+}
+
+type [Azure Cosmos DB] extends [Document NoSQL Database] {
+  op read  ReadItem, ReadMany, QueryItems, ReadChangeFeed
+  op write CreateItem, UpsertItem, ReplaceItem, PatchItem, DeleteItem, TransactionalBatch
+  doc "Azure Cosmos DB, Azure's globally distributed multi-model database."
+}
+
+type [Azure Cache for Redis] extends Redis {
+  doc "Azure Cache for Redis, managed Redis on Azure."
+}
+
+type [Azure AI Search] extends [Search Engine] {
+  doc "Azure AI Search, the managed search service of Azure, with vector search."
+}
+
+type [Azure Blob Storage] extends [Object Storage] {
+  op read  GetBlob, GetBlobProperties, GetBlobMetadata, GetBlockList, ListBlobs, ListContainers
+  op write PutBlob, PutBlock, PutBlockList, PutPage, AppendBlock, CopyBlob, DeleteBlob
+  op write SetBlobMetadata, SetBlobProperties, SnapshotBlob, LeaseBlob, CreateContainer, DeleteContainer
+  doc "Azure Blob Storage, the object storage of Azure."
+}
+
+type [Azure Files] extends [Shared File System] {
+  doc "Azure Files, managed SMB and NFS file shares on Azure."
+}
+
+type [Azure Disk Storage] extends [Block Storage] {
+  doc "Azure Managed Disks, block volumes for Azure virtual machines."
+}
+
+# Messaging
+
+type [Azure Queue Storage] extends [Message Queue] {
+  op read  GetMessages, PeekMessages
+  op write PutMessage, UpdateMessage, DeleteMessage, ClearMessages
+  doc "Azure Queue Storage, simple message queues in an Azure storage account."
+}
+
+type [Azure Service Bus] extends [Message Broker] {
+  op read  ReceiveMessages, PeekMessages
+  op write SendMessages, CompleteMessage, AbandonMessage, DeadLetterMessage, DeferMessage, ScheduleMessages
+  doc "Azure Service Bus, Azure's enterprise broker of queues and topics."
+}
+
+type [Azure Event Hubs] extends [Message Broker] {
+  op read  ReceiveEvents
+  op write SendEvents, UpdateCheckpoint
+  doc "Azure Event Hubs, Azure's partitioned event stream, with a Kafka endpoint."
+}
+
+type [Azure Event Grid] extends [Message Broker] {
+  op write PublishEvents
+  doc "Azure Event Grid, Azure's event routing service."
+}
+` },
+  { path: "stdlib/cloud-cloudflare.proschi", source: `# Proschi standard library: Cloudflare. The rules are in core.proschi.
+
+type Cloudflare extends CDN {
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
+  doc "Cloudflare, the CDN and edge network in front of the origin."
+}
+
+type [Cloudflare Workers] extends Function {
+  doc "Cloudflare Workers, functions that run at Cloudflare's edge locations."
+}
+
+type [Cloudflare R2] extends [AWS S3] {
+  doc "Cloudflare R2, object storage with the S3 API and no egress fees."
+}
+` },
+  { path: "stdlib/cloud-gcp.proschi", source: `# Proschi standard library: Google Cloud. The rules are in core.proschi.
+
+# Edge
+
+type [GCP Cloud CDN] extends CDN {
+  doc "Cloud CDN, the CDN of Google Cloud."
+}
+
+type [GCP Cloud DNS] extends DNS {
+  doc "Cloud DNS, the DNS service of Google Cloud."
+}
+
+type [GCP Load Balancing] extends [Load Balancer] {
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
+  doc "Cloud Load Balancing, Google Cloud's global and regional load balancers."
+}
+
+type [GCP Apigee] extends [API Gateway] {
+  doc "Apigee, Google Cloud's API management platform."
+}
+
+# Compute
+
+type [GCP Compute Engine] extends VM {
+  doc "Compute Engine, virtual machines on Google Cloud."
+}
+
+type [GCP GKE] extends Kubernetes {
+  doc "Google Kubernetes Engine, managed Kubernetes on Google Cloud."
+}
+
+type [GCP Cloud Functions] extends Function {
+  doc "Cloud Functions, functions that run per request or event on Google Cloud."
+}
+
+type [GCP Cloud Run] extends Function {
+  doc "Cloud Run, containers that run per request and scale to zero on Google Cloud."
+}
+
+type [GCP App Engine] extends Function {
+  doc "App Engine, Google Cloud's managed platform for web apps."
+}
+
+# Data
+
+type [GCP Cloud SQL] extends Database {
+  doc "Cloud SQL, managed PostgreSQL, MySQL and SQL Server on Google Cloud."
+}
+
+type [GCP Spanner] extends [Distributed SQL Database] {
+  op read  ExecuteSql, ExecuteStreamingSql, StreamingRead, BeginTransaction
+  op write ExecuteBatchDml
+  doc "Spanner, Google Cloud's globally distributed relational database with external consistency."
+}
+
+type [GCP Firestore] extends [Document NoSQL Database] {
+  op read  GetDocument, ListDocuments, BatchGetDocuments, RunQuery, RunAggregationQuery, Listen
+  op write CreateDocument, UpdateDocument, DeleteDocument, BatchWrite, Commit, BeginTransaction
+  doc "Firestore, Google Cloud's serverless document database."
+}
+
+type [GCP Bigtable] extends [Wide-Column NoSQL Database] {
+  op read  ReadRows, SampleRowKeys
+  op write MutateRow, MutateRows, CheckAndMutateRow, ReadModifyWriteRow
+  doc "Bigtable, Google Cloud's wide-column database for large, low-latency workloads."
+}
+
+type [GCP Memorystore] extends Redis {
+  doc "Memorystore, managed Redis and Memcached on Google Cloud."
+}
+
+type [GCP BigQuery] extends [Data Warehouse] {
+  doc "BigQuery, Google Cloud's serverless data warehouse."
+}
+
+type [GCP Cloud Storage] extends [Object Storage] {
+  op write Insert, Patch, Update, Copy, Compose, Rewrite
+  doc "Cloud Storage, the object storage of Google Cloud."
+}
+
+type [GCP Persistent Disk] extends [Block Storage] {
+  doc "Persistent Disk, block volumes for Compute Engine."
+}
+
+# Messaging
+
+type [GCP Pub/Sub] extends [Message Broker] {
+  op read  Pull, StreamingPull
+  op write Acknowledge, ModifyAckDeadline, CreateTopic, CreateSubscription, Seek
+  doc "Pub/Sub, Google Cloud's global messaging service of topics and subscriptions."
+}
+` },
+  { path: "stdlib/compute.proschi", source: '# Proschi standard library: compute, the code you run. The rules are in\n# core.proschi.\n\nabstract type Compute {\n  kind service\n  protocol HTTP\n  status 100, 101, 102, 103\n  status 200, 201, 202, 203, 204, 205, 206, 207, 208, 226\n  status 300, 301, 302, 303, 304, 307, 308\n  status 400, 401, 402, 403, 404, 405, 406, 407, 408, 409, 410, 411, 412, 413, 414, 415, 416, 417, 418\n  status 421, 422, 423, 424, 425, 426, 428, 429, 431, 451\n  status 500, 501, 502, 503, 504, 505, 506, 507, 508, 510, 511\n  header Accept, Accept-Encoding, Accept-Language, Accept-Ranges, Age, Allow, Authorization\n  header Cache-Control, Connection, Content-Disposition, Content-Encoding, Content-Language\n  header Content-Length, Content-Range, Content-Type, Cookie, Date, ETag, Expires, Host\n  header If-Match, If-Modified-Since, If-None-Match, If-Range, If-Unmodified-Since, Last-Modified\n  header Link, Location, Origin, Range, Referer, Retry-After, Server, Set-Cookie, User-Agent, Vary\n  header Upgrade, WWW-Authenticate, Proxy-Authorization, Strict-Transport-Security, Content-Security-Policy\n  header Access-Control-Allow-Origin, Access-Control-Allow-Methods, Access-Control-Allow-Headers\n  header Access-Control-Allow-Credentials, Access-Control-Max-Age, Access-Control-Request-Method\n  header Forwarded, X-Forwarded-For, X-Forwarded-Host, X-Forwarded-Proto, X-Real-IP\n  header X-Request-Id, X-Correlation-Id, Traceparent, Tracestate, Idempotency-Key\n  header X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset\n  header X-API-Key, X-Content-Type-Options, X-Frame-Options, Sec-WebSocket-Key, Sec-WebSocket-Accept, Sec-WebSocket-Protocol\n  doc "Code you run: a service, a worker, a function or the platform it runs on; its own requests are named freely."\n}\n\ntype Service extends Compute {\n  doc "A program you run that answers requests, whatever it is written in."\n}\n\ntype Worker extends Compute {\n  doc "A background program that takes jobs or events from a queue and processes them."\n}\n\n# Interfaces.\n\nabstract type [HTTP Service] extends Service {\n  op read  GET, HEAD, OPTIONS, TRACE, CONNECT\n  op write POST, PUT, PATCH, DELETE\n  doc "A service whose requests are HTTP methods: GET, HEAD and OPTIONS read, POST, PUT, PATCH and DELETE write."\n}\n\ntype [REST API] extends [HTTP Service] {\n  doc "A service with a REST interface: resources over HTTP methods and status codes."\n}\n\ntype GraphQL extends [HTTP Service] {\n  protocol GraphQL\n  op read  query, subscription\n  op write mutation\n  doc "A service with a GraphQL interface: queries read, mutations write."\n}\n\ntype gRPC extends Service {\n  protocol gRPC\n  doc "A service with a gRPC interface: typed calls over HTTP/2, named by its own .proto file."\n}\n\ntype WebSocket extends Service {\n  protocol WebSocket\n  doc "A service that keeps a WebSocket open to each client and pushes messages both ways, named freely."\n}\n\ntype [SOAP API] extends Service {\n  protocol SOAP\n  doc "A service with a SOAP interface: XML messages over HTTP."\n}\n\n# Languages and frameworks: a service written in it.\n\ntype Java extends Service {\n  doc "A service on the JVM, written in Java."\n}\n\ntype [Spring Boot] extends Java {\n  doc "A service built with Spring Boot."\n}\n\ntype Kotlin extends Service {\n  doc "A service written in Kotlin."\n}\n\ntype Go extends Service {\n  doc "A service written in Go."\n}\n\ntype [Node.js] extends Service {\n  doc "A service on Node.js, written in JavaScript or TypeScript."\n}\n\ntype Python extends Service {\n  doc "A service written in Python."\n}\n\ntype Django extends Python {\n  doc "A service built with Django."\n}\n\ntype FastAPI extends Python {\n  doc "A service built with FastAPI."\n}\n\ntype Flask extends Python {\n  doc "A service built with Flask."\n}\n\ntype [Ruby on Rails] extends Service {\n  doc "A service built with Ruby on Rails."\n}\n\ntype [.NET] extends Service {\n  doc "A service on .NET, written in C#."\n}\n\ntype PHP extends Service {\n  doc "A service written in PHP."\n}\n\ntype Rust extends Service {\n  doc "A service written in Rust."\n}\n\ntype Elixir extends Service {\n  doc "A service written in Elixir, on the Erlang VM."\n}\n\n# Where services run.\n\nabstract type Platform extends Compute {\n  doc "Where a service runs, drawn as the platform: it answers like the service on it."\n}\n\ntype VM extends Platform {\n  doc "A virtual machine running the service."\n}\n\ntype Docker extends Platform {\n  doc "A container running the service."\n}\n\ntype Kubernetes extends Platform {\n  doc "Pods on a Kubernetes cluster running the service."\n}\n\n# Functions.\n\ntype Function extends Compute {\n  kind function\n  doc "A serverless function: runs per request or event and scales to zero."\n}\n' },
+  { path: "stdlib/data.proschi", source: '# Proschi standard library: components that keep data. Queues and brokers\n# are in messaging.proschi. The rules are in core.proschi.\n\nabstract type Data {\n  op read  READ, FETCH, LOOKUP\n  op write WRITE, SAVE, STORE, RECORD, MARK, RESERVE, HOLD, BOOK\n  doc "A component that keeps data: a database, cache, search index, warehouse or bucket."\n}\n\n# Relational databases.\n\ntype Database extends Data {\n  kind database\n  protocol SQL\n  op read  SELECT, WITH, EXPLAIN, SHOW, BEGIN, ROLLBACK\n  op write INSERT, UPDATE, DELETE, UPSERT, MERGE, TRUNCATE, COMMIT, LOCK\n  op write CREATE, ALTER, DROP\n  doc "A relational database queried with SQL, whose product does not matter."\n}\n\ntype PostgreSQL extends Database {\n  op read  LISTEN\n  op write NOTIFY, COPY, VACUUM\n  doc "PostgreSQL, the open source relational database."\n}\n\ntype MySQL extends Database {\n  op write REPLACE\n  doc "MySQL, the open source relational database."\n}\n\ntype MariaDB extends MySQL {\n  doc "MariaDB, the community fork of MySQL."\n}\n\ntype SQLite extends Database {\n  doc "SQLite, the embedded relational database in a single file."\n}\n\ntype Oracle extends Database {\n  doc "Oracle Database, the commercial relational database."\n}\n\ntype [SQL Server] extends Database {\n  doc "Microsoft SQL Server, the commercial relational database."\n}\n\ntype TimescaleDB extends PostgreSQL {\n  kind analytics\n  doc "TimescaleDB, PostgreSQL extended for time series."\n}\n\nabstract type [Distributed SQL Database] extends Database {\n  doc "A relational database that shards and replicates itself across nodes, keeping transactions."\n}\n\ntype CockroachDB extends [Distributed SQL Database] {\n  doc "CockroachDB, a distributed SQL database that speaks the PostgreSQL protocol."\n}\n\ntype YugabyteDB extends [Distributed SQL Database] {\n  doc "YugabyteDB, a distributed SQL database compatible with PostgreSQL."\n}\n\ntype TiDB extends [Distributed SQL Database] {\n  doc "TiDB, a distributed SQL database compatible with MySQL."\n}\n\ntype Vitess extends [Distributed SQL Database] {\n  doc "Vitess, which shards MySQL behind one SQL endpoint."\n}\n\n# NoSQL databases.\n\ntype [NoSQL Database] extends Data {\n  kind database\n  # The key-value vocabulary every product has under its own names.\n  op read  GET, SCAN\n  op write PUT, SET, DELETE\n  doc "A non-relational database that partitions data by key, whose product does not matter."\n}\n\ntype DynamoDB extends [NoSQL Database] {\n  op read  GetItem, BatchGetItem, Query, TransactGetItems, DescribeTable\n  op read  Scan latency 10 cost 25 # replaces the key-value SCAN: it reads the whole table\n  op write PutItem, UpdateItem, DeleteItem, BatchWriteItem, TransactWriteItems\n  op write ExecuteStatement, CreateTable, UpdateTable, DeleteTable\n  doc "DynamoDB, the managed key-value and document database: reads by key or partition, a Scan reads the whole table."\n}\n\nabstract type [Document NoSQL Database] extends [NoSQL Database] {\n  doc "A NoSQL database that stores JSON-like documents and queries their fields."\n}\n\ntype MongoDB extends [Document NoSQL Database] {\n  op read  find, findOne, aggregate, countDocuments, estimatedDocumentCount, distinct, watch\n  op write insertOne, insertMany, updateOne, updateMany, replaceOne, deleteOne, deleteMany\n  op write findOneAndUpdate, findOneAndReplace, findOneAndDelete, bulkWrite, createIndex\n  doc "MongoDB, the document database."\n}\n\ntype CouchDB extends [Document NoSQL Database] {\n  doc "Apache CouchDB, a document database with an HTTP API and multi-primary replication."\n}\n\ntype Couchbase extends [Document NoSQL Database] {\n  op read  lookupIn, exists, query\n  op write upsert, insert, replace, remove, mutateIn, touch, increment, decrement\n  doc "Couchbase, a document database with a built-in cache."\n}\n\nabstract type [Wide-Column NoSQL Database] extends [NoSQL Database] {\n  doc "A NoSQL database of rows with many columns, partitioned by key and sorted within a partition."\n}\n\ntype Cassandra extends [Wide-Column NoSQL Database] {\n  protocol CQL\n  op read  SELECT\n  op write INSERT, UPDATE, DELETE, BATCH, TRUNCATE\n  doc "Apache Cassandra, the wide-column database queried with CQL."\n}\n\ntype ScyllaDB extends Cassandra {\n  doc "ScyllaDB, a Cassandra-compatible database written in C++."\n}\n\ntype HBase extends [Wide-Column NoSQL Database] {\n  op read  Exists\n  op read  Scan latency 10 cost 25 # replaces the key-value SCAN: it reads the whole table\n  op write Increment, Append, CheckAndMutate\n  doc "Apache HBase, the wide-column database on HDFS."\n}\n\nabstract type [Graph NoSQL Database] extends [NoSQL Database] {\n  protocol Cypher\n  op read  MATCH, OPTIONAL, RETURN, CALL\n  op write CREATE, MERGE, DELETE, DETACH, SET, REMOVE\n  doc "A graph database: nodes and relationships, queried by pattern."\n}\n\ntype Neo4j extends [Graph NoSQL Database] {\n  doc "Neo4j, the graph database queried with Cypher."\n}\n\nabstract type [Coordination Store] extends Data {\n  kind database\n  op read  GET, WATCH\n  op write PUT, DELETE\n  doc "A small, strongly consistent store for configuration, leader election and locks."\n}\n\ntype etcd extends [Coordination Store] {\n  op read  Range, LeaseTimeToLive\n  op write DeleteRange, Txn, Compact, LeaseGrant, LeaseRevoke, LeaseKeepAlive\n  doc "etcd, the consistent key-value store behind Kubernetes."\n}\n\ntype ZooKeeper extends [Coordination Store] {\n  op read  getData, getChildren, exists, getACL, sync\n  op write create, setData, setACL, multi\n  doc "Apache ZooKeeper, the coordination service of znodes and watches."\n}\n\n# Caches.\n\ntype Cache extends Data {\n  kind cache\n  op read  GET, MGET\n  op write SET, DELETE, EXPIRE\n  doc "An in-memory key-value cache, whose product does not matter."\n}\n\ntype Redis extends Cache {\n  protocol RESP\n  # Strings\n  op read  GETRANGE, STRLEN\n  op write SETNX, SETEX, PSETEX, GETSET, GETDEL, GETEX, MSET, MSETNX, APPEND, SETRANGE\n  op write INCR, INCRBY, INCRBYFLOAT, DECR, DECRBY\n  # Keys\n  op read  EXISTS, TTL, PTTL, TYPE, KEYS, SCAN\n  op write DEL, UNLINK, PEXPIRE, EXPIREAT, PEXPIREAT, PERSIST, RENAME, COPY\n  # Hashes\n  op read  HGET, HMGET, HGETALL, HEXISTS, HKEYS, HVALS, HLEN, HSCAN\n  op write HSET, HSETNX, HMSET, HDEL, HINCRBY, HINCRBYFLOAT\n  # Lists\n  op read  LRANGE, LLEN, LINDEX\n  op write LPUSH, RPUSH, LPUSHX, RPUSHX, LPOP, RPOP, BLPOP, BRPOP, LSET, LREM, LTRIM, LINSERT, LMOVE, BLMOVE\n  # Sets\n  op read  SMEMBERS, SISMEMBER, SMISMEMBER, SCARD, SRANDMEMBER, SINTER, SUNION, SDIFF, SSCAN\n  op write SADD, SREM, SPOP, SMOVE, SINTERSTORE, SUNIONSTORE, SDIFFSTORE\n  # Sorted sets\n  op read  ZRANGE, ZREVRANGE, ZRANGEBYSCORE, ZREVRANGEBYSCORE, ZRANGEBYLEX, ZSCORE, ZMSCORE\n  op read  ZRANK, ZREVRANK, ZCARD, ZCOUNT, ZSCAN\n  op write ZADD, ZREM, ZINCRBY, ZPOPMIN, ZPOPMAX, BZPOPMIN, BZPOPMAX, ZREMRANGEBYSCORE, ZREMRANGEBYRANK\n  op write ZUNIONSTORE, ZINTERSTORE, ZRANGESTORE\n  # Bitmaps and HyperLogLog\n  op read  GETBIT, BITCOUNT, BITPOS, PFCOUNT\n  op write SETBIT, BITOP, PFADD, PFMERGE\n  # Geo\n  op read  GEOSEARCH, GEODIST, GEOPOS, GEOHASH, GEORADIUS, GEORADIUSBYMEMBER\n  op write GEOADD, GEOSEARCHSTORE\n  # Pub/sub\n  op read  SUBSCRIBE, PSUBSCRIBE, UNSUBSCRIBE, PUNSUBSCRIBE, SSUBSCRIBE\n  op write PUBLISH, SPUBLISH\n  # Streams\n  op read  XREAD, XREADGROUP, XRANGE, XREVRANGE, XLEN, XPENDING, XINFO\n  op write XADD, XACK, XCLAIM, XAUTOCLAIM, XDEL, XTRIM, XGROUP\n  # Transactions and scripts\n  op read  MULTI, WATCH, UNWATCH, DISCARD, PING\n  op write EXEC, EVAL, EVALSHA, FCALL\n  doc "Redis, the in-memory data store, used as a cache."\n}\n\ntype Valkey extends Redis {\n  doc "Valkey, the open source fork of Redis."\n}\n\ntype KeyDB extends Redis {\n  doc "KeyDB, a multithreaded fork of Redis."\n}\n\ntype Dragonfly extends Redis {\n  doc "Dragonfly, an in-memory store compatible with Redis."\n}\n\ntype Memcached extends Cache {\n  op read  GETS\n  op write ADD, REPLACE, APPEND, PREPEND, CAS, INCR, DECR, TOUCH, GAT, GATS, FLUSH_ALL\n  doc "Memcached, the simple distributed in-memory cache."\n}\n\ntype Hazelcast extends Cache {\n  doc "Hazelcast, the in-memory data grid."\n}\n\ntype Aerospike extends Cache {\n  doc "Aerospike, the key-value store tuned for memory and flash."\n}\n\n# Search.\n\ntype [Search Engine] extends Data {\n  kind search\n  op read  Search, Get, KNN\n  op write Index, Upsert, Delete\n  doc "A full-text search index, whose product does not matter."\n}\n\ntype Elasticsearch extends [Search Engine] {\n  op read  Mget, Count, MultiSearch, Scroll, Explain, _search, _msearch, _count\n  op write Bulk, Update, Create, UpdateByQuery, DeleteByQuery, Reindex, Refresh, _bulk, _doc, _update\n  doc "Elasticsearch, the distributed search engine on Lucene."\n}\n\ntype OpenSearch extends Elasticsearch {\n  doc "OpenSearch, the open source fork of Elasticsearch."\n}\n\ntype Solr extends [Search Engine] {\n  doc "Apache Solr, the search server on Lucene."\n}\n\ntype Meilisearch extends [Search Engine] {\n  doc "Meilisearch, a fast search engine for search-as-you-type."\n}\n\ntype Typesense extends [Search Engine] {\n  doc "Typesense, an in-memory search engine that tolerates typos."\n}\n\ntype Algolia extends [Search Engine] {\n  doc "Algolia, the hosted search API."\n}\n\n# Analytics.\n\ntype [Data Warehouse] extends Data {\n  kind analytics\n  protocol SQL\n  op read  SELECT, WITH, EXPLAIN, SHOW\n  op write INSERT, UPDATE, DELETE, UPSERT, MERGE, COPY, TRUNCATE, CREATE, DROP\n  doc "A column store for analytical SQL over large data, whose product does not matter."\n}\n\ntype Snowflake extends [Data Warehouse] {\n  doc "Snowflake, the cloud data warehouse."\n}\n\ntype ClickHouse extends [Data Warehouse] {\n  doc "ClickHouse, the column-oriented OLAP database."\n}\n\ntype [Apache Druid] extends [Data Warehouse] {\n  doc "Apache Druid, the real-time analytics database."\n}\n\ntype [Apache Pinot] extends [Data Warehouse] {\n  doc "Apache Pinot, the real-time OLAP store for user-facing analytics."\n}\n\ntype Databricks extends [Data Warehouse] {\n  doc "Databricks, the lakehouse platform on Spark."\n}\n\nabstract type [Time Series Store] extends Data {\n  kind analytics\n  op read  QUERY, SELECT\n  op write INSERT\n  doc "A database of timestamped measurements, queried over time ranges."\n}\n\ntype InfluxDB extends [Time Series Store] {\n  doc "InfluxDB, the time series database."\n}\n\ntype Prometheus extends [Time Series Store] {\n  doc "Prometheus, the monitoring system and its time series store."\n}\n\n# Files and objects.\n\ntype [Object Storage] extends Data {\n  kind storage\n  protocol HTTP\n  op read  GET, HEAD, LIST\n  op write PUT, DELETE, UPLOAD\n  doc "A bucket of objects (files) by key, whose product does not matter."\n}\n\ntype MinIO extends [AWS S3] {\n  doc "MinIO, the self-hosted object storage with the S3 API."\n}\n\ntype Ceph extends [Object Storage] {\n  doc "Ceph, the distributed object, block and file storage."\n}\n\nabstract type [Shared File System] extends Data {\n  kind storage\n  op read  OPEN, LIST\n  op write APPEND\n  doc "A file system many machines mount at once."\n}\n\ntype HDFS extends [Shared File System] {\n  doc "HDFS, the Hadoop distributed file system."\n}\n\nabstract type [Block Storage] extends Data {\n  kind storage\n  doc "A disk attached to one machine."\n}\n' },
+  { path: "stdlib/edge.proschi", source: `# Proschi standard library: the edge, between the clients and the services.
+# The rules are in core.proschi.
+
+abstract type Edge {
+  kind edge
+  doc "What a request passes through before it reaches a service: DNS, a CDN, a load balancer or a gateway."
+}
+
+abstract type [HTTP Edge] extends Edge {
+  protocol HTTP
+  op read  GET, HEAD, OPTIONS, TRACE, CONNECT
+  op write POST, PUT, PATCH, DELETE
+  status 100, 101, 102, 103
+  status 200, 201, 202, 203, 204, 205, 206, 207, 208, 226
+  status 300, 301, 302, 303, 304, 307, 308
+  status 400, 401, 402, 403, 404, 405, 406, 407, 408, 409, 410, 411, 412, 413, 414, 415, 416, 417, 418
+  status 421, 422, 423, 424, 425, 426, 428, 429, 431, 451
+  status 500, 501, 502, 503, 504, 505, 506, 507, 508, 510, 511
+  header Accept, Accept-Encoding, Accept-Language, Accept-Ranges, Age, Allow, Authorization
+  header Cache-Control, Connection, Content-Disposition, Content-Encoding, Content-Language
+  header Content-Length, Content-Range, Content-Type, Cookie, Date, ETag, Expires, Host
+  header If-Match, If-Modified-Since, If-None-Match, If-Range, If-Unmodified-Since, Last-Modified
+  header Link, Location, Origin, Range, Referer, Retry-After, Server, Set-Cookie, User-Agent, Vary
+  header Upgrade, WWW-Authenticate, Proxy-Authorization, Strict-Transport-Security, Content-Security-Policy
+  header Access-Control-Allow-Origin, Access-Control-Allow-Methods, Access-Control-Allow-Headers
+  header Access-Control-Allow-Credentials, Access-Control-Max-Age, Access-Control-Request-Method
+  header Forwarded, X-Forwarded-For, X-Forwarded-Host, X-Forwarded-Proto, X-Real-IP
+  header X-Request-Id, X-Correlation-Id, Traceparent, Tracestate, Idempotency-Key
+  header X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset
+  header X-API-Key, X-Content-Type-Options, X-Frame-Options, Sec-WebSocket-Key, Sec-WebSocket-Accept, Sec-WebSocket-Protocol
+  doc "An edge component that takes HTTP requests and passes them on."
+}
+
+type DNS extends Edge {
+  kind dns
+  protocol DNS
+  op read  QUERY, RESOLVE
+  op write UPDATE
+  doc "A DNS service: turns a host name into the addresses to connect to."
+}
+
+type CDN extends [HTTP Edge] {
+  kind cdn
+  op write PURGE
+  doc "A content delivery network: caches responses at edge locations near the users."
+}
+
+type [Load Balancer] extends [HTTP Edge] {
+  kind loadbalancer
+  doc "Spreads requests over the replicas behind it and stops sending to unhealthy ones."
+}
+
+type [API Gateway] extends [HTTP Edge] {
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
+  kind gateway
+  doc "One entry point for an API: routing, authentication and rate limits before the services."
+}
+
+type WAF extends [HTTP Edge] {
+  doc "A web application firewall: blocks malicious requests at the edge."
+}
+
+# Products.
+
+type Fastly extends CDN {
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
+  doc "Fastly, the programmable CDN."
+}
+
+type Akamai extends CDN {
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
+  doc "Akamai, the CDN and edge security platform."
+}
+
+type nginx extends [Load Balancer] {
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
+  doc "nginx, the web server used as a reverse proxy and load balancer."
+}
+
+type Envoy extends [Load Balancer] {
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
+  doc "Envoy, the L7 proxy behind most service meshes."
+}
+
+type HAProxy extends [Load Balancer] {
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
+  doc "HAProxy, the TCP and HTTP load balancer."
+}
+
+type Traefik extends [Load Balancer] {
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
+  doc "Traefik, the reverse proxy that configures itself from containers."
+}
+
+type [Kubernetes Ingress] extends [Load Balancer] {
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
+  doc "A Kubernetes ingress controller: routes outside HTTP traffic to the cluster's services."
+}
+
+type Kong extends [API Gateway] {
+  doc "Kong, the open source API gateway built on nginx."
+}
+
+type [Spring Cloud Gateway] extends [API Gateway] {
+  doc "Spring Cloud Gateway, an API gateway for Spring services."
+}
+` },
+  { path: "stdlib/external.proschi", source: `# Proschi standard library: systems you call but do not run. The rules are in
+# core.proschi.
+
+abstract type External {
+  kind external
+  protocol HTTP
+  op read  GET, HEAD, OPTIONS, TRACE, CONNECT
+  op write POST, PUT, PATCH, DELETE
+  status 100, 101, 102, 103
+  status 200, 201, 202, 203, 204, 205, 206, 207, 208, 226
+  status 300, 301, 302, 303, 304, 307, 308
+  status 400, 401, 402, 403, 404, 405, 406, 407, 408, 409, 410, 411, 412, 413, 414, 415, 416, 417, 418
+  status 421, 422, 423, 424, 425, 426, 428, 429, 431, 451
+  status 500, 501, 502, 503, 504, 505, 506, 507, 508, 510, 511
+  header Accept, Accept-Encoding, Accept-Language, Accept-Ranges, Age, Allow, Authorization
+  header Cache-Control, Connection, Content-Disposition, Content-Encoding, Content-Language
+  header Content-Length, Content-Range, Content-Type, Cookie, Date, ETag, Expires, Host
+  header If-Match, If-Modified-Since, If-None-Match, If-Range, If-Unmodified-Since, Last-Modified
+  header Link, Location, Origin, Range, Referer, Retry-After, Server, Set-Cookie, User-Agent, Vary
+  header Upgrade, WWW-Authenticate, Proxy-Authorization, Strict-Transport-Security, Content-Security-Policy
+  header Access-Control-Allow-Origin, Access-Control-Allow-Methods, Access-Control-Allow-Headers
+  header Access-Control-Allow-Credentials, Access-Control-Max-Age, Access-Control-Request-Method
+  header Forwarded, X-Forwarded-For, X-Forwarded-Host, X-Forwarded-Proto, X-Real-IP
+  header X-Request-Id, X-Correlation-Id, Traceparent, Tracestate, Idempotency-Key
+  header X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset
+  header X-API-Key, X-Content-Type-Options, X-Frame-Options, Sec-WebSocket-Key, Sec-WebSocket-Accept, Sec-WebSocket-Protocol
+  doc "A system run by someone else that the design calls over its API."
+}
+
+type [Third Party API] extends External {
+  op write SEND, NOTIFY
+  doc "Another company's API, whose product does not matter."
+}
+
+type [Payment Gateway] extends External {
+  op read  RETRIEVE
+  op write CHARGE, AUTHORIZE, CAPTURE, REFUND, VOID, PAYOUT
+  doc "A payment provider: authorizes, captures and refunds card payments."
+}
+
+type Stripe extends [Payment Gateway] {
+  doc "Stripe, the payments API."
+}
+
+type PayPal extends [Payment Gateway] {
+  doc "PayPal, the online payments service."
+}
+
+type Adyen extends [Payment Gateway] {
+  doc "Adyen, the payments platform for cards and local payment methods."
+}
+
+type Braintree extends [Payment Gateway] {
+  doc "Braintree, PayPal's payments API for cards and wallets."
+}
+
+type [Auth Service] extends External {
+  op read  VALIDATE, VERIFY, INTROSPECT, USERINFO, JWKS
+  op write LOGIN, LOGOUT, TOKEN, REFRESH, REVOKE, REGISTER
+  doc "An identity provider: signs users in and issues and checks their tokens."
+}
+
+type Auth0 extends [Auth Service] {
+  doc "Auth0, the hosted identity provider."
+}
+
+type Okta extends [Auth Service] {
+  doc "Okta, the identity and single sign-on provider."
+}
+
+abstract type Notifier extends External {
+  op write SEND, NOTIFY
+  doc "A provider that delivers messages to people: email, SMS or push notifications."
+}
+
+type [Email Service] extends Notifier {
+  doc "An email provider that sends the design's emails."
+}
+
+type SendGrid extends [Email Service] {
+  doc "SendGrid, Twilio's email API."
+}
+
+type Mailgun extends [Email Service] {
+  doc "Mailgun, the email API."
+}
+
+type [SMS Service] extends Notifier {
+  doc "An SMS provider that sends text messages."
+}
+
+type Twilio extends [SMS Service] {
+  doc "Twilio, the API for SMS, voice and messaging."
+}
+
+type [Push Service] extends Notifier {
+  doc "A push notification provider that delivers to phones."
+}
+
+type APNs extends [Push Service] {
+  doc "Apple Push Notification service, which delivers push notifications to Apple devices."
+}
+
+type FCM extends [Push Service] {
+  doc "Firebase Cloud Messaging, which delivers push notifications to Android, iOS and the web."
+}
+
+type [Analytics Service] extends External {
+  op write TRACK, IDENTIFY, PAGE, SCREEN, ALIAS
+  doc "A product analytics provider that receives usage events."
+}
+
+type [Google Maps] extends External {
+  op read  GEOCODE, DIRECTIONS, DISTANCE, PLACES, ROUTES, TILES
+  doc "Google Maps Platform: geocoding, directions, distances and map tiles."
+}
+
+type OpenAI extends External {
+  op read  COMPLETE, CHAT, EMBED, MODERATE, TRANSCRIBE
+  doc "OpenAI's API for language models and embeddings."
+}
+` },
+  { path: "stdlib/messaging.proschi", source: '# Proschi standard library: queues and brokers, which take a message and\n# hand it on later. The rules are in core.proschi.\n\nabstract type Messaging {\n  op read  RECEIVE, SUBSCRIBE, UNSUBSCRIBE, READ\n  op write SEND, PUBLISH, EMIT, ENQUEUE, WRITE, ACK, NACK\n  doc "A component that takes a message and hands it on later: a queue or a broker."\n}\n\ntype [Message Queue] extends Messaging {\n  kind queue\n  op read  DEQUEUE, PEEK, POLL\n  doc "A queue of jobs: each message goes to one consumer, which deletes it when done."\n}\n\ntype [Message Broker] extends Messaging {\n  kind broker\n  op read  CONSUME, FETCH\n  op write PRODUCE\n  doc "A broker of topics or streams: every subscriber gets each message, and the log can be replayed."\n}\n\ntype SQS extends [Message Queue] {\n  op read  ReceiveMessage, GetQueueAttributes, GetQueueUrl, ListQueues\n  op write SendMessage, SendMessageBatch, DeleteMessage, DeleteMessageBatch\n  op write ChangeMessageVisibility, ChangeMessageVisibilityBatch, PurgeQueue\n  op write CreateQueue, DeleteQueue, SetQueueAttributes\n  doc "SQS, the managed message queue of AWS."\n}\n\ntype [Redis Queue] extends [Message Queue] {\n  protocol RESP\n  op read  XREAD, XREADGROUP, XRANGE, XLEN, XPENDING, LRANGE, LLEN, PSUBSCRIBE\n  op write XADD, XACK, XCLAIM, XAUTOCLAIM, XDEL, XTRIM, XGROUP, LPUSH, RPUSH, LPOP, RPOP, BLPOP, BRPOP, LMOVE, BLMOVE\n  doc "A queue on Redis: a list, a stream or pub/sub channels."\n}\n\ntype ZeroMQ extends [Message Queue] {\n  op read  RECV\n  doc "ZeroMQ, the brokerless messaging library of sockets."\n}\n\ntype Kafka extends [Message Broker] {\n  op read  Poll, OffsetFetch, ListOffsets, Metadata\n  op write Commit, OffsetCommit, AddPartitionsToTxn, EndTxn, DeleteRecords\n  op write CreateTopics, DeleteTopics, CreatePartitions\n  doc "Apache Kafka, the distributed log of partitioned topics."\n}\n\ntype Redpanda extends Kafka {\n  doc "Redpanda, a Kafka-compatible streaming platform written in C++."\n}\n\ntype RabbitMQ extends [Message Broker] {\n  protocol AMQP\n  op read  BasicGet, BasicConsume\n  op write BasicPublish, BasicAck, BasicNack, BasicReject, QueueDeclare, ExchangeDeclare, QueueBind, QueuePurge\n  doc "RabbitMQ, the AMQP broker of exchanges and queues."\n}\n\ntype NATS extends [Message Broker] {\n  op read  REQUEST, SUB\n  op write PUB, REPLY\n  doc "NATS, the lightweight messaging system, with JetStream for persistence."\n}\n\ntype [Apache Pulsar] extends [Message Broker] {\n  doc "Apache Pulsar, the broker of topics with tiered storage."\n}\n\ntype ActiveMQ extends [Message Broker] {\n  doc "Apache ActiveMQ, the JMS message broker."\n}\n' }
+];
+
+// ../frontend/src/dsl/typesys/stdlib.ts
+var cached;
+function loadStdlib(read2) {
+  if (!cached) {
+    const files = STDLIB_SOURCES.map(({ source, path }) => read2(source, path));
+    const resolution = resolveTypes(files.flatMap((f) => f.decls.map((d) => ({ ...d, builtin: true }))));
+    cached = { ...resolution, diagnostics: [...files.flatMap((f) => f.diagnostics), ...resolution.diagnostics] };
+  }
+  return cached;
+}
+
+// ../frontend/src/dsl/typesys/ops.ts
+function opNamesMostSpecificFirst(type, table) {
+  const chain = [type, ...type.parents.flatMap((p) => table.get(typeKey(p)) ?? [])];
+  const seen = /* @__PURE__ */ new Set();
+  const names = [];
+  chain.forEach((t, i) => {
+    const parent = chain[i + 1];
+    for (const op of t.ops) {
+      const key = op.name.toLowerCase();
+      if (seen.has(key) || parent?.ops.some((o) => o.name.toLowerCase() === key)) continue;
+      seen.add(key);
+      names.push(op.name);
+    }
+  });
+  return names;
+}
+function findOp(type, text) {
+  const t = text.trimStart().replace(/^"/, "").toLowerCase();
+  let best;
+  for (const op of type.ops) {
+    const name = op.name.toLowerCase();
+    if (!t.startsWith(name) || /[A-Za-z0-9_]/.test(t.charAt(name.length))) continue;
+    if (!best || op.name.length > best.name.length) best = op;
+  }
+  return best;
+}
+function opWord(text) {
+  return /^\s*"?([A-Za-z_][A-Za-z0-9_]*)/.exec(text)?.[1];
+}
+function suggestOp(type, word) {
+  const w = word.toLowerCase();
+  let best;
+  let bestDistance = Math.max(1, Math.floor(w.length / 3)) + 1;
+  for (const op of type.ops) {
+    const d = editDistance(w, op.name.toLowerCase());
+    if (d < bestDistance) [best, bestDistance] = [op.name, d];
+  }
+  return best;
+}
+function findHeader(type, name) {
+  const n = name.toLowerCase();
+  return type.headers.find((h2) => h2.toLowerCase() === n);
+}
+function suggestHeader(type, name) {
+  const n = name.toLowerCase();
+  let best;
+  let bestDistance = Math.max(1, Math.floor(n.length / 3)) + 1;
+  for (const h2 of type.headers) {
+    const d = editDistance(n, h2.toLowerCase());
+    if (d < bestDistance) [best, bestDistance] = [h2, d];
+  }
+  return best;
+}
+
 // ../frontend/src/dsl/parser.ts
+var NUMBER_PROPS = {
+  rps: "rps",
+  readRps: "rps",
+  writeRps: "rps",
+  latencyMs: "ms",
+  availability: "%",
+  costUsd: "usd/month",
+  bandwidthMBps: "MBps",
+  egressUsdPerGb: "usd/GB"
+};
+var CHOICE_PROPS = {
+  durable: ["true", "false"],
+  consistency: ["strong", "eventual"],
+  writeScaling: ["replicas", "shards"]
+};
+var TYPE_LINES = "kind, protocol, op, status, header, icon, doc or a profile number (rps, readRps, writeRps, writeScaling, latencyMs, availability, costUsd, durable, consistency, bandwidthMBps, egressUsdPerGb)";
+var HEADER_NAME = /^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/;
 var HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
 var DEFAULT_TECH = "Rectangle";
 var DEFAULT_GROUP_TECH = "Logical Group";
@@ -1307,7 +2143,7 @@ var UNIT_EXAMPLES = {
 var CAPACITY_PARTS = "a rate, reads, writes, shards, size, latency, availability, cost, durable or volatile, consistency, bandwidth, egress, timeout, hit, errors, retries or drain";
 var MAX_RETRIES = 5;
 var ASSERTION_HELP = 'Expected an assertion: "Use case" calls <node>, "Use case" writes <node> before responding, <node> calls <node>, no path from <node> to <node>, <node> has replicas >= 2, \u2026';
-var ASSERTION_VERBS = "calls, every scenario calls, never calls, never waits for, writes, responds, starts at, has scenario or handles failure of";
+var ASSERTION_VERBS = "calls, uses, sends header, every scenario calls, never calls, never waits for, writes, responds, starts at, has scenario or handles failure of";
 var GENERIC_TECH = {
   client: "Actor",
   edge: "WAF",
@@ -1333,6 +2169,12 @@ function unknownTechMessage(tech, kind, suggestion) {
 }
 function parse(source, options = {}) {
   return new Parser(source, options).run();
+}
+function parseTypeDecls(source, path) {
+  return new Parser(source, { path }, { chain: [path], teamFiles: /* @__PURE__ */ new Map() }).readTypes();
+}
+function builtinTypes() {
+  return loadStdlib(parseTypeDecls).table;
 }
 var Parser = class _Parser {
   // Per-file state, swapped while an imported file is read.
@@ -1385,6 +2227,14 @@ var Parser = class _Parser {
   deferred = [];
   built = [];
   options;
+  /** `type` blocks of every file read so far, in order. */
+  typeDecls = [];
+  /** Node techs, resolved by `resolveTypes` once every file is read. */
+  techRefs = [];
+  /** Built-in and declared types; set by `resolveTypes`. */
+  typeTable = /* @__PURE__ */ new Map();
+  /** The declared (not built-in) types, resolved. */
+  types = [];
   constructor(source, options, scope2) {
     this.options = options;
     this.lines = source.split("\n");
@@ -1396,6 +2246,7 @@ var Parser = class _Parser {
   }
   run() {
     this.parseFile();
+    this.resolveTypes();
     this.resolvePorts();
     this.createImplicitNodes();
     this.resolveTags();
@@ -1422,7 +2273,8 @@ var Parser = class _Parser {
       ...Object.keys(this.layout).length ? { layout: this.layout } : {},
       ...this.systems.length ? { systems: this.systems } : {},
       ...this.whatifs.length ? { whatifs: this.whatifs } : {},
-      ...this.constants.size ? { constants: [...this.constants.values()] } : {}
+      ...this.constants.size ? { constants: [...this.constants.values()] } : {},
+      ...this.types.length ? { types: this.types } : {}
     };
     const order = (d) => this.fileOrder.get(d.file) ?? 0;
     this.diagnostics.sort((a, b) => order(a) - order(b) || a.line - b.line || a.col - b.col);
@@ -1432,6 +2284,11 @@ var Parser = class _Parser {
       ...this.imports.length ? { imports: this.imports } : {},
       ...this.blocks.length ? { blocks: this.blocks } : {}
     };
+  }
+  /** For `parseTypeDecls`: the file's type blocks and every problem found reading it. */
+  readTypes() {
+    this.parseFile();
+    return { decls: this.typeDecls, diagnostics: this.diagnostics };
   }
   /** Reads the current file's lines and reports blocks it leaves open. */
   parseFile() {
@@ -1443,7 +2300,7 @@ var Parser = class _Parser {
       i = this.parseLine(i);
     }
     for (const frame2 of this.stack) {
-      const what = frame2.kind === "group" ? `group '${frame2.id}'` : frame2.kind === "usecase" ? `usecase '${frame2.useCase.name}'` : frame2.kind === "alt" ? `alt '${frame2.name}'` : frame2.kind === "par" ? "par block" : frame2.kind === "system" ? `system '${frame2.system.id}'` : frame2.kind === "stub" ? `the capacity of system '${frame2.system.id}'` : sectionName(frame2);
+      const what = frame2.kind === "group" ? `group '${frame2.id}'` : frame2.kind === "usecase" ? `usecase '${frame2.useCase.name}'` : frame2.kind === "alt" ? `alt '${frame2.name}'` : frame2.kind === "par" ? "par block" : frame2.kind === "system" ? `system '${frame2.system.id}'` : frame2.kind === "stub" ? `the capacity of system '${frame2.system.id}'` : frame2.kind === "type" ? `type '${frame2.decl.name}'` : sectionName(frame2);
       this.error(`Missing } to close ${what}`, frame2.loc);
       if (frame2.kind === "system") this.finishSystem(frame2);
     }
@@ -1451,6 +2308,11 @@ var Parser = class _Parser {
   /** Parses the line at `index` and returns the index of the last line it consumed. */
   parseLine(index) {
     const line = index + 1;
+    const typeFrame = this.top();
+    if (typeFrame?.kind === "type" && /^\s*header(\s|$)/.test(this.lines[index])) {
+      if (!typeFrame.discard) this.parseHeaders(typeFrame.decl, this.lines[index], line);
+      return index;
+    }
     const { tokens: lexed, diagnostics } = tokenizeLine(this.lines[index], line);
     const tokens = qualify(lexed);
     this.diagnostics.push(...diagnostics.map((d) => ({ ...d, ...this.fileField() })));
@@ -1488,6 +2350,15 @@ var Parser = class _Parser {
       this.parseSystemLine(top, tokens, line);
       return index;
     }
+    if (top?.kind === "type") {
+      if (first.kind === "rbrace") {
+        this.stack.pop();
+        if (second) this.error("Unexpected input after }", loc(second));
+      } else if (!top.discard) {
+        this.parseTypeLine(top.decl, tokens, line);
+      }
+      return index;
+    }
     if (first.kind === "rbrace") {
       if (this.stack.length === 0) this.error("Unmatched }", loc(first));
       else this.closeFrame();
@@ -1516,6 +2387,15 @@ var Parser = class _Parser {
         break;
       case "usecase":
         this.parseUseCase(tokens, line);
+        break;
+      // Keywords only in the shape of a type header, so a node may still be called type or abstract.
+      case "type":
+        if (isTypeHeader(tokens, 1)) this.parseType(tokens, 1, line);
+        else this.parseNode(tokens, line);
+        break;
+      case "abstract":
+        if (isWord(second, "type") && isTypeHeader(tokens, 2)) this.parseType(tokens, 2, line);
+        else this.parseNode(tokens, line);
         break;
       case "par":
         this.parsePar(tokens, line);
@@ -1983,7 +2863,7 @@ var Parser = class _Parser {
     let result = this.teamFiles.get(target.path);
     if (!result) {
       const scope2 = { chain: [...this.chain, target.path], teamFiles: this.teamFiles };
-      result = new _Parser(target.source, { path: target.path, resolve: this.options.resolve }, scope2).run();
+      result = new _Parser(target.source, { path: target.path, resolve: this.options.resolve, ...this.options.strictOps ? { strictOps: true } : {} }, scope2).run();
       this.teamFiles.set(target.path, result);
       for (const d of result.diagnostics) {
         if (!this.fileOrder.has(d.file)) this.fileOrder.set(d.file, this.fileOrder.size);
@@ -2161,11 +3041,13 @@ var Parser = class _Parser {
         if (strings++ === 0) node.name = t.value;
         else node.description = t.value;
       } else if (t.kind === "tech") {
-        const resolved = this.resolveTech(t, line);
-        node.type = resolved.type;
-        node.techStack = resolved.techStack;
-        if (resolved.inferredKind) node.inferredKind = resolved.inferredKind;
-        node.kind = resolved.type === "text" ? "text" : resolved.type === "group" ? "group" : "component";
+        const found = findTech(t.value);
+        if (found) {
+          node.type = found.type;
+          node.techStack = found.techStack;
+          node.kind = found.type === "text" ? "text" : found.type === "group" ? "group" : "component";
+        }
+        this.techRefs.push({ node, value: t.value, loc: this.locOf(t, line) });
       } else if (t.kind === "team") {
         node.ownerTeam = t.value;
       } else if (t.kind === "ident" && t.value === "pos") {
@@ -2249,7 +3131,7 @@ var Parser = class _Parser {
     if (inUseCase) {
       const body = this.currentBody();
       body.openAlt = void 0;
-      const prefixes = arrow === "-->" ? { rest: label } : this.readLabelPrefixes(label, labelToken, line);
+      const prefixes = arrow === "-->" ? { rest: label, col: labelToken && this.labelStart(labelToken, line) } : this.readLabelPrefixes(label, labelToken, line);
       body.items.push({
         kind: "step",
         step: {
@@ -2260,6 +3142,7 @@ var Parser = class _Parser {
           parallelGroup: top.kind === "par" ? top.group : void 0,
           ...prefixes.multiplier !== void 0 ? { multiplier: prefixes.multiplier } : {},
           ...prefixes.sizeBytes !== void 0 ? { sizeBytes: prefixes.sizeBytes } : {},
+          ...prefixes.col !== void 0 ? { labelCol: prefixes.col } : {},
           loc
         }
       });
@@ -2288,8 +3171,7 @@ var Parser = class _Parser {
   readLabelPrefixes(label, token, line) {
     const out = { rest: label };
     if (!token) return out;
-    const after2 = this.lines[line - 1].slice(token.col);
-    const base = token.col + 1 + (after2.length - after2.trimStart().length);
+    const base = this.labelStart(token, line);
     let offset = 0;
     for (; ; ) {
       const rest = label.slice(offset);
@@ -2313,7 +3195,13 @@ var Parser = class _Parser {
       offset += label.slice(offset).length - label.slice(offset).trimStart().length;
     }
     out.rest = label.slice(offset);
+    out.col = base + offset;
     return out;
+  }
+  /** Column of a label's first character: the label token starts at ':' and its value is trimmed. */
+  labelStart(token, line) {
+    const after2 = this.lines[line - 1].slice(token.col);
+    return token.col + 1 + (after2.length - after2.trimStart().length);
   }
   // ---- HLD sections: traffic, requirements, capacity, entity, decision, test (docs/design/hld-and-practice.md §1) ----
   /**
@@ -3242,26 +4130,72 @@ var Parser = class _Parser {
       this.error(`${what} is about the whole use case; leave out scenario "\u2026"`, scenario.loc);
       return false;
     };
-    let assertion2;
-    if (isWord(verb, "calls")) {
-      const target = selector(i + 1);
+    const call = (j) => {
+      const word = tokens[j];
+      const nameAt = (k, what, example2) => {
+        const t = tokens[k];
+        if (t?.kind === "ident" || t?.kind === "string") return t.value;
+        this.error(`Expected ${what} here, e.g. ${example2}`, this.locOf(t ?? tokens[tokens.length - 1], line));
+        return void 0;
+      };
+      if (isWord(word, "uses")) {
+        const example2 = `"${useCase}" uses INSERT on db`;
+        const op = nameAt(j + 1, "an operation", example2);
+        if (op === void 0 || !expectWords(j + 2, ["on"], example2)) return;
+        const target2 = selector(j + 3);
+        return target2 && { target: target2, match: { op }, next: target2.next };
+      }
+      if (isWord(word, "sends")) {
+        const example2 = `"${useCase}" sends header Authorization to api`;
+        if (!expectWords(j + 1, ["header"], example2)) return;
+        const header = nameAt(j + 2, "a header name", example2);
+        if (header === void 0 || !expectWords(j + 3, ["to"], example2)) return;
+        const target2 = selector(j + 4);
+        return target2 && { target: target2, match: { header }, next: target2.next };
+      }
+      if (!isWord(word, "calls")) {
+        this.error(`Expected calls, uses or sends header here, e.g. "${useCase}" never calls any database`, this.locOf(word ?? tokens[tokens.length - 1], line));
+        return;
+      }
+      const target = selector(j + 1);
       if (!target) return;
-      if (isWord(tokens[target.next], "before")) {
-        const then = selector(target.next + 1);
+      if (!isWord(tokens[target.next], "with")) return { target, next: target.next };
+      const [method, path] = [tokens[target.next + 1], tokens[target.next + 2]];
+      const example = `"${useCase}" calls api with GET /urls/{code}`;
+      if (method?.kind !== "ident" || !HTTP_METHODS.includes(method.value.toUpperCase())) {
+        this.error(`Expected an HTTP method after with (${HTTP_METHODS.join(", ")}), e.g. ${example}`, this.locOf(method ?? tokens[target.next], line));
+        return;
+      }
+      if (path?.kind !== "path") {
+        this.error(`Expected a path starting with / after ${method.value}, e.g. ${example}`, this.locOf(path ?? method, line));
+        return;
+      }
+      return { target, match: { method: method.value.toUpperCase(), path: path.value }, next: target.next + 3 };
+    };
+    const matchOf = (c) => c.match ? { match: c.match } : {};
+    let assertion2;
+    if (isWord(verb, "calls") || isWord(verb, "uses") || isWord(verb, "sends")) {
+      const c = call(i);
+      if (!c) return;
+      const word = tokens[c.next];
+      if (isWord(word, "before") && isWord(tokens[c.next + 1], "responding")) {
+        assertion2 = done({ kind: "beforeResponding", useCase, ...withScenario, target: c.target.selector, match: c.match ?? {}, loc }, c.next + 2);
+      } else if (isWord(word, "before")) {
+        const then = selector(c.next + 1);
         if (!then) return;
-        assertion2 = done({ kind: "before", useCase, ...withScenario, first: target.selector, then: then.selector, loc }, then.next);
-      } else if (isWord(tokens[target.next], "after")) {
-        const after2 = selector(target.next + 1);
+        assertion2 = done({ kind: "before", useCase, ...withScenario, first: c.target.selector, ...matchOf(c), then: then.selector, loc }, then.next);
+      } else if (isWord(word, "after")) {
+        const after2 = selector(c.next + 1);
         if (!after2) return;
-        assertion2 = done({ kind: "after", useCase, ...withScenario, target: target.selector, after: after2.selector, loc }, after2.next);
+        assertion2 = done({ kind: "after", useCase, ...withScenario, target: c.target.selector, ...matchOf(c), after: after2.selector, loc }, after2.next);
       } else {
-        assertion2 = done({ kind: "calls", useCase, ...withScenario, target: target.selector, quantifier: "some", loc }, target.next);
+        assertion2 = done({ kind: "calls", useCase, ...withScenario, target: c.target.selector, ...matchOf(c), quantifier: "some", loc }, c.next);
       }
     } else if (isWord(verb, "every")) {
-      if (!expectWords(i + 1, ["scenario", "calls"], `"${useCase}" every scenario calls any cache`)) return;
-      const target = selector(i + 3);
-      if (!target) return;
-      assertion2 = done({ kind: "calls", useCase, ...withScenario, target: target.selector, quantifier: "every", loc }, target.next);
+      if (!expectWords(i + 1, ["scenario"], `"${useCase}" every scenario calls any cache`)) return;
+      const c = call(i + 2);
+      if (!c) return;
+      assertion2 = done({ kind: "calls", useCase, ...withScenario, target: c.target.selector, ...matchOf(c), quantifier: "every", loc }, c.next);
     } else if (isWord(verb, "never") && isWord(tokens[i + 1], "waits")) {
       if (!expectWords(i + 2, ["for"], `"${useCase}" never waits for any queue`)) return;
       const target = selector(i + 3);
@@ -3273,10 +4207,9 @@ var Parser = class _Parser {
       if (!target) return;
       assertion2 = done({ kind: "startsAt", useCase, target: target.selector, loc }, target.next);
     } else if (isWord(verb, "never")) {
-      if (!expectWords(i + 1, ["calls"], `"${useCase}" never calls any database`)) return;
-      const target = selector(i + 2);
-      if (!target) return;
-      assertion2 = done({ kind: "calls", useCase, ...withScenario, target: target.selector, quantifier: "never", loc }, target.next);
+      const c = call(i + 1);
+      if (!c) return;
+      assertion2 = done({ kind: "calls", useCase, ...withScenario, target: c.target.selector, ...matchOf(c), quantifier: "never", loc }, c.next);
     } else if (isWord(verb, "writes")) {
       const target = selector(i + 1);
       if (!target || !expectWords(target.next, ["before", "responding"], `"${useCase}" writes db before responding`)) return;
@@ -3358,8 +4291,11 @@ var Parser = class _Parser {
   checkSelectorLater({ atoms }) {
     for (const { selector, token, loc } of atoms) {
       if ("tech" in selector && !findTech(token.value)) {
-        const suggestion = suggestTech(token.value);
-        this.warning(`Unknown tech stack '${token.value}'${suggestion ? `. Did you mean '${suggestion}'?` : ""}`, loc);
+        this.deferred.push(() => {
+          if (lookupType(this.typeTable, token.value)) return;
+          const suggestion = suggestTech(token.value);
+          this.warning(`Unknown tech stack '${token.value}'${suggestion ? `. Did you mean '${suggestion}'?` : ""}`, loc);
+        });
       }
       if ("node" in selector) {
         this.deferred.push(() => {
@@ -3523,7 +4459,11 @@ var Parser = class _Parser {
           request2.deferredResponse = { after: steps.length, ...step.parallelGroup !== void 0 ? { group: step.parallelGroup } : {} };
         }
         const status = step.label.match(/^(\d{3})\b\s*([\s\S]*)$/);
-        if (status) request2.statusCode = Number(status[1]);
+        if (status) {
+          request2.statusCode = Number(status[1]);
+          const responder = request2.toPort !== void 0 ? this.portType(request2.toServiceId, request2.toPort) : this.nodes.get(respFrom)?.resolvedType;
+          this.checkStatus(responder, request2.statusCode, this.labelLoc(step, 0, 3));
+        }
         const payload = splitPayload(status ? status[2] : step.label);
         const body = payload.body ?? payload.text;
         if (body) {
@@ -3539,6 +4479,9 @@ var Parser = class _Parser {
       const port = toPort ?? this.onlyEntry(to, step.loc);
       const target = this.nodes.get(to);
       const isAsync = step.arrow === "->>";
+      const type = port !== void 0 ? this.portType(to, port) : target?.resolvedType;
+      const typed = this.typedOp(type, label.method, step);
+      if (label.headers) this.checkHeaders(type, label.headers, step);
       steps.push({
         id: `${prefix}-${steps.length + 1}`,
         stepOrder: steps.length,
@@ -3560,12 +4503,73 @@ var Parser = class _Parser {
         loc: step.loc,
         ...step.multiplier !== void 0 ? { multiplier: step.multiplier } : {},
         ...step.sizeBytes !== void 0 ? { sizeBytes: step.sizeBytes } : {},
-        access: accessOf(label.method, step.label),
+        access: typed.access,
+        ...typed.op ? { op: typed.op } : {},
+        ...label.headers ? { headers: label.headers } : {},
         ...port !== void 0 ? { toPort: port } : {},
         ...fromPort !== void 0 ? { fromPort } : {}
       });
     }
+    resolveForwards(steps);
     return steps;
+  }
+  /** The type behind entry point `port` of system `id` (see entryType). */
+  portType(id, port) {
+    const system = this.systemById.get(id);
+    return system && entryType(system, port);
+  }
+  /**
+   * The access of a request step and the operation of its target's type it
+   * names (docs/design/typed-components.md, "Typed operations in steps"). A
+   * typed target with operations looks up the HTTP method or the label's first
+   * words; a match decides the access. Otherwise the step reads as before
+   * (`accessOf`), with a warning when the target is typed: the label is a
+   * comment, unless its verb was already a write, which it stays.
+   */
+  typedOp(type, method, step) {
+    const access = accessOf(method, step.label);
+    if (!type || type.ops.length === 0) return { access };
+    const word = method ?? opWord(step.label);
+    if (!word) return { access };
+    const op = method ? type.ops.find((o) => o.name.toUpperCase() === method) : findOp(type, step.label);
+    if (op) return { access: op.access === "forward" ? access : op.access, op: { ...op } };
+    const suggestion = suggestOp(type, word);
+    const ops = opNamesMostSpecificFirst(type, this.typeTable);
+    const hint = suggestion ? `Did you mean ${suggestion}?` : `Its operations are ${ops.slice(0, 8).join(", ")}${ops.length > 8 ? ", \u2026" : ""}.`;
+    const effect = access === "write" ? "Treated as a write, as before." : "Treated as a comment.";
+    const lead = step.label.length - step.label.trimStart().length + (!method && /^\s*"/.test(step.label) ? 1 : 0);
+    this.typeProblem(`${type.name} has no operation '${word}'. ${hint} ${effect}`, this.labelLoc(step, lead, word.length));
+    return { access };
+  }
+  /** `200` on a response: one of the responder's type's statuses, when it lists any. */
+  checkStatus(type, code, loc) {
+    if (!type || type.statuses.length === 0 || type.statuses.includes(code)) return;
+    const listed = type.statuses.length > 12 ? `${type.statuses.slice(0, 12).join(", ")}, \u2026` : type.statuses.join(", ");
+    this.typeProblem(`${type.name} has no status ${code}; it answers ${listed}`, loc);
+  }
+  /** `header A, B` in a label: each one of the target's type's headers, when it lists any. */
+  checkHeaders(type, headers, step) {
+    if (!type || type.headers.length === 0) return;
+    const clause = step.label.search(/\sheader\s/);
+    for (const h2 of headers) {
+      if (findHeader(type, h2)) continue;
+      const suggestion = suggestHeader(type, h2);
+      const at = step.label.indexOf(h2, clause + 1);
+      this.typeProblem(
+        `${type.name} has no header '${h2}'. ${suggestion ? `Did you mean ${suggestion}?` : `Its headers are ${type.headers.join(", ")}.`}`,
+        this.labelLoc(step, Math.max(0, at), h2.length)
+      );
+    }
+  }
+  /** `length` characters at `offset` in a step's label; the whole step when the label's column is unknown. */
+  labelLoc(step, offset, length) {
+    if (step.labelCol === void 0) return step.loc;
+    return { line: step.loc.line, col: step.labelCol + offset, length, ...step.loc.file !== void 0 ? { file: step.loc.file } : {} };
+  }
+  /** A typed-step problem: a warning, or an error with `strictOps`. */
+  typeProblem(message, loc) {
+    if (this.options.strictOps) this.errorOnce(message, loc);
+    else this.warning(message, loc);
   }
   /**
    * Warns when a step talks between two nodes the architecture never connects.
@@ -3604,19 +4608,271 @@ var Parser = class _Parser {
    * (`Postgress`: database), else a service; never a free, infinitely fast
    * client.
    */
-  resolveTech(token, line) {
-    const found = findTech(token.value);
+  resolveTech(value, loc) {
+    const found = findTech(value);
     if (found) return { type: found.type, techStack: found.techStack };
-    const text = token.value.trim();
+    const text = value.trim();
     if (!text) {
-      this.warning(`Empty tech stack; drawing a ${DEFAULT_TECH}`, this.locOf(token, line));
+      this.warning(`Empty tech stack; drawing a ${DEFAULT_TECH}`, loc);
       return { type: "shape", techStack: DEFAULT_TECH };
     }
     const suggestion = suggestTech(text);
     const closest = suggestion && findTech(suggestion);
     const kind = kindFromName(text) ?? (closest ? kindOf({ kind: "component", type: closest.type, techStack: closest.techStack }) : void 0) ?? "service";
-    this.warning(unknownTechMessage(text, kind, suggestion), this.locOf(token, line));
+    this.warning(unknownTechMessage(text, kind, suggestion), loc);
     return { type: TYPE_OF_KIND[kind], techStack: text, inferredKind: kind };
+  }
+  /**
+   * Resolves the type blocks of every file against the stdlib, then each
+   * node's `[Tech]`: a type gives the node its kind and the icon of its
+   * nearest built-in ancestor (D5); anything else is resolved as before.
+   */
+  resolveTypes() {
+    const resolution = resolveTypes(this.typeDecls, builtinTypes());
+    this.diagnostics.push(...resolution.diagnostics);
+    this.typeTable = resolution.table;
+    this.types = resolution.types;
+    for (const ref of this.techRefs) this.applyTech(ref);
+  }
+  applyTech({ node, value, loc }) {
+    const type = lookupType(this.typeTable, value);
+    if (!type) {
+      if (findTech(value)) return;
+      const resolved = this.resolveTech(value, loc);
+      node.type = resolved.type;
+      node.techStack = resolved.techStack;
+      if (resolved.inferredKind) node.inferredKind = resolved.inferredKind;
+      return;
+    }
+    node.resolvedType = type;
+    if (type.abstract) {
+      const concrete = [...this.typeTable.values()].find((t) => !t.abstract && t.parents[0] === type.name);
+      this.warning(`'${type.name}' is an abstract type; use a type that extends it${concrete ? `, like [${concrete.name}]` : ""}`, loc);
+    }
+    const kind = type.kind ?? kindFromName(type.name) ?? "service";
+    const icon = findTech(type.icon ?? GENERIC_TECH[kind]);
+    if (icon) {
+      node.type = icon.type;
+      node.techStack = icon.techStack;
+      node.kind = icon.type === "text" ? "text" : icon.type === "group" ? "group" : "component";
+    }
+    if (type.kind) delete node.inferredKind;
+    else node.inferredKind = kind;
+  }
+  /** `[abstract] type Name [extends Parent] {`, or a whole one-line block `… { op write APPEND }`; `at` is the name's index. */
+  parseType(tokens, at, line) {
+    const nameToken = tokens[at];
+    const extendsAt = isWord(tokens[at + 1], "extends") ? at + 1 : -1;
+    const parentToken = extendsAt === -1 ? void 0 : tokens[extendsAt + 1];
+    const decl = {
+      name: nameToken.value,
+      abstract: at === 2,
+      ...parentToken && (parentToken.kind === "ident" || parentToken.kind === "tech") ? { parent: parentToken.value, parentLoc: this.locOf(parentToken, line) } : {},
+      props: {},
+      ops: [],
+      statuses: [],
+      headers: [],
+      builtin: false,
+      loc: this.locOf(nameToken, line)
+    };
+    const braceAt = extendsAt === -1 ? at + 1 : extendsAt + 2;
+    const skip = () => {
+      if (tokens[tokens.length - 1].kind === "lbrace") this.stack.push({ kind: "type", decl, discard: true, loc: decl.loc });
+    };
+    if (extendsAt !== -1 && decl.parent === void 0) {
+      this.error("Expected the parent type after extends, e.g. type LedgerDb extends PostgreSQL {", this.locOf(parentToken ?? tokens[extendsAt], line));
+      return skip();
+    }
+    if (tokens[braceAt]?.kind !== "lbrace") {
+      this.error("Expected { after the type header, e.g. type LedgerDb extends PostgreSQL {", this.locOf(tokens[braceAt] ?? tokens[braceAt - 1], line));
+      return skip();
+    }
+    if (!decl.name.trim()) {
+      this.error("Expected a type name, e.g. type LedgerDb extends PostgreSQL {", decl.loc);
+      return skip();
+    }
+    if (this.stack.length > 0) {
+      this.error("Declare types at the top level, not inside a block", this.locOf(tokens[0], line));
+      return skip();
+    }
+    const last = tokens[tokens.length - 1];
+    if (last.kind === "rbrace" && tokens.length > braceAt + 1) {
+      const body = tokens.slice(braceAt + 1, -1);
+      if (body.length) this.parseTypeLine(decl, body, line);
+    } else if (tokens.length > braceAt + 1) {
+      this.error("Expected the type body on the next lines, or on this one closed with }", this.locOf(tokens[braceAt + 1], line));
+      return skip();
+    } else {
+      this.stack.push({ kind: "type", decl, loc: decl.loc });
+    }
+    this.typeDecls.push(decl);
+  }
+  /** One line of a type block: `kind database`, `op read SELECT`, `latencyMs 4`, … */
+  parseTypeLine(decl, tokens, line) {
+    const [key, value] = tokens;
+    const loc = (t) => this.locOf(t ?? tokens[tokens.length - 1], line);
+    if (key.kind !== "ident") {
+      this.error(`Expected a type property: ${TYPE_LINES}`, loc(key));
+      return;
+    }
+    const word = key.value;
+    const single = (kinds, example) => {
+      if (!value || !kinds.includes(value.kind)) {
+        this.error(`Expected ${example}`, loc(value ?? key));
+        return void 0;
+      }
+      this.expectEnd(tokens, 2, line);
+      return value.value;
+    };
+    switch (word) {
+      case "kind": {
+        const kind = single(["ident"], `a kind after kind: ${KINDS.join(", ")}`);
+        if (kind === void 0) return;
+        if (!isKind(kind)) this.error(`Unknown kind '${kind}'; use one of ${KINDS.join(", ")}`, loc(value));
+        else decl.kind = kind;
+        return;
+      }
+      case "protocol": {
+        const protocol = single(["ident", "string"], "a protocol after protocol, e.g. protocol SQL");
+        if (protocol !== void 0) decl.protocol = protocol;
+        return;
+      }
+      case "icon": {
+        const icon = single(["ident", "tech", "string"], "a catalog tech after icon, e.g. icon PostgreSQL or icon [REST API]");
+        if (icon !== void 0) decl.icon = icon;
+        return;
+      }
+      case "doc": {
+        const doc = single(["string"], 'a quoted description after doc, e.g. doc "Keeps the ledger"');
+        if (doc !== void 0) decl.doc = doc;
+        return;
+      }
+      case "op":
+        this.parseTypeOp(decl, tokens, line);
+        return;
+      case "status": {
+        const codes = this.readList(tokens, 1, line, ["number"], "status codes, e.g. status 200, 201, 404");
+        for (const code of codes ?? []) {
+          const n = Number(code.value);
+          if (n < 100 || n > 599) this.error(`'${code.value}' is not an HTTP status code (100 to 599)`, loc(code));
+          else if (!decl.statuses.includes(n)) decl.statuses.push(n);
+        }
+        return;
+      }
+      case "header": {
+        const names = this.readList(tokens, 1, line, ["ident", "string"], 'header names, e.g. header Authorization, "Content-Type"');
+        for (const name of names ?? []) if (!decl.headers.some((h2) => h2.toLowerCase() === name.value.toLowerCase())) decl.headers.push(name.value);
+        return;
+      }
+    }
+    if (Object.hasOwn(CHOICE_PROPS, word)) {
+      const prop = word;
+      const choices = CHOICE_PROPS[prop];
+      const choice = single(["ident"], `${choices.join(" or ")} after ${prop}`);
+      if (choice === void 0) return;
+      if (!choices.includes(choice)) this.error(`Expected ${choices.join(" or ")} after ${prop}, not '${choice}'`, loc(value));
+      else if (prop === "durable") decl.props.durable = choice === "true";
+      else if (prop === "consistency") decl.props.consistency = choice;
+      else decl.props.writeScaling = choice;
+      return;
+    }
+    if (Object.hasOwn(NUMBER_PROPS, word)) {
+      const prop = word;
+      const unit = NUMBER_PROPS[prop];
+      const example = prop === "availability" ? "a percentage after availability, e.g. availability 99.95%" : `a number after ${prop}, e.g. ${prop} ${unit === "rps" ? "20k" : "4"}`;
+      if (!value || value.kind !== "number" && value.kind !== "quantity") {
+        this.error(`Expected ${example}`, loc(value ?? key));
+        return;
+      }
+      this.expectEnd(tokens, 2, line);
+      const q = parseQuantity(value.value);
+      if ("error" in q) {
+        this.error(q.error, loc(value));
+        return;
+      }
+      if (q.unit !== void 0 && q.unit !== unit) {
+        this.error(`Expected ${example}, not ${kindName(q.unit)}`, loc(value));
+        return;
+      }
+      if (prop !== "availability") decl.props[prop] = q.value;
+      else if (q.unit === "%" && q.value > 0 && q.value <= 100) decl.props.availability = Number((q.value / 100).toPrecision(12));
+      else this.error(`Expected ${example}`, loc(value));
+      return;
+    }
+    this.error(`Unknown type property '${word}'; use ${TYPE_LINES}`, loc(key));
+  }
+  /** `op read SELECT, Scan latency 8 cost 2`: operations with their access (read, write or forward) and optional multipliers. */
+  parseTypeOp(decl, tokens, line) {
+    const access = tokens[1];
+    if (!isWord(access, "read") && !isWord(access, "write") && !isWord(access, "forward")) {
+      this.error("Expected read, write or forward after op, e.g. op read SELECT", this.locOf(access ?? tokens[0], line));
+      return;
+    }
+    let end = 2;
+    while (end < tokens.length && !isWord(tokens[end], "latency") && !isWord(tokens[end], "cost")) end++;
+    const example = `operation names after op ${access.value}, e.g. op ${access.value} ${access.value === "read" ? "SELECT" : access.value === "forward" ? "MESSAGE" : "INSERT, UPDATE"}`;
+    const names = this.readList(tokens.slice(0, end), 2, line, ["ident", "string"], example);
+    if (!names) return;
+    const multipliers = {};
+    for (let i = end; i < tokens.length; i += 2) {
+      const [word, number] = [tokens[i], tokens[i + 1]];
+      if (!isWord(word, "latency") && !isWord(word, "cost")) {
+        this.error(`Unexpected ${describe(word)}; an op ends with latency <n> and cost <n>`, this.locOf(word, line));
+        return;
+      }
+      const q = number && (number.kind === "number" || number.kind === "quantity") ? parseQuantity(number.value) : void 0;
+      if (!q || "error" in q || q.unit !== void 0 || q.value <= 0) {
+        this.error(`Expected a multiplier after ${word.value}, e.g. ${word.value} 2 or ${word.value} 0.5`, this.locOf(number ?? word, line));
+        return;
+      }
+      multipliers[word.value] = q.value;
+    }
+    for (const name of names) {
+      const op = { name: name.value, access: access.value, ...multipliers };
+      const at = decl.ops.findIndex((o) => o.name === op.name);
+      if (at === -1) decl.ops.push(op);
+      else decl.ops[at] = op;
+    }
+  }
+  /** `header Authorization, Content-Type`, read from the line's text. */
+  parseHeaders(decl, text, line) {
+    const keyword = text.indexOf("header");
+    const start2 = keyword + "header".length;
+    const body = stripTrailingComment(text.slice(start2));
+    if (!body.trim()) {
+      this.error("Expected header names, e.g. header Authorization, Content-Type", { line, col: keyword + 1, length: 6, ...this.fileField() });
+      return;
+    }
+    let col = start2 + 1;
+    for (const part of body.split(",")) {
+      const raw = part.trim();
+      const name = raw.length > 1 && raw.startsWith('"') && raw.endsWith('"') ? raw.slice(1, -1) : raw;
+      const loc = { line, col: col + part.indexOf(raw), length: Math.max(1, raw.length), ...this.fileField() };
+      col += part.length + 1;
+      if (!HEADER_NAME.test(name)) this.error(`Expected a header name, e.g. Content-Type${raw ? `, not '${raw}'` : ""}`, loc);
+      else if (!decl.headers.some((h2) => h2.toLowerCase() === name.toLowerCase())) decl.headers.push(name);
+    }
+  }
+  /** Comma-separated tokens of `kinds` from `tokens[from]` to the end; undefined (after an error) when malformed. */
+  readList(tokens, from, line, kinds, example) {
+    const items = [];
+    for (let i = from; i < tokens.length; i += 2) {
+      const [item, sep] = [tokens[i], tokens[i + 1]];
+      if (!kinds.includes(item.kind)) {
+        this.error(`Expected ${example}`, this.locOf(item, line));
+        return void 0;
+      }
+      items.push(item);
+      if (sep && (sep.kind !== "comma" || i + 2 >= tokens.length)) {
+        this.error(sep.kind === "comma" ? "Expected another name after ," : `Expected , or the end of the line, not ${describe(sep)}`, this.locOf(sep, line));
+        return void 0;
+      }
+    }
+    if (!items.length) {
+      this.error(`Expected ${example}`, this.locOf(tokens[from - 1], line));
+      return void 0;
+    }
+    return items;
   }
   useCaseId(name) {
     const base = slug(name) || "usecase";
@@ -3748,6 +5004,10 @@ var KIND_NAMES = {
 function kindName(unit) {
   return unit ? KIND_NAMES[unit] : "a plain number";
 }
+function isTypeHeader(tokens, at) {
+  const [name, next] = [tokens[at], tokens[at + 1]];
+  return (name?.kind === "ident" || name?.kind === "tech") && (next?.kind === "lbrace" || isWord(next, "extends"));
+}
 function isWord(token, word) {
   return token?.kind === "ident" && token.value === word;
 }
@@ -3779,11 +5039,14 @@ function splitPayload(input) {
   }
   return { text: unquote(text), format: "JSON" };
 }
+var HEADER_CLAUSE = /^header\s+([A-Za-z0-9-]+(?:\s*,\s*[A-Za-z0-9-]+)*)(?=\s|$)\s*([\s\S]*)$/;
 function parseStepLabel(input) {
   const http = input.trim().match(/^([A-Z]+)\s+(\S+)\s*([\s\S]*)$/);
   if (http && HTTP_METHODS.includes(http[1])) {
-    const payload2 = splitPayload(http[3]);
+    const clause = HEADER_CLAUSE.exec(http[3]);
+    const payload2 = splitPayload(clause ? clause[2] : http[3]);
     return {
+      ...clause ? { headers: clause[1].split(",").map((h2) => h2.trim()) } : {},
       name: `${http[1]} ${http[2]}`,
       method: http[1],
       endpoint: http[2],
@@ -3794,6 +5057,36 @@ function parseStepLabel(input) {
   }
   const payload = splitPayload(input);
   return { name: payload.text, format: payload.body ? payload.format : void 0, body: payload.body };
+}
+function entryType(system, port) {
+  const useCaseId = system.entries.find((e) => e.id === port)?.useCaseId;
+  const team = system.diagram;
+  const first = team?.useCases.find((u) => u.id === useCaseId)?.steps[0];
+  if (!team || !first) return void 0;
+  const sender = team.nodes.find((n) => n.id === first.fromServiceId);
+  if (sender && kindOf(sender) !== "client") return sender.resolvedType;
+  if (first.toPort !== void 0) {
+    const nested = team.systems?.find((s) => s.id === first.toServiceId);
+    return nested && entryType(nested, first.toPort);
+  }
+  return team.nodes.find((n) => n.id === first.toServiceId)?.resolvedType;
+}
+function resolveForwards(steps) {
+  const handler = (i, seen) => {
+    const step = steps[i];
+    for (let j = i + 1; j < steps.length; j++) {
+      if (steps[j].fromServiceId !== step.toServiceId) continue;
+      if (steps[j].op?.access !== "forward" || seen.has(j)) return steps[j];
+      seen.add(j);
+      return handler(j, seen) ?? steps[j];
+    }
+    return void 0;
+  };
+  steps.forEach((step, i) => {
+    if (step.op?.access !== "forward") return;
+    const next = handler(i, /* @__PURE__ */ new Set([i]));
+    if (next && next.op?.access !== "forward" && next.access) step.access = next.access;
+  });
 }
 var SIZE_UNITS = { B: 1, KB: 1e3, MB: 1e6, GB: 1e9, TB: 1e12 };
 function parseSize(text) {
@@ -4020,7 +5313,8 @@ function encodeShareHash(source, playback, imports) {
 
 // ../frontend/src/sim/access.ts
 function stepAccess(step) {
-  return step.access ?? accessOf(step.httpMethod, step.stepName ?? "");
+  const op = step.op?.access;
+  return step.access ?? (op === "read" || op === "write" ? op : void 0) ?? accessOf(step.httpMethod, step.stepName ?? "");
 }
 function accessIn(diagram) {
   const queues = new Set(diagram.nodes.filter((n) => kindMatches(kindOf(n), "queue")).map((n) => n.id));
@@ -4175,7 +5469,11 @@ var SIZES = {
 };
 function profileOf(node, override) {
   const kind = kindOf(node);
-  const base = (Object.hasOwn(TECH_PROFILES, node.techStack) ? TECH_PROFILES[node.techStack] : void 0) ?? KIND_PROFILES[kind];
+  const type = node.resolvedType;
+  const techRow = Object.hasOwn(TECH_PROFILES, node.techStack) && (!type || kindOf({ ...node, resolvedType: void 0 }) === kind) ? TECH_PROFILES[node.techStack] : void 0;
+  const props = type?.props ?? {};
+  const sides = props.rps !== void 0 ? { readRps: props.readRps ?? props.rps, writeRps: props.writeRps ?? props.rps } : {};
+  const base = { ...techRow ?? KIND_PROFILES[kind], ...props, ...sides };
   const size = SIZES[override?.size ?? "S"];
   const baseRead = (base.readRps ?? base.rps) * size.capacity;
   const baseWrite = (base.writeRps ?? base.rps) * size.capacity;
@@ -4305,13 +5603,38 @@ function selectNodes(diagram, selector) {
 function matches(node, selector, diagram) {
   if (node.kind !== "component") return false;
   if ("node" in selector) return node.id === selector.node;
-  if ("tech" in selector) return node.techStack.toLowerCase() === selector.tech.toLowerCase();
+  if ("tech" in selector) {
+    const wanted = typeKey(selector.tech);
+    return [node.techStack, node.resolvedType?.name, ...node.resolvedType?.parents ?? []].some((t) => t !== void 0 && typeKey(t) === wanted);
+  }
   if ("anyOf" in selector) return selector.anyOf.some((s) => matches(node, s, diagram));
   if ("consistency" in selector) {
     const override = diagram?.capacity?.find((o) => o.node === node.id);
     return profileOf(node, override).consistency === selector.consistency;
   }
   return kindMatches(kindOf(node), selector.kind);
+}
+var isParam = (segment2) => /^\{[^}]*\}$/.test(segment2) || /^:\w+$/.test(segment2);
+var segments2 = (path) => path.replace(/[?#].*$/, "").replace(/(.)\/+$/, "$1").split("/");
+function pathMatches(pattern, endpoint) {
+  const [a, b] = [segments2(pattern), segments2(endpoint)];
+  return a.length === b.length && a.every((s, i) => s === b[i] || isParam(s) || isParam(b[i]));
+}
+function stepMatches(step, match) {
+  if (!match) return true;
+  const same = (a, b) => a.toLowerCase() === b.toLowerCase();
+  if (match.method !== void 0 && !same(step.httpMethod, match.method)) return false;
+  if (match.path !== void 0 && !pathMatches(match.path, step.endpoint)) return false;
+  if (match.op !== void 0 && !(step.op && same(step.op.name, match.op))) return false;
+  if (match.header !== void 0 && !step.headers?.some((h2) => same(h2, match.header))) return false;
+  return true;
+}
+function callText(selector, match) {
+  const target = selectorText(selector);
+  if (match?.op !== void 0) return `uses ${match.op} on ${target}`;
+  if (match?.header !== void 0) return `sends header ${match.header} to ${target}`;
+  if (match?.method !== void 0) return `calls ${target} with ${match.method} ${match.path ?? ""}`.trimEnd();
+  return `calls ${target}`;
 }
 function techOf(node) {
   return node && !node.implicit ? node.techStack : void 0;
@@ -4654,16 +5977,16 @@ function analyzeSystem(system, sent, options) {
   const sharedInboundRps = [...sentToTeam.values()].reduce((sum, rps) => sum + rps, 0);
   result.callers = shared?.callers ?? (totalInboundRps > 0 ? [{ path: system.id, rps: totalInboundRps }] : []);
   result.sharedInboundRps = sharedInboundRps;
-  let cached = options.sharedSystems?.analyses.get(key);
-  if (!cached) {
+  let cached2 = options.sharedSystems?.analyses.get(key);
+  if (!cached2) {
     const combined = sharedInboundRps > 0 ? withExtraTraffic(team, sentToTeam, system.loc) : team;
     const nested = { timeoutMs: options.timeoutMs, ...options.sharedSystems ? { sharedSystems: options.sharedSystems } : {} };
-    cached = { combined, analysis: sharedInboundRps > 0 ? analyze(combined, nested) : contract.baseline };
-    options.sharedSystems?.analyses.set(key, cached);
+    cached2 = { combined, analysis: sharedInboundRps > 0 ? analyze(combined, nested) : contract.baseline };
+    options.sharedSystems?.analyses.set(key, cached2);
   }
-  const { analysis } = cached;
+  const { analysis } = cached2;
   result.analysis = analysis;
-  result.overlay = analysisOverlay(cached.combined, analysis);
+  result.overlay = analysisOverlay(cached2.combined, analysis);
   const busiest = analysis.nodes.reduce((best, n) => !best || n.utilization > best.utilization ? n : best, void 0);
   result.utilization = busiest?.utilization ?? 0;
   result.busiest = busiest?.id;
@@ -4939,6 +6262,8 @@ function averageTraffic(traffic) {
   return new Map([...traffic].map(([id, t]) => [id, t.average === void 0 ? t : { ...t, rps: t.rps * t.average }]));
 }
 var multiplierOf = (step) => step.multiplier !== void 0 && step.multiplier > 0 ? step.multiplier : 1;
+var opLatencyOf = (step) => step.op?.latency !== void 0 && step.op.latency > 0 ? step.op.latency : 1;
+var opCostOf = (step) => step.op?.cost !== void 0 && step.op.cost > 0 ? step.op.cost : 1;
 function forEachStepRate(diagram, traffic, visit) {
   for (const u of diagram.useCases) {
     const { rps, shares, miss, retry } = traffic.get(u.id) ?? { rps: 0, shares: [] };
@@ -4958,7 +6283,7 @@ function computeLoad(diagram, traffic) {
   const access = accessIn(diagram);
   forEachStepRate(diagram, traffic, (step, rate) => {
     const entry = load.get(step.toServiceId) ?? { read: 0, write: 0 };
-    entry[access(step)] += rate * multiplierOf(step);
+    entry[access(step)] += rate * multiplierOf(step) * opCostOf(step);
     load.set(step.toServiceId, entry);
   });
   return load;
@@ -5206,7 +6531,8 @@ function analyze(diagram, options = {}) {
       (part) => part.map((h2) => {
         if (h2.failed) return { fixedMs: timeoutOf(h2.target), tailMs: 0 };
         const hop = systems?.hop(h2.target, h2.step.toPort) ?? hops.get(h2.target) ?? { fixedMs: 0, tailMs: 0 };
-        const item = { fixedMs: transferMs(h2.step, bandwidthOf) + hop.fixedMs, tailMs: hop.tailMs };
+        const op = opLatencyOf(h2.step);
+        const item = { fixedMs: transferMs(h2.step, bandwidthOf) + hop.fixedMs * op, tailMs: hop.tailMs * op };
         return h2.attempts === void 0 ? item : { fixedMs: item.fixedMs * h2.attempts, tailMs: item.tailMs * h2.attempts };
       })
     )
@@ -5552,10 +6878,10 @@ function availability(run, u, minPercent) {
   const hint = !weakest ? "Add replicas to the nodes on the main path, or fallback scenarios that complete without them" : primaryBound ? `The weakest link is writing to ${nodeLabel(run.diagram, weakest.id)}: writes need its primary, ${formatAvailability(weakest.writeAvailability)} with failover${weakest.replicas < 2 ? " (none without a second replica; add one)" : ` (a replica takes over, but about ${formatPercent(FAILOVER_SHARE)} of each outage is lost)`}. Move the writes to a partitioned store, or add a fallback scenario that calls it with -x and still completes` : weakest.failed ? `${nodeLabel(run.diagram, weakest.id)} is down in this what-if: add a fallback scenario in "${u.name}" that calls ${weakest.id} with -x and still completes` : `The weakest link is ${nodeLabel(run.diagram, weakest.id)} at ${formatAvailability(effective(weakest))}: add a replica (x${weakest.replicas + 1}) or a fallback scenario that calls it with -x and still completes`;
   return { ...fail(message, hint), value };
 }
-function writeGap(run, u, s, accept) {
+function writeGap(run, u, s, accept, isWrite = run.isWrite) {
   const { requests, beforeResponse } = requestOrder(u, s);
   const hits = requests.map((m, i) => ({ m, i })).filter(({ m }) => !m.failed && accept(m.to));
-  const writes = hits.filter(({ m }) => run.isWrite(m.step));
+  const writes = hits.filter(({ m }) => isWrite(m.step));
   const early = writes.find(({ m, i }) => m.async && i < beforeResponse);
   if (early) return { kind: "async", step: early.m.step };
   const late = writes.find(({ i }) => i >= beforeResponse);
@@ -5573,17 +6899,17 @@ function writesCheck(run, u, scenarios, accept, what) {
     return pass(`${label} writes to ${what} before responding`);
   }
   const details = gaps.map((s) => ({ s, gap: writeGap(run, u, s, accept) }));
-  const where = (s) => u.scenarios.length > 1 ? `"${s.name}"` : `"${u.name}"`;
+  const where2 = (s) => u.scenarios.length > 1 ? `"${s.name}"` : `"${u.name}"`;
   const text = (s, gap) => {
     switch (gap.kind) {
       case "async":
-        return `${where(s)} writes to ${what} only asynchronously: ${stepText(gap.step)}`;
+        return `${where2(s)} writes to ${what} only asynchronously: ${stepText(gap.step)}`;
       case "after":
-        return `${where(s)} writes to ${what} only after responding: ${stepText(gap.step)}`;
+        return `${where2(s)} writes to ${what} only after responding: ${stepText(gap.step)}`;
       case "read":
-        return `${where(s)} only reads from ${what} before responding: ${stepText(gap.step)} is a read`;
+        return `${where2(s)} only reads from ${what} before responding: ${stepText(gap.step)} is a read`;
       case "none":
-        return `${where(s)} never writes to ${what} before responding`;
+        return `${where2(s)} never writes to ${what} before responding`;
     }
   };
   const message = details.map(({ s, gap }) => text(s, gap)).join("; ");
@@ -5751,6 +7077,8 @@ function assertion(run, a) {
       if (ids.size === 0) return noMatch(a.target);
       return writesCheck(run, sc.u, sc.scenarios, (id) => ids.has(id), selectorText(a.target));
     }
+    case "beforeResponding":
+      return beforeResponding(run, a);
     case "responds":
       return responds(run, a);
     case "hasScenario": {
@@ -5794,58 +7122,132 @@ function assertion(run, a) {
 function noMatch(selector) {
   return fail(`No node matches ${selectorText(selector)}`, "Use a node id, [Tech] or any <kind> (any cache, any database, \u2026)");
 }
+function callNoun(selector, match) {
+  const target = selectorText(selector);
+  if (match?.op !== void 0) return `${match.op} on ${target}`;
+  if (match?.header !== void 0) return `header ${match.header} to ${target}`;
+  if (match?.method !== void 0) return `${match.method} ${match.path ?? ""} to ${target}`;
+  return target;
+}
+var baseForm = (phrase) => phrase.replace(/^(\w+?)s\b/, "$1");
+function vocabularyGap(run, ids, selector, match) {
+  if (match?.op === void 0 && match?.header === void 0) return void 0;
+  const nodes = run.diagram.nodes.filter((n) => ids.has(n.id));
+  if (nodes.some((n) => n.kind === "system")) return void 0;
+  const same = (a, b) => a.toLowerCase() === b.toLowerCase();
+  const what = selectorText(selector);
+  const types = nodes.map((n) => n.resolvedType);
+  const listed = (names) => `${names.slice(0, 8).join(", ")}${names.length > 8 ? ", \u2026" : ""}`;
+  const { op, header } = match;
+  if (op !== void 0 && !types.some((t) => t?.ops.some((o) => same(o.name, op)))) {
+    const ops = [...new Set(types.flatMap((t) => t?.ops.map((o) => o.name) ?? []))];
+    return fail(
+      `No node matching ${what} has an operation '${op}'`,
+      ops.length ? `Its operations are ${listed(ops)}` : `${what} has no typed operations; give it a type with op lines, or assert calls ${what} instead`
+    );
+  }
+  if (header !== void 0 && types.every((t) => t && t.headers.length > 0 && !t.headers.some((h2) => same(h2, header)))) {
+    const headers = [...new Set(types.flatMap((t) => t?.headers ?? []))];
+    return fail(`No node matching ${what} takes the header '${header}'`, `Its headers are ${listed(headers)}`);
+  }
+  return void 0;
+}
+function matchHint(selector, match) {
+  const what = selectorText(selector);
+  if (match?.op !== void 0) return `Add a step to ${what} whose label starts with ${match.op}`;
+  if (match?.header !== void 0) return `Name the header in a request to ${what}: GET /path header ${match.header}`;
+  if (match?.method !== void 0) return `Add a step to ${what} labelled ${match.method} ${match.path ?? ""}`.trimEnd();
+  return `Add a step to ${what}`;
+}
+function otherSteps(scenarios, ids, match) {
+  if (!match) return "";
+  const steps = scenarios.flatMap((s) => s.steps.filter((step) => ids.has(step.toServiceId)));
+  const labels = [...new Set(steps.map((step) => requestLabel(step) || "(no label)"))];
+  return labels.length ? `; its steps there are ${labels.slice(0, 3).join(", ")}${labels.length > 3 ? ", \u2026" : ""}` : "";
+}
 function calls(run, a) {
   const sc = scope(run, a.useCase, a.scenario);
   if (isCheck(sc)) return sc;
   const what = selectorText(a.target);
+  const phrase = callText(a.target, a.match);
   const ids = idsOf(run, a.target);
-  const called = (s) => s.steps.filter((step) => ids.has(step.toServiceId));
+  const called = (s) => s.steps.filter((step) => ids.has(step.toServiceId) && stepMatches(step, a.match));
   const calling = sc.scenarios.filter((s) => called(s).length > 0);
   const names = (list) => list.map((s) => quote(s.name)).join(", ");
   const multi = sc.scenarios.length > 1;
+  const gap = vocabularyGap(run, ids, a.target, a.match);
+  if (gap) return gap;
   if (a.quantifier === "never") {
-    if (calling.length === 0) return pass(`${sc.label} never calls ${what}`);
+    if (calling.length === 0) return pass(`${sc.label} never ${phrase}`);
     const first = calling[0];
     const step = called(first)[0];
     return fail(
-      `${multi ? quote(first.name) : sc.label} calls ${nodeLabel(run.diagram, step.toServiceId)}: ${stepText(step)}`,
-      `Take the call to ${step.toServiceId} out of ${quote(first.name)}, e.g. serve it from a cache`
+      `${multi ? quote(first.name) : sc.label} ${a.match ? phrase : `calls ${nodeLabel(run.diagram, step.toServiceId)}`}: ${stepText(step)}`,
+      a.match ? `Change or remove the step to ${step.toServiceId} in ${quote(first.name)}` : `Take the call to ${step.toServiceId} out of ${quote(first.name)}, e.g. serve it from a cache`
     );
   }
   if (ids.size === 0) return noMatch(a.target);
   if (a.quantifier === "some") {
-    if (calling.length) return pass(`${sc.label} calls ${what}${multi ? ` in ${names(calling)}` : ""}`);
-    return fail(`${sc.label} never calls ${what}`, `Add a step to ${what}`);
+    if (calling.length) return pass(`${sc.label} ${phrase}${multi ? ` in ${names(calling)}` : ""}`);
+    return fail(`${sc.label} never ${phrase}${otherSteps(sc.scenarios, ids, a.match)}`, matchHint(a.target, a.match));
   }
   const missing = sc.scenarios.filter((s) => !calling.includes(s));
-  if (missing.length === 0 && sc.scenarios.length) return pass(`Every scenario of ${sc.label} calls ${what}`);
-  return fail(`${sc.label} does not call ${what} in ${names(missing) || "any scenario"}`, `Add a step to ${what} in ${names(missing) || "a scenario"}`);
+  if (missing.length === 0 && sc.scenarios.length) return pass(`Every scenario of ${sc.label} ${phrase}`);
+  return fail(
+    `${sc.label} does not ${baseForm(phrase)} in ${names(missing) || "any scenario"}${otherSteps(missing, ids, a.match)}`,
+    a.match ? `${matchHint(a.target, a.match)} in ${names(missing) || "a scenario"}` : `Add a step to ${what} in ${names(missing) || "a scenario"}`
+  );
 }
 function before(run, a) {
   const sc = scope(run, a.useCase, a.scenario);
   if (isCheck(sc)) return sc;
   const first = idsOf(run, a.first);
   const then = idsOf(run, a.then);
-  const [x, y] = [selectorText(a.first), selectorText(a.then)];
+  const [x, y] = [callNoun(a.first, a.match), selectorText(a.then)];
   if (first.size === 0) return noMatch(a.first);
   if (then.size === 0) return noMatch(a.then);
+  const gap = vocabularyGap(run, first, a.first, a.match);
+  if (gap) return gap;
   let checked = 0;
   for (const s of sc.scenarios) {
     const order = requestOrder(sc.u, s).requests;
     const iy = order.findIndex((m) => then.has(m.to));
     if (iy < 0) continue;
     checked++;
-    const ix = order.findIndex((m) => first.has(m.to));
+    const ix = order.findIndex((m) => first.has(m.to) && stepMatches(m.step, a.match));
     if (ix < 0 || ix > iy) {
-      const where = sc.scenarios.length > 1 || a.scenario ? `In ${quote(s.name)}` : `In ${quote(sc.u.name)}`;
+      const where2 = sc.scenarios.length > 1 || a.scenario ? `In ${quote(s.name)}` : `In ${quote(sc.u.name)}`;
       return fail(
-        ix < 0 ? `${where}, ${order[iy].to} is called (${stepText(order[iy].step)}) but ${x} never is` : `${where}, ${order[iy].to} is called (${stepText(order[iy].step)}) before ${order[ix].to} (${stepText(order[ix].step)})`,
+        ix < 0 ? `${where2}, ${order[iy].to} is called (${stepText(order[iy].step)}) but ${x} never is` : `${where2}, ${order[iy].to} is called (${stepText(order[iy].step)}) before ${order[ix].to} (${stepText(order[ix].step)})`,
         `Call ${x} before the first call to ${y}`
       );
     }
   }
   if (checked === 0) return fail(`${sc.label} never calls ${y}`, `Add a step to ${y} after the call to ${x}`);
-  return pass(`${sc.label} calls ${x} before ${y}${checked > 1 ? ` in all ${checked} scenarios that call ${y}` : ""}`);
+  return pass(`${sc.label} ${callText(a.first, a.match)} before ${y}${checked > 1 ? ` in all ${checked} scenarios that call ${y}` : ""}`);
+}
+function beforeResponding(run, a) {
+  const sc = scope(run, a.useCase, a.scenario);
+  if (isCheck(sc)) return sc;
+  const ids = idsOf(run, a.target);
+  if (ids.size === 0) return noMatch(a.target);
+  const gap = vocabularyGap(run, ids, a.target, a.match);
+  if (gap) return gap;
+  const phrase = callText(a.target, a.match);
+  const success = sc.scenarios.filter((s) => s.outcome === "success");
+  if (success.length === 0) return fail(`${sc.label} has no success scenario to check`, "Add a scenario whose entry request is answered with a 2xx");
+  const accept = (id) => ids.has(id);
+  const isMatch = (step) => stepMatches(step, a.match);
+  const gaps = success.filter((s) => !writesBeforeResponse(sc.u, s, accept, isMatch));
+  if (gaps.length === 0) return pass(`${success.length === 1 ? sc.label : `Every success scenario of ${sc.label}`} ${phrase} before responding`);
+  const where2 = (s) => sc.u.scenarios.length > 1 ? quote(s.name) : quote(sc.u.name);
+  const text = (s) => {
+    const g = writeGap(run, sc.u, s, accept, isMatch);
+    if (g.kind === "async") return `${where2(s)} ${phrase} only asynchronously: ${stepText(g.step)}`;
+    if (g.kind === "after") return `${where2(s)} ${phrase} only after responding: ${stepText(g.step)}`;
+    return `${where2(s)} never ${phrase} before responding${otherSteps([s], ids, a.match)}`;
+  };
+  return fail(gaps.map(text).join("; "), `${matchHint(a.target, a.match)}, sent with -> before the line that answers the entry request`);
 }
 function neverWaits(run, a) {
   const sc = scope(run, a.useCase, a.scenario);
@@ -5855,9 +7257,9 @@ function neverWaits(run, a) {
   for (const s of sc.scenarios) {
     const hop = criticalPath(sc.u, s).flat().find((h2) => !h2.async && ids.has(h2.target));
     if (hop) {
-      const where = sc.scenarios.length > 1 ? quote(s.name) : sc.label;
+      const where2 = sc.scenarios.length > 1 ? quote(s.name) : sc.label;
       return fail(
-        `${where} waits for ${nodeLabel(run.diagram, hop.target)} before responding: ${stepText(hop.step)}${hop.failed ? " times out on the request path" : " is synchronous"}`,
+        `${where2} waits for ${nodeLabel(run.diagram, hop.target)} before responding: ${stepText(hop.step)}${hop.failed ? " times out on the request path" : " is synchronous"}`,
         `Send it with ->> (through a queue if it must not be lost), or move it after the line that answers the entry request`
       );
     }
@@ -5870,31 +7272,34 @@ function after(run, a) {
   if (isCheck(sc)) return sc;
   const targets = idsOf(run, a.target);
   const firsts = idsOf(run, a.after);
-  const [y, x] = [selectorText(a.target), selectorText(a.after)];
+  const [y, x] = [callNoun(a.target, a.match), selectorText(a.after)];
   if (targets.size === 0) return noMatch(a.target);
   if (firsts.size === 0) return noMatch(a.after);
+  const gap = vocabularyGap(run, targets, a.target, a.match);
+  if (gap) return gap;
+  const isTarget = (m) => targets.has(m.to) && stepMatches(m.step, a.match);
   let checked = 0;
   for (const s of sc.scenarios) {
     const order = requestOrder(sc.u, s).requests;
     const ix = order.findIndex((m) => firsts.has(m.to));
-    const iy = order.map((m) => targets.has(m.to)).lastIndexOf(true);
+    const iy = order.map(isTarget).lastIndexOf(true);
     if (ix < 0 || iy < 0) continue;
     checked++;
     if (iy < ix) {
-      const where = sc.scenarios.length > 1 || a.scenario ? `In ${quote(s.name)}` : `In ${quote(sc.u.name)}`;
+      const where2 = sc.scenarios.length > 1 || a.scenario ? `In ${quote(s.name)}` : `In ${quote(sc.u.name)}`;
       return fail(
-        `${where}, the last call to ${y} (${stepText(order[iy].step)}) comes before the first call to ${x} (${stepText(order[ix].step)})`,
+        `${where2}, the last call to ${y} (${stepText(order[iy].step)}) comes before the first call to ${x} (${stepText(order[ix].step)})`,
         `Call ${y} after ${x}: move the step to ${order[iy].to} below the call to ${order[ix].to}`
       );
     }
   }
   if (checked === 0) {
-    const callsY = sc.scenarios.some((s) => s.steps.some((step) => targets.has(step.toServiceId)));
+    const callsY = sc.scenarios.some((s) => s.steps.some((step) => targets.has(step.toServiceId) && stepMatches(step, a.match)));
     const callsX = sc.scenarios.some((s) => s.steps.some((step) => firsts.has(step.toServiceId)));
     const why = !callsY && !callsX ? `calls neither ${x} nor ${y}` : !callsY ? `never calls ${y}` : !callsX ? `never calls ${x}` : `never calls ${x} and ${y} in the same scenario`;
     return fail(`${sc.label} ${why}`, `Add a step to ${y} after the call to ${x}`);
   }
-  return pass(`${sc.label} calls ${y} after ${x}${checked > 1 ? ` in all ${checked} scenarios that call both` : ""}`);
+  return pass(`${sc.label} ${callText(a.target, a.match)} after ${x}${checked > 1 ? ` in all ${checked} scenarios that call both` : ""}`);
 }
 function senderCalls(run, a) {
   let useCases = run.diagram.useCases;
@@ -5911,10 +7316,10 @@ function senderCalls(run, a) {
     for (const s of u.scenarios) {
       const step = s.steps.find((st) => from.has(st.fromServiceId) && to.has(st.toServiceId));
       if (!step) continue;
-      const where = u.scenarios.length > 1 ? `${quote(u.name)} scenario ${quote(s.name)}` : quote(u.name);
-      if (a.quantifier === "some") return pass(`${x} calls ${y}${within}: ${stepText(step)} in ${where}`);
+      const where2 = u.scenarios.length > 1 ? `${quote(u.name)} scenario ${quote(s.name)}` : quote(u.name);
+      if (a.quantifier === "some") return pass(`${x} calls ${y}${within}: ${stepText(step)} in ${where2}`);
       return fail(
-        `${x} calls ${y}${within}: ${stepText(step)} in ${where}`,
+        `${x} calls ${y}${within}: ${stepText(step)} in ${where2}`,
         `Let another node make this call (e.g. the client uploads to storage with a presigned URL), or remove the step`
       );
     }
@@ -5965,8 +7370,8 @@ function noPath(run, from, to) {
     for (const s of u.scenarios) {
       const step = s.steps.find((st) => sources.has(st.fromServiceId) && targets.has(st.toServiceId));
       if (step) {
-        const where = u.scenarios.length > 1 ? `${quote(u.name)} scenario ${quote(s.name)}` : quote(u.name);
-        return fail(`The step ${step.fromServiceId} -> ${step.toServiceId} in ${where} (${lineOf(step.loc)}) goes directly from ${x} to ${y}`, hint);
+        const where2 = u.scenarios.length > 1 ? `${quote(u.name)} scenario ${quote(s.name)}` : quote(u.name);
+        return fail(`The step ${step.fromServiceId} -> ${step.toServiceId} in ${where2} (${lineOf(step.loc)}) goes directly from ${x} to ${y}`, hint);
       }
     }
   }
@@ -7533,12 +8938,12 @@ async function diagramView($, d, viewId, written, file) {
     doc = loadDocument(source);
     documents.set(key, doc);
   }
-  const where = file ?? "The diagram";
+  const where2 = file ?? "The diagram";
   if (doc.errors.length > 0) {
     const [first] = doc.errors;
-    return { error: `${where} has errors (line ${first.line}: ${first.message})${file ? `: run \`npx proschi check ${file}\`` : ""}.` };
+    return { error: `${where2} has errors (line ${first.line}: ${first.message})${file ? `: run \`npx proschi check ${file}\`` : ""}.` };
   }
-  if (doc.diagram.nodes.length === 0) return { error: `${where} has no components to draw.` };
+  if (doc.diagram.nodes.length === 0) return { error: `${where2} has no components to draw.` };
   const layout = layouts.get(key);
   if (!layout) {
     requestLayout($, key, source);
@@ -7553,8 +8958,8 @@ async function diagramView($, d, viewId, written, file) {
     scenes.set(sceneKey, scene);
   }
   const picks = doc.diagram.useCases.flatMap((u) => u.scenarios.map((s) => pickOf(u, s)));
-  const pick = picks.find((p) => p.value === player.pick) ?? picks[0];
-  const playing = player.mode === "play" ? pick : void 0;
+  const pick2 = picks.find((p) => p.value === player.pick) ?? picks[0];
+  const playing = player.mode === "play" ? pick2 : void 0;
   const steps = playing?.scenario.steps ?? [];
   const step = Math.max(0, Math.min(player.step, steps.length - 1));
   const width = Math.min(Math.max(40, d.columns), Math.max(scene.columns, BARS_WIDTH));
@@ -7568,7 +8973,7 @@ async function diagramView($, d, viewId, written, file) {
   const lost = lostImports(written, keyOf(written));
   const hasSystems = systems.length > 0 || player.focus !== void 0;
   const roomy = view.width >= 79;
-  return { element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, playing ? playerHeader($, view, playing, player) : doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, grid.columns > d.columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", grid.columns, " columns wide, wider than the ", d.columns, " here: ", view.inPane ? "widen the window" : "use \u26F6 Focus or a wider window", " to see it whole."), lost.some((name) => !importReasons.has(name)) && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u26A0 Not found, so drawn as plain boxes: ", lost.filter((name) => !importReasons.has(name)).join(", ")), lost.filter((name) => importReasons.has(name)).map((name) => /* @__PURE__ */ h(ui.Text, { key: `lost-${name}`, dimColor: true }, "\u26A0 ", importReasons.get(name))), doc.notes.map((note) => /* @__PURE__ */ h(ui.Text, { color: "yellow" }, "\u26A0 ", note.text, note.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true }, " \u2192 ", note.hint))), /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() })), hasSystems && !playing && systemBar($, view, doc, systems, selected, player), playing ? stepPanel($, view, playing, step, player) : pick && useCaseBar($, view, doc, pick, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: roomy ? "\u29C9 Copy source" : "\u29C9 Source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: roomy ? "\u29C9 Copy share link" : "\u29C9 Link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: roomy ? "\u2197 Open in Proschi" : "\u2197 Open", variant: "primary", onPress: (press) => void openLink($, press.surface, link) }), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `focus-${viewId}`, label: "\u26F6 Focus", onPress: () => focus($, view, file ? basename(file) : doc.diagram.title ?? "diagram", file ? { file } : { source }) }))), systems: hasSystems };
+  return { element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, playing ? playerHeader($, view, playing, player) : doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, grid.columns > d.columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", grid.columns, " columns wide, wider than the ", d.columns, " here: ", view.inPane ? "widen the window" : "use \u26F6 Focus or a wider window", " to see it whole."), lost.some((name) => !importReasons.has(name)) && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u26A0 Not found, so drawn as plain boxes: ", lost.filter((name) => !importReasons.has(name)).join(", ")), lost.filter((name) => importReasons.has(name)).map((name) => /* @__PURE__ */ h(ui.Text, { key: `lost-${name}`, dimColor: true }, "\u26A0 ", importReasons.get(name))), doc.notes.map((note) => /* @__PURE__ */ h(ui.Text, { color: "yellow" }, "\u26A0 ", note.text, note.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true }, " \u2192 ", note.hint))), /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() })), hasSystems && !playing && systemBar($, view, doc, systems, selected, player), playing ? stepPanel($, view, playing, step, player) : pick2 && useCaseBar($, view, doc, pick2, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: roomy ? "\u29C9 Copy source" : "\u29C9 Source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: roomy ? "\u29C9 Copy share link" : "\u29C9 Link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: roomy ? "\u2197 Open in Proschi" : "\u2197 Open", variant: "primary", onPress: (press) => void openLink($, press.surface, link) }), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `focus-${viewId}`, label: "\u26F6 Focus", onPress: () => focus($, view, file ? basename(file) : doc.diagram.title ?? "diagram", file ? { file } : { source }) }))), systems: hasSystems };
 }
 function selectable(scene, focus2) {
   return [...scene.nodes.values()].map((n) => n.node).filter((n) => n.kind === "system" || n.kind === "group" && n.system === n.id).map((n) => ({ id: n.id, path: focus2 !== void 0 ? `${focus2}.${n.id}` : n.id, name: n.name, expanded: n.kind === "group" }));
@@ -7621,7 +9026,7 @@ function lostImports(source, key) {
 var EXPLORE = { long: ["\u2261 Explore use cases", "\u2261 Hide explorer"], short: ["\u2261 Explore", "\u2261 Hide"] };
 var toggle = (labels, open) => labels[open ? 1 : 0].padEnd(Math.max(...labels.map((l) => l.length)));
 var cut = (text, room) => text.length <= room ? text : `${text.slice(0, Math.max(0, room - 1))}\u2026`;
-function useCaseBar($, view, doc, pick, player) {
+function useCaseBar($, view, doc, pick2, player) {
   const { ui } = view.d;
   const groups = groupByEndpoint(doc.diagram.useCases);
   const count = (u) => `${u.scenarios.length} scenario${u.scenarios.length === 1 ? "" : "s"}`;
@@ -7636,7 +9041,7 @@ function useCaseBar($, view, doc, pick, player) {
     ui.Select,
     {
       key: `uc-${view.viewId}`,
-      value: pick.useCase.id,
+      value: pick2.useCase.id,
       options,
       onSelect: (id) => {
         const u = doc.diagram.useCases.find((c) => c.id === id);
@@ -7644,8 +9049,8 @@ function useCaseBar($, view, doc, pick, player) {
       }
     }
   ));
-  const buttons = /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Button, { key: `play-${view.viewId}`, label: "\u25B6 Play", variant: "primary", ...hotkey(view, "p"), onPress: () => start($, view, pick) }), /* @__PURE__ */ h(ui.Button, { key: `explore-${view.viewId}`, label: explore, ...hotkey(view, "x"), onPress: () => void setPlayer($, view, (p) => ({ ...p, explorer: !p.explorer })) }));
-  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: PINK, paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Box, { flexDirection: oneRow ? "row" : "column", gap: oneRow ? 1 : 0 }, select, buttons), player.explorer && groups.map((g) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, g.label && /* @__PURE__ */ h(ui.Text, { bold: true, color: "cyan" }, g.label), g.useCases.map((u) => /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap", paddingLeft: g.label ? 2 : 0 }, /* @__PURE__ */ h(ui.Text, { bold: u.id === pick.useCase.id }, u.name), u.scenarios.map((s) => /* @__PURE__ */ h(ui.Button, { key: `x-${view.viewId}-${u.id}-${s.id}`, onPress: () => start($, view, pickOf(u, s)) }, scenarioLabel(ui, u, s))))))));
+  const buttons = /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Button, { key: `play-${view.viewId}`, label: "\u25B6 Play", variant: "primary", ...hotkey(view, "p"), onPress: () => start($, view, pick2) }), /* @__PURE__ */ h(ui.Button, { key: `explore-${view.viewId}`, label: explore, ...hotkey(view, "x"), onPress: () => void setPlayer($, view, (p) => ({ ...p, explorer: !p.explorer })) }));
+  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: PINK, paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Box, { flexDirection: oneRow ? "row" : "column", gap: oneRow ? 1 : 0 }, select, buttons), player.explorer && groups.map((g) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, g.label && /* @__PURE__ */ h(ui.Text, { bold: true, color: "cyan" }, g.label), g.useCases.map((u) => /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap", paddingLeft: g.label ? 2 : 0 }, /* @__PURE__ */ h(ui.Text, { bold: u.id === pick2.useCase.id }, u.name), u.scenarios.map((s) => /* @__PURE__ */ h(ui.Button, { key: `x-${view.viewId}-${u.id}-${s.id}`, onPress: () => start($, view, pickOf(u, s)) }, scenarioLabel(ui, u, s))))))));
 }
 function scenarioLabel(ui, u, s, current) {
   const error = s.outcome === "error";
@@ -7653,11 +9058,11 @@ function scenarioLabel(ui, u, s, current) {
   const name = u.scenarios.length > 1 ? s.name : "Play";
   return /* @__PURE__ */ h(ui.Text, { color: error ? "red" : "green", bold: current === true }, current === void 0 ? "" : current ? "\u25B8 " : "  ", error ? "\u2717" : "\u2713", " ", name, status ? ` \xB7 ${status}` : "");
 }
-function playerHeader($, view, pick, player) {
+function playerHeader($, view, pick2, player) {
   const { ui } = view.d;
-  const { useCase } = pick;
+  const { useCase } = pick2;
   return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: PINK, paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Button, { key: `back-${view.viewId}`, label: "\u2190 Diagram", ...hotkey(view, "d"), onPress: () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })) }), /* @__PURE__ */ h(ui.Text, { bold: true, wrap: "truncate-end" }, useCase.name), /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\xB7 Playback mode \xB7 read only")), useCase.scenarios.length > 1 && /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap" }, useCase.scenarios.map((s) => {
-    const current = s.id === pick.scenario.id;
+    const current = s.id === pick2.scenario.id;
     return /* @__PURE__ */ h(ui.Button, { key: `sc-${view.viewId}-${s.id}`, variant: current ? "primary" : void 0, dimColor: !current, onPress: () => start($, view, pickOf(useCase, s), player.isPlaying) }, scenarioLabel(ui, useCase, s, current));
   })));
 }
@@ -7723,9 +9128,9 @@ function stepRows(ui, view, steps, at) {
   });
   return { nodes, height };
 }
-function stepPanel($, view, pick, step, player) {
+function stepPanel($, view, pick2, step, player) {
   const { ui } = view.d;
-  const { scenario } = pick;
+  const { scenario } = pick2;
   const steps = scenario.steps;
   const total = steps.length;
   const go = (to, isPlaying = false) => {
@@ -7752,9 +9157,9 @@ function stepPanel($, view, pick, step, player) {
   ), /* @__PURE__ */ h(ui.Button, { key: `next-${view.viewId}`, label: "\u203A", ...hotkey(view, "n"), onPress: () => go(step + 1) }), /* @__PURE__ */ h(ui.Button, { key: `end-${view.viewId}`, label: "\u21E5", ...hotkey(view, "e"), onPress: () => go(total - 1) }), /* @__PURE__ */ h(ui.Text, null, counter), bar > 0 && /* @__PURE__ */ h(ui.Text, null, /* @__PURE__ */ h(ui.Text, { color: YELLOW }, "\u2501".repeat(filled)), /* @__PURE__ */ h(ui.Text, { dimColor: true }, "\u2501".repeat(bar - filled))), /* @__PURE__ */ h(ui.Button, { key: `exit-${view.viewId}`, label: exit, dimColor: true, onPress: () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })) })));
 }
 var hotkey = (view, key) => view.inPane ? { hotkey: key } : {};
-function start($, view, pick, isPlaying = true) {
+function start($, view, pick2, isPlaying = true) {
   reveal($, view);
-  void setPlayer($, view, (p) => ({ ...p, pick: pick.value, step: 0, isPlaying, mode: "play" }), pick.scenario.steps);
+  void setPlayer($, view, (p) => ({ ...p, pick: pick2.value, step: 0, isPlaying, mode: "play" }), pick2.scenario.steps);
 }
 function reveal($, view) {
   void scroll($, view.inPane ? { to: { key: view.anchorKey }, in: PANE, block: "start" } : { to: { requestId: view.d.requestId }, block: "start" });

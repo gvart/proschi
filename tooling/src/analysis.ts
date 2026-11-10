@@ -2,8 +2,12 @@ import {
   ASSERTIONS,
   CAPACITY_PARTS,
   DID_YOU_MEAN,
+  HTTP_METHODS,
   KEYWORDS,
+  KINDS,
+  TYPE_PROPERTIES,
   addConnection,
+  builtinTypes,
   componentCatalog,
   costBreakdown,
   findUseCase,
@@ -13,18 +17,23 @@ import {
   formatTraffic,
   formatUsd,
   kindName,
+  lookupType,
   parse,
   requirementFixes,
   setCapacity,
   setReplicas,
+  techNamed,
   tokenizeLine,
+  typeKey,
   type Constant,
   type Diagnostic,
   type Diagram,
   type DiagramNode,
   type ParseOptions,
   type ParseResult,
+  type ResolvedType,
   type SourceLoc,
+  type TypeTable,
 } from './proschi';
 import { nodeSimulation, queueText, resultsOf, simulationOf, verdict, whatIfsOf } from './simulation';
 
@@ -137,9 +146,17 @@ export function semanticTokens(analysis: Analysis): Token[] {
     if (payload[line]) return;
     const definition = LET.exec(text);
     if (definition && constants.has(definition[2])) out.push({ line, character: definition[1].length, length: definition[2].length, kind: 'constant' });
+    // A type header's name and parent, written without brackets.
+    const bare = new Set<number>();
+    for (const r of typeRefsOn(analysis, line, false)) {
+      if (r.bracketed) continue;
+      bare.add(r.start);
+      out.push({ line, character: r.start, length: r.end - r.start, kind: 'tech' });
+    }
     for (const m of text.matchAll(TOKEN)) {
       const word = m[0];
       const at = m.index ?? 0;
+      if (bare.has(at)) continue;
       const kind: TokenKind | null =
         /^x?\$/.test(word)
           ? 'constant'
@@ -216,12 +233,272 @@ function labelStart(text: string): number {
   return -1;
 }
 
-export type CompletionKind = 'keyword' | 'node' | 'tech' | 'usecase' | 'scenario' | 'constant';
+const tables = new WeakMap<Analysis, TypeTable>();
+
+/** The built-in types with the document's own (and its imports') over them, as the parser resolved them. */
+export function typeTable(analysis: Analysis): TypeTable {
+  let table = tables.get(analysis);
+  if (!table) {
+    const own = new Map(builtinTypes());
+    for (const t of analysis.diagram.types ?? []) own.set(typeKey(t.name), t);
+    tables.set(analysis, (table = own));
+  }
+  return table;
+}
+
+/** A type name written in the document: a `[Tech]`, or the name or parent of a type header. */
+interface TypeRef {
+  name: string;
+  type?: ResolvedType;
+  /** 0-based. */
+  line: number;
+  /** The name alone, without brackets. */
+  start: number;
+  end: number;
+  /** Written in brackets, so a rename may put spaces in it. */
+  bracketed: boolean;
+  /** The name of a type header (not its parent, not a use). */
+  header: boolean;
+}
+
+/** `type Name [extends Parent] {` or `abstract type …`: the index of the name token, or -1. */
+function typeHeaderAt(tokens: LineToken[]): number {
+  const word = (t: LineToken | undefined, w: string) => t?.kind === 'ident' && t.value === w;
+  const at = word(tokens[0], 'type') ? 1 : word(tokens[0], 'abstract') && word(tokens[1], 'type') ? 2 : -1;
+  if (at < 0) return -1;
+  const [name, next] = [tokens[at], tokens[at + 1]];
+  return (name?.kind === 'ident' || name?.kind === 'tech') && (next?.kind === 'lbrace' || word(next, 'extends')) ? at : -1;
+}
+
+/** The type names on line `line` (0-based): headers, parents and every `[Tech]` but the one after `icon`. */
+function typeRefsOn(analysis: Analysis, line: number, payload = insidePayload(analysis.lines, line)): TypeRef[] {
+  if (payload) return [];
+  const text = analysis.lines[line] ?? '';
+  const tokens = tokenizeLine(text, line + 1).tokens;
+  const table = typeTable(analysis);
+  const out: TypeRef[] = [];
+  const add = (t: LineToken, header: boolean) => {
+    const bracketed = t.kind === 'tech';
+    const start = bracketed ? text.indexOf(t.value, t.col) : t.col - 1;
+    if (!t.value || start < 0) return;
+    const type = lookupType(table, t.value);
+    out.push({ name: t.value, ...(type ? { type } : {}), line, start, end: start + t.value.length, bracketed, header });
+  };
+  const at = typeHeaderAt(tokens);
+  if (at > 0) {
+    add(tokens[at], true);
+    const parent = tokens[at + 2];
+    if (tokens[at + 1]?.kind === 'ident' && (parent?.kind === 'ident' || parent?.kind === 'tech')) add(parent, false);
+  }
+  tokens.forEach((t, k) => {
+    if (t.kind !== 'tech' || (at > 0 && (k === at || k === at + 2))) return;
+    if (tokens[k - 1]?.kind === 'ident' && tokens[k - 1].value === 'icon') return;
+    add(t, false);
+  });
+  return out;
+}
+
+/** The type named under the cursor, with the range of its name. */
+export function typeAt(analysis: Analysis, pos: Position): { type: ResolvedType; ref: TypeRef; range: Range } | null {
+  for (const ref of typeRefsOn(analysis, pos.line)) {
+    // A bracketed name is hit on its brackets too.
+    const pad = ref.bracketed ? 1 : 0;
+    if (!ref.type || pos.character < ref.start - pad || pos.character > ref.end + pad) continue;
+    return { type: ref.type, ref, range: { start: { line: pos.line, character: ref.start }, end: { line: pos.line, character: ref.end } } };
+  }
+  return null;
+}
+
+/** Whether a reference is to the declared (not built-in) type `b`. */
+const sameType = (a: ResolvedType | undefined, b: ResolvedType) => a !== undefined && !a.builtin && !b.builtin && typeKey(a.name) === typeKey(b.name) && a.loc.file === b.loc.file;
+
+/** Every place this document names the declared type `type`. */
+function typeRefs(analysis: Analysis, type: ResolvedType): TypeRef[] {
+  const payload = payloadLines(analysis.lines);
+  return analysis.lines.flatMap((_, line) => typeRefsOn(analysis, line, payload[line]).filter((r) => sameType(r.type, type)));
+}
+
+/** `PostgreSQL → SqlDatabase → … → Component` */
+export function typeChain(t: ResolvedType): string {
+  return [t.name, ...t.parents].join(' → ');
+}
+
+const multipliers = (o: { latency?: number; cost?: number }) =>
+  [o.latency !== undefined ? `latency ×${o.latency}` : '', o.cost !== undefined ? `cost ×${o.cost}` : ''].filter(Boolean).join(', ');
+
+const opText = (o: ResolvedType['ops'][number]) => `\`${o.name}\`${multipliers(o) ? ` (${multipliers(o)})` : ''}`;
+
+/** Hover for a type: its chain, kind, doc and operations by access. */
+function typeHover(t: ResolvedType): string {
+  const lines = [`**${t.name}** · ${t.abstract ? 'abstract type' : 'type'}${t.builtin ? ', built in' : ''}`, '', `\`${typeChain(t)}\``];
+  const facts = [t.kind ? `kind \`${t.kind}\`` : '', t.protocol ? `protocol \`${t.protocol}\`` : '', t.icon && t.icon !== t.name ? `drawn as \`${t.icon}\`` : ''].filter(Boolean);
+  if (facts.length) lines.push('', facts.join(' · '));
+  if (t.doc) lines.push('', t.doc);
+  for (const access of ['read', 'write', 'forward'] as const) {
+    const ops = t.ops.filter((o) => o.access === access);
+    if (ops.length) lines.push('', `**${access === 'read' ? 'Read' : access === 'write' ? 'Write' : 'Forward'}:** ${ops.map(opText).join(', ')}`);
+  }
+  if (t.statuses.length) lines.push('', `**Status:** ${t.statuses.join(', ')}`);
+  if (t.headers.length) lines.push('', `**Headers:** ${t.headers.map((h) => `\`${h}\``).join(', ')}`);
+  if (!t.builtin && t.loc.file) lines.push('', `_Declared in ${t.loc.file.split(/[\\/]/).pop()}_`);
+  return lines.join('\n');
+}
+
+/**
+ * The open blocks around line `index` (0-based), outermost first, each as
+ * the text of the line that opened it. Payload lines and labels are skipped.
+ */
+function openBlocks(lines: string[], index: number): string[] {
+  const payload = payloadLines(lines.slice(0, index + 1));
+  const stack: string[] = [];
+  for (let i = 0; i < index; i++) {
+    if (payload[i]) continue;
+    for (const t of tokenizeLine(lines[i], i + 1).tokens) {
+      if (t.kind === 'lbrace') stack.push(lines[i]);
+      else if (t.kind === 'rbrace') stack.pop();
+    }
+  }
+  return stack;
+}
+
+const inTypeBody = (blocks: string[]) => blocks.length > 0 && /^\s*(abstract\s+)?type\b/.test(blocks[blocks.length - 1]);
+
+/** `a -> b : label`: the step's nodes, arrow and its label. */
+const STEP = /^\s*(?:\}\s*)?([A-Za-z_]\w*)\s*(->>|-->|->|-x)\s*([A-Za-z_]\w*)\s*:\s*(.*)$/;
+
+/** The type of the node with id `id`, if it has one. */
+const typeOfNode = (analysis: Analysis, id: string) => analysis.diagram.nodes.find((n) => n.id === id)?.resolvedType;
+
+/**
+ * Completions in the label of a use case step: the operations of the
+ * target's type (and the HTTP methods, for an HTTP type), the statuses of
+ * the sender's type on a response, and the target's headers after
+ * `METHOD /path header`. Null when the cursor is not in such a label.
+ */
+function stepCompletions(analysis: Analysis, before: string, pos: Position): CompletionItem[] | null {
+  const m = STEP.exec(before);
+  if (!m || !openBlocks(analysis.lines, pos.line).some((b) => /^\s*usecase\b/.test(b))) return null;
+  const [, from, arrow, to, label] = m;
+  const rangeOf = (partial: string) => ({ start: { line: pos.line, character: pos.character - partial.length }, end: pos });
+  if (arrow === '-->') {
+    const t = typeOfNode(analysis, from);
+    if (!t || !/^\d*$/.test(label)) return [];
+    return t.statuses.map((s) => ({ label: String(s), kind: 'status' as const, detail: `status of ${t.name}`, range: rangeOf(label) }));
+  }
+  const t = typeOfNode(analysis, to);
+  if (!t) return [];
+  const headers = headerCompletions(t, label, rangeOf);
+  if (headers) return headers;
+  if (!/^\w*$/.test(label)) return [];
+  const ops: CompletionItem[] = t.ops.map((o) => ({
+    label: o.name,
+    kind: 'op' as const,
+    detail: [o.access, multipliers(o), t.name].filter(Boolean).join(' · '),
+    ...(t.doc ? { documentation: t.doc } : {}),
+    range: rangeOf(label),
+  }));
+  const http = t.protocol?.toUpperCase() === 'HTTP' ? HTTP_METHODS.filter((h) => !t.ops.some((o) => o.name === h)) : [];
+  return [...ops, ...http.map((h) => ({ label: h, kind: 'op' as const, detail: `HTTP method · ${t.name}`, range: rangeOf(label) }))];
+}
+
+/**
+ * `GET /orders header Authorization, Idem|`: the target type's headers not
+ * yet on the label; after `GET /orders ` the `header` word itself, when the
+ * type has headers. Null when the label is not there.
+ */
+function headerCompletions(t: ResolvedType, label: string, rangeOf: (partial: string) => Range): CompletionItem[] | null {
+  const list = /^([A-Z]+)\s+\S+\s+header\s+((?:[A-Za-z0-9-]+\s*,\s*)*)([A-Za-z0-9-]*)$/.exec(label);
+  if (list && HTTP_METHODS.includes(list[1])) {
+    const used = new Set(list[2].split(',').map((h) => h.trim().toLowerCase()));
+    return t.headers.filter((h) => !used.has(h.toLowerCase())).map((h) => ({ label: h, kind: 'header' as const, detail: `header of ${t.name}`, range: rangeOf(list[3]) }));
+  }
+  const after = /^([A-Z]+)\s+\S+\s+(\w*)$/.exec(label);
+  if (after && HTTP_METHODS.includes(after[1]) && t.headers.length) {
+    return [{ label: 'header', kind: 'keyword', detail: `Headers the request sends: ${t.headers.join(', ')}`, range: rangeOf(after[2]) }];
+  }
+  return null;
+}
+
+/** The operation under the cursor, the first word of a step label, for hover. */
+function opAt(analysis: Analysis, pos: Position): { markdown: string; range: Range } | null {
+  const line = analysis.lines[pos.line] ?? '';
+  const m = STEP.exec(line);
+  if (!m || m[2] === '-->') return null;
+  const t = typeOfNode(analysis, m[3]);
+  const word = wordAt(line, pos.character);
+  if (!t || !word || word.start !== line.length - m[4].length) return null;
+  const op = t.ops.find((o) => o.name === word.word) ?? t.ops.find((o) => o.name.toLowerCase() === word.word.toLowerCase());
+  if (!op) return null;
+  const lines = [`**${op.name}** · ${op.access} operation of \`${t.name}\``];
+  if (multipliers(op)) lines.push('', multipliers(op));
+  if (t.doc) lines.push('', t.doc);
+  return { markdown: lines.join('\n'), range: { start: { line: pos.line, character: word.start }, end: { line: pos.line, character: word.end } } };
+}
+
+/** A type name as written outside brackets: bare when it is a word, else in brackets. */
+const bareTypeName = (name: string) => (/^[A-Za-z_]\w*$/.test(name) ? name : `[${name}]`);
+
+/**
+ * Types to name: the document's types, then the built-in ones (abstract
+ * marked, their doc as detail), then the catalog techs no type is named
+ * after. `insert` turns a name into the text to insert.
+ */
+function typeItems(analysis: Analysis, range: Range, insert: (name: string) => string): CompletionItem[] {
+  const table = typeTable(analysis);
+  const all = [...table.values()];
+  const typed = new Set(all.map((t) => typeKey(t.name)));
+  const aliasesOf = (tech: string | undefined): readonly string[] => {
+    const c = tech === undefined ? undefined : componentCatalog.find((x) => x.techStack === tech);
+    return c && 'aliases' in c ? c.aliases : [];
+  };
+  const typeItem = (t: ResolvedType): CompletionItem => {
+    const aliases = aliasesOf(techNamed(t.name));
+    return {
+      label: t.name,
+      kind: 'type',
+      detail: [t.abstract ? 'abstract' : '', t.doc ?? `extends ${t.parents[0] ?? 'nothing'}`].filter(Boolean).join(' · '),
+      documentation: typeChain(t),
+      insertText: insert(t.name),
+      ...(aliases.length ? { filterText: [t.name, ...aliases].join(' ') } : {}),
+      range,
+    };
+  };
+  const techs = componentCatalog
+    .filter((c) => !typed.has(typeKey(c.techStack)))
+    .map((c): CompletionItem => {
+      const aliases = aliasesOf(c.techStack);
+      return {
+        label: c.techStack,
+        kind: 'tech',
+        detail: aliases.length ? `${c.category} · also ${aliases.slice(0, 3).join(', ')}` : c.category,
+        insertText: insert(c.techStack),
+        ...(aliases.length ? { filterText: [c.techStack, ...aliases].join(' ') } : {}),
+        range,
+      };
+    });
+  return [...all.filter((t) => !t.builtin), ...all.filter((t) => t.builtin)].map(typeItem).concat(techs);
+}
+
+/** Inside a type body: the property words at line start, then the values of `kind`, `op`, `icon` and the choices. */
+function typeBodyCompletions(head: string, range: Range): CompletionItem[] {
+  if (/^\s*$/.test(head)) return TYPE_PROPERTIES.map((p) => ({ label: p.label, kind: 'keyword', detail: p.detail, snippet: p.snippet, range }));
+  if (/^\s*kind\s+$/.test(head)) return KINDS.map((k) => ({ label: k, kind: 'keyword', detail: 'kind', range }));
+  if (/^\s*op\s+$/.test(head)) return ['read', 'write', 'forward'].map((label) => ({ label, kind: 'keyword', detail: `${label} operations`, range }));
+  const choices: Record<string, string[]> = { durable: ['true', 'false'], consistency: ['strong', 'eventual'], writeScaling: ['replicas', 'shards'] };
+  const choice = head.match(/^\s*(durable|consistency|writeScaling)\s+$/)?.[1];
+  if (choice) return choices[choice].map((label) => ({ label, kind: 'keyword', range }));
+  if (/^\s*icon\s+$/.test(head)) return componentCatalog.map((c) => ({ label: c.techStack, kind: 'tech', detail: c.category, insertText: bareTypeName(c.techStack), range }));
+  return [];
+}
+
+export type CompletionKind = 'keyword' | 'node' | 'tech' | 'type' | 'op' | 'status' | 'header' | 'usecase' | 'scenario' | 'constant';
 
 export interface CompletionItem {
   label: string;
   kind: CompletionKind;
   detail?: string;
+  /** Markdown shown beside the list: a type's chain, an operation's type doc. */
+  documentation?: string;
   /** LSP snippet syntax, for keywords. */
   snippet?: string;
   /** Text to insert when it differs from the label (tech stacks close their bracket). */
@@ -246,18 +523,15 @@ export function complete(analysis: Analysis, pos: Position): CompletionItem[] {
   if (tech) {
     const closed = line[pos.character] === ']';
     const range = { start: { line: pos.line, character: pos.character - tech[1].length }, end: pos };
-    return componentCatalog.map((c) => {
-      const aliases: readonly string[] = 'aliases' in c ? c.aliases : [];
-      return {
-        label: c.techStack,
-        kind: 'tech' as const,
-        detail: aliases.length ? `${c.category} · also ${aliases.slice(0, 3).join(', ')}` : c.category,
-        insertText: closed ? c.techStack : `${c.techStack}]`,
-        ...(aliases.length ? { filterText: [c.techStack, ...aliases].join(' ') } : {}),
-        range,
-      };
-    });
+    return typeItems(analysis, range, (name) => (closed ? name : `${name}]`));
   }
+  const parent = before.match(/^\s*(?:abstract\s+)?type\s+(?:\[[^\]]*\]|\w+)\s+extends\s+(\w*)$/);
+  if (parent) {
+    const range = { start: { line: pos.line, character: pos.character - parent[1].length }, end: pos };
+    return typeItems(analysis, range, bareTypeName);
+  }
+  const step = stepCompletions(analysis, before, pos);
+  if (step) return step;
   const names = quotedNames(analysis, pos);
   if (names) return names;
   if (inLabel(before)) return [];
@@ -274,6 +548,7 @@ export function complete(analysis: Analysis, pos: Position): CompletionItem[] {
   const word = before.match(/[A-Za-z_]\w*$/)?.[0] ?? '';
   const range = { start: { line: pos.line, character: pos.character - word.length }, end: pos };
   const atLineStart = /^\s*(\}\s*)?$/.test(before.slice(0, before.length - word.length));
+  if (inTypeBody(openBlocks(analysis.lines, pos.line))) return typeBodyCompletions(before.slice(0, before.length - word.length), range);
   if (sectionAt(analysis, pos.line) === 'capacity') return capacityCompletions(analysis, before.slice(0, before.length - word.length), range);
   if (sectionAt(analysis, pos.line) === 'traffic') return trafficCompletions(before.slice(0, before.length - word.length), range);
   // `when` is only valid right after an alt name: alt "Not found" when "…" {
@@ -286,6 +561,10 @@ export function complete(analysis: Analysis, pos: Position): CompletionItem[] {
     detail: describeNode(n),
     range,
   }));
+  if (!atLineStart && inTestBlock(analysis.lines, pos.line)) {
+    const typed = assertionValueCompletions(analysis, before, pos);
+    if (typed) return typed;
+  }
   if (!atLineStart) return nodes;
   // Inside a test block a line is an assertion, never a statement.
   if (inTestBlock(analysis.lines, pos.line) && !/\}/.test(before)) {
@@ -301,6 +580,68 @@ export function complete(analysis: Analysis, pos: Position): CompletionItem[] {
     range,
   }));
   return afterBrace ? keywords : [...keywords, ...nodes];
+}
+
+/** The types of the diagram's nodes, once each: what `uses` and `sends header` in an assertion can name. */
+function nodeTypes(analysis: Analysis): ResolvedType[] {
+  const seen = new Map<string, ResolvedType>();
+  for (const n of analysis.diagram.nodes) if (n.resolvedType) seen.set(n.resolvedType.name, n.resolvedType);
+  return [...seen.values()];
+}
+
+/**
+ * In a test assertion: the operations of the diagram's node types after
+ * `uses`, their headers after `sends header`, the HTTP methods after
+ * `calls <node> with`. Null elsewhere.
+ */
+function assertionValueCompletions(analysis: Analysis, before: string, pos: Position): CompletionItem[] | null {
+  const rangeOf = (partial: string) => ({ start: { line: pos.line, character: pos.character - partial.length }, end: pos });
+  const op = /\buses\s+(\w*)$/.exec(before);
+  if (op) {
+    const items = new Map<string, CompletionItem>();
+    for (const t of nodeTypes(analysis)) {
+      for (const o of t.ops) {
+        if (!items.has(o.name.toLowerCase())) items.set(o.name.toLowerCase(), { label: o.name, kind: 'op', detail: [o.access, multipliers(o), t.name].filter(Boolean).join(' · '), range: rangeOf(op[1]) });
+      }
+    }
+    return [...items.values()];
+  }
+  const header = /\bsends\s+header\s+([\w-]*)$/.exec(before);
+  if (header) {
+    const names = new Map<string, string>();
+    for (const t of nodeTypes(analysis)) for (const h of t.headers) if (!names.has(h.toLowerCase())) names.set(h.toLowerCase(), `${h}|${t.name}`);
+    return [...names.values()].map((v) => {
+      const [label, type] = v.split('|');
+      return { label, kind: 'header' as const, detail: `header of ${type}`, range: rangeOf(header[1]) };
+    });
+  }
+  const sends = /\bsends\s+(\w*)$/.exec(before);
+  if (sends) return [{ label: 'header', kind: 'keyword', detail: 'sends header <Name> to <node>', range: rangeOf(sends[1]) }];
+  const method = /\bcalls\s+\S+\s+with\s+([A-Za-z]*)$/.exec(before);
+  if (method) return HTTP_METHODS.map((m) => ({ label: m, kind: 'op' as const, detail: 'HTTP method, then a path: GET /items/{id}', range: rangeOf(method[1]) }));
+  return null;
+}
+
+/** The operation or header a test assertion names (`uses INSERT on`, `sends header X to`), for hover. */
+function assertionValueAt(analysis: Analysis, pos: Position): { markdown: string; range: Range } | null {
+  if (!inTestBlock(analysis.lines, pos.line)) return null;
+  const line = analysis.lines[pos.line] ?? '';
+  const m = /\b(uses\s+|sends\s+header\s+)("[^"]*"|[\w-]+)/.exec(line);
+  if (!m) return null;
+  const start = m.index + m[1].length;
+  const end = start + m[2].length;
+  if (pos.character < start || pos.character > end) return null;
+  const name = m[2].replace(/^"|"$/g, '').toLowerCase();
+  const range = { start: { line: pos.line, character: start }, end: { line: pos.line, character: end } };
+  const types = nodeTypes(analysis);
+  if (m[1].startsWith('uses')) {
+    const owners = types.filter((t) => t.ops.some((o) => o.name.toLowerCase() === name));
+    if (!owners.length) return { markdown: `No node type in this diagram has an operation \`${m[2]}\`; the assertion fails.`, range };
+    const op = owners[0].ops.find((o) => o.name.toLowerCase() === name)!;
+    return { markdown: [`**${op.name}** · ${op.access} operation of ${owners.map((t) => `\`${t.name}\``).join(', ')}`, '', 'Holds when a step to the node names this operation.'].join('\n'), range };
+  }
+  const owners = types.filter((t) => t.headers.some((h) => h.toLowerCase() === name));
+  return { markdown: [`**${m[2]}** · request header${owners.length ? ` of ${owners.map((t) => `\`${t.name}\``).join(', ')}` : ''}`, '', 'Holds when a request to the node names it: `GET /path header Name`.'].join('\n'), range };
 }
 
 const PERCENTILE = 'p50|p90|p95|p99|p999';
@@ -445,6 +786,9 @@ export function nodeAt(analysis: Analysis, pos: Position): { node: DiagramNode; 
 export function declaration(analysis: Analysis, pos: Position): { file?: string; range: Range } | null {
   const constant = constantAt(analysis, pos);
   if (constant) return { file: constant.constant.loc.file, range: toRange(constant.constant.loc) };
+  const type = typeAt(analysis, pos);
+  // A built-in type's file is bundled, not on disk.
+  if (type) return type.type.builtin ? null : { file: type.type.loc.file, range: toRange(type.type.loc) };
   const hit = nodeAt(analysis, pos);
   if (!hit || hit.node.implicit) return null;
   return { file: hit.node.loc.file, range: toRange(hit.node.loc) };
@@ -460,6 +804,8 @@ export function definition(analysis: Analysis, pos: Position): Range | null {
 export function references(analysis: Analysis, pos: Position): Range[] {
   const constant = constantAt(analysis, pos);
   if (constant) return constantRefs(analysis, constant.constant.name);
+  const type = typeAt(analysis, pos);
+  if (type) return typeRefs(analysis, type.type).map((r) => ({ start: { line: r.line, character: r.start }, end: { line: r.line, character: r.end } }));
   const hit = nodeAt(analysis, pos);
   return hit ? referencesTo(analysis, hit.node.id) : [];
 }
@@ -598,7 +944,8 @@ export type RenameSymbol =
   | { kind: 'node'; id: string }
   | { kind: 'usecase'; name: string }
   | { kind: 'scenario'; useCase: string; path: string[] }
-  | { kind: 'constant'; name: string };
+  | { kind: 'constant'; name: string }
+  | { kind: 'type'; name: string };
 
 /**
  * The symbol at `pos`, the range a rename replaces, and the file that
@@ -610,6 +957,12 @@ function symbolAt(analysis: Analysis, pos: Position): { symbol: RenameSymbol; ra
   if (constant) {
     const c = constant.constant;
     return { symbol: { kind: 'constant', name: c.name }, range: constant.range, placeholder: c.name, file: c.loc.file };
+  }
+  const type = typeAt(analysis, pos);
+  if (type) {
+    // Built-in types are not the document's to rename.
+    if (type.type.builtin) return null;
+    return { symbol: { kind: 'type', name: type.type.name }, range: type.range, placeholder: type.type.name, file: type.type.loc.file };
   }
   const name = nameAt(analysis, pos);
   if (name) {
@@ -647,6 +1000,14 @@ export function renameTarget(analysis: Analysis, pos: Position): { range: Range;
  * `expose … -> "…"` of a system whose team file is `file` follows it.
  */
 export function renameEdits(analysis: Analysis, symbol: RenameSymbol, newName: string, file?: string): TextEdit[] {
+  if (symbol.kind === 'type') {
+    const type = (analysis.diagram.types ?? []).find((t) => typeKey(t.name) === typeKey(symbol.name) && t.loc.file === file);
+    if (!type) return [];
+    return typeRefs(analysis, type).map((r) => ({
+      range: { start: { line: r.line, character: r.start }, end: { line: r.line, character: r.end } },
+      newText: r.bracketed ? newName : bareTypeName(newName),
+    }));
+  }
   if (symbol.kind === 'constant') {
     const constant = (analysis.diagram.constants ?? []).find((c) => c.name === symbol.name);
     if (!constant || constant.loc.file !== file) return [];
@@ -701,6 +1062,10 @@ export function rename(analysis: Analysis, pos: Position, newName: string): Rena
     if (name !== symbol.name && (analysis.diagram.constants ?? []).some((c) => c.name === name)) return { error: `There is already a constant '$${name}'` };
     const edits = renameEdits(analysis, symbol, name, file);
     return file === undefined ? { symbol, edits } : { symbol, edits, declaredIn: file };
+  } else if (symbol.kind === 'type') {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*(?: [A-Za-z0-9_]+)*$/.test(newName)) return { error: `'${newName}' is not a type name; use letters, digits, _ and single spaces` };
+    const taken = lookupType(typeTable(analysis), newName);
+    if (taken && typeKey(newName) !== typeKey(symbol.name)) return { error: `There is already a type '${taken.name}'` };
   } else {
     if (!newName.trim() || /["\\\n]/.test(newName) || newName.includes(' › ')) return { error: `'${newName}' cannot be a name; leave out quotes, backslashes and ' › '` };
     if (symbol.kind === 'usecase' && newName !== symbol.name && analysis.diagram.useCases.some((u) => u.name === newName)) return { error: `There is already a use case named "${newName}"` };
@@ -729,6 +1094,12 @@ export function hover(analysis: Analysis, pos: Position): { markdown: string; ra
   }
   const team = teamAt(analysis, pos);
   if (team) return teamHover(analysis, team.team, team.range);
+  const type = typeAt(analysis, pos);
+  if (type) return { markdown: typeHover(type.type), range: type.range };
+  const op = opAt(analysis, pos);
+  if (op) return op;
+  const asserted = assertionValueAt(analysis, pos);
+  if (asserted) return asserted;
   const hit = nodeAt(analysis, pos);
   if (!hit) return null;
   const n = hit.node;
@@ -781,13 +1152,13 @@ function teamHover(analysis: Analysis, team: string, range: Range): { markdown: 
 export interface OutlineSymbol {
   name: string;
   detail?: string;
-  kind: 'node' | 'group' | 'usecase' | 'scenario' | 'section' | 'traffic' | 'requirement' | 'entity' | 'decision' | 'test';
+  kind: 'node' | 'group' | 'type' | 'usecase' | 'scenario' | 'section' | 'traffic' | 'requirement' | 'entity' | 'decision' | 'test';
   range: Range;
   children: OutlineSymbol[];
 }
 
 /**
- * Groups with their members, then use cases with their scenarios, then the
+ * Groups with their members, then types, then use cases with their scenarios, then the
  * high-level design sections (traffic, requirements, entities, decisions,
  * tests); only what this document declares.
  */
@@ -817,7 +1188,14 @@ export function outline(analysis: Analysis): OutlineSymbol[] {
           }))
         : [],
   }));
-  return [...top, ...useCases, ...sections(analysis)];
+  const types = (analysis.diagram.types ?? []).filter((t) => !t.loc.file).map((t) => ({
+    name: t.name,
+    detail: [t.abstract ? 'abstract' : '', `extends ${t.parents[0] ?? 'nothing'}`, t.kind ?? ''].filter(Boolean).join(' · '),
+    kind: 'type' as const,
+    range: toRange(t.loc),
+    children: [],
+  }));
+  return [...top, ...types, ...useCases, ...sections(analysis)];
 }
 
 /** One symbol per high-level design section that has entries in this document, spanning them. */
@@ -852,6 +1230,7 @@ export interface TextEdit {
 
 const MISSING_CONNECTION = /^No connection between '\w+' and '\w+' in the architecture; add '(\w+) -> (\w+)'$/;
 const REPEATED_PART = /^.+ is given twice for '\w+'$/;
+const UNKNOWN_PARENT = /^Unknown parent type '(.*)'\. Did you mean '([^']+)'\?/;
 
 /**
  * A quick fix for a parser diagnostic, if it has one: the missing-connection
@@ -862,6 +1241,17 @@ const REPEATED_PART = /^.+ is given twice for '\w+'$/;
  */
 export function quickFix(analysis: Analysis, message: string, range?: Range): { title: string; edit: TextEdit } | null {
   if (REPEATED_PART.test(message) && range) return removeCapacityPart(analysis, range.start);
+  const parent = message.match(UNKNOWN_PARENT);
+  if (parent && range) {
+    // The range covers the parent as written: `Postgre`, or `[Postgre]` with its brackets.
+    const line = analysis.lines[range.start.line] ?? '';
+    const bracketed = line[range.start.character] === '[';
+    const end = bracketed ? line.indexOf(']', range.start.character) + 1 || range.end.character : range.end.character;
+    return {
+      title: `Change to '${parent[2]}'`,
+      edit: { range: { start: range.start, end: { line: range.start.line, character: end } }, newText: bracketed ? `[${parent[2]}]` : bareTypeName(parent[2]) },
+    };
+  }
   const tech = message.match(DID_YOU_MEAN);
   if (tech && range) {
     const line = analysis.lines[range.start.line] ?? '';

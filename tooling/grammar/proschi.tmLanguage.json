@@ -10,6 +10,9 @@
       "include": "#comment"
     },
     {
+      "include": "#type-block"
+    },
+    {
       "include": "#system"
     },
     {
@@ -279,6 +282,18 @@
           }
         },
         {
+          "comment": "`header A, B` after an HTTP endpoint: the headers the request sends.",
+          "match": "(?<=\\s)(header)\\s+([A-Za-z0-9-]+(?:\\s*,\\s*[A-Za-z0-9-]+)*)",
+          "captures": {
+            "1": {
+              "name": "keyword.other.header.proschi"
+            },
+            "2": {
+              "name": "support.type.property-name.header.proschi"
+            }
+          }
+        },
+        {
           "comment": "A leading three-digit number on a response is its status code.",
           "match": "\\G\\s*([1-5]\\d\\d)\\b",
           "captures": {
@@ -473,7 +488,7 @@
     },
     "section-keyword": {
       "name": "keyword.other.proschi",
-      "match": "\\b(?:traffic|requirements|capacity|entity|decision|test|whatif|fail|mix|peak|hit|group|errors|retries|drain|lag|durable|volatile|survive|because|rejected|calls|before|after|never|every|waits|for|starts|at|or|responds|writes|reads|responding|handles|failure|path|replicas|any|strong|eventual|store|in|scenario|latency|availability|cost|shards|size|consistency|bandwidth|egress|timeout|no|from|to|has|of|node|key|index|unique|optional|p50|p90|p95|p99|p999)\\b"
+      "match": "\\b(?:traffic|requirements|capacity|entity|decision|test|whatif|fail|mix|peak|hit|group|errors|retries|drain|lag|durable|volatile|survive|because|rejected|calls|uses|sends|header|with|on|before|after|never|every|waits|for|starts|at|or|responds|writes|reads|responding|handles|failure|path|replicas|any|strong|eventual|store|in|scenario|latency|availability|cost|shards|size|consistency|bandwidth|egress|timeout|no|from|to|has|of|node|key|index|unique|optional|p50|p90|p95|p99|p999)\\b"
     },
     "quantity": {
       "comment": "A number with an optional fraction, magnitude and unit, attached or one space away: 120, 2.5, 50ms, 100k rps, 99.9%, 4xx, 500 MB/s, 0.05 usd/GB.",
@@ -653,6 +668,156 @@
         },
         {
           "include": "#brace"
+        }
+      ]
+    },
+    "type-block": {
+      "comment": "`[abstract] type Name [extends Parent] { … }` (docs/design/typed-components.md): a component type, one property per line or on the header line closed with }.",
+      "name": "meta.block.type.proschi",
+      "begin": "^\\s*(?:(abstract)\\s+)?(type)\\s+(\\[[^\\]\\n]*\\]|[A-Za-z_][A-Za-z0-9_]*)(?:\\s+(extends)\\s+(\\[[^\\]\\n]*\\]|[A-Za-z_][A-Za-z0-9_]*))?\\s*(\\{)",
+      "end": "\\}",
+      "beginCaptures": {
+        "1": {
+          "name": "storage.modifier.abstract.proschi"
+        },
+        "2": {
+          "name": "storage.type.type.proschi"
+        },
+        "3": {
+          "name": "entity.name.type.proschi"
+        },
+        "4": {
+          "name": "storage.modifier.extends.proschi"
+        },
+        "5": {
+          "name": "entity.other.inherited-class.proschi"
+        },
+        "6": {
+          "name": "punctuation.section.block.begin.proschi"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.block.end.proschi"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "comment": "`op read|write|forward A, B [latency x] [cost y]`",
+          "begin": "(?:^|(?<=\\{))\\s*(op)\\s+(read|write|forward)\\b",
+          "end": "(?=$|\\}|#)",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.other.type-property.proschi"
+            },
+            "2": {
+              "name": "storage.modifier.access.proschi"
+            }
+          },
+          "patterns": [
+            {
+              "match": "\\b(latency|cost)\\b",
+              "name": "keyword.other.multiplier.proschi"
+            },
+            {
+              "include": "#quantity"
+            },
+            {
+              "include": "#string"
+            },
+            {
+              "match": "[A-Za-z_][A-Za-z0-9_]*",
+              "name": "entity.name.function.operation.proschi"
+            },
+            {
+              "match": ",",
+              "name": "punctuation.separator.comma.proschi"
+            }
+          ]
+        },
+        {
+          "comment": "`header Authorization, Content-Type`: names may have dashes.",
+          "begin": "(?:^|(?<=\\{))\\s*(header)\\b",
+          "end": "(?=$|\\}|#)",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.other.type-property.proschi"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#string"
+            },
+            {
+              "match": "[A-Za-z0-9!#$%&\\'*+.^_`|~-]+",
+              "name": "support.type.property-name.header.proschi"
+            },
+            {
+              "match": ",",
+              "name": "punctuation.separator.comma.proschi"
+            }
+          ]
+        },
+        {
+          "match": "(?:^|(?<=\\{))\\s*(kind)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "keyword.other.type-property.proschi"
+            },
+            "2": {
+              "name": "constant.language.kind.proschi"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=\\{))\\s*(protocol)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "keyword.other.type-property.proschi"
+            },
+            "2": {
+              "name": "constant.language.protocol.proschi"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=\\{))\\s*(icon)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "keyword.other.type-property.proschi"
+            },
+            "2": {
+              "name": "entity.name.type.tech.proschi"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=\\{))\\s*(kind|protocol|icon|doc|status|rps|readRps|writeRps|writeScaling|latencyMs|availability|costUsd|durable|consistency|bandwidthMBps|egressUsdPerGb)\\b",
+          "captures": {
+            "1": {
+              "name": "keyword.other.type-property.proschi"
+            }
+          }
+        },
+        {
+          "match": "\\b(true|false|strong|eventual|replicas|shards)\\b",
+          "name": "constant.language.proschi"
+        },
+        {
+          "include": "#quantity"
+        },
+        {
+          "include": "#string"
+        },
+        {
+          "include": "#tech"
+        },
+        {
+          "match": ",",
+          "name": "punctuation.separator.comma.proschi"
         }
       ]
     }

@@ -1,0 +1,14 @@
+# Proschi standard library: Cloudflare. The rules are in core.proschi.
+
+type Cloudflare extends CDN {
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
+  doc "Cloudflare, the CDN and edge network in front of the origin."
+}
+
+type [Cloudflare Workers] extends Function {
+  doc "Cloudflare Workers, functions that run at Cloudflare's edge locations."
+}
+
+type [Cloudflare R2] extends [AWS S3] {
+  doc "Cloudflare R2, object storage with the S3 API and no egress fees."
+}

@@ -32,13 +32,13 @@ test "Searches never touch the source of truth" {
 test "An edit is saved, then indexed in the background" {
   "Edit menu" starts at merchant
   "Edit menu" writes db before responding
-  "Edit menu" calls any broker
+  "Edit menu" uses PUBLISH on any broker
   "Edit menu" never calls any search
 }
 
 test "Every change reaches the index through the stream" {
   "Index change" starts at any broker
-  "Index change" calls db before any search
+  "Index change" uses SELECT on db before any search
   "Backfill" starts at loader
   "Backfill" calls any broker before any search
   "Backfill" never calls db

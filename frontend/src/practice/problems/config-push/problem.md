@@ -4,6 +4,8 @@ summary: "Cloudflare's Quicksilver: config written once, sent down a tree, read 
 difficulty: medium
 company: Cloudflare
 tags: [replication, fan-out, read-heavy, availability, real-world]
+version: 2
+strict: true
 hints:
   - "Edge requests read configuration 3M times a second, and the requirements say a data center must keep serving when the core is unreachable. Where can a read come from so that it never leaves the edge server?"
   - "Every change is written once, to the root (x2: a primary and a secondary), and the customer gets the answer as soon as the root has it. Copying it to the edge happens after the answer, with async sends (->>)."
@@ -58,7 +60,9 @@ in `problem.proschi` refer to them, and to the use case names above.
   directly.
 - Use `[Key-Value Store]` for the root and the main nodes: each node serves
   about **20k** operations a second, carries **100 MB/s** of traffic and
-  costs **$500 / month**.
+  costs **$500 / month**. Its operations are those of any key-value store:
+  `GET` and `SCAN` read, `PUT` and `DELETE` write; the local stores are
+  `[Key-Value Store]` too.
 - p99 of **Serve request** under **20 ms**; of **Change config** under
   **100 ms**.
 - Every use case available **99.99%** of the time.

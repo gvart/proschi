@@ -25,7 +25,7 @@ The exercise keeps three endpoints:
 The given has the `rider` app and four services owned by other teams: `auth`, `pricing`, `trips` and `users`. You add the load balancer, the gateway pool and a cache that holds sessions and bans. The limits: p99 under 100 ms for every endpoint, 99.95% availability, no latency limit broken by losing any one machine, and at most $2,800 a month. The tests check:
 
 - Every call starts at the app, passes a load balancer and then a gateway before it reaches a service, and the app has no path to any service.
-- Every endpoint reads the cache before it calls `auth`, and a cached session never calls `auth`.
+- Every endpoint reads the cache before it calls `auth`, a cached session never calls `auth`, and an uncached one `SET`s the session in the cache after `auth` answers.
 - The session is checked before the call is routed, and no backend calls `auth` itself.
 - A blocked rider's call never reaches `pricing` and is answered 403.
 

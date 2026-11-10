@@ -67,17 +67,17 @@ usecase "Suggest" "Top ten completions of what the user has typed so far" {
 usecase "Search" "Run a submitted query and log it" {
   user    -> lb       : GET /search?q=iphone+case
   lb      -> api      : GET /search?q=iphone+case
-  api     -> search   : match "iphone case"
+  api     -> search   : _search match "iphone case"
   search --> api      : hits
-  api    ->> querylog : Query "iphone case"
+  api    ->> querylog : PUBLISH Query "iphone case"
   api    --> lb       : 200 {"results": []}
   lb     --> user     : 200 {"results": []}
 }
 
 usecase "Rebuild index" "Recompute the top ten of every prefix from recent queries" {
-  api       ->> builder  : RebuildIndex
-  builder    -> querylog : read the last 7 days
-  querylog  --> builder  : queries
-  builder    -> topk     : SET top10:{prefix} for changed prefixes
-  topk      --> builder  : OK
+  api      ->> builder  : RebuildIndex
+  builder   -> querylog : read the last 7 days
+  querylog --> builder  : queries
+  builder   -> topk     : SET top10:{prefix} for changed prefixes
+  topk     --> builder  : OK
 }

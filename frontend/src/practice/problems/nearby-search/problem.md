@@ -4,6 +4,8 @@ summary: "Tinder's geosharded search: S2 cells grouped by load, so a search read
 difficulty: hard
 company: Tinder
 tags: [geo, sharding, search, hot-partitions, real-world]
+version: 2
+strict: true
 hints:
   - "A search only wants people within the searcher's radius. If the index is sharded by user id, how many shards does every search have to visit, and what does each shard then serve?"
   - "Shard by location: cover the map with S2 cells, group nearby cells into geoshards, and let a geo router turn the search circle into the few geoshards it overlaps. In the model a search visits 3 geoshards (x3), all in one group: `metro` for a dense metro, `regional` for everywhere else."

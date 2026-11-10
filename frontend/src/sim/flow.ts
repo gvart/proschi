@@ -1,6 +1,7 @@
 import { buildSequence, sequenceMessages, type SequenceMessage } from '../dsl/sequence';
-import type { Diagram, DiagramNode, DiagramScenario, DiagramStep, DiagramUseCase, Selector } from '../dsl/types';
+import type { Diagram, DiagramNode, DiagramScenario, DiagramStep, DiagramUseCase, Selector, StepMatch } from '../dsl/types';
 import { kindMatches, kindOf } from '../dsl/kinds';
+import { typeKey } from '../dsl/typesys/resolve';
 import { stepAccess } from './access';
 import { profileOf } from './profiles';
 
@@ -185,13 +186,47 @@ export function selectNodes(diagram: Diagram, selector: Selector): DiagramNode[]
 export function matches(node: DiagramNode, selector: Selector, diagram?: Diagram): boolean {
   if (node.kind !== 'component') return false;
   if ('node' in selector) return node.id === selector.node;
-  if ('tech' in selector) return node.techStack.toLowerCase() === selector.tech.toLowerCase();
+  // `[LedgerDb]` may name a declared type: its nodes have the tech stack of their icon, a built-in tech.
+  // A type also picks its subtypes: `[Database]` matches PostgreSQL nodes.
+  if ('tech' in selector) {
+    const wanted = typeKey(selector.tech);
+    return [node.techStack, node.resolvedType?.name, ...(node.resolvedType?.parents ?? [])].some((t) => t !== undefined && typeKey(t) === wanted);
+  }
   if ('anyOf' in selector) return selector.anyOf.some((s) => matches(node, s, diagram));
   if ('consistency' in selector) {
     const override = diagram?.capacity?.find((o) => o.node === node.id);
     return profileOf(node, override).consistency === selector.consistency;
   }
   return kindMatches(kindOf(node), selector.kind);
+}
+
+const isParam = (segment: string) => /^\{[^}]*\}$/.test(segment) || /^:\w+$/.test(segment);
+const segments = (path: string) => path.replace(/[?#].*$/, '').replace(/(.)\/+$/, '$1').split('/');
+
+/** `/urls/{code}` matches `/urls/aZ3x9` and `/urls/{id}`: a `{param}` or `:param` segment on either side matches any one segment. */
+export function pathMatches(pattern: string, endpoint: string): boolean {
+  const [a, b] = [segments(pattern), segments(endpoint)];
+  return a.length === b.length && a.every((s, i) => s === b[i] || isParam(s) || isParam(b[i]));
+}
+
+/** Whether a request step is what a typed assertion asks for: its method and path, its resolved operation, or a header it sends. */
+export function stepMatches(step: DiagramStep, match: StepMatch | undefined): boolean {
+  if (!match) return true;
+  const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+  if (match.method !== undefined && !same(step.httpMethod, match.method)) return false;
+  if (match.path !== undefined && !pathMatches(match.path, step.endpoint)) return false;
+  if (match.op !== undefined && !(step.op && same(step.op.name, match.op))) return false;
+  if (match.header !== undefined && !step.headers?.some((h) => same(h, match.header!))) return false;
+  return true;
+}
+
+/** A call in words, third person: `calls db`, `calls api with GET /urls/{code}`, `uses INSERT on db`, `sends header Authorization to api`. */
+export function callText(selector: Selector, match: StepMatch | undefined): string {
+  const target = selectorText(selector);
+  if (match?.op !== undefined) return `uses ${match.op} on ${target}`;
+  if (match?.header !== undefined) return `sends header ${match.header} to ${target}`;
+  if (match?.method !== undefined) return `calls ${target} with ${match.method} ${match.path ?? ''}`.trimEnd();
+  return `calls ${target}`;
 }
 
 /** `PostgreSQL` for a declared node, nothing for one only referenced. */

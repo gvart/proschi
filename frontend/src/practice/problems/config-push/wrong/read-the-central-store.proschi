@@ -24,7 +24,7 @@ usecase "Serve request" {
 
 usecase "Change config" {
   customer -> api      : PUT /zones/{id}/settings
-  api      -> root     : SET key
+  api      -> root     : PUT key
   root    --> api      : OK
   api     --> customer : 200
 }

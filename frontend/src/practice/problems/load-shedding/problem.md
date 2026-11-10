@@ -4,6 +4,8 @@ summary: "Netflix's Zuul gateway: rank every request and shed logs before playba
 difficulty: medium
 company: Netflix
 tags: [load-shedding, resilience, api-gateway, availability, real-world]
+version: 2
+strict: true
 hints:
   - "The API service cannot grow during the spike, and it is asked for 125% of what it can serve. Some requests must not be served. Which ones would a member miss least?"
   - "Put a gateway (id zuul, an [API Gateway]) between the devices and the API service, and send every request through it. It is the first to see each request, so it is the place to rank them."

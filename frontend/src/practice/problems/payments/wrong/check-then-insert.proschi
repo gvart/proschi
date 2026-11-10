@@ -61,7 +61,7 @@ usecase "Checkout" "Charge the shopper's card for an order, exactly once" {
 
   alt "Charged" when "the key is new and the gateway approves" {
     intents --> api     : inserted, status pending
-    api      -> gateway : POST /charges Idempotency-Key chk_7f3a
+    api      -> gateway : POST /charges header Idempotency-Key
     gateway --> api     : 201 approved
     api      -> ledger  : APPEND debit and credit entries for pay_81
     ledger  --> api     : ok
@@ -75,7 +75,7 @@ usecase "Checkout" "Charge the shopper's card for an order, exactly once" {
     lb      --> shopper : 201 {"paymentId": "pay_81", "status": "succeeded"}
   } alt "Gateway down" when "the gateway times out or fails" {
     intents --> api     : inserted, status pending
-    api      -x gateway : POST /charges Idempotency-Key chk_7f3a
+    api      -x gateway : POST /charges header Idempotency-Key
     api      -> retries : ENQUEUE RetryCharge {"idempotencyKey": "chk_7f3a"}
     retries --> api     : ok
     api     --> lb      : 202 {"paymentId": "pay_81", "status": "pending"}
@@ -87,7 +87,7 @@ usecase "Retry charge" "The queue hands a worker one pending charge; it is ackno
   retries  -> worker  : RetryCharge {"idempotencyKey": "chk_7f3a"}
   worker   -> intents : SELECT intent FOR UPDATE
   intents --> worker  : status pending
-  worker   -> gateway : POST /charges Idempotency-Key chk_7f3a
+  worker   -> gateway : POST /charges header Idempotency-Key
   gateway --> worker  : 201 approved
   worker   -> ledger  : APPEND debit and credit entries for pay_81
   ledger  --> worker  : ok

@@ -62,7 +62,8 @@ describe('docs/site.json', () => {
     expect(pager('systems')).toContain(`<span class="pager__title">${title('imports')}</span>`)
     expect(pager('systems')).toContain(`<span class="pager__title">${title('versions')}</span>`)
     expect(pager('versions')).toContain(`<span class="pager__title">${title('hld')}</span>`)
-    expect(pager('grammar')).toContain(`<span class="pager__title">${title('model')}</span>`)
+    expect(pager('grammar')).toContain(`<span class="pager__title">${title('types-core')}</span>`)
+    expect(pager('types-cloud')).toContain(`<span class="pager__title">${title('model')}</span>`)
   })
 
   it('keeps the sidebar’s Start group short with labels', () => {
@@ -215,6 +216,11 @@ describe('live examples', () => {
         expect(/^\s*(title|usecase|group)\b|\s-[->x]/m.test(content), `${file}: an untagged fence that looks like Proschi:\n${content}`).toBe(false)
       }
     }
+  })
+
+  it('the typed steps example warns about load on PostgreSQL, as its try-it says', () => {
+    const typed = rendered.get('use-cases')!.examples.find((e) => e.includes('SELECT posts'))!
+    expect(parse(typed.replace('SELECT posts', 'load posts')).diagnostics.map((d) => d.message)).toEqual([expect.stringMatching(/^PostgreSQL has no operation 'load'\./)])
   })
 
   it('the org guide flags Order Processing at 2k rps and nothing at 1k, as it says', () => {

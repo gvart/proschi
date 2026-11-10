@@ -1,0 +1,91 @@
+# Proschi standard library: Google Cloud. The rules are in core.proschi.
+
+# Edge
+
+type [GCP Cloud CDN] extends CDN {
+  doc "Cloud CDN, the CDN of Google Cloud."
+}
+
+type [GCP Cloud DNS] extends DNS {
+  doc "Cloud DNS, the DNS service of Google Cloud."
+}
+
+type [GCP Load Balancing] extends [Load Balancer] {
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
+  doc "Cloud Load Balancing, Google Cloud's global and regional load balancers."
+}
+
+type [GCP Apigee] extends [API Gateway] {
+  doc "Apigee, Google Cloud's API management platform."
+}
+
+# Compute
+
+type [GCP Compute Engine] extends VM {
+  doc "Compute Engine, virtual machines on Google Cloud."
+}
+
+type [GCP GKE] extends Kubernetes {
+  doc "Google Kubernetes Engine, managed Kubernetes on Google Cloud."
+}
+
+type [GCP Cloud Functions] extends Function {
+  doc "Cloud Functions, functions that run per request or event on Google Cloud."
+}
+
+type [GCP Cloud Run] extends Function {
+  doc "Cloud Run, containers that run per request and scale to zero on Google Cloud."
+}
+
+type [GCP App Engine] extends Function {
+  doc "App Engine, Google Cloud's managed platform for web apps."
+}
+
+# Data
+
+type [GCP Cloud SQL] extends Database {
+  doc "Cloud SQL, managed PostgreSQL, MySQL and SQL Server on Google Cloud."
+}
+
+type [GCP Spanner] extends [Distributed SQL Database] {
+  op read  ExecuteSql, ExecuteStreamingSql, StreamingRead, BeginTransaction
+  op write ExecuteBatchDml
+  doc "Spanner, Google Cloud's globally distributed relational database with external consistency."
+}
+
+type [GCP Firestore] extends [Document NoSQL Database] {
+  op read  GetDocument, ListDocuments, BatchGetDocuments, RunQuery, RunAggregationQuery, Listen
+  op write CreateDocument, UpdateDocument, DeleteDocument, BatchWrite, Commit, BeginTransaction
+  doc "Firestore, Google Cloud's serverless document database."
+}
+
+type [GCP Bigtable] extends [Wide-Column NoSQL Database] {
+  op read  ReadRows, SampleRowKeys
+  op write MutateRow, MutateRows, CheckAndMutateRow, ReadModifyWriteRow
+  doc "Bigtable, Google Cloud's wide-column database for large, low-latency workloads."
+}
+
+type [GCP Memorystore] extends Redis {
+  doc "Memorystore, managed Redis and Memcached on Google Cloud."
+}
+
+type [GCP BigQuery] extends [Data Warehouse] {
+  doc "BigQuery, Google Cloud's serverless data warehouse."
+}
+
+type [GCP Cloud Storage] extends [Object Storage] {
+  op write Insert, Patch, Update, Copy, Compose, Rewrite
+  doc "Cloud Storage, the object storage of Google Cloud."
+}
+
+type [GCP Persistent Disk] extends [Block Storage] {
+  doc "Persistent Disk, block volumes for Compute Engine."
+}
+
+# Messaging
+
+type [GCP Pub/Sub] extends [Message Broker] {
+  op read  Pull, StreamingPull
+  op write Acknowledge, ModifyAckDeadline, CreateTopic, CreateSubscription, Seek
+  doc "Pub/Sub, Google Cloud's global messaging service of topics and subscriptions."
+}

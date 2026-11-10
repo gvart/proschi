@@ -427,8 +427,8 @@ describe('test', () => {
   });
 
   it.each([
-    ['"Redirect"', 'Expected calls, every scenario calls, never calls, never waits for, writes, responds, starts at, has scenario or handles failure of after "Redirect"'],
-    ['"Redirect" invokes api', 'Expected calls, every scenario calls, never calls, never waits for, writes, responds, starts at, has scenario or handles failure of after "Redirect"'],
+    ['"Redirect"', 'Expected calls, uses, sends header, every scenario calls, never calls, never waits for, writes, responds, starts at, has scenario or handles failure of after "Redirect"'],
+    ['"Redirect" invokes api', 'Expected calls, uses, sends header, every scenario calls, never calls, never waits for, writes, responds, starts at, has scenario or handles failure of after "Redirect"'],
     ['"Redirect" calls', 'Expected a node id, [Tech] or any <kind>'],
     ['"Redirect" calls "api"', 'Expected a node id, [Tech] or any <kind>, not string "api"'],
     ['"Redirect" calls any', `Expected a kind after any: ${KINDS.join(', ')}, or strong store / eventual store`],
@@ -446,7 +446,7 @@ describe('test', () => {
     ['in "Redirect"', 'Expected a node id, [Tech] or any <kind>'],
     ['api never db', "Expected 'calls' here, e.g. any service never calls any storage"],
     ['"Redirect" every calls api', `Expected 'scenario' here, e.g. "Redirect" every scenario calls any cache`],
-    ['"Redirect" never api', `Expected 'calls' here, e.g. "Redirect" never calls any database`],
+    ['"Redirect" never api', 'Expected calls, uses or sends header here, e.g. "Redirect" never calls any database'],
     ['"Shorten" writes db', `Expected 'before' here, e.g. "Shorten" writes db before responding`],
     ['"Shorten" writes db before', `Expected 'responding' here, e.g. "Shorten" writes db before responding`],
     ['"Shorten" responds', 'Expected a status code or class after responds, e.g. 201 or 4xx'],
