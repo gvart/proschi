@@ -8,7 +8,7 @@ import { accessOf, type Access } from './access';
 import { COLOR_NAMES, editDistance, resolveColor, suggestColor } from './palette';
 import { lookupType, resolveTypes } from './typesys/resolve';
 import { loadStdlib } from './typesys/stdlib';
-import { findHeader, findOp, opWord, suggestHeader, suggestOp } from './typesys/ops';
+import { findHeader, findOp, opNamesMostSpecificFirst, opWord, suggestHeader, suggestOp } from './typesys/ops';
 import type { ResolvedType, TypeDecl, TypeOp, TypeProps, TypeTable } from './typesys/types';
 import type {
   FlowStep,
@@ -2775,7 +2775,7 @@ class Parser {
     const op = method ? type.ops.find((o) => o.name.toUpperCase() === method) : findOp(type, step.label);
     if (op) return { access: op.access, op: { ...op } };
     const suggestion = suggestOp(type, word);
-    const ops = type.ops.map((o) => o.name);
+    const ops = opNamesMostSpecificFirst(type, this.typeTable);
     const hint = suggestion ? `Did you mean ${suggestion}?` : `Its operations are ${ops.slice(0, 8).join(', ')}${ops.length > 8 ? ', …' : ''}.`;
     const effect = access === 'write' ? 'Treated as a write, as before.' : 'Treated as a comment.';
     const lead = step.label.length - step.label.trimStart().length + (!method && /^\s*"/.test(step.label) ? 1 : 0);
@@ -2786,7 +2786,8 @@ class Parser {
   /** `200` on a response: one of the responder's type's statuses, when it lists any. */
   private checkStatus(type: ResolvedType | undefined, code: number, loc: SourceLoc) {
     if (!type || type.statuses.length === 0 || type.statuses.includes(code)) return;
-    this.typeProblem(`${type.name} has no status ${code}; it answers ${type.statuses.join(', ')}`, loc);
+    const listed = type.statuses.length > 12 ? `${type.statuses.slice(0, 12).join(', ')}, …` : type.statuses.join(', ');
+    this.typeProblem(`${type.name} has no status ${code}; it answers ${listed}`, loc);
   }
 
   /** `header A, B` in a label: each one of the target's type's headers, when it lists any. */

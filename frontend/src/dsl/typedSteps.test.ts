@@ -54,7 +54,7 @@ describe('step labels resolve their operation on the target type', () => {
   it('warns about a word that is no op, suggests the closest one and reads the label as a comment', () => {
     const source = doc('  api -> db : persist row\n  api -> db : INSRT row');
     expect(messages(source)).toEqual([
-      "warning: Ledger has no operation 'persist'. Its operations are SELECT, INSERT, UPDATE, DELETE, APPEND, full scan. Treated as a comment.",
+      "warning: Ledger has no operation 'persist'. Its operations are APPEND, full scan, LISTEN, NOTIFY, COPY, VACUUM, SELECT, WITH, …. Treated as a comment.",
       "warning: Ledger has no operation 'INSRT'. Did you mean INSERT? Treated as a comment.",
     ]);
     const [persist] = steps(source);
@@ -63,9 +63,9 @@ describe('step labels resolve their operation on the target type', () => {
   });
 
   it('keeps a verb that wrote before a write, with the warning', () => {
-    const source = doc('  api -> db : SAVE row');
+    const source = doc('  api -> db : CHARGE row');
     expect(steps(source)[0].access).toBe('write');
-    expect(messages(source)).toEqual(["warning: Ledger has no operation 'SAVE'. Its operations are SELECT, INSERT, UPDATE, DELETE, APPEND, full scan. Treated as a write, as before."]);
+    expect(messages(source)).toEqual([expect.stringMatching(/^warning: Ledger has no operation 'CHARGE'\. Its operations are APPEND, full scan, .*\. Treated as a write, as before\.$/)]);
   });
 
   it('points the warning at the word, after prefixes and a quote', () => {
@@ -86,11 +86,11 @@ describe('step labels resolve their operation on the target type', () => {
   });
 
   it('checks response statuses against the responder type', () => {
-    const source = doc('  client -> api : GET /items\n  api --> client : 202 accepted\n  client -> api : GET /x\n  api --> client : 418 teapot');
-    expect(messages(source)).toEqual([expect.stringMatching(/^warning: Shop has no status 418; it answers 200, .*202, 429$/)]);
+    const source = doc('  client -> api : GET /items\n  api --> client : 202 accepted\n  client -> api : GET /x\n  api --> client : 299 odd');
+    expect(messages(source)).toEqual([expect.stringMatching(/^warning: Shop has no status 299; it answers 100, 101, .*, …$/)]);
     const d = run(source).diagnostics[0];
     const text = source.split('\n')[d.line - 1];
-    expect(text.slice(d.col - 1, d.col - 1 + d.length)).toBe('418');
+    expect(text.slice(d.col - 1, d.col - 1 + d.length)).toBe('299');
   });
 
   it('reads headers after the endpoint and checks them against the type', () => {
@@ -120,12 +120,12 @@ describe('step labels resolve their operation on the target type', () => {
   });
 
   it('checks built-in types too', () => {
-    const source = `client [Actor]\napi [REST API]\ndb [PostgreSQL]\nclient -> api\napi -> db\nusecase "U" {\n  client -> api : place order\n  api -> db : persist row\n  api --> client : 418\n}`;
+    const source = `client [Actor]\napi [REST API]\ndb [PostgreSQL]\nclient -> api\napi -> db\nusecase "U" {\n  client -> api : place order\n  api -> db : persist row\n  api --> client : 299\n}`;
     expect(messages(source).map((m) => m.split(':')[0])).toEqual(['warning', 'warning', 'warning']);
     expect(messages(source, { strictOps: true })).toEqual([
-      "error: REST API has no operation 'place'. Its operations are GET, HEAD, POST, PUT, PATCH, DELETE. Treated as a comment.",
-      "error: PostgreSQL has no operation 'persist'. Its operations are SELECT, INSERT, UPDATE, DELETE. Treated as a comment.",
-      expect.stringMatching(/^error: REST API has no status 418;/),
+      expect.stringMatching(/^error: REST API has no operation 'place'\. Its operations are GET, /),
+      expect.stringMatching(/^error: PostgreSQL has no operation 'persist'\. Its operations are LISTEN, NOTIFY, COPY, VACUUM, SELECT, /),
+      expect.stringMatching(/^error: REST API has no status 299;/),
     ]);
   });
 

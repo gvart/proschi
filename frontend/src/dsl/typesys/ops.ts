@@ -1,5 +1,27 @@
 import { editDistance } from '../../catalog/componentCatalog';
-import type { ResolvedType, TypeOp } from './types';
+import { typeKey } from './resolve';
+import type { ResolvedType, TypeOp, TypeTable } from './types';
+
+/**
+ * The names of a type's operations, its own first, then each ancestor's in
+ * turn: what a warning lists, so `PostgreSQL` shows SELECT and INSERT before
+ * the generic READ and WRITE every data store has.
+ */
+export function opNamesMostSpecificFirst(type: ResolvedType, table: TypeTable): string[] {
+  const chain = [type, ...type.parents.flatMap((p) => table.get(typeKey(p)) ?? [])];
+  const seen = new Set<string>();
+  const names: string[] = [];
+  chain.forEach((t, i) => {
+    const parent = chain[i + 1];
+    for (const op of t.ops) {
+      const key = op.name.toLowerCase();
+      if (seen.has(key) || parent?.ops.some((o) => o.name.toLowerCase() === key)) continue;
+      seen.add(key);
+      names.push(op.name);
+    }
+  });
+  return names;
+}
 
 /**
  * Typed operations in use case steps (docs/design/typed-components.md,

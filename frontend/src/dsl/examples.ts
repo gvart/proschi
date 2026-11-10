@@ -28,7 +28,7 @@ usecase "Create order" "Complete flow for creating a new order" {
     users --> orders : 200 {"verified": true}
     par {
       orders  -> ordersDb : INSERT order
-      orders ->> events   : OrderCreated {"orderId": "order-789"}
+      orders ->> events   : PUBLISH OrderCreated {"orderId": "order-789"}
     }
     orders --> gateway : 201 {"orderId": "order-789", "status": "pending"}
   } alt "Unknown user" {
@@ -111,7 +111,7 @@ usecase "Upload a photo" {
   client   -> gateway : POST /images json {"fileName": "cat.jpg"}
   gateway  -> upload  : invoke
   upload   -> bucket  : PUT /originals/cat.jpg
-  upload  ->> jobs    : ResizeRequested {"key": "originals/cat.jpg"}
+  upload  ->> jobs    : SEND ResizeRequested {"key": "originals/cat.jpg"}
   upload  --> gateway : 202 {"imageId": "img-1"}
   gateway --> client  : 202 {"imageId": "img-1"}
   jobs     -> resize  : ResizeRequested
@@ -360,7 +360,7 @@ usecase "Place an order" {
   shopper  -> gateway  : POST /orders
   gateway  -> orders   : POST /orders
   orders   -> ordersDb : INSERT order
-  orders  ->> events   : OrderPlaced
+  orders  ->> events   : PUBLISH OrderPlaced
   orders  --> gateway  : 201
   gateway --> shopper  : 201
 }

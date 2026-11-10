@@ -124,7 +124,7 @@ usecase "Place order" {
 
   alt "Placed" {
     api  -&gt; db     : INSERT order
-    api -&gt;&gt; events : OrderPlaced {"orderId": "o-1"}
+    api -&gt;&gt; events : PUBLISH OrderPlaced {"orderId": "o-1"}
     api --&gt; web    : 201 {"orderId": "o-1"}
   } alt "DB down" {
     api  -x db  : INSERT order

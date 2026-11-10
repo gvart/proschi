@@ -32,7 +32,7 @@ describe('example document', () => {
   it('builds use case steps with responses and parallel groups', () => {
     const [useCase] = diagram.useCases;
     expect(useCase).toMatchObject({ id: 'create-order', name: 'Create order', entryServiceId: 'gateway' });
-    expect(useCase.steps.map((s) => s.stepName)).toEqual(['POST /api/orders', 'GET /api/users/user123', 'INSERT order', 'OrderCreated']);
+    expect(useCase.steps.map((s) => s.stepName)).toEqual(['POST /api/orders', 'GET /api/users/user123', 'INSERT order', 'PUBLISH OrderCreated']);
 
     const [create, getUser, insert, publish] = useCase.steps;
     expect(create).toMatchObject({ httpMethod: 'POST', endpoint: '/api/orders', protocol: 'REST', statusCode: 201, requestFormat: 'JSON' });
