@@ -1,0 +1,151 @@
+# Proschi standard library: compute, the code you run. The rules are in
+# core.proschi.
+
+abstract type Compute {
+  kind service
+  protocol HTTP
+  status 100, 101, 102, 103
+  status 200, 201, 202, 203, 204, 205, 206, 207, 208, 226
+  status 300, 301, 302, 303, 304, 307, 308
+  status 400, 401, 402, 403, 404, 405, 406, 407, 408, 409, 410, 411, 412, 413, 414, 415, 416, 417, 418
+  status 421, 422, 423, 424, 425, 426, 428, 429, 431, 451
+  status 500, 501, 502, 503, 504, 505, 506, 507, 508, 510, 511
+  header Accept, Accept-Encoding, Accept-Language, Accept-Ranges, Age, Allow, Authorization
+  header Cache-Control, Connection, Content-Disposition, Content-Encoding, Content-Language
+  header Content-Length, Content-Range, Content-Type, Cookie, Date, ETag, Expires, Host
+  header If-Match, If-Modified-Since, If-None-Match, If-Range, If-Unmodified-Since, Last-Modified
+  header Link, Location, Origin, Range, Referer, Retry-After, Server, Set-Cookie, User-Agent, Vary
+  header Upgrade, WWW-Authenticate, Proxy-Authorization, Strict-Transport-Security, Content-Security-Policy
+  header Access-Control-Allow-Origin, Access-Control-Allow-Methods, Access-Control-Allow-Headers
+  header Access-Control-Allow-Credentials, Access-Control-Max-Age, Access-Control-Request-Method
+  header Forwarded, X-Forwarded-For, X-Forwarded-Host, X-Forwarded-Proto, X-Real-IP
+  header X-Request-Id, X-Correlation-Id, Traceparent, Tracestate, Idempotency-Key
+  header X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset
+  header X-API-Key, X-Content-Type-Options, X-Frame-Options, Sec-WebSocket-Key, Sec-WebSocket-Accept, Sec-WebSocket-Protocol
+  doc "Code you run: a service, a worker, a function or the platform it runs on; its own requests are named freely."
+}
+
+type Service extends Compute {
+  doc "A program you run that answers requests, whatever it is written in."
+}
+
+type Worker extends Compute {
+  doc "A background program that takes jobs or events from a queue and processes them."
+}
+
+# Interfaces.
+
+abstract type HttpService extends Service {
+  op read  GET, HEAD, OPTIONS, TRACE, CONNECT
+  op write POST, PUT, PATCH, DELETE
+  doc "A service whose requests are HTTP methods: GET, HEAD and OPTIONS read, POST, PUT, PATCH and DELETE write."
+}
+
+type [REST API] extends HttpService {
+  doc "A service with a REST interface: resources over HTTP methods and status codes."
+}
+
+type GraphQL extends HttpService {
+  protocol GraphQL
+  op read  query, subscription
+  op write mutation
+  doc "A service with a GraphQL interface: queries read, mutations write."
+}
+
+type gRPC extends Service {
+  protocol gRPC
+  doc "A service with a gRPC interface: typed calls over HTTP/2, named by its own .proto file."
+}
+
+type WebSocket extends Service {
+  protocol WebSocket
+  doc "A service that keeps a WebSocket open to each client and pushes messages both ways, named freely."
+}
+
+type [SOAP API] extends Service {
+  protocol SOAP
+  doc "A service with a SOAP interface: XML messages over HTTP."
+}
+
+# Languages and frameworks: a service written in it.
+
+type Java extends Service {
+  doc "A service on the JVM, written in Java."
+}
+
+type [Spring Boot] extends Java {
+  doc "A service built with Spring Boot."
+}
+
+type Kotlin extends Service {
+  doc "A service written in Kotlin."
+}
+
+type Go extends Service {
+  doc "A service written in Go."
+}
+
+type [Node.js] extends Service {
+  doc "A service on Node.js, written in JavaScript or TypeScript."
+}
+
+type Python extends Service {
+  doc "A service written in Python."
+}
+
+type Django extends Python {
+  doc "A service built with Django."
+}
+
+type FastAPI extends Python {
+  doc "A service built with FastAPI."
+}
+
+type Flask extends Python {
+  doc "A service built with Flask."
+}
+
+type [Ruby on Rails] extends Service {
+  doc "A service built with Ruby on Rails."
+}
+
+type [.NET] extends Service {
+  doc "A service on .NET, written in C#."
+}
+
+type PHP extends Service {
+  doc "A service written in PHP."
+}
+
+type Rust extends Service {
+  doc "A service written in Rust."
+}
+
+type Elixir extends Service {
+  doc "A service written in Elixir, on the Erlang VM."
+}
+
+# Where services run.
+
+abstract type Platform extends Compute {
+  doc "Where a service runs, drawn as the platform: it answers like the service on it."
+}
+
+type VM extends Platform {
+  doc "A virtual machine running the service."
+}
+
+type Docker extends Platform {
+  doc "A container running the service."
+}
+
+type Kubernetes extends Platform {
+  doc "Pods on a Kubernetes cluster running the service."
+}
+
+# Functions.
+
+type Function extends Compute {
+  kind function
+  doc "A serverless function: runs per request or event and scales to zero."
+}

@@ -1,0 +1,106 @@
+# Proschi standard library: the edge, between the clients and the services.
+# The rules are in core.proschi.
+
+abstract type Edge {
+  kind edge
+  doc "What a request passes through before it reaches a service: DNS, a CDN, a load balancer or a gateway."
+}
+
+abstract type HttpEdge extends Edge {
+  protocol HTTP
+  op read  GET, HEAD, OPTIONS, TRACE, CONNECT
+  op write POST, PUT, PATCH, DELETE
+  status 100, 101, 102, 103
+  status 200, 201, 202, 203, 204, 205, 206, 207, 208, 226
+  status 300, 301, 302, 303, 304, 307, 308
+  status 400, 401, 402, 403, 404, 405, 406, 407, 408, 409, 410, 411, 412, 413, 414, 415, 416, 417, 418
+  status 421, 422, 423, 424, 425, 426, 428, 429, 431, 451
+  status 500, 501, 502, 503, 504, 505, 506, 507, 508, 510, 511
+  header Accept, Accept-Encoding, Accept-Language, Accept-Ranges, Age, Allow, Authorization
+  header Cache-Control, Connection, Content-Disposition, Content-Encoding, Content-Language
+  header Content-Length, Content-Range, Content-Type, Cookie, Date, ETag, Expires, Host
+  header If-Match, If-Modified-Since, If-None-Match, If-Range, If-Unmodified-Since, Last-Modified
+  header Link, Location, Origin, Range, Referer, Retry-After, Server, Set-Cookie, User-Agent, Vary
+  header Upgrade, WWW-Authenticate, Proxy-Authorization, Strict-Transport-Security, Content-Security-Policy
+  header Access-Control-Allow-Origin, Access-Control-Allow-Methods, Access-Control-Allow-Headers
+  header Access-Control-Allow-Credentials, Access-Control-Max-Age, Access-Control-Request-Method
+  header Forwarded, X-Forwarded-For, X-Forwarded-Host, X-Forwarded-Proto, X-Real-IP
+  header X-Request-Id, X-Correlation-Id, Traceparent, Tracestate, Idempotency-Key
+  header X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset
+  header X-API-Key, X-Content-Type-Options, X-Frame-Options, Sec-WebSocket-Key, Sec-WebSocket-Accept, Sec-WebSocket-Protocol
+  doc "An edge component that takes HTTP requests and passes them on."
+}
+
+type DNS extends Edge {
+  kind dns
+  protocol DNS
+  op read  QUERY, RESOLVE
+  op write UPDATE
+  doc "A DNS service: turns a host name into the addresses to connect to."
+}
+
+type CDN extends HttpEdge {
+  kind cdn
+  op write PURGE
+  doc "A content delivery network: caches responses at edge locations near the users."
+}
+
+type [Load Balancer] extends HttpEdge {
+  kind loadbalancer
+  doc "Spreads requests over the replicas behind it and stops sending to unhealthy ones."
+}
+
+type [API Gateway] extends HttpEdge {
+  op write MESSAGE   # forwards a WebSocket message
+  kind gateway
+  doc "One entry point for an API: routing, authentication and rate limits before the services."
+}
+
+type WAF extends HttpEdge {
+  doc "A web application firewall: blocks malicious requests at the edge."
+}
+
+# Products.
+
+type Fastly extends CDN {
+  op write MESSAGE   # forwards a WebSocket message
+  doc "Fastly, the programmable CDN."
+}
+
+type Akamai extends CDN {
+  op write MESSAGE   # forwards a WebSocket message
+  doc "Akamai, the CDN and edge security platform."
+}
+
+type nginx extends [Load Balancer] {
+  op write MESSAGE   # forwards a WebSocket message
+  doc "nginx, the web server used as a reverse proxy and load balancer."
+}
+
+type Envoy extends [Load Balancer] {
+  op write MESSAGE   # forwards a WebSocket message
+  doc "Envoy, the L7 proxy behind most service meshes."
+}
+
+type HAProxy extends [Load Balancer] {
+  op write MESSAGE   # forwards a WebSocket message
+  doc "HAProxy, the TCP and HTTP load balancer."
+}
+
+type Traefik extends [Load Balancer] {
+  op write MESSAGE   # forwards a WebSocket message
+  doc "Traefik, the reverse proxy that configures itself from containers."
+}
+
+type [Kubernetes Ingress] extends [Load Balancer] {
+  op write MESSAGE   # forwards a WebSocket message
+  doc "A Kubernetes ingress controller: routes outside HTTP traffic to the cluster's services."
+}
+
+type Kong extends [API Gateway] {
+  doc "Kong, the open source API gateway built on nginx."
+}
+
+type [Spring Cloud Gateway] extends [API Gateway] {
+  doc "Spring Cloud Gateway, an API gateway for Spring services."
+}

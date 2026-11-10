@@ -1,0 +1,73 @@
+# Proschi standard library: queues and brokers, which take a message and
+# hand it on later. The rules are in core.proschi.
+
+abstract type Messaging {
+  op read  RECEIVE, SUBSCRIBE, UNSUBSCRIBE, READ
+  op write SEND, PUBLISH, EMIT, ENQUEUE, WRITE, ACK, NACK
+  doc "A component that takes a message and hands it on later: a queue or a broker."
+}
+
+type [Message Queue] extends Messaging {
+  kind queue
+  op read  DEQUEUE, PEEK, POLL
+  doc "A queue of jobs: each message goes to one consumer, which deletes it when done."
+}
+
+type [Message Broker] extends Messaging {
+  kind broker
+  op read  CONSUME, FETCH
+  op write PRODUCE
+  doc "A broker of topics or streams: every subscriber gets each message, and the log can be replayed."
+}
+
+type SQS extends [Message Queue] {
+  op read  ReceiveMessage, GetQueueAttributes, GetQueueUrl, ListQueues
+  op write SendMessage, SendMessageBatch, DeleteMessage, DeleteMessageBatch
+  op write ChangeMessageVisibility, ChangeMessageVisibilityBatch, PurgeQueue
+  op write CreateQueue, DeleteQueue, SetQueueAttributes
+  doc "SQS, the managed message queue of AWS."
+}
+
+type [Redis Queue] extends [Message Queue] {
+  protocol RESP
+  op read  XREAD, XREADGROUP, XRANGE, XLEN, XPENDING, LRANGE, LLEN, PSUBSCRIBE
+  op write XADD, XACK, XCLAIM, XAUTOCLAIM, XDEL, XTRIM, XGROUP, LPUSH, RPUSH, LPOP, RPOP, BLPOP, BRPOP, LMOVE, BLMOVE
+  doc "A queue on Redis: a list, a stream or pub/sub channels."
+}
+
+type ZeroMQ extends [Message Queue] {
+  op read  RECV
+  doc "ZeroMQ, the brokerless messaging library of sockets."
+}
+
+type Kafka extends [Message Broker] {
+  op read  Poll, OffsetFetch, ListOffsets, Metadata
+  op write Commit, OffsetCommit, AddPartitionsToTxn, EndTxn, DeleteRecords
+  op write CreateTopics, DeleteTopics, CreatePartitions
+  doc "Apache Kafka, the distributed log of partitioned topics."
+}
+
+type Redpanda extends Kafka {
+  doc "Redpanda, a Kafka-compatible streaming platform written in C++."
+}
+
+type RabbitMQ extends [Message Broker] {
+  protocol AMQP
+  op read  BasicGet, BasicConsume
+  op write BasicPublish, BasicAck, BasicNack, BasicReject, QueueDeclare, ExchangeDeclare, QueueBind, QueuePurge
+  doc "RabbitMQ, the AMQP broker of exchanges and queues."
+}
+
+type NATS extends [Message Broker] {
+  op read  REQUEST, SUB
+  op write PUB, REPLY
+  doc "NATS, the lightweight messaging system, with JetStream for persistence."
+}
+
+type [Apache Pulsar] extends [Message Broker] {
+  doc "Apache Pulsar, the broker of topics with tiered storage."
+}
+
+type ActiveMQ extends [Message Broker] {
+  doc "Apache ActiveMQ, the JMS message broker."
+}
