@@ -1,0 +1,106 @@
+docs/CARDS.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/types/cloud.md
+  s_ccb8935595dc4e::t_1c4f198983f5f0 1-4
+frontend/src/docs/docs.css
+  s_ccb8935595dc4e::t_cdf6a5468128e2 1192-1194
+  s_ccb8935595dc4e::t_bf7177b557672d 446-450
+docs/GAME.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/SCENARIOS.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/LANGUAGE.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+CLAUDE.md
+  s_ccb8935595dc4e::t_c378da56e7f99d 55-58
+docs/AGENT-SKILLS.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/types/compute.md
+  s_ccb8935595dc4e::t_1c4f198983f5f0 1-4
+docs/EDITORS.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/QUICKSTART.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/README.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/TERMS.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/STYLING.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/PRIVACY.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/NODES.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/USE-CASES.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+frontend/src/dsl/stdlib/sources.gen.ts
+  s_ccb8935595dc4e::t_1c4f198983f5f0 4
+CONTRIBUTING.md
+  s_ccb8935595dc4e::t_c378da56e7f99d 389-393
+frontend/plugins/typeReference.ts
+  s_ccb8935595dc4e::t_1c4f198983f5f0 3,15-17,126-133,174-177
+docs/HLD.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+frontend/plugins/typeReference.test.ts
+  s_ccb8935595dc4e::t_d66ac1e09321f4 5,29-31
+  s_ccb8935595dc4e::t_6df046d0e6ef6d 32-33
+docs/TESTS.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/GRAMMAR.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/SYSTEMS.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+frontend/plugins/docsSite.test.ts
+  s_ccb8935595dc4e::t_d66ac1e09321f4 6,80-86,302-325
+  s_ccb8935595dc4e::t_6c1acc7b3ab526 326-327
+docs/types/external.md
+  s_ccb8935595dc4e::t_1c4f198983f5f0 1-4
+docs/types/data.md
+  s_ccb8935595dc4e::t_1c4f198983f5f0 1-4
+frontend/src/docs/model.html
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+.claude/skills/docs-writer/SKILL.md
+  s_ccb8935595dc4e::t_15b60901e36a00 175-180
+  s_ccb8935595dc4e::t_c378da56e7f99d 29-40
+frontend/plugins/docsSite.ts
+  s_ccb8935595dc4e::t_53a5df76c78f93 37-40,89-90,93-121,426,428,452,456,548,562,630
+  s_ccb8935595dc4e::t_c56a564f138b1c 441
+docs/VERSIONS.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/SHARING.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/WHY.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/types/messaging.md
+  s_ccb8935595dc4e::t_1c4f198983f5f0 1-4
+docs/types/edge.md
+  s_ccb8935595dc4e::t_1c4f198983f5f0 1-4
+frontend/src/dsl/stdlib/core.proschi
+  s_ccb8935595dc4e::t_1c4f198983f5f0 4-5,39-42
+docs/IMPORTS.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/PRACTICE.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/types/core.md
+  s_ccb8935595dc4e::t_1c4f198983f5f0 1-4
+docs/TYPES.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+docs/NUMBERS.md
+  s_ccb8935595dc4e::t_06c9a2a2475571 1-4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7c6f4d0383f2dfd24b6e66a041666efb64256d4f",
+  "prompts": {},
+  "sessions": {
+    "s_ccb8935595dc4e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0e2b8447-0e71-4063-8d52-5e5b5302fc2f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
