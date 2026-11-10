@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { mockSignedIn, SIGNED_IN } from './accounts';
-import { expect, test, toSetupStep } from './fixtures';
+import { expect, STAGES_KEY, test, toSetupStep } from './fixtures';
 import { FREE, MAX, mockSolo } from './history';
 
 /**
@@ -49,11 +49,15 @@ test('a roadmap problem opened on Design has no Design partner', async ({ page }
   expect(metered).toEqual([]);
 });
 
-test.describe('on Clarify, a first visit', () => {
+test.describe('on Clarify', () => {
   test.use({ stages: 'fresh' });
 
   test('selecting text offers no "Ask Design partner"', async ({ page }) => {
     const metered = await open(page);
+    // Started (notes saved), so it opens on Clarify, not the lesson (P52).
+    await page.addInitScript((key) => {
+      if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify({ stage: 'clarify', reached: 'clarify' }));
+    }, `${STAGES_KEY}url-shortener`);
     await page.goto('practice/#/roadmap/url-shortener');
     const brief = page.getByTestId('brief');
     await expect(brief).toBeVisible();

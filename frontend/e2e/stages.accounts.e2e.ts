@@ -1,6 +1,6 @@
 import type { Locator, Page } from '@playwright/test';
 import { mockSignedIn } from './accounts';
-import { expect, test } from './fixtures';
+import { expect, STAGES_KEY, test } from './fixtures';
 import { PartnerMock } from './partner';
 
 /**
@@ -30,7 +30,10 @@ async function select(el: Locator) {
 async function openClarify(page: Page) {
   await mockSignedIn(page);
   await new PartnerMock().mock(page);
-  // The stages are on the roadmap only (P51); a first visit opens on Clarify (P52).
+  // The stages are on the roadmap only (P51); started (notes saved), so it opens on Clarify (P52).
+  await page.addInitScript((key) => {
+    if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify({ stage: 'clarify', reached: 'clarify' }));
+  }, `${STAGES_KEY}url-shortener`);
   await page.goto('practice/#/roadmap/url-shortener');
   const brief = page.getByTestId('brief');
   await expect(brief).toBeVisible();
