@@ -325,7 +325,18 @@ type keep the old rules and get no new warnings.
   parses as before.
 - **Strict mode.** `parse(source, { strictOps: true })` reports every one of
   these problems as an error, not a warning. The option is passed on to team
-  files. Problem front matter `strict: true` will turn it on (iteration 5).
+  files. Problem front matter `strict: true` turns it on for every design
+  of the problem (iteration 5, docs/PRACTICE.md, "Strict mode and typed
+  tests").
+- **System entry points.** A step to `orders.api` is checked against the
+  type of the node behind the entry point, where an expanded view reroutes
+  it (dsl/view.ts): the sender of the mapped use case's first request, or
+  its receiver when the sender is a client, followed into nested systems
+  (`entryType` in parser.ts). The step gets `op` and `headers` like any
+  other. A stub system (a `capacity` block, no `from` file) has no node and
+  no type behind it, so steps to it stay unchecked; so does a team file the
+  resolver could not load. A response from a system (`orders --> web : 201`)
+  is checked against the same type.
 - **Simulation.** An op's `latency` multiplies the target's service time (the
   fixed part and the tail of the hop, not the payload transfer) on the
   critical path. Its `cost` multiplies the load the step puts on the target
@@ -334,3 +345,99 @@ type keep the old rules and get no new warnings.
   utilisation and the replicas it needs. The load of system ports
   (`sim/systems.ts`) does not apply `cost`. With no multipliers, every number
   stays the same.
+
+---
+
+## Typed assertions and strict mode (iteration 5)
+
+Test assertions can say what a step to a selector is (docs/TESTS.md,
+"Typed assertions"), as a `StepMatch` on the `calls`, `before`, `after` and
+`beforeResponding` assertions:
+
+- `U calls X with GET /urls/{code}`: method and path; `{param}` and
+  `:param` segments match any one segment, on either side.
+- `U uses INSERT on X`: `step.op.name`, ignoring case.
+- `U sends header Authorization to X`: `step.headers`, ignoring case.
+
+Each takes `every scenario` / `never` and `before Y` / `after Y` /
+`before responding`. An operation no selected type has, or a header every
+selected type leaves out, fails the assertion (so `never` cannot pass on a
+typo). `[Type]` selectors match subtypes through `resolvedType.parents`:
+`[Database]` selects PostgreSQL nodes. `pathMatches` and `stepMatches` are
+in sim/flow.ts.
+
+## Migrating a problem to typed checks
+
+For the agents migrating the remaining problems. url-shortener and payments
+are the pilots (commit "url-shortener and payments pilot strict mode").
+
+Checklist, per problem:
+
+1. Run `node dist/cli.cjs problem check ../frontend/src/practice/problems`
+   in `tooling/` first; it must be clean before you start.
+2. Add `strict: true` and bump `version` (or add `version: 2`) in
+   `problem.md`. Strict mode can make an old solve fail, so the version
+   changes.
+3. Make every step to a typed node name a real operation, in the solution,
+   the starter, every wrong design and the lesson's examples: `SQL row` →
+   `INSERT row`, `save x` → the store's write op. Run problem check: in a
+   strict problem each leftover is an `error:` violation with the file and
+   line.
+4. Write headers as a header clause: `POST /charges Idempotency-Key k` →
+   `POST /charges header Idempotency-Key`.
+5. Where a test stands for an operation, make it typed:
+   `calls any cache after any database` → `uses SET on any cache after any
+   database`. Pick ops the whole kind has (`GET`/`SET` on `Cache`,
+   `SELECT`/`INSERT` on `Database`), never one product's (`PutItem`), unless
+   the problem fixes the product in the given.
+6. Add a typed check where the problem's insight is a request or a header:
+   `calls any service with GET /{code}`, `sends header Idempotency-Key to
+   gateway`. Name only paths and headers the statement asks for.
+7. Run problem check again. Every wrong design must still fail the tests its
+   `# expect-fail:` lines name; new tests it also fails are fine (listed
+   under "also fails"). Keep test names unless you must change them: guided
+   `- test` checks and wrong designs refer to them.
+8. If you rename a test or change a hard-coded count, update the tests that
+   pin it (`grep -rn` the old text in frontend/src, tooling/test, e2e).
+
+Before and after, url-shortener's given:
+
+```proschi fragment
+test "Redirects read the cache first" {
+  "Redirect" calls any cache before any database
+}
+test "Misses fill the cache" {
+  "Redirect" scenario "Cache miss" calls any cache after any database
+}
+test "Redirects redirect" {
+  "Redirect" responds 302
+}
+```
+
+```proschi fragment
+test "Redirects read the cache first" {
+  "Redirect" uses GET on any cache before any database
+}
+test "Misses fill the cache" {
+  "Redirect" scenario "Cache miss" uses SET on any cache after any database
+}
+test "Redirects redirect" {
+  "Redirect" calls any service with GET /{code}
+  "Redirect" responds 302
+}
+```
+
+The untyped "Misses fill the cache" held for a miss that only read the cache
+again; the typed one needs the `SET`. Payments added one test, the header
+its whole design is about:
+
+```proschi fragment
+test "Every charge sends the idempotency key" {
+  "Checkout" scenario "Charged" sends header Idempotency-Key to gateway
+  "Checkout" scenario "Gateway down" sends header Idempotency-Key to gateway
+  "Retry charge" sends header Idempotency-Key to gateway
+}
+```
+
+and its steps changed from `POST /charges Idempotency-Key chk_7f3a` to
+`POST /charges header Idempotency-Key`.

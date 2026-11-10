@@ -884,7 +884,19 @@ function tokenizeLine(text, line) {
       tokens.push({ kind: "team", value: text.slice(start2 + 1, i), col: start2 + 1, length: i - start2 });
       continue;
     }
+    if (ch === "/") {
+      while (i < text.length && !/\s/.test(text[i])) i++;
+      tokens.push({ kind: "path", value: text.slice(start2, i), col: start2 + 1, length: i - start2 });
+      continue;
+    }
     if (IDENT_START.test(ch)) {
+      const prev = tokens[tokens.length - 1];
+      const headerName = prev?.kind === "ident" && prev.value === "header" ? /^[A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)+/.exec(text.slice(i)) : null;
+      if (headerName) {
+        i += headerName[0].length;
+        tokens.push({ kind: "ident", value: headerName[0], col: start2 + 1, length: i - start2 });
+        continue;
+      }
       while (i < text.length && IDENT_PART.test(text[i])) i++;
       if (i === start2 + 1 && ch === "x" && text[i] === "$" && IDENT_START.test(text[i + 1] ?? "")) {
         i += 2;
@@ -1999,7 +2011,7 @@ var UNIT_EXAMPLES = {
 var CAPACITY_PARTS = "a rate, reads, writes, shards, size, latency, availability, cost, durable or volatile, consistency, bandwidth, egress, timeout, hit, errors, retries or drain";
 var MAX_RETRIES = 5;
 var ASSERTION_HELP = 'Expected an assertion: "Use case" calls <node>, "Use case" writes <node> before responding, <node> calls <node>, no path from <node> to <node>, <node> has replicas >= 2, \u2026';
-var ASSERTION_VERBS = "calls, every scenario calls, never calls, never waits for, writes, responds, starts at, has scenario or handles failure of";
+var ASSERTION_VERBS = "calls, uses, sends header, every scenario calls, never calls, never waits for, writes, responds, starts at, has scenario or handles failure of";
 var GENERIC_TECH = {
   client: "Actor",
   edge: "WAF",
@@ -3986,26 +3998,72 @@ var Parser = class _Parser {
       this.error(`${what} is about the whole use case; leave out scenario "\u2026"`, scenario.loc);
       return false;
     };
-    let assertion2;
-    if (isWord(verb, "calls")) {
-      const target = selector(i + 1);
+    const call = (j) => {
+      const word = tokens[j];
+      const nameAt = (k, what, example2) => {
+        const t = tokens[k];
+        if (t?.kind === "ident" || t?.kind === "string") return t.value;
+        this.error(`Expected ${what} here, e.g. ${example2}`, this.locOf(t ?? tokens[tokens.length - 1], line));
+        return void 0;
+      };
+      if (isWord(word, "uses")) {
+        const example2 = `"${useCase}" uses INSERT on db`;
+        const op = nameAt(j + 1, "an operation", example2);
+        if (op === void 0 || !expectWords(j + 2, ["on"], example2)) return;
+        const target2 = selector(j + 3);
+        return target2 && { target: target2, match: { op }, next: target2.next };
+      }
+      if (isWord(word, "sends")) {
+        const example2 = `"${useCase}" sends header Authorization to api`;
+        if (!expectWords(j + 1, ["header"], example2)) return;
+        const header = nameAt(j + 2, "a header name", example2);
+        if (header === void 0 || !expectWords(j + 3, ["to"], example2)) return;
+        const target2 = selector(j + 4);
+        return target2 && { target: target2, match: { header }, next: target2.next };
+      }
+      if (!isWord(word, "calls")) {
+        this.error(`Expected calls, uses or sends header here, e.g. "${useCase}" never calls any database`, this.locOf(word ?? tokens[tokens.length - 1], line));
+        return;
+      }
+      const target = selector(j + 1);
       if (!target) return;
-      if (isWord(tokens[target.next], "before")) {
-        const then = selector(target.next + 1);
+      if (!isWord(tokens[target.next], "with")) return { target, next: target.next };
+      const [method, path] = [tokens[target.next + 1], tokens[target.next + 2]];
+      const example = `"${useCase}" calls api with GET /urls/{code}`;
+      if (method?.kind !== "ident" || !HTTP_METHODS.includes(method.value.toUpperCase())) {
+        this.error(`Expected an HTTP method after with (${HTTP_METHODS.join(", ")}), e.g. ${example}`, this.locOf(method ?? tokens[target.next], line));
+        return;
+      }
+      if (path?.kind !== "path") {
+        this.error(`Expected a path starting with / after ${method.value}, e.g. ${example}`, this.locOf(path ?? method, line));
+        return;
+      }
+      return { target, match: { method: method.value.toUpperCase(), path: path.value }, next: target.next + 3 };
+    };
+    const matchOf = (c) => c.match ? { match: c.match } : {};
+    let assertion2;
+    if (isWord(verb, "calls") || isWord(verb, "uses") || isWord(verb, "sends")) {
+      const c = call(i);
+      if (!c) return;
+      const word = tokens[c.next];
+      if (isWord(word, "before") && isWord(tokens[c.next + 1], "responding")) {
+        assertion2 = done({ kind: "beforeResponding", useCase, ...withScenario, target: c.target.selector, match: c.match ?? {}, loc }, c.next + 2);
+      } else if (isWord(word, "before")) {
+        const then = selector(c.next + 1);
         if (!then) return;
-        assertion2 = done({ kind: "before", useCase, ...withScenario, first: target.selector, then: then.selector, loc }, then.next);
-      } else if (isWord(tokens[target.next], "after")) {
-        const after2 = selector(target.next + 1);
+        assertion2 = done({ kind: "before", useCase, ...withScenario, first: c.target.selector, ...matchOf(c), then: then.selector, loc }, then.next);
+      } else if (isWord(word, "after")) {
+        const after2 = selector(c.next + 1);
         if (!after2) return;
-        assertion2 = done({ kind: "after", useCase, ...withScenario, target: target.selector, after: after2.selector, loc }, after2.next);
+        assertion2 = done({ kind: "after", useCase, ...withScenario, target: c.target.selector, ...matchOf(c), after: after2.selector, loc }, after2.next);
       } else {
-        assertion2 = done({ kind: "calls", useCase, ...withScenario, target: target.selector, quantifier: "some", loc }, target.next);
+        assertion2 = done({ kind: "calls", useCase, ...withScenario, target: c.target.selector, ...matchOf(c), quantifier: "some", loc }, c.next);
       }
     } else if (isWord(verb, "every")) {
-      if (!expectWords(i + 1, ["scenario", "calls"], `"${useCase}" every scenario calls any cache`)) return;
-      const target = selector(i + 3);
-      if (!target) return;
-      assertion2 = done({ kind: "calls", useCase, ...withScenario, target: target.selector, quantifier: "every", loc }, target.next);
+      if (!expectWords(i + 1, ["scenario"], `"${useCase}" every scenario calls any cache`)) return;
+      const c = call(i + 2);
+      if (!c) return;
+      assertion2 = done({ kind: "calls", useCase, ...withScenario, target: c.target.selector, ...matchOf(c), quantifier: "every", loc }, c.next);
     } else if (isWord(verb, "never") && isWord(tokens[i + 1], "waits")) {
       if (!expectWords(i + 2, ["for"], `"${useCase}" never waits for any queue`)) return;
       const target = selector(i + 3);
@@ -4017,10 +4075,9 @@ var Parser = class _Parser {
       if (!target) return;
       assertion2 = done({ kind: "startsAt", useCase, target: target.selector, loc }, target.next);
     } else if (isWord(verb, "never")) {
-      if (!expectWords(i + 1, ["calls"], `"${useCase}" never calls any database`)) return;
-      const target = selector(i + 2);
-      if (!target) return;
-      assertion2 = done({ kind: "calls", useCase, ...withScenario, target: target.selector, quantifier: "never", loc }, target.next);
+      const c = call(i + 1);
+      if (!c) return;
+      assertion2 = done({ kind: "calls", useCase, ...withScenario, target: c.target.selector, ...matchOf(c), quantifier: "never", loc }, c.next);
     } else if (isWord(verb, "writes")) {
       const target = selector(i + 1);
       if (!target || !expectWords(target.next, ["before", "responding"], `"${useCase}" writes db before responding`)) return;
@@ -4272,7 +4329,8 @@ var Parser = class _Parser {
         const status = step.label.match(/^(\d{3})\b\s*([\s\S]*)$/);
         if (status) {
           request2.statusCode = Number(status[1]);
-          this.checkStatus(this.nodes.get(respFrom)?.resolvedType, request2.statusCode, this.labelLoc(step, 0, 3));
+          const responder = request2.toPort !== void 0 ? this.portType(request2.toServiceId, request2.toPort) : this.nodes.get(respFrom)?.resolvedType;
+          this.checkStatus(responder, request2.statusCode, this.labelLoc(step, 0, 3));
         }
         const payload = splitPayload(status ? status[2] : step.label);
         const body = payload.body ?? payload.text;
@@ -4289,8 +4347,9 @@ var Parser = class _Parser {
       const port = toPort ?? this.onlyEntry(to, step.loc);
       const target = this.nodes.get(to);
       const isAsync = step.arrow === "->>";
-      const typed = this.typedOp(target?.resolvedType, label.method, step);
-      if (label.headers) this.checkHeaders(target?.resolvedType, label.headers, step);
+      const type = port !== void 0 ? this.portType(to, port) : target?.resolvedType;
+      const typed = this.typedOp(type, label.method, step);
+      if (label.headers) this.checkHeaders(type, label.headers, step);
       steps.push({
         id: `${prefix}-${steps.length + 1}`,
         stepOrder: steps.length,
@@ -4321,6 +4380,11 @@ var Parser = class _Parser {
     }
     resolveForwards(steps);
     return steps;
+  }
+  /** The type behind entry point `port` of system `id` (see entryType). */
+  portType(id, port) {
+    const system = this.systemById.get(id);
+    return system && entryType(system, port);
   }
   /**
    * The access of a request step and the operation of its target's type it
@@ -4862,6 +4926,19 @@ function parseStepLabel(input) {
   const payload = splitPayload(input);
   return { name: payload.text, format: payload.body ? payload.format : void 0, body: payload.body };
 }
+function entryType(system, port) {
+  const useCaseId = system.entries.find((e) => e.id === port)?.useCaseId;
+  const team = system.diagram;
+  const first = team?.useCases.find((u) => u.id === useCaseId)?.steps[0];
+  if (!team || !first) return void 0;
+  const sender = team.nodes.find((n) => n.id === first.fromServiceId);
+  if (sender && kindOf(sender) !== "client") return sender.resolvedType;
+  if (first.toPort !== void 0) {
+    const nested = team.systems?.find((s) => s.id === first.toServiceId);
+    return nested && entryType(nested, first.toPort);
+  }
+  return team.nodes.find((n) => n.id === first.toServiceId)?.resolvedType;
+}
 function resolveForwards(steps) {
   const handler = (i, seen) => {
     const step = steps[i];
@@ -5394,13 +5471,38 @@ function selectNodes(diagram, selector) {
 function matches(node, selector, diagram) {
   if (node.kind !== "component") return false;
   if ("node" in selector) return node.id === selector.node;
-  if ("tech" in selector) return [node.techStack, node.resolvedType?.name].some((t) => t?.toLowerCase() === selector.tech.toLowerCase());
+  if ("tech" in selector) {
+    const wanted = typeKey(selector.tech);
+    return [node.techStack, node.resolvedType?.name, ...node.resolvedType?.parents ?? []].some((t) => t !== void 0 && typeKey(t) === wanted);
+  }
   if ("anyOf" in selector) return selector.anyOf.some((s) => matches(node, s, diagram));
   if ("consistency" in selector) {
     const override = diagram?.capacity?.find((o) => o.node === node.id);
     return profileOf(node, override).consistency === selector.consistency;
   }
   return kindMatches(kindOf(node), selector.kind);
+}
+var isParam = (segment2) => /^\{[^}]*\}$/.test(segment2) || /^:\w+$/.test(segment2);
+var segments2 = (path) => path.replace(/[?#].*$/, "").replace(/(.)\/+$/, "$1").split("/");
+function pathMatches(pattern, endpoint) {
+  const [a, b] = [segments2(pattern), segments2(endpoint)];
+  return a.length === b.length && a.every((s, i) => s === b[i] || isParam(s) || isParam(b[i]));
+}
+function stepMatches(step, match) {
+  if (!match) return true;
+  const same = (a, b) => a.toLowerCase() === b.toLowerCase();
+  if (match.method !== void 0 && !same(step.httpMethod, match.method)) return false;
+  if (match.path !== void 0 && !pathMatches(match.path, step.endpoint)) return false;
+  if (match.op !== void 0 && !(step.op && same(step.op.name, match.op))) return false;
+  if (match.header !== void 0 && !step.headers?.some((h2) => same(h2, match.header))) return false;
+  return true;
+}
+function callText(selector, match) {
+  const target = selectorText(selector);
+  if (match?.op !== void 0) return `uses ${match.op} on ${target}`;
+  if (match?.header !== void 0) return `sends header ${match.header} to ${target}`;
+  if (match?.method !== void 0) return `calls ${target} with ${match.method} ${match.path ?? ""}`.trimEnd();
+  return `calls ${target}`;
 }
 function techOf(node) {
   return node && !node.implicit ? node.techStack : void 0;
@@ -6644,10 +6746,10 @@ function availability(run, u, minPercent) {
   const hint = !weakest ? "Add replicas to the nodes on the main path, or fallback scenarios that complete without them" : primaryBound ? `The weakest link is writing to ${nodeLabel(run.diagram, weakest.id)}: writes need its primary, ${formatAvailability(weakest.writeAvailability)} with failover${weakest.replicas < 2 ? " (none without a second replica; add one)" : ` (a replica takes over, but about ${formatPercent(FAILOVER_SHARE)} of each outage is lost)`}. Move the writes to a partitioned store, or add a fallback scenario that calls it with -x and still completes` : weakest.failed ? `${nodeLabel(run.diagram, weakest.id)} is down in this what-if: add a fallback scenario in "${u.name}" that calls ${weakest.id} with -x and still completes` : `The weakest link is ${nodeLabel(run.diagram, weakest.id)} at ${formatAvailability(effective(weakest))}: add a replica (x${weakest.replicas + 1}) or a fallback scenario that calls it with -x and still completes`;
   return { ...fail(message, hint), value };
 }
-function writeGap(run, u, s, accept) {
+function writeGap(run, u, s, accept, isWrite = run.isWrite) {
   const { requests, beforeResponse } = requestOrder(u, s);
   const hits = requests.map((m, i) => ({ m, i })).filter(({ m }) => !m.failed && accept(m.to));
-  const writes = hits.filter(({ m }) => run.isWrite(m.step));
+  const writes = hits.filter(({ m }) => isWrite(m.step));
   const early = writes.find(({ m, i }) => m.async && i < beforeResponse);
   if (early) return { kind: "async", step: early.m.step };
   const late = writes.find(({ i }) => i >= beforeResponse);
@@ -6843,6 +6945,8 @@ function assertion(run, a) {
       if (ids.size === 0) return noMatch(a.target);
       return writesCheck(run, sc.u, sc.scenarios, (id) => ids.has(id), selectorText(a.target));
     }
+    case "beforeResponding":
+      return beforeResponding(run, a);
     case "responds":
       return responds(run, a);
     case "hasScenario": {
@@ -6886,48 +6990,99 @@ function assertion(run, a) {
 function noMatch(selector) {
   return fail(`No node matches ${selectorText(selector)}`, "Use a node id, [Tech] or any <kind> (any cache, any database, \u2026)");
 }
+function callNoun(selector, match) {
+  const target = selectorText(selector);
+  if (match?.op !== void 0) return `${match.op} on ${target}`;
+  if (match?.header !== void 0) return `header ${match.header} to ${target}`;
+  if (match?.method !== void 0) return `${match.method} ${match.path ?? ""} to ${target}`;
+  return target;
+}
+var baseForm = (phrase) => phrase.replace(/^(\w+?)s\b/, "$1");
+function vocabularyGap(run, ids, selector, match) {
+  if (match?.op === void 0 && match?.header === void 0) return void 0;
+  const nodes = run.diagram.nodes.filter((n) => ids.has(n.id));
+  if (nodes.some((n) => n.kind === "system")) return void 0;
+  const same = (a, b) => a.toLowerCase() === b.toLowerCase();
+  const what = selectorText(selector);
+  const types = nodes.map((n) => n.resolvedType);
+  const listed = (names) => `${names.slice(0, 8).join(", ")}${names.length > 8 ? ", \u2026" : ""}`;
+  const { op, header } = match;
+  if (op !== void 0 && !types.some((t) => t?.ops.some((o) => same(o.name, op)))) {
+    const ops = [...new Set(types.flatMap((t) => t?.ops.map((o) => o.name) ?? []))];
+    return fail(
+      `No node matching ${what} has an operation '${op}'`,
+      ops.length ? `Its operations are ${listed(ops)}` : `${what} has no typed operations; give it a type with op lines, or assert calls ${what} instead`
+    );
+  }
+  if (header !== void 0 && types.every((t) => t && t.headers.length > 0 && !t.headers.some((h2) => same(h2, header)))) {
+    const headers = [...new Set(types.flatMap((t) => t?.headers ?? []))];
+    return fail(`No node matching ${what} takes the header '${header}'`, `Its headers are ${listed(headers)}`);
+  }
+  return void 0;
+}
+function matchHint(selector, match) {
+  const what = selectorText(selector);
+  if (match?.op !== void 0) return `Add a step to ${what} whose label starts with ${match.op}`;
+  if (match?.header !== void 0) return `Name the header in a request to ${what}: GET /path header ${match.header}`;
+  if (match?.method !== void 0) return `Add a step to ${what} labelled ${match.method} ${match.path ?? ""}`.trimEnd();
+  return `Add a step to ${what}`;
+}
+function otherSteps(scenarios, ids, match) {
+  if (!match) return "";
+  const steps = scenarios.flatMap((s) => s.steps.filter((step) => ids.has(step.toServiceId)));
+  const labels = [...new Set(steps.map((step) => requestLabel(step) || "(no label)"))];
+  return labels.length ? `; its steps there are ${labels.slice(0, 3).join(", ")}${labels.length > 3 ? ", \u2026" : ""}` : "";
+}
 function calls(run, a) {
   const sc = scope(run, a.useCase, a.scenario);
   if (isCheck(sc)) return sc;
   const what = selectorText(a.target);
+  const phrase = callText(a.target, a.match);
   const ids = idsOf(run, a.target);
-  const called = (s) => s.steps.filter((step) => ids.has(step.toServiceId));
+  const called = (s) => s.steps.filter((step) => ids.has(step.toServiceId) && stepMatches(step, a.match));
   const calling = sc.scenarios.filter((s) => called(s).length > 0);
   const names = (list) => list.map((s) => quote(s.name)).join(", ");
   const multi = sc.scenarios.length > 1;
+  const gap = vocabularyGap(run, ids, a.target, a.match);
+  if (gap) return gap;
   if (a.quantifier === "never") {
-    if (calling.length === 0) return pass(`${sc.label} never calls ${what}`);
+    if (calling.length === 0) return pass(`${sc.label} never ${phrase}`);
     const first = calling[0];
     const step = called(first)[0];
     return fail(
-      `${multi ? quote(first.name) : sc.label} calls ${nodeLabel(run.diagram, step.toServiceId)}: ${stepText(step)}`,
-      `Take the call to ${step.toServiceId} out of ${quote(first.name)}, e.g. serve it from a cache`
+      `${multi ? quote(first.name) : sc.label} ${a.match ? phrase : `calls ${nodeLabel(run.diagram, step.toServiceId)}`}: ${stepText(step)}`,
+      a.match ? `Change or remove the step to ${step.toServiceId} in ${quote(first.name)}` : `Take the call to ${step.toServiceId} out of ${quote(first.name)}, e.g. serve it from a cache`
     );
   }
   if (ids.size === 0) return noMatch(a.target);
   if (a.quantifier === "some") {
-    if (calling.length) return pass(`${sc.label} calls ${what}${multi ? ` in ${names(calling)}` : ""}`);
-    return fail(`${sc.label} never calls ${what}`, `Add a step to ${what}`);
+    if (calling.length) return pass(`${sc.label} ${phrase}${multi ? ` in ${names(calling)}` : ""}`);
+    return fail(`${sc.label} never ${phrase}${otherSteps(sc.scenarios, ids, a.match)}`, matchHint(a.target, a.match));
   }
   const missing = sc.scenarios.filter((s) => !calling.includes(s));
-  if (missing.length === 0 && sc.scenarios.length) return pass(`Every scenario of ${sc.label} calls ${what}`);
-  return fail(`${sc.label} does not call ${what} in ${names(missing) || "any scenario"}`, `Add a step to ${what} in ${names(missing) || "a scenario"}`);
+  if (missing.length === 0 && sc.scenarios.length) return pass(`Every scenario of ${sc.label} ${phrase}`);
+  return fail(
+    `${sc.label} does not ${baseForm(phrase)} in ${names(missing) || "any scenario"}${otherSteps(missing, ids, a.match)}`,
+    a.match ? `${matchHint(a.target, a.match)} in ${names(missing) || "a scenario"}` : `Add a step to ${what} in ${names(missing) || "a scenario"}`
+  );
 }
 function before(run, a) {
   const sc = scope(run, a.useCase, a.scenario);
   if (isCheck(sc)) return sc;
   const first = idsOf(run, a.first);
   const then = idsOf(run, a.then);
-  const [x, y] = [selectorText(a.first), selectorText(a.then)];
+  const [x, y] = [callNoun(a.first, a.match), selectorText(a.then)];
   if (first.size === 0) return noMatch(a.first);
   if (then.size === 0) return noMatch(a.then);
+  const gap = vocabularyGap(run, first, a.first, a.match);
+  if (gap) return gap;
   let checked = 0;
   for (const s of sc.scenarios) {
     const order = requestOrder(sc.u, s).requests;
     const iy = order.findIndex((m) => then.has(m.to));
     if (iy < 0) continue;
     checked++;
-    const ix = order.findIndex((m) => first.has(m.to));
+    const ix = order.findIndex((m) => first.has(m.to) && stepMatches(m.step, a.match));
     if (ix < 0 || ix > iy) {
       const where2 = sc.scenarios.length > 1 || a.scenario ? `In ${quote(s.name)}` : `In ${quote(sc.u.name)}`;
       return fail(
@@ -6937,7 +7092,30 @@ function before(run, a) {
     }
   }
   if (checked === 0) return fail(`${sc.label} never calls ${y}`, `Add a step to ${y} after the call to ${x}`);
-  return pass(`${sc.label} calls ${x} before ${y}${checked > 1 ? ` in all ${checked} scenarios that call ${y}` : ""}`);
+  return pass(`${sc.label} ${callText(a.first, a.match)} before ${y}${checked > 1 ? ` in all ${checked} scenarios that call ${y}` : ""}`);
+}
+function beforeResponding(run, a) {
+  const sc = scope(run, a.useCase, a.scenario);
+  if (isCheck(sc)) return sc;
+  const ids = idsOf(run, a.target);
+  if (ids.size === 0) return noMatch(a.target);
+  const gap = vocabularyGap(run, ids, a.target, a.match);
+  if (gap) return gap;
+  const phrase = callText(a.target, a.match);
+  const success = sc.scenarios.filter((s) => s.outcome === "success");
+  if (success.length === 0) return fail(`${sc.label} has no success scenario to check`, "Add a scenario whose entry request is answered with a 2xx");
+  const accept = (id) => ids.has(id);
+  const isMatch = (step) => stepMatches(step, a.match);
+  const gaps = success.filter((s) => !writesBeforeResponse(sc.u, s, accept, isMatch));
+  if (gaps.length === 0) return pass(`${success.length === 1 ? sc.label : `Every success scenario of ${sc.label}`} ${phrase} before responding`);
+  const where2 = (s) => sc.u.scenarios.length > 1 ? quote(s.name) : quote(sc.u.name);
+  const text = (s) => {
+    const g = writeGap(run, sc.u, s, accept, isMatch);
+    if (g.kind === "async") return `${where2(s)} ${phrase} only asynchronously: ${stepText(g.step)}`;
+    if (g.kind === "after") return `${where2(s)} ${phrase} only after responding: ${stepText(g.step)}`;
+    return `${where2(s)} never ${phrase} before responding${otherSteps([s], ids, a.match)}`;
+  };
+  return fail(gaps.map(text).join("; "), `${matchHint(a.target, a.match)}, sent with -> before the line that answers the entry request`);
 }
 function neverWaits(run, a) {
   const sc = scope(run, a.useCase, a.scenario);
@@ -6962,14 +7140,17 @@ function after(run, a) {
   if (isCheck(sc)) return sc;
   const targets = idsOf(run, a.target);
   const firsts = idsOf(run, a.after);
-  const [y, x] = [selectorText(a.target), selectorText(a.after)];
+  const [y, x] = [callNoun(a.target, a.match), selectorText(a.after)];
   if (targets.size === 0) return noMatch(a.target);
   if (firsts.size === 0) return noMatch(a.after);
+  const gap = vocabularyGap(run, targets, a.target, a.match);
+  if (gap) return gap;
+  const isTarget = (m) => targets.has(m.to) && stepMatches(m.step, a.match);
   let checked = 0;
   for (const s of sc.scenarios) {
     const order = requestOrder(sc.u, s).requests;
     const ix = order.findIndex((m) => firsts.has(m.to));
-    const iy = order.map((m) => targets.has(m.to)).lastIndexOf(true);
+    const iy = order.map(isTarget).lastIndexOf(true);
     if (ix < 0 || iy < 0) continue;
     checked++;
     if (iy < ix) {
@@ -6981,12 +7162,12 @@ function after(run, a) {
     }
   }
   if (checked === 0) {
-    const callsY = sc.scenarios.some((s) => s.steps.some((step) => targets.has(step.toServiceId)));
+    const callsY = sc.scenarios.some((s) => s.steps.some((step) => targets.has(step.toServiceId) && stepMatches(step, a.match)));
     const callsX = sc.scenarios.some((s) => s.steps.some((step) => firsts.has(step.toServiceId)));
     const why = !callsY && !callsX ? `calls neither ${x} nor ${y}` : !callsY ? `never calls ${y}` : !callsX ? `never calls ${x}` : `never calls ${x} and ${y} in the same scenario`;
     return fail(`${sc.label} ${why}`, `Add a step to ${y} after the call to ${x}`);
   }
-  return pass(`${sc.label} calls ${y} after ${x}${checked > 1 ? ` in all ${checked} scenarios that call both` : ""}`);
+  return pass(`${sc.label} ${callText(a.target, a.match)} after ${x}${checked > 1 ? ` in all ${checked} scenarios that call both` : ""}`);
 }
 function senderCalls(run, a) {
   let useCases = run.diagram.useCases;

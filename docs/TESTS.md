@@ -166,6 +166,9 @@ X and Y are [selectors](#selectors-and-kinds). After U you may add
 | `U calls Y after X` | In every scenario that calls both, the last call to Y comes after the first call to X, and some scenario calls both. |
 | `U never waits for X` | No synchronous call to X happens before U's first request is answered. Async sends and later calls are fine. |
 | `U writes X before responding` | Every success scenario has a synchronous, successful step to X before the answer. |
+| `U calls X with GET /urls/{code}` | Some scenario sends X a request with that method and path. See [typed assertions](#typed-assertions). |
+| `U uses INSERT on X` | Some scenario has a step to X whose operation is `INSERT`. |
+| `U sends header Authorization to X` | Some scenario sends X a request that names the header. |
 | `U responds 201` | Some scenario answers with that status, or a class such as 4xx. |
 | `U has scenario S` | The scenario exists. |
 | `U handles failure of X` | Some success scenario of U contains a failed call to X. |
@@ -179,6 +182,91 @@ An assertion that starts with a use case is about steps that reach X; one
 that starts with a selector is about the sender. Order is sequence order,
 requests and responses interleaved. Unknown names and empty tests are
 warnings, and two tests with one name are an error.
+
+### Typed assertions
+
+`calls X` holds for any step to X. When X has a [type](TYPES.md), an
+assertion can also say what the step must be:
+
+```proschi
+title "Short links"
+
+visitor [Browser]
+api     [REST API]   x2
+cache   [Redis]      x2
+db      [PostgreSQL] x2
+
+visitor -> api
+api     -> cache
+api     -> db
+
+usecase "Shorten" {
+  visitor -> api : POST /links header Idempotency-Key
+  api     -> db  : INSERT link
+  api    --> visitor : 201
+}
+
+usecase "Redirect" {
+  visitor -> api   : GET /aZ3x9
+  api     -> cache : GET code
+  alt "Hit" {
+    cache --> api : target
+  } alt "Miss" {
+    api  -> db    : SELECT link
+    api ->> cache : SET code
+  }
+  api --> visitor : 302
+}
+
+test "Typed checks" {
+  "Redirect" calls api with GET /{code}
+  "Redirect" uses GET on any cache before any database
+  "Redirect" scenario "Miss" uses SET on any cache after db
+  "Redirect" never uses INSERT on any database
+  "Shorten" uses INSERT on db before responding
+  "Shorten" sends header Idempotency-Key to api
+}
+```
+
+> **Try it:** change `INSERT link` to `SAVE link`. `SAVE` is a write in
+> general, so `writes db before responding` would still hold, but it is not
+> an operation of PostgreSQL: the editor warns, and `uses INSERT on db`
+> fails.
+
+There are three ways to say what a step is:
+
+| Clause | A step to X matches when |
+|---|---|
+| `calls X with GET /urls/{code}` | Its method is `GET` and its path is `/urls/{code}`. A `{param}` or `:param` segment, in the assertion or in the step, matches any one segment, so `/urls/{code}` matches `GET /urls/aZ3x9`. A query string is ignored. |
+| `uses INSERT on X` | Its operation is `INSERT`: the operation of X's type that the label names (`INSERT link`, or the method of an HTTP step). Case does not matter. |
+| `sends header Authorization to X` | Its label names the header after the endpoint: `GET /feed header Authorization`. Case does not matter. A name with dashes is written as it is (`Idempotency-Key`), or in quotes. |
+
+Each clause takes the place of `calls X` in these forms:
+
+| Form | Holds when |
+|---|---|
+| `U uses OP on X` | Some scenario has a matching step to X. |
+| `U every scenario uses OP on X` | Every scenario has one. |
+| `U never uses OP on X` | No scenario has one. |
+| `U uses OP on X before Y` | In every scenario that calls Y, a matching step to X comes earlier. |
+| `U uses OP on X after Y` | In every scenario that calls both, the last matching step to X comes after the first call to Y. |
+| `U uses OP on X before responding` | Every success scenario has a matching synchronous, successful step to X before the answer. |
+
+The same goes for `calls X with …` and `sends header H to X`, and
+`U calls X before responding` with no clause at all. `scenario "S"` after U
+works as for the other assertions.
+
+- An operation is matched on the step's resolved operation, so it needs a
+  typed target. If no node X selects has a type with that operation, the
+  assertion fails with `No node matching X has an operation 'OP'`, even
+  under `never`: a misspelt name never passes by accident. A header that
+  every selected type's header list leaves out fails the same way.
+- Pick names every product of the kind has. `uses SET on any cache` holds
+  for Redis and Memcached, because both inherit `SET` from `Cache`;
+  `uses PutItem on any database` holds only for DynamoDB.
+- `U responds 201` compares the status the entry request is answered with.
+  The responder's type checks that status when it is written (a warning, an
+  error in [strict mode](PRACTICE.md#strict-mode-and-typed-tests)).
 
 ## What-ifs
 
@@ -286,7 +374,7 @@ Tests and the failure requirement take a selector, so a rule such as
 | Selector | Matches |
 |---|---|
 | `db` | The node with that id |
-| `[PostgreSQL]` | Every node with that tech stack |
+| `[PostgreSQL]` | Every node of that type, or of a type that extends it: `[Database]` also selects PostgreSQL and MySQL nodes, `[Cache]` Redis ones |
 | `any database` | Every node of that kind (see the table below) |
 | `any strong store`, `any eventual store` | Data stores with that consistency: relational databases and queues are strong; caches, most NoSQL, search, CDNs and object storage eventual. [Capacity](HLD.md#capacity) can change it. |
 | `X or Y` | A node matching any of them, as in `never calls any cache or any database` |
