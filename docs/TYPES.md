@@ -123,6 +123,12 @@ The multipliers apply to each name on the line:
 - `cost 3` makes the step count as three requests of load on the target,
   so it needs more replicas, and those cost more.
 
+`op forward` is the third access, for an edge that passes a WebSocket
+frame on: the load balancers and gateways list `op forward MESSAGE`. A
+forwarded step reads or writes as the next step from its target does, the
+one that handles the frame. `MESSAGE CURSOR moved` to nginx, then
+`CURSOR moved` to a server whose type says `op read CURSOR`, is a read.
+
 ## Statuses and headers
 
 ```proschi fragment
@@ -133,7 +139,7 @@ type [Cart API] extends [REST API] {
 ```
 
 `status` lists HTTP status codes, `header` lists header names. A response
-such as `cart --> user : 418` is checked against the statuses of the
+such as `cart --> user : 299` is checked against the statuses of the
 type that answers it. A request can name its headers after the path:
 `GET /cart header Authorization, X-Cart-Id`. Each one is checked against
 the target's headers. The HTTP types (`[REST API]`, the gateways, the
@@ -194,8 +200,9 @@ twice is an error at the second declaration, naming the first.
 A type that lists no operations accepts any label. The service types
 (`[Service]`, `[Go]`, `[Spring Boot]` and the like) list none, because a
 service's requests are yours to name: `api -> billing : charge card` is
-fine. Nodes whose tech stack is not in the catalog have no type, and their
-labels are free text too.
+fine. To close one, extend it with operations and use your type: from then
+on a label that names none of them warns. Nodes whose tech stack is not in
+the catalog have no type, and their labels are free text too.
 
 ## Fix an unknown operation
 
@@ -203,12 +210,14 @@ A step to a typed component that names none of its operations gets a
 warning at the word:
 
 ```text
-PostgreSQL has no operation 'persist'. Did you mean INSERT? Treated as a comment.
+PostgreSQL has no operation 'persist'. Its operations are LISTEN, NOTIFY, COPY, VACUUM, SELECT, WITH, EXPLAIN, SHOW, …. Treated as a comment.
 ```
 
-The step still plays. Without a matching operation it counts as a read,
-or as a write when its verb wrote before types (`SAVE`, `STORE`), and the
-warning then ends "Treated as a write, as before." To fix it, pick one:
+When the word is a near miss (`INSRT`), the warning says `Did you mean
+INSERT?` instead of listing the operations. The step still plays. Without
+a matching operation it counts as a read, or as a write when its verb wrote
+before types (`APPEND`, `INCR`), and the warning then ends "Treated as a
+write, as before." To fix it, pick one:
 
 1. Use an operation the type lists. The warning suggests a close one, or
    lists them, and the editor completes them after the colon.
