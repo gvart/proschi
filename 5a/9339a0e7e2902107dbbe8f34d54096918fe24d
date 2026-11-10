@@ -1,0 +1,31 @@
+plugin/skills/code-to-usecases/references/proschi-cheatsheet.md
+  s_ccb8935595dc4e::t_8f45510285d886 115-123
+plugin/skills/image-to-proschi/references/proschi-cheatsheet.md
+  s_ccb8935595dc4e::t_8f45510285d886 115-123
+plugin/skills/proschi-hld-doc/references/proschi-cheatsheet.md
+  s_ccb8935595dc4e::t_8f45510285d886 115-123
+plugin/skills/proschi-capacity-plan/references/proschi-cheatsheet.md
+  s_ccb8935595dc4e::t_8f45510285d886 115-123
+plugin/skills/infra-to-proschi/references/proschi-cheatsheet.md
+  s_ccb8935595dc4e::t_8f45510285d886 115-123
+plugin/skills/proschi-keep-in-sync/references/proschi-cheatsheet.md
+  s_ccb8935595dc4e::t_8f45510285d886 115-123
+plugin/skills/proschi-design-review/references/proschi-cheatsheet.md
+  s_ccb8935595dc4e::t_8f45510285d886 115-123
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5a9339a0e7e2902107dbbe8f34d54096918fe24d",
+  "prompts": {},
+  "sessions": {
+    "s_ccb8935595dc4e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0e2b8447-0e71-4063-8d52-5e5b5302fc2f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
