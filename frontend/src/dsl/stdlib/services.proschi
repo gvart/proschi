@@ -1,0 +1,9 @@
+# Proschi standard library: services. The rules are in core.proschi.
+
+type [REST API] extends Service {
+  op read  GET, HEAD
+  op write POST, PUT, PATCH, DELETE
+  status 200, 201, 204, 400, 401, 403, 404, 409, 500, 503
+  header Authorization, Content-Type
+  doc "A service with a REST interface over HTTP"
+}

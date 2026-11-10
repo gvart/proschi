@@ -1,0 +1,29 @@
+# Proschi standard library: data stores. The rules are in core.proschi.
+
+type Database extends DataStore {
+  kind database
+  doc "A database whose product does not matter"
+}
+
+abstract type SqlDatabase extends Database {
+  protocol SQL
+  op read  SELECT
+  op write INSERT, UPDATE, DELETE
+  doc "A relational database, queried with SQL"
+}
+
+type PostgreSQL extends SqlDatabase {
+  doc "PostgreSQL, the open source relational database"
+}
+
+type Cache extends DataStore {
+  kind cache
+  doc "An in-memory key-value cache"
+}
+
+type Redis extends Cache {
+  protocol RESP
+  op read  GET, MGET, HGET
+  op write SET, DEL, HSET, EXPIRE
+  doc "Redis, the in-memory data store, used as a cache"
+}
