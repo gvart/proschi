@@ -545,11 +545,11 @@ id; don't rewrite old ones.
   second component. The solved state and the saved code are shared by
   the two entries of a problem (the same practice progress); the stage
   notes (`proschi.practice.stages.<id>`) matter only on the roadmap.
-- **P52. The roadmap opens where you left off, a new problem on its lesson.** A
+- **P52. The roadmap opens where you left off, never on the lesson.** A
   problem opened from the roadmap (`practice/#/roadmap/<id>`) opens on the
-  stage the learner was last on; a first visit (no stage notes saved yet)
-  opens on the **Lesson**, step 1. The lesson is no gate: Clarify is one
-  click away, the lesson stays the first stage in the stage bar, and its own address
+  stage the learner was last on; a first visit opens on **Clarify**, even
+  with the lesson unread. The lesson is no gate: it stays one click away
+  as the first stage in the stage bar, and its own address
   (`practice/#/roadmap/<id>/lesson`, the roadmap's "Read the lesson"
   links) still opens on it.
 - **P53. History and the report cover interviews on your own, and cost
@@ -664,3 +664,10 @@ id; don't rewrite old ones.
   server as for P54. Where paid plans are on, other plans see the blocks'
   names with a locked teaser and the way to Pro. Prices stay the same; the
   pricing page lists it under Pro.
+- **P58. A new roadmap problem opens on its lesson; the Wrap-up ends with
+  Finish.** Supersedes P52's first visit on Clarify: a roadmap problem with
+  no stage notes saved yet opens on the **Lesson**, step 1, so "Next on the
+  roadmap" leads into the next problem from the start; a started one still
+  opens on the stage it was left on, and Clarify stays one click away. The
+  Wrap-up's main action is **Finish**, back to where the problem was opened
+  from (the roadmap); "Next on the roadmap" stays beside it.

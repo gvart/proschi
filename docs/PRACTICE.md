@@ -95,7 +95,7 @@ text. Headings get ids from their text, GitHub style
 The lesson teaches the ideas behind the problem before the solver tries it:
 each roadmap step is *Learn → Challenge → Review*. A problem
 from the roadmap (`practice/#/roadmap/<id>`) opens on the step the learner
-was last on, a first visit (no notes saved yet) on the lesson (P52); the lesson
+was last on, a first visit (no notes saved yet) on the lesson (P52, P58); the lesson
 is the first step in the step bar, a page of its own with a table of
 contents and a button at the top and the bottom that leads on to the steps
 (see below), and the browser remembers once it was read. A problem from the list (`practice/#/<id>`) opens straight on
@@ -227,8 +227,8 @@ to a number), **Design** (the whiteboard, with the full editor one click
 away) and **Wrap-up** (the tests, the review and a recall prompt). The
 notes of each step are kept per problem in the browser
 (`proschi.practice.stages.<id>`); a problem opens on the step it was
-left on, a first visit on the lesson. See `docs/design/paid-plans.md` P50, P51
-and P52.
+left on, a first visit on the lesson. See `docs/design/paid-plans.md` P50, P51,
+P52 and P58.
 
 ## `interview.md`
 
