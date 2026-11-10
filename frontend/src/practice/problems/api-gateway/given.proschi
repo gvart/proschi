@@ -46,6 +46,9 @@ test "Sessions are checked from a cache" {
   "Request trip" scenario "Session cached" never calls auth
   "Get rider profile" scenario "Session cached" never calls auth
   "Get fare estimate" scenario "Session not cached" calls auth
+  "Get fare estimate" scenario "Session not cached" uses SET on any cache after auth
+  "Request trip" scenario "Session not cached" uses SET on any cache after auth
+  "Get rider profile" scenario "Session not cached" uses SET on any cache after auth
 }
 
 test "The session is checked before the call is routed" {

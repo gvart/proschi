@@ -4,6 +4,8 @@ summary: "Cloudflare's Quicksilver: config written once, sent down a tree, read 
 difficulty: medium
 company: Cloudflare
 tags: [replication, fan-out, read-heavy, availability, real-world]
+version: 2
+strict: true
 hints:
   - "Edge requests read configuration 3M times a second, and the requirements say a data center must keep serving when the core is unreachable. Where can a read come from so that it never leaves the edge server?"
   - "Every change is written once, to the root (x2: a primary and a secondary), and the customer gets the answer as soon as the root has it. Copying it to the edge happens after the answer, with async sends (->>)."

@@ -3,6 +3,8 @@ title: Distributed Key-Value Store
 summary: Dynamo-style quorums on a consistent-hashing ring that keep writing when a node dies.
 difficulty: hard
 tags: [replication, sharding, consistency, availability, write-heavy]
+version: 2
+strict: true
 hints:
   - "Every key lives on three storage nodes. A coordinator in front of them decides which three (consistent hashing) and talks to them; the application servers never pick a node themselves."
   - "Choose R and W so that R + W > N = 3: write to all three replicas and answer after two (W = 2), read two (R = 2). Write the fan-out with the prefixes, x3 PUT and x2 GET, so the simulation counts every replica operation."

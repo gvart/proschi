@@ -4,6 +4,8 @@ summary: "Uber's Edge Gateway: a stateless pool that authenticates and routes ev
 difficulty: medium
 company: Uber
 tags: [api-gateway, caching, authentication, availability, real-world]
+version: 2
+strict: true
 hints:
   - "Every call from the app needs the same things done first: is the token valid, is this rider blocked, which service handles this path? Where can that happen once, for every service, instead of in each of them?"
   - "Put a load balancer and a pool of gateway instances in front of the services. There is no connection from the app to any service: the app knows one address."

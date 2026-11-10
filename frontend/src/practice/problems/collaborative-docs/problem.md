@@ -3,6 +3,8 @@ title: Collaborative Docs
 summary: Google Docs-style editing, one sequencer per document, a log written before the ack, pub/sub fan-out.
 difficulty: hard
 tags: [websocket, pub-sub, presence, consistency, durability]
+version: 2
+strict: true
 hints:
   - "Send operations, not documents: each keystroke batch is a small operation against the revision the editor last saw. One service owns each open document, transforms concurrent operations into one order and numbers them."
   - "The ack means \"saved\": append the transformed operation to a durable log before you answer the editor. Everything the collaborators see comes after that."

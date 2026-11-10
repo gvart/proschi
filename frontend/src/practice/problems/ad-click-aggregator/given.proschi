@@ -41,7 +41,7 @@ capacity {
 
 test "Recording an event only appends it to Kafka" {
   "Record event" starts at app
-  "Record event" writes events before responding
+  "Record event" uses PRODUCE on events before responding
   "Record event" never calls any database or any analytics or budget
   "Record event" responds 2xx
 }
@@ -53,13 +53,13 @@ test "Events are aggregated in the stream, in memory" {
 
 test "Aggregates are committed only after a checkpoint" {
   "Publish aggregates" writes aggregates before responding
-  "Checkpoint" calls any storage before aggregates
-  "Checkpoint" calls aggregates after any storage
+  "Checkpoint" uses PUT on any storage before aggregates
+  "Checkpoint" uses Commit on aggregates after any storage
 }
 
 test "Pinot and the budget read only committed aggregates" {
   "Load aggregates" starts at aggregates
-  "Load aggregates" calls pinot
+  "Load aggregates" uses UPSERT on pinot
   "Update budget" starts at aggregates
   "Update budget" calls budget
   no path from events to pinot

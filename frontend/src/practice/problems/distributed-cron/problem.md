@@ -4,6 +4,8 @@ summary: "Slack's cron: a leader-elected scheduler that only enqueues, a worker 
 difficulty: medium
 tags: [scheduling, queues, availability, leader-election, real-world]
 company: Slack
+version: 2
+strict: true
 hints:
   - "The old cron box both decided when a script was due and ran it, on one machine. Split those two jobs: what must be small and always up, and what needs CPU, memory and many machines?"
   - "The scheduler should only enqueue: \"Fire\" goes from the clock to the scheduler and ends with a write to a queue, and never reaches the systems the scripts work on. \"Run script\" starts at the queue, and the workers do the work."

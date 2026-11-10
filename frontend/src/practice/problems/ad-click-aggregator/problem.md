@@ -4,6 +4,8 @@ summary: "Uber Eats ads: Kafka, one-minute Flink windows committed at each check
 difficulty: medium
 company: Uber
 tags: [streaming, aggregation, exactly-once, olap, real-world]
+version: 2
+strict: true
 hints:
   - "A click is money: counted twice, the advertiser is overcharged; lost, Uber loses revenue. What is the least the app's request can do and still never lose an event?"
   - "Use two Kafka topics. A Flink job reads `events`, keeps each ad's counts for the current minute in memory, and writes one record per ad and minute to `aggregates`. Pinot (\"Load aggregates\") and the budget service (\"Update budget\") read only `aggregates`."
