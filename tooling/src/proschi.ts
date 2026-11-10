@@ -4,7 +4,7 @@
  * thin adapter around it, so the CLI, the language server and the web editor
  * can never disagree about what is valid.
  */
-export { DID_YOU_MEAN, builtinTypes, kindName, parse } from '../../frontend/src/dsl/parser';
+export { DID_YOU_MEAN, HTTP_METHODS, builtinTypes, kindName, parse } from '../../frontend/src/dsl/parser';
 export { lookupType, techNamed, typeKey } from '../../frontend/src/dsl/typesys/resolve';
 export type { ResolvedType, TypeTable } from '../../frontend/src/dsl/typesys/types';
 export { KINDS } from '../../frontend/src/dsl/kinds';
@@ -149,6 +149,3 @@ export const TYPE_PROPERTIES: { label: string; detail: string; snippet: string }
   { label: 'bandwidthMBps', detail: 'Network bandwidth, MB/s', snippet: 'bandwidthMBps ${1:500}' },
   { label: 'egressUsdPerGb', detail: 'Price per GB sent out', snippet: 'egressUsdPerGb ${1:0.09}' },
 ];
-
-/** The methods an HTTP step label starts with (parser.ts). */
-export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];

@@ -5,7 +5,7 @@ import type { Text } from '@codemirror/state';
 import type { Diagnostic as CmDiagnostic } from '@codemirror/lint';
 import { componentCatalog } from '../../catalog/componentCatalog';
 import { COLOR_NAMES } from '../../dsl/palette';
-import { KINDS, builtinTypes, parse, typeKey, type Diagnostic, type Diagram, type ResolvedType } from '../../dsl';
+import { HTTP_METHODS, KINDS, builtinTypes, parse, typeKey, type Diagnostic, type Diagram, type ResolvedType } from '../../dsl';
 
 interface LexState {
   inLabel: boolean;
@@ -284,7 +284,6 @@ function openBlocks(doc: Text, number: number): string[] {
   return stack;
 }
 
-const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 /** `a -> b : label`: the step's nodes, arrow and its label so far. */
 const STEP = /^\s*(?:\}\s*)?([A-Za-z_]\w*)\s*(->>|-->|->|-x)\s*([A-Za-z_]\w*)\s*:\s*(.*)$/;
 
