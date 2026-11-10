@@ -1,0 +1,213 @@
+frontend/src/practice/problems/nearby-search/wrong/index-inside-the-update.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 44-48
+frontend/src/practice/problems/file-storage/wrong/upload-through-api.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 77
+frontend/src/practice/problems/rate-limiter/lesson.md
+  s_ccb8935595dc4e::t_bd50c33e6c24a3 178
+frontend/src/practice/problems/notion-sharding/wrong/one-big-database.proschi
+  s_ccb8935595dc4e::t_d67b06a87db1ad 18-19
+frontend/src/practice/problems/video-streaming/wrong/upload-request-carries-file.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 74
+frontend/src/practice/problems/ride-matching/wrong/locations-in-sharded-database.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 58,75
+frontend/src/practice/problems/notion-sharding/wrong/direct-connections.proschi
+  s_ccb8935595dc4e::t_d67b06a87db1ad 19
+frontend/src/practice/problems/file-storage/solution.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 65
+frontend/src/practice/problems/search-indexing/wrong/index-inside-the-edit.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 32
+frontend/src/practice/problems/search-autocomplete/solution.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 64,66
+frontend/src/practice/problems/video-streaming/wrong/segments-from-storage.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 74
+frontend/src/practice/problems/search-autocomplete/wrong/rebuild-from-search-api.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 70,72
+  s_ccb8935595dc4e::t_06e82b0a4414ce 78-82
+frontend/src/practice/problems/rate-limiter/solution.proschi
+  s_ccb8935595dc4e::t_bd50c33e6c24a3 26
+frontend/src/practice/problems/search-indexing/wrong/shards-without-replicas.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 33
+frontend/src/practice/problems/ad-click-aggregator/given.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 8-9,11
+  s_ccb8935595dc4e::t_20c80d2c6a9376 3-7,10
+frontend/src/practice/problems/social-graph-cache/wrong/followers-write-mysql.proschi
+  s_ccb8935595dc4e::t_cd52726410cfa3 9-10
+frontend/src/practice/problems/snowflake-ids/wrong/coordinates-every-id.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 16
+frontend/src/practice/problems/search-autocomplete/wrong/search-waits-for-query-log.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 68-75
+frontend/src/practice/problems/search-autocomplete/wrong/suggestions-without-cdn.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 73,75
+frontend/src/practice/problems/rate-limiter/wrong/increment-after-decision.proschi
+  s_ccb8935595dc4e::t_bd50c33e6c24a3 32
+  s_ccb8935595dc4e::t_06e82b0a4414ce 37,39-41
+frontend/src/practice/problems/ticket-booking/wrong/holds-in-dynamodb.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 78,89,105,111
+  s_ccb8935595dc4e::t_06e82b0a4414ce 12
+frontend/src/practice/problems/recommendations/wrong/heavy-model-on-every-candidate.proschi
+  s_ccb8935595dc4e::t_8a80d926eb070a 42
+frontend/src/practice/problems/video-streaming/wrong/transcode-while-waiting.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 67-77
+frontend/src/practice/problems/view-counting/wrong/row-per-viewer.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 76
+frontend/src/practice/problems/video-streaming/wrong/upload-through-api.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 75
+frontend/src/practice/problems/nearby-search/wrong/equal-area-geoshards.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 47-50
+frontend/src/practice/problems/recommendations/wrong/funnel-that-never-narrows.proschi
+  s_ccb8935595dc4e::t_8a80d926eb070a 49
+frontend/src/practice/problems/collaborative-docs/wrong/cursors-in-the-log.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 61,75
+frontend/src/practice/problems/url-shortener/solution.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 28
+frontend/src/practice/problems/config-push/wrong/root-sends-to-every-edge.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 31
+frontend/src/practice/problems/recommendations/solution.proschi
+  s_ccb8935595dc4e::t_8a80d926eb070a 67
+frontend/src/practice/problems/chat/solution.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 45
+frontend/src/practice/problems/search-indexing/solution.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 63
+frontend/src/practice/problems/multi-region-active-active/solution.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 88,97
+frontend/src/practice/problems/social-graph-cache/solution.proschi
+  s_ccb8935595dc4e::t_cd52726410cfa3 3-4
+frontend/src/practice/problems/multi-region-active-active/wrong/synchronous-replication.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 69,78
+frontend/src/practice/problems/multi-region-active-active/wrong/sized-for-half.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 73,82
+frontend/src/practice/problems/ride-matching/wrong/trips-in-nosql.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 57,72,74
+frontend/src/practice/problems/news-feed/wrong/fan-out-in-request.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 68
+  s_ccb8935595dc4e::t_bd50c33e6c24a3 13
+frontend/src/practice/problems/rate-limiter/wrong/client-bypasses-limiter.proschi
+  s_ccb8935595dc4e::t_bd50c33e6c24a3 33
+frontend/src/practice/problems/ride-matching/solution.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 51,68
+frontend/src/practice/problems/view-counting/wrong/read-count-from-cassandra.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 74
+frontend/src/practice/problems/github-repo-replication/given.proschi
+  s_ccb8935595dc4e::t_cd52726410cfa3 3-7
+frontend/src/practice/problems/multi-region-active-active/wrong/standby-region.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 72,81
+frontend/src/practice/problems/video-streaming/wrong/load-balancer-instead-of-cdn.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 74
+frontend/src/practice/problems/video-streaming/wrong/jobs-without-queue.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 74
+frontend/src/practice/problems/social-graph-cache/wrong/one-cache-tier.proschi
+  s_ccb8935595dc4e::t_cd52726410cfa3 11
+frontend/src/practice/problems/github-repo-replication/solution.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 3
+  s_ccb8935595dc4e::t_cd52726410cfa3 4
+frontend/src/practice/problems/notification-fanout/wrong/worker-polls-queue.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 9-10,45
+frontend/src/practice/problems/collaborative-docs/solution.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 55,69
+frontend/src/practice/problems/ride-matching/wrong/locations-in-database.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 58,75
+frontend/src/practice/problems/notion-sharding/solution.proschi
+  s_ccb8935595dc4e::t_d67b06a87db1ad 45-46
+frontend/src/practice/problems/config-push/wrong/single-root.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 33-34
+frontend/src/practice/problems/notion-sharding/starter.proschi
+  s_ccb8935595dc4e::t_d67b06a87db1ad 13-14
+frontend/src/practice/problems/nearby-search/wrong/shard-by-user-id.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 47
+  s_ccb8935595dc4e::t_06e82b0a4414ce 30-31
+frontend/src/practice/problems/github-repo-replication/wrong/read-any-replica-blindly.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 9
+  s_ccb8935595dc4e::t_cd52726410cfa3 10
+frontend/src/practice/problems/config-push/wrong/wait-for-every-edge.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 30-31
+frontend/src/practice/problems/payments/wrong/idempotency-keys-in-redis.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 11
+  s_ccb8935595dc4e::t_e0f227874bd60a 60
+  s_ccb8935595dc4e::t_8a80d926eb070a 68,88,94
+frontend/src/practice/problems/chat/wrong/deliver-before-ack.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 51
+  s_ccb8935595dc4e::t_06e82b0a4414ce 58-64,66-69
+frontend/src/practice/problems/config-push/solution.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 50-51
+frontend/src/practice/problems/collaborative-docs/wrong/replay-whole-log.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 51,65
+frontend/src/practice/problems/url-shortener/wrong/miss-never-fills-cache.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 34
+  s_ccb8935595dc4e::t_06e82b0a4414ce 48-50
+frontend/src/practice/problems/view-counting/wrong/count-in-request.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 77
+frontend/src/practice/problems/recommendations/wrong/same-size-pool-for-every-model.proschi
+  s_ccb8935595dc4e::t_8a80d926eb070a 50
+frontend/src/practice/problems/social-graph-cache/wrong/no-invalidation.proschi
+  s_ccb8935595dc4e::t_cd52726410cfa3 9-10
+frontend/src/practice/problems/collaborative-docs/wrong/ack-before-log.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 59,72
+frontend/src/practice/problems/news-feed/wrong/two-feed-cache-nodes.proschi
+  s_ccb8935595dc4e::t_bd50c33e6c24a3 13
+  s_ccb8935595dc4e::t_5131cc2d692c78 67
+frontend/src/practice/problems/github-repo-replication/starter.proschi
+  s_ccb8935595dc4e::t_cd52726410cfa3 5
+frontend/src/practice/problems/github-repo-replication/wrong/read-every-replica.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 9
+  s_ccb8935595dc4e::t_cd52726410cfa3 10
+frontend/src/dsl/examples.ts
+  s_ccb8935595dc4e::t_1681d1e21a07d2 170-175,177-178,192,195
+  s_ccb8935595dc4e::t_9bf90c7b757390 179-180
+frontend/src/practice/problems/collaborative-docs/wrong/broadcast-before-ack.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 61,78
+frontend/src/practice/problems/search-indexing/wrong/one-write-per-change.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 31
+frontend/src/practice/problems/nearby-search/wrong/geo-query-on-profiles.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 41-44
+frontend/src/practice/problems/notification-fanout/solution.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 3-4
+frontend/src/practice/problems/social-graph-cache/given.proschi
+  s_ccb8935595dc4e::t_cd52726410cfa3 3-8
+frontend/src/practice/problems/collaborative-docs/wrong/same-server-delivery.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 60,72
+frontend/src/practice/problems/notion-sharding/wrong/shard-by-block-id.proschi
+  s_ccb8935595dc4e::t_d67b06a87db1ad 21-22
+frontend/src/practice/problems/social-graph-cache/starter.proschi
+  s_ccb8935595dc4e::t_cd52726410cfa3 5
+frontend/src/practice/problems/notion-sharding/wrong/replicas-instead-of-shards.proschi
+  s_ccb8935595dc4e::t_d67b06a87db1ad 21-22
+frontend/src/practice/problems/nearby-search/solution.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 82
+frontend/src/practice/problems/ride-matching/wrong/request-waits-for-offer-queue.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 57,74
+frontend/src/practice/problems/github-repo-replication/wrong/ack-after-one-replica.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 11
+  s_ccb8935595dc4e::t_cd52726410cfa3 12
+frontend/src/practice/problems/file-storage/wrong/load-balancer-instead-of-cdn.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 12
+  s_ccb8935595dc4e::t_5131cc2d692c78 71
+frontend/src/practice/problems/video-streaming/solution.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 68
+frontend/src/practice/problems/social-graph-cache/wrong/too-few-shards.proschi
+  s_ccb8935595dc4e::t_cd52726410cfa3 9-10
+frontend/src/practice/problems/notification-fanout/wrong/notifier-calls-provider-inline.proschi
+  s_ccb8935595dc4e::t_06e82b0a4414ce 9-10
+frontend/src/practice/problems/news-feed/solution.proschi
+  s_ccb8935595dc4e::t_bd50c33e6c24a3 7
+  s_ccb8935595dc4e::t_5131cc2d692c78 61
+frontend/src/practice/problems/view-counting/solution.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 87
+frontend/src/practice/problems/file-storage/wrong/download-from-bucket.proschi
+  s_ccb8935595dc4e::t_5131cc2d692c78 72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9e10565024c752560edfa3847cf7e81497e40972",
+  "prompts": {},
+  "sessions": {
+    "s_ccb8935595dc4e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0e2b8447-0e71-4063-8d52-5e5b5302fc2f",
+        "model": "unknown"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
