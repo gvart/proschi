@@ -1,0 +1,21 @@
+tooling/src/proschi.ts
+  s_ccb8935595dc4e::t_a16e331c71d652 7
+frontend/src/components/Playground/proschiLanguage.ts
+  s_ccb8935595dc4e::t_a16e331c71d652 8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "04f738480f708d3a99e870f65b35f1614d343b0c",
+  "prompts": {},
+  "sessions": {
+    "s_ccb8935595dc4e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0e2b8447-0e71-4063-8d52-5e5b5302fc2f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
