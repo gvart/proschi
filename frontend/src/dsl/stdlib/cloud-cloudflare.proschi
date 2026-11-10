@@ -1,7 +1,7 @@
 # Proschi standard library: Cloudflare. The rules are in core.proschi.
 
 type Cloudflare extends CDN {
-  op write MESSAGE   # forwards a WebSocket message
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
   doc "Cloudflare, the CDN and edge network in front of the origin."
 }
 

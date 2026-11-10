@@ -25,10 +25,17 @@ export interface TypeProps {
 
 export type TypePropName = keyof TypeProps;
 
+/**
+ * What an operation does to the node's data: reads it, writes it, or (for an
+ * edge that passes a WebSocket frame on) neither, `forward`: the step then
+ * reads or writes as the step that handles it downstream does.
+ */
+export type OpAccess = 'read' | 'write' | 'forward';
+
 /** `op read SELECT latency 8 cost 2`: an operation the type supports. */
 export interface TypeOp {
   name: string;
-  access: 'read' | 'write';
+  access: OpAccess;
   /** Multiplier of the node's latency for this operation; absent means 1. */
   latency?: number;
   /** Multiplier of the node's cost (load) for this operation; absent means 1. */

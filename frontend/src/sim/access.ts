@@ -9,7 +9,8 @@ import type { Diagram, DiagramStep } from '../dsl/types';
  * two never drift.
  */
 export function stepAccess(step: Pick<DiagramStep, 'access' | 'httpMethod' | 'stepName' | 'op'>): Access {
-  return step.access ?? step.op?.access ?? accessOf(step.httpMethod, step.stepName ?? '');
+  const op = step.op?.access;
+  return step.access ?? (op === 'read' || op === 'write' ? op : undefined) ?? accessOf(step.httpMethod, step.stepName ?? '');
 }
 
 /**

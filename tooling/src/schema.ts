@@ -165,7 +165,7 @@ export function diagramSchema() {
           ),
           ops: {
             type: 'array',
-            items: object({ name: str, access: { enum: ['read', 'write'] }, latency: num, cost: num }, ['name', 'access']),
+            items: object({ name: str, access: { enum: ['read', 'write', 'forward'] }, latency: num, cost: num }, ['name', 'access']),
           },
           statuses: { type: 'array', items: int },
           headers: { type: 'array', items: str },

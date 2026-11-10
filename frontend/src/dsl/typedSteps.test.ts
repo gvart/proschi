@@ -140,6 +140,53 @@ describe('step labels resolve their operation on the target type', () => {
   });
 });
 
+describe('forwarded frames', () => {
+  const ws = (steps: string) => `type Relay extends Service { op forward MESSAGE }
+type Session extends WebSocket {
+  op write OP
+  op read  CURSOR
+}
+editor [Browser]
+lb [Relay]
+lb2 [Relay]
+gw [Session]
+bus [NATS]
+editor -> lb
+lb -> lb2
+lb -> gw
+lb2 -> gw
+gw -> bus
+usecase "U" {
+${steps}
+}`;
+  const accessOf = (source: string) => parse(source).diagram.useCases[0].steps.map((s) => [s.stepName.split(' ')[0], s.op?.access, s.access]);
+
+  it('parses op forward', () => {
+    const { diagram, diagnostics } = parse(ws(''));
+    expect(diagnostics).toEqual([]);
+    expect(diagram.nodes.find((n) => n.id === 'lb')?.resolvedType?.ops).toContainEqual({ name: 'MESSAGE', access: 'forward' });
+    expect(parse('type T extends Service { op pass X }').diagnostics[0].message).toBe('Expected read, write or forward after op, e.g. op read SELECT');
+  });
+
+  it('reads or writes as the step that handles the frame', () => {
+    expect(accessOf(ws('  editor -> lb : MESSAGE OP insert\n  lb -> gw : OP insert\n  gw ->> bus : PUBLISH op'))).toEqual([
+      ['MESSAGE', 'forward', 'write'],
+      ['OP', 'write', 'write'],
+      ['PUBLISH', expect.any(String), 'write'],
+    ]);
+    expect(accessOf(ws('  editor -> lb : MESSAGE CURSOR at 3\n  lb -> gw : CURSOR at 3\n  gw ->> bus : PUBLISH cursor'))[0]).toEqual(['MESSAGE', 'forward', 'read']);
+  });
+
+  it('follows a chain of forwards, and keeps the verb without a handler', () => {
+    expect(accessOf(ws('  editor -> lb : MESSAGE OP\n  lb -> lb2 : MESSAGE OP\n  lb2 -> gw : OP'))).toEqual([
+      ['MESSAGE', 'forward', 'write'],
+      ['MESSAGE', 'forward', 'write'],
+      ['OP', 'write', 'write'],
+    ]);
+    expect(accessOf(ws('  editor -> lb : MESSAGE OP'))).toEqual([['MESSAGE', 'forward', 'read']]);
+  });
+});
+
 describe('op multipliers in the simulation', () => {
   const sim = (label: string) => {
     const source = `${TYPES}

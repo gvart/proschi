@@ -9,7 +9,7 @@ import { COLOR_NAMES, editDistance, resolveColor, suggestColor } from './palette
 import { lookupType, resolveTypes } from './typesys/resolve';
 import { loadStdlib } from './typesys/stdlib';
 import { findHeader, findOp, opNamesMostSpecificFirst, opWord, suggestHeader, suggestOp } from './typesys/ops';
-import type { ResolvedType, TypeDecl, TypeOp, TypeProps, TypeTable } from './typesys/types';
+import type { OpAccess, ResolvedType, TypeDecl, TypeOp, TypeProps, TypeTable } from './typesys/types';
 import type {
   FlowStep,
   Protocol,
@@ -2756,6 +2756,7 @@ class Parser {
       });
     }
 
+    resolveForwards(steps);
     return steps;
   }
 
@@ -2773,7 +2774,8 @@ class Parser {
     const word = method ?? opWord(step.label);
     if (!word) return { access };
     const op = method ? type.ops.find((o) => o.name.toUpperCase() === method) : findOp(type, step.label);
-    if (op) return { access: op.access, op: { ...op } };
+    // A forwarded frame takes its access from the step that handles it (resolveForwards); until then, the verb's.
+    if (op) return { access: op.access === 'forward' ? access : op.access, op: { ...op } };
     const suggestion = suggestOp(type, word);
     const ops = opNamesMostSpecificFirst(type, this.typeTable);
     const hint = suggestion ? `Did you mean ${suggestion}?` : `Its operations are ${ops.slice(0, 8).join(', ')}${ops.length > 8 ? ', …' : ''}.`;
@@ -3062,16 +3064,16 @@ class Parser {
     this.error(`Unknown type property '${word}'; use ${TYPE_LINES}`, loc(key));
   }
 
-  /** `op read SELECT, Scan latency 8 cost 2`: operations with their access and optional multipliers. */
+  /** `op read SELECT, Scan latency 8 cost 2`: operations with their access (read, write or forward) and optional multipliers. */
   private parseTypeOp(decl: TypeDecl, tokens: Token[], line: number) {
     const access = tokens[1];
-    if (!isWord(access, 'read') && !isWord(access, 'write')) {
-      this.error('Expected read or write after op, e.g. op read SELECT', this.locOf(access ?? tokens[0], line));
+    if (!isWord(access, 'read') && !isWord(access, 'write') && !isWord(access, 'forward')) {
+      this.error('Expected read, write or forward after op, e.g. op read SELECT', this.locOf(access ?? tokens[0], line));
       return;
     }
     let end = 2;
     while (end < tokens.length && !isWord(tokens[end], 'latency') && !isWord(tokens[end], 'cost')) end++;
-    const example = `operation names after op ${access.value}, e.g. op ${access.value} ${access.value === 'read' ? 'SELECT' : 'INSERT, UPDATE'}`;
+    const example = `operation names after op ${access.value}, e.g. op ${access.value} ${access.value === 'read' ? 'SELECT' : access.value === 'forward' ? 'MESSAGE' : 'INSERT, UPDATE'}`;
     const names = this.readList(tokens.slice(0, end), 2, line, ['ident', 'string'], example);
     if (!names) return;
     const multipliers: { latency?: number; cost?: number } = {};
@@ -3089,7 +3091,7 @@ class Parser {
       multipliers[word.value as 'latency' | 'cost'] = q.value;
     }
     for (const name of names) {
-      const op = { name: name.value, access: access.value as 'read' | 'write', ...multipliers };
+      const op = { name: name.value, access: access.value as OpAccess, ...multipliers };
       const at = decl.ops.findIndex((o) => o.name === op.name);
       if (at === -1) decl.ops.push(op);
       else decl.ops[at] = op;
@@ -3404,6 +3406,30 @@ export function parseStepLabel(input: string): StepLabel {
   }
   const payload = splitPayload(input);
   return { name: payload.text, format: payload.body ? payload.format : undefined, body: payload.body };
+}
+
+/**
+ * A step whose op is `forward` (a WebSocket frame through a load balancer)
+ * neither reads nor writes at its target: it reads or writes as the step
+ * that handles the frame does, the next one sent on from the target, through
+ * any further forwards. Without such a step it keeps the verb's access.
+ */
+function resolveForwards(steps: DiagramStep[]) {
+  const handler = (i: number, seen: Set<number>): DiagramStep | undefined => {
+    const step = steps[i];
+    for (let j = i + 1; j < steps.length; j++) {
+      if (steps[j].fromServiceId !== step.toServiceId) continue;
+      if (steps[j].op?.access !== 'forward' || seen.has(j)) return steps[j];
+      seen.add(j);
+      return handler(j, seen) ?? steps[j];
+    }
+    return undefined;
+  };
+  steps.forEach((step, i) => {
+    if (step.op?.access !== 'forward') return;
+    const next = handler(i, new Set([i]));
+    if (next && next.op?.access !== 'forward' && next.access) step.access = next.access;
+  });
 }
 
 const SIZE_UNITS: Record<string, number> = { B: 1, KB: 1e3, MB: 1e6, GB: 1e9, TB: 1e12 };

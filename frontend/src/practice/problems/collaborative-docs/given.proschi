@@ -1,5 +1,11 @@
 title "Collaborative Docs" "Many people editing one document at once, every keystroke merged, stored and shown to the others"
 
+# The session servers' WebSocket messages: an edit is stored, a cursor position is not.
+type SessionServer extends WebSocket {
+  op write OP
+  op read  CURSOR
+}
+
 editor        "Editor"        [Browser] "The person typing; the browser keeps a WebSocket open while the document is open"
 collaborators "Collaborators" [Browser] "Everyone else who has the same document open"
 

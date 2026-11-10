@@ -41,9 +41,9 @@ describe('typed steps on the bundled content', () => {
           for (const step of s.steps) {
             const old = accessOf(step.httpMethod || undefined, step.stepName);
             const key = `${step.loc.file ?? ''}:${step.loc.line}`;
-            if (step.op && step.op.access !== old && !seen.has(key)) {
+            if (step.op && step.access !== old && !seen.has(key)) {
               seen.add(key);
-              flips.push(`${name}\t${u.name}\t${step.fromServiceId} -> ${step.toServiceId} : ${step.stepName}\t${old} -> ${step.op.access}`);
+              flips.push(`${name}\t${u.name}\t${step.fromServiceId} -> ${step.toServiceId} : ${step.stepName}\t${old} -> ${step.access}`);
             }
           }
       for (const d of diagnostics) if (TYPED.test(d.message)) warnings.push(`${name}:${d.line}\t${d.message}`);

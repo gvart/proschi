@@ -131,7 +131,7 @@ export const CAPACITY_PARTS: { label: string; detail: string; snippet: string }[
 /** Lines of a `type` block body (docs/design/typed-components.md, D2). */
 export const TYPE_PROPERTIES: { label: string; detail: string; snippet: string }[] = [
   { label: 'kind', detail: 'What the type is: one of the 17 kinds', snippet: 'kind ${1:service}' },
-  { label: 'op', detail: 'Operations: op read|write A, B [latency x] [cost y]', snippet: 'op ${1|read,write|} ${2:NAME}' },
+  { label: 'op', detail: 'Operations: op read|write|forward A, B [latency x] [cost y]', snippet: 'op ${1|read,write,forward|} ${2:NAME}' },
   { label: 'status', detail: 'HTTP status codes it answers with', snippet: 'status ${1:200, 404}' },
   { label: 'header', detail: 'HTTP headers it reads', snippet: 'header ${1:Authorization}' },
   { label: 'protocol', detail: 'How it is called: SQL, HTTP, RESP, …', snippet: 'protocol ${1:HTTP}' },

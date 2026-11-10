@@ -334,9 +334,9 @@ function typeHover(t: ResolvedType): string {
   const facts = [t.kind ? `kind \`${t.kind}\`` : '', t.protocol ? `protocol \`${t.protocol}\`` : '', t.icon && t.icon !== t.name ? `drawn as \`${t.icon}\`` : ''].filter(Boolean);
   if (facts.length) lines.push('', facts.join(' · '));
   if (t.doc) lines.push('', t.doc);
-  for (const access of ['read', 'write'] as const) {
+  for (const access of ['read', 'write', 'forward'] as const) {
     const ops = t.ops.filter((o) => o.access === access);
-    if (ops.length) lines.push('', `**${access === 'read' ? 'Read' : 'Write'}:** ${ops.map(opText).join(', ')}`);
+    if (ops.length) lines.push('', `**${access === 'read' ? 'Read' : access === 'write' ? 'Write' : 'Forward'}:** ${ops.map(opText).join(', ')}`);
   }
   if (t.statuses.length) lines.push('', `**Status:** ${t.statuses.join(', ')}`);
   if (t.headers.length) lines.push('', `**Headers:** ${t.headers.map((h) => `\`${h}\``).join(', ')}`);
@@ -483,7 +483,7 @@ function typeItems(analysis: Analysis, range: Range, insert: (name: string) => s
 function typeBodyCompletions(head: string, range: Range): CompletionItem[] {
   if (/^\s*$/.test(head)) return TYPE_PROPERTIES.map((p) => ({ label: p.label, kind: 'keyword', detail: p.detail, snippet: p.snippet, range }));
   if (/^\s*kind\s+$/.test(head)) return KINDS.map((k) => ({ label: k, kind: 'keyword', detail: 'kind', range }));
-  if (/^\s*op\s+$/.test(head)) return ['read', 'write'].map((label) => ({ label, kind: 'keyword', detail: `${label} operations`, range }));
+  if (/^\s*op\s+$/.test(head)) return ['read', 'write', 'forward'].map((label) => ({ label, kind: 'keyword', detail: `${label} operations`, range }));
   const choices: Record<string, string[]> = { durable: ['true', 'false'], consistency: ['strong', 'eventual'], writeScaling: ['replicas', 'shards'] };
   const choice = head.match(/^\s*(durable|consistency|writeScaling)\s+$/)?.[1];
   if (choice) return choices[choice].map((label) => ({ label, kind: 'keyword', range }));

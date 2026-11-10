@@ -3,7 +3,7 @@
 # Edge
 
 type [AWS CloudFront] extends CDN {
-  op write MESSAGE   # forwards a WebSocket message
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
   op write CreateInvalidation
   doc "Amazon CloudFront, the CDN of AWS."
 }
@@ -14,7 +14,7 @@ type [AWS Route53] extends DNS {
 }
 
 type [AWS Load Balancer] extends [Load Balancer] {
-  op write MESSAGE   # forwards a WebSocket message
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
   doc "Elastic Load Balancing: an application (L7) or network (L4) load balancer on AWS."
 }
 

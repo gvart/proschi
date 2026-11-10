@@ -8,7 +8,7 @@
 import "problem.proschi"
 
 lb       "Load Balancer"   [AWS Load Balancer] x2 @docs
-gateways "Session Servers" [WebSocket]         x26 @docs "Hold the editors' WebSockets and subscribe to the documents they have open"
+gateways "Session Servers" [SessionServer]     x26 @docs "Hold the editors' WebSockets and subscribe to the documents they have open"
 collab   "Collab Service"  [Go]                x4 @docs "Owns each open document's revision: transforms concurrent operations and appends them in order"
 oplog    "Operation Log"   [Cassandra]         x3 @docs "Every operation of every document, partitioned by document id, ordered by revision"
 bus      "Document Bus"    [NATS]              x2 @docs "One subject per open document; carries operations and cursors to the session servers"
@@ -57,7 +57,7 @@ usecase "Edit" "An editor types; the change is ordered, stored, acknowledged and
   gateways --> lb            : ACK revision 43
   lb       --> editor        : ACK revision 43
   collab   ->> bus           : PUBLISH doc.42 revision 43
-  bus      ->> gateways      : x2 doc.42 revision 43
+  bus      ->> gateways      : x2 OP doc.42 revision 43
   gateways ->> collaborators : x2 OP revision 43
 }
 
@@ -67,7 +67,7 @@ usecase "Move cursor" "An editor moves the cursor or selects text; the others se
   gateways ->> bus           : PUBLISH doc.42.presence cursor 120
   gateways --> lb            : ok
   lb       --> editor        : ok
-  bus      ->> gateways      : x2 doc.42.presence cursor 120
+  bus      ->> gateways      : x2 CURSOR doc.42.presence at 120
   gateways ->> collaborators : x2 CURSOR alice at 120
 }
 

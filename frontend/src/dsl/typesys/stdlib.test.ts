@@ -125,7 +125,7 @@ describe('the stdlib vocabularies', () => {
     expectOps('Memcached', ['GET', 'GETS'], ['SET', 'ADD', 'CAS', 'DELETE']);
     expectOps('Payment Gateway', [], ['CHARGE', 'REFUND']);
     // Edges that carry WebSockets forward a MESSAGE; plain HTTP edges do not.
-    for (const name of ['AWS Load Balancer', 'API Gateway', 'AWS API Gateway', 'Cloudflare', 'nginx', 'Envoy', 'HAProxy']) expectOps(name, [], ['MESSAGE']);
+    for (const name of ['AWS Load Balancer', 'API Gateway', 'AWS API Gateway', 'Cloudflare', 'nginx', 'Envoy', 'HAProxy']) expect(findOp(byName.get(name)!, 'MESSAGE')?.access, name).toBe('forward');
     for (const name of ['CDN', 'Load Balancer', 'WAF', 'DNS']) expect(findOp(byName.get(name)!, 'MESSAGE'), name).toBeUndefined();
   });
 });
@@ -137,7 +137,7 @@ describe('the stdlib vocabularies', () => {
  * from the type's ops, they become writes.
  */
 const ACCESS_CHANGES = [
-  // A WebSocket frame the load balancer forwards to the gateway.
+  // A WebSocket frame the load balancer forwards: it writes when its handler does (chat's SEND, a document's OP).
   'AWS Load Balancer MESSAGE read→write',
   // User types of the problems: a consumed record spends budget, a ref update and its replication, a TAO write and invalidation.
   'BudgetService AdAggregate read→write',
@@ -147,6 +147,8 @@ const ACCESS_CHANGES = [
   'Redis LPOP read→write',
   'Redis PFADD read→write',
   'Redis ZINCRBY read→write',
+  // collaborative-docs: an edit is stored; a cursor (SessionServer CURSOR) is a read.
+  'SessionServer OP read→write',
   'TAO INVALIDATE read→write',
   'TAO assoc_add read→write',
 ];
@@ -164,7 +166,8 @@ describe('the stdlib and the practice problems', () => {
           const word = step.httpMethod || /^\s*"?([A-Za-z_]+)/.exec(step.stepName.replace(/^((x\d+|~\S+)\s+)*/, ''))?.[1];
           const op = type && word ? findOp(type, word) : undefined;
           const before = accessOf(step.httpMethod || undefined, step.stepName);
-          if (op && op.access !== before) changes.add(`${type!.name} ${op.name} ${before}→${op.access}`);
+          // The access the step gets: the op's, or for a forwarded frame its handler's.
+          if (op && step.access !== before) changes.add(`${type!.name} ${op.name} ${before}→${step.access}`);
           // An op's multipliers would change the simulation of a reference solution.
           if (op && solution) expect(op.latency ?? op.cost, `${p.id}: ${type!.name} ${op.name}`).toBeUndefined();
         }

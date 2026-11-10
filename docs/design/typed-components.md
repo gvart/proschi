@@ -85,7 +85,7 @@ Properties:
 | `consistency` | `strong` or `eventual`. |
 | `writeScaling` | `replicas` or `shards`. |
 | `protocol` | A word or a string: `SQL`, `HTTP`, `RESP`. |
-| `op read\|write <names> [latency <n>] [cost <n>]` | Comma-separated names (words or strings); multipliers apply to each. |
+| `op read\|write\|forward <names> [latency <n>] [cost <n>]` | Comma-separated names (words or strings); multipliers apply to each. `forward`: see "Typed operations in steps". |
 | `status <codes>` | Comma-separated codes, 100 to 599. |
 | `header <names>` | Comma-separated header names; dashes are allowed (`Content-Type`). In a one-line body, quote a name with dashes. |
 | `icon <tech>` | A catalog tech stack: `icon PostgreSQL`, `icon [Amazon DynamoDB]`. |
@@ -262,7 +262,17 @@ interface ResolvedType {
 
 Iteration 3 implements D7. It applies to request steps (`->`, `->>`, `-x`)
 whose target node has a `resolvedType` with at least one `op`. Nodes without a
-type, and types without ops, keep the old rules and get no new warnings.
+type keep the old rules and get no new warnings.
+
+- **Open and closed vocabularies.** A type with no ops, own or inherited, has
+  an open vocabulary: any label is accepted and reads or writes by the verb
+  list, as before. `Service`, `Worker`, `WebSocket`, `gRPC`, the languages and
+  frameworks, the platforms and the functions are open, because their
+  operations are the user's own API. To close one, declare a type with ops and
+  use it: `type SessionServer extends WebSocket` with the lines `op write OP`
+  and `op read CURSOR`, then `gateways [SessionServer]`. From then on a label
+  that names none of them warns. A type with ops is closed, and its children
+  inherit the ops, so they are closed too.
 
 - **Lookup.** If the label starts with an HTTP method, the method is looked up.
   Otherwise the label's first words are (after `x<N>` / `~size` and an opening
@@ -280,6 +290,26 @@ type, and types without ops, keep the old rules and get no new warnings.
   instead of listing the ops. The step has no `op`. Its access is what
   `accessOf` gives, so a verb that wrote before (`SAVE`) still writes, and the
   warning ends `Treated as a write, as before.`
+- **Forward.** `op forward MESSAGE` is the third access. An edge that passes a
+  WebSocket frame on (AWS Load Balancer, API Gateway, nginx, Envoy, …)
+  neither reads nor writes it: the frame means what its handler makes of it.
+  A step whose op is `forward` takes the access of the step that handles the
+  frame, the next step sent on from its target, following further forwards
+  (`resolveForwards` in parser.ts). `editor -> lb : MESSAGE CURSOR …` then
+  `lb -> gateways : CURSOR …` is a read when the gateway's type says
+  `op read CURSOR`, and `MESSAGE OP …` is a write. Without a handler, the step
+  keeps the verb's access. `step.op.access` stays `forward`; `step.access` is
+  always `read` or `write`.
+- **Warning text.** The ops are listed with the type's own ones first and
+  each ancestor's after, at most eight. A long status list is cut after
+  twelve codes.
+- **Scan.** DynamoDB and HBase `Scan` read the whole table:
+  `op read Scan latency 10 cost 25`. No reference solution uses it.
+  nearby-search's wrong design `geo-query-on-profiles` does, and it still
+  fails the tests it names. Cassandra's `ALLOW FILTERING` is a clause after
+  `SELECT`, not a first word, so it can't be an op. Mongo's collection scans
+  are a `find` without an index, which the op name can't show. Neither has a
+  multiplier.
 - **Statuses.** A response `api --> client : 418` is checked against the
   responder's (the request target's) `statuses`, if the type lists any:
   `REST API has no status 418; it answers 200, 201, …`.

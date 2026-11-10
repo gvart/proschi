@@ -119,7 +119,7 @@ api    "API"    [REST API]
 ledger "Ledger" [LedgerDb]
 api -> ledger : APPEND
 ```
-`[Tech]` names a type. Body lines: `kind`, `op read|write A, B [latency x] [cost y]`, `status`, `header`, `doc "…"`.
+`[Tech]` names a type. Body lines: `kind`, `op read|write|forward A, B [latency x] [cost y]`, `status`, `header`, `doc "…"`.
 
 ## Use cases
 

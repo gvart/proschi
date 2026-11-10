@@ -706,8 +706,8 @@
           "include": "#comment"
         },
         {
-          "comment": "`op read|write A, B [latency x] [cost y]`",
-          "begin": "(?:^|(?<=\\{))\\s*(op)\\s+(read|write)\\b",
+          "comment": "`op read|write|forward A, B [latency x] [cost y]`",
+          "begin": "(?:^|(?<=\\{))\\s*(op)\\s+(read|write|forward)\\b",
           "end": "(?=$|\\}|#)",
           "beginCaptures": {
             "1": {

@@ -11,7 +11,7 @@ type [GCP Cloud DNS] extends DNS {
 }
 
 type [GCP Load Balancing] extends [Load Balancer] {
-  op write MESSAGE   # forwards a WebSocket message
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
   doc "Cloud Load Balancing, Google Cloud's global and regional load balancers."
 }
 

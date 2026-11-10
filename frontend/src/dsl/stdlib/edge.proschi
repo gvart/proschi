@@ -51,7 +51,7 @@ type [Load Balancer] extends HttpEdge {
 }
 
 type [API Gateway] extends HttpEdge {
-  op write MESSAGE   # forwards a WebSocket message
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
   kind gateway
   doc "One entry point for an API: routing, authentication and rate limits before the services."
 }
@@ -63,37 +63,37 @@ type WAF extends HttpEdge {
 # Products.
 
 type Fastly extends CDN {
-  op write MESSAGE   # forwards a WebSocket message
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
   doc "Fastly, the programmable CDN."
 }
 
 type Akamai extends CDN {
-  op write MESSAGE   # forwards a WebSocket message
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
   doc "Akamai, the CDN and edge security platform."
 }
 
 type nginx extends [Load Balancer] {
-  op write MESSAGE   # forwards a WebSocket message
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
   doc "nginx, the web server used as a reverse proxy and load balancer."
 }
 
 type Envoy extends [Load Balancer] {
-  op write MESSAGE   # forwards a WebSocket message
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
   doc "Envoy, the L7 proxy behind most service meshes."
 }
 
 type HAProxy extends [Load Balancer] {
-  op write MESSAGE   # forwards a WebSocket message
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
   doc "HAProxy, the TCP and HTTP load balancer."
 }
 
 type Traefik extends [Load Balancer] {
-  op write MESSAGE   # forwards a WebSocket message
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
   doc "Traefik, the reverse proxy that configures itself from containers."
 }
 
 type [Kubernetes Ingress] extends [Load Balancer] {
-  op write MESSAGE   # forwards a WebSocket message
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
   doc "A Kubernetes ingress controller: routes outside HTTP traffic to the cluster's services."
 }
 

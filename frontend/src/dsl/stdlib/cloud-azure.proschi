@@ -7,7 +7,7 @@ type [Azure CDN] extends CDN {
 }
 
 type [Azure Front Door] extends CDN {
-  op write MESSAGE   # forwards a WebSocket message
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
   doc "Azure Front Door, Azure's global entry point: CDN, load balancing and WAF at the edge."
 }
 
@@ -20,7 +20,7 @@ type [Azure Load Balancer] extends [Load Balancer] {
 }
 
 type [Azure Application Gateway] extends [Load Balancer] {
-  op write MESSAGE   # forwards a WebSocket message
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
   doc "Azure Application Gateway, the L7 load balancer of Azure, with an optional WAF."
 }
 
