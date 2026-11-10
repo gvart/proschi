@@ -557,7 +557,10 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
       ? { label: notes.reached === 'clarify' ? 'Next: Clarify' : `Continue: ${labelOf(notes.stage)}`, onClick: () => openStage(notes.stage), primary: true }
       : following
         ? { label: `Next: ${labelOf(following)}`, onClick: () => openStage(following), primary: stageDone(notes, work!, questions.length, solved) }
-        : undefined;
+        : // The last stage: Finish goes back where the problem was opened from (the notes are saved as typed).
+          { label: 'Finish', onClick: () => {
+              window.location.hash = back.href;
+            }, primary: true };
 
   // Focus moves to each new stage's heading (not on the first render).
   const main = useRef<HTMLDivElement>(null);
@@ -698,7 +701,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   else if (screen === 'clarify') body = <ClarifyStage problem={problem} interview={interview} notes={notes} onNotes={updateNotes} onNext={() => openStage('estimate')} />;
   else if (screen === 'estimate') body = <EstimateStage problem={problem} interview={interview} notes={notes} onNotes={updateNotes} onNext={() => openStage('design')} phone={phone} />;
   else if (screen === 'design') body = designStage;
-  else if (screen === 'wrapup') body = <WrapupStage problem={problem} progress={progress} solved={solved} notes={notes} onNotes={updateNotes} tests={testPanel(true)} />;
+  else if (screen === 'wrapup') body = <WrapupStage problem={problem} progress={progress} solved={solved} notes={notes} onNotes={updateNotes} tests={testPanel(true)} finish={back} />;
 
   const zenOn = zen.zen && editorView;
   const designTools =

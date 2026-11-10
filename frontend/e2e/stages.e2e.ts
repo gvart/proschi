@@ -106,9 +106,12 @@ for (const [device, viewport] of [
       await expect(page.getByTestId('design-guide')).toBeAttached();
       await next(page).click();
 
-      // Wrap-up: solved, a recall prompt, and where to go next.
+      // Wrap-up: solved, a recall prompt, Finish, and where to go next.
       await expect(page.getByTestId('wrapup-status')).toContainText('Solved');
-      await page.getByLabel(/what breaks first at 10×/).fill('The single database, under the redirects.');
+      const recall = page.getByLabel(/what breaks first at 10×/);
+      await recall.fill('The single database, under the redirects.');
+      await expect(page.getByTestId('wrapup-finish')).toHaveText('Finish');
+      await expect(next(page)).toHaveText('Finish');
       await expect(page.getByTestId('wrapup-next')).toContainText('Next on the roadmap');
       await expect(page.getByRole('link', { name: /Practice this as a mock interview/ })).toHaveAttribute('href', '#/interview?problem=url-shortener');
       await shot(page, `${device}-9-wrapup`);
@@ -116,7 +119,17 @@ for (const [device, viewport] of [
       await shot(page, `${device}-10-wrapup-end`);
       expect(await page.evaluate(() => JSON.parse(localStorage.getItem('proschi.practice')!)['url-shortener'].status)).toBe('solved');
 
+      // Finish goes back to the roadmap it was opened from, the notes kept.
+      await page.getByTestId('wrapup-finish').click();
+      await expect(page).toHaveURL(/#\/roadmap$/);
+      await page.goto('practice/#/roadmap/url-shortener');
+      await expect(recall).toHaveValue('The single database, under the redirects.');
+      // The stage bar's Finish does the same.
+      await next(page).click();
+      await expect(page).toHaveURL(/#\/roadmap$/);
+
       // Next on the roadmap opens the next problem on its lesson, a first visit.
+      await page.goto('practice/#/roadmap/url-shortener');
       const following = page.getByTestId('wrapup-next');
       const href = (await following.getAttribute('href'))!;
       expect(href).toMatch(/^#\/roadmap\/[a-z0-9-]+$/);
