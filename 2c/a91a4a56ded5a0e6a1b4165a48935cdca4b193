@@ -1,0 +1,14 @@
+plugin/hooks/layout.cjs
+  h_bdd87144da84ba 1-3,5-7,9,18,20-22,24-27,38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2ca91a4a56ded5a0e6a1b4165a48935cdca4b193",
+  "prompts": {},
+  "humans": {
+    "h_bdd87144da84ba": {
+      "author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
