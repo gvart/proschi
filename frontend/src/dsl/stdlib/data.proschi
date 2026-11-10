@@ -1,29 +1,347 @@
-# Proschi standard library: data stores. The rules are in core.proschi.
+# Proschi standard library: components that keep data. Queues and brokers
+# are in messaging.proschi. The rules are in core.proschi.
 
-type Database extends DataStore {
+abstract type DataComponent {
+  op read  READ, FETCH, LOOKUP
+  op write WRITE, SAVE, STORE, RECORD, MARK, RESERVE, HOLD, BOOK
+  doc "A component that keeps data: a database, cache, search index, warehouse or bucket."
+}
+
+# Relational databases.
+
+type Database extends DataComponent {
   kind database
-  doc "A database whose product does not matter"
-}
-
-abstract type SqlDatabase extends Database {
   protocol SQL
+  op read  SELECT, WITH, EXPLAIN, SHOW, BEGIN, ROLLBACK
+  op write INSERT, UPDATE, DELETE, UPSERT, MERGE, TRUNCATE, COMMIT, LOCK
+  op write CREATE, ALTER, DROP
+  doc "A relational database queried with SQL, whose product does not matter."
+}
+
+type PostgreSQL extends Database {
+  op read  LISTEN
+  op write NOTIFY, COPY, VACUUM
+  doc "PostgreSQL, the open source relational database."
+}
+
+type MySQL extends Database {
+  op write REPLACE
+  doc "MySQL, the open source relational database."
+}
+
+type MariaDB extends MySQL {
+  doc "MariaDB, the community fork of MySQL."
+}
+
+type SQLite extends Database {
+  doc "SQLite, the embedded relational database in a single file."
+}
+
+type Oracle extends Database {
+  doc "Oracle Database, the commercial relational database."
+}
+
+type [SQL Server] extends Database {
+  doc "Microsoft SQL Server, the commercial relational database."
+}
+
+type TimescaleDB extends PostgreSQL {
+  kind analytics
+  doc "TimescaleDB, PostgreSQL extended for time series."
+}
+
+abstract type DistributedSql extends Database {
+  doc "A relational database that shards and replicates itself across nodes, keeping transactions."
+}
+
+type CockroachDB extends DistributedSql {
+  doc "CockroachDB, a distributed SQL database that speaks the PostgreSQL protocol."
+}
+
+type YugabyteDB extends DistributedSql {
+  doc "YugabyteDB, a distributed SQL database compatible with PostgreSQL."
+}
+
+type TiDB extends DistributedSql {
+  doc "TiDB, a distributed SQL database compatible with MySQL."
+}
+
+type Vitess extends DistributedSql {
+  doc "Vitess, which shards MySQL behind one SQL endpoint."
+}
+
+# NoSQL databases.
+
+type [NoSQL Database] extends DataComponent {
+  kind database
+  op read  GET
+  op write PUT, SET, DELETE
+  doc "A non-relational database that partitions data by key, whose product does not matter."
+}
+
+type DynamoDB extends [NoSQL Database] {
+  op read  GetItem, BatchGetItem, Query, Scan, TransactGetItems, DescribeTable
+  op write PutItem, UpdateItem, DeleteItem, BatchWriteItem, TransactWriteItems
+  op write ExecuteStatement, CreateTable, UpdateTable, DeleteTable
+  doc "DynamoDB, the managed key-value and document database: reads by key or partition, a Scan reads the whole table."
+}
+
+abstract type DocumentNoSql extends [NoSQL Database] {
+  doc "A NoSQL database that stores JSON-like documents and queries their fields."
+}
+
+type MongoDB extends DocumentNoSql {
+  op read  find, findOne, aggregate, countDocuments, estimatedDocumentCount, distinct, watch
+  op write insertOne, insertMany, updateOne, updateMany, replaceOne, deleteOne, deleteMany
+  op write findOneAndUpdate, findOneAndReplace, findOneAndDelete, bulkWrite, createIndex
+  doc "MongoDB, the document database."
+}
+
+type CouchDB extends DocumentNoSql {
+  doc "Apache CouchDB, a document database with an HTTP API and multi-primary replication."
+}
+
+type Couchbase extends DocumentNoSql {
+  op read  lookupIn, exists, query
+  op write upsert, insert, replace, remove, mutateIn, touch, increment, decrement
+  doc "Couchbase, a document database with a built-in cache."
+}
+
+abstract type WideColumnNoSql extends [NoSQL Database] {
+  doc "A NoSQL database of rows with many columns, partitioned by key and sorted within a partition."
+}
+
+type Cassandra extends WideColumnNoSql {
+  protocol CQL
   op read  SELECT
-  op write INSERT, UPDATE, DELETE
-  doc "A relational database, queried with SQL"
+  op write INSERT, UPDATE, DELETE, BATCH, TRUNCATE
+  doc "Apache Cassandra, the wide-column database queried with CQL."
 }
 
-type PostgreSQL extends SqlDatabase {
-  doc "PostgreSQL, the open source relational database"
+type ScyllaDB extends Cassandra {
+  doc "ScyllaDB, a Cassandra-compatible database written in C++."
 }
 
-type Cache extends DataStore {
+type HBase extends WideColumnNoSql {
+  op read  Scan, Exists
+  op write Increment, Append, CheckAndMutate
+  doc "Apache HBase, the wide-column database on HDFS."
+}
+
+abstract type GraphNoSql extends [NoSQL Database] {
+  protocol Cypher
+  op read  MATCH, OPTIONAL, RETURN, CALL
+  op write CREATE, MERGE, DELETE, DETACH, SET, REMOVE
+  doc "A graph database: nodes and relationships, queried by pattern."
+}
+
+type Neo4j extends GraphNoSql {
+  doc "Neo4j, the graph database queried with Cypher."
+}
+
+abstract type CoordinationStore extends DataComponent {
+  kind database
+  doc "A small, strongly consistent store for configuration, leader election and locks."
+}
+
+type etcd extends CoordinationStore {
+  op read  Range, Watch, LeaseTimeToLive
+  op write Put, DeleteRange, Txn, Compact, LeaseGrant, LeaseRevoke, LeaseKeepAlive
+  doc "etcd, the consistent key-value store behind Kubernetes."
+}
+
+type ZooKeeper extends CoordinationStore {
+  op read  getData, getChildren, exists, getACL, sync
+  op write create, setData, delete, setACL, multi
+  doc "Apache ZooKeeper, the coordination service of znodes and watches."
+}
+
+# Caches.
+
+type Cache extends DataComponent {
   kind cache
-  doc "An in-memory key-value cache"
+  op read  GET, MGET
+  op write SET, DELETE, EXPIRE
+  doc "An in-memory key-value cache, whose product does not matter."
 }
 
 type Redis extends Cache {
   protocol RESP
-  op read  GET, MGET, HGET
-  op write SET, DEL, HSET, EXPIRE
-  doc "Redis, the in-memory data store, used as a cache"
+  # Strings
+  op read  GETRANGE, STRLEN
+  op write SETNX, SETEX, PSETEX, GETSET, GETDEL, GETEX, MSET, MSETNX, APPEND, SETRANGE
+  op write INCR, INCRBY, INCRBYFLOAT, DECR, DECRBY
+  # Keys
+  op read  EXISTS, TTL, PTTL, TYPE, KEYS, SCAN
+  op write DEL, UNLINK, PEXPIRE, EXPIREAT, PEXPIREAT, PERSIST, RENAME, COPY
+  # Hashes
+  op read  HGET, HMGET, HGETALL, HEXISTS, HKEYS, HVALS, HLEN, HSCAN
+  op write HSET, HSETNX, HMSET, HDEL, HINCRBY, HINCRBYFLOAT
+  # Lists
+  op read  LRANGE, LLEN, LINDEX
+  op write LPUSH, RPUSH, LPUSHX, RPUSHX, LPOP, RPOP, BLPOP, BRPOP, LSET, LREM, LTRIM, LINSERT, LMOVE, BLMOVE
+  # Sets
+  op read  SMEMBERS, SISMEMBER, SMISMEMBER, SCARD, SRANDMEMBER, SINTER, SUNION, SDIFF, SSCAN
+  op write SADD, SREM, SPOP, SMOVE, SINTERSTORE, SUNIONSTORE, SDIFFSTORE
+  # Sorted sets
+  op read  ZRANGE, ZREVRANGE, ZRANGEBYSCORE, ZREVRANGEBYSCORE, ZRANGEBYLEX, ZSCORE, ZMSCORE
+  op read  ZRANK, ZREVRANK, ZCARD, ZCOUNT, ZSCAN
+  op write ZADD, ZREM, ZINCRBY, ZPOPMIN, ZPOPMAX, BZPOPMIN, BZPOPMAX, ZREMRANGEBYSCORE, ZREMRANGEBYRANK
+  op write ZUNIONSTORE, ZINTERSTORE, ZRANGESTORE
+  # Bitmaps and HyperLogLog
+  op read  GETBIT, BITCOUNT, BITPOS, PFCOUNT
+  op write SETBIT, BITOP, PFADD, PFMERGE
+  # Geo
+  op read  GEOSEARCH, GEODIST, GEOPOS, GEOHASH, GEORADIUS, GEORADIUSBYMEMBER
+  op write GEOADD, GEOSEARCHSTORE
+  # Pub/sub
+  op read  SUBSCRIBE, PSUBSCRIBE, UNSUBSCRIBE, PUNSUBSCRIBE, SSUBSCRIBE
+  op write PUBLISH, SPUBLISH
+  # Streams
+  op read  XREAD, XREADGROUP, XRANGE, XREVRANGE, XLEN, XPENDING, XINFO
+  op write XADD, XACK, XCLAIM, XAUTOCLAIM, XDEL, XTRIM, XGROUP
+  # Transactions and scripts
+  op read  MULTI, WATCH, UNWATCH, DISCARD, PING
+  op write EXEC, EVAL, EVALSHA, FCALL
+  doc "Redis, the in-memory data store, used as a cache."
+}
+
+type Valkey extends Redis {
+  doc "Valkey, the open source fork of Redis."
+}
+
+type KeyDB extends Redis {
+  doc "KeyDB, a multithreaded fork of Redis."
+}
+
+type Dragonfly extends Redis {
+  doc "Dragonfly, an in-memory store compatible with Redis."
+}
+
+type Memcached extends Cache {
+  op read  GETS
+  op write ADD, REPLACE, APPEND, PREPEND, CAS, INCR, DECR, TOUCH, GAT, GATS, FLUSH_ALL
+  doc "Memcached, the simple distributed in-memory cache."
+}
+
+type Hazelcast extends Cache {
+  doc "Hazelcast, the in-memory data grid."
+}
+
+type Aerospike extends Cache {
+  doc "Aerospike, the key-value store tuned for memory and flash."
+}
+
+# Search.
+
+type [Search Engine] extends DataComponent {
+  kind search
+  op read  Search, KNN
+  op write Index, Upsert, Delete
+  doc "A full-text search index, whose product does not matter."
+}
+
+type Elasticsearch extends [Search Engine] {
+  op read  Get, Mget, Count, MultiSearch, Scroll, Explain, _search, _msearch, _count
+  op write Bulk, Update, Create, UpdateByQuery, DeleteByQuery, Reindex, Refresh, _bulk, _doc, _update
+  doc "Elasticsearch, the distributed search engine on Lucene."
+}
+
+type OpenSearch extends Elasticsearch {
+  doc "OpenSearch, the open source fork of Elasticsearch."
+}
+
+type Solr extends [Search Engine] {
+  doc "Apache Solr, the search server on Lucene."
+}
+
+type Meilisearch extends [Search Engine] {
+  doc "Meilisearch, a fast search engine for search-as-you-type."
+}
+
+type Typesense extends [Search Engine] {
+  doc "Typesense, an in-memory search engine that tolerates typos."
+}
+
+type Algolia extends [Search Engine] {
+  doc "Algolia, the hosted search API."
+}
+
+# Analytics.
+
+type [Data Warehouse] extends DataComponent {
+  kind analytics
+  protocol SQL
+  op read  SELECT, WITH, EXPLAIN, SHOW
+  op write INSERT, UPDATE, DELETE, UPSERT, MERGE, COPY, TRUNCATE, CREATE, DROP
+  doc "A column store for analytical SQL over large data, whose product does not matter."
+}
+
+type Snowflake extends [Data Warehouse] {
+  doc "Snowflake, the cloud data warehouse."
+}
+
+type ClickHouse extends [Data Warehouse] {
+  doc "ClickHouse, the column-oriented OLAP database."
+}
+
+type [Apache Druid] extends [Data Warehouse] {
+  doc "Apache Druid, the real-time analytics database."
+}
+
+type [Apache Pinot] extends [Data Warehouse] {
+  doc "Apache Pinot, the real-time OLAP store for user-facing analytics."
+}
+
+type Databricks extends [Data Warehouse] {
+  doc "Databricks, the lakehouse platform on Spark."
+}
+
+abstract type TimeSeriesStore extends DataComponent {
+  kind analytics
+  op read  QUERY, SELECT
+  op write INSERT
+  doc "A database of timestamped measurements, queried over time ranges."
+}
+
+type InfluxDB extends TimeSeriesStore {
+  doc "InfluxDB, the time series database."
+}
+
+type Prometheus extends TimeSeriesStore {
+  doc "Prometheus, the monitoring system and its time series store."
+}
+
+# Files and objects.
+
+type [Object Storage] extends DataComponent {
+  kind storage
+  protocol HTTP
+  op read  GET, HEAD, LIST
+  op write PUT, DELETE, UPLOAD
+  doc "A bucket of objects (files) by key, whose product does not matter."
+}
+
+type MinIO extends [AWS S3] {
+  doc "MinIO, the self-hosted object storage with the S3 API."
+}
+
+type Ceph extends [Object Storage] {
+  doc "Ceph, the distributed object, block and file storage."
+}
+
+abstract type SharedFileSystem extends DataComponent {
+  kind storage
+  op read  OPEN, LIST
+  op write APPEND
+  doc "A file system many machines mount at once."
+}
+
+type HDFS extends SharedFileSystem {
+  doc "HDFS, the Hadoop distributed file system."
+}
+
+abstract type BlockStorage extends DataComponent {
+  kind storage
+  doc "A disk attached to one machine."
 }

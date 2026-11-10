@@ -1,0 +1,121 @@
+# Proschi standard library: systems you call but do not run. The rules are in
+# core.proschi.
+
+abstract type External {
+  kind external
+  protocol HTTP
+  op read  GET, HEAD, OPTIONS, TRACE, CONNECT
+  op write POST, PUT, PATCH, DELETE
+  status 100, 101, 102, 103
+  status 200, 201, 202, 203, 204, 205, 206, 207, 208, 226
+  status 300, 301, 302, 303, 304, 307, 308
+  status 400, 401, 402, 403, 404, 405, 406, 407, 408, 409, 410, 411, 412, 413, 414, 415, 416, 417, 418
+  status 421, 422, 423, 424, 425, 426, 428, 429, 431, 451
+  status 500, 501, 502, 503, 504, 505, 506, 507, 508, 510, 511
+  header Accept, Accept-Encoding, Accept-Language, Accept-Ranges, Age, Allow, Authorization
+  header Cache-Control, Connection, Content-Disposition, Content-Encoding, Content-Language
+  header Content-Length, Content-Range, Content-Type, Cookie, Date, ETag, Expires, Host
+  header If-Match, If-Modified-Since, If-None-Match, If-Range, If-Unmodified-Since, Last-Modified
+  header Link, Location, Origin, Range, Referer, Retry-After, Server, Set-Cookie, User-Agent, Vary
+  header Upgrade, WWW-Authenticate, Proxy-Authorization, Strict-Transport-Security, Content-Security-Policy
+  header Access-Control-Allow-Origin, Access-Control-Allow-Methods, Access-Control-Allow-Headers
+  header Access-Control-Allow-Credentials, Access-Control-Max-Age, Access-Control-Request-Method
+  header Forwarded, X-Forwarded-For, X-Forwarded-Host, X-Forwarded-Proto, X-Real-IP
+  header X-Request-Id, X-Correlation-Id, Traceparent, Tracestate, Idempotency-Key
+  header X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset
+  header X-API-Key, X-Content-Type-Options, X-Frame-Options, Sec-WebSocket-Key, Sec-WebSocket-Accept, Sec-WebSocket-Protocol
+  doc "A system run by someone else that the design calls over its API."
+}
+
+type [Third Party API] extends External {
+  op write SEND, NOTIFY
+  doc "Another company's API, whose product does not matter."
+}
+
+type [Payment Gateway] extends External {
+  op read  RETRIEVE
+  op write CHARGE, AUTHORIZE, CAPTURE, REFUND, VOID, PAYOUT
+  doc "A payment provider: authorizes, captures and refunds card payments."
+}
+
+type Stripe extends [Payment Gateway] {
+  doc "Stripe, the payments API."
+}
+
+type PayPal extends [Payment Gateway] {
+  doc "PayPal, the online payments service."
+}
+
+type Adyen extends [Payment Gateway] {
+  doc "Adyen, the payments platform for cards and local payment methods."
+}
+
+type Braintree extends [Payment Gateway] {
+  doc "Braintree, PayPal's payments API for cards and wallets."
+}
+
+type [Auth Service] extends External {
+  op read  VALIDATE, VERIFY, INTROSPECT, USERINFO, JWKS
+  op write LOGIN, LOGOUT, TOKEN, REFRESH, REVOKE, REGISTER
+  doc "An identity provider: signs users in and issues and checks their tokens."
+}
+
+type Auth0 extends [Auth Service] {
+  doc "Auth0, the hosted identity provider."
+}
+
+type Okta extends [Auth Service] {
+  doc "Okta, the identity and single sign-on provider."
+}
+
+abstract type Notifier extends External {
+  op write SEND, NOTIFY
+  doc "A provider that delivers messages to people: email, SMS or push notifications."
+}
+
+type [Email Service] extends Notifier {
+  doc "An email provider that sends the design's emails."
+}
+
+type SendGrid extends [Email Service] {
+  doc "SendGrid, Twilio's email API."
+}
+
+type Mailgun extends [Email Service] {
+  doc "Mailgun, the email API."
+}
+
+type [SMS Service] extends Notifier {
+  doc "An SMS provider that sends text messages."
+}
+
+type Twilio extends [SMS Service] {
+  doc "Twilio, the API for SMS, voice and messaging."
+}
+
+type [Push Service] extends Notifier {
+  doc "A push notification provider that delivers to phones."
+}
+
+type APNs extends [Push Service] {
+  doc "Apple Push Notification service, which delivers push notifications to Apple devices."
+}
+
+type FCM extends [Push Service] {
+  doc "Firebase Cloud Messaging, which delivers push notifications to Android, iOS and the web."
+}
+
+type [Analytics Service] extends External {
+  op write TRACK, IDENTIFY, PAGE, SCREEN, ALIAS
+  doc "A product analytics provider that receives usage events."
+}
+
+type [Google Maps] extends External {
+  op read  GEOCODE, DIRECTIONS, DISTANCE, PLACES, ROUTES, TILES
+  doc "Google Maps Platform: geocoding, directions, distances and map tiles."
+}
+
+type OpenAI extends External {
+  op read  COMPLETE, CHAT, EMBED, MODERATE, TRANSCRIBE
+  doc "OpenAI's API for language models and embeddings."
+}

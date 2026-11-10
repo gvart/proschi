@@ -38,12 +38,12 @@ describe('stdlib', () => {
   it('has the seed types, rooted at Component', () => {
     const table = builtinTypes();
     const names = [...table.values()].map((t) => t.name);
-    expect(names).toEqual(expect.arrayContaining(['Component', 'Service', 'DataStore', 'Database', 'SqlDatabase', 'PostgreSQL', 'Cache', 'Redis', 'REST API']));
+    expect(names).toEqual(expect.arrayContaining(['Component', 'Service', 'DataComponent', 'Database', 'PostgreSQL', 'Cache', 'Redis', 'REST API']));
     for (const t of table.values()) {
       expect(t.builtin).toBe(true);
       if (t.name !== 'Component') expect(t.parents[t.parents.length - 1], t.name).toBe('Component');
     }
-    expect(lookupType(table, 'PostgreSQL')).toMatchObject({ parents: ['SqlDatabase', 'Database', 'DataStore', 'Component'], kind: 'database', protocol: 'SQL', icon: 'PostgreSQL' });
+    expect(lookupType(table, 'PostgreSQL')).toMatchObject({ parents: ['Database', 'DataComponent', 'Component'], kind: 'database', protocol: 'SQL', icon: 'PostgreSQL' });
     expect(lookupType(table, 'Component')).toMatchObject({ abstract: true, parents: [] });
   });
 
@@ -58,10 +58,10 @@ describe('stdlib', () => {
   });
 
   it('never changes what a catalog name means', () => {
-    // `SQL Database` is an alias of Database and `Datastore` of GCP Firestore, though SqlDatabase and DataStore are built-in types.
+    // `SQL Database` is an alias of Database and `Datastore` of GCP Firestore: the catalog decides what they mean.
     expect(nodeOf('db [SQL Database]', 'db')).toMatchObject({ techStack: 'Database', resolvedType: { name: 'Database' } });
     expect(nodeOf('db [Datastore]', 'db').techStack).toBe('GCP Firestore');
-    expect(nodeOf('db [Datastore]', 'db').resolvedType).toBeUndefined();
+    expect(nodeOf('db [Datastore]', 'db').resolvedType?.name).toBe('GCP Firestore');
     expect(messages('db [SQL Database]\nf [Datastore]')).toEqual([]);
     for (const t of builtinTypes().values()) {
       const tech = findTech(t.name);
@@ -97,7 +97,7 @@ ledger "Ledger" [LedgerDb]
       name: 'LedgerDb',
       abstract: false,
       builtin: false,
-      parents: ['PostgreSQL', 'SqlDatabase', 'Database', 'DataStore', 'Component'],
+      parents: ['PostgreSQL', 'Database', 'DataComponent', 'Component'],
       kind: 'database',
       protocol: 'SQL',
       props: { latencyMs: 8, availability: 0.9999, durable: true },
@@ -110,13 +110,13 @@ ledger "Ledger" [LedgerDb]
 
   it('merges ops with the inherited ones, own ops replacing inherited ones of the same name', () => {
     const ops = nodeOf(ledger, 'ledger').resolvedType!.ops;
-    expect(ops).toEqual([
-      { name: 'INSERT', access: 'write' },
-      { name: 'UPDATE', access: 'write' },
-      { name: 'DELETE', access: 'write' },
+    expect(ops.slice(-2)).toEqual([
       { name: 'APPEND', access: 'write', latency: 2, cost: 3 },
       { name: 'SELECT', access: 'read', latency: 0.5 },
     ]);
+    expect(ops.filter((o) => o.name === 'SELECT')).toHaveLength(1);
+    expect(ops).toContainEqual({ name: 'INSERT', access: 'write' });
+    expect(ops.findIndex((o) => o.name === 'INSERT')).toBeLessThan(ops.length - 2);
   });
 
   it('draws a node of a declared type with its nearest built-in icon', () => {
@@ -125,9 +125,9 @@ ledger "Ledger" [LedgerDb]
     expect(node.inferredKind).toBeUndefined();
     expect(kindOf(node)).toBe('database');
     const iconned = nodeOf('type Audit extends LedgerDb { icon [DynamoDB] }\n' + ledger + 'a [Audit]', 'a');
-    expect(iconned).toMatchObject({ techStack: 'DynamoDB', resolvedType: { icon: 'DynamoDB', parents: ['LedgerDb', 'PostgreSQL', 'SqlDatabase', 'Database', 'DataStore', 'Component'] } });
+    expect(iconned).toMatchObject({ techStack: 'DynamoDB', resolvedType: { icon: 'DynamoDB', parents: ['LedgerDb', 'PostgreSQL', 'Database', 'DataComponent', 'Component'] } });
     // No built-in icon on the way up: the generic tech of the kind.
-    expect(nodeOf('type Bag extends DataStore {\n  kind storage\n}\nb [Bag]', 'b')).toMatchObject({ techStack: 'Object Storage', type: 'storage' });
+    expect(nodeOf('type Bag extends DataComponent {\n  kind storage\n}\nb [Bag]', 'b')).toMatchObject({ techStack: 'Object Storage', type: 'storage' });
   });
 
   it('overrides scalars down the chain and lets a child change the kind', () => {
@@ -154,7 +154,7 @@ c [C]
     const source = 'type [Ledger Store] extends [REST API] { op write APPEND }\ntype Empty extends Service {}\nl [Ledger Store]\ne [Empty]';
     const { diagram, diagnostics } = parse(source);
     expect(diagnostics).toEqual([]);
-    expect(diagram.nodes[0].resolvedType).toMatchObject({ name: 'Ledger Store', parents: ['REST API', 'Service', 'Component'], statuses: expect.arrayContaining([200, 404]) });
+    expect(diagram.nodes[0].resolvedType).toMatchObject({ name: 'Ledger Store', parents: ['REST API', 'HttpService', 'Service', 'Compute', 'Component'], statuses: expect.arrayContaining([200, 404]) });
     expect(diagram.nodes[0].resolvedType!.ops.at(-1)).toEqual({ name: 'APPEND', access: 'write' });
     expect(diagram.nodes[1].resolvedType).toMatchObject({ name: 'Empty', kind: 'service' });
   });
@@ -166,7 +166,7 @@ c [C]
   it('gives catalog techs their built-in type, aliases included', () => {
     expect(nodeOf('db [Postgres]', 'db')).toMatchObject({ techStack: 'PostgreSQL', resolvedType: { name: 'PostgreSQL', builtin: true } });
     expect(nodeOf('c [Redis]', 'c').resolvedType?.name).toBe('Redis');
-    expect(nodeOf('k [Kafka]', 'k').resolvedType).toBeUndefined();
+    expect(nodeOf('k [Apache Kafka]', 'k').resolvedType?.name).toBe('Kafka');
   });
 
   it('reports cycles, unknown parents, duplicates and redeclared built-ins', () => {
@@ -175,7 +175,8 @@ c [C]
     expect(messages('type A extends PostgreSQLL {}')).toEqual(["error 1: Unknown parent type 'PostgreSQLL'. Did you mean 'PostgreSQL'?"]);
     expect(messages('type A extends Service {}\ntype A extends Cache {}')).toEqual(["error 2: Duplicate type 'A' (first declared on line 1)"]);
     expect(messages('type Redis extends Cache {}')).toEqual(["error 1: Type 'Redis' is built in; extend it under another name"]);
-    expect(messages('type Kafka extends Service {}')).toEqual(["warning 1: Type 'Kafka' has the name of the catalog tech 'Kafka'; [Kafka] now means this type"]);
+    expect(messages('type Kafka extends Service {}')).toEqual(["error 1: Type 'Kafka' is built in; extend it under another name"]);
+    expect(messages('type Postgres extends Service {}')).toEqual(["warning 1: Type 'Postgres' has the name of the catalog tech 'PostgreSQL'; [Postgres] now means this type"]);
     expect(messages('type NoKind {}')).toEqual(["error 1: Type 'NoKind' needs a kind: declare one (kind database) or extend a type that has one"]);
   });
 
@@ -296,7 +297,7 @@ describe('profileOf', () => {
 });
 
 describe('format, diff and Mermaid', () => {
-  const source = `abstract   type Store extends DataStore {
+  const source = `abstract   type Store extends DataComponent {
     kind database
   op read   SELECT,Scan latency 8
     op write INSERT
@@ -309,7 +310,7 @@ db [LedgerDb]
 
   it('formats a type block and keeps its meaning', () => {
     const formatted = format(source);
-    expect(formatted).toBe(`abstract type Store extends DataStore {
+    expect(formatted).toBe(`abstract type Store extends DataComponent {
   kind database
   op read  SELECT, Scan latency 8
   op write INSERT
