@@ -112,6 +112,15 @@ the generic tech of its kind, product in the name (`"TigerBeetle" [Database]`).
 | external | `Third Party API`, `Payment Gateway`, `Email Service`, `SMS Service`, `Push Service`, `Auth Service`, `Stripe`, `PayPal`, `Adyen`, `Twilio`, `SendGrid`, `Mailgun`, `Auth0`, `Okta`, `AWS Cognito`, `AWS SES`, `APNs`, `FCM`, `OpenAI`, `Google Maps` |
 | other (text) | `Text Note`, `Sticky Note`, `Comment` |
 
+## Types: `[abstract] type Name [extends Parent] { … }` (top level)
+```proschi
+type LedgerDb extends PostgreSQL { op write APPEND latency 2 }
+api    "API"    [REST API]
+ledger "Ledger" [LedgerDb]
+api -> ledger : APPEND
+```
+`[Tech]` names a type. Body lines: `kind`, `op read|write A, B [latency x] [cost y]`, `status`, `header`, `doc "…"`.
+
 ## Use cases
 
 ```proschi fragment

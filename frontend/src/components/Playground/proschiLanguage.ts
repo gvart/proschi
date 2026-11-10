@@ -5,7 +5,7 @@ import type { Text } from '@codemirror/state';
 import type { Diagnostic as CmDiagnostic } from '@codemirror/lint';
 import { componentCatalog } from '../../catalog/componentCatalog';
 import { COLOR_NAMES } from '../../dsl/palette';
-import type { Diagnostic } from '../../dsl';
+import { KINDS, builtinTypes, parse, typeKey, type Diagnostic, type Diagram, type ResolvedType } from '../../dsl';
 
 interface LexState {
   inLabel: boolean;
@@ -15,6 +15,8 @@ interface LexState {
   inSection: boolean;
   /** Inside the legend block, where palette names and dashes are words of their own. */
   inLegend?: boolean;
+  /** Inside a `type Name { … }` block, whose property words are keywords. */
+  inType?: boolean;
 }
 
 const KEYWORDS = /^(title|import|group|usecase|par|alt|pos|color|critical)\b/;
@@ -33,6 +35,14 @@ const CONSTANT = /^x?\$[A-Za-z_]\w*/;
 const AFTER_ALT_NAME = /^\s*(\}\s*)?alt\s+("(?:[^"\\]|\\.)*"|\w+)\s+$/;
 
 const STRING = '"(?:[^"\\\\]|\\\\.)*"';
+/** `[abstract] type Name [extends Parent] {`: a type header (docs/design/typed-components.md); elsewhere `type` is a node id. */
+const TYPE_HEADER = /^\s*(?:abstract\s+)?type\s+(?:\[[^\]]*\]|[A-Za-z_]\w*)\s*(?:extends\s+(?:\[[^\]]*\]|[A-Za-z_]\w*)\s*)?\{/;
+/** The words a type body line starts with. */
+const TYPE_PROPERTIES = [
+  'kind', 'op', 'status', 'header', 'protocol', 'icon', 'doc',
+  'rps', 'readRps', 'writeRps', 'writeScaling', 'latencyMs', 'availability', 'costUsd', 'durable', 'consistency', 'bandwidthMBps', 'egressUsdPerGb',
+];
+const TYPE_WORD = new RegExp(`^(?:${TYPE_PROPERTIES.join('|')})\\b`);
 /** A line that opens a section block, in the shapes the parser accepts. */
 export const SECTION_HEADER = new RegExp(
   `^\\s*(?:(?:traffic|requirements|capacity)\\s*\\{|entity\\s+[A-Za-z_]\\w*\\b.*\\{|(?:decision|test|whatif)\\s+${STRING}.*\\{)\\s*(?:#.*)?$`,
@@ -57,7 +67,8 @@ export const proschiStreamParser: StreamParser<LexState> = {
     if (stream.sol() && state.depth <= 0) {
       state.inLabel = false;
       state.depth = 0;
-      if (/^\s*\}/.test(stream.string)) state.inSection = state.inLegend = false;
+      if (/^\s*\}/.test(stream.string)) state.inSection = state.inLegend = state.inType = false;
+      else if (!state.inSection && TYPE_HEADER.test(stream.string)) state.inType = !/\}\s*(?:#.*)?$/.test(stream.string);
       else if (!state.inSection && SECTION_HEADER.test(stream.string)) state.inSection = true;
       else if (!state.inSection && LEGEND_HEADER.test(stream.string)) state.inSection = state.inLegend = true;
     }
@@ -80,6 +91,10 @@ export const proschiStreamParser: StreamParser<LexState> = {
         if (BEFORE_LABEL_PREFIX.test(stream.string.slice(0, stream.pos)) && stream.match(LABEL_PREFIX)) return 'number';
         if (stream.match(HTTP_METHOD)) return 'keyword';
         if (stream.match(/^\/\S*/)) return 'link';
+        // `GET /orders header Authorization, Idempotency-Key`: the headers the request sends.
+        const label = stream.string.slice(0, stream.pos);
+        if (/:\s*[A-Z]+\s+\S+\s+$/.test(label) && stream.match(/^header\b/)) return 'keyword';
+        if (/:\s*[A-Z]+\s+\S+\s+header\s+(?:[\w-]+\s*,\s*)*$/.test(label) && stream.match(/^[\w-]+/)) return 'propertyName';
         if (stream.match(/^\d{3}\b/)) return 'number';
         if (stream.match(/^(json|xml|text)\b/)) return 'typeName';
       }
@@ -98,6 +113,8 @@ export const proschiStreamParser: StreamParser<LexState> = {
       if (stream.pos === stream.string.search(/\S/) && stream.match(/^let\b/)) return 'keyword';
       if (stream.eat('=')) return 'operator';
     }
+    const typeStyle = typeToken(stream, state);
+    if (typeStyle) return typeStyle;
     if (stream.match(QUANTITY)) return 'number';
     if (stream.match(/^[<>]=?/)) return 'operator';
     if ((afterColor || (state.inLegend && stream.string.slice(0, stream.pos).trim())) && stream.match(COLOR_NAME)) return 'atom';
@@ -130,6 +147,24 @@ export const proschiStreamParser: StreamParser<LexState> = {
   languageData: { commentTokens: { line: '#' } },
 };
 
+/** A word of a type header or body: `abstract`, `type`, `extends`, the names, the property words and their values. */
+function typeToken(stream: Parameters<StreamParser<LexState>['token']>[0], state: LexState): string | null {
+  const header = TYPE_HEADER.test(stream.string);
+  if (!header && !state.inType) return null;
+  const before = stream.string.slice(0, stream.pos);
+  if (header && /^\s*(?:abstract\s+)?$/.test(before) && stream.match(/^(?:abstract|type)\b/)) return 'keyword';
+  if (header && /^\s*(?:abstract\s+)?type\s+\S+\s+$/.test(before) && stream.match(/^extends\b/)) return 'keyword';
+  if (header && /(?:^\s*(?:abstract\s+)?type|\bextends)\s+$/.test(before) && stream.match(/^[A-Za-z_]\w*/)) return 'typeName';
+  // A body line, or a one-line body after `{`.
+  if ((state.inType ? /^\s*$/ : /\{\s*$/).test(before) && stream.match(TYPE_WORD)) return 'keyword';
+  if (/(?:^|\{)\s*op\s+$/.test(before) && stream.match(/^(?:read|write)\b/)) return 'keyword';
+  if (/(?:^|\{)\s*op\s+(?:read|write)\b/.test(before) && stream.match(/^(?:latency|cost)\b/)) return 'keyword';
+  if (/(?:^|\{)\s*kind\s+$/.test(before) && stream.match(/^[A-Za-z_]\w*/)) return 'atom';
+  if (/(?:^|\{)\s*(?:durable|consistency|writeScaling)\s+$/.test(before) && stream.match(/^[A-Za-z_]\w*/)) return 'atom';
+  if (/(?:^|\{)\s*header\s+(?:[\w-]+\s*,\s*)*$/.test(before) && stream.match(/^[\w-]+/)) return 'propertyName';
+  return null;
+}
+
 /** Syntax highlighting for Proschi documents. */
 export const proschiLanguage = StreamLanguage.define(proschiStreamParser);
 
@@ -150,6 +185,8 @@ const keywordOptions: Completion[] = [
   { label: 'title', type: 'keyword', apply: 'title "', detail: 'document title' },
   { label: 'import', type: 'keyword', apply: 'import "', detail: 'import "file.proschi"' },
   snippetCompletion('let ${name} = ${100 rps}', { label: 'let', type: 'keyword', detail: 'a constant, used as $name' }),
+  snippetCompletion('type ${Name} extends ${Service} {\n\t${}\n}', { label: 'type', type: 'keyword', detail: 'type Name extends Parent { … }' }),
+  snippetCompletion('abstract type ${Name} extends ${Service} {\n\t${}\n}', { label: 'abstract type', type: 'keyword', detail: 'a type only others extend' }),
   { label: 'group', type: 'keyword', detail: 'group id "Name" { … }' },
   { label: 'usecase', type: 'keyword', apply: 'usecase "', detail: 'usecase "Name" { … }' },
   { label: 'par', type: 'keyword', apply: 'par {', detail: 'parallel steps' },
@@ -188,6 +225,103 @@ const assertionOptions: Completion[] = [
   ['${node} has replicas >= ${min}', 'node has replicas >=', 'minimum replica count'],
 ].map(([template, label, detail]) => snippetCompletion(template, { label, type: 'keyword', detail }));
 
+/** The diagram of a document, parsed once per version of it, for what completion needs of its types. */
+const diagrams = new WeakMap<Text, Diagram>();
+function diagramOf(doc: Text): Diagram {
+  let diagram = diagrams.get(doc);
+  if (!diagram) diagrams.set(doc, (diagram = parse(doc.toString()).diagram));
+  return diagram;
+}
+
+/** A type name as written outside brackets: bare when it is a word, else in brackets. */
+const bareTypeName = (name: string) => (/^[A-Za-z_]\w*$/.test(name) ? name : `[${name}]`);
+
+/** The document's types, then the built-in ones (abstract marked, the doc as detail); `apply` inserts a name. */
+function typeOptions(doc: Text, apply: (name: string) => Completion['apply']): Completion[] {
+  const builtin = [...builtinTypes().values()];
+  return [...(diagramOf(doc).types ?? []), ...builtin].map((t: ResolvedType) => ({
+    label: t.name,
+    type: 'class',
+    detail: [t.abstract ? 'abstract' : '', t.doc ?? `extends ${t.parents[0] ?? 'nothing'}`].filter(Boolean).join(' · '),
+    info: [t.name, ...t.parents].join(' → '),
+    apply: apply(t.name),
+    boost: 1,
+  }));
+}
+
+/** Catalog techs no built-in type is named after, with their aliases. */
+const untypedTechOptions = () => {
+  const typed = new Set([...builtinTypes().values()].map((t) => typeKey(t.name)));
+  // Aliases (boost -1) stay: `Postgres` still inserts the tech it stands for.
+  return techOptions.filter((o) => o.boost === -1 || !typed.has(typeKey(o.label)));
+};
+
+/** The type-body lines: a property at the start, a kind after `kind`, read or write after `op`. */
+const typeBodyOptions: Completion[] = TYPE_PROPERTIES.map((label) => ({ label, type: 'keyword', detail: 'type property' }));
+
+/**
+ * The open blocks around line `number` (1-based), outermost first, each as
+ * the text of its opening line. Strings, labels and payloads are skipped.
+ */
+function openBlocks(doc: Text, number: number): string[] {
+  const stack: string[] = [];
+  let payload = 0;
+  const count = (text: string, open: string, close: string, on: (opened: boolean) => void) => {
+    for (const ch of text) if (open.includes(ch)) on(true);
+    else if (close.includes(ch)) on(false);
+  };
+  for (let n = 1; n < number; n++) {
+    const text = doc.line(n).text;
+    if (payload > 0) {
+      count(text, '{[', '}]', (o) => (payload = Math.max(0, payload + (o ? 1 : -1))));
+      continue;
+    }
+    const code = text.replace(/"(?:[^"\\]|\\.)*"?/g, '""').replace(/(?:^|\s)#.*$/, '');
+    const colon = code.indexOf(':');
+    count(colon < 0 ? code : code.slice(0, colon), '{', '}', (o) => (o ? stack.push(text) : stack.pop()));
+    if (colon >= 0) count(code.slice(colon + 1), '{[', '}]', (o) => (payload = Math.max(0, payload + (o ? 1 : -1))));
+  }
+  return stack;
+}
+
+const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
+/** `a -> b : label`: the step's nodes, arrow and its label so far. */
+const STEP = /^\s*(?:\}\s*)?([A-Za-z_]\w*)\s*(->>|-->|->|-x)\s*([A-Za-z_]\w*)\s*:\s*(.*)$/;
+
+/**
+ * In a use case step's label: the target type's operations (and the HTTP
+ * methods, for an HTTP type), the sender type's statuses on a response, and
+ * the target's headers after `METHOD /path header`.
+ */
+function stepOptions(doc: Text, before: string, pos: number, lineNumber: number): CompletionResult | null {
+  const m = STEP.exec(before);
+  if (!m || !openBlocks(doc, lineNumber).some((b) => /^\s*usecase\b/.test(b))) return null;
+  const [, from, arrow, to, label] = m;
+  const typeOf = (id: string) => diagramOf(doc).nodes.find((n) => n.id === id)?.resolvedType;
+  if (arrow === '-->') {
+    const t = typeOf(from);
+    if (!t || !/^\d*$/.test(label)) return null;
+    return { from: pos - label.length, options: t.statuses.map((s) => ({ label: String(s), type: 'constant', detail: `status of ${t.name}` })), validFor: /^\d*$/ };
+  }
+  const t = typeOf(to);
+  if (!t) return null;
+  const headers = /^([A-Z]+)\s+\S+\s+header\s+((?:[\w-]+\s*,\s*)*)([\w-]*)$/.exec(label);
+  if (headers && HTTP_METHODS.includes(headers[1])) {
+    const used = new Set(headers[2].split(',').map((h) => h.trim().toLowerCase()));
+    const options = t.headers.filter((h) => !used.has(h.toLowerCase())).map((h) => ({ label: h, type: 'property', detail: `header of ${t.name}` }));
+    return { from: pos - headers[3].length, options, validFor: /^[\w-]*$/ };
+  }
+  const afterPath = /^([A-Z]+)\s+\S+\s+(\w*)$/.exec(label);
+  if (afterPath && HTTP_METHODS.includes(afterPath[1]) && t.headers.length) {
+    return { from: pos - afterPath[2].length, options: [{ label: 'header', type: 'keyword', apply: 'header ', detail: t.headers.join(', ') }], validFor: /^\w*$/ };
+  }
+  if (!/^\w*$/.test(label)) return null;
+  const ops: Completion[] = t.ops.map((o) => ({ label: o.name, type: 'method', detail: `${o.access} · ${t.name}`, info: t.doc }));
+  const http = t.protocol?.toUpperCase() === 'HTTP' ? HTTP_METHODS.filter((h) => !t.ops.some((o) => o.name === h)) : [];
+  const options = [...ops, ...http.map((h) => ({ label: h, type: 'method', detail: `HTTP method · ${t.name}` }))];
+  return options.length ? { from: pos - label.length, options, validFor: /^\w*$/ } : null;
+}
+
 /** True when line `number` (1-based) is inside a `test "…" {` block. */
 function inTestBlock(doc: Text, number: number): boolean {
   for (let n = number - 1; n >= 1; n--) {
@@ -214,11 +348,15 @@ export function proschiCompletions(getNodeIds: () => string[], getTechs?: () => 
     const tech = before.match(/\[([^\]]*)$/);
     if (tech) {
       const only = getTechs?.();
-      const options = only ? only.map((t) => ({ label: t.tech, type: 'type', detail: t.detail, apply: applyTech(t.tech) })) : techOptions;
+      const options = only ? only.map((t) => ({ label: t.tech, type: 'type', detail: t.detail, apply: applyTech(t.tech) })) : [...typeOptions(ctx.state.doc, applyTech), ...untypedTechOptions()];
       return { from: ctx.pos - tech[1].length, options, validFor: /^[\w ./-]*$/ };
     }
+    const parent = before.match(/^\s*(?:abstract\s+)?type\s+(?:\[[^\]]*\]|\w+)\s+extends\s+(\w*)$/);
+    if (parent) return { from: ctx.pos - parent[1].length, options: typeOptions(ctx.state.doc, bareTypeName), validFor: /^\w*$/ };
 
-    // Labels after ':' are free text.
+    const step = stepOptions(ctx.state.doc, before, ctx.pos, line.number);
+    if (step) return step;
+    // Other labels after ':' are free text.
     if (/^[^"#]*:/.test(before)) return null;
 
     const word = ctx.matchBefore(/[A-Za-z_]\w*/);
@@ -228,6 +366,15 @@ export function proschiCompletions(getNodeIds: () => string[], getTechs?: () => 
     // `when` is only valid right after an alt name: alt "Not found" when "…" {
     if (/^\s*(\}\s*)?alt\s+"[^"]*"\s+$/.test(before.slice(0, from - line.from))) {
       return { from, options: [{ label: 'when', type: 'keyword', apply: 'when "', detail: 'condition of this scenario' }], validFor: /^\w*$/ };
+    }
+
+    const head = before.slice(0, from - line.from);
+    const blocks = openBlocks(ctx.state.doc, line.number);
+    if (blocks.length && /^\s*(?:abstract\s+)?type\b/.test(blocks[blocks.length - 1])) {
+      if (atLineStart) return { from, options: typeBodyOptions, validFor: /^\w*$/ };
+      if (/^\s*kind\s+$/.test(head)) return { from, options: KINDS.map((k) => ({ label: k, type: 'enum' })), validFor: /^\w*$/ };
+      if (/^\s*op\s+$/.test(head)) return { from, options: ['read', 'write'].map((label) => ({ label, type: 'keyword' })), validFor: /^\w*$/ };
+      return null;
     }
 
     const ids: Completion[] = getNodeIds().map((id) => ({ label: id, type: 'variable' }));
