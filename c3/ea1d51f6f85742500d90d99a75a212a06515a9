@@ -1,0 +1,19 @@
+frontend/src/dsl/typesys/stdlib.test.ts
+  s_ccb8935595dc4e::t_29afadbbfc9ad4 79-85
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c3ea1d51f6f85742500d90d99a75a212a06515a9",
+  "prompts": {},
+  "sessions": {
+    "s_ccb8935595dc4e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0e2b8447-0e71-4063-8d52-5e5b5302fc2f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
