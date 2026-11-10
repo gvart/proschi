@@ -1,0 +1,47 @@
+frontend/src/practice/problems/discord-messages/lesson.md
+  s_ccb8935595dc4e::t_be56803a7b1259 32,34
+frontend/src/practice/problems/job-queue/lesson.md
+  s_ccb8935595dc4e::t_af5839fa31676e 35
+frontend/src/practice/problems/flash-sale/lesson.md
+  s_ccb8935595dc4e::t_be56803a7b1259 38
+frontend/src/practice/problems/cdn-tiered-cache/lesson.md
+  s_ccb8935595dc4e::t_be56803a7b1259 29
+frontend/src/practice/problems/github-repo-replication/given.proschi
+  s_ccb8935595dc4e::t_5f066e26050f6a 34-35,43
+frontend/src/practice/problems/hello-proschi/given.proschi
+  s_ccb8935595dc4e::t_72de15e27756d4 17
+frontend/src/practice/problems/job-queue/given.proschi
+  s_ccb8935595dc4e::t_80ea2691375437 22
+frontend/src/practice/problems/github-repo-replication/lesson.md
+  s_ccb8935595dc4e::t_be56803a7b1259 29
+frontend/src/practice/problems/file-storage/lesson.md
+  s_ccb8935595dc4e::t_af5839fa31676e 38
+frontend/src/practice/problems/distributed-kv/lesson.md
+  s_ccb8935595dc4e::t_af5839fa31676e 32
+frontend/src/practice/problems/file-storage/given.proschi
+  s_ccb8935595dc4e::t_562ef53001b707 27
+frontend/src/practice/problems/flash-sale/given.proschi
+  s_ccb8935595dc4e::t_17c1cf92199f95 39-40,42
+frontend/src/practice/problems/collaborative-docs/lesson.md
+  s_ccb8935595dc4e::t_af5839fa31676e 45,47
+frontend/src/practice/problems/distributed-cron/lesson.md
+  s_ccb8935595dc4e::t_be56803a7b1259 26
+frontend/src/practice/problems/api-gateway/lesson.md
+  s_ccb8935595dc4e::t_be56803a7b1259 28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2a493d916f692baafce6cd9b3cccf76791dc3a6f",
+  "prompts": {},
+  "sessions": {
+    "s_ccb8935595dc4e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0e2b8447-0e71-4063-8d52-5e5b5302fc2f",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
