@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
-import { ArrowRight, CircleCheck, Layers, Map as MapIcon, Timer } from 'lucide-react';
+import { ArrowRight, Check, CircleCheck, Layers, Map as MapIcon, Timer } from 'lucide-react';
 import problems from 'virtual:practice-listings';
 import { field, outlineButton, primaryButton } from '../../components/Playground/ui';
 import Markdown from '../Markdown';
@@ -190,10 +190,12 @@ interface WrapupProps {
   onNotes: Update;
   /** The tests and the free design review (TestPanel), run from here. */
   tests: ReactNode;
+  /** Where Finish leads: back where the problem was opened from (the roadmap or the problem list). */
+  finish: { href: string; label: string };
 }
 
-/** Wrap-up: the tests and the review, a recall prompt, then where to go next. */
-export function WrapupStage({ problem, progress, solved, notes, onNotes, tests }: WrapupProps) {
+/** Wrap-up: the tests and the review, a recall prompt, then Finish or where to go next. */
+export function WrapupStage({ problem, progress, solved, notes, onNotes, tests, finish }: WrapupProps) {
   const topics = useRelatedTopics(problem.id);
   const next = useNextOnRoadmap(problem.id, progress);
   const link = 'inline-flex items-center gap-1.5 font-semibold text-ink underline decoration-2 underline-offset-2 hover:decoration-pop-blue';
@@ -229,15 +231,21 @@ export function WrapupStage({ problem, progress, solved, notes, onNotes, tests }
 
         <section aria-labelledby="keep-going" className="space-y-3">
           <h3 id="keep-going" className="font-display text-xl font-bold tracking-tight text-ink">
-            Keep going
+            Finish, or keep going
           </h3>
-          {next && (
-            <a href={roadmapHref(next.id)} className={solved ? primaryButton : outlineButton} data-testid="wrapup-next">
-              <MapIcon size={15} aria-hidden="true" />
-              Next on the roadmap: {next.title}
-              <ArrowRight size={15} aria-hidden="true" />
+          <div className="flex flex-wrap items-center gap-2">
+            <a href={finish.href} className={primaryButton} title={`Back to the ${finish.label.toLowerCase()}`} data-testid="wrapup-finish">
+              <Check size={15} aria-hidden="true" />
+              Finish
             </a>
-          )}
+            {next && (
+              <a href={roadmapHref(next.id)} className={`${outlineButton} min-w-0`} data-testid="wrapup-next">
+                <MapIcon size={15} aria-hidden="true" className="shrink-0" />
+                <span className="truncate">Next on the roadmap: {next.title}</span>
+                <ArrowRight size={15} aria-hidden="true" className="shrink-0" />
+              </a>
+            )}
+          </div>
           <ul className="space-y-1.5 text-sm">
             {topics.map(({ topic, count }) => (
               <li key={topic.id}>

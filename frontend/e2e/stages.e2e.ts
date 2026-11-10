@@ -35,14 +35,11 @@ for (const [device, viewport] of [
       }, SOLUTION);
       await page.goto('practice/#/roadmap/url-shortener');
 
-      // A first visit opens on Clarify, even with the lesson unread (P52), with the stages on top.
-      await expect(page.getByTestId('stage-clarify')).toBeVisible();
-      await expect(page.getByRole('article', { name: 'Lesson' })).toHaveCount(0);
-      await expect(rail(page).getByRole('button')).toHaveText(['1Lesson', '2Clarify', '3Estimate', '4Design', '5Wrap-up']);
-      await expect(rail(page).getByRole('button', { name: 'Estimate' })).toBeDisabled();
-      // The lesson is one click away in the rail, and leads back to Clarify.
-      await rail(page).getByRole('button', { name: 'Lesson' }).click();
+      // A first visit opens on the lesson, step 1 (P52), with the stages on top.
       await expect(page.getByRole('article', { name: 'Lesson' })).toBeVisible();
+      await expect(rail(page).getByRole('button')).toHaveText(['1Lesson', '2Clarify', '3Estimate', '4Design', '5Wrap-up']);
+      await expect(rail(page).getByRole('button', { name: 'Lesson' })).toHaveAttribute('aria-current', 'step');
+      await expect(rail(page).getByRole('button', { name: 'Estimate' })).toBeDisabled();
       await expect(page.locator('.cm-content')).toHaveCount(0);
       await expect(next(page)).toHaveText('Next: Clarify');
       await shot(page, `${device}-1-lesson`);
@@ -109,22 +106,46 @@ for (const [device, viewport] of [
       await expect(page.getByTestId('design-guide')).toBeAttached();
       await next(page).click();
 
-      // Wrap-up: solved, a recall prompt, and where to go next.
+      // Wrap-up: solved, a recall prompt, Finish, and where to go next.
       await expect(page.getByTestId('wrapup-status')).toContainText('Solved');
-      await page.getByLabel(/what breaks first at 10×/).fill('The single database, under the redirects.');
+      const recall = page.getByLabel(/what breaks first at 10×/);
+      await recall.fill('The single database, under the redirects.');
+      await expect(page.getByTestId('wrapup-finish')).toHaveText('Finish');
+      await expect(next(page)).toHaveText('Finish');
       await expect(page.getByTestId('wrapup-next')).toContainText('Next on the roadmap');
       await expect(page.getByRole('link', { name: /Practice this as a mock interview/ })).toHaveAttribute('href', '#/interview?problem=url-shortener');
       await shot(page, `${device}-9-wrapup`);
       await page.getByTestId('stage-wrapup').evaluate((el) => el.scrollTo(0, el.scrollHeight));
       await shot(page, `${device}-10-wrapup-end`);
       expect(await page.evaluate(() => JSON.parse(localStorage.getItem('proschi.practice')!)['url-shortener'].status)).toBe('solved');
+
+      // Finish goes back to the roadmap it was opened from, the notes kept.
+      await page.getByTestId('wrapup-finish').click();
+      await expect(page).toHaveURL(/#\/roadmap$/);
+      await page.goto('practice/#/roadmap/url-shortener');
+      await expect(recall).toHaveValue('The single database, under the redirects.');
+      // The stage bar's Finish does the same.
+      await next(page).click();
+      await expect(page).toHaveURL(/#\/roadmap$/);
+
+      // Next on the roadmap opens the next problem on its lesson, a first visit.
+      await page.goto('practice/#/roadmap/url-shortener');
+      const following = page.getByTestId('wrapup-next');
+      const href = (await following.getAttribute('href'))!;
+      expect(href).toMatch(/^#\/roadmap\/[a-z0-9-]+$/);
+      await following.click();
+      await expect(page).toHaveURL(new RegExp(`${href.slice(1)}$`));
+      await expect(page.getByRole('article', { name: 'Lesson' })).toBeVisible();
+      await expect(rail(page).getByRole('button', { name: 'Lesson' })).toHaveAttribute('aria-current', 'step');
     });
   });
 }
 
 test('going back keeps the notes, and a reload lands where you were', async ({ page }) => {
   await page.goto('practice/#/roadmap/url-shortener');
-  // A first visit: straight to Clarify.
+  // A first visit opens on the lesson; its Next leads to Clarify.
+  await expect(page.getByRole('article', { name: 'Lesson' })).toBeVisible();
+  await next(page).click();
   await expect(page.getByTestId('stage-clarify')).toBeVisible();
   const notes = page.getByLabel('Your clarifying questions and assumptions');
   await notes.fill('Is there a budget?');

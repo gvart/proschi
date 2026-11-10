@@ -93,6 +93,8 @@ export function readNotes(raw: unknown): StageNotes {
 
 export const loadNotes = (problem: string): StageNotes => readNotes(loadJson<unknown>(NOTES_KEY(problem), undefined));
 export const saveNotes = (problem: string, notes: StageNotes): void => saveJson(NOTES_KEY(problem), notes);
+/** Whether the learner has started the problem's stages in this browser (any notes saved). */
+export const notesSaved = (problem: string): boolean => loadJson<unknown>(NOTES_KEY(problem), undefined) !== undefined;
 
 /** Moves to `stage`, which then counts as reached. */
 export function goTo(notes: StageNotes, stage: WorkStage): StageNotes {
@@ -103,13 +105,12 @@ export function goTo(notes: StageNotes, stage: WorkStage): StageNotes {
 export const canOpen = (notes: StageNotes, stage: StageId): boolean => stage === 'lesson' || stageAt(stage) <= stageAt(notes.reached);
 
 /**
- * The screen a problem opens on: its lesson only when asked for (`always`,
- * practice/#/roadmap/<id>/lesson), else the stage the learner left it on, so
- * a first visit opens on Clarify even with the lesson unread (P52); the
- * lesson stays one click away in the stage bar.
+ * The screen a problem opens on (P52): its lesson when asked for (`always`,
+ * practice/#/roadmap/<id>/lesson) or on a first visit (`started` false: no
+ * notes saved yet), else the stage the learner left it on.
  */
-export function openingScreen(hasLesson: boolean, openLesson: 'always' | undefined, notes: StageNotes): StageId {
-  return hasLesson && openLesson === 'always' ? 'lesson' : notes.stage;
+export function openingScreen(hasLesson: boolean, openLesson: 'always' | undefined, notes: StageNotes, started = true): StageId {
+  return hasLesson && (openLesson === 'always' || !started) ? 'lesson' : notes.stage;
 }
 
 /** Checks an estimate once (a checked one stays as it was), against the question's accepted range. */

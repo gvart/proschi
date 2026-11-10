@@ -664,3 +664,10 @@ id; don't rewrite old ones.
   server as for P54. Where paid plans are on, other plans see the blocks'
   names with a locked teaser and the way to Pro. Prices stay the same; the
   pricing page lists it under Pro.
+- **P58. A new roadmap problem opens on its lesson; the Wrap-up ends with
+  Finish.** Supersedes P52's first visit on Clarify: a roadmap problem with
+  no stage notes saved yet opens on the **Lesson**, step 1, so "Next on the
+  roadmap" leads into the next problem from the start; a started one still
+  opens on the stage it was left on, and Clarify stays one click away. The
+  Wrap-up's main action is **Finish**, back to where the problem was opened
+  from (the roadmap); "Next on the roadmap" stays beside it.

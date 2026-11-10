@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { EstimateQuestion } from '../modes/interviewFile';
-import { canOpen, checkEstimate, EMPTY_NOTES, goTo, loadNotes, nextOf, NOTES_KEY, openingScreen, readNotes, saveNotes, stageDone, STAGES } from './flow';
+import { canOpen, checkEstimate, EMPTY_NOTES, goTo, loadNotes, nextOf, NOTES_KEY, notesSaved, openingScreen, readNotes, saveNotes, stageDone, STAGES } from './flow';
 
 const question: EstimateQuestion = { question: 'Codes a year?', answer: 3.2e9, unit: 'codes', low: 1.5e9, high: 6e9, tolerance: 2, solution: '…' };
 
@@ -13,8 +13,10 @@ describe('the stages of a practice problem', () => {
     expect(nextOf('wrapup')).toBeUndefined();
   });
 
-  it('opens where the learner left off, a first visit on Clarify; the lesson only when asked for', () => {
+  it('opens where the learner left off, a first visit on the lesson, and the lesson when asked for', () => {
     const atDesign = goTo(EMPTY_NOTES, 'design');
+    expect(openingScreen(true, undefined, EMPTY_NOTES, false)).toBe('lesson');
+    expect(openingScreen(false, undefined, EMPTY_NOTES, false)).toBe('clarify');
     expect(openingScreen(true, undefined, EMPTY_NOTES)).toBe('clarify');
     expect(openingScreen(true, undefined, atDesign)).toBe('design');
     expect(openingScreen(true, undefined, goTo(atDesign, 'estimate'))).toBe('estimate');
@@ -56,6 +58,8 @@ describe('the stage notes in storage', () => {
     saveNotes('url-shortener', notes);
     expect(loadNotes('url-shortener')).toEqual(notes);
     expect(loadNotes('pastebin')).toEqual(EMPTY_NOTES);
+    expect(notesSaved('url-shortener')).toBe(true);
+    expect(notesSaved('pastebin')).toBe(false);
   });
 
   it('reads damaged entries as not done yet', () => {
