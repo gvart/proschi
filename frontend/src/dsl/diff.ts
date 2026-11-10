@@ -144,7 +144,7 @@ const nodeFields = (n: DiagramNode) => ({
   type: n.type,
   techStack: n.techStack,
   /** A declared type keeps its icon's tech stack, so a change between two types of one icon shows here. */
-  typeName: n.resolvedType?.name,
+  typeName: n.resolvedType && !n.resolvedType.builtin ? n.resolvedType.name : undefined,
   ownerTeam: n.ownerTeam,
   description: n.description,
   parent: n.parent,
