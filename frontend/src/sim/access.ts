@@ -8,8 +8,8 @@ import type { Diagram, DiagramStep } from '../dsl/types';
  * classified with the parser's own rule (`accessOf` in dsl/access.ts), so the
  * two never drift.
  */
-export function stepAccess(step: Pick<DiagramStep, 'access' | 'httpMethod' | 'stepName'>): Access {
-  return step.access ?? accessOf(step.httpMethod, step.stepName ?? '');
+export function stepAccess(step: Pick<DiagramStep, 'access' | 'httpMethod' | 'stepName' | 'op'>): Access {
+  return step.access ?? step.op?.access ?? accessOf(step.httpMethod, step.stepName ?? '');
 }
 
 /**
