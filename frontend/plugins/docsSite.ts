@@ -34,6 +34,10 @@ import { typeReferencePages } from './typeReference'
  * - An image alone in a paragraph, `![alt](images/x.svg "Caption")`, becomes
  *   a figure with its size, lazily loaded, and the title as its caption. It
  *   must be an .svg or .png under docs/images/, published at /docs/images/.
+ * - A page starts with front matter, `---\nupdated: YYYY-MM-DD\n---`: the day
+ *   its content last changed (bumped by hand, not for typo fixes). It shows
+ *   under the title as "Last updated 10 Nov 2026" and in the head as
+ *   article:modified_time. The type reference takes the stdlib's date.
  */
 
 export const REPO = 'gvart/proschi'
@@ -82,7 +86,38 @@ export interface RenderedPage {
   anchors: Set<string>
   /** The images it shows, relative to docs/ (images/org.svg). */
   images: string[]
+  /** The front matter's `updated:` date, YYYY-MM-DD. */
+  updated?: string
 }
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** 2026-11-10 → 10 Nov 2026. */
+export function shortDate(date: string): string {
+  const [y, m, d] = date.split('-').map(Number)
+  return `${d} ${MONTHS[m - 1]} ${y}`
+}
+
+/** A real calendar day written YYYY-MM-DD. */
+export const isDate = (s: string): boolean => /^\d{4}-\d{2}-\d{2}$/.test(s) && new Date(`${s}T00:00:00Z`).toISOString().startsWith(s)
+
+/** Takes a page's front matter (`---\nupdated: 2026-11-10\n---`) off its source. `updated` is the only key. */
+export function splitFrontMatter(source: string, where: string): { updated?: string; body: string } {
+  const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n/.exec(source)
+  if (!m) return { body: source }
+  let updated: string | undefined
+  for (const line of m[1].split(/\r?\n/)) {
+    const kv = /^([\w-]+):\s*(.*?)\s*$/.exec(line)
+    if (!kv) throw new Error(`${where}: front matter lines are \`key: value\`, not "${line}"`)
+    if (kv[1] !== 'updated') throw new Error(`${where}: unknown front matter "${kv[1]}" (only updated)`)
+    if (!isDate(kv[2])) throw new Error(`${where}: updated is a date written YYYY-MM-DD, not "${kv[2]}"`)
+    updated = kv[2]
+  }
+  return { updated, body: source.slice(m[0].length) }
+}
+
+const updatedHtml = (updated: string | undefined): string =>
+  updated ? `<p class="doc-updated">Last updated <time datetime="${updated}">${shortDate(updated)}</time></p>\n` : ''
 
 /** A docs image's size in CSS pixels: an SVG's width and height, a PNG's pixels (halved for name@2x.png). */
 export function imageSize(file: string): { width: number; height: number } {
@@ -388,8 +423,9 @@ const stripTags = (s: string): string =>
   decodeEntities(s.replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim()
 
 /** Renders one page's article from its source text. */
-export function renderPage(config: SiteConfig, page: DocPage, source: string, docsDir?: string): RenderedPage {
+export function renderPage(config: SiteConfig, page: DocPage, text: string, docsDir?: string): RenderedPage {
   const sourcePath = posix.normalize(posix.join('docs', page.source))
+  const { updated, body: source } = splitFrontMatter(text, sourcePath)
   const toc: TocEntry[] = []
   const examples: string[] = []
   const images: string[] = []
@@ -402,6 +438,7 @@ export function renderPage(config: SiteConfig, page: DocPage, source: string, do
     const body = source
       .replace(/<!--[\s\S]*?-->\n?/g, '')
       .replace(/(<pre\b[^>]*\bdata-proschi\b[^>]*><code>)([\s\S]*?)(<\/code><\/pre>)/g, (_, open: string, code: string, close: string) => open + highlightProschi(decodeEntities(code)) + close)
+      .replace(/<\/h1>\n?/, () => `</h1>\n${updatedHtml(updated)}`)
     article = `<div class="doc-html">\n${body}</div>\n`
     for (const m of article.matchAll(/<h([23])\b[^>]*\bid="([^"]+)"[^>]*>([\s\S]*?)<\/h\1>/g)) {
       toc.push({ level: Number(m[1]) as 2 | 3, id: m[2], text: stripTags(m[3]) })
@@ -412,11 +449,11 @@ export function renderPage(config: SiteConfig, page: DocPage, source: string, do
     const { h1, body } = splitTitle(html)
     // The paragraph right after the title is the lede.
     const lede = body.replace(/^\s*<p>/, '<p class="lede">')
-    article = `<header class="doc-hero">\n<p class="kicker">${escapeHtml(group)}</p>\n<h1>${h1 || escapeHtml(page.title)}</h1>\n</header>\n<div class="doc-body">\n${lede}</div>\n`
+    article = `<header class="doc-hero">\n<p class="kicker">${escapeHtml(group)}</p>\n<h1>${h1 || escapeHtml(page.title)}</h1>\n${updatedHtml(updated)}</header>\n<div class="doc-body">\n${lede}</div>\n`
   }
 
   const anchors = new Set([...article.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]))
-  return { page, article, toc, examples, anchors, images }
+  return { page, article, toc, examples, anchors, images, updated }
 }
 
 function navHtml(config: SiteConfig, current: string): string {
@@ -508,7 +545,7 @@ ${toc ? `<aside class="docs-toc">\n<nav class="toc" aria-label="On this page">\n
 </div>`
 }
 
-export function headHtml(page: DocPage): string {
+export function headHtml(page: DocPage, updated?: string): string {
   const url = `${SITE_ORIGIN}docs/${page.slug ? `${page.slug}/` : ''}`
   // The home page's title names the product already.
   const title = page.slug ? `${page.title} · Proschi docs` : page.title
@@ -522,6 +559,7 @@ export function headHtml(page: DocPage): string {
     `<meta property="og:description" content="${escapeHtml(page.description)}" />`,
     `<meta property="og:url" content="${url}" />`,
     `<meta property="og:image" content="${SITE_ORIGIN}og.png" />`,
+    ...(updated ? [`<meta property="article:modified_time" content="${updated}" />`] : []),
     `<meta name="twitter:card" content="summary_large_image" />`,
   ].join('\n    ')
 }
@@ -589,7 +627,7 @@ export function docsSite({ docsDir, stubsDir }: { docsDir: string; stubsDir: str
         const page = site.pages.find((p) => p.slug === folder)
         if (!page) throw new Error(`${relative(config.root, ctx.filename)}: no page with slug "${folder}" in docs/site.json`)
         const rendered = renderFromDisk(docsDir, site, page)
-        return html.replace(PLACEHOLDER, (_, slot: string) => (slot === 'head' ? headHtml(page) : layoutHtml(site, rendered)))
+        return html.replace(PLACEHOLDER, (_, slot: string) => (slot === 'head' ? headHtml(page, rendered.updated) : layoutHtml(site, rendered)))
       },
     },
   }

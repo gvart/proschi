@@ -1,3 +1,7 @@
+---
+updated: 2026-11-09
+---
+
 # Privacy
 
 Short version: signed out, the editor never sends your diagrams anywhere

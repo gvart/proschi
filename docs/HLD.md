@@ -1,3 +1,7 @@
+---
+updated: 2026-11-09
+---
+
 # High-level design
 
 A high-level design adds what a design review asks after the architecture:

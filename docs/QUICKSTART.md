@@ -1,3 +1,7 @@
+---
+updated: 2026-11-01
+---
+
 # Your first diagram in 2 minutes
 
 You will end with a diagram, a request you can play, a failure path and a

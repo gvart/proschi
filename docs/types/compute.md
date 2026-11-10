@@ -1,3 +1,7 @@
+---
+updated: 2026-11-10
+---
+
 # Built-in types: compute
 
 Services, workers, functions and the platforms they run on. They list statuses and headers but no operations, so their requests are named freely. Generated from [compute.proschi](../../frontend/src/dsl/stdlib/compute.proschi); [component types](../TYPES.md) explains how to read and extend them.

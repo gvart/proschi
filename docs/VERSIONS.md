@@ -1,3 +1,7 @@
+---
+updated: 2026-11-09
+---
+
 # Save and compare diagram versions
 
 A version is a saved snapshot of a diagram that never changes. Save one each

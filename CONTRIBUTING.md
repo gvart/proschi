@@ -386,6 +386,11 @@ full reference; this is the checklist.
 - Proschi files are in canonical format (`node tooling/dist/cli.cjs fmt`).
 - Docs and prose: short sentences, plain words, real numbers. Problem
   lessons and cards are original writing; cite sources, don't copy them.
+- A docs page starts with `updated: YYYY-MM-DD` front matter, shown as its
+  "Last updated" date. Bump it when you change the page's content (not for a
+  typo or formatting fix). The built-in type reference (`docs/types/`) takes
+  the `# updated:` date in `frontend/src/dsl/stdlib/core.proschi`; bump that
+  when you change the stdlib's types.
 - Pull requests are squash-merged, and their titles are
   [conventional commits](https://www.conventionalcommits.org/) (`feat: …`,
   `fix(dsl): …`, `docs: …`). `feat`, `fix` and `perf` titles become the

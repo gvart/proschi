@@ -1,3 +1,7 @@
+---
+updated: 2026-11-10
+---
+
 # Built-in types: data
 
 Databases, caches, search engines, warehouses and storage: the components that keep data, with the operations their clients send. Generated from [data.proschi](../../frontend/src/dsl/stdlib/data.proschi); [component types](../TYPES.md) explains how to read and extend them.

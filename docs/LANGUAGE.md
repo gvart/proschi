@@ -1,3 +1,7 @@
+---
+updated: 2026-11-10
+---
+
 # Proschi language reference
 
 A Proschi document describes an architecture (nodes, groups and the

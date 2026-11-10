@@ -1,3 +1,7 @@
+---
+updated: 2026-11-01
+---
+
 # Imports
 
 `import` pulls another `.proschi` file into a document, so you can write

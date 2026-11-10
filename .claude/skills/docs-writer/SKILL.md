@@ -26,7 +26,18 @@ budget is split or cut, not squeezed.
 
 ## 2. Add a page
 
-1. Write `docs/<NAME>.md`. Its first line is the only H1.
+1. Write `docs/<NAME>.md`. It starts with front matter, then the only H1:
+
+   ```markdown
+   ---
+   updated: 2026-11-10
+   ---
+
+   # The page title
+   ```
+
+   `updated:` is the day you write it, shown under the title as "Last
+   updated 10 Nov 2026" and in the head as `article:modified_time`.
 2. Add `{ slug, title, source, description }` to `pages` in
    `docs/site.json` (title ≤ 45 characters, description 120–155, see
    STYLE.md "SEO") and an item to `nav`.
@@ -161,3 +172,9 @@ At most one or two images per page, each on the page that explains its idea.
 
 6. Look at the page in `npx vite preview` at desktop width and at 390px,
    light and dark, before you hand it over.
+7. **Bump `updated:`** in the front matter of every page whose content you
+   changed (not for a typo or formatting fix) to today's date. A change to
+   the stdlib's types bumps the `# updated:` line in
+   `frontend/src/dsl/stdlib/core.proschi` instead, the date of every
+   `docs/types/` page (then `npm run gen:stdlib` in `frontend/`). The docs
+   tests fail on a page without a date or with one in the future.

@@ -1,3 +1,7 @@
+---
+updated: 2026-11-09
+---
+
 # Colors, legend and layout
 
 A Proschi diagram is colored and laid out for you. You can also set colors,

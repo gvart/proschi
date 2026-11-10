@@ -1,3 +1,7 @@
+---
+updated: 2026-11-10
+---
+
 # Built-in types: clients, shapes, notes and groups
 
 The root type `Component`, the clients that send the first request, and the shapes, notes and group boxes that only draw. Generated from [core.proschi](../../frontend/src/dsl/stdlib/core.proschi); [component types](../TYPES.md) explains how to read and extend them.

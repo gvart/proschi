@@ -1,3 +1,7 @@
+---
+updated: 2026-11-09
+---
+
 # Sharing and embedding
 
 A diagram in the [editor](https://proschi.app/app/) leaves it three ways,

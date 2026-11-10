@@ -1,3 +1,7 @@
+---
+updated: 2026-11-10
+---
+
 # Built-in types: external services
 
 Services you call but do not run: payments, sign-in, email, SMS, push, maps and AI. Generated from [external.proschi](../../frontend/src/dsl/stdlib/external.proschi); [component types](../TYPES.md) explains how to read and extend them.

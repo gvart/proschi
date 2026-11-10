@@ -3,7 +3,7 @@ import markdownIt from 'markdown-it'
 import { describe, expect, it } from 'vitest'
 import { parse } from '../src/dsl/parser'
 import { runTests } from '../src/sim/tests'
-import { headHtml, layoutHtml, pageHref, readingOrder, readSite, renderFromDisk, renderPage, rewriteHref, slugger, splitAnnotations, stubInputs, type RenderedPage, type SiteConfig } from './docsSite'
+import { headHtml, layoutHtml, pageHref, readingOrder, readSite, renderFromDisk, renderPage, rewriteHref, shortDate, slugger, splitAnnotations, splitFrontMatter, stubInputs, type RenderedPage, type SiteConfig } from './docsSite'
 
 /**
  * The docs section: every page in docs/site.json has a stub and renders,
@@ -75,6 +75,13 @@ describe('docs/site.json', () => {
   it('gives the home page its own title, without the docs suffix', () => {
     expect(headHtml(site.pages.find((p) => p.slug === '')!)).toContain('<title>Proschi: architecture diagrams as code</title>')
     expect(headHtml(site.pages.find((p) => p.slug === 'why')!)).toMatch(/<title>.+ · Proschi docs<\/title>/)
+  })
+
+  // Bump a page's `updated:` when its content changes meaningfully (not for a typo); the type reference takes core.proschi's.
+  it.each(site.pages.map((p) => [p.source, p.slug]))('%s has an updated: date in its front matter, not in the future', (_, slug) => {
+    const { updated } = rendered.get(slug)!
+    expect(updated, 'add `---\\nupdated: YYYY-MM-DD\\n---` at the top').toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(updated! <= new Date().toISOString().slice(0, 10), `${updated} is in the future`).toBe(true)
   })
 
   it('redirects old anchors only to pages and anchors that exist, never shadowing a live anchor', () => {
@@ -289,6 +296,32 @@ describe('links', () => {
     expect(slug('5.3 Practice platform (/practice/)')).toBe('53-practice-platform-practice')
     expect(slug('Tests')).toBe('tests')
     expect(slug('Tests')).toBe('tests-1')
+  })
+})
+
+describe('last updated', () => {
+  const fixture: SiteConfig = { pages: [{ slug: 'x', title: 'X', source: 'X.md', description: 'd' }, { slug: 'm', title: 'M', source: 'm.html', description: 'd' }], nav: [{ title: 'G', items: [{ page: 'x' }, { page: 'm' }] }] }
+
+  it('shows the front matter’s date under the title and in the head, and leaves the front matter out of the page', () => {
+    const page = renderPage(fixture, fixture.pages[0], '---\nupdated: 2026-11-10\n---\n\n# X\n\nLede.\n')
+    expect(page.updated).toBe('2026-11-10')
+    expect(page.article).toContain('<h1>X</h1>\n<p class="doc-updated">Last updated <time datetime="2026-11-10">10 Nov 2026</time></p>\n</header>')
+    expect(page.article).not.toMatch(/<hr|updated:/)
+    expect(headHtml(fixture.pages[0], page.updated)).toContain('<meta property="article:modified_time" content="2026-11-10" />')
+    expect(headHtml(fixture.pages[0])).not.toContain('modified_time')
+  })
+
+  it('puts the date under an HTML page’s own title', () => {
+    const page = renderPage(fixture, fixture.pages[1], '---\nupdated: 2026-01-05\n---\n<!-- c -->\n<header class="doc-hero"><h1>M</h1>\n<p>Lede</p></header>\n')
+    expect(page.article).toContain('<h1>M</h1>\n<p class="doc-updated">Last updated <time datetime="2026-01-05">5 Jan 2026</time></p>\n<p>Lede</p>')
+  })
+
+  it('takes only a real date, and no other key', () => {
+    expect(splitFrontMatter('# X\n', 'X.md')).toEqual({ body: '# X\n' })
+    expect(() => splitFrontMatter('---\nupdated: 2026-02-30\n---\n', 'X.md')).toThrow(/YYYY-MM-DD/)
+    expect(() => splitFrontMatter('---\nupdated: 10 Nov 2026\n---\n', 'X.md')).toThrow(/YYYY-MM-DD/)
+    expect(() => splitFrontMatter('---\ntitle: X\n---\n', 'X.md')).toThrow(/unknown front matter "title"/)
+    expect(shortDate('2026-12-31')).toBe('31 Dec 2026')
   })
 })
 
