@@ -4,6 +4,8 @@ summary: "Twitter's trends: count tweets in the stream, rank ahead of time, serv
 difficulty: medium
 company: Twitter
 tags: [streaming, queues, caching, top-k, real-world]
+version: 2
+strict: true
 hints:
   - "Counting is not the tweet's job. What is the least the Tweet Service can do so that something else counts the tweet later?"
   - "Readers ask one question: the top fifty for a location. Answer it once every few seconds and keep the answer in a cache, instead of counting while someone waits."
