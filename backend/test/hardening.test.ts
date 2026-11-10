@@ -12,6 +12,8 @@ import { call, dailyRun, ORIGIN, resetDatabase, signedInUser, WINDOW_TIMEOUT, wi
 
 const ID = 'url-shortener';
 const problem = findProblem(ID)!;
+/** The problem's content version (problem.md `version`), which progress records. */
+const VERSION = problem.version ?? 1;
 const nowSeconds = () => Math.floor(Date.now() / 1000);
 
 /** The Worker called directly, as Cloudflare would. */
@@ -254,7 +256,7 @@ describe('data export', () => {
           bestCostAt: expect.any(Number),
           bestP99At: expect.any(Number),
           simVersion: SIM_VERSION,
-          problemVersion: 1,
+          problemVersion: VERSION,
         },
       ],
       cardReviews: [],
@@ -332,7 +334,7 @@ describe('versions', () => {
     const next = (await (await run(token, { source: problem.starter, solved: false })).json()) as Record<string, any>;
     expect(next.progress).toEqual({ status: 'attempted', runs: 1, source: problem.starter });
     const row = await env.DB.prepare('SELECT sim_version, problem_version FROM progress WHERE user_id = ?').bind(id).first();
-    expect(row).toEqual({ sim_version: SIM_VERSION, problem_version: 1 });
+    expect(row).toEqual({ sim_version: SIM_VERSION, problem_version: VERSION });
     expect(await (await run(token, { source: problem.solution, solved: true })).json()).toMatchObject({ progress: { status: 'solved', runs: 2, runsToSolve: 2 } });
   });
 });
