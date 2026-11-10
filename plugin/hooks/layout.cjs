@@ -51,6 +51,16 @@ Consider installing the package or pass your own 'workerFactory' to ELK's constr
 #   upper-case plain words (WRITE, SEND) are not repeated by its children.
 #   A child declares an inherited op again only to change it, as DynamoDB's
 #   Scan gives the key-value SCAN its multipliers.
+# - Transaction control is \`op read\`: an op that only opens, commits, rolls
+#   back or discards a transaction (SQL BEGIN, COMMIT, ROLLBACK; Redis MULTI,
+#   EXEC, DISCARD; Spanner and Firestore BeginTransaction; Kafka
+#   AddPartitionsToTxn, EndTxn) carries no data of its own. The statements
+#   inside the transaction are steps of their own and carry its reads and
+#   writes, so a read-only transaction stays a read and a use case does not
+#   become a write by its BEGIN or COMMIT. An op that carries the
+#   transaction's data has that data's access: DynamoDB TransactWriteItems
+#   and TransactGetItems, Firestore Commit, etcd Txn, ZooKeeper multi, Cosmos
+#   DB TransactionalBatch. stdlib.test.ts checks both.
 # - A generic type (the catalog's [NoSQL Database], Cache, [Message Queue],
 #   [Object Storage], [Search Engine], CDN, \u2026) or an abstract parent declares
 #   its family's standard vocabulary (key-value: GET, PUT, DELETE, SCAN;
@@ -504,8 +514,8 @@ type [GCP Spanner] extends [Distributed SQL Database] {
 }
 
 type [GCP Firestore] extends [Document NoSQL Database] {
-  op read  GetDocument, ListDocuments, BatchGetDocuments, RunQuery, RunAggregationQuery, Listen
-  op write CreateDocument, UpdateDocument, DeleteDocument, BatchWrite, Commit, BeginTransaction
+  op read  GetDocument, ListDocuments, BatchGetDocuments, RunQuery, RunAggregationQuery, Listen, BeginTransaction
+  op write CreateDocument, UpdateDocument, DeleteDocument, BatchWrite, Commit
   doc "Firestore, Google Cloud's serverless document database."
 }
 
@@ -704,8 +714,10 @@ abstract type Data {
 type Database extends Data {
   kind database
   protocol SQL
-  op read  SELECT, WITH, EXPLAIN, SHOW, BEGIN, ROLLBACK
-  op write INSERT, UPDATE, DELETE, UPSERT, MERGE, TRUNCATE, COMMIT, LOCK
+  op read  SELECT, WITH, EXPLAIN, SHOW
+  op write INSERT, UPDATE, DELETE, UPSERT, MERGE, TRUNCATE, LOCK
+  # Transaction control: the statements inside carry the reads and writes.
+  op read  BEGIN, COMMIT, ROLLBACK
   op write CREATE, ALTER, DROP
   doc "A relational database queried with SQL, whose product does not matter."
 }
@@ -898,8 +910,8 @@ type Redis extends Cache {
   op read  XREAD, XREADGROUP, XRANGE, XREVRANGE, XLEN, XPENDING, XINFO
   op write XADD, XACK, XCLAIM, XAUTOCLAIM, XDEL, XTRIM, XGROUP
   # Transactions and scripts
-  op read  MULTI, WATCH, UNWATCH, DISCARD, PING
-  op write EXEC, EVAL, EVALSHA, FCALL
+  op read  MULTI, EXEC, DISCARD, WATCH, UNWATCH, PING
+  op write EVAL, EVALSHA, FCALL
   doc "Redis, the in-memory data store, used as a cache."
 }
 
@@ -1312,8 +1324,8 @@ type ZeroMQ extends [Message Queue] {
 }
 
 type Kafka extends [Message Broker] {
-  op read  Poll, OffsetFetch, ListOffsets, Metadata
-  op write Commit, OffsetCommit, AddPartitionsToTxn, EndTxn, DeleteRecords
+  op read  Poll, OffsetFetch, ListOffsets, Metadata, AddPartitionsToTxn, EndTxn
+  op write Commit, OffsetCommit, DeleteRecords
   op write CreateTopics, DeleteTopics, CreatePartitions
   doc "Apache Kafka, the distributed log of partitioned topics."
 }

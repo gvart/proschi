@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
-import { canvasNodes, chooseOption, codeEditor, editorText, expect, loadReferenceSolution, test, waitForCanvas } from './fixtures';
+import { appendCode, canvasNodes, chooseOption, codeEditor, editorText, expect, loadReferenceSolution, test, waitForCanvas } from './fixtures';
 
 const problemList = (page: Page) => page.getByRole('main').getByRole('list').first();
 
@@ -154,6 +154,22 @@ test.describe('practice', () => {
     await page.goto('practice/#/snowflake-ids');
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Snowflake IDs');
     await expect(page.locator('header [data-company="Twitter"]')).toBeVisible();
+  });
+
+  test("completion offers the types the problem's given declares, and their operations", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('practice/#/collaborative-docs');
+    await expect(codeEditor(page)).toBeVisible();
+    const options = page.locator('.cm-tooltip-autocomplete li');
+    // SessionServer is declared in the given (problem.proschi), not in the solver's file.
+    await appendCode(page, '\nprobe [Sess');
+    await page.keyboard.press('Control+Space');
+    await expect(options.filter({ hasText: 'SessionServer' })).toHaveCount(1);
+    await page.keyboard.press('Escape');
+    await appendCode(page, ']\neditor -> probe\nusecase "Probe" {\n  editor -> gateways : ');
+    await page.keyboard.press('Control+Space');
+    // The step's target is a SessionServer: its ops, and nothing else (the editor lists them sorted).
+    await expect(options.locator('.cm-completionLabel')).toHaveText(['CURSOR', 'OP']);
   });
 
   test("a problem's own page shows the statement and opens it in practice", async ({ page }) => {

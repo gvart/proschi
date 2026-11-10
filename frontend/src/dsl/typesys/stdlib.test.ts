@@ -135,13 +135,40 @@ describe('the stdlib vocabularies', () => {
     expect(open.filter((t) => !t.parents.includes('Compute')).map((t) => t.name)).toEqual(['AWS Global Accelerator']);
   });
 
+  it("reads on transaction control, and gives an op that carries a transaction's data that data's access", () => {
+    // Opening, committing, rolling back or discarding a transaction (core.proschi's rules).
+    const control = /^(?:begin|commit|rollback|abort|savepoint|release|start transaction|multi|exec|discard|(?:begin|start|commit|abort|rollback|end)_?(?:transaction|txn)|addpartitionstotxn)$/i;
+    // Same names, but the request carries data: a consumer's offsets, the transaction's writes, the ops to run.
+    const carriesData = new Set(['Kafka Commit', 'GCP Firestore Commit', 'ZooKeeper multi']);
+    for (const t of types) {
+      for (const op of t.ops.filter((o) => control.test(o.name))) {
+        const owner = [t.name, ...t.parents].find((n) => carriesData.has(`${n} ${op.name}`));
+        expect(op.access, `${t.name} ${op.name}`).toBe(owner ? 'write' : 'read');
+      }
+    }
+    const expectAccess = (name: string, ops: string[], access: string) => {
+      for (const op of ops) expect(findOp(byName.get(name)!, op)?.access, `${name} ${op}`).toBe(access);
+    };
+    expectAccess('PostgreSQL', ['BEGIN', 'COMMIT', 'ROLLBACK'], 'read');
+    expectAccess('Redis', ['MULTI', 'EXEC', 'DISCARD'], 'read');
+    expectAccess('GCP Spanner', ['BeginTransaction'], 'read');
+    expectAccess('GCP Firestore', ['BeginTransaction'], 'read');
+    expectAccess('Kafka', ['AddPartitionsToTxn', 'EndTxn'], 'read');
+    expectAccess('DynamoDB', ['TransactGetItems'], 'read');
+    expectAccess('DynamoDB', ['TransactWriteItems'], 'write');
+    expectAccess('GCP Firestore', ['Commit'], 'write');
+    expectAccess('etcd', ['Txn'], 'write');
+    expectAccess('ZooKeeper', ['multi'], 'write');
+    expectAccess('Azure Cosmos DB', ['TransactionalBatch'], 'write');
+  });
+
   it('knows the key techs by their own commands', () => {
     const expectOps = (name: string, read: string[], write: string[]) => {
       const t = byName.get(name)!;
       for (const op of read) expect(findOp(t, op)?.access, `${name} ${op}`).toBe('read');
       for (const op of write) expect(findOp(t, op)?.access, `${name} ${op}`).toBe('write');
     };
-    expectOps('PostgreSQL', ['SELECT'], ['INSERT', 'UPDATE', 'DELETE', 'UPSERT', 'COMMIT']);
+    expectOps('PostgreSQL', ['SELECT'], ['INSERT', 'UPDATE', 'DELETE', 'UPSERT']);
     expectOps('Redis', ['GET', 'MGET', 'HGETALL', 'ZRANGE', 'ZREVRANGE', 'SISMEMBER', 'PFCOUNT', 'GEOSEARCH', 'XREAD', 'TTL'], ['SET', 'DEL', 'INCR', 'INCRBY', 'DECR', 'EXPIRE', 'HSET', 'LPUSH', 'RPUSH', 'LPOP', 'RPOP', 'SADD', 'ZADD', 'ZINCRBY', 'PFADD', 'GEOADD', 'PUBLISH', 'XADD']);
     expectOps('AWS ElastiCache', ['GET'], ['SET']);
     expectOps('DynamoDB', ['GetItem', 'BatchGetItem', 'Query', 'Scan'], ['PutItem', 'UpdateItem', 'DeleteItem', 'BatchWriteItem', 'TransactWriteItems']);

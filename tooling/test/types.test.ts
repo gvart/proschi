@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { analyze, complete, definition, hover, outline, quickFix, references, rename, semanticTokens, toRange, type TextEdit } from '../src/analysis';
 import { builtinTypes } from '../src/proschi';
+import { mapResolver } from '../../frontend/src/dsl/imports';
 
 // Typed components (docs/design/typed-components.md) in the language server.
 // Names of built-in types and their ops come from builtinTypes(), so these
@@ -89,6 +90,14 @@ describe('types in the language server', () => {
     expect(items[0]).toMatchObject({ kind: 'op', detail: expect.stringContaining(withOps.ops[0].access) });
     // Outside a use case a connection label stays free text.
     expect(complete(analyze(`db "DB" [${withOps.name}]\na -> db : `), { line: 1, character: 10 })).toEqual([]);
+  });
+
+  it("completes an imported file's types and their ops", () => {
+    const given = 'type Session extends WebSocket {\n  op write OP\n  op read CURSOR\n}\neditor [Browser]\n';
+    const src = 'import "problem.proschi"\ngw [Session]\neditor -> gw\nusecase "U" {\n  editor -> gw : \n}\nx [Se';
+    const imported = analyze(src, { path: 'solution.proschi', resolve: mapResolver({ 'problem.proschi': given }) });
+    expect(complete(imported, { line: 4, character: 17 }).map((i) => i.label)).toEqual(['OP', 'CURSOR']);
+    expect(complete(imported, { line: 6, character: 5 }).map((i) => i.label)).toContain('Session');
   });
 
   it('completes statuses on a response and headers after header', () => {

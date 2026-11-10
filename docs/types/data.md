@@ -24,8 +24,8 @@ A relational database queried with SQL, whose product does not matter.
 - **Extended by:** [PostgreSQL](#postgresql), [MySQL](#mysql), [SQLite](#sqlite), [Oracle](#oracle), [SQL Server](#sql-server), [Distributed SQL Database](#distributed-sql-database), [AWS RDS](cloud.md#aws-rds), [AWS Aurora](cloud.md#aws-aurora), [GCP Cloud SQL](cloud.md#gcp-cloud-sql)
 - **Kind:** `database`
 - **Protocol:** `SQL`
-- **Read:** `SELECT`, `WITH`, `EXPLAIN`, `SHOW`, `BEGIN`, `ROLLBACK`, plus 3 from [Data](#data)
-- **Write:** `INSERT`, `UPDATE`, `DELETE`, `UPSERT`, `MERGE`, `TRUNCATE`, `COMMIT`, `LOCK`, `CREATE`, `ALTER`, `DROP`, plus 8 from [Data](#data)
+- **Read:** `SELECT`, `WITH`, `EXPLAIN`, `SHOW`, `BEGIN`, `COMMIT`, `ROLLBACK`, plus 3 from [Data](#data)
+- **Write:** `INSERT`, `UPDATE`, `DELETE`, `UPSERT`, `MERGE`, `TRUNCATE`, `LOCK`, `CREATE`, `ALTER`, `DROP`, plus 8 from [Data](#data)
 
 ## PostgreSQL
 
@@ -35,8 +35,8 @@ PostgreSQL, the open source relational database.
 - **Extended by:** [TimescaleDB](#timescaledb), [Azure Database for PostgreSQL](cloud.md#azure-database-for-postgresql)
 - **Kind:** `database`
 - **Protocol:** `SQL`
-- **Read:** `LISTEN`, plus 6 from [Database](#database), 3 from [Data](#data)
-- **Write:** `NOTIFY`, `COPY`, `VACUUM`, plus 11 from [Database](#database), 8 from [Data](#data)
+- **Read:** `LISTEN`, plus 7 from [Database](#database), 3 from [Data](#data)
+- **Write:** `NOTIFY`, `COPY`, `VACUUM`, plus 10 from [Database](#database), 8 from [Data](#data)
 
 ## MySQL
 
@@ -46,8 +46,8 @@ MySQL, the open source relational database.
 - **Extended by:** [MariaDB](#mariadb), [Azure Database for MySQL](cloud.md#azure-database-for-mysql)
 - **Kind:** `database`
 - **Protocol:** `SQL`
-- **Read:** 6 from [Database](#database), 3 from [Data](#data)
-- **Write:** `REPLACE`, plus 11 from [Database](#database), 8 from [Data](#data)
+- **Read:** 7 from [Database](#database), 3 from [Data](#data)
+- **Write:** `REPLACE`, plus 10 from [Database](#database), 8 from [Data](#data)
 
 ## MariaDB
 
@@ -56,8 +56,8 @@ MariaDB, the community fork of MySQL.
 - **Extends:** [MySQL](#mysql) › [Database](#database) › [Data](#data) › [Component](core.md#component)
 - **Kind:** `database`
 - **Protocol:** `SQL`
-- **Read:** 6 from [Database](#database), 3 from [Data](#data)
-- **Write:** 1 from [MySQL](#mysql), 11 from [Database](#database), 8 from [Data](#data)
+- **Read:** 7 from [Database](#database), 3 from [Data](#data)
+- **Write:** 1 from [MySQL](#mysql), 10 from [Database](#database), 8 from [Data](#data)
 
 ## SQLite
 
@@ -66,8 +66,8 @@ SQLite, the embedded relational database in a single file.
 - **Extends:** [Database](#database) › [Data](#data) › [Component](core.md#component)
 - **Kind:** `database`
 - **Protocol:** `SQL`
-- **Read:** 6 from [Database](#database), 3 from [Data](#data)
-- **Write:** 11 from [Database](#database), 8 from [Data](#data)
+- **Read:** 7 from [Database](#database), 3 from [Data](#data)
+- **Write:** 10 from [Database](#database), 8 from [Data](#data)
 
 ## Oracle
 
@@ -76,8 +76,8 @@ Oracle Database, the commercial relational database.
 - **Extends:** [Database](#database) › [Data](#data) › [Component](core.md#component)
 - **Kind:** `database`
 - **Protocol:** `SQL`
-- **Read:** 6 from [Database](#database), 3 from [Data](#data)
-- **Write:** 11 from [Database](#database), 8 from [Data](#data)
+- **Read:** 7 from [Database](#database), 3 from [Data](#data)
+- **Write:** 10 from [Database](#database), 8 from [Data](#data)
 
 ## SQL Server
 
@@ -87,8 +87,8 @@ Microsoft SQL Server, the commercial relational database.
 - **Extended by:** [Azure SQL](cloud.md#azure-sql)
 - **Kind:** `database`
 - **Protocol:** `SQL`
-- **Read:** 6 from [Database](#database), 3 from [Data](#data)
-- **Write:** 11 from [Database](#database), 8 from [Data](#data)
+- **Read:** 7 from [Database](#database), 3 from [Data](#data)
+- **Write:** 10 from [Database](#database), 8 from [Data](#data)
 
 ## TimescaleDB
 
@@ -97,8 +97,8 @@ TimescaleDB, PostgreSQL extended for time series.
 - **Extends:** [PostgreSQL](#postgresql) › [Database](#database) › [Data](#data) › [Component](core.md#component)
 - **Kind:** `analytics`
 - **Protocol:** `SQL`
-- **Read:** 1 from [PostgreSQL](#postgresql), 6 from [Database](#database), 3 from [Data](#data)
-- **Write:** 3 from [PostgreSQL](#postgresql), 11 from [Database](#database), 8 from [Data](#data)
+- **Read:** 1 from [PostgreSQL](#postgresql), 7 from [Database](#database), 3 from [Data](#data)
+- **Write:** 3 from [PostgreSQL](#postgresql), 10 from [Database](#database), 8 from [Data](#data)
 
 ## Distributed SQL Database
 
@@ -110,8 +110,8 @@ A relational database that shards and replicates itself across nodes, keeping tr
 - **Kind:** `database`
 - **Protocol:** `SQL`
 - **Icon:** `Database`
-- **Read:** 6 from [Database](#database), 3 from [Data](#data)
-- **Write:** 11 from [Database](#database), 8 from [Data](#data)
+- **Read:** 7 from [Database](#database), 3 from [Data](#data)
+- **Write:** 10 from [Database](#database), 8 from [Data](#data)
 
 ## CockroachDB
 
@@ -120,8 +120,8 @@ CockroachDB, a distributed SQL database that speaks the PostgreSQL protocol.
 - **Extends:** [Distributed SQL Database](#distributed-sql-database) › [Database](#database) › [Data](#data) › [Component](core.md#component)
 - **Kind:** `database`
 - **Protocol:** `SQL`
-- **Read:** 6 from [Database](#database), 3 from [Data](#data)
-- **Write:** 11 from [Database](#database), 8 from [Data](#data)
+- **Read:** 7 from [Database](#database), 3 from [Data](#data)
+- **Write:** 10 from [Database](#database), 8 from [Data](#data)
 
 ## YugabyteDB
 
@@ -130,8 +130,8 @@ YugabyteDB, a distributed SQL database compatible with PostgreSQL.
 - **Extends:** [Distributed SQL Database](#distributed-sql-database) › [Database](#database) › [Data](#data) › [Component](core.md#component)
 - **Kind:** `database`
 - **Protocol:** `SQL`
-- **Read:** 6 from [Database](#database), 3 from [Data](#data)
-- **Write:** 11 from [Database](#database), 8 from [Data](#data)
+- **Read:** 7 from [Database](#database), 3 from [Data](#data)
+- **Write:** 10 from [Database](#database), 8 from [Data](#data)
 
 ## TiDB
 
@@ -140,8 +140,8 @@ TiDB, a distributed SQL database compatible with MySQL.
 - **Extends:** [Distributed SQL Database](#distributed-sql-database) › [Database](#database) › [Data](#data) › [Component](core.md#component)
 - **Kind:** `database`
 - **Protocol:** `SQL`
-- **Read:** 6 from [Database](#database), 3 from [Data](#data)
-- **Write:** 11 from [Database](#database), 8 from [Data](#data)
+- **Read:** 7 from [Database](#database), 3 from [Data](#data)
+- **Write:** 10 from [Database](#database), 8 from [Data](#data)
 
 ## Vitess
 
@@ -150,8 +150,8 @@ Vitess, which shards MySQL behind one SQL endpoint.
 - **Extends:** [Distributed SQL Database](#distributed-sql-database) › [Database](#database) › [Data](#data) › [Component](core.md#component)
 - **Kind:** `database`
 - **Protocol:** `SQL`
-- **Read:** 6 from [Database](#database), 3 from [Data](#data)
-- **Write:** 11 from [Database](#database), 8 from [Data](#data)
+- **Read:** 7 from [Database](#database), 3 from [Data](#data)
+- **Write:** 10 from [Database](#database), 8 from [Data](#data)
 
 ## NoSQL Database
 
@@ -325,8 +325,8 @@ Redis, the in-memory data store, used as a cache.
 - **Extended by:** [Valkey](#valkey), [KeyDB](#keydb), [Dragonfly](#dragonfly), [AWS ElastiCache](cloud.md#aws-elasticache), [GCP Memorystore](cloud.md#gcp-memorystore), [Azure Cache for Redis](cloud.md#azure-cache-for-redis)
 - **Kind:** `cache`
 - **Protocol:** `RESP`
-- **Read:** `GETRANGE`, `STRLEN`, `EXISTS`, `TTL`, `PTTL`, `TYPE`, `KEYS`, `SCAN`, `HGET`, `HMGET`, `HGETALL`, `HEXISTS`, `HKEYS`, `HVALS`, `HLEN`, `HSCAN`, `LRANGE`, `LLEN`, `LINDEX`, `SMEMBERS`, `SISMEMBER`, `SMISMEMBER`, `SCARD`, `SRANDMEMBER`, `SINTER`, `SUNION`, `SDIFF`, `SSCAN`, `ZRANGE`, `ZREVRANGE`, `ZRANGEBYSCORE`, `ZREVRANGEBYSCORE`, `ZRANGEBYLEX`, `ZSCORE`, `ZMSCORE`, `ZRANK`, `ZREVRANK`, `ZCARD`, `ZCOUNT`, `ZSCAN`, `GETBIT`, `BITCOUNT`, `BITPOS`, `PFCOUNT`, `GEOSEARCH`, `GEODIST`, `GEOPOS`, `GEOHASH`, `GEORADIUS`, `GEORADIUSBYMEMBER`, `SUBSCRIBE`, `PSUBSCRIBE`, `UNSUBSCRIBE`, `PUNSUBSCRIBE`, `SSUBSCRIBE`, `XREAD`, `XREADGROUP`, `XRANGE`, `XREVRANGE`, `XLEN`, `XPENDING`, `XINFO`, `MULTI`, `WATCH`, `UNWATCH`, `DISCARD`, `PING`, plus 2 from [Cache](#cache), 3 from [Data](#data)
-- **Write:** `SETNX`, `SETEX`, `PSETEX`, `GETSET`, `GETDEL`, `GETEX`, `MSET`, `MSETNX`, `APPEND`, `SETRANGE`, `INCR`, `INCRBY`, `INCRBYFLOAT`, `DECR`, `DECRBY`, `DEL`, `UNLINK`, `PEXPIRE`, `EXPIREAT`, `PEXPIREAT`, `PERSIST`, `RENAME`, `COPY`, `HSET`, `HSETNX`, `HMSET`, `HDEL`, `HINCRBY`, `HINCRBYFLOAT`, `LPUSH`, `RPUSH`, `LPUSHX`, `RPUSHX`, `LPOP`, `RPOP`, `BLPOP`, `BRPOP`, `LSET`, `LREM`, `LTRIM`, `LINSERT`, `LMOVE`, `BLMOVE`, `SADD`, `SREM`, `SPOP`, `SMOVE`, `SINTERSTORE`, `SUNIONSTORE`, `SDIFFSTORE`, `ZADD`, `ZREM`, `ZINCRBY`, `ZPOPMIN`, `ZPOPMAX`, `BZPOPMIN`, `BZPOPMAX`, `ZREMRANGEBYSCORE`, `ZREMRANGEBYRANK`, `ZUNIONSTORE`, `ZINTERSTORE`, `ZRANGESTORE`, `SETBIT`, `BITOP`, `PFADD`, `PFMERGE`, `GEOADD`, `GEOSEARCHSTORE`, `PUBLISH`, `SPUBLISH`, `XADD`, `XACK`, `XCLAIM`, `XAUTOCLAIM`, `XDEL`, `XTRIM`, `XGROUP`, `EXEC`, `EVAL`, `EVALSHA`, `FCALL`, plus 3 from [Cache](#cache), 8 from [Data](#data)
+- **Read:** `GETRANGE`, `STRLEN`, `EXISTS`, `TTL`, `PTTL`, `TYPE`, `KEYS`, `SCAN`, `HGET`, `HMGET`, `HGETALL`, `HEXISTS`, `HKEYS`, `HVALS`, `HLEN`, `HSCAN`, `LRANGE`, `LLEN`, `LINDEX`, `SMEMBERS`, `SISMEMBER`, `SMISMEMBER`, `SCARD`, `SRANDMEMBER`, `SINTER`, `SUNION`, `SDIFF`, `SSCAN`, `ZRANGE`, `ZREVRANGE`, `ZRANGEBYSCORE`, `ZREVRANGEBYSCORE`, `ZRANGEBYLEX`, `ZSCORE`, `ZMSCORE`, `ZRANK`, `ZREVRANK`, `ZCARD`, `ZCOUNT`, `ZSCAN`, `GETBIT`, `BITCOUNT`, `BITPOS`, `PFCOUNT`, `GEOSEARCH`, `GEODIST`, `GEOPOS`, `GEOHASH`, `GEORADIUS`, `GEORADIUSBYMEMBER`, `SUBSCRIBE`, `PSUBSCRIBE`, `UNSUBSCRIBE`, `PUNSUBSCRIBE`, `SSUBSCRIBE`, `XREAD`, `XREADGROUP`, `XRANGE`, `XREVRANGE`, `XLEN`, `XPENDING`, `XINFO`, `MULTI`, `EXEC`, `DISCARD`, `WATCH`, `UNWATCH`, `PING`, plus 2 from [Cache](#cache), 3 from [Data](#data)
+- **Write:** `SETNX`, `SETEX`, `PSETEX`, `GETSET`, `GETDEL`, `GETEX`, `MSET`, `MSETNX`, `APPEND`, `SETRANGE`, `INCR`, `INCRBY`, `INCRBYFLOAT`, `DECR`, `DECRBY`, `DEL`, `UNLINK`, `PEXPIRE`, `EXPIREAT`, `PEXPIREAT`, `PERSIST`, `RENAME`, `COPY`, `HSET`, `HSETNX`, `HMSET`, `HDEL`, `HINCRBY`, `HINCRBYFLOAT`, `LPUSH`, `RPUSH`, `LPUSHX`, `RPUSHX`, `LPOP`, `RPOP`, `BLPOP`, `BRPOP`, `LSET`, `LREM`, `LTRIM`, `LINSERT`, `LMOVE`, `BLMOVE`, `SADD`, `SREM`, `SPOP`, `SMOVE`, `SINTERSTORE`, `SUNIONSTORE`, `SDIFFSTORE`, `ZADD`, `ZREM`, `ZINCRBY`, `ZPOPMIN`, `ZPOPMAX`, `BZPOPMIN`, `BZPOPMAX`, `ZREMRANGEBYSCORE`, `ZREMRANGEBYRANK`, `ZUNIONSTORE`, `ZINTERSTORE`, `ZRANGESTORE`, `SETBIT`, `BITOP`, `PFADD`, `PFMERGE`, `GEOADD`, `GEOSEARCHSTORE`, `PUBLISH`, `SPUBLISH`, `XADD`, `XACK`, `XCLAIM`, `XAUTOCLAIM`, `XDEL`, `XTRIM`, `XGROUP`, `EVAL`, `EVALSHA`, `FCALL`, plus 3 from [Cache](#cache), 8 from [Data](#data)
 
 ## Valkey
 
@@ -335,8 +335,8 @@ Valkey, the open source fork of Redis.
 - **Extends:** [Redis](#redis) › [Cache](#cache) › [Data](#data) › [Component](core.md#component)
 - **Kind:** `cache`
 - **Protocol:** `RESP`
-- **Read:** 67 from [Redis](#redis), 2 from [Cache](#cache), 3 from [Data](#data)
-- **Write:** 81 from [Redis](#redis), 3 from [Cache](#cache), 8 from [Data](#data)
+- **Read:** 68 from [Redis](#redis), 2 from [Cache](#cache), 3 from [Data](#data)
+- **Write:** 80 from [Redis](#redis), 3 from [Cache](#cache), 8 from [Data](#data)
 
 ## KeyDB
 
@@ -345,8 +345,8 @@ KeyDB, a multithreaded fork of Redis.
 - **Extends:** [Redis](#redis) › [Cache](#cache) › [Data](#data) › [Component](core.md#component)
 - **Kind:** `cache`
 - **Protocol:** `RESP`
-- **Read:** 67 from [Redis](#redis), 2 from [Cache](#cache), 3 from [Data](#data)
-- **Write:** 81 from [Redis](#redis), 3 from [Cache](#cache), 8 from [Data](#data)
+- **Read:** 68 from [Redis](#redis), 2 from [Cache](#cache), 3 from [Data](#data)
+- **Write:** 80 from [Redis](#redis), 3 from [Cache](#cache), 8 from [Data](#data)
 
 ## Dragonfly
 
@@ -355,8 +355,8 @@ Dragonfly, an in-memory store compatible with Redis.
 - **Extends:** [Redis](#redis) › [Cache](#cache) › [Data](#data) › [Component](core.md#component)
 - **Kind:** `cache`
 - **Protocol:** `RESP`
-- **Read:** 67 from [Redis](#redis), 2 from [Cache](#cache), 3 from [Data](#data)
-- **Write:** 81 from [Redis](#redis), 3 from [Cache](#cache), 8 from [Data](#data)
+- **Read:** 68 from [Redis](#redis), 2 from [Cache](#cache), 3 from [Data](#data)
+- **Write:** 80 from [Redis](#redis), 3 from [Cache](#cache), 8 from [Data](#data)
 
 ## Memcached
 

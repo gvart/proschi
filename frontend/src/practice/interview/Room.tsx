@@ -121,7 +121,7 @@ export default function Room({ problem, board, phone, phase, viewing, onView, ne
         )}
       </div>
       <div className="min-h-0 flex-1">
-        <CodeEditor ref={editor} value={source} onChange={setSource} diagnostics={rootDiagnostics} nodeIds={nodeIds} />
+        <CodeEditor ref={editor} value={source} onChange={setSource} diagnostics={rootDiagnostics} nodeIds={nodeIds} diagram={parsed.diagram} />
       </div>
     </section>
   );

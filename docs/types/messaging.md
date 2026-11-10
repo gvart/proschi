@@ -72,8 +72,8 @@ Apache Kafka, the distributed log of partitioned topics.
 - **Extends:** [Message Broker](#message-broker) › [Messaging](#messaging) › [Component](core.md#component)
 - **Extended by:** [Redpanda](#redpanda), [AWS MSK](cloud.md#aws-msk)
 - **Kind:** `broker`
-- **Read:** `Poll`, `OffsetFetch`, `ListOffsets`, `Metadata`, plus 2 from [Message Broker](#message-broker), 4 from [Messaging](#messaging)
-- **Write:** `Commit`, `OffsetCommit`, `AddPartitionsToTxn`, `EndTxn`, `DeleteRecords`, `CreateTopics`, `DeleteTopics`, `CreatePartitions`, plus 1 from [Message Broker](#message-broker), 7 from [Messaging](#messaging)
+- **Read:** `Poll`, `OffsetFetch`, `ListOffsets`, `Metadata`, `AddPartitionsToTxn`, `EndTxn`, plus 2 from [Message Broker](#message-broker), 4 from [Messaging](#messaging)
+- **Write:** `Commit`, `OffsetCommit`, `DeleteRecords`, `CreateTopics`, `DeleteTopics`, `CreatePartitions`, plus 1 from [Message Broker](#message-broker), 7 from [Messaging](#messaging)
 
 ## Redpanda
 
@@ -81,8 +81,8 @@ Redpanda, a Kafka-compatible streaming platform written in C++.
 
 - **Extends:** [Kafka](#kafka) › [Message Broker](#message-broker) › [Messaging](#messaging) › [Component](core.md#component)
 - **Kind:** `broker`
-- **Read:** 4 from [Kafka](#kafka), 2 from [Message Broker](#message-broker), 4 from [Messaging](#messaging)
-- **Write:** 8 from [Kafka](#kafka), 1 from [Message Broker](#message-broker), 7 from [Messaging](#messaging)
+- **Read:** 6 from [Kafka](#kafka), 2 from [Message Broker](#message-broker), 4 from [Messaging](#messaging)
+- **Write:** 6 from [Kafka](#kafka), 1 from [Message Broker](#message-broker), 7 from [Messaging](#messaging)
 
 ## RabbitMQ
 

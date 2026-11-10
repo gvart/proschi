@@ -5,7 +5,7 @@ import { Compartment, EditorState, StateEffect, StateField, type Extension } fro
 import { isolateHistory, redo as redoCommand, undo as undoCommand } from '@codemirror/commands';
 import { autocompletion } from '@codemirror/autocomplete';
 import { lintGutter, setDiagnostics } from '@codemirror/lint';
-import type { Diagnostic } from '../../dsl';
+import type { Diagnostic, Diagram } from '../../dsl';
 import { format, formattedOffset } from '../../dsl/format';
 import { proschiCompletions, proschiLanguage, toCmDiagnostics, type TechChoice } from './proschiLanguage';
 import { editorLayout, focusThemeFor } from './editorThemes';
@@ -35,6 +35,8 @@ interface CodeEditorProps {
   onChange: (value: string) => void;
   diagnostics: Diagnostic[];
   nodeIds: string[];
+  /** The page's parse of `value`, the one behind `diagnostics`, imports resolved: completion offers its types and nodes. */
+  diagram?: Diagram;
   /** The techs to offer inside [ ]; every catalog tech when absent. */
   techs?: readonly TechChoice[];
   ref?: Ref<CodeEditorHandle>;
@@ -99,7 +101,7 @@ const linkedLineTheme = EditorView.baseTheme({
 
 const readOnlyState = (readOnly: boolean) => [EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)];
 
-export default function CodeEditor({ value, onChange, diagnostics, nodeIds, techs, ref, readOnly = false, autoFocus = false, theme, extensions, onCursor }: CodeEditorProps) {
+export default function CodeEditor({ value, onChange, diagnostics, nodeIds, diagram, techs, ref, readOnly = false, autoFocus = false, theme, extensions, onCursor }: CodeEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const mode = useEditorTheme();
@@ -110,12 +112,14 @@ export default function CodeEditor({ value, onChange, diagnostics, nodeIds, tech
   const onCursorRef = useRef(onCursor);
   const nodeIdsRef = useRef(nodeIds);
   const techsRef = useRef(techs);
+  const diagramRef = useRef(diagram);
 
   useEffect(() => {
     onChangeRef.current = onChange;
     onCursorRef.current = onCursor;
     nodeIdsRef.current = nodeIds;
     techsRef.current = techs;
+    diagramRef.current = diagram;
   });
 
   // The editor owns its document; it is created once and fed external changes below.
@@ -129,7 +133,7 @@ export default function CodeEditor({ value, onChange, diagnostics, nodeIds, tech
           tabKeymap,
           keymap.of([{ key: 'Shift-Alt-f', run: formatDocument, preventDefault: true }]),
           proschiLanguage,
-          autocompletion({ override: [proschiCompletions(() => nodeIdsRef.current, () => techsRef.current)] }),
+          autocompletion({ override: [proschiCompletions(() => nodeIdsRef.current, () => techsRef.current, () => diagramRef.current)] }),
           lintGutter(),
           editorLayout,
           readOnlyConf.of(readOnlyState(readOnly)),

@@ -41,8 +41,8 @@ type ZeroMQ extends [Message Queue] {
 }
 
 type Kafka extends [Message Broker] {
-  op read  Poll, OffsetFetch, ListOffsets, Metadata
-  op write Commit, OffsetCommit, AddPartitionsToTxn, EndTxn, DeleteRecords
+  op read  Poll, OffsetFetch, ListOffsets, Metadata, AddPartitionsToTxn, EndTxn
+  op write Commit, OffsetCommit, DeleteRecords
   op write CreateTopics, DeleteTopics, CreatePartitions
   doc "Apache Kafka, the distributed log of partitioned topics."
 }

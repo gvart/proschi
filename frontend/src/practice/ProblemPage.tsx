@@ -438,7 +438,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
         </div>
       </ZenCollapse>
       <div className="flex-1 min-h-0">
-        <CodeEditor ref={editorRef} value={source} onChange={setSource} diagnostics={rootDiagnostics} nodeIds={nodeIds} />
+        <CodeEditor ref={editorRef} value={source} onChange={setSource} diagnostics={rootDiagnostics} nodeIds={nodeIds} diagram={diagram} />
       </div>
     </EditorZone>
   );
