@@ -118,7 +118,8 @@ export function resolveTypes(decls: readonly TypeDecl[], base: TypeTable = new M
     const kind = decl.kind ?? parent?.kind;
     if (!decl.abstract && !kind && !broken.has(key)) error(`Type '${decl.name}' needs a kind: declare one (kind database) or extend a type that has one`, decl.loc);
 
-    const ownOps = new Set(decl.ops.map((o) => o.name));
+    // An own op replaces the inherited op of that name, ignoring case as step labels do.
+    const ownOps = new Set(decl.ops.map((o) => o.name.toLowerCase()));
     const resolved: ResolvedType = {
       name: decl.name,
       abstract: decl.abstract,
@@ -126,7 +127,7 @@ export function resolveTypes(decls: readonly TypeDecl[], base: TypeTable = new M
       parents: parent ? [parent.name, ...parent.parents] : [],
       ...(kind ? { kind } : {}),
       props: { ...parent?.props, ...decl.props },
-      ops: [...(parent?.ops.filter((o) => !ownOps.has(o.name)) ?? []), ...decl.ops].map((o): TypeOp => ({ ...o })),
+      ops: [...(parent?.ops.filter((o) => !ownOps.has(o.name.toLowerCase())) ?? []), ...decl.ops].map((o): TypeOp => ({ ...o })),
       statuses: union(parent?.statuses ?? [], decl.statuses),
       headers: union(parent?.headers ?? [], decl.headers, (h) => h.toLowerCase()),
       ...pick('protocol', decl.protocol ?? parent?.protocol),

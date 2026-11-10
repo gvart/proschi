@@ -48,7 +48,7 @@ describe('the stdlib tree', () => {
 
   it('has the top levels under Component', () => {
     expect(children(byName.get('Component')!).map((t) => t.name).sort()).toEqual(
-      ['Annotation', 'Caller', 'Compute', 'DataComponent', 'Edge', 'External', 'Group', 'Messaging', 'Shape'].sort(),
+      ['Annotation', 'Caller', 'Compute', 'Data', 'Edge', 'External', 'Group', 'Messaging', 'Shape'].sort(),
     );
   });
 
@@ -101,6 +101,31 @@ describe('the stdlib vocabularies', () => {
     }
     // Services whose requests the design names itself have no fixed ops.
     for (const name of ['Service', 'Worker', 'gRPC', 'WebSocket', 'Go', 'Kubernetes', 'AWS Lambda']) expect(byName.get(name)!.ops, name).toEqual([]);
+  });
+
+  it("gives every generic type its family's standard vocabulary, which the products inherit", () => {
+    const families: [string, string[], string[], string[]][] = [
+      ['NoSQL Database', ['GET', 'SCAN'], ['PUT', 'DELETE'], ['DynamoDB', 'MongoDB', 'Cassandra', 'GCP Bigtable', 'Neo4j']],
+      ['Cache', ['GET'], ['SET', 'DELETE', 'EXPIRE'], ['Redis', 'Memcached', 'Hazelcast', 'Aerospike']],
+      ['Message Queue', ['RECEIVE'], ['SEND', 'ACK'], ['SQS', 'Azure Queue Storage', 'Redis Queue', 'ZeroMQ']],
+      ['Message Broker', ['SUBSCRIBE', 'CONSUME'], ['PUBLISH', 'ACK'], ['Kafka', 'RabbitMQ', 'GCP Pub/Sub', 'AWS SNS']],
+      ['Object Storage', ['GET', 'HEAD', 'LIST'], ['PUT', 'DELETE'], ['AWS S3', 'GCP Cloud Storage', 'Azure Blob Storage', 'Cloudflare R2', 'MinIO', 'Ceph']],
+      ['Search Engine', ['Search', 'Get'], ['Index', 'Delete'], ['Elasticsearch', 'Solr', 'Algolia', 'AWS OpenSearch']],
+      ['CDN', ['GET'], ['PURGE'], ['Cloudflare', 'AWS CloudFront', 'Fastly', 'Azure CDN']],
+      ['Coordination Store', ['GET', 'WATCH'], ['PUT', 'DELETE'], ['etcd', 'ZooKeeper']],
+    ];
+    for (const [name, read, write, products] of families) {
+      for (const t of [name, ...products].map((n) => byName.get(n)!)) {
+        for (const op of read) expect(findOp(t, op)?.access, `${t.name} ${op}`).toBe('read');
+        for (const op of write) expect(findOp(t, op)?.access, `${t.name} ${op}`).toBe('write');
+      }
+    }
+    // A product changes an inherited op only to give it its own cost: a DynamoDB Scan reads the whole table.
+    expect(findOp(byName.get('DynamoDB')!, 'SCAN')).toEqual({ name: 'Scan', access: 'read', latency: 10, cost: 25 });
+    expect(findOp(byName.get('NoSQL Database')!, 'SCAN')).toEqual({ name: 'SCAN', access: 'read' });
+    // Only the open surfaces have no ops: code you run, and an L4 accelerator that carries any traffic.
+    const open = types.filter((t) => !t.abstract && t.kind && !['client', 'other'].includes(t.kind) && t.ops.length === 0);
+    expect(open.filter((t) => !t.parents.includes('Compute')).map((t) => t.name)).toEqual(['AWS Global Accelerator']);
   });
 
   it('knows the key techs by their own commands', () => {

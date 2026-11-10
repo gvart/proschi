@@ -44,7 +44,7 @@ usecase "Serve request" "An edge server answers a visitor, reading the site's se
 
 usecase "Change config" "A customer changes a setting; the change reaches every data center in the background" {
   customer -> api      : PUT /zones/{id}/settings
-  api      -> root     : SET key
+  api      -> root     : PUT key
   root    --> api      : seq 1024
   api     --> customer : 200
   root    ->> mains    : ~2KB x6 PUT log entry 1024

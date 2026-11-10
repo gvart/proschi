@@ -38,12 +38,12 @@ describe('stdlib', () => {
   it('has the seed types, rooted at Component', () => {
     const table = builtinTypes();
     const names = [...table.values()].map((t) => t.name);
-    expect(names).toEqual(expect.arrayContaining(['Component', 'Service', 'DataComponent', 'Database', 'PostgreSQL', 'Cache', 'Redis', 'REST API']));
+    expect(names).toEqual(expect.arrayContaining(['Component', 'Service', 'Data', 'Database', 'PostgreSQL', 'Cache', 'Redis', 'REST API']));
     for (const t of table.values()) {
       expect(t.builtin).toBe(true);
       if (t.name !== 'Component') expect(t.parents[t.parents.length - 1], t.name).toBe('Component');
     }
-    expect(lookupType(table, 'PostgreSQL')).toMatchObject({ parents: ['Database', 'DataComponent', 'Component'], kind: 'database', protocol: 'SQL', icon: 'PostgreSQL' });
+    expect(lookupType(table, 'PostgreSQL')).toMatchObject({ parents: ['Database', 'Data', 'Component'], kind: 'database', protocol: 'SQL', icon: 'PostgreSQL' });
     expect(lookupType(table, 'Component')).toMatchObject({ abstract: true, parents: [] });
   });
 
@@ -97,7 +97,7 @@ ledger "Ledger" [LedgerDb]
       name: 'LedgerDb',
       abstract: false,
       builtin: false,
-      parents: ['PostgreSQL', 'Database', 'DataComponent', 'Component'],
+      parents: ['PostgreSQL', 'Database', 'Data', 'Component'],
       kind: 'database',
       protocol: 'SQL',
       props: { latencyMs: 8, availability: 0.9999, durable: true },
@@ -119,15 +119,20 @@ ledger "Ledger" [LedgerDb]
     expect(ops.findIndex((o) => o.name === 'INSERT')).toBeLessThan(ops.length - 2);
   });
 
+  it('replaces an inherited op whatever its case, as steps match ops', () => {
+    const ops = nodeOf('type Slow extends PostgreSQL { op read select latency 4 }\ns [Slow]', 's').resolvedType!.ops;
+    expect(ops.filter((o) => o.name.toLowerCase() === 'select')).toEqual([{ name: 'select', access: 'read', latency: 4 }]);
+  });
+
   it('draws a node of a declared type with its nearest built-in icon', () => {
     const node = nodeOf(ledger, 'ledger');
     expect(node).toMatchObject({ kind: 'component', type: 'database', techStack: 'PostgreSQL' });
     expect(node.inferredKind).toBeUndefined();
     expect(kindOf(node)).toBe('database');
     const iconned = nodeOf('type Audit extends LedgerDb { icon [DynamoDB] }\n' + ledger + 'a [Audit]', 'a');
-    expect(iconned).toMatchObject({ techStack: 'DynamoDB', resolvedType: { icon: 'DynamoDB', parents: ['LedgerDb', 'PostgreSQL', 'Database', 'DataComponent', 'Component'] } });
+    expect(iconned).toMatchObject({ techStack: 'DynamoDB', resolvedType: { icon: 'DynamoDB', parents: ['LedgerDb', 'PostgreSQL', 'Database', 'Data', 'Component'] } });
     // No built-in icon on the way up: the generic tech of the kind.
-    expect(nodeOf('type Bag extends DataComponent {\n  kind storage\n}\nb [Bag]', 'b')).toMatchObject({ techStack: 'Object Storage', type: 'storage' });
+    expect(nodeOf('type Bag extends Data {\n  kind storage\n}\nb [Bag]', 'b')).toMatchObject({ techStack: 'Object Storage', type: 'storage' });
   });
 
   it('overrides scalars down the chain and lets a child change the kind', () => {
@@ -154,7 +159,7 @@ c [C]
     const source = 'type [Ledger Store] extends [REST API] { op write APPEND }\ntype Empty extends Service {}\nl [Ledger Store]\ne [Empty]';
     const { diagram, diagnostics } = parse(source);
     expect(diagnostics).toEqual([]);
-    expect(diagram.nodes[0].resolvedType).toMatchObject({ name: 'Ledger Store', parents: ['REST API', 'HttpService', 'Service', 'Compute', 'Component'], statuses: expect.arrayContaining([200, 404]) });
+    expect(diagram.nodes[0].resolvedType).toMatchObject({ name: 'Ledger Store', parents: ['REST API', 'HTTP Service', 'Service', 'Compute', 'Component'], statuses: expect.arrayContaining([200, 404]) });
     expect(diagram.nodes[0].resolvedType!.ops.at(-1)).toEqual({ name: 'APPEND', access: 'write' });
     expect(diagram.nodes[1].resolvedType).toMatchObject({ name: 'Empty', kind: 'service' });
   });
@@ -297,7 +302,7 @@ describe('profileOf', () => {
 });
 
 describe('format, diff and Mermaid', () => {
-  const source = `abstract   type Store extends DataComponent {
+  const source = `abstract   type Store extends Data {
     kind database
   op read   SELECT,Scan latency 8
     op write INSERT
@@ -310,7 +315,7 @@ db [LedgerDb]
 
   it('formats a type block and keeps its meaning', () => {
     const formatted = format(source);
-    expect(formatted).toBe(`abstract type Store extends DataComponent {
+    expect(formatted).toBe(`abstract type Store extends Data {
   kind database
   op read  SELECT, Scan latency 8
   op write INSERT

@@ -7,7 +7,7 @@ The root type `Component`, the clients that send the first request, and the shap
 Anything drawn on the diagram: the root of every type.
 
 - **Abstract.** A node uses a type that extends it.
-- **Extended by:** [Caller](#caller), [Shape](#shape), [Annotation](#annotation), [Group](#group), [Edge](edge.md#edge), [Compute](compute.md#compute), [DataComponent](data.md#datacomponent), [Messaging](messaging.md#messaging), [External](external.md#external)
+- **Extended by:** [Caller](#caller), [Shape](#shape), [Annotation](#annotation), [Group](#group), [Edge](edge.md#edge), [Compute](compute.md#compute), [Data](data.md#data), [Messaging](messaging.md#messaging), [External](external.md#external)
 
 ## Caller
 

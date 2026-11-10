@@ -74,7 +74,7 @@ type [AWS Keyspaces] extends Cassandra {
   doc "Amazon Keyspaces, the AWS wide-column database compatible with Cassandra."
 }
 
-type [AWS Neptune] extends GraphNoSql {
+type [AWS Neptune] extends [Graph NoSQL Database] {
   doc "Amazon Neptune, the graph database of AWS."
 }
 
@@ -104,11 +104,11 @@ type [AWS S3] extends [Object Storage] {
   doc "Amazon S3, the object storage of AWS."
 }
 
-type [AWS EBS] extends BlockStorage {
+type [AWS EBS] extends [Block Storage] {
   doc "Amazon EBS, block volumes for EC2 instances."
 }
 
-type [AWS EFS] extends SharedFileSystem {
+type [AWS EFS] extends [Shared File System] {
   doc "Amazon EFS, a shared NFS file system on AWS."
 }
 

@@ -59,7 +59,7 @@ change them for every node that uses it, where a
 ## Declare a type
 
 ```proschi fragment
-abstract type Store extends DataComponent {
+abstract type Store extends Data {
   kind database
 }
 type OrderStore extends Store { op write RESERVE }
@@ -100,7 +100,7 @@ A concrete type needs a `kind`, declared or inherited. Every concrete
 A type inherits everything from its parent. Its own `kind`, numbers,
 `protocol`, `icon` and `doc` replace the inherited ones. Its `op`, `status`
 and `header` lines add to the inherited lists, and an `op` with an
-inherited op's name replaces that op. `abstract` is not inherited. A
+inherited op's name (in any case) replaces that op. `abstract` is not inherited. A
 `capacity` block on a node still wins over every number of its type.
 
 ## Operations: reads and writes
@@ -157,7 +157,7 @@ title "Three stores"
 
 type Ledger extends PostgreSQL {}
 type Archive extends Ledger { icon [AWS S3] }
-type Bag extends DataComponent { kind storage }
+type Bag extends Data { kind storage }
 
 ledger  "Ledger"  [Ledger]
 archive "Archive" [Archive]
@@ -261,6 +261,30 @@ operations, statuses and headers, generated from the stdlib:
 | [Messaging](types/messaging.md) | `Message Queue`, `Message Broker`, `Kafka`, `RabbitMQ`, `SQS` |
 | [External services](types/external.md) | `Payment Gateway`, `Stripe`, `Auth Service`, `Email Service`, `OpenAI` |
 | [Cloud providers](types/cloud.md) | The AWS, Google Cloud, Azure and Cloudflare products |
+
+A generic type has the standard operations of its family, and its products
+inherit them next to their own API's names:
+
+| Type | Reads | Writes |
+|---|---|---|
+| `NoSQL Database` (`Key-Value Store`, `Document Store`, …) | `GET`, `SCAN` | `PUT`, `SET`, `DELETE` |
+| `Cache` | `GET`, `MGET` | `SET`, `DELETE`, `EXPIRE` |
+| `Message Queue`, `Message Broker` | `RECEIVE`, `SUBSCRIBE` | `SEND`, `PUBLISH`, `ACK` |
+| `Object Storage` | `GET`, `HEAD`, `LIST` | `PUT`, `DELETE`, `UPLOAD` |
+| `Search Engine` | `Search`, `Get`, `KNN` | `Index`, `Upsert`, `Delete` |
+| `CDN` | `GET`, `HEAD`, `OPTIONS` | `POST`, `PUT`, `PATCH`, `DELETE`, `PURGE` |
+
+So `GET settings` to a `[Key-Value Store]` reads, and the same label works
+on DynamoDB, MongoDB or Cassandra. Types whose requests are your own API
+have no operations and take any label: `Service`, `Worker`, `gRPC`,
+`WebSocket`, the languages, the platforms and the functions. To check the
+labels of one, [declare a type](#declare-a-type) with its operations.
+
+The abstract types in between are named like the catalog techs, and one
+that narrows another ends with its name: `[Document NoSQL Database]` under
+`NoSQL Database`, `[HTTP Service]` under `Service`. The top levels are one
+word: `Edge`, `Compute`, `Data`, `Messaging` and `External`, and `Caller`,
+`Shape`, `Annotation` and `Group` for what is drawn.
 
 ## Go further
 

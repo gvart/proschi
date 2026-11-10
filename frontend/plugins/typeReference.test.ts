@@ -34,14 +34,14 @@ describe('the type reference', () => {
     const data = pages.get('types/data.md')!
     const postgres = /^## PostgreSQL\n([\s\S]*?)\n## /m.exec(data)![1]
     expect(postgres).toContain('PostgreSQL, the open source relational database.')
-    expect(postgres).toContain('- **Extends:** [Database](#database) › [DataComponent](#datacomponent) › [Component](core.md#component)')
+    expect(postgres).toContain('- **Extends:** [Database](#database) › [Data](#data) › [Component](core.md#component)')
     expect(postgres).toContain('- **Kind:** `database`')
     expect(postgres).toContain('- **Protocol:** `SQL`')
-    expect(postgres).toMatch(/- \*\*Read:\*\* `LISTEN`, plus \d+ from \[Database\]\(#database\), \d+ from \[DataComponent\]\(#datacomponent\)/)
+    expect(postgres).toMatch(/- \*\*Read:\*\* `LISTEN`, plus \d+ from \[Database\]\(#database\), \d+ from \[Data\]\(#data\)/)
     expect(postgres).toContain('- **Write:** `NOTIFY`, `COPY`, `VACUUM`, plus')
     expect(postgres).toContain('[Azure Database for PostgreSQL](cloud.md#azure-database-for-postgresql)')
     const edge = pages.get('types/edge.md')!
-    expect(edge).toMatch(/^## HttpEdge\n\n.+\n\n- \*\*Abstract\.\*\*/m)
+    expect(edge).toMatch(/^## HTTP Edge\n\n.+\n\n- \*\*Abstract\.\*\*/m)
     expect(edge).toMatch(/- \*\*Statuses:\*\* `100`, .*`511`/)
     expect(edge).toMatch(/- \*\*Headers:\*\* `Accept`, .*`Content-Type`/)
   })

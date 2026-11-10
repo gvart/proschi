@@ -8,16 +8,36 @@
 #   (stdlib.test.ts checks both). Every catalog tech has a type.
 # - An abstract type, or any type the catalog does not know, must not share
 #   a name or an alias with a catalog tech: the catalog name always wins.
+# - Names of the types the catalog does not know, all abstract:
+#   - a top level under Component is one word: a layer of a design (Edge,
+#     Compute, Data, Messaging, External) or a family of drawings (Caller,
+#     Shape, Annotation, Group);
+#   - below it, a type is named in English words like a catalog tech, in
+#     brackets when there are several, with acronyms written as the catalog
+#     writes them (SQL, NoSQL, HTTP): [Coordination Store], Platform;
+#   - a type that narrows another one ends with that type's name:
+#     [HTTP Service] under Service, [Document NoSQL Database] under
+#     [NoSQL Database], [Distributed SQL Database] under Database.
 # - Simulation numbers (latencyMs, rps, …) go here only when they equal what
 #   sim/profiles.ts already gives the tech, so diagrams simulate as before.
 # - An op a practice problem's step already uses must have the access that
 #   step has today (dsl/access.ts); stdlib.test.ts checks it.
 # - Op names are unique along a type's chain, ignoring case: a parent's
 #   upper-case plain words (WRITE, SEND) are not repeated by its children.
+#   A child declares an inherited op again only to change it, as DynamoDB's
+#   Scan gives the key-value SCAN its multipliers.
+# - A generic type (the catalog's [NoSQL Database], Cache, [Message Queue],
+#   [Object Storage], [Search Engine], CDN, …) or an abstract parent declares
+#   its family's standard vocabulary (key-value: GET, PUT, DELETE, SCAN;
+#   queue: SEND, RECEIVE, ACK; objects: GET, PUT, DELETE, LIST), so every
+#   product inherits it and adds its own API's names. Types whose requests
+#   are the design's own API (Service, Worker, gRPC, WebSocket, the
+#   languages, platforms and functions) declare no ops and stay open, and
+#   so does AWS Global Accelerator, which carries any TCP or UDP traffic.
 # - After editing, run `npm run gen:stdlib` to refresh sources.gen.ts.
 #
 # The top levels: Component, then Caller and Shape (clients), Annotation and
-# Group (drawing aids), Edge, Compute, DataComponent, Messaging and External.
+# Group (drawing aids), Edge, Compute, Data, Messaging and External.
 
 abstract type Component {
   doc "Anything drawn on the diagram: the root of every type."

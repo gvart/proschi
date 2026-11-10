@@ -60,7 +60,9 @@ in `problem.proschi` refer to them, and to the use case names above.
   directly.
 - Use `[Key-Value Store]` for the root and the main nodes: each node serves
   about **20k** operations a second, carries **100 MB/s** of traffic and
-  costs **$500 / month**.
+  costs **$500 / month**. Its operations are those of any key-value store:
+  `GET` and `SCAN` read, `PUT` and `DELETE` write; the local stores are
+  `[Key-Value Store]` too.
 - p99 of **Serve request** under **20 ms**; of **Change config** under
   **100 ms**.
 - Every use case available **99.99%** of the time.
