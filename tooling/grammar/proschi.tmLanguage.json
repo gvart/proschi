@@ -10,6 +10,9 @@
       "include": "#comment"
     },
     {
+      "include": "#type-block"
+    },
+    {
       "include": "#system"
     },
     {
@@ -275,6 +278,18 @@
             },
             "2": {
               "name": "string.unquoted.endpoint.proschi"
+            }
+          }
+        },
+        {
+          "comment": "`header A, B` after an HTTP endpoint: the headers the request sends.",
+          "match": "(?<=\\s)(header)\\s+([A-Za-z0-9-]+(?:\\s*,\\s*[A-Za-z0-9-]+)*)",
+          "captures": {
+            "1": {
+              "name": "keyword.other.header.proschi"
+            },
+            "2": {
+              "name": "support.type.property-name.header.proschi"
             }
           }
         },
@@ -653,6 +668,156 @@
         },
         {
           "include": "#brace"
+        }
+      ]
+    },
+    "type-block": {
+      "comment": "`[abstract] type Name [extends Parent] { … }` (docs/design/typed-components.md): a component type, one property per line or on the header line closed with }.",
+      "name": "meta.block.type.proschi",
+      "begin": "^\\s*(?:(abstract)\\s+)?(type)\\s+(\\[[^\\]\\n]*\\]|[A-Za-z_][A-Za-z0-9_]*)(?:\\s+(extends)\\s+(\\[[^\\]\\n]*\\]|[A-Za-z_][A-Za-z0-9_]*))?\\s*(\\{)",
+      "end": "\\}",
+      "beginCaptures": {
+        "1": {
+          "name": "storage.modifier.abstract.proschi"
+        },
+        "2": {
+          "name": "storage.type.type.proschi"
+        },
+        "3": {
+          "name": "entity.name.type.proschi"
+        },
+        "4": {
+          "name": "storage.modifier.extends.proschi"
+        },
+        "5": {
+          "name": "entity.other.inherited-class.proschi"
+        },
+        "6": {
+          "name": "punctuation.section.block.begin.proschi"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.section.block.end.proschi"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "comment": "`op read|write A, B [latency x] [cost y]`",
+          "begin": "(?:^|(?<=\\{))\\s*(op)\\s+(read|write)\\b",
+          "end": "(?=$|\\}|#)",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.other.type-property.proschi"
+            },
+            "2": {
+              "name": "storage.modifier.access.proschi"
+            }
+          },
+          "patterns": [
+            {
+              "match": "\\b(latency|cost)\\b",
+              "name": "keyword.other.multiplier.proschi"
+            },
+            {
+              "include": "#quantity"
+            },
+            {
+              "include": "#string"
+            },
+            {
+              "match": "[A-Za-z_][A-Za-z0-9_]*",
+              "name": "entity.name.function.operation.proschi"
+            },
+            {
+              "match": ",",
+              "name": "punctuation.separator.comma.proschi"
+            }
+          ]
+        },
+        {
+          "comment": "`header Authorization, Content-Type`: names may have dashes.",
+          "begin": "(?:^|(?<=\\{))\\s*(header)\\b",
+          "end": "(?=$|\\}|#)",
+          "beginCaptures": {
+            "1": {
+              "name": "keyword.other.type-property.proschi"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#string"
+            },
+            {
+              "match": "[A-Za-z0-9!#$%&\\'*+.^_`|~-]+",
+              "name": "support.type.property-name.header.proschi"
+            },
+            {
+              "match": ",",
+              "name": "punctuation.separator.comma.proschi"
+            }
+          ]
+        },
+        {
+          "match": "(?:^|(?<=\\{))\\s*(kind)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "keyword.other.type-property.proschi"
+            },
+            "2": {
+              "name": "constant.language.kind.proschi"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=\\{))\\s*(protocol)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "keyword.other.type-property.proschi"
+            },
+            "2": {
+              "name": "constant.language.protocol.proschi"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=\\{))\\s*(icon)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "captures": {
+            "1": {
+              "name": "keyword.other.type-property.proschi"
+            },
+            "2": {
+              "name": "entity.name.type.tech.proschi"
+            }
+          }
+        },
+        {
+          "match": "(?:^|(?<=\\{))\\s*(kind|protocol|icon|doc|status|rps|readRps|writeRps|writeScaling|latencyMs|availability|costUsd|durable|consistency|bandwidthMBps|egressUsdPerGb)\\b",
+          "captures": {
+            "1": {
+              "name": "keyword.other.type-property.proschi"
+            }
+          }
+        },
+        {
+          "match": "\\b(true|false|strong|eventual|replicas|shards)\\b",
+          "name": "constant.language.proschi"
+        },
+        {
+          "include": "#quantity"
+        },
+        {
+          "include": "#string"
+        },
+        {
+          "include": "#tech"
+        },
+        {
+          "match": ",",
+          "name": "punctuation.separator.comma.proschi"
         }
       ]
     }
