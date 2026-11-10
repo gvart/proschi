@@ -3,6 +3,8 @@ title: File Storage
 summary: "Pre-signed uploads: the API never touches the bytes."
 difficulty: medium
 tags: [storage, cdn, egress, async]
+version: 2
+strict: true
 hints:
   - Your API should never touch the bytes. What can it hand the client instead, so that the client writes to the bucket itself?
   - "The upload is acknowledged by the bucket, not by your API. The bucket can publish an event when an object arrives: let a worker behind a queue mark the file ready."

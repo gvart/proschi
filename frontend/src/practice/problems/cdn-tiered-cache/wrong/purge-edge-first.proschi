@@ -37,9 +37,9 @@ usecase "Fetch asset" "A visitor requests a cacheable asset" {
 
 usecase "Purge" "The site owner purges a changed asset" {
   owner  -> purge : POST /purge_cache json {"files": ["https://example.com/assets/hero.jpg"]}
-  purge  -> edge  : x300 DELETE /assets/hero.jpg
+  purge  -> edge  : x300 PURGE /assets/hero.jpg
   edge  --> purge : purged
-  purge  -> upper : DELETE /assets/hero.jpg
+  purge  -> upper : PURGE /assets/hero.jpg
   upper --> purge : purged
   purge --> owner : 200 {"success": true}
 }

@@ -4,6 +4,8 @@ summary: "Dropbox's Riviera: render each output once, in the background, and ser
 difficulty: medium
 company: Dropbox
 tags: [queues, async, cdn, object-storage, read-heavy, real-world]
+version: 2
+strict: true
 hints:
   - "A preview takes half a second of worker time. Can the upload wait for that? What can hold the work until a worker is free?"
   - "The upload stores the original, then sends a job to a queue (api ->> jobs) and answers 201. \"Pre-warm\" starts at that queue: a coordinator reads the original, asks the thumbnail workers and, for files likely to be opened, the preview workers, and stores what they return in derived."

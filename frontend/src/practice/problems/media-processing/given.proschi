@@ -29,7 +29,7 @@ requirements {
 
 test "Uploads never wait for processing" {
   "Upload file" starts at user
-  "Upload file" writes originals before responding
+  "Upload file" uses PUT on originals before responding
   "Upload file" calls any queue
   "Upload file" never waits for thumbnailer or previewer
   "Upload file" never calls thumbnailer or previewer
@@ -37,7 +37,7 @@ test "Uploads never wait for processing" {
 }
 
 test "Each transformation has its own worker pool" {
-  "Pre-warm" calls originals before thumbnailer
+  "Pre-warm" uses GET on originals before thumbnailer
   "Pre-warm" scenario "Thumbnail and preview" calls previewer
   "Pre-warm" scenario "Thumbnail only" never calls previewer
   "Pre-warm" writes derived before responding

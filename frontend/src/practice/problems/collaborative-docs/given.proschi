@@ -34,7 +34,7 @@ test "An edit is in the operation log before it is acknowledged" {
 test "Collaborators get an edit after it is stored, through pub/sub" {
   "Edit" never waits for collaborators
   "Edit" calls collaborators after any database
-  "Edit" calls any queue before collaborators
+  "Edit" uses PUBLISH on any queue before collaborators
 }
 
 test "Cursor moves are broadcast, never stored" {
@@ -44,6 +44,6 @@ test "Cursor moves are broadcast, never stored" {
 }
 
 test "Opening a document starts from a snapshot" {
-  "Open document" calls any storage before any database
-  "Save snapshot" calls any storage after any database
+  "Open document" uses GET on any storage before any database
+  "Save snapshot" uses PUT on any storage after any database
 }

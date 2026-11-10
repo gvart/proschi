@@ -4,6 +4,8 @@ summary: "Shopify's flash sales: cache at the edge, throttle checkout, never ove
 difficulty: hard
 company: Shopify
 tags: [rate-limiting, caching, consistency, spiky-traffic, real-world]
+version: 2
+strict: true
 hints:
   - "Checkout writes, and this shop's database takes about 2k writes a second. Ten thousand buyers a second press Checkout. Where should the ones that cannot be served now stop, and what should they see?"
   - "Most of the crowd is reading the same product page over and over. The load balancer in front of the app can answer from its own page cache: in \"Page cache hit\" the edge replies without calling anything else."

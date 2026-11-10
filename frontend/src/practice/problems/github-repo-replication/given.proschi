@@ -31,7 +31,8 @@ test "Every repository lives on three file servers behind a proxy" {
 }
 
 test "A push commits on a quorum of replicas" {
-  "Push" writes fs before responding
+  "Push" uses PREPARE on fs before responding
+  "Push" uses COMMIT on fs before responding
   "Push" writes routes before responding
   "Push" calls routes after fs
   "Push" handles failure of fs
@@ -39,6 +40,6 @@ test "A push commits on a quorum of replicas" {
 }
 
 test "A fetch reads one replica that is up to date" {
-  "Fetch" calls routes before fs
+  "Fetch" uses SELECT on routes before fs
   "Fetch" responds 2xx
 }

@@ -4,6 +4,8 @@ summary: "GitHub's Spokes: three replicas per repository, quorum pushes, reads f
 difficulty: medium
 company: GitHub
 tags: [replication, consistency, availability, read-heavy, real-world]
+version: 2
+strict: true
 hints:
   - "Git is distributed: a repository can be copied to several servers and kept in sync with Git itself. If every copy is a full repository, which of them can answer a fetch?"
   - "Put a proxy in front of the file servers (id fs, x3: one replica per copy). A push goes to all three copies with an x3 fan-out; a fetch reads just one, so three copies give nearly three times the read capacity of one server and a standby."

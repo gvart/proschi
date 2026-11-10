@@ -19,7 +19,7 @@ requirements {
 
 test "Enqueuing never touches Redis" {
   "Enqueue" starts at web
-  "Enqueue" writes any queue before responding
+  "Enqueue" uses PRODUCE on any queue before responding
   "Enqueue" never calls any cache
   no path from web to any cache
 }

@@ -42,9 +42,9 @@ Two people type into the same paragraph at once. Each sees their own letter imme
 **What the tests check.**
 
 - *An edit is in the operation log before it is acknowledged*: Edit starts at the editor and writes a database before answering.
-- *Collaborators get an edit after it is stored, through pub/sub*: Edit never waits for the collaborators, reaches them after the database, and passes a queue (the bus) on the way.
+- *Collaborators get an edit after it is stored, through pub/sub*: Edit never waits for the collaborators, reaches them after the database, and publishes to a queue (the bus, `PUBLISH`) on the way.
 - *Cursor moves are broadcast, never stored*: Move cursor reaches the collaborators without waiting for them and never touches a database or storage.
-- *Opening a document starts from a snapshot*: Open document reads storage before the log, and Save snapshot writes storage after reading the log.
+- *Opening a document starts from a snapshot*: Open document reads storage (`GET`) before the log, and Save snapshot writes storage (`PUT`) after reading the log.
 
 ## Back-of-the-envelope
 

@@ -36,8 +36,9 @@ test "The throttle keeps the crowd out of checkout" {
 
 test "The pod's database decides the stock and records the order" {
   "Checkout" never calls any eventual store
-  "Checkout" scenario "Order placed" writes pod before responding
+  "Checkout" scenario "Order placed" uses UPDATE on pod before responding
+  "Checkout" scenario "Order placed" uses INSERT on pod before responding
   "Checkout" scenario "Order placed" responds 201
-  "Checkout" scenario "Sold out" calls pod
+  "Checkout" scenario "Sold out" uses UPDATE on pod
   "Checkout" scenario "Sold out" responds 409
 }

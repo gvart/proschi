@@ -37,12 +37,12 @@ test "Scripts run on the worker pool" {
 }
 
 test "Every run is recorded before it is enqueued" {
-  "Fire" calls any database before any queue
+  "Fire" uses INSERT on any database before any queue
   "Fire" scenario "Enqueued" writes any database before responding
   "Fire" scenario "Already running" never calls any queue
   "Fire" never calls any cache
-  "Run script" calls any database before backend
-  "Run script" calls any database after backend
+  "Run script" uses UPDATE on any database before backend
+  "Run script" uses UPDATE on any database after backend
 }
 
 test "A standby scheduler is ready to take over" {

@@ -24,7 +24,7 @@ The problem has three use cases:
 - **Update location**: the app's new location is written to `profiles`, a change event goes to a stream, and the app hears back.
 - **Index location**: an indexer consumes the event and upserts the user in the geoshard that owns their new cell; in `"Moved geoshard"` it first deletes them from the old one.
 
-The tests check that searches go through the router and never read `profiles`, that a search stays inside one group, that location updates never call the index, that a move touches both the old and the new geoshard, and that every geoshard has a replica.
+The tests check that searches go through the router and never read `profiles`, that a search stays inside one group, that location updates never call the index, that a move deletes the user from the old geoshard and upserts them into the new one, and that every geoshard has a replica.
 
 ## Back-of-the-envelope
 

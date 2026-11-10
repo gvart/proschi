@@ -4,6 +4,8 @@ summary: "Uber's M3: aggregate before storage, quorum writes to a replicated tim
 difficulty: hard
 company: Uber
 tags: [streaming, aggregation, replication, sharding, write-heavy, real-world]
+version: 2
+strict: true
 hints:
   - "The storage cluster is fixed and can take only a fraction of the raw datapoints. Most of them are never queried at full detail: what could shrink them before they are stored?"
   - "Put an aggregation tier between the hosts and M3DB. It answers a batch as soon as the datapoints are in its open windows in memory, and writes the rolled-up result later, once per resolution, in \"Flush aggregates\"."

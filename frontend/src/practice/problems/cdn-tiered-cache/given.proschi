@@ -36,6 +36,7 @@ test "Only the upper tier talks to the origin" {
 
 test "A purge clears the upper tier before the edge" {
   "Purge" starts at owner
-  "Purge" calls upper before edge
+  "Purge" uses PURGE on upper before edge
+  "Purge" uses PURGE on edge
   "Purge" never calls origin
 }

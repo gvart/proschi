@@ -28,8 +28,8 @@ test "Messages are stored before the ack, and history reads them back" {
 }
 
 test "Presence decides how a message is delivered" {
-  "Send message" calls any cache before recipient
-  "Send message" calls any cache before push
+  "Send message" uses GET on any cache before recipient
+  "Send message" uses GET on any cache before push
 }
 
 test "Delivery happens after the ack" {

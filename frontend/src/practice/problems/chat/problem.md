@@ -3,6 +3,8 @@ title: Chat
 summary: Store before the ack, then deliver over pub/sub or push.
 difficulty: medium
 tags: [websocket, pub-sub, durability, presence]
+version: 2
+strict: true
 hints:
   - The ack is a promise. Which store must the message reach before the sender gets it, and which store can then serve the history?
   - The recipient is connected to a different gateway server than the sender. Something has to know which one (presence) and carry the message there (pub/sub).
