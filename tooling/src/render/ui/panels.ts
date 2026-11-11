@@ -1,8 +1,8 @@
 import { renderSequenceSvg } from '../sequence';
 import { withTheme } from '../svg';
 import { loadDocument } from '../../terminal/document';
-import type { ActionBarPanel, BannerPanel, Block, Control, DrawerPanel, ExplorerPanel, Item, MenuPanel, NoticesPanel, Panel, PlayerBarPanel, Rich, ScenarioChip, Select, SequencePanel, StepCard, SystemBarPanel, TabBarPanel, UiTheme } from './contract';
-import { BODY, CODE, CONTROL_ROW, blocks, codeBox, itemsRow, menu, placeButton, upToRow } from './blocks';
+import type { ActionBarPanel, Block, Control, DrawerPanel, ExplorerPanel, Item, MenuPanel, NoticesPanel, Panel, PlayerBarPanel, Rich, ScenarioChip, Select, SequencePanel, StepCard, SystemBarPanel, TabBarPanel, UiTheme } from './contract';
+import { BODY, CODE, CONTROL_ROW, blocks, codeBox, itemsRow, measureRich, menu, placeButton, upToRow } from './blocks';
 import { CELL, CONTROL, Surface, buttonColumns, chip, drawLaid, drawSelect, icon, layoutRich, line, paragraph, rect, selectColumns, surfaceFrame, tint, txt, width, type Box, type ControlState, type Edges } from './kit';
 import { clip } from './metrics';
 import { alpha, mix, paletteOf, type Palette } from './theme';
@@ -91,6 +91,11 @@ function tabs(S: Surface, p: TabBarPanel): number {
       },
     });
     col += columns;
+  }
+  // The editor, at the row's right end: its label shortened, then the icon alone, where the tabs leave less room.
+  if (p.open) {
+    const fits = [p.open, { ...p.open, label: 'Proschi' }, { ...p.open, label: undefined }].find((c) => col + 1 + buttonColumns(c) <= S.columns - 1);
+    if (fits) placeButton(S, fits, S.columns - 1 - buttonColumns(fits), 0);
   }
   return H;
 }
@@ -394,20 +399,6 @@ function actionBar(S: Surface, p: ActionBarPanel): number {
   return itemsRow(S, p.controls.map((c) => ({ control: c })), 1, 0, S.columns - 1);
 }
 
-function banner(S: Surface, p: BannerPanel): number {
-  const P = S.P;
-  const resetCols = buttonColumns(p.reset);
-  section(S, 0, CONTROL_ROW);
-  placeButton(S, p.reset, 1, 0);
-  const x = (resetCols + 2) * CELL.width;
-  const label = { size: 13.5, weight: 600 };
-  const lw = Math.min(S.width - x - 16, width(p.label, label) + 24);
-  const cy = CONTROL_ROW / 2;
-  S.add(rect(x, cy - 12, lw, 24, { fill: P.yellow, rx: 12 }), txt(x + 12, cy + 5, clip(p.label, lw - 24, 13.5, 600), { ...label, color: P.onAccent }));
-  if (p.note && x + lw + 12 < S.width - 60) S.add(txt(x + lw + 12, cy + 5, clip(p.note, S.width - x - lw - 20, 13.5), { size: 13.5, color: P.muted }));
-  return CONTROL_ROW;
-}
-
 /**
  * The load legend as LoadLegend.tsx says it, in one short row: the heat
  * scale as small swatches, the p99 path's stroke and what it is. Its left at
@@ -522,7 +513,17 @@ function sequence(S: Surface, p: SequencePanel, theme: UiTheme): number {
 
 function sequenceDrawing(S: Surface, p: SequencePanel, theme: UiTheme, top: number): number {
   let y = top;
-  if (p.controls?.length) y += itemsRow(S, p.controls, 2, y, S.columns - 3);
+  if (p.controls?.length) {
+    // One row however long the scenario's name: a select as wide whichever option shows, narrowed (its label cut) to leave the rest room.
+    const room = S.columns - 5;
+    const others = p.controls.reduce((s, it) => s + ('text' in it ? Math.ceil((measureRich(it.text, BODY) + 2) / CELL.width) + 1 : 'control' in it ? buttonColumns(it.control) + 1 : 0), 0);
+    const controls = p.controls.map((it): Item => {
+      if (!('select' in it)) return it;
+      const widest = Math.max(...it.select.options.map((o) => selectColumns(o.label, it.select.hotkey, !!o.icon)));
+      return { select: { ...it.select, columns: Math.max(12, Math.min(it.select.columns ?? widest, room - others)) } };
+    });
+    y += itemsRow(S, controls, 2, y, S.columns - 3);
+  }
   const doc = loadDocument(p.source);
   if (doc.errors.length) throw new Error(doc.errors.map((e) => `${e.line}:${e.col} ${e.message}`).join('\n'));
   const u = doc.diagram.useCases.find((c) => c.id === p.useCase || c.name === p.useCase);
@@ -573,9 +574,6 @@ export function drawPanel(panel: Panel, columns: number, theme: UiTheme, edges: 
       break;
     case 'notices':
       h = notices(S, panel);
-      break;
-    case 'banner':
-      h = banner(S, panel);
       break;
     case 'page':
       h = page(S, panel);

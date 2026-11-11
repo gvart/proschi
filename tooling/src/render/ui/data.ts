@@ -1,12 +1,10 @@
-import { formatMultiplier, MULTIPLIERS, stopOf, toggleFailed, totalRps, whatIfLabel, type LiveWhatIf } from '../../../../frontend/src/components/WhatIf/whatIf';
 import type { DiagramScenario, FlowStep } from '../../../../frontend/src/dsl/types';
-import { HOT, availabilityRow, checkRow, costBreakdown, costRow, headlineOf, p99Row, runWhatIfs, sweep, utilizationRow, type Analysis, type CostShare, type DeltaRow, type NodeAnalysis, type SweepResult, type TestResult, type WhatIfResult } from '../../../../frontend/src/sim';
-import { components } from '../../../../frontend/src/sim/analyze';
+import { HOT, availabilityRow, costBreakdown, costRow, headlineOf, p99Row, runWhatIfs, type CostShare, type DeltaRow, type NodeAnalysis, type TestResult, type WhatIfResult } from '../../../../frontend/src/sim';
 import { formatAvailability, formatCount, formatDuration, formatMs, formatPercent, formatRps, formatTraffic, formatUsd } from '../../../../frontend/src/sim/format';
 import { BOTTLENECK_FROM, busiestOf } from '../../../../frontend/src/sim/overlay';
 import { currentStepsOf, isErrorStep } from '../../terminal/playback';
 import type { Document } from '../../terminal/document';
-import type { Block, Body, Cell, Control, PagePanel, Row, Span, StepCard, TabBarPanel, Tone } from './contract';
+import type { Block, Body, PagePanel, Row, Span, StepCard, TabBarPanel, Tone } from './contract';
 import { markdownBlocks } from './markdown';
 
 /**
@@ -18,17 +16,21 @@ import { markdownBlocks } from './markdown';
 
 const usd = (x: number) => formatUsd(x).replace('/month', '');
 
-/** The pane's tabs (views/tabs.tsx TABS), Tests with its failing count. */
+/** The pane's tabs (views/tabs.tsx TABS), Tests with its failing count, and the way to the same view in the editor (control `open`). */
 export function tabBarPanel(active: string, failing: number): TabBarPanel {
   const tabs = [
     ['diagram', 'Diagram'],
     ['analysis', 'Analysis'],
-    ['whatif', 'What-if'],
     ['sequence', 'Sequence'],
     ['hld', 'HLD'],
     ['tests', 'Tests'],
   ] as const;
-  return { kind: 'tabs', active, tabs: tabs.map(([id, label], i) => ({ id, label, hotkey: String(i + 1), ...(id === 'tests' && failing > 0 ? { badge: { text: `✗ ${failing}`, tone: 'bad' as const } } : {}) })) };
+  return {
+    kind: 'tabs',
+    active,
+    tabs: tabs.map(([id, label], i) => ({ id, label, hotkey: String(i + 1), ...(id === 'tests' && failing > 0 ? { badge: { text: `✗ ${failing}`, tone: 'bad' as const } } : {}) })),
+    open: { id: 'open', icon: 'open', label: 'Open in Proschi', variant: 'quiet' },
+  };
 }
 
 // ---------- the player ----------
@@ -66,8 +68,12 @@ export function stepCardsOf(scenario: DiagramScenario, name: (id: string) => str
 const splits = (n: NodeAnalysis) => n.writeLoadRps > 0 && (n.writeScaling === 'shards' || n.readCapacityRps !== n.writeCapacityRps);
 const bare = (rps: number) => formatRps(rps).replace(' rps', '');
 
-/** The editor's Analysis panel (AnalysisPanel.tsx; the text UI's analysisLines). */
-export function analysisPage(doc: Document): PagePanel {
+/**
+ * The editor's Analysis panel (AnalysisPanel.tsx; the text UI's
+ * analysisLines), then the saved what-ifs (`whatIfs`, else run here) and a
+ * way to explore what-ifs live in the editor: control `explore-whatifs`.
+ */
+export function analysisPage(doc: Document, whatIfs?: WhatIfResult[]): PagePanel {
   const analysis = doc.analysis;
   if (!analysis) {
     return {
@@ -199,7 +205,48 @@ export function analysisPage(doc: Document): PagePanel {
     blocks.push({ type: 'callout', tone: 'warn', text: [{ text: spofs.join(', '), bold: true }, { text: ': one replica, and a use case cannot do without it. Add x2, or a fallback scenario that calls it with -x and still completes.' }] });
   }
   blocks.push({ type: 'paragraph', small: true, text: 'Teaching numbers from default profiles per technology and a simple queueing model; override them with capacity { … }.' });
+  blocks.push(...whatIfBlocks(doc, whatIfs ?? runWhatIfs(doc.root)));
   return { kind: 'page', blocks };
+}
+
+const deltaTone = (r: DeltaRow): Tone | undefined => (r.tone === 'better' ? 'good' : r.tone === 'worse' ? 'bad' : undefined);
+
+/**
+ * The saved `whatif` blocks (WhatIfResults.tsx WhatIfTable): the verdict and
+ * the headline against the design as written, an arrow where it moved; or
+ * how to save one. Then the editor, where what-ifs are explored live.
+ */
+function whatIfBlocks(doc: Document, results: WhatIfResult[]): Block[] {
+  const a = headlineOf(doc.analysis!);
+  const blocks: Block[] = [{ type: 'heading', text: 'What-ifs' }];
+  if (results.length === 0) {
+    blocks.push({ type: 'paragraph', small: true, text: 'None saved yet: a whatif block runs the design again with more traffic or nodes down, e.g.' });
+    blocks.push({ type: 'code', text: 'whatif "Launch day" {\n  traffic "Redirect" x3\n}' });
+  } else {
+    const arrow = (r: DeltaRow, up: '↑' | '↓', down: '↑' | '↓'): Span[] => {
+      const tone = deltaTone(r);
+      const changed = r.change !== 'same' && r.before !== r.after;
+      return [{ text: changed && r.tone !== 'same' ? `${r.after} ${r.tone === 'better' ? up : down}` : r.after, ...(tone ? { tone } : changed ? {} : { tone: 'muted' as const }) }];
+    };
+    blocks.push({
+      type: 'table',
+      columns: [{ title: 'What-if' }, { title: 'Result' }, { title: 'Worst p99', align: 'right' }, { title: 'Avail', align: 'right', drop: 2 }, { title: 'Cost', align: 'right', drop: 1 }],
+      rows: results.map(
+        (r): Row => ({
+          cells: [
+            [{ text: r.name, bold: true }],
+            [{ text: r.passed ? 'pass' : 'fail', chip: r.passed ? 'good' : 'bad' }],
+            arrow(p99Row('', a.p99Ms, r.headline.p99Ms), '↓', '↑'),
+            arrow(availabilityRow('', a.availability, r.headline.availability), '↑', '↓'),
+            arrow(costRow(a.costUsd, r.headline.costUsd), '↓', '↑'),
+          ],
+        }),
+      ),
+    });
+    for (const text of results.flatMap((r) => r.warnings)) blocks.push({ type: 'callout', tone: 'warn', text });
+  }
+  blocks.push({ type: 'controls', items: [{ control: { id: 'explore-whatifs', icon: 'open', label: 'Explore what-ifs in Proschi' } }, { text: [{ text: 'more traffic, nodes down, a sweep', tone: 'muted' }] }] });
+  return blocks;
 }
 
 // ---------- Tests ----------
@@ -241,210 +288,6 @@ export function testsPage(doc: Document, open: boolean): PagePanel {
   }
   return { kind: 'page', blocks };
 }
-
-// ---------- What-if ----------
-
-/** The pane's what-if (plugin/types.ts WhatIfState), with which of its menus is open. */
-export interface WhatIfView {
-  multiplier: number;
-  failed: readonly string[];
-  saved?: string;
-  node?: string;
-  sweep?: string;
-  open?: 'wi-mult' | 'wi-node' | 'wi-sweep-uc';
-}
-
-const live = (w: WhatIfView): LiveWhatIf => ({ multiplier: w.multiplier, failed: [...w.failed], ...(w.saved !== undefined ? { saved: w.saved } : {}) });
-
-/** The what-if banner's label (views/whatif.ts bannerLine). */
-export const whatIfBannerLabel = (doc: Document, w: WhatIfView) => `What-if: ${whatIfLabel(doc.root, live(w))}`;
-
-const deltaTone = (r: DeltaRow): Tone | undefined => (r.tone === 'better' ? 'good' : r.tone === 'worse' ? 'bad' : undefined);
-const note = (change: string) => (change === 'same' ? '' : change.replace(/^[^,]*→[^,]*(, )?/, ''));
-
-function deltaTable(rows: DeltaRow[], head = 'What'): Block {
-  return {
-    type: 'table',
-    columns: [{ title: head }, { title: 'As written', align: 'right' }, { title: 'What-if', align: 'right' }, { title: 'Change', drop: 1 }],
-    rows: rows.map((r) => {
-      const tone = deltaTone(r);
-      const changed = r.change !== 'same' && r.before !== r.after;
-      return {
-        cells: [
-          [{ text: r.label, bold: true }],
-          [{ text: r.before, ...(changed ? {} : { tone: 'muted' as const }) }],
-          [{ text: r.after, ...(tone ? { tone, bold: true } : changed ? {} : { tone: 'muted' as const }) }],
-          changed ? [{ text: note(r.change) || (r.tone === 'better' ? 'better' : r.tone === 'worse' ? 'worse' : ''), ...(tone ? { tone } : {}) }] : [{ text: 'same', tone: 'muted' }],
-        ],
-      };
-    }),
-  };
-}
-
-const passCount = (results: TestResult[]) => results.filter((t) => t.passed).length;
-
-function moved(base: Analysis, now: Analysis): DeltaRow[] {
-  const before = new Map(base.nodes.map((n) => [n.id, n.utilization]));
-  return now.nodes
-    .map((n) => ({ node: n.id, before: before.get(n.id), after: n.utilization }))
-    .filter((u) => (u.before ?? 0) >= 1 !== u.after >= 1 || Math.abs(u.after - (u.before ?? 0)) >= 0.1)
-    .sort((x, y) => Math.abs(y.after - (y.before ?? 0)) - Math.abs(x.after - (x.before ?? 0)))
-    .map(utilizationRow);
-}
-
-function flipped(base: TestResult[], now: TestResult[]): DeltaRow[] {
-  const before = new Map(base.map((r) => [r.name, r.passed]));
-  return now
-    .filter((r) => before.get(r.name) !== r.passed)
-    .map((r) => checkRow({ name: r.name, category: r.category, before: before.get(r.name), after: r.passed }))
-    .sort((a, b) => (a.tone === 'worse' ? 0 : 1) - (b.tone === 'worse' ? 0 : 1));
-}
-
-/** The sweep's range around today's rate (views/whatif.ts SWEEP). */
-export const SWEEP = { from: 0.5, to: 10, steps: 12 };
-
-/** The What-if tab (views/whatifTab.tsx): the controls, the impact, the saved blocks, the sweep. */
-export function whatIfPage(base: Document, now: Document, w: WhatIfView, cache: { saved?: WhatIfResult[]; sweep?: SweepResult } = {}): PagePanel {
-  const diagram = base.root;
-  if (!base.analysis) {
-    return {
-      kind: 'page',
-      blocks: [
-        { type: 'paragraph', text: 'What-ifs run the simulation again with more or less traffic or nodes down: add a traffic { … } block first, then save a what-if as' },
-        { type: 'code', text: 'whatif "Launch day" {\n  traffic "Redirect" x3\n}\nwhatif "Cache outage" {\n  fail cache\n}' },
-      ],
-    };
-  }
-  const blocks: Block[] = [];
-  const stop = stopOf(w.multiplier);
-  const rate = (m: number) => `${formatMultiplier(m)} · ${formatRps(totalRps(diagram) * m)}`;
-  const nodes = components(diagram);
-  const node = nodes.find((n) => n.id === w.node) ?? nodes[0];
-  const down = node !== undefined && w.saved === undefined && w.failed.includes(node.id);
-  blocks.push({
-    type: 'controls',
-    items: [
-      { text: [{ text: 'Traffic', bold: true }] },
-      { control: { id: 'wi-less', icon: 'prev', label: 'Less', hotkey: 'l', disabled: stop === 0 } },
-      { select: { id: 'wi-mult', value: String(stop), options: MULTIPLIERS.map((m, i) => ({ value: String(i), label: rate(m) })), ...(w.open === 'wi-mult' ? { open: true } : {}) } },
-      { control: { id: 'wi-more', label: 'More', icon: 'next', hotkey: 'm', disabled: stop === MULTIPLIERS.length - 1 } },
-    ],
-  });
-  if (node) {
-    blocks.push({
-      type: 'controls',
-      items: [
-        { text: [{ text: 'Node', bold: true }] },
-        { select: { id: 'wi-node', value: node.id, options: nodes.map((n) => ({ value: n.id, label: n.id, ...(n.name && n.name !== n.id ? { detail: n.name } : {}) })), ...(w.open === 'wi-node' ? { open: true } : {}) } },
-        { control: { id: 'wi-down', icon: 'power', label: down ? 'Bring up' : 'Take down', hotkey: 't', ...(down ? { active: true } : {}) } },
-        { text: [{ text: w.saved === undefined && w.failed.length ? `Down: ${w.failed.join(', ')}` : 'None down', tone: w.saved === undefined && w.failed.length ? 'bad' : 'muted' }] },
-      ],
-    });
-  }
-  const a = headlineOf(base.analysis);
-  if (now !== base && now.analysis) {
-    const b = headlineOf(now.analysis);
-    blocks.push({ type: 'heading', text: 'Against the design as written' });
-    blocks.push(deltaTable([p99Row('Worst p99', a.p99Ms, b.p99Ms), availabilityRow('Availability', a.availability, b.availability), costRow(a.costUsd, b.costUsd)]));
-    if (base.tests.length) {
-      const worse = passCount(now.tests) < passCount(base.tests);
-      const changed = passCount(now.tests) !== passCount(base.tests);
-      blocks.push({ type: 'paragraph', text: [{ text: 'Checks  ', tone: 'muted' }, { text: `${passCount(base.tests)} of ${base.tests.length} pass as written  →  ` }, { text: `${passCount(now.tests)} of ${now.tests.length} pass`, bold: true, ...(changed ? { tone: worse ? 'bad' : 'good' } : {}) }] });
-    }
-    const old = new Map(base.analysis.useCases.map((u) => [u.id, u]));
-    const useCases = now.analysis.useCases
-      .filter((u) => u.rps > 0 || (old.get(u.id)?.rps ?? 0) > 0)
-      .flatMap((u) => {
-        const was = old.get(u.id);
-        const rows = [p99Row(`p99 · ${u.name}`, was?.percentiles.p99, u.percentiles.p99), availabilityRow(`Availability · ${u.name}`, was?.availability, u.availability)];
-        if (was && was.rps !== u.rps) rows.unshift({ label: `Traffic · ${u.name}`, before: formatRps(was.rps), after: formatRps(u.rps), change: `${formatRps(was.rps)}→${formatRps(u.rps)}`, tone: 'same' });
-        return rows;
-      });
-    for (const [title, rows] of [
-      ['Per use case', useCases],
-      ['Checks that changed', flipped(base.tests, now.tests)],
-      ['Load that moved', moved(base.analysis, now.analysis)],
-    ] as const) {
-      if (rows.length) blocks.push(deltaTable(rows, title));
-    }
-  } else {
-    const items = [`worst p99 ${formatMs(a.p99Ms)}`, `availability ${formatAvailability(a.availability)}`, `cost ${formatUsd(a.costUsd)}`, ...(base.tests.length ? [`${passCount(base.tests)} of ${base.tests.length} checks pass`] : [])];
-    blocks.push({ type: 'paragraph', text: [{ text: 'As written  ', bold: true }, { text: items.join(' · ') }] });
-    blocks.push({ type: 'paragraph', small: true, text: 'Change the traffic or take nodes down: the diagram, the analysis and the checks follow.' });
-  }
-
-  const results = cache.saved ?? runWhatIfs(diagram);
-  if (results.length) {
-    blocks.push({ type: 'heading', text: 'Saved what-ifs' });
-    const arrow = (r: DeltaRow, up: '↑' | '↓', down: '↑' | '↓'): Span[] => {
-      const tone = deltaTone(r);
-      const changed = r.change !== 'same' && r.before !== r.after;
-      return [{ text: changed && r.tone !== 'same' ? `${r.after} ${r.tone === 'better' ? up : down}` : r.after, ...(tone ? { tone } : changed ? {} : { tone: 'muted' as const }) }];
-    };
-    blocks.push({
-      type: 'table',
-      columns: [{ title: '' }, { title: 'What-if' }, { title: 'Result' }, { title: 'Worst p99', align: 'right' }, { title: 'Avail', align: 'right', drop: 2 }, { title: 'Cost', align: 'right', drop: 1 }],
-      rows: results.map((r, i): Row => {
-        const on = w.saved === r.name;
-        const control: Control = { id: `wi-saved-${i}`, label: on ? 'Showing' : 'Preview', variant: on ? 'primary' : 'default' };
-        const cells: Cell[] = [
-          { control },
-          [{ text: r.name, bold: true }],
-          [{ text: r.passed ? 'pass' : 'fail', chip: r.passed ? 'good' : 'bad' }],
-          arrow(p99Row('', a.p99Ms, r.headline.p99Ms), '↓', '↑'),
-          arrow(availabilityRow('', a.availability, r.headline.availability), '↑', '↓'),
-          arrow(costRow(a.costUsd, r.headline.costUsd), '↓', '↑'),
-        ];
-        return { cells };
-      }),
-    });
-    for (const text of results.flatMap((r) => r.warnings)) blocks.push({ type: 'callout', tone: 'warn', text });
-  }
-
-  const loaded = base.analysis.useCases.filter((u) => u.rps > 0);
-  const busiest = loaded.reduce<(typeof loaded)[number] | undefined>((b, u) => (!b || u.rps > b.rps ? u : b), undefined);
-  const swept = loaded.find((u) => u.id === w.sweep) ?? busiest;
-  if (swept) {
-    const result = w.sweep !== undefined ? (cache.sweep ?? sweep(diagram, swept.name, swept.rps * SWEEP.from, swept.rps * SWEEP.to, { steps: SWEEP.steps })) : undefined;
-    blocks.push({ type: 'heading', text: 'Sweep' });
-    blocks.push({
-      type: 'controls',
-      items: [
-        ...(loaded.length > 1 ? [{ select: { id: 'wi-sweep-uc', value: swept.id, options: loaded.map((u) => ({ value: u.id, label: u.name })), ...(w.open === 'wi-sweep-uc' ? { open: true } : {}) } }] : []),
-        { control: { id: 'wi-sweep', icon: 'bolt', label: `Sweep ${formatRps(swept.rps * SWEEP.from)} to ${formatRps(swept.rps * SWEEP.to)}`, hotkey: 's', variant: result ? 'default' : 'primary' } },
-      ],
-    });
-    if (!result) blocks.push({ type: 'paragraph', small: true, text: "Where each node saturates and how far the requirements hold, from half to ten times today's traffic." });
-    else {
-      const today = swept.rps;
-      const verdict =
-        result.maxPassingRps === undefined
-          ? `"${result.useCase}" fails already at ${formatRps(result.from)}.`
-          : result.maxPassingRps >= result.to
-            ? `"${result.useCase}" passes over the whole range, up to ${formatRps(result.to)}.`
-            : `"${result.useCase}" passes up to ${formatRps(result.maxPassingRps)}, ${Number((result.maxPassingRps / today).toFixed(1))}× today's ${formatRps(today)}.`;
-      blocks.push({ type: 'paragraph', text: [{ text: verdict, bold: true, ...(result.maxPassingRps === undefined ? { tone: 'bad' as const } : {}) }] });
-      if (result.saturation.length === 0) blocks.push({ type: 'paragraph', small: true, text: 'No node saturates in this range.' });
-      else {
-        blocks.push({
-          type: 'chart',
-          chart: {
-            from: result.from,
-            to: result.to,
-            today,
-            ...(result.maxPassingRps !== undefined ? { maxPassing: Math.min(result.maxPassingRps, result.to) } : {}),
-            labels: { from: formatRps(result.from), to: formatRps(result.to), today: formatRps(today), ...(result.maxPassingRps !== undefined ? { maxPassing: formatRps(result.maxPassingRps) } : {}) },
-            bars: result.saturation.map((n) => ({ node: n.node, rps: n.rps, value: n.atStart ? `below ${formatRps(n.rps)}` : formatRps(n.rps), ...(n.atStart ? { atStart: true } : {}) })),
-          },
-        });
-      }
-    }
-  }
-  return { kind: 'page', blocks };
-}
-
-/** Toggling a node down, as the tab's `t` does (whatIf.ts toggleFailed). */
-export const toggleDown = (w: WhatIfView, id: string): string[] => [...toggleFailed(live(w), id).failed];
 
 // ---------- HLD ----------
 

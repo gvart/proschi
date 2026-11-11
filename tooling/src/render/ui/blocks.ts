@@ -1,5 +1,5 @@
 import { r } from '../svg';
-import type { Block, Cell, Column, Control, Item, Rich, Select, SweepChart, Tone } from './contract';
+import type { Block, Cell, Column, Control, Item, Rich, Select, Tone } from './contract';
 import { CELL, CONTROL, Surface, buttonColumns, chip, drawButton, drawLaid, drawSelect, icon, layoutRich, line, paragraph, plain, rect, selectColumns, spansOf, toneColor, txt, width, type Box, type TextStyle } from './kit';
 import { clip, measure } from './metrics';
 import { alpha, mix, type Palette } from './theme';
@@ -7,7 +7,7 @@ import { alpha, mix, type Palette } from './theme';
 /**
  * Laying out what panels are made of: rows of controls (snapped to whole
  * cells, three rows tall), and the blocks of a page (headings, paragraphs,
- * stats, tables, callouts, code, lists, checks, the sweep chart). Each
+ * stats, tables, callouts, code, lists, checks). Each
  * function draws onto a Surface from `top` and returns the px it used.
  */
 
@@ -473,42 +473,6 @@ function list(S: Surface, items: Rich[], ordered: boolean, x: number, top: numbe
   return y - top - 2;
 }
 
-/** The sweep (WhatIfResults.tsx SweepChart): a bar per node to where it saturates; today and the highest passing rate marked. */
-function chart(S: Surface, c: SweepChart, x: number, top: number, w: number): number {
-  const P = S.P;
-  const nameW = Math.min(150, Math.max(50, ...c.bars.map((b) => width(b.node, { size: 12, weight: 600 })))) + 12;
-  const valueW = Math.max(70, ...c.bars.map((b) => width(b.value, { size: 12 }))) + 12;
-  const tx = x + nameW;
-  const tw = w - nameW - valueW;
-  const at = (rps: number) => tx + Math.max(0, Math.min(1, (rps - c.from) / (c.to - c.from))) * tw;
-  const parts: string[] = [];
-  let y = top + 18;
-  const barH = 22;
-  const bottom = y + c.bars.length * barH;
-  parts.push(txt(x, top + 12, 'NODE', { ...HEAD, color: P.muted }), txt(x + w, top + 12, 'SATURATES AT', { ...HEAD, color: P.muted, anchor: 'end' }));
-  c.bars.forEach((b) => {
-    parts.push(txt(x, y + 15, clip(b.node, nameW - 12, 12, 600), { size: 12, weight: 600, color: P.ink }));
-    parts.push(rect(tx, y + 6, tw, 10, { fill: P.hover, rx: 3 }));
-    if (!b.atStart) parts.push(rect(tx, y + 6, Math.max(4, at(b.rps) - tx), 10, { fill: P.blue, rx: 3 }));
-    parts.push(txt(x + w, y + 15, b.value, { size: 12, color: b.atStart ? P.tone.bad : mix(P.ink, P.surface, 0.85), anchor: 'end' }));
-    y += barH;
-  });
-  // Markers over the bars, their labels under them.
-  const mark = (rps: number, color: string, label: string, row: number) => {
-    const mx = at(rps);
-    parts.push(line(mx, top + 16, mx, bottom + 2, color, 2, '3 3'));
-    const lw = width(label, { size: 11, weight: 600 });
-    const lx = Math.max(tx, Math.min(tx + tw - lw, mx - lw / 2));
-    parts.push(txt(lx, bottom + 16 + row * 15, label, { size: 11, weight: 600, color }));
-  };
-  mark(c.today, P.ink, `today ${c.labels.today}`, 0);
-  if (c.maxPassing !== undefined && c.labels.maxPassing) mark(c.maxPassing, P.tone.good, `passes up to ${c.labels.maxPassing}`, Math.abs(at(c.maxPassing) - at(c.today)) < 150 ? 1 : 0);
-  const rows = c.maxPassing !== undefined && Math.abs(at(c.maxPassing) - at(c.today)) < 150 ? 2 : 1;
-  parts.push(txt(tx, bottom + 16 + rows * 15, c.labels.from, { size: 10.5, color: P.muted }), txt(tx + tw, bottom + 16 + rows * 15, c.labels.to, { size: 10.5, color: P.muted, anchor: 'end' }));
-  S.add(...parts);
-  return bottom + 20 + rows * 15 - top;
-}
-
 const HEADING = { 1: { size: 20, weight: 600, before: 8 }, 2: { size: 16.5, weight: 600, before: 8 }, 3: { size: 14.5, weight: 600, before: 4 } } as const;
 
 /** The space before a block, after the one before it. */
@@ -570,9 +534,6 @@ export function blocks(S: Surface, list_: Block[], x: number, top: number, w: nu
       case 'check':
         y += check(S, b, x, y, w);
         break;
-      case 'chart':
-        y += chart(S, b.chart, x, y, w);
-        break;
       case 'quote': {
         const p = paragraph(P, b.text, x + 14, y, w - 14, BODY, P.muted, 21);
         S.add(rect(x, y, 3, p.height, { fill: P.line, rx: 1.5 }), p.svg);
@@ -588,7 +549,7 @@ export function blocks(S: Surface, list_: Block[], x: number, top: number, w: nu
         break;
     }
     // Boxes read as one: never cut across.
-    if (b.type === 'stats' || b.type === 'callout' || b.type === 'chart' || (b.type === 'code' && y - at <= 16 * ROW)) S.keep(at, y);
+    if (b.type === 'stats' || b.type === 'callout' || (b.type === 'code' && y - at <= 16 * ROW)) S.keep(at, y);
   }
   return y - top;
 }

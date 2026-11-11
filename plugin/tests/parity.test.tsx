@@ -72,7 +72,7 @@ test('a failing check reads in one line, and Details opens the pane on its Tests
   expect(opens[0]).toMatchObject({ id: 'proschi-view', focus: true })
 
   const p = await $.ui.mount(pane)
-  expect(((await p.find({ key: 'tab-tests' })) as unknown as { props: { label: string; variant?: string; hotkey?: string } }).props).toMatchObject({ label: 'Tests ✗2', variant: 'primary', hotkey: '6' })
+  expect(((await p.find({ key: 'tab-tests' })) as unknown as { props: { label: string; variant?: string; hotkey?: string } }).props).toMatchObject({ label: 'Tests ✗2', variant: 'primary', hotkey: '5' })
   expect(await texts(p, /^2 of 3 failing$/)).toBeDefined()
   expect(await texts(p, /^→ /)).toBeDefined()
   // What fails comes first, open; what passes is folded under a toggle, as the editor's Results.
@@ -86,7 +86,7 @@ test('a failing check reads in one line, and Details opens the pane on its Tests
   expect(await texts(p, /Orders are stored/)).toBeUndefined()
   // No drawing on the Tests tab; the keys say how to change tabs.
   expect(await p.find({ type: 'Raster' })).toBeUndefined()
-  expect(await texts(p, /^1-6 tabs · ↑↓ scroll/)).toBeDefined()
+  expect(await texts(p, /^1-5 tabs · ↑↓ scroll/)).toBeDefined()
   await p.unmount()
 })
 

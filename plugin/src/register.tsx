@@ -12,21 +12,18 @@ import { buildScene, type Scene } from '../../tooling/src/terminal/scene'
 import { idList, systemAt, viewError, type SystemsView } from '../../tooling/src/terminal/systems'
 import type { DiagramScenario, DiagramUseCase, FlowStep } from '../../frontend/src/dsl/types'
 import { groupByEndpoint } from '../../frontend/src/playground/useCaseGroups'
-import type { PaneSource, PaneTab, Player, WhatIfState } from '../types'
-import { analysisPage, hldPage, stepCardsOf, tabBarPanel, testsPage, whatIfBannerLabel, whatIfPage } from '../../tooling/src/render/ui/data'
+import type { PaneSource, PaneTab, Player } from '../types'
+import { analysisPage, hldPage, stepCardsOf, tabBarPanel, testsPage } from '../../tooling/src/render/ui/data'
 import type { Control, DrawerPanel, ExplorerPanel, Notice, NoticesPanel, Option, Panel, PlayerBarPanel, SequencePanel, Span } from '../../tooling/src/render/ui/contract'
-import { components } from '../../frontend/src/sim/analyze'
-import { MULTIPLIERS, stopOf, toggleFailed } from '../../frontend/src/components/WhatIf/whatIf'
 import { cellPx, graphicsMode, gridFrame, imageSize, maxWidthPx, probe, probeKey, probeOf, probeSource, rasterOf, sourceOf, themeOf, TMUX_HINT, type GraphicsMode, type RasterGrid, type RasterRequest } from './graphics'
-import { loading, paneWindow, pictureSite, pressTimings, registerPicture, type Action, type Ahead, type Float, type Picture, type Piece, type Site } from './picture'
+import { loading, markOpened, paneWindow, pictureSite, pressTimings, registerPicture, scrollToAnchor, type Action, type Ahead, type Float, type Picture, type Piece, type Site } from './picture'
 import { setCellAspect } from './helper'
 import { hldMarkdown, hldTab } from './views/hld'
 import { legendLine, verdictLine } from './views/lines'
 import { lineView, type Ui } from './views/render'
 import { sequenceTab } from './views/sequenceTab'
-import { TABS, tabBar, tabBody, tabOf, testsTab } from './views/tabs'
-import { liveOf, NO_WHATIF, optionsOf, whatIfOf } from './views/whatif'
-import { whatIfBanner, whatIfResults, whatIfTab } from './views/whatifTab'
+import { analysisTab, TABS, tabBar, tabBody, tabOf, testsTab } from './views/tabs'
+import { savedWhatIfs } from './views/whatif'
 
 /**
  * Draws Proschi diagrams in Claude Code's terminal: ```proschi blocks in
@@ -60,12 +57,11 @@ const paneFile = atom({ plugin: 'proschi', key: 'paneFile' } as const, '')
 const paneSource = atom({ plugin: 'proschi', key: 'paneSource' } as const, NO_SOURCE)
 const players = atom({ plugin: 'proschi', key: 'player' } as const, IDLE)
 const paneTab = atom({ plugin: 'proschi', key: 'paneTab' } as const, 'diagram' as PaneTab)
-const paneWhatIf = atom({ plugin: 'proschi', key: 'paneWhatIf' } as const, NO_WHATIF as WhatIfState)
 const panePassing = atom({ plugin: 'proschi', key: 'panePassing' } as const, false)
 
 /** The pane's keys, as its Buttons' hotkeys name them; the system keys where the diagram has systems. */
-const PANE_KEYS = '1-6 tabs · p play · n/b step · r first · e last · d stop · esc back to the prompt'
-const TAB_KEYS = '1-6 tabs · ↑↓ scroll · esc back to the prompt'
+const PANE_KEYS = '1-5 tabs · p play · n/b step · r first · e last · d stop · esc back to the prompt'
+const TAB_KEYS = '1-5 tabs · ↑↓ scroll · esc back to the prompt'
 const SYSTEM_KEYS = 's next system · o open/close · f focus in · u back out'
 
 /** One animation frame, in ms: about 30 a second. */
@@ -129,7 +125,7 @@ export function register(on: On, options: PluginOptions): void {
     stop(PANE_VIEW)
     await update($, memberOf(players, { requestId: PANE_VIEW }), () => ({ ...IDLE, expanded: view.expanded ?? [], ...(view.focus !== undefined ? { focus: view.focus } : {}) }))
     await update($, paneFile, () => file)
-    await update($, paneWhatIf, () => NO_WHATIF)
+    await markOpened($, PANE_VIEW)
     await $.ui.open({ id: PANE, title: `Proschi · ${basename(file)}` })
     watch($, file)
     return { text: `Showing ${file} in the Proschi pane.` }
@@ -202,18 +198,15 @@ export function register(on: On, options: PluginOptions): void {
     const bodyRows = typeof scrolled?.bodyRows === 'number' ? scrolled.bodyRows : 0
     paneWindow(PANE, typeof scrolled?.offset === 'number' ? scrolled.offset : 0, bodyRows)
     const tab = tabOf(await read($, paneTab))
-    const whatIf = whatIfOf(await read($, paneWhatIf))
-    const loaded = await documentOf($, PANE_VIEW, source, undefined, whatIf)
+    const loaded = await documentOf($, PANE_VIEW, source)
     const failing = 'error' in loaded ? 0 : loaded.doc.tests.filter(t => !t.passed).length
-    const setWhatIf = (fn: (w: WhatIfState) => WhatIfState) => void update($, paneWhatIf, w => fn(whatIfOf(w)))
-    const resetWhatIf = () => setWhatIf(w => ({ ...NO_WHATIF, ...(w.node ? { node: w.node } : {}) }))
     const draw: Draw = { ui, requestId: PANE, columns, rows: Math.max(INLINE_ROWS, bodyRows - 10) }
 
-    // In pictures: the tab bar, the what-if banner and the tab's body, one drawing under one overlay.
+    // In pictures: the tab bar and the tab's body, one drawing.
     const mode = await modeOf($, ui, PANE, PANE_VIEW)
     if (mode.kind !== 'text' && !('error' in loaded)) {
       const W = panelColumns(columns)
-      const { doc, base, key, player } = loaded
+      const { doc, key, player } = loaded
       const pieces: Piece[] = [{ id: 'tabs', panel: tabBarPanel(tab, failing), columns: W }]
       const actions: Record<string, Action> = {}
       for (const t of TABS)
@@ -221,35 +214,31 @@ export function register(on: On, options: PluginOptions): void {
           menus.delete(PANE_VIEW)
           void update($, paneTab, () => t.id)
         }
-      if (doc !== base) {
-        pieces.push({ id: 'banner', panel: { kind: 'banner', label: whatIfBannerLabel(base, whatIf), note: 'the design as written is unchanged', reset: { id: 'reset', icon: 'reset', label: 'Reset', ...(tab !== 'diagram' ? { hotkey: 'r' } : {}) } }, columns: W })
-        actions['banner/reset'] = resetWhatIf
-      }
-      const page = { doc, base, key, player, source: loaded.source, whatIf, setWhatIf, passing: (await read($, panePassing)) === true, columns: W }
+      const link = tabLink(doc, tab, player)
+      actions['tabs/open'] = surface => void openLink($, surface, link)
+      const page = { doc, key, player, source: loaded.source, passing: (await read($, panePassing)) === true, columns: W }
       // Ahead: every other tab's bar. Every page is drawn, the shown one waited on, the others hidden once ready, so a switch only shows one.
       const ahead = TABS.filter(t => t.id !== tab).map(t => ({ panel: tabBarPanel(t.id, failing) as Panel, columns: W }))
       const pages: NonNullable<Site['pages']> = []
+      let float: Float | undefined
       for (const t of TABS) {
         if (t.id === 'diagram') continue
         const body = pagePart($, t.id, page)
         pages.push({ id: `page-${t.id}`, panel: body.panel, columns: W, shown: t.id === tab })
-        if (t.id === tab) for (const [id, fn] of Object.entries(body.actions)) actions[`page-${t.id}/${id}`] = fn
+        if (t.id !== tab) continue
+        for (const [id, fn] of Object.entries(body.actions)) actions[`page-${t.id}/${id}`] = fn
+        float = body.float
       }
-      if (tab === 'diagram') {
-        const view = await drawDiagram($, draw, PANE_VIEW, source, undefined, whatIf, { pieces, actions, ahead, pages }, mode)
-        if ('error' in view) return <ui.Text color="red">{view.error}</ui.Text>
-        if (view.picture) return view.element
-      } else if (mode.kind === 'loading') return loading(ui, PANE_VIEW, Math.max(10, bodyRows - 2), mode.probe)
-      else {
-        const drawn = await pictureSite($, ui, { requestId: PANE, site: PANE_VIEW, theme: await themeOf($), pieces, pages, actions, hotkeys: true, ahead, rows: Math.max(10, bodyRows - 2), ...(mode.form ? { form: mode.form } : {}) })
-        if ('element' in drawn) return drawn.element
-        $.ui.log(`proschi: the ${tab} tab in text: ${drawn.error}`, { to: 'debug' })
-      }
+      // The Diagram tab whichever tab shows: drawn ahead of every other page and kept mounted, so going back to it is instant.
+      const view = await drawDiagram($, draw, PANE_VIEW, source, undefined, { pieces, actions, ahead, pages, hidden: tab !== 'diagram', ...(float ? { float } : {}) }, mode)
+      if ('error' in view) {
+        if (tab === 'diagram') return <ui.Text color="red">{view.error}</ui.Text>
+        $.ui.log(`proschi: the ${tab} tab in text: ${view.error}`, { to: 'debug' })
+      } else if (view.picture) return view.element
     }
 
-    // While a what-if is on, every tab says so, with the way back to the design as written.
-    const banner = 'error' in loaded || loaded.doc === loaded.base ? undefined : whatIfBanner(ui, loaded.base, whatIf, columns, tab !== 'diagram', resetWhatIf)
-    const bar = tabBar(ui, tab, failing, to => void update($, paneTab, () => to))
+    const opens = 'error' in loaded ? undefined : tabLink(loaded.doc, tab, loaded.player)
+    const bar = tabBar(ui, tab, failing, to => void update($, paneTab, () => to), opens === undefined ? undefined : surface => void openLink($, surface, opens))
     const keys = (systems: boolean) => (
       <ui.Box flexDirection="column">
         <ui.Text dimColor wrap="truncate-end">
@@ -260,28 +249,27 @@ export function register(on: On, options: PluginOptions): void {
     )
     if (tab !== 'diagram') {
       if ('error' in loaded) return <ui.Text color="red">{loaded.error}</ui.Text>
-      const { doc, base, key, player } = loaded
+      const { doc, key, player } = loaded
+      const link = opens!
       const body =
-        tab === 'whatif' ? whatIfTab({ ui, base, key, now: doc, w: whatIf, set: setWhatIf, columns })
-        : tab === 'sequence' ? sequenceTab({ ui, diagram: doc.diagram, player, columns, pick: value => void paneStep($, doc, p => ({ ...p, pick: value, step: 0, isPlaying: false })) })
-        : tab === 'hld' ? hldTab(ui, base, key, (surface, text) => void copy($, surface, text, 'the HLD markdown'))
+        tab === 'sequence' ? sequenceTab({ ui, diagram: doc.diagram, player, columns, pick: value => void paneStep($, doc, p => ({ ...p, pick: value, step: 0, isPlaying: false })) })
+        : tab === 'hld' ? hldTab(ui, doc, key, (surface, text) => void copy($, surface, text, 'the HLD markdown'))
         : tab === 'tests' ? testsTab(ui, doc, columns, (await read($, panePassing)) === true, () => void update($, panePassing, open => !open))
+        : tab === 'analysis' ? analysisTab(ui, doc, savedWhatIfs(key, doc), columns, surface => void openLink($, surface, link))
         : tabBody(ui, tab, doc, columns)
       return (
         <ui.Box flexDirection="column">
           {bar}
-          {banner}
           {body}
           {keys(false)}
         </ui.Box>
       )
     }
-    const view = await drawDiagram($, draw, PANE_VIEW, source, undefined, whatIf, undefined, { kind: 'text' })
+    const view = await drawDiagram($, draw, PANE_VIEW, source, undefined, undefined, { kind: 'text' })
     if ('error' in view) return <ui.Text color="red">{view.error}</ui.Text>
     return (
       <ui.Box flexDirection="column">
         {bar}
-        {banner}
         {view.element}
         {keys(view.systems)}
       </ui.Box>
@@ -291,61 +279,34 @@ export function register(on: On, options: PluginOptions): void {
   registerPicture(on)
 }
 
-/** What the pane's other tabs draw from: the document under the what-if and as written, the player, the what-if and how to change it. */
+/** What the pane's other tabs draw from: the document, the player, whether the passing checks are open. */
 interface PageContext {
   doc: Document
-  base: Document
   key: string
   player: Player
-  whatIf: WhatIfState
-  setWhatIf: (fn: (w: WhatIfState) => WhatIfState) => void
   passing: boolean
   source: Source
   columns: number
 }
 
 /** A tab other than the diagram as a page panel (tooling/src/render/ui/data.ts), with what its controls do by control id. */
-function pagePart($: EngineInterface, tab: Exclude<PaneTab, 'diagram'>, c: PageContext): { panel: Panel; actions: Record<string, Action> } {
+function pagePart($: EngineInterface, tab: Exclude<PaneTab, 'diagram'>, c: PageContext): { panel: Panel; actions: Record<string, Action>; float?: Float } {
   const actions: Record<string, Action> = {}
   const open = menus.get(PANE_VIEW)
-  const { doc, base, key, whatIf: w, setWhatIf: set } = c
-  if (tab === 'analysis') return { panel: analysisPage(doc), actions }
+  const { doc, key } = c
+  const link = tabLink(doc, tab, c.player)
+  if (tab === 'analysis') {
+    actions['explore-whatifs'] = surface => void openLink($, surface, link)
+    return { panel: analysisPage(doc, savedWhatIfs(key, doc)), actions }
+  }
   if (tab === 'tests') {
     actions.passing = () => void update($, panePassing, was => !was)
     return { panel: testsPage(doc, c.passing), actions }
   }
   if (tab === 'hld') {
-    const markdown = hldMarkdown(base, key)
+    const markdown = hldMarkdown(doc, key)
     actions['hld-copy'] = surface => void copy($, surface, markdown, 'the HLD markdown')
     return { panel: hldPage(markdown), actions }
-  }
-  if (tab === 'whatif') {
-    const r = whatIfResults(key, base, w)
-    const stop = stopOf(w.multiplier)
-    // A change to the traffic or the nodes ends a saved what-if's preview, as the editor's slider does.
-    const live = ({ saved, ...x }: WhatIfState): WhatIfState => (saved === undefined ? x : { ...x, multiplier: 1, failed: [] })
-    const multiply = (m: number) => set(x => ({ ...live(x), multiplier: m }))
-    const pick = (id: string, fn: () => void) => {
-      actions[id] = () => {
-        menus.delete(PANE_VIEW)
-        fn()
-      }
-    }
-    actions['wi-less'] = () => multiply(MULTIPLIERS[Math.max(0, stop - 1)])
-    actions['wi-more'] = () => multiply(MULTIPLIERS[Math.min(MULTIPLIERS.length - 1, stop + 1)])
-    for (const id of ['wi-mult', 'wi-node', 'wi-sweep-uc']) actions[id] = () => toggleMenu($, PANE_VIEW, id)
-    MULTIPLIERS.forEach((m, i) => pick(`wi-mult=${i}`, () => multiply(m)))
-    const nodes = components(base.root)
-    for (const n of nodes) pick(`wi-node=${n.id}`, () => set(x => ({ ...x, node: n.id })))
-    const node = nodes.find(n => n.id === w.node) ?? nodes[0]
-    if (node) actions['wi-down'] = () => set(x => ({ ...live(x), failed: [...toggleFailed(live(x), node.id).failed] }))
-    r.saved.forEach((s, i) => {
-      actions[`wi-saved-${i}`] = () => set(x => (w.saved === s.name ? { ...NO_WHATIF, ...(x.node ? { node: x.node } : {}) } : { ...NO_WHATIF, ...(x.node ? { node: x.node } : {}), saved: s.name, ...(x.sweep ? { sweep: x.sweep } : {}) }))
-    })
-    for (const u of r.loaded) pick(`wi-sweep-uc=${u.id}`, () => set(x => ({ ...x, sweep: u.id })))
-    if (r.swept) actions['wi-sweep'] = () => set(x => ({ ...x, sweep: r.swept!.id }))
-    const view = { ...w, ...(open === 'wi-mult' || open === 'wi-node' || open === 'wi-sweep-uc' ? { open: open as 'wi-mult' | 'wi-node' | 'wi-sweep-uc' } : {}) }
-    return { panel: whatIfPage(base, doc, view, { saved: r.saved, ...(r.sweep ? { sweep: r.sweep } : {}) }), actions }
   }
   // The Sequence tab: a still of the picked scenario (`proschi render`'s sequence) under its picker; the Diagram tab's player lights its step.
   const picks = doc.diagram.useCases.flatMap(u => u.scenarios.map(s => ({ value: `${u.id}:${s.id}`, useCase: u, scenario: s })))
@@ -357,13 +318,29 @@ function pagePart($: EngineInterface, tab: Exclude<PaneTab, 'diagram'>, c: PageC
   const playing = player.mode === 'play' && player.pick === now.value
   const step = Math.max(0, Math.min(player.step, total - 1))
   actions['seq-pick'] = () => toggleMenu($, PANE_VIEW, 'seq-pick')
-  for (const p of picks) {
-    actions[`seq-pick=${p.value}`] = () => {
-      menus.delete(PANE_VIEW)
-      void paneStep($, doc, q => ({ ...q, pick: p.value, step: 0, isPlaying: false }))
-    }
-  }
   const label = (p: (typeof picks)[number]) => `${p.useCase.name}${p.useCase.scenarios.length > 1 ? ` › ${p.scenario.name}` : ''}`
+  const select = {
+    id: 'seq-pick',
+    value: now.value,
+    options: picks.map(p => ({ value: p.value, label: label(p), icon: p.scenario.outcome === 'error' ? ('cross' as const) : ('check' as const), tone: p.scenario.outcome === 'error' ? ('bad' as const) : ('good' as const) })),
+  }
+  // Its menu floats over the page under the picker, as the player bar's do: nothing under it moves.
+  let float: Float | undefined
+  if (open === 'seq-pick') {
+    const menu: Panel = { kind: 'menu', select }
+    const close = () => {
+      if (menus.delete(PANE_VIEW)) $.ui.invalidate('ui.render')
+    }
+    const picked: Record<string, Action> = {}
+    for (const p of picks) {
+      picked[`menu/seq-pick=${p.value}`] = () => {
+        menus.delete(PANE_VIEW)
+        void paneStep($, doc, q => ({ ...q, pick: p.value, step: 0, isPlaying: false }))
+      }
+    }
+    picked['menu/close'] = close
+    float = { id: 'menu', panel: menu, columns: floatColumns(c.columns, menu), anchor: { piece: 'page-sequence', control: 'seq-pick' }, close, actions: picked }
+  }
   const panel: SequencePanel = {
     kind: 'sequence',
     source: { source: c.source.source, ...(c.source.path ? { path: c.source.path } : {}), ...(c.source.imports ? { imports: c.source.imports } : {}) },
@@ -372,11 +349,11 @@ function pagePart($: EngineInterface, tab: Exclude<PaneTab, 'diagram'>, c: PageC
     current: playing ? currentStepsOf(steps, step).map(s => steps.indexOf(s) + 1) : [],
     controls: [
       { text: [{ text: 'Scenario', bold: true }] },
-      { select: { id: 'seq-pick', value: now.value, options: picks.map(p => ({ value: p.value, label: label(p), ...(p.scenario.outcome === 'error' ? { detail: '✗' } : {}) })), ...(open === 'seq-pick' ? { open: true } : {}) } },
+      { select: { ...select, floats: true, ...(open === 'seq-pick' ? { open: true } : {}) } },
       { text: [{ text: playing ? `Step ${step + 1} of ${total}` : `${total} step${total === 1 ? '' : 's'}`, bold: true }] },
     ],
   }
-  return { panel, actions }
+  return { panel, actions, ...(float ? { float } : {}) }
 }
 
 /** A diagram drawn at a site: in pictures where the terminal shows them (with `top`'s pieces over it, the pane's tabs), else in text cells. */
@@ -386,32 +363,39 @@ async function drawDiagram(
   viewId: string,
   source: Source,
   file?: string,
-  whatIf?: WhatIfState,
-  top: { pieces: Piece[]; actions: Record<string, Action>; ahead: { panel: Panel; columns: number }[]; pages?: Site['pages'] } = { pieces: [], actions: {}, ahead: [] },
+  top: { pieces: Piece[]; actions: Record<string, Action>; ahead: { panel: Panel; columns: number }[]; pages?: Site['pages']; hidden?: boolean; float?: Float } = { pieces: [], actions: {}, ahead: [] },
   known?: Mode,
 ): Promise<{ element: RenderElement; systems: boolean; picture: boolean } | { error: string }> {
   const mode = known ?? (await modeOf($, d.ui, d.requestId, viewId))
-  const view = await diagramView($, d, viewId, source, file, whatIf, mode)
-  if ('error' in view) return view
-  if (view.kind === 'text') return { element: view.element, systems: view.systems, picture: false }
-  if (view.kind === 'loading') return { element: loading(d.ui, viewId, view.rows, mode.kind === 'loading' ? mode.probe : undefined), systems: false, picture: true }
+  // `hidden`: another of the pane's tabs shows; the diagram is drawn under it, asked for ahead of everything not waited on.
+  const hidden = top.hidden === true
+  const view = await diagramView($, d, viewId, source, file, mode, hidden ? 'first' : 'now')
+  if (!hidden) {
+    if ('error' in view) return view
+    if (view.kind === 'text') return { element: view.element, systems: view.systems, picture: false }
+    if (view.kind === 'loading') return { element: loading(d.ui, viewId, view.rows, mode.kind === 'loading' ? mode.probe : undefined), systems: false, picture: true }
+  } else if (mode.kind === 'loading') return { element: loading(d.ui, viewId, d.rows ?? INLINE_ROWS, mode.probe), systems: false, picture: true }
+  // Behind another tab: the page alone until the diagram can be drawn, then the diagram's pieces too, hidden.
+  const pic = !('error' in view) && view.kind === 'picture' ? view : undefined
+  const float = hidden ? top.float : pic?.float
   const drawn = await pictureSite($, d.ui, {
     requestId: d.requestId,
     site: viewId,
     theme: await themeOf($),
-    pieces: [...top.pieces, ...view.pieces],
-    actions: { ...top.actions, ...view.actions },
+    pieces: [...top.pieces, ...(pic?.pieces ?? [])],
+    actions: { ...top.actions, ...(pic?.actions ?? {}) },
     hotkeys: d.requestId === PANE,
-    ahead: [...top.ahead, ...view.ahead],
+    ahead: [...top.ahead, ...(pic?.ahead ?? [])],
     layer: 'bar',
-    ...(view.float ? { float: view.float } : {}),
+    ...(float ? { float } : {}),
     ...(top.pages ? { pages: top.pages } : {}),
-    rows: view.rows,
+    ...(top.pages && pic?.pieces[0] ? { paged: { from: pic.pieces[0].id, shown: !hidden } } : {}),
+    rows: pic?.rows ?? d.rows ?? INLINE_ROWS,
     ...(mode.kind === 'picture' && mode.form ? { form: mode.form } : {}),
   })
-  if ('element' in drawn) return { element: drawn.element, systems: view.systems, picture: true }
+  if ('element' in drawn) return { element: drawn.element, systems: pic?.systems ?? false, picture: true }
   $.ui.log(`proschi: the drawing in text: ${drawn.error}`, { to: 'debug' })
-  return drawDiagram($, d, viewId, source, file, whatIf, top, { kind: 'text' })
+  return hidden ? { error: drawn.error } : drawDiagram($, d, viewId, source, file, top, { kind: 'text' })
 }
 
 /** The `.proschi` file a Write or Edit call wrote. */
@@ -583,8 +567,7 @@ const YELLOW = '#ffd23f'
 const BARS_WIDTH = 80
 
 /** A document as a drawing's player shows it (its systems opened or focused into), or why it cannot be drawn. */
-/** With `whatIf` (the pane's), `doc` is analysed under it and `base` is the document as written; else the two are one. */
-async function documentOf($: EngineInterface, viewId: string, written: Source, file?: string, whatIf?: WhatIfState): Promise<{ doc: Document; base: Document; source: Source; key: string; player: Player } | { error: string }> {
+async function documentOf($: EngineInterface, viewId: string, written: Source, file?: string): Promise<{ doc: Document; source: Source; key: string; player: Player } | { error: string }> {
   // The systems the player opened or focused into are part of what is laid out.
   const player = normal(await read($, memberOf(players, { requestId: viewId })))
   const shown: SystemsView = { ...(player.expanded.length ? { expanded: player.expanded } : {}), ...(player.focus !== undefined ? { focus: player.focus } : {}) }
@@ -601,15 +584,7 @@ async function documentOf($: EngineInterface, viewId: string, written: Source, f
     return { error: `${where} has errors (line ${first.line}: ${first.message})${file ? `: run \`npx proschi check ${file}\`` : ''}.` }
   }
   if (doc.diagram.nodes.length === 0) return { error: `${where} has no components to draw.` }
-  const options = whatIf && optionsOf(doc.root, whatIf)
-  if (!options) return { doc, base: doc, source, key, player }
-  const under = `${key}?${JSON.stringify(whatIf)}`
-  let now = documents.get(under)
-  if (!now) {
-    now = loadDocument(source, options)
-    documents.set(under, now)
-  }
-  return { doc: now, base: doc, source, key, player }
+  return { doc, source, key, player }
 }
 
 /** Warnings a drawing in the transcript lists before it points at the pane's Analysis tab for the rest. */
@@ -643,11 +618,11 @@ type DrawnView =
   | { kind: 'picture'; pieces: Piece[]; actions: Record<string, Action>; ahead: Ahead[]; float?: Float; rows: number; systems: boolean }
 
 /** The drawing of one document: the diagram with its use case picker or player and its links, or why it cannot be drawn. `file` is where the source was read from, if anywhere. */
-async function diagramView($: EngineInterface, d: Draw, viewId: string, written: Source, file?: string, whatIf?: WhatIfState, mode: Mode = { kind: 'text' }): Promise<DrawnView | { error: string }> {
+async function diagramView($: EngineInterface, d: Draw, viewId: string, written: Source, file?: string, mode: Mode = { kind: 'text' }, priority: 'now' | 'first' = 'now'): Promise<DrawnView | { error: string }> {
   const { ui } = d
-  const loaded = await documentOf($, viewId, written, file, whatIf)
+  const loaded = await documentOf($, viewId, written, file)
   if ('error' in loaded) return loaded
-  const { doc, base, source, key, player } = loaded
+  const { doc, source, key, player } = loaded
 
   const layout = layouts.get(key)
   if (!layout) {
@@ -693,7 +668,6 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
     maxWidthPx: maxWidthPx(d.columns),
     ...(doc.overlay && !play ? { overlay: true } : {}),
     ...(view.selected ? { selected: view.selected } : {}),
-    ...(whatIf && doc !== base ? { whatIf: liveOf(whatIf) } : {}),
     ...(play ? { play: { useCase: play.useCase.id, scenario: play.scenario.id, frames: FRAMES } } : {}),
     // A strip of the drawing's one surface, as wide as its panels: its top where nothing is above it (no tabs, header, title or notice), the load legend in its corner.
     grid: {
@@ -708,12 +682,12 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
 
   if (mode.kind !== 'text') {
     images.delete(viewId)
-    const out = rasterOf($, request)
+    const out = rasterOf($, request, priority)
     const size = out && !('error' in out) ? (out.grid ? { columns: out.grid.columns, rows: out.grid.rows } : imageSize(out, d.columns, d.rows ?? INLINE_ROWS)) : undefined
     const rows = (size?.rows ?? Math.min(scene.rows, d.rows ?? INLINE_ROWS)) + 16
     if (mode.kind === 'loading') return { kind: 'loading', rows }
     // No picture: the text drawing stands.
-    if (out && 'error' in out) return diagramView($, d, viewId, written, file, whatIf, { kind: 'text' })
+    if (out && 'error' in out) return diagramView($, d, viewId, written, file, { kind: 'text' }, priority)
     let picture: Picture | undefined
     if (out && size) {
       const imageKey = `img-${viewId}`
@@ -1459,12 +1433,12 @@ async function scroll($: EngineInterface, args: UiScrollArgs): Promise<{ deny?: 
 function focus($: EngineInterface, view: View, title: string, what: { file: string } | { source: Source }, tab: PaneTab = 'diagram'): void {
   const opened = $.ui.open({ id: PANE, title: `Proschi · ${title}`, focus: true, closeOnEscape: true })
   void (async () => {
+    await markOpened($, PANE_VIEW)
     await update($, paneTab, () => tab)
     const player = normal(await read($, memberOf(players, { requestId: view.viewId })))
     if (player.isPlaying) await setPlayer($, view, p => ({ ...p, isPlaying: false }))
     stop(PANE_VIEW)
     await update($, memberOf(players, { requestId: PANE_VIEW }), () => player)
-    await update($, paneWhatIf, () => NO_WHATIF)
     if ('file' in what) {
       await update($, paneFile, () => what.file)
       watch($, what.file)
@@ -1557,6 +1531,18 @@ function animate($: EngineInterface, view: View, steps: FlowStep[]): void {
 async function copy($: EngineInterface, surface: RenderSurface, text: string, what: string): Promise<void> {
   const copied = await $.ui.copy({ text, surface })
   $.ui.toast(copied.isCopied ? `Copied ${what} to the clipboard` : `Could not copy ${what}: ${copied.reason === 'no-clipboard' ? 'no clipboard tool answered' : copied.reason}`)
+}
+
+/**
+ * The editor's link for a tab: the Sequence tab's at its scenario's first
+ * step (the share link opens the player there); the others at the document,
+ * as the link names no other view.
+ */
+function tabLink(doc: Document, tab: PaneTab, player: Player): string {
+  if (tab !== 'sequence') return doc.link()
+  const picks = doc.diagram.useCases.flatMap(u => u.scenarios.map(s => pickOf(u, s)))
+  const pick = picks.find(p => p.value === player.pick) ?? picks[0]
+  return doc.link(pick ? { useCase: pick.useCase.id, ...(pick.useCase.scenarios.length > 1 ? { scenario: pick.scenario.id } : {}), step: 1 } : undefined)
 }
 
 /** Opens the editor in the browser; where nothing opens it, copies the link instead. */

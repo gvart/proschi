@@ -20,23 +20,12 @@ export type Player = {
 /** A document the pane draws when it shows no file: a fenced block focused from a reply, with its imports. */
 export type PaneSource = { source: string; path?: string; imports?: Record<string, string> }
 
-/** The pane's tabs (src/views/tabs.tsx), as the editor's views. */
-export type PaneTab = 'diagram' | 'analysis' | 'whatif' | 'sequence' | 'hld' | 'tests'
-
 /**
- * The pane's live what-if (src/views/whatif.tsx), as the editor's
- * (components/WhatIf/whatIf.ts LiveWhatIf): every use case's traffic times
- * `multiplier`, the `failed` nodes down, or a saved `whatif` block previewed
- * (`saved`); and the node its toggle acts on (`node`) and the use case swept
- * (`sweep`). View state only: the file never changes.
+ * The pane's tabs (src/views/tabs.tsx), as the editor's views. An older
+ * version stored `whatif` too: `tabOf` reads it as the Analysis tab,
+ * where the saved what-ifs are listed now.
  */
-export type WhatIfState = {
-  multiplier: number
-  failed: string[]
-  saved?: string
-  node?: string
-  sweep?: string
-}
+export type PaneTab = 'diagram' | 'analysis' | 'sequence' | 'hld' | 'tests'
 
 /**
  * Whether this terminal shows the diagrams as pictures (src/graphics.ts), as
@@ -57,8 +46,6 @@ declare module 'claude-code' {
       paneSource: PaneSource
       /** The pane's tab; read through `tabOf`, as a version before tabs stored none. */
       paneTab: PaneTab
-      /** The pane's what-if; read through `whatIfOf`, as a version before what-ifs stored none. */
-      paneWhatIf: WhatIfState
       /** Whether the Tests tab shows the checks that pass, folded by default as the editor's Results. */
       panePassing: boolean
       /** Whether the terminal shows pictures, once asked; read through `probeOf`. */

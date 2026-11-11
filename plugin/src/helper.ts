@@ -7,15 +7,24 @@ import { CELL_ASPECT, type PanelOutput, type PanelRequest, type PanelsInput, typ
  * the mod asks it: one session-long worker, `raster.cjs --serve <dir>`
  * started with `$.process.spawn`, each request a file `<id>.req.json` put
  * into its folder and each answer a line on its stdout. A press's request is
- * named `a…`, a prefetch's `b…`, and the worker answers the lowest name
- * first, so a press never waits behind prefetching. A worker that dies is
- * started again on the next request, the requests it held asked once more
- * one shot; where spawn is refused, every request runs one shot
- * (`$.process.run`, ≈150 ms more each).
+ * named `a…`, the pane's Diagram drawn ahead `b…`, any other prefetch `c…`,
+ * and the worker answers the lowest name first, so a press never waits
+ * behind prefetching, and the Diagram tab never waits behind the others. A
+ * worker that dies is started again on the next request, the requests it
+ * held asked once more one shot; where spawn is refused, every request runs
+ * one shot (`$.process.run`, ≈150 ms more each).
  */
 
-/** `now` for a drawing waited on, `later` for a prefetch, `mount` for a prefetch that redraws when ready (a hidden page). */
-export type Priority = 'now' | 'later' | 'mount'
+/**
+ * `now` for a drawing waited on; `first` for the pane's Diagram drawn ahead
+ * while another tab shows (it redraws when ready, before any other
+ * prefetch); `later` for a prefetch; `mount` for a prefetch that redraws
+ * when ready (a hidden page).
+ */
+export type Priority = 'now' | 'first' | 'later' | 'mount'
+
+/** The request name's first letter: the worker answers the lowest first. */
+const RANK: Record<Priority, string> = { now: 'a', first: 'b', later: 'c', mount: 'c' }
 
 type Waiter = { resolve: (output: unknown) => void; reject: (error: Error) => void; input: object }
 
@@ -130,7 +139,7 @@ export async function ask($: EngineInterface, input: object, priority: Priority 
   if (refused) return oneShot($, input)
   const root = await cacheDir($)
   const w = worker ?? start($, root)
-  const id = `${priority === 'now' ? 'a' : 'b'}${String(seq++).padStart(9, '0')}`
+  const id = `${RANK[priority]}${String(seq++).padStart(9, '0')}`
   return new Promise<unknown>((resolve, reject) => {
     const timer = $.clock.after(TIMEOUT_MS, () => {
       if (!w.waiting.delete(id)) return
@@ -172,7 +181,7 @@ const panels = new Map<string, PanelOutput | { error: string }>()
 const drawing = new Set<string>()
 /** Prefetched panels a drawing has since asked for: their answer redraws. */
 const wanted = new Set<string>()
-let batch: { now: Map<string, PanelAsk>; later: Map<string, PanelAsk> } | undefined
+let batch: { now: Map<string, PanelAsk>; first: Map<string, PanelAsk>; later: Map<string, PanelAsk> } | undefined
 
 export const panelKey = (p: PanelAsk) => JSON.stringify([p.theme, p.columns, p.edges?.top === true, p.edges?.bottom === true, p.panel])
 
@@ -189,10 +198,10 @@ export function panelOf($: EngineInterface, p: PanelAsk, priority: Priority = 'n
   if (drawing.has(key)) return undefined
   drawing.add(key)
   if (!batch) {
-    batch = { now: new Map(), later: new Map() }
+    batch = { now: new Map(), first: new Map(), later: new Map() }
     void Promise.resolve().then(() => flush($))
   }
-  batch[priority === 'now' ? 'now' : 'later'].set(key, p)
+  batch[priority === 'mount' ? 'later' : priority].set(key, p)
   return undefined
 }
 
@@ -205,7 +214,7 @@ async function flush($: EngineInterface): Promise<void> {
   const b = batch!
   batch = undefined
   const outDir = await cacheDir($)
-  for (const priority of ['now', 'later'] as const) {
+  for (const priority of ['now', 'first', 'later'] as const) {
     const asks = [...b[priority].entries()]
     if (asks.length === 0) continue
     // By theme: one request each.

@@ -44,7 +44,6 @@ export interface RasterOptions {
   overlay?: boolean
   selected?: string
   play?: { useCase: string; scenario?: string; frames?: number }
-  whatIf?: { multiplier: number; failed: readonly string[]; saved?: string }
   grid?: { room: number; maxRows: number; cellPx: { width: number; height: number }; tile?: { columns: number; rows: number }; fill?: { columns: number; top?: boolean; bottom?: boolean; legend?: boolean } }
 }
 
@@ -105,7 +104,7 @@ export function rasterOf($: EngineInterface, request: RasterRequest, priority: P
   const done = rasters.get(key)
   if (done) return done
   if (pending.has(key)) {
-    if (priority === 'now') wanted.add(key)
+    if (priority === 'now' || priority === 'first') wanted.add(key)
     return undefined
   }
   pending.add(key)
@@ -122,7 +121,7 @@ export function rasterOf($: EngineInterface, request: RasterRequest, priority: P
     if ('error' in answer) $.ui.log(`proschi: no picture: ${answer.error}`, { to: 'debug' })
     rasters.set(key, answer)
     pending.delete(key)
-    if (priority === 'now' || wanted.delete(key)) $.ui.invalidate('ui.render')
+    if (priority === 'now' || priority === 'first' || wanted.delete(key)) $.ui.invalidate('ui.render')
   })()
   return undefined
 }

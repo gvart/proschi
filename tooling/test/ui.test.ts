@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { examples } from '../src/proschi';
 import { renderSequenceSvg } from '../src/render/sequence';
 import type { Panel, PanelOutput, PanelsOutput } from '../src/render/ui/contract';
-import { analysisPage, hldPage, stepCardsOf, tabBarPanel, testsPage, whatIfPage } from '../src/render/ui/data';
+import { analysisPage, hldPage, stepCardsOf, tabBarPanel, testsPage } from '../src/render/ui/data';
 import { CELL } from '../src/render/ui/kit';
 import { markdownBlocks } from '../src/render/ui/markdown';
 import { loadFonts, measure } from '../src/render/ui/metrics';
@@ -15,7 +15,6 @@ import { drawPanel } from '../src/render/ui/panels';
 import { cellsOf, cut } from '../src/render/ui/tiles';
 import { loadDocument } from '../src/terminal/document';
 import { answer } from '../src/terminal/rasterHost';
-import { liveOptions } from '../../frontend/src/components/WhatIf/whatIf';
 import { hld } from '../../frontend/src/hld/hld';
 import { toMarkdown } from '../../frontend/src/hld/markdown';
 
@@ -25,7 +24,8 @@ loadFonts(join(HOOKS, 'fonts'));
 const src = `${examples.find((e) => e.id === 'url-shortener')!.source}\nwhatif "Launch day" {\n  traffic "Redirect" x3\n}\n`;
 const source = { source: src };
 const doc = loadDocument(source);
-const now = loadDocument(source, liveOptions(doc.root, { multiplier: 3, failed: ['cache'] }));
+// The same design held to a p99 it misses, for the Tests tab's failing checks.
+const now = loadDocument({ source: `${src}\nrequirements {\n  p99 "Redirect" < 1ms\n}\n` });
 const name = (id: string) => doc.diagram.nodes.find((n) => n.id === id)?.name ?? id;
 const redirect = doc.diagram.useCases[0];
 
@@ -54,9 +54,7 @@ const PANELS: Record<string, Panel> = {
   systemBar: { kind: 'systemBar', inside: 'a › b', selected: { name: 'Ledger', path: 'a.b' }, controls: [{ id: 'next', icon: 'cycle', label: 'Next', hotkey: 's' }] },
   actionBar: { kind: 'actionBar', controls: [{ id: 'src', icon: 'copy', label: 'Copy source' }, { id: 'open', icon: 'open', label: 'Open in Proschi', variant: 'primary' }] },
   notices: { kind: 'notices', notices: [{ text: 'A warning', hint: 'a hint' }], legend: {}, verdict: { passed: 1, total: 3, first: 'p99: too slow' }, details: { id: 'details', label: 'Details' } },
-  banner: { kind: 'banner', label: 'What-if: Traffic ×3', reset: { id: 'reset', icon: 'reset', label: 'Reset', hotkey: 'r' } },
   analysis: analysisPage(doc),
-  whatIf: whatIfPage(doc, now, { multiplier: 3, failed: ['cache'], sweep: 'redirect', open: 'wi-node' }),
   tests: testsPage(now, true),
   hld: hldPage(toMarkdown(hld(doc.root, doc.analysis, doc.tests))),
   sequence: { kind: 'sequence', source, useCase: redirect.id, current: [2], controls: [{ text: [{ text: 'Scenario', bold: true }] }, { select: { id: 'pick', value: 'redirect', options: [{ value: 'redirect', label: 'Redirect' }] } }, { text: [{ text: 'Step 2 of 3', bold: true }] }] },
@@ -165,7 +163,7 @@ describe('UI panels: the cell grid', () => {
 
   it('keeps hotkeys and control ids on the tiles', () => {
     const { surface } = drawPanel(PANELS.tabs, 120, 'dark');
-    expect(surface.controls.map((c) => [c.control.id, c.control.hotkey, c.control.kind])).toEqual(['diagram', 'analysis', 'whatif', 'sequence', 'hld', 'tests'].map((id, i) => [id, String(i + 1), 'tab']));
+    expect(surface.controls.map((c) => [c.control.id, c.control.hotkey, c.control.kind])).toEqual([...['diagram', 'analysis', 'sequence', 'hld', 'tests'].map((id, i) => [id, String(i + 1), 'tab']), ['open', undefined, 'button']]);
     const bar = drawPanel(PANELS.playerBar, 120, 'dark').surface.controls.map((c) => [c.control.id, c.control.hotkey]);
     expect(bar).toEqual([['uc', undefined], ['sc', undefined], ['first', 'r'], ['prev', 'b'], ['play', 'p'], ['next', 'n'], ['last', 'e'], ['stop', 'd'], ['body', undefined]]);
     const menu = drawPanel(PANELS.menu, 40, 'dark').surface.controls.filter((c) => c.control.kind === 'option');
@@ -270,7 +268,7 @@ describe('UI panels: the raster helper', () => {
           child.stdout.on('data', on);
         });
       expect(await next()).toMatchObject({ ready: true });
-      writeFileSync(join(dir, 'a.tmp'), JSON.stringify({ kind: 'panels', outDir: join(dir, 'out'), panels: [{ panel: PANELS.banner, columns: 80 }] }));
+      writeFileSync(join(dir, 'a.tmp'), JSON.stringify({ kind: 'panels', outDir: join(dir, 'out'), panels: [{ panel: PANELS.actionBar, columns: 80 }] }));
       renameSync(join(dir, 'a.tmp'), join(dir, 'a.req.json'));
       const reply = (await next()) as { id: string; output: PanelsOutput };
       expect(reply.id).toBe('a');

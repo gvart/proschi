@@ -86,7 +86,15 @@ export interface Site {
   ahead?: Ahead[]
   /** The piece from which the pieces are held in one Box a float is laid over (the player bar). */
   layer?: string
-  /** What floats over the drawing now. */
+  /**
+   * The pieces from `from` down are a page of their own (the pane's Diagram
+   * tab): drawn whichever tab shows, in a Box drawn as nothing while
+   * `shown` is false, at keys that do not change with it, so going back to
+   * it shows pictures mounted already. Hidden, they are asked for `first`
+   * and nothing waits on them.
+   */
+  paged?: { from: string; shown: boolean }
+  /** What floats over the drawing now: anchored to a piece, or to a control of the page shown. */
   float?: Float
   /** The rows the drawing is expected to take, reserved while its first pictures are drawn. */
   rows: number
@@ -107,6 +115,8 @@ interface Shown {
   pieces: Resolved[]
   pages: { id: string; out: PanelOutput; shown: boolean }[]
   actions: Record<string, Action>
+  /** Whether the paged pieces (Site.paged) show. */
+  paged?: { from: string; shown: boolean }
 }
 
 /** A control's tiles in the drawing shown, by `<piece>/<control>`. */
@@ -135,6 +145,8 @@ interface Live {
   sources: Map<string, string>
   /** What floats over the drawing: the drawing's row its top is on, and what closes it. */
   float?: { top: number; close: () => void }
+  /** The page shown: the drawing's row its top is on, and its anchors' rows within it (a heading a table of contents scrolls to). */
+  page?: { top: number; anchors: Record<string, number> }
 }
 
 // Per module load: the drawing shown last per site, what its overlays map, and each overlay's site.
@@ -172,6 +184,29 @@ const PERF_KEEP = 40
 const perf: PressTiming[] = []
 export const pressTimings = (): readonly PressTiming[] => perf
 
+/** When a site was opened (the pane), until its first drawing in pictures and its paged pieces' first picture are timed. */
+const opening = new Map<string, { at: number; drawn?: boolean; paged?: boolean }>()
+
+/**
+ * Times a site from now: `open` to its first drawing in pictures, and
+ * `open: diagram` to the first drawing that holds its paged pieces (the
+ * pane's Diagram tab, shown or drawn ahead), both listed by `/proschi perf`.
+ * Where there is no clock nothing is timed.
+ */
+export async function markOpened($: EngineInterface, site: string): Promise<void> {
+  try {
+    opening.set(site, { at: await $.clock.now() })
+  } catch {
+    opening.delete(site)
+  }
+}
+
+function timed($: EngineInterface, t: PressTiming): void {
+  perf.push(t)
+  if (perf.length > PERF_KEEP) perf.shift()
+  $.ui.log(`proschi: ${t.control} drew in ${t.toShown} ms (render after ${t.toRender} ms, built in ${t.build} ms, ${t.sent} of ${t.images} pictures new)`, { to: 'debug' })
+}
+
 /** The reserved blank area while the first pictures are drawn, with the probe's invisible Image when it asks. */
 export function loading(ui: Ui, key: string, rows: number, probe?: RenderElement): RenderElement {
   return (
@@ -196,17 +231,25 @@ export async function pictureSite($: EngineInterface, ui: Ui, s: Site): Promise<
   const resolved: Resolved[] = []
   let waiting = false
   // One continuous surface: the first piece has the drawing's top corners, the last (the page shown, else the last piece) its bottom ones.
-  const last = s.pages?.some(p => p.shown) ? -1 : s.pieces.length - 1
+  // Paged pieces end the drawing whether they show or not, so showing them asks for nothing new.
+  const last = !s.paged && s.pages?.some(p => p.shown) ? -1 : s.pieces.length - 1
+  const pagedAt = s.paged ? s.pieces.findIndex(p => p.id === s.paged!.from) : -1
   for (const [i, p] of s.pieces.entries()) {
+    // Paged pieces not shown: asked for ahead of every other prefetch, drawn hidden once ready, never waited on.
+    const hidden = pagedAt >= 0 && i >= pagedAt && !s.paged!.shown
     if (!('panel' in p)) {
       if (p.picture) resolved.push({ id: p.id, picture: p.picture })
-      else waiting = true
+      else if (!hidden) waiting = true
       continue
     }
-    const out = panelOf($, { panel: p.panel, columns: p.columns, theme: s.theme, edges: { ...(i === 0 ? { top: true } : {}), ...(i === last ? { bottom: true } : {}) } })
-    if (out && 'error' in out) return { error: out.error }
-    if (!out) waiting = true
-    else resolved.push({ id: p.id, out })
+    const out = panelOf($, { panel: p.panel, columns: p.columns, theme: s.theme, edges: { ...(i === 0 ? { top: true } : {}), ...(i === last ? { bottom: true } : {}) } }, hidden ? 'first' : 'now')
+    if (out && 'error' in out) {
+      if (hidden) continue
+      return { error: out.error }
+    }
+    if (!out) {
+      if (!hidden) waiting = true
+    } else resolved.push({ id: p.id, out })
   }
   // The page shown is waited for; the others are drawn once the helper has them (they are prefetched).
   const pages: Shown['pages'] = []
@@ -232,7 +275,7 @@ export async function pictureSite($: EngineInterface, ui: Ui, s: Site): Promise<
   if (s.ahead?.length) prefetch($, s.ahead.map(a => ({ panel: a.panel, columns: a.columns, theme: s.theme, edges: a.edges ?? (onTop(a) ? { top: true } : {}) })))
   let now: Shown | undefined
   if (!waiting) {
-    now = { pieces: resolved, pages, actions: { ...s.actions, ...(s.float?.actions ?? {}) }, ...(float ? { float } : {}) }
+    now = { pieces: resolved, pages, actions: { ...s.actions, ...(s.float?.actions ?? {}) }, ...(float ? { float } : {}), ...(s.paged ? { paged: s.paged } : {}) }
     shown.set(s.site, now)
   } else now = shown.get(s.site)
   if (!now) return { element: loading(ui, s.site, s.rows) }
@@ -242,11 +285,23 @@ export async function pictureSite($: EngineInterface, ui: Ui, s: Site): Promise<
   if (!waiting && l?.pressedAt !== undefined) {
     const t: PressTiming = { at: l.pressedAt, site: s.site, control: l.pressed ?? '', toRender: (l.renderedAt ?? started) - l.pressedAt, toShown: done - l.pressedAt, build: done - started, images: built.images, sent: built.sent }
     timings.press = t.toShown
-    perf.push(t)
-    if (perf.length > PERF_KEEP) perf.shift()
-    $.ui.log(`proschi: ${t.control} drew in ${t.toShown} ms (render after ${t.toRender} ms, built in ${t.build} ms, ${t.sent} of ${t.images} pictures new)`, { to: 'debug' })
+    timed($, t)
     l.pressedAt = undefined
     l.renderedAt = undefined
+  }
+  // From the pane's opening: its first drawing in pictures, and the first that holds the Diagram tab's picture.
+  const o = opening.get(s.site)
+  if (o) {
+    const at = (control: string): PressTiming => ({ at: o.at, site: s.site, control, toRender: started - o.at, toShown: done - o.at, build: done - started, images: built.images, sent: built.sent })
+    if (!waiting && !o.drawn) {
+      o.drawn = true
+      timed($, at('open'))
+    }
+    if (!o.paged && now.paged && now.pieces.some(p => 'picture' in p)) {
+      o.paged = true
+      timed($, at('open: diagram'))
+    }
+    if (o.drawn && (o.paged || !s.paged)) opening.delete(s.site)
   }
   return { element: built.element }
 }
@@ -259,7 +314,7 @@ type Into = { tiles: Map<string, TileRef>; overlays: Map<string, string[]>; hotk
  * strip is shown or not (so showing a page moves no Image), with its overlay
  * when its controls go `into` the drawing's (the page shown).
  */
-async function strips(ui: Ui, s: Site, piece: string, out: PanelOutput, source: (key: string, file: string) => Promise<ImageSource>, into?: Into): Promise<RenderElement[]> {
+async function strips(ui: Ui, s: Site, piece: string, out: PanelOutput, source: Source, into?: Into): Promise<RenderElement[]> {
   const rows: RenderElement[] = []
   for (const [i, tile] of out.tiles.entries()) {
     const key = tileKey(s.site, piece, i)
@@ -296,26 +351,69 @@ async function strips(ui: Ui, s: Site, piece: string, out: PanelOutput, source: 
   return rows
 }
 
+/**
+ * What floats, laid over a Box `rows` × `width` whose row 0 is `boxTop` in
+ * the drawing: under its anchor (the control's strip at its column, else
+ * the anchor's foot at the left, `anchorRow` within the Box), shifted up
+ * (never above the Box's top) where it would run past the foot. Under it,
+ * over the whole Box, an overlay that closes it on a press elsewhere.
+ */
+async function floatOver(ui: Ui, s: Site, f: NonNullable<Shown['float']>, anchor: { row: number; out: PanelOutput }, rows: number, width: number, source: Source, into: Into, $: EngineInterface): Promise<{ elements: RenderElement[]; top: number }> {
+  const tile = f.def.anchor.control ? anchor.out.tiles.find(t => t.controls?.some(a => a.control.id === f.def.anchor.control)) : undefined
+  const area = tile?.controls?.find(a => a.control.id === f.def.anchor.control)
+  const below = anchor.row + (tile ? tile.row + tile.rows : anchor.out.rows)
+  const at = Math.max(0, Math.min(below, rows - f.out.rows))
+  const left = Math.max(0, Math.min((tile?.col ?? 0) + (area?.col ?? 0), width - f.out.columns))
+  if (f.out.rows > rows) $.ui.log(`proschi: the ${f.def.id} is ${f.out.rows} rows, over the ${rows} it floats over: its foot is cut`, { to: 'debug' })
+  const scrim = `ov-scrim-${s.site}`
+  into.overlays.set(scrim, [`${f.def.id}/close`])
+  overlaySites.set(scrim, s.site)
+  const elements: RenderElement[] = [
+    <ui.Box key={`scrim-${s.site}`} position="absolute" top={0} left={0} width={width} height={rows}>
+      <ui.Client key={scrim} module="./uiOverlay.js" props={{ controls: [{ id: `${f.def.id}/close`, col: 0, row: 0, columns: width, rows }] }} width={width} height={rows} />
+    </ui.Box>,
+  ]
+  const floated = await strips(ui, s, f.def.id, f.out, source, into)
+  f.out.tiles.forEach((t, i) =>
+    elements.push(
+      <ui.Box key={`fl-${s.site}-${i}`} position="absolute" top={at + t.row} left={left} width={t.columns} height={t.rows}>
+        {floated[i]}
+      </ui.Box>,
+    ),
+  )
+  return { elements, top: at }
+}
+
+type Source = (key: string, file: string) => Promise<ImageSource>
+
 async function build($: EngineInterface, ui: Ui, s: Site, d: Shown): Promise<{ element: RenderElement; images: number; sent: number }> {
   const was = live.get(s.site)
   const before = was?.sources ?? new Map<string, string>()
   const sources = new Map<string, string>()
-  const source = (key: string, file: string): Promise<ImageSource> => {
+  const source: Source = (key, file) => {
     sources.set(key, file)
     return sourceOf($, file, s.form)
   }
   const into: Into = { tiles: new Map(), overlays: new Map(), hotkeys: new Map() }
   const parts: RenderElement[] = []
+  /** The paged pieces (Site.paged), in a Box of their own whether they show or not. */
+  const paged: RenderElement[] = []
+  const pagedAt = d.paged ? d.pieces.findIndex(p => p.id === d.paged!.from) : -1
+  const pagedShown = d.paged?.shown !== false
   let top = 0
   let width = 1
   // From the layer's piece down, the pieces go in one Box (whether a float is open or not, so opening one moves no Image).
   const layerAt = s.layer ? d.pieces.findIndex(p => p.id === s.layer) : -1
   const layered: RenderElement[] = []
   let layerTop = 0
+  let layerRows = 0
   const anchors = new Map<string, { row: number; out: PanelOutput }>()
   for (const [i, p] of d.pieces.entries()) {
+    const hidden = pagedAt >= 0 && i >= pagedAt && !pagedShown
     if (i === layerAt) layerTop = top
-    const into_ = layerAt >= 0 && i >= layerAt ? layered : parts
+    const target = layerAt >= 0 && i >= layerAt ? layered : pagedAt >= 0 && i >= pagedAt ? paged : parts
+    let rows: number
+    let columns: number
     if ('picture' in p) {
       const pic = p.picture
       let body: RenderElement | RenderElement[]
@@ -334,78 +432,75 @@ async function build($: EngineInterface, ui: Ui, s: Site, d: Shown): Promise<{ e
         }
         body = lines
       } else body = <ui.Image key={pic.key} source={await source(pic.key, pic.file)} columns={pic.columns} rows={pic.rows} alt={pic.alt} />
-      into_.push(
+      target.push(
         <ui.Box key={pic.anchorKey ?? `pic-${s.site}-${p.id}`} flexDirection="column" height={pic.rows}>
           {body}
         </ui.Box>,
       )
-      top += pic.rows
-      width = Math.max(width, pic.columns)
-      continue
+      rows = pic.rows
+      columns = pic.columns
+    } else {
+      const { out } = p
+      if (!hidden) anchors.set(p.id, { row: top - layerTop, out })
+      target.push(
+        <ui.Box key={`p-${s.site}-${p.id}`} flexDirection="column" height={out.rows}>
+          {await strips(ui, s, p.id, out, source, hidden ? undefined : into)}
+        </ui.Box>,
+      )
+      rows = out.rows
+      columns = out.columns
     }
-    const { out } = p
-    anchors.set(p.id, { row: top - layerTop, out })
-    into_.push(
-      <ui.Box key={`p-${s.site}-${p.id}`} flexDirection="column" height={out.rows}>
-        {await strips(ui, s, p.id, out, source, into)}
-      </ui.Box>,
-    )
-    top += out.rows
-    width = Math.max(width, out.columns)
+    if (layerAt >= 0 && i >= layerAt) layerRows += rows
+    if (hidden) continue
+    top += rows
+    width = Math.max(width, columns)
   }
   let floatTop: number | undefined
   if (layerAt >= 0) {
-    const rows = top - layerTop
     const over: RenderElement[] = []
     const f = d.float
-    const anchor = f && anchors.get(f.def.anchor.piece)
+    const anchor = f && pagedShown && anchors.get(f.def.anchor.piece)
     if (f && anchor) {
-      // Under the anchor control's strip, at its column; else under the anchor piece, at the left.
-      const tile = f.def.anchor.control ? anchor.out.tiles.find(t => t.controls?.some(a => a.control.id === f.def.anchor.control)) : undefined
-      const area = tile?.controls?.find(a => a.control.id === f.def.anchor.control)
-      const below = anchor.row + (tile ? tile.row + tile.rows : anchor.out.rows)
-      // Kept inside the Box: shifted up (never above its top) where it would run past the foot, clipped only where it is taller than the Box.
-      const at = Math.max(0, Math.min(below, rows - f.out.rows))
-      const left = Math.max(0, Math.min((tile?.col ?? 0) + (area?.col ?? 0), width - f.out.columns))
-      if (f.out.rows > rows) $.ui.log(`proschi: the ${f.def.id} is ${f.out.rows} rows, over the ${rows} it floats over: its foot is cut`, { to: 'debug' })
-      floatTop = layerTop + at
-      const scrim = `ov-scrim-${s.site}`
-      into.overlays.set(scrim, [`${f.def.id}/close`])
-      overlaySites.set(scrim, s.site)
-      over.push(
-        <ui.Box key={`scrim-${s.site}`} position="absolute" top={0} left={0} width={width} height={rows}>
-          <ui.Client key={scrim} module="./uiOverlay.js" props={{ controls: [{ id: `${f.def.id}/close`, col: 0, row: 0, columns: width, rows }] }} width={width} height={rows} />
-        </ui.Box>,
-      )
-      const floated = await strips(ui, s, f.def.id, f.out, source, into)
-      f.out.tiles.forEach((t, i) =>
-        over.push(
-          <ui.Box key={`fl-${s.site}-${i}`} position="absolute" top={at + t.row} left={left} width={t.columns} height={t.rows}>
-            {floated[i]}
-          </ui.Box>,
-        ),
-      )
+      const laid = await floatOver(ui, s, f, anchor, layerRows, width, source, into, $)
+      over.push(...laid.elements)
+      floatTop = layerTop + laid.top
     }
-    parts.push(
-      <ui.Box key={`ly-${s.site}`} flexDirection="column" height={rows} overflow="hidden">
+    ;(pagedAt >= 0 && layerAt >= pagedAt ? paged : parts).push(
+      <ui.Box key={`ly-${s.site}`} flexDirection="column" height={layerRows} overflow="hidden">
         {layered}
         {over}
       </ui.Box>,
     )
   }
+  if (pagedAt >= 0) {
+    parts.push(
+      <ui.Box key={`dg-${s.site}`} flexDirection="column" display={pagedShown ? 'flex' : 'none'}>
+        {paged}
+      </ui.Box>,
+    )
+  }
   // Every page drawn, in the order given whichever is shown, so a switch only shows one and hides another.
+  let page: Live['page']
   if (d.pages.length) {
     const pages: RenderElement[] = []
-    for (const page of d.pages) {
-      const rows = await strips(ui, s, page.id, page.out, source, page.shown ? into : undefined)
+    for (const pg of d.pages) {
+      const rows = await strips(ui, s, pg.id, pg.out, source, pg.shown ? into : undefined)
+      // What floats over the page shown, anchored to one of its controls (the Sequence tab's picker).
+      const f = pg.shown && d.float?.def.anchor.piece === pg.id ? d.float : undefined
+      if (f) {
+        const laid = await floatOver(ui, s, f, { row: 0, out: pg.out }, pg.out.rows, Math.max(width, pg.out.columns), source, into, $)
+        rows.push(...laid.elements)
+        floatTop = top + laid.top
+      }
       pages.push(
-        <ui.Box key={`pg-${s.site}-${page.id}`} flexDirection="column" height={page.out.rows} display={page.shown ? 'flex' : 'none'}>
+        <ui.Box key={`pg-${s.site}-${pg.id}`} flexDirection="column" height={pg.out.rows} display={pg.shown ? 'flex' : 'none'}>
           {rows}
         </ui.Box>,
       )
-      if (page.shown) {
-        top += page.out.rows
-        width = Math.max(width, page.out.columns)
+      if (pg.shown) {
+        page = { top, anchors: pg.out.anchors ?? {} }
+        top += pg.out.rows
+        width = Math.max(width, pg.out.columns)
       }
     }
     parts.push(
@@ -423,6 +518,7 @@ async function build($: EngineInterface, ui: Ui, s: Site, d: Shown): Promise<{ e
     hotkeys,
     sources,
     ...(floatTop !== undefined && d.float ? { float: { top: floatTop, close: d.float.def.close } } : {}),
+    ...(page ? { page } : {}),
     ...(s.form ? { form: s.form } : {}),
     ...(was?.pressedAt !== undefined ? { pressedAt: was.pressedAt, ...(was.pressed ? { pressed: was.pressed } : {}), ...(was.renderedAt !== undefined ? { renderedAt: was.renderedAt } : {}) } : {}),
   })
@@ -536,6 +632,23 @@ async function scrollKey($: EngineInterface, id: string, key: string): Promise<v
   if (moved.deny) $.ui.log(`proschi: scroll key ${key} refused: ${moved.deny}`, { to: 'debug' })
 }
 
+/**
+ * Scrolls the pane to an anchor of the page shown (a section a table of
+ * contents names): its row on the window's first row, as far as the pane
+ * goes.
+ */
+export async function scrollToAnchor($: EngineInterface, site: string, anchor: string): Promise<void> {
+  const l = live.get(site)
+  const row = l?.page?.anchors[anchor]
+  if (!l?.page || row === undefined) return
+  const to = l.page.top + row
+  going.set(l.requestId, to)
+  $.ui.log(`proschi: ${anchor} scrolls ${l.requestId} to row ${to}`, { to: 'debug' })
+  const moved = await $.ui.scroll({ to: 'start', in: l.requestId }).catch((error: unknown) => ({ deny: String(error) }))
+  going.delete(l.requestId)
+  if (moved.deny) $.ui.log(`proschi: scroll to ${anchor} refused: ${moved.deny}`, { to: 'debug' })
+}
+
 /** For tests: forget what was drawn. */
 export function resetPictures(): void {
   windows.clear()
@@ -543,4 +656,5 @@ export function resetPictures(): void {
   shown.clear()
   live.clear()
   overlaySites.clear()
+  opening.clear()
 }

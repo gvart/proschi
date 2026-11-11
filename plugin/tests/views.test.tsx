@@ -4,7 +4,7 @@ import { test } from './textUi'
 
 import { LAYOUT, SOURCE } from './fixture'
 
-// The pane's What-if, Sequence and HLD tabs (docs/design/terminal-mod.md D8 to D10).
+// The pane's saved what-ifs, Sequence and HLD tabs (docs/design/terminal-mod.md D8 to D10).
 
 type On = Parameters<Parameters<typeof test>[1]>[1]
 type T = Parameters<Parameters<typeof test>[1]>[0]
@@ -35,8 +35,12 @@ whatif "Database outage" {
 }
 `
 
-function engine(on: On, copied: string[] = []) {
-  on('process.run', () => ({ value: { exitCode: 0, stdout: LAYOUT, stderr: '' } }))
+function engine(on: On, copied: string[] = [], opened: string[] = []) {
+  on('process.run', (_, e) => {
+    const argv = (e as unknown as { argv: string[] }).argv
+    if (argv[0] === 'open') opened.push(argv[1]!)
+    return { value: { exitCode: 0, stdout: LAYOUT, stderr: '' } }
+  })
   on('ui.invalidate', () => ({ value: undefined }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('ui.blit', () => ({ value: {} }))
@@ -67,90 +71,40 @@ function glyphs(raster: unknown): string {
 }
 
 const has = async (ui: { find(q: { type: 'Text'; text: RegExp }): Promise<unknown> }, text: RegExp) => (await ui.find({ type: 'Text', text })) !== undefined
-const labelOf = async (ui: { find(q: { key: string }): Promise<unknown> }, key: string) => ((await ui.find({ key })) as { props: { label?: string; hotkey?: string } } | undefined)?.props
+const labelOf = async (ui: { find(q: { key: string }): Promise<unknown> }, key: string) => ((await ui.find({ key })) as { props: { label?: string; hotkey?: string; variant?: string } } | undefined)?.props
 
-test('the traffic multiplier analyses the design again, and the diagram draws under it with a banner and a reset', async ($, on) => {
-  engine(on)
-  const p = await focused($, SOURCE)
-  await p.press({ key: 'tab-whatif' })
-  expect(await has(p, /^As written worst p99 [\d.]+ ms · availability/)).toBe(true)
-  expect(await labelOf(p, 'wi-more')).toMatchObject({ hotkey: 'm' })
-  // ×3: the stop after ×2.
-  await p.select({ key: 'wi-mult', value: '6' })
-  expect(await has(p, /^ What-if: Traffic ×3 /)).toBe(true)
-  expect(await has(p, /^Traffic · Place order +300 rps +900 rps/)).toBe(true)
-  expect(await has(p, /^Utilisation · api +\d+% +\d+%/)).toBe(true)
-  await p.press({ key: 'wi-more' })
-  expect(await has(p, /^ What-if: Traffic ×4 /)).toBe(true)
-
-  await p.press({ key: 'tab-diagram' })
-  expect(await has(p, /^ What-if: Traffic ×4 /)).toBe(true)
-  expect(glyphs(await p.find({ type: 'Raster' }))).toMatch(/HTTPS · 1\.2k rps/)
-  // On the Diagram tab `r` restarts the player: the reset takes no key there.
-  expect((await labelOf(p, 'wi-reset'))?.hotkey).toBeUndefined()
-  await p.press({ key: 'wi-reset' })
-  expect(await p.find({ key: 'wi-reset' })).toBeUndefined()
-  expect(glyphs(await p.find({ type: 'Raster' }))).toMatch(/HTTPS · 300 rps/)
-  await p.unmount()
-})
-
-test('a node taken down is listed, drawn down, and brought back up', async ($, on) => {
-  engine(on)
-  const p = await focused($, SOURCE)
-  await p.press({ key: 'tab-whatif' })
-  expect(await has(p, /^None down$/)).toBe(true)
-  await p.select({ key: 'wi-node', value: 'cache' })
-  await p.press({ key: 'wi-down' })
-  expect(await labelOf(p, 'wi-down')).toMatchObject({ label: '⏻ Bring up ', hotkey: 't' })
-  expect(await has(p, /^Down: cache$/)).toBe(true)
-  expect(await has(p, /^ What-if: cache down /)).toBe(true)
-  // The banner's reset takes `r` away from the Diagram tab.
-  expect((await labelOf(p, 'wi-reset'))?.hotkey).toBe('r')
-  await p.press({ key: 'tab-diagram' })
-  expect(glyphs(await p.find({ type: 'Raster' }))).toMatch(/down/)
-  await p.press({ key: 'tab-whatif' })
-  await p.press({ key: 'wi-down' })
-  expect(await has(p, /^None down$/)).toBe(true)
-  expect(await p.find({ key: 'wi-banner' })).toBeUndefined()
-  await p.unmount()
-})
-
-test('the saved what-ifs are listed with their results, and Preview draws one', async ($, on) => {
-  engine(on)
+test('the Analysis tab lists the saved what-ifs with their results, and opens the editor to explore them', async ($, on) => {
+  const opened: string[] = []
+  engine(on, [], opened)
   const p = await focused($, SAVED)
-  await p.press({ key: 'tab-whatif' })
-  expect(await has(p, /^Saved what-ifs$/)).toBe(true)
+  // No What-if tab: five tabs, Analysis by its digit.
+  expect(await p.find({ key: 'tab-whatif' })).toBeUndefined()
+  expect((await labelOf(p, 'tab-tests'))?.hotkey).toBe('5')
+  await p.press({ key: 'tab-analysis' })
+  expect(await has(p, /^What-ifs$/)).toBe(true)
   // The fixture fails its availability as written, so each what-if fails too; the numbers say how far each moves.
   expect(await has(p, /^Launch day +✗ fail +[\d.]+ ms ↑/)).toBe(true)
   expect(await has(p, /^Database outage +✗ fail +[\d.]+ ms +0% ↓/)).toBe(true)
-  await p.press({ key: 'wi-saved-1' })
-  expect(await labelOf(p, 'wi-saved-1')).toMatchObject({ label: 'Showing' })
-  expect(await has(p, /^ What-if: Database outage /)).toBe(true)
-  // The Tests tab counts what fails under it.
-  expect((await labelOf(p, 'tab-tests'))?.label).toMatch(/^Tests ✗\d+$/)
-  // A change to the traffic ends the preview.
-  await p.press({ key: 'wi-more' })
-  expect(await has(p, /^ What-if: Traffic ×1\.25 /)).toBe(true)
-  expect(await labelOf(p, 'wi-saved-1')).toMatchObject({ label: 'Preview' })
-  // The sweep: where each node saturates, today and the highest rate that passes marked.
-  await p.press({ key: 'wi-sweep' })
-  expect(await has(p, /^"Place order" passes up to [\d.]+k? rps|^"Place order" (fails already|passes over)/)).toBe(true)
-  expect(await has(p, /^Range 150 rps to 3k rps · ▽ today 300 rps/)).toBe(true)
+  // Nothing live: no multiplier, node toggle, banner or sweep.
+  for (const key of ['wi-more', 'wi-down', 'wi-banner', 'wi-sweep', 'wi-saved-0']) expect(await p.find({ key })).toBeUndefined()
+  await p.press({ key: 'explore-whatifs' })
+  expect(opened.at(-1)).toMatch(/^https:\/\/proschi\.app\/.*#code=/)
   await p.unmount()
 })
 
-test('the sweep marks today and what passes over the bars, which stay whole', async ($, on) => {
+test('a design without saved what-ifs says how to save one; a stored What-if tab opens on Analysis', async ($, on) => {
   engine(on)
-  const p = await focused($, SOURCE.replace('"Place order" 300 rps', '"Place order" 3000 rps'))
-  await p.press({ key: 'tab-whatif' })
-  await p.press({ key: 'wi-sweep' })
-  const texts = ((await p.findAll({ type: 'Text' })) as unknown as Found[]).map(t => t.text)
-  // The header row carries the markers where the bars run.
-  expect(texts.some(t => /^NODE +[ ▽▼]*[▽▼][ ▽▼]* +SATURATES AT$/.test(t))).toBe(true)
-  // Each bar row: its blocks, then dots, no marker among them.
-  const rows = texts.filter(t => /█/.test(t) && /rps$/.test(t))
-  expect(rows.length).toBeGreaterThan(0)
-  expect(rows.every(t => /^\S+ +█+·* +[\d.]+k? rps$/.test(t))).toBe(true)
+  // The tab as an older version stored it, once the block is focused.
+  let stored = false
+  on('state.get', { plugin: 'proschi', key: 'paneTab' }, async ($, e, next) => {
+    const read = (await next(e)) as { value: { version: number } }
+    return stored ? { value: { ...read.value, value: 'whatif' } } : read
+  })
+  await (await focused($, SOURCE)).unmount()
+  stored = true
+  const p = await $.ui.mount(pane)
+  expect((await labelOf(p, 'tab-analysis'))?.variant).toBe('primary')
+  expect(await has(p, /^None saved yet: a whatif block/)).toBe(true)
   await p.unmount()
 })
 

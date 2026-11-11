@@ -168,16 +168,6 @@ describe('raster helper', () => {
     expect(Math.abs(left - right)).toBeLessThanOrEqual(16);
   }, 30_000);
 
-  it('draws the load under a live what-if', async () => {
-    const outDir = mkdtempSync(join(tmpdir(), 'proschi-raster-'));
-    const options = { scale: 0.5, overlay: true };
-    const written = await rasterize({ source: source('url-shortener'), outDir, options }, { dir: HOOKS });
-    const tripled = await rasterize({ source: source('url-shortener'), outDir, options: { ...options, whatIf: { multiplier: 3, failed: [] } } }, { dir: HOOKS });
-    const unchanged = await rasterize({ source: source('url-shortener'), outDir, options: { ...options, whatIf: { multiplier: 1, failed: [] } } }, { dir: HOOKS });
-    expect(tripled.base).not.toBe(written.base);
-    expect(unchanged.base).toBe(written.base);
-  });
-
   it('fits maxWidthPx, and names an unknown use case', async () => {
     const outDir = mkdtempSync(join(tmpdir(), 'proschi-raster-'));
     const out = await rasterize({ source: source('hello'), outDir, options: { maxWidthPx: 300 } }, { dir: HOOKS });

@@ -1009,8 +1009,8 @@ function qualify(tokens) {
   let out;
   for (let i = 0; i < tokens.length; i++) {
     const [t, next] = [tokens[i], tokens[i + 1]];
-    const joined2 = t.kind === "ident" && next?.kind === "tag" && next.col === t.col + t.length;
-    if (joined2 && (tokens[i + 2]?.kind === "arrow" || tokens[i - 1]?.kind === "arrow")) {
+    const joined = t.kind === "ident" && next?.kind === "tag" && next.col === t.col + t.length;
+    if (joined && (tokens[i + 2]?.kind === "arrow" || tokens[i - 1]?.kind === "arrow")) {
       out ??= tokens.slice(0, i);
       out.push({ ...t, value: `${t.value}.${next.value}`, length: t.length + next.length });
       i++;
@@ -5794,9 +5794,9 @@ function bottlenecksOf(analysis) {
   return analysis.nodes.filter((n) => works(n) && (n.saturated || n.utilization >= BOTTLENECK_FROM)).map((n) => n.id);
 }
 function criticalPathOf(diagram, analysis, useCase) {
-  const live3 = analysis.useCases.filter((u2) => u2.rps > 0);
-  const picked = useCase === void 0 ? void 0 : live3.find((u2) => u2.id === useCase || u2.name === useCase);
-  const result = picked ?? live3.reduce((best, u2) => !best || u2.rps > best.rps ? u2 : best, void 0);
+  const live2 = analysis.useCases.filter((u2) => u2.rps > 0);
+  const picked = useCase === void 0 ? void 0 : live2.find((u2) => u2.id === useCase || u2.name === useCase);
+  const result = picked ?? live2.reduce((best, u2) => !best || u2.rps > best.rps ? u2 : best, void 0);
   if (!result) return void 0;
   const u = diagram.useCases.find((d) => d.id === result.id) ?? findUseCase(diagram, result.name);
   const scenario = u?.scenarios[result.tailScenario.p99] ?? u?.scenarios[0];
@@ -6501,13 +6501,13 @@ function pathCdf(path, t) {
   return 1 - Math.exp(-lo);
 }
 function mixtureQuantile(paths, q) {
-  const live3 = paths.filter((s) => s.share > 0);
-  if (live3.length === 0) return 0;
-  if (live3.length === 1) return pathQuantile(live3[0].path, q);
-  const total = live3.reduce((sum, s) => sum + s.share, 0);
-  const cdf = (t) => live3.reduce((sum, s) => sum + s.share * pathCdf(s.path, t), 0) / total;
-  let lo = Math.min(...live3.map((s) => pathQuantile(s.path, 0)));
-  let hi = Math.max(...live3.map((s) => pathQuantile(s.path, q)));
+  const live2 = paths.filter((s) => s.share > 0);
+  if (live2.length === 0) return 0;
+  if (live2.length === 1) return pathQuantile(live2[0].path, q);
+  const total = live2.reduce((sum, s) => sum + s.share, 0);
+  const cdf = (t) => live2.reduce((sum, s) => sum + s.share * pathCdf(s.path, t), 0) / total;
+  let lo = Math.min(...live2.map((s) => pathQuantile(s.path, 0)));
+  let hi = Math.max(...live2.map((s) => pathQuantile(s.path, q)));
   for (let i = 0; i < 60 && hi - lo > 1e-9 * Math.max(1, hi); i++) {
     const mid = (lo + hi) / 2;
     if (cdf(mid) >= q) hi = mid;
@@ -7478,9 +7478,6 @@ function headlineOf(analysis) {
   };
 }
 var requirementsPass = (results) => results.every((r) => r.passed || r.id.startsWith("test:"));
-function findWhatIf(diagram, name) {
-  return diagram.whatifs?.find((w) => w.name === name);
-}
 function whatIfOptions(diagram, whatif, base = {}) {
   const warnings = [];
   const traffic = resolveTraffic(diagram);
@@ -7531,61 +7528,6 @@ function runWhatIf(diagram, whatif, base = {}) {
 function runWhatIfs(diagram, base = {}) {
   return (diagram.whatifs ?? []).map((w) => runWhatIf(diagram, w, base));
 }
-function sweep(diagram, useCase, from, to, opts = {}) {
-  const u = findUseCase(diagram, useCase);
-  if (!u) throw new Error(`No use case named "${useCase}"`);
-  if (!(from >= 0) || !(to > from)) throw new Error("The sweep range must go up, e.g. 10k..500k");
-  const base = opts.base ?? {};
-  const count = Math.max(2, Math.round(opts.steps ?? 10));
-  const at = (rps, cheap = false) => ({
-    ...base,
-    trafficRps: new Map([...base.trafficRps ?? [], [u.id, rps]]),
-    ...cheap ? { percentiles: [] } : {}
-  });
-  const passesAt = (rps) => {
-    const options = at(rps);
-    return requirementsPass(runTests(diagram, analyze(diagram, options), options));
-  };
-  const tolerance = Math.max(1, (to - from) / 1e3);
-  const bisect = (lo, hi, ok) => {
-    while (hi - lo > tolerance) {
-      const mid = (lo + hi) / 2;
-      if (ok(mid)) lo = mid;
-      else hi = mid;
-    }
-    return lo;
-  };
-  const steps = [];
-  for (let i = 0; i < count; i++) {
-    const rps = from + (to - from) * i / (count - 1);
-    const options = at(rps);
-    const analysis = analyze(diagram, options);
-    const results = runTests(diagram, analysis, options);
-    steps.push({
-      rps,
-      passed: requirementsPass(results),
-      headline: headlineOf(analysis),
-      saturated: analysis.nodes.filter((n) => n.saturated).map((n) => n.id),
-      failing: results.filter((r) => !r.passed && !r.id.startsWith("test:")).map((r) => r.name)
-    });
-  }
-  const saturation = [];
-  for (const id of new Set(steps.flatMap((s) => s.saturated))) {
-    const first = steps.findIndex((s) => s.saturated.includes(id));
-    if (first === 0) {
-      saturation.push({ node: id, rps: from, atStart: true });
-      continue;
-    }
-    const free = (rps) => !analyze(diagram, at(rps, true)).nodes.find((n) => n.id === id)?.saturated;
-    saturation.push({ node: id, rps: bisect(steps[first - 1].rps, steps[first].rps, free), atStart: false });
-  }
-  saturation.sort((a, b) => a.rps - b.rps || a.node.localeCompare(b.node));
-  let maxPassingRps;
-  const firstFail = steps.findIndex((s) => !s.passed);
-  if (firstFail === -1) maxPassingRps = to;
-  else if (firstFail > 0) maxPassingRps = bisect(steps[firstFail - 1].rps, steps[firstFail].rps, passesAt);
-  return { useCase: u.name, from, to, steps, saturation, ...maxPassingRps !== void 0 ? { maxPassingRps } : {} };
-}
 
 // ../frontend/src/sim/delta.ts
 var MINUS = "\u2212";
@@ -7624,29 +7566,6 @@ function availabilityRow(label, before2, after2) {
     after: after2 === void 0 ? none : formatAvailability(after2),
     change: before2 === void 0 || after2 === void 0 ? after2 === void 0 ? "removed" : "new" : same ? "same" : `${formatAvailability(before2)}\u2192${formatAvailability(after2)}`,
     tone: same ? "same" : tone(before2, after2, false, 1e-12)
-  };
-}
-function checkRow(c) {
-  const state = (p) => p === void 0 ? none : p ? "pass" : "fail";
-  const change = c.before === void 0 ? c.after ? "\u2713 new, passes" : "\u2717 new, fails" : c.after === void 0 ? "removed" : c.after ? "\u2713 now passes" : "\u2717 now fails";
-  return {
-    label: c.name,
-    before: state(c.before),
-    after: state(c.after),
-    change,
-    tone: c.after === void 0 ? "same" : c.after ? c.before === true ? "same" : "better" : "worse"
-  };
-}
-function utilizationRow(u) {
-  const pct = (x) => x === void 0 ? none : formatPercent(x);
-  const saturates = (u.after ?? 0) >= 1 && (u.before ?? 0) < 1;
-  const frees = (u.before ?? 0) >= 1 && (u.after ?? 0) < 1;
-  return {
-    label: `Utilisation \xB7 ${u.node}`,
-    before: pct(u.before),
-    after: pct(u.after),
-    change: `${pct(u.before)}\u2192${pct(u.after)}${saturates ? ", saturated" : frees ? ", no longer saturated" : ""}`,
-    tone: tone(u.before ?? 0, u.after ?? 0, true, 1e-9)
   };
 }
 
@@ -7860,10 +7779,10 @@ function parseSource({ source, path = "diagram.proschi", imports = {} }) {
   const result = parse(source, { path, resolve: mapResolver(imports) });
   return { diagram: result.diagram, errors: result.diagnostics.filter((d) => d.severity === "error") };
 }
-function loadDocument(input, options) {
+function loadDocument(input) {
   const { diagram, errors } = parseSource(input);
   const simulated = errors.length === 0 && (diagram.traffic?.length ?? 0) > 0;
-  const analysis = simulated ? analyze(diagram, options) : void 0;
+  const analysis = simulated ? analyze(diagram) : void 0;
   const imports = input.imports && Object.keys(input.imports).length ? input.imports : void 0;
   const view = errors.length ? {} : input.view ?? {};
   const sim = errors.length ? void 0 : viewOverlay(diagram, analysis, view);
@@ -7886,7 +7805,7 @@ function loadDocument(input, options) {
     warnings: (analysis?.warnings ?? []).filter((w) => !noted.has(w)),
     systems: sim?.systems ?? {},
     notes: sim?.notes ?? [],
-    tests: analysis ? runTests(diagram, analysis, options) : [],
+    tests: analysis ? runTests(diagram, analysis) : [],
     link: (playback) => EDITOR + encodeShareHash(input.source, playback, imports)
   };
 }
@@ -9104,56 +9023,6 @@ function groupByEndpoint(useCases) {
   return [...groups].map(([label, list]) => ({ label, useCases: list }));
 }
 
-// ../frontend/src/components/WhatIf/whatIf.ts
-var MULTIPLIERS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 5, 7.5, 10];
-var isActive = (w) => w.multiplier !== 1 || w.failed.length > 0 || w.saved !== void 0;
-function stopOf(multiplier) {
-  let best = 0;
-  MULTIPLIERS.forEach((m, i) => {
-    if (Math.abs(Math.log(m / multiplier)) < Math.abs(Math.log(MULTIPLIERS[best] / multiplier))) best = i;
-  });
-  return best;
-}
-function formatMultiplier(m) {
-  return `\xD7${Number.isInteger(m * 10) ? m.toFixed(1) : String(Number(m.toFixed(2)))}`;
-}
-var shortMultiplier = (m) => `\xD7${Number(m.toFixed(2))}`;
-function totalRps(diagram) {
-  let sum = 0;
-  for (const t of resolveTraffic(diagram).values()) sum += t.rps;
-  return sum;
-}
-function liveFailed(diagram, failed) {
-  const ids = new Set(components(diagram).map((n) => n.id));
-  return failed.filter((id) => ids.has(id));
-}
-function liveOptions(diagram, w) {
-  if (w.saved !== void 0) {
-    const block = findWhatIf(diagram, w.saved);
-    return block ? whatIfOptions(diagram, block).options : void 0;
-  }
-  const failed = liveFailed(diagram, w.failed);
-  const rates = /* @__PURE__ */ new Map();
-  if (w.multiplier !== 1) {
-    for (const [id, t] of resolveTraffic(diagram)) if (t.rps > 0) rates.set(id, t.rps * w.multiplier);
-  }
-  if (rates.size === 0 && failed.length === 0) return void 0;
-  return { ...rates.size ? { trafficRps: rates } : {}, ...failed.length ? { failed: new Set(failed) } : {} };
-}
-function whatIfLabel(diagram, w) {
-  if (w.saved !== void 0) return w.saved;
-  const failed = liveFailed(diagram, w.failed);
-  const parts = [
-    ...w.multiplier !== 1 ? [`Traffic ${shortMultiplier(w.multiplier)}`] : [],
-    ...failed.length ? [`${failed.length > 2 ? `${failed.length} nodes` : failed.join(" and ")} down`] : []
-  ];
-  return parts.join(", ") || "As written";
-}
-function toggleFailed(w, id) {
-  const failed = w.failed.includes(id) ? w.failed.filter((f) => f !== id) : [...w.failed, id];
-  return { multiplier: w.multiplier, failed };
-}
-
 // src/render/ui/markdown.ts
 var MARKS = {
   "\u2705": { text: "\u2713", tone: "good", bold: true },
@@ -9260,12 +9129,16 @@ function tabBarPanel(active, failing) {
   const tabs = [
     ["diagram", "Diagram"],
     ["analysis", "Analysis"],
-    ["whatif", "What-if"],
     ["sequence", "Sequence"],
     ["hld", "HLD"],
     ["tests", "Tests"]
   ];
-  return { kind: "tabs", active, tabs: tabs.map(([id, label], i) => ({ id, label, hotkey: String(i + 1), ...id === "tests" && failing > 0 ? { badge: { text: `\u2717 ${failing}`, tone: "bad" } } : {} })) };
+  return {
+    kind: "tabs",
+    active,
+    tabs: tabs.map(([id, label], i) => ({ id, label, hotkey: String(i + 1), ...id === "tests" && failing > 0 ? { badge: { text: `\u2717 ${failing}`, tone: "bad" } } : {} })),
+    open: { id: "open", icon: "open", label: "Open in Proschi", variant: "quiet" }
+  };
 }
 var FORMAT = { JSON: "JSON", XML: "XML", FREE_TEXT: "Text" };
 function card(s, steps, name) {
@@ -9293,7 +9166,7 @@ function stepCardsOf(scenario, name) {
 }
 var splits = (n) => n.writeLoadRps > 0 && (n.writeScaling === "shards" || n.readCapacityRps !== n.writeCapacityRps);
 var bare = (rps) => formatRps(rps).replace(" rps", "");
-function analysisPage(doc) {
+function analysisPage(doc, whatIfs) {
   const analysis = doc.analysis;
   if (!analysis) {
     return {
@@ -9421,7 +9294,41 @@ function analysisPage(doc) {
     blocks.push({ type: "callout", tone: "warn", text: [{ text: spofs.join(", "), bold: true }, { text: ": one replica, and a use case cannot do without it. Add x2, or a fallback scenario that calls it with -x and still completes." }] });
   }
   blocks.push({ type: "paragraph", small: true, text: "Teaching numbers from default profiles per technology and a simple queueing model; override them with capacity { \u2026 }." });
+  blocks.push(...whatIfBlocks(doc, whatIfs ?? runWhatIfs(doc.root)));
   return { kind: "page", blocks };
+}
+var deltaTone = (r) => r.tone === "better" ? "good" : r.tone === "worse" ? "bad" : void 0;
+function whatIfBlocks(doc, results) {
+  const a = headlineOf(doc.analysis);
+  const blocks = [{ type: "heading", text: "What-ifs" }];
+  if (results.length === 0) {
+    blocks.push({ type: "paragraph", small: true, text: "None saved yet: a whatif block runs the design again with more traffic or nodes down, e.g." });
+    blocks.push({ type: "code", text: 'whatif "Launch day" {\n  traffic "Redirect" x3\n}' });
+  } else {
+    const arrow2 = (r, up, down) => {
+      const tone2 = deltaTone(r);
+      const changed = r.change !== "same" && r.before !== r.after;
+      return [{ text: changed && r.tone !== "same" ? `${r.after} ${r.tone === "better" ? up : down}` : r.after, ...tone2 ? { tone: tone2 } : changed ? {} : { tone: "muted" } }];
+    };
+    blocks.push({
+      type: "table",
+      columns: [{ title: "What-if" }, { title: "Result" }, { title: "Worst p99", align: "right" }, { title: "Avail", align: "right", drop: 2 }, { title: "Cost", align: "right", drop: 1 }],
+      rows: results.map(
+        (r) => ({
+          cells: [
+            [{ text: r.name, bold: true }],
+            [{ text: r.passed ? "pass" : "fail", chip: r.passed ? "good" : "bad" }],
+            arrow2(p99Row("", a.p99Ms, r.headline.p99Ms), "\u2193", "\u2191"),
+            arrow2(availabilityRow("", a.availability, r.headline.availability), "\u2191", "\u2193"),
+            arrow2(costRow(a.costUsd, r.headline.costUsd), "\u2193", "\u2191")
+          ]
+        })
+      )
+    });
+    for (const text of results.flatMap((r) => r.warnings)) blocks.push({ type: "callout", tone: "warn", text });
+  }
+  blocks.push({ type: "controls", items: [{ control: { id: "explore-whatifs", icon: "open", label: "Explore what-ifs in Proschi" } }, { text: [{ text: "more traffic, nodes down, a sweep", tone: "muted" }] }] });
+  return blocks;
 }
 var where2 = (r) => r.loc ? `${r.loc.file ? `${r.loc.file}:` : "line "}${r.loc.line}` : void 0;
 function checkBlocks(r) {
@@ -9444,175 +9351,14 @@ function testsPage(doc, open) {
     };
   }
   const failing = results.filter((r) => !r.passed);
-  const passing2 = results.filter((r) => r.passed);
+  const passing = results.filter((r) => r.passed);
   const blocks = [
     failing.length ? { type: "callout", tone: "bad", text: [{ text: `${failing.length} of ${results.length} failing`, bold: true }] } : { type: "callout", tone: "good", text: [{ text: `All ${results.length} passing`, bold: true }] }
   ];
   for (const r of failing) blocks.push(...checkBlocks(r));
-  if (passing2.length) {
-    blocks.push({ type: "controls", items: [{ control: { id: "passing", icon: open ? "chevron-down" : "next", label: `${passing2.length} passing`, hotkey: "a", variant: "quiet", active: open } }] });
-    if (open) for (const r of passing2) blocks.push({ type: "check", passed: true, title: r.name, ...where2(r) ? { where: where2(r) } : {}, message: r.message });
-  }
-  return { kind: "page", blocks };
-}
-var live = (w) => ({ multiplier: w.multiplier, failed: [...w.failed], ...w.saved !== void 0 ? { saved: w.saved } : {} });
-var whatIfBannerLabel = (doc, w) => `What-if: ${whatIfLabel(doc.root, live(w))}`;
-var deltaTone = (r) => r.tone === "better" ? "good" : r.tone === "worse" ? "bad" : void 0;
-var note = (change) => change === "same" ? "" : change.replace(/^[^,]*→[^,]*(, )?/, "");
-function deltaTable(rows, head = "What") {
-  return {
-    type: "table",
-    columns: [{ title: head }, { title: "As written", align: "right" }, { title: "What-if", align: "right" }, { title: "Change", drop: 1 }],
-    rows: rows.map((r) => {
-      const tone2 = deltaTone(r);
-      const changed = r.change !== "same" && r.before !== r.after;
-      return {
-        cells: [
-          [{ text: r.label, bold: true }],
-          [{ text: r.before, ...changed ? {} : { tone: "muted" } }],
-          [{ text: r.after, ...tone2 ? { tone: tone2, bold: true } : changed ? {} : { tone: "muted" } }],
-          changed ? [{ text: note(r.change) || (r.tone === "better" ? "better" : r.tone === "worse" ? "worse" : ""), ...tone2 ? { tone: tone2 } : {} }] : [{ text: "same", tone: "muted" }]
-        ]
-      };
-    })
-  };
-}
-var passCount = (results) => results.filter((t) => t.passed).length;
-function moved(base, now) {
-  const before2 = new Map(base.nodes.map((n) => [n.id, n.utilization]));
-  return now.nodes.map((n) => ({ node: n.id, before: before2.get(n.id), after: n.utilization })).filter((u) => (u.before ?? 0) >= 1 !== u.after >= 1 || Math.abs(u.after - (u.before ?? 0)) >= 0.1).sort((x, y) => Math.abs(y.after - (y.before ?? 0)) - Math.abs(x.after - (x.before ?? 0))).map(utilizationRow);
-}
-function flipped(base, now) {
-  const before2 = new Map(base.map((r) => [r.name, r.passed]));
-  return now.filter((r) => before2.get(r.name) !== r.passed).map((r) => checkRow({ name: r.name, category: r.category, before: before2.get(r.name), after: r.passed })).sort((a, b) => (a.tone === "worse" ? 0 : 1) - (b.tone === "worse" ? 0 : 1));
-}
-var SWEEP = { from: 0.5, to: 10, steps: 12 };
-function whatIfPage(base, now, w, cache2 = {}) {
-  const diagram = base.root;
-  if (!base.analysis) {
-    return {
-      kind: "page",
-      blocks: [
-        { type: "paragraph", text: "What-ifs run the simulation again with more or less traffic or nodes down: add a traffic { \u2026 } block first, then save a what-if as" },
-        { type: "code", text: 'whatif "Launch day" {\n  traffic "Redirect" x3\n}\nwhatif "Cache outage" {\n  fail cache\n}' }
-      ]
-    };
-  }
-  const blocks = [];
-  const stop2 = stopOf(w.multiplier);
-  const rate = (m) => `${formatMultiplier(m)} \xB7 ${formatRps(totalRps(diagram) * m)}`;
-  const nodes = components(diagram);
-  const node = nodes.find((n) => n.id === w.node) ?? nodes[0];
-  const down = node !== void 0 && w.saved === void 0 && w.failed.includes(node.id);
-  blocks.push({
-    type: "controls",
-    items: [
-      { text: [{ text: "Traffic", bold: true }] },
-      { control: { id: "wi-less", icon: "prev", label: "Less", hotkey: "l", disabled: stop2 === 0 } },
-      { select: { id: "wi-mult", value: String(stop2), options: MULTIPLIERS.map((m, i) => ({ value: String(i), label: rate(m) })), ...w.open === "wi-mult" ? { open: true } : {} } },
-      { control: { id: "wi-more", label: "More", icon: "next", hotkey: "m", disabled: stop2 === MULTIPLIERS.length - 1 } }
-    ]
-  });
-  if (node) {
-    blocks.push({
-      type: "controls",
-      items: [
-        { text: [{ text: "Node", bold: true }] },
-        { select: { id: "wi-node", value: node.id, options: nodes.map((n) => ({ value: n.id, label: n.id, ...n.name && n.name !== n.id ? { detail: n.name } : {} })), ...w.open === "wi-node" ? { open: true } : {} } },
-        { control: { id: "wi-down", icon: "power", label: down ? "Bring up" : "Take down", hotkey: "t", ...down ? { active: true } : {} } },
-        { text: [{ text: w.saved === void 0 && w.failed.length ? `Down: ${w.failed.join(", ")}` : "None down", tone: w.saved === void 0 && w.failed.length ? "bad" : "muted" }] }
-      ]
-    });
-  }
-  const a = headlineOf(base.analysis);
-  if (now !== base && now.analysis) {
-    const b = headlineOf(now.analysis);
-    blocks.push({ type: "heading", text: "Against the design as written" });
-    blocks.push(deltaTable([p99Row("Worst p99", a.p99Ms, b.p99Ms), availabilityRow("Availability", a.availability, b.availability), costRow(a.costUsd, b.costUsd)]));
-    if (base.tests.length) {
-      const worse = passCount(now.tests) < passCount(base.tests);
-      const changed = passCount(now.tests) !== passCount(base.tests);
-      blocks.push({ type: "paragraph", text: [{ text: "Checks  ", tone: "muted" }, { text: `${passCount(base.tests)} of ${base.tests.length} pass as written  \u2192  ` }, { text: `${passCount(now.tests)} of ${now.tests.length} pass`, bold: true, ...changed ? { tone: worse ? "bad" : "good" } : {} }] });
-    }
-    const old = new Map(base.analysis.useCases.map((u) => [u.id, u]));
-    const useCases = now.analysis.useCases.filter((u) => u.rps > 0 || (old.get(u.id)?.rps ?? 0) > 0).flatMap((u) => {
-      const was = old.get(u.id);
-      const rows = [p99Row(`p99 \xB7 ${u.name}`, was?.percentiles.p99, u.percentiles.p99), availabilityRow(`Availability \xB7 ${u.name}`, was?.availability, u.availability)];
-      if (was && was.rps !== u.rps) rows.unshift({ label: `Traffic \xB7 ${u.name}`, before: formatRps(was.rps), after: formatRps(u.rps), change: `${formatRps(was.rps)}\u2192${formatRps(u.rps)}`, tone: "same" });
-      return rows;
-    });
-    for (const [title, rows] of [
-      ["Per use case", useCases],
-      ["Checks that changed", flipped(base.tests, now.tests)],
-      ["Load that moved", moved(base.analysis, now.analysis)]
-    ]) {
-      if (rows.length) blocks.push(deltaTable(rows, title));
-    }
-  } else {
-    const items = [`worst p99 ${formatMs(a.p99Ms)}`, `availability ${formatAvailability(a.availability)}`, `cost ${formatUsd(a.costUsd)}`, ...base.tests.length ? [`${passCount(base.tests)} of ${base.tests.length} checks pass`] : []];
-    blocks.push({ type: "paragraph", text: [{ text: "As written  ", bold: true }, { text: items.join(" \xB7 ") }] });
-    blocks.push({ type: "paragraph", small: true, text: "Change the traffic or take nodes down: the diagram, the analysis and the checks follow." });
-  }
-  const results = cache2.saved ?? runWhatIfs(diagram);
-  if (results.length) {
-    blocks.push({ type: "heading", text: "Saved what-ifs" });
-    const arrow2 = (r, up, down2) => {
-      const tone2 = deltaTone(r);
-      const changed = r.change !== "same" && r.before !== r.after;
-      return [{ text: changed && r.tone !== "same" ? `${r.after} ${r.tone === "better" ? up : down2}` : r.after, ...tone2 ? { tone: tone2 } : changed ? {} : { tone: "muted" } }];
-    };
-    blocks.push({
-      type: "table",
-      columns: [{ title: "" }, { title: "What-if" }, { title: "Result" }, { title: "Worst p99", align: "right" }, { title: "Avail", align: "right", drop: 2 }, { title: "Cost", align: "right", drop: 1 }],
-      rows: results.map((r, i) => {
-        const on = w.saved === r.name;
-        const control = { id: `wi-saved-${i}`, label: on ? "Showing" : "Preview", variant: on ? "primary" : "default" };
-        const cells = [
-          { control },
-          [{ text: r.name, bold: true }],
-          [{ text: r.passed ? "pass" : "fail", chip: r.passed ? "good" : "bad" }],
-          arrow2(p99Row("", a.p99Ms, r.headline.p99Ms), "\u2193", "\u2191"),
-          arrow2(availabilityRow("", a.availability, r.headline.availability), "\u2191", "\u2193"),
-          arrow2(costRow(a.costUsd, r.headline.costUsd), "\u2193", "\u2191")
-        ];
-        return { cells };
-      })
-    });
-    for (const text of results.flatMap((r) => r.warnings)) blocks.push({ type: "callout", tone: "warn", text });
-  }
-  const loaded = base.analysis.useCases.filter((u) => u.rps > 0);
-  const busiest = loaded.reduce((b, u) => !b || u.rps > b.rps ? u : b, void 0);
-  const swept = loaded.find((u) => u.id === w.sweep) ?? busiest;
-  if (swept) {
-    const result = w.sweep !== void 0 ? cache2.sweep ?? sweep(diagram, swept.name, swept.rps * SWEEP.from, swept.rps * SWEEP.to, { steps: SWEEP.steps }) : void 0;
-    blocks.push({ type: "heading", text: "Sweep" });
-    blocks.push({
-      type: "controls",
-      items: [
-        ...loaded.length > 1 ? [{ select: { id: "wi-sweep-uc", value: swept.id, options: loaded.map((u) => ({ value: u.id, label: u.name })), ...w.open === "wi-sweep-uc" ? { open: true } : {} } }] : [],
-        { control: { id: "wi-sweep", icon: "bolt", label: `Sweep ${formatRps(swept.rps * SWEEP.from)} to ${formatRps(swept.rps * SWEEP.to)}`, hotkey: "s", variant: result ? "default" : "primary" } }
-      ]
-    });
-    if (!result) blocks.push({ type: "paragraph", small: true, text: "Where each node saturates and how far the requirements hold, from half to ten times today's traffic." });
-    else {
-      const today = swept.rps;
-      const verdict = result.maxPassingRps === void 0 ? `"${result.useCase}" fails already at ${formatRps(result.from)}.` : result.maxPassingRps >= result.to ? `"${result.useCase}" passes over the whole range, up to ${formatRps(result.to)}.` : `"${result.useCase}" passes up to ${formatRps(result.maxPassingRps)}, ${Number((result.maxPassingRps / today).toFixed(1))}\xD7 today's ${formatRps(today)}.`;
-      blocks.push({ type: "paragraph", text: [{ text: verdict, bold: true, ...result.maxPassingRps === void 0 ? { tone: "bad" } : {} }] });
-      if (result.saturation.length === 0) blocks.push({ type: "paragraph", small: true, text: "No node saturates in this range." });
-      else {
-        blocks.push({
-          type: "chart",
-          chart: {
-            from: result.from,
-            to: result.to,
-            today,
-            ...result.maxPassingRps !== void 0 ? { maxPassing: Math.min(result.maxPassingRps, result.to) } : {},
-            labels: { from: formatRps(result.from), to: formatRps(result.to), today: formatRps(today), ...result.maxPassingRps !== void 0 ? { maxPassing: formatRps(result.maxPassingRps) } : {} },
-            bars: result.saturation.map((n) => ({ node: n.node, rps: n.rps, value: n.atStart ? `below ${formatRps(n.rps)}` : formatRps(n.rps), ...n.atStart ? { atStart: true } : {} }))
-          }
-        });
-      }
-    }
+  if (passing.length) {
+    blocks.push({ type: "controls", items: [{ control: { id: "passing", icon: open ? "chevron-down" : "next", label: `${passing.length} passing`, hotkey: "a", variant: "quiet", active: open } }] });
+    if (open) for (const r of passing) blocks.push({ type: "check", passed: true, title: r.name, ...where2(r) ? { where: where2(r) } : {}, message: r.message });
   }
   return { kind: "page", blocks };
 }
@@ -9636,6 +9382,7 @@ import { atom, read, update } from "claude-code";
 var CELL_ASPECT = 17 / 8;
 
 // ../plugin/src/helper.ts
+var RANK = { now: "a", first: "b", later: "c", mount: "c" };
 var worker;
 var refused = false;
 var seq = 0;
@@ -9716,7 +9463,7 @@ async function ask($, input, priority = "now") {
   if (refused) return oneShot($, input);
   const root = await cacheDir($);
   const w = worker ?? start($, root);
-  const id = `${priority === "now" ? "a" : "b"}${String(seq++).padStart(9, "0")}`;
+  const id = `${RANK[priority]}${String(seq++).padStart(9, "0")}`;
   return new Promise((resolve, reject) => {
     const timer = $.clock.after(TIMEOUT_MS, () => {
       if (!w.waiting.delete(id)) return;
@@ -9754,10 +9501,10 @@ function panelOf($, p, priority = "now") {
   if (drawing.has(key)) return void 0;
   drawing.add(key);
   if (!batch) {
-    batch = { now: /* @__PURE__ */ new Map(), later: /* @__PURE__ */ new Map() };
+    batch = { now: /* @__PURE__ */ new Map(), first: /* @__PURE__ */ new Map(), later: /* @__PURE__ */ new Map() };
     void Promise.resolve().then(() => flush($));
   }
-  batch[priority === "now" ? "now" : "later"].set(key, p);
+  batch[priority === "mount" ? "later" : priority].set(key, p);
   return void 0;
 }
 function prefetch($, asks) {
@@ -9767,7 +9514,7 @@ async function flush($) {
   const b = batch;
   batch = void 0;
   const outDir = await cacheDir($);
-  for (const priority of ["now", "later"]) {
+  for (const priority of ["now", "first", "later"]) {
     const asks = [...b[priority].entries()];
     if (asks.length === 0) continue;
     for (const theme2 of new Set(asks.map(([, p]) => p.theme))) {
@@ -9829,7 +9576,7 @@ function rasterOf($, request2, priority = "now") {
   const done = rasters.get(key);
   if (done) return done;
   if (pending.has(key)) {
-    if (priority === "now") wanted2.add(key);
+    if (priority === "now" || priority === "first") wanted2.add(key);
     return void 0;
   }
   pending.add(key);
@@ -9846,7 +9593,7 @@ function rasterOf($, request2, priority = "now") {
     if ("error" in answer) $.ui.log(`proschi: no picture: ${answer.error}`, { to: "debug" });
     rasters.set(key, answer);
     pending.delete(key);
-    if (priority === "now" || wanted2.delete(key)) $.ui.invalidate("ui.render");
+    if (priority === "now" || priority === "first" || wanted2.delete(key)) $.ui.invalidate("ui.render");
   })();
   return void 0;
 }
@@ -9916,7 +9663,7 @@ function probe($, requestId, key) {
 
 // ../plugin/src/picture.tsx
 var shown = /* @__PURE__ */ new Map();
-var live2 = /* @__PURE__ */ new Map();
+var live = /* @__PURE__ */ new Map();
 var overlaySites = /* @__PURE__ */ new Map();
 var tileKey = (site, piece, i) => `t-${site}-${piece}-${i}`;
 var overlayKey = (strip) => `ov-${strip}`;
@@ -9924,26 +9671,45 @@ var timings = {};
 var PERF_KEEP = 40;
 var perf = [];
 var pressTimings = () => perf;
+var opening = /* @__PURE__ */ new Map();
+async function markOpened($, site) {
+  try {
+    opening.set(site, { at: await $.clock.now() });
+  } catch {
+    opening.delete(site);
+  }
+}
+function timed($, t) {
+  perf.push(t);
+  if (perf.length > PERF_KEEP) perf.shift();
+  $.ui.log(`proschi: ${t.control} drew in ${t.toShown} ms (render after ${t.toRender} ms, built in ${t.build} ms, ${t.sent} of ${t.images} pictures new)`, { to: "debug" });
+}
 function loading(ui, key, rows, probe2) {
   return /* @__PURE__ */ h(ui.Box, { key: `load-${key}`, flexDirection: "column", height: Math.max(1, rows) }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row" }, /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Rendering diagram\u2026"), probe2));
 }
 async function pictureSite($, ui, s) {
   const started = await $.clock.now();
-  const was = live2.get(s.site);
+  const was = live.get(s.site);
   if (was?.pressedAt !== void 0 && was.renderedAt === void 0) was.renderedAt = started;
   const resolved = [];
   let waiting = false;
-  const last = s.pages?.some((p) => p.shown) ? -1 : s.pieces.length - 1;
+  const last = !s.paged && s.pages?.some((p) => p.shown) ? -1 : s.pieces.length - 1;
+  const pagedAt = s.paged ? s.pieces.findIndex((p) => p.id === s.paged.from) : -1;
   for (const [i, p] of s.pieces.entries()) {
+    const hidden = pagedAt >= 0 && i >= pagedAt && !s.paged.shown;
     if (!("panel" in p)) {
       if (p.picture) resolved.push({ id: p.id, picture: p.picture });
-      else waiting = true;
+      else if (!hidden) waiting = true;
       continue;
     }
-    const out = panelOf($, { panel: p.panel, columns: p.columns, theme: s.theme, edges: { ...i === 0 ? { top: true } : {}, ...i === last ? { bottom: true } : {} } });
-    if (out && "error" in out) return { error: out.error };
-    if (!out) waiting = true;
-    else resolved.push({ id: p.id, out });
+    const out = panelOf($, { panel: p.panel, columns: p.columns, theme: s.theme, edges: { ...i === 0 ? { top: true } : {}, ...i === last ? { bottom: true } : {} } }, hidden ? "first" : "now");
+    if (out && "error" in out) {
+      if (hidden) continue;
+      return { error: out.error };
+    }
+    if (!out) {
+      if (!hidden) waiting = true;
+    } else resolved.push({ id: p.id, out });
   }
   const pages = [];
   for (const page of s.pages ?? []) {
@@ -9966,21 +9732,32 @@ async function pictureSite($, ui, s) {
   if (s.ahead?.length) prefetch($, s.ahead.map((a) => ({ panel: a.panel, columns: a.columns, theme: s.theme, edges: a.edges ?? (onTop(a) ? { top: true } : {}) })));
   let now;
   if (!waiting) {
-    now = { pieces: resolved, pages, actions: { ...s.actions, ...s.float?.actions ?? {} }, ...float ? { float } : {} };
+    now = { pieces: resolved, pages, actions: { ...s.actions, ...s.float?.actions ?? {} }, ...float ? { float } : {}, ...s.paged ? { paged: s.paged } : {} };
     shown.set(s.site, now);
   } else now = shown.get(s.site);
   if (!now) return { element: loading(ui, s.site, s.rows) };
   const built = await build($, ui, s, now);
   const done = await $.clock.now();
-  const l = live2.get(s.site);
+  const l = live.get(s.site);
   if (!waiting && l?.pressedAt !== void 0) {
     const t = { at: l.pressedAt, site: s.site, control: l.pressed ?? "", toRender: (l.renderedAt ?? started) - l.pressedAt, toShown: done - l.pressedAt, build: done - started, images: built.images, sent: built.sent };
     timings.press = t.toShown;
-    perf.push(t);
-    if (perf.length > PERF_KEEP) perf.shift();
-    $.ui.log(`proschi: ${t.control} drew in ${t.toShown} ms (render after ${t.toRender} ms, built in ${t.build} ms, ${t.sent} of ${t.images} pictures new)`, { to: "debug" });
+    timed($, t);
     l.pressedAt = void 0;
     l.renderedAt = void 0;
+  }
+  const o = opening.get(s.site);
+  if (o) {
+    const at = (control) => ({ at: o.at, site: s.site, control, toRender: started - o.at, toShown: done - o.at, build: done - started, images: built.images, sent: built.sent });
+    if (!waiting && !o.drawn) {
+      o.drawn = true;
+      timed($, at("open"));
+    }
+    if (!o.paged && now.paged && now.pieces.some((p) => "picture" in p)) {
+      o.paged = true;
+      timed($, at("open: diagram"));
+    }
+    if (o.drawn && (o.paged || !s.paged)) opening.delete(s.site);
   }
   return { element: built.element };
 }
@@ -10013,8 +9790,29 @@ async function strips(ui, s, piece, out, source, into) {
   }
   return rows;
 }
+async function floatOver(ui, s, f, anchor, rows, width, source, into, $) {
+  const tile = f.def.anchor.control ? anchor.out.tiles.find((t) => t.controls?.some((a) => a.control.id === f.def.anchor.control)) : void 0;
+  const area = tile?.controls?.find((a) => a.control.id === f.def.anchor.control);
+  const below = anchor.row + (tile ? tile.row + tile.rows : anchor.out.rows);
+  const at = Math.max(0, Math.min(below, rows - f.out.rows));
+  const left = Math.max(0, Math.min((tile?.col ?? 0) + (area?.col ?? 0), width - f.out.columns));
+  if (f.out.rows > rows) $.ui.log(`proschi: the ${f.def.id} is ${f.out.rows} rows, over the ${rows} it floats over: its foot is cut`, { to: "debug" });
+  const scrim = `ov-scrim-${s.site}`;
+  into.overlays.set(scrim, [`${f.def.id}/close`]);
+  overlaySites.set(scrim, s.site);
+  const elements = [
+    /* @__PURE__ */ h(ui.Box, { key: `scrim-${s.site}`, position: "absolute", top: 0, left: 0, width, height: rows }, /* @__PURE__ */ h(ui.Client, { key: scrim, module: "./uiOverlay.js", props: { controls: [{ id: `${f.def.id}/close`, col: 0, row: 0, columns: width, rows }] }, width, height: rows }))
+  ];
+  const floated = await strips(ui, s, f.def.id, f.out, source, into);
+  f.out.tiles.forEach(
+    (t, i) => elements.push(
+      /* @__PURE__ */ h(ui.Box, { key: `fl-${s.site}-${i}`, position: "absolute", top: at + t.row, left, width: t.columns, height: t.rows }, floated[i])
+    )
+  );
+  return { elements, top: at };
+}
 async function build($, ui, s, d) {
-  const was = live2.get(s.site);
+  const was = live.get(s.site);
   const before2 = was?.sources ?? /* @__PURE__ */ new Map();
   const sources = /* @__PURE__ */ new Map();
   const source = (key, file) => {
@@ -10023,15 +9821,22 @@ async function build($, ui, s, d) {
   };
   const into = { tiles: /* @__PURE__ */ new Map(), overlays: /* @__PURE__ */ new Map(), hotkeys: /* @__PURE__ */ new Map() };
   const parts = [];
+  const paged = [];
+  const pagedAt = d.paged ? d.pieces.findIndex((p) => p.id === d.paged.from) : -1;
+  const pagedShown = d.paged?.shown !== false;
   let top = 0;
   let width = 1;
   const layerAt = s.layer ? d.pieces.findIndex((p) => p.id === s.layer) : -1;
   const layered = [];
   let layerTop = 0;
+  let layerRows = 0;
   const anchors = /* @__PURE__ */ new Map();
   for (const [i, p] of d.pieces.entries()) {
+    const hidden = pagedAt >= 0 && i >= pagedAt && !pagedShown;
     if (i === layerAt) layerTop = top;
-    const into_ = layerAt >= 0 && i >= layerAt ? layered : parts;
+    const target = layerAt >= 0 && i >= layerAt ? layered : pagedAt >= 0 && i >= pagedAt ? paged : parts;
+    let rows;
+    let columns;
     if ("picture" in p) {
       const pic = p.picture;
       let body;
@@ -10047,62 +9852,63 @@ async function build($, ui, s, d) {
         }
         body = lines;
       } else body = /* @__PURE__ */ h(ui.Image, { key: pic.key, source: await source(pic.key, pic.file), columns: pic.columns, rows: pic.rows, alt: pic.alt });
-      into_.push(
+      target.push(
         /* @__PURE__ */ h(ui.Box, { key: pic.anchorKey ?? `pic-${s.site}-${p.id}`, flexDirection: "column", height: pic.rows }, body)
       );
-      top += pic.rows;
-      width = Math.max(width, pic.columns);
-      continue;
+      rows = pic.rows;
+      columns = pic.columns;
+    } else {
+      const { out } = p;
+      if (!hidden) anchors.set(p.id, { row: top - layerTop, out });
+      target.push(
+        /* @__PURE__ */ h(ui.Box, { key: `p-${s.site}-${p.id}`, flexDirection: "column", height: out.rows }, await strips(ui, s, p.id, out, source, hidden ? void 0 : into))
+      );
+      rows = out.rows;
+      columns = out.columns;
     }
-    const { out } = p;
-    anchors.set(p.id, { row: top - layerTop, out });
-    into_.push(
-      /* @__PURE__ */ h(ui.Box, { key: `p-${s.site}-${p.id}`, flexDirection: "column", height: out.rows }, await strips(ui, s, p.id, out, source, into))
-    );
-    top += out.rows;
-    width = Math.max(width, out.columns);
+    if (layerAt >= 0 && i >= layerAt) layerRows += rows;
+    if (hidden) continue;
+    top += rows;
+    width = Math.max(width, columns);
   }
   let floatTop;
   if (layerAt >= 0) {
-    const rows = top - layerTop;
     const over = [];
     const f = d.float;
-    const anchor = f && anchors.get(f.def.anchor.piece);
+    const anchor = f && pagedShown && anchors.get(f.def.anchor.piece);
     if (f && anchor) {
-      const tile = f.def.anchor.control ? anchor.out.tiles.find((t) => t.controls?.some((a) => a.control.id === f.def.anchor.control)) : void 0;
-      const area = tile?.controls?.find((a) => a.control.id === f.def.anchor.control);
-      const below = anchor.row + (tile ? tile.row + tile.rows : anchor.out.rows);
-      const at = Math.max(0, Math.min(below, rows - f.out.rows));
-      const left = Math.max(0, Math.min((tile?.col ?? 0) + (area?.col ?? 0), width - f.out.columns));
-      if (f.out.rows > rows) $.ui.log(`proschi: the ${f.def.id} is ${f.out.rows} rows, over the ${rows} it floats over: its foot is cut`, { to: "debug" });
-      floatTop = layerTop + at;
-      const scrim = `ov-scrim-${s.site}`;
-      into.overlays.set(scrim, [`${f.def.id}/close`]);
-      overlaySites.set(scrim, s.site);
-      over.push(
-        /* @__PURE__ */ h(ui.Box, { key: `scrim-${s.site}`, position: "absolute", top: 0, left: 0, width, height: rows }, /* @__PURE__ */ h(ui.Client, { key: scrim, module: "./uiOverlay.js", props: { controls: [{ id: `${f.def.id}/close`, col: 0, row: 0, columns: width, rows }] }, width, height: rows }))
-      );
-      const floated = await strips(ui, s, f.def.id, f.out, source, into);
-      f.out.tiles.forEach(
-        (t, i) => over.push(
-          /* @__PURE__ */ h(ui.Box, { key: `fl-${s.site}-${i}`, position: "absolute", top: at + t.row, left, width: t.columns, height: t.rows }, floated[i])
-        )
-      );
+      const laid = await floatOver(ui, s, f, anchor, layerRows, width, source, into, $);
+      over.push(...laid.elements);
+      floatTop = layerTop + laid.top;
     }
-    parts.push(
-      /* @__PURE__ */ h(ui.Box, { key: `ly-${s.site}`, flexDirection: "column", height: rows, overflow: "hidden" }, layered, over)
+    ;
+    (pagedAt >= 0 && layerAt >= pagedAt ? paged : parts).push(
+      /* @__PURE__ */ h(ui.Box, { key: `ly-${s.site}`, flexDirection: "column", height: layerRows, overflow: "hidden" }, layered, over)
     );
   }
+  if (pagedAt >= 0) {
+    parts.push(
+      /* @__PURE__ */ h(ui.Box, { key: `dg-${s.site}`, flexDirection: "column", display: pagedShown ? "flex" : "none" }, paged)
+    );
+  }
+  let page;
   if (d.pages.length) {
     const pages = [];
-    for (const page of d.pages) {
-      const rows = await strips(ui, s, page.id, page.out, source, page.shown ? into : void 0);
+    for (const pg of d.pages) {
+      const rows = await strips(ui, s, pg.id, pg.out, source, pg.shown ? into : void 0);
+      const f = pg.shown && d.float?.def.anchor.piece === pg.id ? d.float : void 0;
+      if (f) {
+        const laid = await floatOver(ui, s, f, { row: 0, out: pg.out }, pg.out.rows, Math.max(width, pg.out.columns), source, into, $);
+        rows.push(...laid.elements);
+        floatTop = top + laid.top;
+      }
       pages.push(
-        /* @__PURE__ */ h(ui.Box, { key: `pg-${s.site}-${page.id}`, flexDirection: "column", height: page.out.rows, display: page.shown ? "flex" : "none" }, rows)
+        /* @__PURE__ */ h(ui.Box, { key: `pg-${s.site}-${pg.id}`, flexDirection: "column", height: pg.out.rows, display: pg.shown ? "flex" : "none" }, rows)
       );
-      if (page.shown) {
-        top += page.out.rows;
-        width = Math.max(width, page.out.columns);
+      if (pg.shown) {
+        page = { top, anchors: pg.out.anchors ?? {} };
+        top += pg.out.rows;
+        width = Math.max(width, pg.out.columns);
       }
     }
     parts.push(
@@ -10110,7 +9916,7 @@ async function build($, ui, s, d) {
     );
   }
   const { tiles, overlays, hotkeys } = into;
-  live2.set(s.site, {
+  live.set(s.site, {
     requestId: s.requestId,
     tiles,
     overlays,
@@ -10118,6 +9924,7 @@ async function build($, ui, s, d) {
     hotkeys,
     sources,
     ...floatTop !== void 0 && d.float ? { float: { top: floatTop, close: d.float.def.close } } : {},
+    ...page ? { page } : {},
     ...s.form ? { form: s.form } : {},
     ...was?.pressedAt !== void 0 ? { pressedAt: was.pressedAt, ...was.pressed ? { pressed: was.pressed } : {}, ...was.renderedAt !== void 0 ? { renderedAt: was.renderedAt } : {} } : {}
   });
@@ -10132,7 +9939,7 @@ async function blit($, l, ref, file) {
   if (r.deny) $.ui.log(`proschi: blit refused: ${r.deny}`, { to: "debug" });
 }
 async function act($, site, id, surface) {
-  const l = live2.get(site);
+  const l = live.get(site);
   const action = l?.actions[id];
   if (!l || !action) return;
   $.ui.log(`proschi: press ${id}`, { to: "debug" });
@@ -10144,7 +9951,7 @@ async function act($, site, id, surface) {
 function registerPicture(on) {
   on("ui.message", async ($, e, next) => {
     const site = overlaySites.get(e.element);
-    const l = site !== void 0 ? live2.get(site) : void 0;
+    const l = site !== void 0 ? live.get(site) : void 0;
     if (!site || !l) return next(e);
     const data = e.data ?? {};
     const id = typeof data.id === "string" ? data.id : "";
@@ -10178,7 +9985,7 @@ function registerPicture(on) {
       return next({ ...e, offset });
     }
     if (windows.has(e.requestId)) windows.set(e.requestId, { offset: e.offset, bodyRows: e.bodyRows });
-    for (const l of live2.values()) if (l.requestId === e.requestId && l.float && e.offset > l.float.top) l.float.close();
+    for (const l of live.values()) if (l.requestId === e.requestId && l.float && e.offset > l.float.top) l.float.close();
     return next(e);
   });
 }
@@ -10194,9 +10001,9 @@ async function scrollKey($, id, key) {
   const to = key === "home" ? 0 : key === "end" ? Infinity : Math.max(0, w.offset + (key === "up" ? -1 : key === "down" ? 1 : key === "pageup" ? -w.bodyRows : w.bodyRows));
   if (key !== "home" && key !== "end") going.set(id, to);
   $.ui.log(`proschi: scroll key ${key} moves ${id} to row ${to}`, { to: "debug" });
-  const moved3 = await $.ui.scroll(args).catch((error) => ({ deny: String(error) }));
+  const moved = await $.ui.scroll(args).catch((error) => ({ deny: String(error) }));
   going.delete(id);
-  if (moved3.deny) $.ui.log(`proschi: scroll key ${key} refused: ${moved3.deny}`, { to: "debug" });
+  if (moved.deny) $.ui.log(`proschi: scroll key ${key} refused: ${moved.deny}`, { to: "debug" });
 }
 
 // ../frontend/src/hld/hld.ts
@@ -11258,135 +11065,17 @@ function sequenceTab(t) {
   return /* @__PURE__ */ h(ui.Box, { key: "body-sequence", flexDirection: "column" }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "Scenario"), /* @__PURE__ */ h(ui.Select, { key: "seq-pick", value: pick2.value, options: picks.map((p) => ({ value: p.value, label: label(p.useCase, p.scenario) })), onSelect: t.pick }), /* @__PURE__ */ h(ui.Text, null, counter)), wide > columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", seq2.participants.length, " participants take ", wide, " columns, wider than the ", columns, " here: widen the window to see the right side."), linesView(ui, sequenceLines(seq2, columns, playing ? currentStepsOf(steps, step) : []), "seq-lines"));
 }
 
-// ../plugin/src/views/tabs.tsx
-var TABS = [
-  { id: "diagram", label: "Diagram", key: "1" },
-  { id: "analysis", label: "Analysis", key: "2" },
-  { id: "whatif", label: "What-if", key: "3" },
-  { id: "sequence", label: "Sequence", key: "4" },
-  { id: "hld", label: "HLD", key: "5" },
-  { id: "tests", label: "Tests", key: "6" }
-];
-var tabOf = (stored) => TABS.find((t) => t.id === stored)?.id ?? "diagram";
-function tabBar(ui, current, failing, pick2) {
-  return /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap" }, TABS.map((t) => /* @__PURE__ */ h(
-    ui.Button,
-    {
-      key: `tab-${t.id}`,
-      label: t.id === "tests" && failing > 0 ? `${t.label} \u2717${failing}` : t.label,
-      hotkey: t.key,
-      ...t.id === current ? { variant: "primary" } : { dimColor: true },
-      onPress: () => pick2(t.id)
-    }
-  )));
-}
-function tabBody(ui, tab, doc, columns) {
-  return linesView(ui, bodyLines(tab, doc, columns), `body-${tab}`);
-}
-function bodyLines(tab, doc, columns) {
-  if (tab === "analysis") {
-    if (!doc.analysis) return [{ segs: [{ text: "No traffic yet: add a traffic { \u2026 } block and Proschi estimates load, latency, availability and cost for every node, e.g." }], wrap: true }, { segs: [] }, { segs: [{ text: "traffic {", dim: true }] }, { segs: [{ text: '  "Redirect" 10k rps  mix "Cache hit" 90%, "Cache miss" 10%', dim: true }] }, { segs: [{ text: "}", dim: true }] }];
-    return analysisLines(doc.root, doc.analysis, columns);
-  }
-  if (tab === "tests") {
-    if (!doc.analysis) return [{ segs: [{ text: "Requirements and tests run against the simulation: add a traffic { \u2026 } block first." }], wrap: true }];
-    return testLines(doc.tests, columns);
-  }
-  const what = TABS.find((t) => t.id === tab).label;
-  return [{ segs: [{ text: `${what} in the terminal is coming; \u2197 Open in Proschi shows it in the editor now.`, dim: true }], wrap: true }];
-}
-function testsTab(ui, doc, columns, open, toggle) {
-  const passing2 = doc.analysis ? doc.tests.filter((t) => t.passed).length : 0;
-  return /* @__PURE__ */ h(ui.Box, { key: "body-tests", flexDirection: "column" }, linesView(ui, bodyLines("tests", doc, columns), "tests-lines"), passing2 > 0 && /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, /* @__PURE__ */ h(ui.Button, { key: "tests-passing", label: `${open ? "\u25BE" : "\u25B8"} ${passing2} passing`, hotkey: "a", dimColor: !open, onPress: toggle }), open && linesView(ui, passingLines(doc.tests, columns), "tests-passing-lines")));
-}
-
 // ../plugin/src/views/whatif.ts
-var NO_WHATIF = { multiplier: 1, failed: [] };
-function whatIfOf(stored) {
-  const w = stored && typeof stored === "object" ? stored : {};
-  return {
-    multiplier: typeof w.multiplier === "number" && w.multiplier > 0 ? w.multiplier : 1,
-    failed: Array.isArray(w.failed) ? w.failed.filter((id) => typeof id === "string") : [],
-    ...typeof w.saved === "string" ? { saved: w.saved } : {},
-    ...typeof w.node === "string" ? { node: w.node } : {},
-    ...typeof w.sweep === "string" ? { sweep: w.sweep } : {}
-  };
-}
-var liveOf = (w) => ({ multiplier: w.multiplier, failed: w.failed, ...w.saved !== void 0 ? { saved: w.saved } : {} });
-var optionsOf = (diagram, w) => isActive(liveOf(w)) ? liveOptions(diagram, liveOf(w)) : void 0;
-function bannerLine(diagram, w, width) {
-  const badge = ` What-if: ${whatIfLabel(diagram, liveOf(w))} `;
-  const rest = " The numbers are for this what-if, not the design as written.";
-  return { segs: [{ text: cut(badge, width), bg: HEAT.warm, color: TONE.ink, bold: true }, ...badge.length + rest.length <= width ? [{ text: rest, dim: true }] : []] };
+var saved = /* @__PURE__ */ new Map();
+function savedWhatIfs(key, doc) {
+  let results = saved.get(key);
+  if (!results) {
+    results = doc.analysis ? runWhatIfs(doc.root) : [];
+    saved.set(key, results);
+  }
+  return results;
 }
 var toneColor = (r) => r.tone === "better" ? TONE.good : r.tone === "worse" ? TONE.bad : void 0;
-var note2 = (change) => change === "same" ? "" : change.replace(/^[^,]*→[^,]*(, )?/, "");
-function deltaTable2(rows, width, head = "What") {
-  return table2(
-    [{ title: head }, { title: "As written", right: true }, { title: "What-if", right: true }, { title: "Change", drop: 1 }],
-    rows.map((r) => {
-      const color = toneColor(r);
-      const changed = r.change !== "same" && r.before !== r.after;
-      return [
-        { text: r.label, bold: true },
-        { text: r.before, dim: !changed },
-        { text: r.after, ...color ? { color, bold: true } : { dim: !changed } },
-        changed ? { text: note2(r.change) || (r.tone === "better" ? "better" : r.tone === "worse" ? "worse" : ""), ...color ? { color } : {} } : { text: "same", dim: true }
-      ];
-    }),
-    width
-  );
-}
-var passing = (results) => results.filter((t) => t.passed).length;
-function moved2(base, now) {
-  const before2 = new Map(base.nodes.map((n) => [n.id, n.utilization]));
-  return now.nodes.map((n) => ({ node: n.id, before: before2.get(n.id), after: n.utilization })).filter((u) => (u.before ?? 0) >= 1 !== u.after >= 1 || Math.abs(u.after - (u.before ?? 0)) >= 0.1).sort((x, y) => Math.abs(y.after - (y.before ?? 0)) - Math.abs(x.after - (x.before ?? 0))).map(utilizationRow);
-}
-function flipped2(base, now) {
-  const before2 = new Map(base.map((r) => [r.name, r.passed]));
-  return now.filter((r) => before2.get(r.name) !== r.passed).map((r) => checkRow({ name: r.name, category: r.category, before: before2.get(r.name), after: r.passed })).sort((a, b) => (a.tone === "worse" ? 0 : 1) - (b.tone === "worse" ? 0 : 1));
-}
-function impactLines(base, now, width) {
-  const a = headlineOf(base.analysis);
-  const b = headlineOf(now.analysis);
-  const out = [
-    { segs: [{ text: "Against the design as written", bold: true }] },
-    ...deltaTable2([p99Row("Worst p99", a.p99Ms, b.p99Ms), availabilityRow("Availability", a.availability, b.availability), costRow(a.costUsd, b.costUsd)], width)
-  ];
-  if (base.results.length > 0) {
-    const worse = passing(now.results) < passing(base.results);
-    out.push({
-      segs: [
-        { text: "Checks ", dim: true },
-        { text: `${passing(base.results)} of ${base.results.length} pass as written \u2192 ` },
-        { text: `${passing(now.results)} of ${now.results.length} pass`, bold: true, ...passing(now.results) !== passing(base.results) ? { color: worse ? TONE.bad : TONE.good } : {} }
-      ]
-    });
-  }
-  const old = new Map(base.analysis.useCases.map((u) => [u.id, u]));
-  const useCases = now.analysis.useCases.filter((u) => u.rps > 0 || (old.get(u.id)?.rps ?? 0) > 0).flatMap((u) => {
-    const was = old.get(u.id);
-    const rows = [p99Row(`p99 \xB7 ${u.name}`, was?.percentiles.p99, u.percentiles.p99), availabilityRow(`Availability \xB7 ${u.name}`, was?.availability, u.availability)];
-    if (was && was.rps !== u.rps) rows.unshift({ label: `Traffic \xB7 ${u.name}`, before: formatRps(was.rps), after: formatRps(u.rps), change: `${formatRps(was.rps)}\u2192${formatRps(u.rps)}`, tone: "same" });
-    return rows;
-  });
-  for (const [title, rows] of [
-    ["Per use case", useCases],
-    ["Checks that changed", flipped2(base.results, now.results)],
-    ["Load that moved", moved2(base.analysis, now.analysis)]
-  ]) {
-    if (rows.length) out.push({ segs: [] }, ...deltaTable2(rows, width, title));
-  }
-  return out;
-}
-function asWrittenLines(base, width) {
-  const h2 = headlineOf(base.analysis);
-  const items = [`worst p99 ${formatMs(h2.p99Ms)}`, `availability ${formatAvailability(h2.availability)}`, `cost ${formatUsd(h2.costUsd)}`, ...base.results.length ? [`${passing(base.results)} of ${base.results.length} checks pass`] : []];
-  return [
-    { segs: [{ text: "As written ", bold: true }, { text: items.join(" \xB7 ") }], wrap: true },
-    { segs: [{ text: cut("Change the traffic or take nodes down: the diagram, the analysis and the checks follow.", width), dim: true }] }
-  ];
-}
 var versus = (r) => {
   const color = toneColor(r);
   const changed = r.change !== "same" && r.before !== r.after;
@@ -11407,109 +11096,61 @@ function savedLines(base, results, width) {
     width
   );
 }
-var SWEEP2 = { from: 0.5, to: 10, steps: 12 };
-var BLUE = "#3b82f6";
-function sweepLines(s, today, width) {
-  const verdict = s.maxPassingRps === void 0 ? `"${s.useCase}" fails already at ${formatRps(s.from)}.` : s.maxPassingRps >= s.to ? `"${s.useCase}" passes over the whole range, up to ${formatRps(s.to)}.` : `"${s.useCase}" passes up to ${formatRps(s.maxPassingRps)}, ${Number((s.maxPassingRps / today).toFixed(1))}\xD7 today's ${formatRps(today)}.`;
-  const out = [{ segs: [{ text: verdict, bold: true, ...s.maxPassingRps === void 0 ? { color: TONE.bad } : {} }], wrap: true }];
-  const legend = [
-    { text: `Range ${formatRps(s.from)} to ${formatRps(s.to)} \xB7 `, dim: true },
-    { text: TODAY },
-    { text: ` today ${formatRps(today)}`, dim: true },
-    ...s.maxPassingRps !== void 0 ? [{ text: " \xB7 ", dim: true }, { text: PASSES, color: TONE.good, bold: true }, { text: ` passes up to ${formatRps(s.maxPassingRps)}`, dim: true }] : []
-  ];
-  if (s.saturation.length === 0) return [...out, { segs: [{ text: "No node saturates in this range.", dim: true }] }, { segs: legend, wrap: true }];
-  const values = s.saturation.map((n) => n.atStart ? `below ${formatRps(n.rps)}` : formatRps(n.rps));
-  const name = Math.min(16, Math.max(4, ...s.saturation.map((n) => n.node.length)));
-  const value = Math.max(12, ...values.map((v) => v.length));
-  const bar = Math.max(10, width - name - value - 4);
-  const at = (rps) => Math.max(0, Math.min(bar - 1, Math.round((rps - s.from) / (s.to - s.from) * (bar - 1))));
-  const marks = Array.from({ length: bar }, () => ({ text: " " }));
-  marks[at(today)] = { text: TODAY };
-  if (s.maxPassingRps !== void 0) marks[at(s.maxPassingRps)] = { text: PASSES, color: TONE.good, bold: true };
-  out.push({ segs: [{ text: `${"NODE".padEnd(name)}  `, dim: true }, ...joined(marks), { text: `  ${"SATURATES AT".padStart(value)}`, dim: true }] });
-  s.saturation.forEach((n, i) => {
-    const filled = n.atStart ? 0 : at(n.rps) + 1;
-    out.push({
-      segs: [
-        { text: cut(n.node, name).padEnd(name), bold: true },
-        { text: "  " },
-        ...filled > 0 ? [{ text: "\u2588".repeat(filled), color: BLUE }] : [],
-        ...filled < bar ? [{ text: "\xB7".repeat(bar - filled), dim: true }] : [],
-        { text: "  " },
-        { text: values[i].padStart(value) }
-      ]
-    });
-  });
-  out.push({ segs: legend, wrap: true });
-  return out;
-}
-var TODAY = "\u25BD";
-var PASSES = "\u25BC";
-function joined(cells) {
-  const out = [];
-  for (const c of cells) {
-    const last = out[out.length - 1];
-    if (last && c.text === " " && /^ +$/.test(last.text)) last.text += " ";
-    else out.push({ ...c });
+function whatIfLines(base, results, width) {
+  const out = [{ segs: [] }, { segs: [{ text: "What-ifs", bold: true }] }];
+  if (results.length === 0) {
+    out.push({ segs: [{ text: "None saved yet: a whatif block runs the design again with more traffic or nodes down, e.g.", dim: true }], wrap: true });
+    out.push(...['whatif "Launch day" {', '  traffic "Redirect" x3', "}"].map((text) => ({ segs: [{ text, dim: true }] })));
+    return out;
   }
+  out.push(...savedLines(base, results, width));
+  for (const text of results.flatMap((r) => r.warnings)) out.push({ segs: [{ text: `\u26A0 ${text}`, color: TONE.warn }], wrap: true });
   return out;
 }
 
-// ../plugin/src/views/whatifTab.tsx
-var saved = /* @__PURE__ */ new Map();
-var sweeps = /* @__PURE__ */ new Map();
-function whatIfBanner(ui, base, w, columns, hotkey2, reset) {
-  return /* @__PURE__ */ h(ui.Box, { key: "wi-banner", flexDirection: "row", gap: 1 }, /* @__PURE__ */ h(ui.Button, { key: "wi-reset", label: "\u21BA Reset", ...hotkey2 ? { hotkey: "r" } : {}, onPress: reset }), lineView(ui, bannerLine(base.root, w, columns - 12)));
-}
-function whatIfResults(key, base, w) {
-  const diagram = base.root;
-  let results = saved.get(key);
-  if (!results) {
-    results = runWhatIfs(diagram);
-    saved.set(key, results);
-  }
-  const loaded = base.analysis?.useCases.filter((u) => u.rps > 0) ?? [];
-  const busiest = loaded.reduce((b, u) => !b || u.rps > b.rps ? u : b, void 0);
-  const swept = loaded.find((u) => u.id === w.sweep) ?? busiest;
-  let result;
-  if (swept && w.sweep !== void 0) {
-    const at = `${key}|${swept.id}`;
-    result = sweeps.get(at);
-    if (!result) {
-      result = sweep(diagram, swept.name, swept.rps * SWEEP2.from, swept.rps * SWEEP2.to, { steps: SWEEP2.steps });
-      sweeps.set(at, result);
+// ../plugin/src/views/tabs.tsx
+var TABS = [
+  { id: "diagram", label: "Diagram", key: "1" },
+  { id: "analysis", label: "Analysis", key: "2" },
+  { id: "sequence", label: "Sequence", key: "3" },
+  { id: "hld", label: "HLD", key: "4" },
+  { id: "tests", label: "Tests", key: "5" }
+];
+var tabOf = (stored) => stored === "whatif" ? "analysis" : TABS.find((t) => t.id === stored)?.id ?? "diagram";
+function tabBar(ui, current, failing, pick2, open) {
+  return /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap" }, TABS.map((t) => /* @__PURE__ */ h(
+    ui.Button,
+    {
+      key: `tab-${t.id}`,
+      label: t.id === "tests" && failing > 0 ? `${t.label} \u2717${failing}` : t.label,
+      hotkey: t.key,
+      ...t.id === current ? { variant: "primary" } : { dimColor: true },
+      onPress: () => pick2(t.id)
     }
-  }
-  return { saved: results, ...result ? { sweep: result } : {}, swept, loaded };
+  )), open && /* @__PURE__ */ h(ui.Button, { key: "tab-open", label: "\u2197 Open in Proschi", dimColor: true, onPress: (press) => open(press.surface) }));
 }
-function whatIfTab(t) {
-  const { ui, base, w, set, columns } = t;
-  const diagram = base.root;
-  if (!base.analysis) {
-    const hint = [
-      { segs: [{ text: "What-ifs run the simulation again with more or less traffic or nodes down: add a traffic { \u2026 } block first, then save a what-if as" }], wrap: true },
-      { segs: [] },
-      ...['whatif "Launch day" {', '  traffic "Redirect" x3', "}", 'whatif "Cache outage" {', "  fail cache", "}"].map((text) => ({ segs: [{ text, dim: true }] }))
-    ];
-    return linesView(ui, hint, "body-whatif");
+function tabBody(ui, tab, doc, columns) {
+  return linesView(ui, bodyLines(tab, doc, columns), `body-${tab}`);
+}
+function bodyLines(tab, doc, columns) {
+  if (tab === "analysis") {
+    if (!doc.analysis) return [{ segs: [{ text: "No traffic yet: add a traffic { \u2026 } block and Proschi estimates load, latency, availability and cost for every node, e.g." }], wrap: true }, { segs: [] }, { segs: [{ text: "traffic {", dim: true }] }, { segs: [{ text: '  "Redirect" 10k rps  mix "Cache hit" 90%, "Cache miss" 10%', dim: true }] }, { segs: [{ text: "}", dim: true }] }];
+    return analysisLines(doc.root, doc.analysis, columns);
   }
-  const stop2 = stopOf(w.multiplier);
-  const rate = (m) => `${formatMultiplier(m)} \xB7 ${formatRps(totalRps(diagram) * m)}`;
-  const nodes = components(diagram);
-  const node = nodes.find((n) => n.id === w.node) ?? nodes[0];
-  const down = node !== void 0 && w.saved === void 0 && w.failed.includes(node.id);
-  const live3 = ({ saved: saved2, ...x }) => saved2 === void 0 ? x : { ...x, multiplier: 1, failed: [] };
-  const multiply = (m) => set((x) => ({ ...live3(x), multiplier: m }));
-  const baseSide = { analysis: base.analysis, results: base.tests };
-  const nowSide = t.now.analysis ? { analysis: t.now.analysis, results: t.now.tests } : baseSide;
-  const active = t.now !== base;
-  const { saved: results, sweep: result, swept, loaded } = whatIfResults(t.key, base, w);
-  const rows = savedLines(base.analysis, results, columns - 12);
-  return /* @__PURE__ */ h(ui.Box, { key: "body-whatif", flexDirection: "column" }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "Traffic"), /* @__PURE__ */ h(ui.Button, { key: "wi-less", label: "\u2039 Less", hotkey: "l", onPress: () => multiply(MULTIPLIERS[Math.max(0, stop2 - 1)]) }), /* @__PURE__ */ h(ui.Select, { key: "wi-mult", value: String(stop2), options: MULTIPLIERS.map((m, i) => ({ value: String(i), label: rate(m) })), onSelect: (i) => multiply(MULTIPLIERS[Number(i)]) }), /* @__PURE__ */ h(ui.Button, { key: "wi-more", label: "More \u203A", hotkey: "m", onPress: () => multiply(MULTIPLIERS[Math.min(MULTIPLIERS.length - 1, stop2 + 1)]) })), node && /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "Node"), /* @__PURE__ */ h(ui.Select, { key: "wi-node", value: node.id, options: nodes.map((n) => ({ value: n.id, label: n.name && n.name !== n.id ? `${n.id} \xB7 ${n.name}` : n.id })), onSelect: (id) => set((x) => ({ ...x, node: id })) }), /* @__PURE__ */ h(ui.Button, { key: "wi-down", label: down ? "\u23FB Bring up " : "\u23FB Take down", hotkey: "t", onPress: () => set((x) => ({ ...live3(x), failed: [...toggleFailed(live3(x), node.id).failed] })) }), /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, w.saved === void 0 && w.failed.length ? `Down: ${w.failed.join(", ")}` : "None down")), /* @__PURE__ */ h(ui.Text, null, " "), linesView(ui, active ? impactLines(baseSide, nowSide, columns) : asWrittenLines(baseSide, columns), "wi-impact"), results.length > 0 && /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, /* @__PURE__ */ h(ui.Text, { bold: true }, "Saved what-ifs"), /* @__PURE__ */ h(ui.Box, { paddingLeft: 12 }, lineView(ui, rows[0])), results.map((r, i) => {
-    const on = w.saved === r.name;
-    return /* @__PURE__ */ h(ui.Box, { key: `wi-row-${i}`, flexDirection: "row", gap: 1 }, /* @__PURE__ */ h(ui.Button, { key: `wi-saved-${i}`, label: on ? "Showing" : "Preview", ...on ? { variant: "primary" } : { dimColor: true }, onPress: () => set((x) => on ? { ...NO_WHATIF, ...x.node ? { node: x.node } : {} } : { ...NO_WHATIF, ...x.node ? { node: x.node } : {}, saved: r.name, ...x.sweep ? { sweep: x.sweep } : {} }) }), lineView(ui, rows[i + 1]));
-  }), results.some((r) => r.warnings.length) && results.flatMap((r) => r.warnings).map((text, i) => lineView(ui, { segs: [{ text: `\u26A0 ${text}`, color: TONE.warn }], wrap: true }, `wi-warn-${i}`))), swept && /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "Sweep"), loaded.length > 1 && /* @__PURE__ */ h(ui.Select, { key: "wi-sweep-uc", value: swept.id, options: loaded.map((u) => ({ value: u.id, label: u.name })), onSelect: (id) => set((x) => ({ ...x, sweep: id })) }), /* @__PURE__ */ h(ui.Button, { key: "wi-sweep", label: `Sweep ${formatRps(swept.rps * SWEEP2.from)} to ${formatRps(swept.rps * SWEEP2.to)}`, hotkey: "s", variant: result ? void 0 : "primary", onPress: () => set((x) => ({ ...x, sweep: swept.id })) })), result ? linesView(ui, sweepLines(result, swept.rps, columns), "wi-sweep-chart") : /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Where each node saturates and how far the requirements hold, from half to ten times today's traffic.")));
+  if (tab === "tests") {
+    if (!doc.analysis) return [{ segs: [{ text: "Requirements and tests run against the simulation: add a traffic { \u2026 } block first." }], wrap: true }];
+    return testLines(doc.tests, columns);
+  }
+  const what = TABS.find((t) => t.id === tab).label;
+  return [{ segs: [{ text: `${what} in the terminal is coming; \u2197 Open in Proschi shows it in the editor now.`, dim: true }], wrap: true }];
+}
+function analysisTab(ui, doc, whatIfs, columns, explore) {
+  if (!doc.analysis) return tabBody(ui, "analysis", doc, columns);
+  return /* @__PURE__ */ h(ui.Box, { key: "body-analysis", flexDirection: "column" }, linesView(ui, analysisLines(doc.root, doc.analysis, columns), "analysis-lines"), linesView(ui, whatIfLines(doc.analysis, whatIfs, columns), "whatif-lines"), /* @__PURE__ */ h(ui.Box, { marginTop: 1 }, /* @__PURE__ */ h(ui.Button, { key: "explore-whatifs", label: "\u2197 Explore what-ifs in Proschi", onPress: (press) => explore(press.surface) })));
+}
+function testsTab(ui, doc, columns, open, toggle) {
+  const passing = doc.analysis ? doc.tests.filter((t) => t.passed).length : 0;
+  return /* @__PURE__ */ h(ui.Box, { key: "body-tests", flexDirection: "column" }, linesView(ui, bodyLines("tests", doc, columns), "tests-lines"), passing > 0 && /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, /* @__PURE__ */ h(ui.Button, { key: "tests-passing", label: `${open ? "\u25BE" : "\u25B8"} ${passing} passing`, hotkey: "a", dimColor: !open, onPress: toggle }), open && linesView(ui, passingLines(doc.tests, columns), "tests-passing-lines")));
 }
 
 // ../plugin/src/register.tsx
@@ -11524,10 +11165,9 @@ var paneFile = atom2({ plugin: "proschi", key: "paneFile" }, "");
 var paneSource = atom2({ plugin: "proschi", key: "paneSource" }, NO_SOURCE);
 var players = atom2({ plugin: "proschi", key: "player" }, IDLE);
 var paneTab = atom2({ plugin: "proschi", key: "paneTab" }, "diagram");
-var paneWhatIf = atom2({ plugin: "proschi", key: "paneWhatIf" }, NO_WHATIF);
 var panePassing = atom2({ plugin: "proschi", key: "panePassing" }, false);
-var PANE_KEYS = "1-6 tabs \xB7 p play \xB7 n/b step \xB7 r first \xB7 e last \xB7 d stop \xB7 esc back to the prompt";
-var TAB_KEYS = "1-6 tabs \xB7 \u2191\u2193 scroll \xB7 esc back to the prompt";
+var PANE_KEYS = "1-5 tabs \xB7 p play \xB7 n/b step \xB7 r first \xB7 e last \xB7 d stop \xB7 esc back to the prompt";
+var TAB_KEYS = "1-5 tabs \xB7 \u2191\u2193 scroll \xB7 esc back to the prompt";
 var SYSTEM_KEYS = "s next system \xB7 o open/close \xB7 f focus in \xB7 u back out";
 var FRAME3 = 33;
 var FRAMES = Math.round(TRAVEL_MS / FRAME3) + 1;
@@ -11580,7 +11220,7 @@ function register(on, options) {
     stop(PANE_VIEW);
     await update2($, memberOf(players, { requestId: PANE_VIEW }), () => ({ ...IDLE, expanded: view.expanded ?? [], ...view.focus !== void 0 ? { focus: view.focus } : {} }));
     await update2($, paneFile, () => file);
-    await update2($, paneWhatIf, () => NO_WHATIF);
+    await markOpened($, PANE_VIEW);
     await $.ui.open({ id: PANE, title: `Proschi \xB7 ${basename(file)}` });
     watch($, file);
     return { text: `Showing ${file} in the Proschi pane.` };
@@ -11642,16 +11282,13 @@ function register(on, options) {
     const bodyRows2 = typeof scrolled?.bodyRows === "number" ? scrolled.bodyRows : 0;
     paneWindow(PANE, typeof scrolled?.offset === "number" ? scrolled.offset : 0, bodyRows2);
     const tab = tabOf(await read2($, paneTab));
-    const whatIf = whatIfOf(await read2($, paneWhatIf));
-    const loaded = await documentOf($, PANE_VIEW, source, void 0, whatIf);
+    const loaded = await documentOf($, PANE_VIEW, source);
     const failing = "error" in loaded ? 0 : loaded.doc.tests.filter((t) => !t.passed).length;
-    const setWhatIf = (fn) => void update2($, paneWhatIf, (w) => fn(whatIfOf(w)));
-    const resetWhatIf = () => setWhatIf((w) => ({ ...NO_WHATIF, ...w.node ? { node: w.node } : {} }));
     const draw = { ui, requestId: PANE, columns, rows: Math.max(INLINE_ROWS, bodyRows2 - 10) };
     const mode = await modeOf($, ui, PANE, PANE_VIEW);
     if (mode.kind !== "text" && !("error" in loaded)) {
       const W2 = panelColumns(columns);
-      const { doc, base, key, player } = loaded;
+      const { doc, key, player } = loaded;
       const pieces = [{ id: "tabs", panel: tabBarPanel(tab, failing), columns: W2 }];
       const actions = {};
       for (const t of TABS)
@@ -11659,85 +11296,59 @@ function register(on, options) {
           menus.delete(PANE_VIEW);
           void update2($, paneTab, () => t.id);
         };
-      if (doc !== base) {
-        pieces.push({ id: "banner", panel: { kind: "banner", label: whatIfBannerLabel(base, whatIf), note: "the design as written is unchanged", reset: { id: "reset", icon: "reset", label: "Reset", ...tab !== "diagram" ? { hotkey: "r" } : {} } }, columns: W2 });
-        actions["banner/reset"] = resetWhatIf;
-      }
-      const page = { doc, base, key, player, source: loaded.source, whatIf, setWhatIf, passing: await read2($, panePassing) === true, columns: W2 };
+      const link = tabLink(doc, tab, player);
+      actions["tabs/open"] = (surface) => void openLink($, surface, link);
+      const page = { doc, key, player, source: loaded.source, passing: await read2($, panePassing) === true, columns: W2 };
       const ahead = TABS.filter((t) => t.id !== tab).map((t) => ({ panel: tabBarPanel(t.id, failing), columns: W2 }));
       const pages = [];
+      let float;
       for (const t of TABS) {
         if (t.id === "diagram") continue;
         const body = pagePart($, t.id, page);
         pages.push({ id: `page-${t.id}`, panel: body.panel, columns: W2, shown: t.id === tab });
-        if (t.id === tab) for (const [id, fn] of Object.entries(body.actions)) actions[`page-${t.id}/${id}`] = fn;
+        if (t.id !== tab) continue;
+        for (const [id, fn] of Object.entries(body.actions)) actions[`page-${t.id}/${id}`] = fn;
+        float = body.float;
       }
-      if (tab === "diagram") {
-        const view2 = await drawDiagram($, draw, PANE_VIEW, source, void 0, whatIf, { pieces, actions, ahead, pages }, mode);
-        if ("error" in view2) return /* @__PURE__ */ h(ui.Text, { color: "red" }, view2.error);
-        if (view2.picture) return view2.element;
-      } else if (mode.kind === "loading") return loading(ui, PANE_VIEW, Math.max(10, bodyRows2 - 2), mode.probe);
-      else {
-        const drawn = await pictureSite($, ui, { requestId: PANE, site: PANE_VIEW, theme: await themeOf($), pieces, pages, actions, hotkeys: true, ahead, rows: Math.max(10, bodyRows2 - 2), ...mode.form ? { form: mode.form } : {} });
-        if ("element" in drawn) return drawn.element;
-        $.ui.log(`proschi: the ${tab} tab in text: ${drawn.error}`, { to: "debug" });
-      }
+      const view2 = await drawDiagram($, draw, PANE_VIEW, source, void 0, { pieces, actions, ahead, pages, hidden: tab !== "diagram", ...float ? { float } : {} }, mode);
+      if ("error" in view2) {
+        if (tab === "diagram") return /* @__PURE__ */ h(ui.Text, { color: "red" }, view2.error);
+        $.ui.log(`proschi: the ${tab} tab in text: ${view2.error}`, { to: "debug" });
+      } else if (view2.picture) return view2.element;
     }
-    const banner = "error" in loaded || loaded.doc === loaded.base ? void 0 : whatIfBanner(ui, loaded.base, whatIf, columns, tab !== "diagram", resetWhatIf);
-    const bar = tabBar(ui, tab, failing, (to) => void update2($, paneTab, () => to));
+    const opens = "error" in loaded ? void 0 : tabLink(loaded.doc, tab, loaded.player);
+    const bar = tabBar(ui, tab, failing, (to) => void update2($, paneTab, () => to), opens === void 0 ? void 0 : (surface) => void openLink($, surface, opens));
     const keys = (systems) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, isFocused ? tab === "diagram" ? PANE_KEYS : TAB_KEYS : "ctrl+x tab focuses the pane for its keys"), isFocused && systems && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, SYSTEM_KEYS));
     if (tab !== "diagram") {
       if ("error" in loaded) return /* @__PURE__ */ h(ui.Text, { color: "red" }, loaded.error);
-      const { doc, base, key, player } = loaded;
-      const body = tab === "whatif" ? whatIfTab({ ui, base, key, now: doc, w: whatIf, set: setWhatIf, columns }) : tab === "sequence" ? sequenceTab({ ui, diagram: doc.diagram, player, columns, pick: (value) => void paneStep($, doc, (p) => ({ ...p, pick: value, step: 0, isPlaying: false })) }) : tab === "hld" ? hldTab(ui, base, key, (surface, text) => void copy($, surface, text, "the HLD markdown")) : tab === "tests" ? testsTab(ui, doc, columns, await read2($, panePassing) === true, () => void update2($, panePassing, (open) => !open)) : tabBody(ui, tab, doc, columns);
-      return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, bar, banner, body, keys(false));
+      const { doc, key, player } = loaded;
+      const link = opens;
+      const body = tab === "sequence" ? sequenceTab({ ui, diagram: doc.diagram, player, columns, pick: (value) => void paneStep($, doc, (p) => ({ ...p, pick: value, step: 0, isPlaying: false })) }) : tab === "hld" ? hldTab(ui, doc, key, (surface, text) => void copy($, surface, text, "the HLD markdown")) : tab === "tests" ? testsTab(ui, doc, columns, await read2($, panePassing) === true, () => void update2($, panePassing, (open) => !open)) : tab === "analysis" ? analysisTab(ui, doc, savedWhatIfs(key, doc), columns, (surface) => void openLink($, surface, link)) : tabBody(ui, tab, doc, columns);
+      return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, bar, body, keys(false));
     }
-    const view = await drawDiagram($, draw, PANE_VIEW, source, void 0, whatIf, void 0, { kind: "text" });
+    const view = await drawDiagram($, draw, PANE_VIEW, source, void 0, void 0, { kind: "text" });
     if ("error" in view) return /* @__PURE__ */ h(ui.Text, { color: "red" }, view.error);
-    return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, bar, banner, view.element, keys(view.systems));
+    return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, bar, view.element, keys(view.systems));
   });
   registerPicture(on);
 }
 function pagePart($, tab, c) {
   const actions = {};
   const open = menus.get(PANE_VIEW);
-  const { doc, base, key, whatIf: w, setWhatIf: set } = c;
-  if (tab === "analysis") return { panel: analysisPage(doc), actions };
+  const { doc, key } = c;
+  const link = tabLink(doc, tab, c.player);
+  if (tab === "analysis") {
+    actions["explore-whatifs"] = (surface) => void openLink($, surface, link);
+    return { panel: analysisPage(doc, savedWhatIfs(key, doc)), actions };
+  }
   if (tab === "tests") {
     actions.passing = () => void update2($, panePassing, (was) => !was);
     return { panel: testsPage(doc, c.passing), actions };
   }
   if (tab === "hld") {
-    const markdown = hldMarkdown(base, key);
+    const markdown = hldMarkdown(doc, key);
     actions["hld-copy"] = (surface) => void copy($, surface, markdown, "the HLD markdown");
     return { panel: hldPage(markdown), actions };
-  }
-  if (tab === "whatif") {
-    const r = whatIfResults(key, base, w);
-    const stop2 = stopOf(w.multiplier);
-    const live3 = ({ saved: saved2, ...x }) => saved2 === void 0 ? x : { ...x, multiplier: 1, failed: [] };
-    const multiply = (m) => set((x) => ({ ...live3(x), multiplier: m }));
-    const pick2 = (id, fn) => {
-      actions[id] = () => {
-        menus.delete(PANE_VIEW);
-        fn();
-      };
-    };
-    actions["wi-less"] = () => multiply(MULTIPLIERS[Math.max(0, stop2 - 1)]);
-    actions["wi-more"] = () => multiply(MULTIPLIERS[Math.min(MULTIPLIERS.length - 1, stop2 + 1)]);
-    for (const id of ["wi-mult", "wi-node", "wi-sweep-uc"]) actions[id] = () => toggleMenu($, PANE_VIEW, id);
-    MULTIPLIERS.forEach((m, i) => pick2(`wi-mult=${i}`, () => multiply(m)));
-    const nodes = components(base.root);
-    for (const n of nodes) pick2(`wi-node=${n.id}`, () => set((x) => ({ ...x, node: n.id })));
-    const node = nodes.find((n) => n.id === w.node) ?? nodes[0];
-    if (node) actions["wi-down"] = () => set((x) => ({ ...live3(x), failed: [...toggleFailed(live3(x), node.id).failed] }));
-    r.saved.forEach((s, i) => {
-      actions[`wi-saved-${i}`] = () => set((x) => w.saved === s.name ? { ...NO_WHATIF, ...x.node ? { node: x.node } : {} } : { ...NO_WHATIF, ...x.node ? { node: x.node } : {}, saved: s.name, ...x.sweep ? { sweep: x.sweep } : {} });
-    });
-    for (const u of r.loaded) pick2(`wi-sweep-uc=${u.id}`, () => set((x) => ({ ...x, sweep: u.id })));
-    if (r.swept) actions["wi-sweep"] = () => set((x) => ({ ...x, sweep: r.swept.id }));
-    const view = { ...w, ...open === "wi-mult" || open === "wi-node" || open === "wi-sweep-uc" ? { open } : {} };
-    return { panel: whatIfPage(base, doc, view, { saved: r.saved, ...r.sweep ? { sweep: r.sweep } : {} }), actions };
   }
   const picks = doc.diagram.useCases.flatMap((u) => u.scenarios.map((s) => ({ value: `${u.id}:${s.id}`, useCase: u, scenario: s })));
   const player = c.player;
@@ -11748,13 +11359,28 @@ function pagePart($, tab, c) {
   const playing = player.mode === "play" && player.pick === now.value;
   const step = Math.max(0, Math.min(player.step, total - 1));
   actions["seq-pick"] = () => toggleMenu($, PANE_VIEW, "seq-pick");
-  for (const p of picks) {
-    actions[`seq-pick=${p.value}`] = () => {
-      menus.delete(PANE_VIEW);
-      void paneStep($, doc, (q) => ({ ...q, pick: p.value, step: 0, isPlaying: false }));
-    };
-  }
   const label = (p) => `${p.useCase.name}${p.useCase.scenarios.length > 1 ? ` \u203A ${p.scenario.name}` : ""}`;
+  const select = {
+    id: "seq-pick",
+    value: now.value,
+    options: picks.map((p) => ({ value: p.value, label: label(p), icon: p.scenario.outcome === "error" ? "cross" : "check", tone: p.scenario.outcome === "error" ? "bad" : "good" }))
+  };
+  let float;
+  if (open === "seq-pick") {
+    const menu = { kind: "menu", select };
+    const close = () => {
+      if (menus.delete(PANE_VIEW)) $.ui.invalidate("ui.render");
+    };
+    const picked = {};
+    for (const p of picks) {
+      picked[`menu/seq-pick=${p.value}`] = () => {
+        menus.delete(PANE_VIEW);
+        void paneStep($, doc, (q) => ({ ...q, pick: p.value, step: 0, isPlaying: false }));
+      };
+    }
+    picked["menu/close"] = close;
+    float = { id: "menu", panel: menu, columns: floatColumns(c.columns, menu), anchor: { piece: "page-sequence", control: "seq-pick" }, close, actions: picked };
+  }
   const panel = {
     kind: "sequence",
     source: { source: c.source.source, ...c.source.path ? { path: c.source.path } : {}, ...c.source.imports ? { imports: c.source.imports } : {} },
@@ -11763,35 +11389,41 @@ function pagePart($, tab, c) {
     current: playing ? currentStepsOf(steps, step).map((s) => steps.indexOf(s) + 1) : [],
     controls: [
       { text: [{ text: "Scenario", bold: true }] },
-      { select: { id: "seq-pick", value: now.value, options: picks.map((p) => ({ value: p.value, label: label(p), ...p.scenario.outcome === "error" ? { detail: "\u2717" } : {} })), ...open === "seq-pick" ? { open: true } : {} } },
+      { select: { ...select, floats: true, ...open === "seq-pick" ? { open: true } : {} } },
       { text: [{ text: playing ? `Step ${step + 1} of ${total}` : `${total} step${total === 1 ? "" : "s"}`, bold: true }] }
     ]
   };
-  return { panel, actions };
+  return { panel, actions, ...float ? { float } : {} };
 }
-async function drawDiagram($, d, viewId, source, file, whatIf, top = { pieces: [], actions: {}, ahead: [] }, known) {
+async function drawDiagram($, d, viewId, source, file, top = { pieces: [], actions: {}, ahead: [] }, known) {
   const mode = known ?? await modeOf($, d.ui, d.requestId, viewId);
-  const view = await diagramView($, d, viewId, source, file, whatIf, mode);
-  if ("error" in view) return view;
-  if (view.kind === "text") return { element: view.element, systems: view.systems, picture: false };
-  if (view.kind === "loading") return { element: loading(d.ui, viewId, view.rows, mode.kind === "loading" ? mode.probe : void 0), systems: false, picture: true };
+  const hidden = top.hidden === true;
+  const view = await diagramView($, d, viewId, source, file, mode, hidden ? "first" : "now");
+  if (!hidden) {
+    if ("error" in view) return view;
+    if (view.kind === "text") return { element: view.element, systems: view.systems, picture: false };
+    if (view.kind === "loading") return { element: loading(d.ui, viewId, view.rows, mode.kind === "loading" ? mode.probe : void 0), systems: false, picture: true };
+  } else if (mode.kind === "loading") return { element: loading(d.ui, viewId, d.rows ?? INLINE_ROWS, mode.probe), systems: false, picture: true };
+  const pic = !("error" in view) && view.kind === "picture" ? view : void 0;
+  const float = hidden ? top.float : pic?.float;
   const drawn = await pictureSite($, d.ui, {
     requestId: d.requestId,
     site: viewId,
     theme: await themeOf($),
-    pieces: [...top.pieces, ...view.pieces],
-    actions: { ...top.actions, ...view.actions },
+    pieces: [...top.pieces, ...pic?.pieces ?? []],
+    actions: { ...top.actions, ...pic?.actions ?? {} },
     hotkeys: d.requestId === PANE,
-    ahead: [...top.ahead, ...view.ahead],
+    ahead: [...top.ahead, ...pic?.ahead ?? []],
     layer: "bar",
-    ...view.float ? { float: view.float } : {},
+    ...float ? { float } : {},
     ...top.pages ? { pages: top.pages } : {},
-    rows: view.rows,
+    ...top.pages && pic?.pieces[0] ? { paged: { from: pic.pieces[0].id, shown: !hidden } } : {},
+    rows: pic?.rows ?? d.rows ?? INLINE_ROWS,
     ...mode.kind === "picture" && mode.form ? { form: mode.form } : {}
   });
-  if ("element" in drawn) return { element: drawn.element, systems: view.systems, picture: true };
+  if ("element" in drawn) return { element: drawn.element, systems: pic?.systems ?? false, picture: true };
   $.ui.log(`proschi: the drawing in text: ${drawn.error}`, { to: "debug" });
-  return drawDiagram($, d, viewId, source, file, whatIf, top, { kind: "text" });
+  return hidden ? { error: drawn.error } : drawDiagram($, d, viewId, source, file, top, { kind: "text" });
 }
 function proschiFile(tool, input) {
   if (tool !== "Write" && tool !== "Edit") return void 0;
@@ -11901,7 +11533,7 @@ var PINK2 = "#ff5da2";
 var INK = "#111111";
 var YELLOW2 = "#ffd23f";
 var BARS_WIDTH = 80;
-async function documentOf($, viewId, written, file, whatIf) {
+async function documentOf($, viewId, written, file) {
   const player = normal(await read2($, memberOf(players, { requestId: viewId })));
   const shown2 = { ...player.expanded.length ? { expanded: player.expanded } : {}, ...player.focus !== void 0 ? { focus: player.focus } : {} };
   const source = shown2.expanded || shown2.focus !== void 0 ? { ...written, view: shown2 } : written;
@@ -11917,15 +11549,7 @@ async function documentOf($, viewId, written, file, whatIf) {
     return { error: `${where4} has errors (line ${first.line}: ${first.message})${file ? `: run \`npx proschi check ${file}\`` : ""}.` };
   }
   if (doc.diagram.nodes.length === 0) return { error: `${where4} has no components to draw.` };
-  const options = whatIf && optionsOf(doc.root, whatIf);
-  if (!options) return { doc, base: doc, source, key, player };
-  const under = `${key}?${JSON.stringify(whatIf)}`;
-  let now = documents.get(under);
-  if (!now) {
-    now = loadDocument(source, options);
-    documents.set(under, now);
-  }
-  return { doc: now, base: doc, source, key, player };
+  return { doc, source, key, player };
 }
 var INLINE_WARNINGS = 2;
 async function modeOf($, ui, requestId, probeId) {
@@ -11939,11 +11563,11 @@ async function modeOf($, ui, requestId, probeId) {
   if (graphics === "auto" && (p.status === "no" || p.status === "tmux")) return { kind: "text", ...p.status === "tmux" ? { hint: true } : {} };
   return { kind: "picture", ...p.form ? { form: p.form } : {} };
 }
-async function diagramView($, d, viewId, written, file, whatIf, mode = { kind: "text" }) {
+async function diagramView($, d, viewId, written, file, mode = { kind: "text" }, priority = "now") {
   const { ui } = d;
-  const loaded = await documentOf($, viewId, written, file, whatIf);
+  const loaded = await documentOf($, viewId, written, file);
   if ("error" in loaded) return loaded;
-  const { doc, base, source, key, player } = loaded;
+  const { doc, source, key, player } = loaded;
   const layout = layouts.get(key);
   if (!layout) {
     requestLayout($, key, source);
@@ -11981,7 +11605,6 @@ async function diagramView($, d, viewId, written, file, whatIf, mode = { kind: "
     maxWidthPx: maxWidthPx(d.columns),
     ...doc.overlay && !play ? { overlay: true } : {},
     ...view.selected ? { selected: view.selected } : {},
-    ...whatIf && doc !== base ? { whatIf: liveOf(whatIf) } : {},
     ...play ? { play: { useCase: play.useCase.id, scenario: play.scenario.id, frames: FRAMES } } : {},
     // A strip of the drawing's one surface, as wide as its panels: its top where nothing is above it (no tabs, header, title or notice), the load legend in its corner.
     grid: {
@@ -11995,11 +11618,11 @@ async function diagramView($, d, viewId, written, file, whatIf, mode = { kind: "
   const alt = `${doc.diagram.title ?? title}: the architecture diagram as a picture`;
   if (mode.kind !== "text") {
     images.delete(viewId);
-    const out = rasterOf($, request2);
+    const out = rasterOf($, request2, priority);
     const size = out && !("error" in out) ? out.grid ? { columns: out.grid.columns, rows: out.grid.rows } : imageSize(out, d.columns, d.rows ?? INLINE_ROWS) : void 0;
     const rows = (size?.rows ?? Math.min(scene.rows, d.rows ?? INLINE_ROWS)) + 16;
     if (mode.kind === "loading") return { kind: "loading", rows };
-    if (out && "error" in out) return diagramView($, d, viewId, written, file, whatIf, { kind: "text" });
+    if (out && "error" in out) return diagramView($, d, viewId, written, file, { kind: "text" }, priority);
     let picture;
     if (out && size) {
       const imageKey = `img-${viewId}`;
@@ -12027,7 +11650,7 @@ async function diagramView($, d, viewId, written, file, whatIf, mode = { kind: "
   const grid = paint(scene, { overlay: doc.overlay, edges: doc.edges, icons, systems: doc.systems, ...view.selected ? { selected: view.selected } : {}, ...steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {} });
   const verdict = verdictLine(doc.tests, view.width - (view.inPane ? 0 : 13));
   const m = pick2 && playerModel($, view, doc, pick2, playing, step, player);
-  return { kind: "text", element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, m && playerBarText(view, doc, m), doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, mode.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, TMUX_HINT), grid.columns > d.columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", grid.columns, " columns wide, wider than the ", d.columns, " here: ", view.inPane ? "widen the window" : "use \u26F6 Focus or a wider window", " to see it whole."), lost.some((name) => !importReasons.has(name)) && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u26A0 Not found, so drawn as plain boxes: ", lost.filter((name) => !importReasons.has(name)).join(", ")), lost.filter((name) => importReasons.has(name)).map((name) => /* @__PURE__ */ h(ui.Text, { key: `lost-${name}`, dimColor: true }, "\u26A0 ", importReasons.get(name))), doc.notes.map((note3) => /* @__PURE__ */ h(ui.Text, { color: "yellow" }, "\u26A0 ", note3.text, note3.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true }, " \u2192 ", note3.hint))), (view.inPane ? doc.warnings : doc.warnings.slice(0, INLINE_WARNINGS)).map((w) => /* @__PURE__ */ h(ui.Text, { key: `warn-${w}`, color: "yellow", wrap: "truncate-end" }, "\u26A0 ", w)), !view.inPane && doc.warnings.length > INLINE_WARNINGS && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2026 ", doc.warnings.length - INLINE_WARNINGS, " more: \u26F6 Focus, then Analysis"), /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), doc.edges && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)), verdict && /* @__PURE__ */ h(ui.Box, { key: `verdict-${viewId}`, flexDirection: "row", gap: 1, width: view.width }, lineView(ui, verdict), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `tests-${viewId}`, label: "\u26F6 Details", dimColor: true, onPress: () => focus($, view, title, what, "tests") })), hasSystems && systemBar($, view, doc, systems, selected, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: roomy ? "\u29C9 Copy source" : "\u29C9 Source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: roomy ? "\u29C9 Copy share link" : "\u29C9 Link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: roomy ? "\u2197 Open in Proschi" : "\u2197 Open", variant: "primary", onPress: (press) => void openLink($, press.surface, link) }), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `focus-${viewId}`, label: "\u26F6 Focus", onPress: () => focus($, view, title, what) }))), systems: hasSystems };
+  return { kind: "text", element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, m && playerBarText(view, doc, m), doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, mode.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, TMUX_HINT), grid.columns > d.columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", grid.columns, " columns wide, wider than the ", d.columns, " here: ", view.inPane ? "widen the window" : "use \u26F6 Focus or a wider window", " to see it whole."), lost.some((name) => !importReasons.has(name)) && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u26A0 Not found, so drawn as plain boxes: ", lost.filter((name) => !importReasons.has(name)).join(", ")), lost.filter((name) => importReasons.has(name)).map((name) => /* @__PURE__ */ h(ui.Text, { key: `lost-${name}`, dimColor: true }, "\u26A0 ", importReasons.get(name))), doc.notes.map((note) => /* @__PURE__ */ h(ui.Text, { color: "yellow" }, "\u26A0 ", note.text, note.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true }, " \u2192 ", note.hint))), (view.inPane ? doc.warnings : doc.warnings.slice(0, INLINE_WARNINGS)).map((w) => /* @__PURE__ */ h(ui.Text, { key: `warn-${w}`, color: "yellow", wrap: "truncate-end" }, "\u26A0 ", w)), !view.inPane && doc.warnings.length > INLINE_WARNINGS && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2026 ", doc.warnings.length - INLINE_WARNINGS, " more: \u26F6 Focus, then Analysis"), /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), doc.edges && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)), verdict && /* @__PURE__ */ h(ui.Box, { key: `verdict-${viewId}`, flexDirection: "row", gap: 1, width: view.width }, lineView(ui, verdict), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `tests-${viewId}`, label: "\u26F6 Details", dimColor: true, onPress: () => focus($, view, title, what, "tests") })), hasSystems && systemBar($, view, doc, systems, selected, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: roomy ? "\u29C9 Copy source" : "\u29C9 Source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: roomy ? "\u29C9 Copy share link" : "\u29C9 Link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: roomy ? "\u2197 Open in Proschi" : "\u2197 Open", variant: "primary", onPress: (press) => void openLink($, press.surface, link) }), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `focus-${viewId}`, label: "\u26F6 Focus", onPress: () => focus($, view, title, what) }))), systems: hasSystems };
 }
 var images = /* @__PURE__ */ new Map();
 var menus = /* @__PURE__ */ new Map();
@@ -12401,19 +12024,19 @@ function reveal($, view) {
   void scroll($, view.inPane ? { to: { key: view.anchorKey }, in: PANE, block: "start" } : { to: { requestId: view.d.requestId }, block: "start" });
 }
 async function scroll($, args) {
-  const moved3 = await $.ui.scroll(args).catch((error) => ({ deny: String(error) }));
-  if (moved3.deny) $.ui.log(`proschi: scroll to ${JSON.stringify(args.to)} refused: ${moved3.deny}`, { to: "debug" });
-  return moved3;
+  const moved = await $.ui.scroll(args).catch((error) => ({ deny: String(error) }));
+  if (moved.deny) $.ui.log(`proschi: scroll to ${JSON.stringify(args.to)} refused: ${moved.deny}`, { to: "debug" });
+  return moved;
 }
 function focus($, view, title, what, tab = "diagram") {
   const opened = $.ui.open({ id: PANE, title: `Proschi \xB7 ${title}`, focus: true, closeOnEscape: true });
   void (async () => {
+    await markOpened($, PANE_VIEW);
     await update2($, paneTab, () => tab);
     const player = normal(await read2($, memberOf(players, { requestId: view.viewId })));
     if (player.isPlaying) await setPlayer($, view, (p) => ({ ...p, isPlaying: false }));
     stop(PANE_VIEW);
     await update2($, memberOf(players, { requestId: PANE_VIEW }), () => player);
-    await update2($, paneWhatIf, () => NO_WHATIF);
     if ("file" in what) {
       await update2($, paneFile, () => what.file);
       watch($, what.file);
@@ -12493,6 +12116,12 @@ function animate($, view, steps) {
 async function copy($, surface, text, what) {
   const copied = await $.ui.copy({ text, surface });
   $.ui.toast(copied.isCopied ? `Copied ${what} to the clipboard` : `Could not copy ${what}: ${copied.reason === "no-clipboard" ? "no clipboard tool answered" : copied.reason}`);
+}
+function tabLink(doc, tab, player) {
+  if (tab !== "sequence") return doc.link();
+  const picks = doc.diagram.useCases.flatMap((u) => u.scenarios.map((s) => pickOf(u, s)));
+  const pick2 = picks.find((p) => p.value === player.pick) ?? picks[0];
+  return doc.link(pick2 ? { useCase: pick2.useCase.id, ...pick2.useCase.scenarios.length > 1 ? { scenario: pick2.scenario.id } : {}, step: 1 } : void 0);
 }
 async function openLink($, surface, link) {
   for (const opener of ["open", "xdg-open"]) {

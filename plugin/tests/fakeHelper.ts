@@ -16,6 +16,7 @@ function controlsOf(panel: Record<string, unknown>): { id: string; hotkey?: stri
   }
   if (panel.kind === 'tabs') {
     for (const t of panel.tabs as { id: string; hotkey?: string }[]) out.push({ id: t.id, ...(t.hotkey ? { hotkey: t.hotkey } : {}) })
+    if (panel.open) out.push({ id: (panel.open as { id: string }).id })
     return out
   }
   const walk = (v: unknown, key?: string): void => {

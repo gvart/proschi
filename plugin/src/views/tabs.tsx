@@ -1,30 +1,36 @@
-import type { RenderElement } from 'claude-code'
+import type { RenderElement, RenderSurface } from 'claude-code'
 
+import type { WhatIfResult } from '../../../frontend/src/sim'
 import type { Document } from '../../../tooling/src/terminal/document'
 import type { PaneTab } from '../../types'
 import { analysisLines, passingLines, testLines, type Line } from './lines'
 import { linesView, type Ui } from './render'
+import { whatIfLines } from './whatif'
 
 /**
  * The pane's tabs, as the editor's views (components/Analysis/ViewTabs.tsx):
- * the diagram with its player, the analysis, what-ifs, the sequence diagram,
- * the HLD sections and the requirement and test results. Each has a digit
- * that picks it while the pane holds the keys (docs/design/terminal-mod.md D3).
+ * the diagram with its player, the analysis (with the saved what-ifs), the
+ * sequence diagram, the HLD sections and the requirement and test results.
+ * Each has a digit that picks it while the pane holds the keys
+ * (docs/design/terminal-mod.md D3).
  */
 export const TABS: { id: PaneTab; label: string; key: string }[] = [
   { id: 'diagram', label: 'Diagram', key: '1' },
   { id: 'analysis', label: 'Analysis', key: '2' },
-  { id: 'whatif', label: 'What-if', key: '3' },
-  { id: 'sequence', label: 'Sequence', key: '4' },
-  { id: 'hld', label: 'HLD', key: '5' },
-  { id: 'tests', label: 'Tests', key: '6' },
+  { id: 'sequence', label: 'Sequence', key: '3' },
+  { id: 'hld', label: 'HLD', key: '4' },
+  { id: 'tests', label: 'Tests', key: '5' },
 ]
 
-/** A stored tab in the current shape: anything else (an older version stored none) is the diagram. */
-export const tabOf = (stored: unknown): PaneTab => TABS.find(t => t.id === stored)?.id ?? 'diagram'
+/**
+ * A stored tab in the current shape: an older version's What-if tab is the
+ * Analysis tab, which lists the saved what-ifs now; anything else (an older
+ * version stored none) is the diagram.
+ */
+export const tabOf = (stored: unknown): PaneTab => (stored === 'whatif' ? 'analysis' : (TABS.find(t => t.id === stored)?.id ?? 'diagram'))
 
-/** The tab bar: the current tab primary, each with its digit; a failing check count on Tests. */
-export function tabBar(ui: Ui, current: PaneTab, failing: number, pick: (tab: PaneTab) => void): RenderElement {
+/** The tab bar: the current tab primary, each with its digit; a failing check count on Tests; at its end, the same view in the editor. */
+export function tabBar(ui: Ui, current: PaneTab, failing: number, pick: (tab: PaneTab) => void, open?: (surface: RenderSurface) => void): RenderElement {
   return (
     <ui.Box flexDirection="row" gap={1} flexWrap="wrap">
       {TABS.map(t => (
@@ -36,6 +42,7 @@ export function tabBar(ui: Ui, current: PaneTab, failing: number, pick: (tab: Pa
           onPress={() => pick(t.id)}
         />
       ))}
+      {open && <ui.Button key="tab-open" label="↗ Open in Proschi" dimColor onPress={press => open(press.surface)} />}
     </ui.Box>
   )
 }
@@ -56,6 +63,23 @@ export function bodyLines(tab: Exclude<PaneTab, 'diagram'>, doc: Document, colum
   }
   const what = TABS.find(t => t.id === tab)!.label
   return [{ segs: [{ text: `${what} in the terminal is coming; ↗ Open in Proschi shows it in the editor now.`, dim: true }], wrap: true }]
+}
+
+/**
+ * The Analysis tab: the analysis, then the saved what-ifs and the way to
+ * explore what-ifs live, which is the editor's (docs/design/terminal-mod.md D8).
+ */
+export function analysisTab(ui: Ui, doc: Document, whatIfs: WhatIfResult[], columns: number, explore: (surface: RenderSurface) => void): RenderElement {
+  if (!doc.analysis) return tabBody(ui, 'analysis', doc, columns)
+  return (
+    <ui.Box key="body-analysis" flexDirection="column">
+      {linesView(ui, analysisLines(doc.root, doc.analysis, columns), 'analysis-lines')}
+      {linesView(ui, whatIfLines(doc.analysis, whatIfs, columns), 'whatif-lines')}
+      <ui.Box marginTop={1}>
+        <ui.Button key="explore-whatifs" label="↗ Explore what-ifs in Proschi" onPress={press => explore(press.surface)} />
+      </ui.Box>
+    </ui.Box>
+  )
 }
 
 /**

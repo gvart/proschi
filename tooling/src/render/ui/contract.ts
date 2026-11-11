@@ -121,11 +121,12 @@ export type Item = { text: Rich; columns?: number } | { control: Control } | { s
 
 // ---------- the chrome panels around the diagram ----------
 
-/** The pane's tabs (D3): each with its digit; a badge (Tests' failing count) in its tone. */
+/** The pane's tabs (D3): each with its digit; a badge (Tests' failing count) in its tone; `open` at the row's right end (↗ Open in Proschi), shortened where the row is narrow. */
 export interface TabBarPanel {
   kind: 'tabs';
   tabs: { id: string; label: string; hotkey?: string; badge?: { text: string; tone: Tone } }[];
   active: string;
+  open?: Control;
 }
 
 /** The scenario buttons of the explorer. */
@@ -242,14 +243,6 @@ export interface NoticesPanel {
   details?: Control;
 }
 
-/** The what-if banner over every tab (D8). */
-export interface BannerPanel {
-  kind: 'banner';
-  label: string;
-  note?: string;
-  reset: Control;
-}
-
 // ---------- pages: the tabs other than the diagram ----------
 
 /** A cell of a table: text, a heat bar (utilisation, 0..1 and past it), or a control (a Preview per row). */
@@ -269,17 +262,6 @@ export interface Row {
   dim?: boolean;
 }
 
-/** Where each node saturates over a range of a use case's traffic (WhatIfResults.tsx SweepChart). */
-export interface SweepChart {
-  from: number;
-  to: number;
-  today: number;
-  maxPassing?: number;
-  /** Formatted rates for the axis and markers. */
-  labels: { from: string; to: string; today: string; maxPassing?: string };
-  bars: { node: string; rps: number; value: string; atStart?: boolean }[];
-}
-
 export type Block =
   | { type: 'heading'; text: Rich; level?: 1 | 2 | 3 }
   | { type: 'paragraph'; text: Rich; tone?: Tone; indent?: number; small?: boolean }
@@ -290,12 +272,11 @@ export type Block =
   | { type: 'code'; text: string; language?: string; maxLines?: number }
   | { type: 'list'; items: Rich[]; ordered?: boolean; indent?: number }
   | { type: 'check'; passed: boolean; title: Rich; where?: string; message?: string; hint?: string; indent?: number }
-  | { type: 'chart'; chart: SweepChart }
   | { type: 'quote'; text: Rich }
   | { type: 'rule' }
   | { type: 'space'; rows?: number };
 
-/** A tab's body as blocks top to bottom: Analysis, What-if, Tests, HLD (data.ts builds them). */
+/** A tab's body as blocks top to bottom: Analysis, Tests, HLD (data.ts builds them). */
 export interface PagePanel {
   kind: 'page';
   blocks: Block[];
@@ -313,7 +294,7 @@ export interface SequencePanel {
   controls?: Item[];
 }
 
-export type Panel = TabBarPanel | PlayerBarPanel | MenuPanel | DrawerPanel | ExplorerPanel | SystemBarPanel | ActionBarPanel | NoticesPanel | BannerPanel | PagePanel | SequencePanel;
+export type Panel = TabBarPanel | PlayerBarPanel | MenuPanel | DrawerPanel | ExplorerPanel | SystemBarPanel | ActionBarPanel | NoticesPanel | PagePanel | SequencePanel;
 
 // ---------- the request and the answer ----------
 
@@ -393,6 +374,8 @@ export interface PanelOutput {
   /** PNG px per cell. */
   cellPx: { width: number; height: number };
   tiles: Tile[];
+  /** The row each anchored heading starts on (a page's sections, by `Block.anchor`): what a table of contents scrolls to. */
+  anchors?: Record<string, number>;
 }
 
 /** stdout for a PanelsInput. */

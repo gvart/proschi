@@ -257,7 +257,7 @@ test('an overlay press runs the control under it: the player bar, its menus, and
   await ui.unmount()
 })
 
-test('the pane: tabs, pages and the what-if banner are pictures, each press and hotkey runs its control', SLOW, async ($, on) => {
+test('the pane: tabs and pages are pictures, each press and hotkey runs its control', SLOW, async ($, on) => {
   const clock = mock.clock(on)
   host(on, clock)
   const ui = await settle($, clock)
@@ -265,7 +265,8 @@ test('the pane: tabs, pages and the what-if banner are pictures, each press and 
   await ui.unmount()
   const site = 'proschi-view:0'
   let p = await settle($, clock, pane, site, c => c.some(x => x.id === 'tabs/analysis'))
-  expect(await ids(p, site)).toEqual(expect.arrayContaining(['tabs/diagram', 'tabs/analysis', 'tabs/whatif', 'tabs/sequence', 'tabs/hld', 'tabs/tests', 'links/src']))
+  expect(await ids(p, site)).toEqual(expect.arrayContaining(['tabs/diagram', 'tabs/analysis', 'tabs/sequence', 'tabs/hld', 'tabs/tests', 'tabs/open', 'links/src']))
+  expect(await ids(p, site)).not.toEqual(expect.arrayContaining(['tabs/whatif']))
   // In the pane, the hotkeys are Buttons drawn as nothing.
   expect(((await p.find({ key: `hk-${site}-2` })) as Found)?.props).toMatchObject({ hotkey: '2' })
   await click(p, site, 'tabs/analysis')
@@ -283,22 +284,12 @@ test('the pane: tabs, pages and the what-if banner are pictures, each press and 
   expect(tests?.props).toMatchObject({ display: 'none' })
   const hidden = ((await p.findAll({ type: 'Image' })) as unknown as NonNullable<Found>[]).filter(x => String(x.key).includes('page-tests'))
   expect(hidden.length).toBeGreaterThan(0)
-  await p.press({ key: `hk-${site}-6` })
+  await p.press({ key: `hk-${site}-5` })
   await p.unmount()
   p = await $.ui.mount(pane)
   expect(((await p.find({ key: `pg-${site}-page-tests` })) as Found)?.props).toMatchObject({ display: 'flex' })
   const shown = ((await p.findAll({ type: 'Image' })) as unknown as NonNullable<Found>[]).filter(x => String(x.key).includes('page-tests'))
   expect(shown.map(x => [x.key, x.props.source])).toEqual(hidden.map(x => [x.key, x.props.source]))
-  // What-if by its hotkey: ×more puts the banner up, Reset takes it down.
-  await p.press({ key: `hk-${site}-3` })
-  await p.unmount()
-  p = await settle($, clock, pane, site, c => c.some(x => x.id === 'page-whatif/wi-more'))
-  await click(p, site, 'page-whatif/wi-more')
-  await p.unmount()
-  p = await settle($, clock, pane, site, c => c.some(x => x.id === 'banner/reset'))
-  await click(p, site, 'banner/reset')
-  await p.unmount()
-  p = await settle($, clock, pane, site, c => c.some(x => x.id === 'page-whatif/wi-more') && !c.some(x => x.id === 'banner/reset'))
   await p.unmount()
 })
 
@@ -363,11 +354,11 @@ test('the worker: one per session, a press asked before prefetching, the first r
   const ui = await settle($, clock)
   expect(h.spawns).toBe(1)
   expect(h.runs.some(r => r.argv[1]?.endsWith('raster.cjs'))).toBe(false)
-  // The diagram and the panels shown are `a…`; the panels likely next (Play's header and step) `b…`.
+  // The diagram and the panels shown are `a…`; the panels likely next (Play's header and step) `c…` (`b…` is the pane's Diagram drawn ahead of its other tabs).
   const panels = h.requests.filter(r => r.input.kind === 'panels')
   const kinds = (r: { input: Record<string, unknown> }) => (r.input.panels as { panel: { kind: string } }[]).map(p => p.panel.kind)
   expect(panels.filter(r => r.id.startsWith('a')).flatMap(kinds)).toEqual(expect.arrayContaining(['playerBar', 'actionBar']))
-  expect(panels.filter(r => r.id.startsWith('b')).flatMap(kinds)).toEqual(expect.arrayContaining(['playerBar', 'menu']))
+  expect(panels.filter(r => r.id.startsWith('c')).flatMap(kinds)).toEqual(expect.arrayContaining(['playerBar', 'menu']))
   expect(h.requests.map(r => r.input.prune)).toEqual([true, ...h.requests.slice(1).map(() => undefined)])
   // Hover and pressed variants with every panel.
   expect(panels.every(r => (r.input.panels as { variants?: string[] }[]).every(p => p.variants?.join() === 'hover,pressed'))).toBe(true)
@@ -404,7 +395,7 @@ test('pictures shown: Play blits only the tiles a frame changes, asked for once 
   const plays = () => h.requests.filter(r => (r.input.options as { play?: unknown } | undefined)?.play)
   // Prefetched while the diagram stood, the overlay off as playback hides it.
   expect(plays()).toHaveLength(1)
-  expect(plays()[0]!.id).toMatch(/^b/)
+  expect(plays()[0]!.id).toMatch(/^c/)
   expect((plays()[0]!.input.options as Record<string, unknown>).overlay).toBeUndefined()
   await click(ui, 'm1:0', 'bar/play')
   await ui.unmount()
@@ -426,16 +417,17 @@ test('pictures shown: Play blits only the tiles a frame changes, asked for once 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /** What a control opens: the floats' controls behind it, by the prefix of their ids. */
-const OPENS: Record<string, string[]> = { 'bar/uc': ['menu/uc=', 'explorer/'], 'bar/sc': ['menu/sc='], 'bar/body': ['drawer/'], 'menu/uc=__explore': ['explorer/'] }
+const OPENS: Record<string, string[]> = { 'bar/uc': ['menu/uc=', 'explorer/'], 'bar/sc': ['menu/sc='], 'bar/body': ['drawer/'], 'menu/uc=__explore': ['explorer/'], 'page-sequence/seq-pick': ['menu/seq-pick='] }
 
 /** The overlays of what floats over a drawing. */
 const FLOATS = /^ov-t-[^]*-(menu|drawer|explorer)-\d+$/
 
-/** A press outside what floats: on the diagram's first cell, under the layer's overlay that closes it. */
+/** A press outside what floats: on the first cell of the overlay laid under it, from its last row up, that nothing floats over. */
 async function clickOutside(ui: Mounted, site: string): Promise<void> {
   const root = layout((await ui.drawn()) as never)
-  const tile = [...nodes(root)].find(n => n.el.type === 'Image' && String(n.key).startsWith(`img-${site}-`))!
-  const heard = pointerAt(root, 1 - tile.y, tile.x, 1)
+  const scrim = [...nodes(root)].find(n => n.key === `ov-scrim-${site}`)!
+  let heard: ReturnType<typeof pointerAt>
+  for (let y = scrim.y + scrim.h - 1; y >= scrim.y && heard?.in !== `ov-scrim-${site}`; y--) heard = pointerAt(root, 1 - y, scrim.x, 1)
   if (heard?.in !== `ov-scrim-${site}`) throw new Error(`a press outside lands on ${heard?.in}`)
   await ui.pointer({ type: 'down', ...heard, button: 'left' })
   await ui.pointer({ type: 'up', ...heard, button: 'left' })
@@ -528,7 +520,7 @@ test('every control in the transcript runs its own action when pressed on its ce
   expect(h.copied).toEqual(expect.arrayContaining([SOURCE]))
 })
 
-test('every control in the pane runs its own action when pressed on its cell, the pane scrolled: tabs, systems, use case bar, player, links, banner, every page', TOUR, async ($, on) => {
+test('every control in the pane runs its own action when pressed on its cell, the pane scrolled: tabs, systems, use case bar, player, links, every page', TOUR, async ($, on) => {
   const clock = mock.clock(on)
   const root = '/proj'
   const files = Object.fromEntries([[`${root}/proschi.json`, '{}'], ...Object.entries(DRONE).map(([path, text]) => [`${root}/${path}`, text])])
@@ -536,8 +528,9 @@ test('every control in the pane runs its own action when pressed on its cell, th
   on('command.register', () => ({ value: { command: 'proschi' } }))
   await $.command.run({ command: 'proschi', args: `view ${root}/org-busy.proschi` })
   const pressed = await tour($, clock, h, pane, 'proschi-view:0')
-  expect(panelsOf(pressed)).toEqual(['banner', 'bar', 'drawer', 'explorer', 'links', 'menu', 'page-hld', 'page-sequence', 'page-tests', 'page-whatif', 'systems', 'tabs'])
-  expect(pressed).toEqual(expect.arrayContaining(['systems/next', 'systems/open', 'systems/focus', 'systems/back', 'tabs/diagram', 'tabs/analysis', 'tabs/whatif', 'tabs/sequence', 'tabs/hld', 'tabs/tests', 'links/src', 'links/lnk', 'links/open', ...BAR, 'menu/uc=__explore', 'drawer/close', 'banner/reset']))
+  expect(panelsOf(pressed)).toEqual(['bar', 'drawer', 'explorer', 'links', 'menu', 'page-analysis', 'page-hld', 'page-sequence', 'page-tests', 'systems', 'tabs'])
+  expect(pressed).toEqual(expect.arrayContaining(['systems/next', 'systems/open', 'systems/focus', 'systems/back', 'tabs/diagram', 'tabs/analysis', 'tabs/sequence', 'tabs/hld', 'tabs/tests', 'tabs/open', 'links/src', 'links/lnk', 'links/open', ...BAR, 'menu/uc=__explore', 'drawer/close', 'page-analysis/explore-whatifs', 'page-sequence/seq-pick']))
+  expect(pressed.some(id => id.startsWith('menu/seq-pick='))).toBe(true)
   expect(pressed.some(id => id.startsWith('menu/sc='))).toBe(true)
   expect(pressed.some(id => id.startsWith('explorer/x-'))).toBe(true)
 })
