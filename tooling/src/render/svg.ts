@@ -13,34 +13,63 @@ export const FONT = CANVAS_FONT;
 /** The canvas's monospace font (`--font-mono`), for tech stacks and edge labels. */
 export const MONO = "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 
-const T = CANVAS_TOKENS.light;
+export type Theme = 'light' | 'dark';
 
-/** The canvas's design tokens (light): paper background, white cards, ink borders; `active` and `error` are what use case playback highlights with. */
-export const COLORS = {
-  background: T.paper,
-  surface: T.surface,
-  text: T.ink,
-  muted: T.muted,
-  line: T.muted,
-  border: T.ink,
-  active: T.accent,
-  error: T.fail,
-  par: T.muted,
-};
+function paletteOf(theme: Theme) {
+  const T = CANVAS_TOKENS[theme];
+  return {
+    background: T.paper,
+    surface: T.surface,
+    text: T.ink,
+    muted: T.muted,
+    line: T.muted,
+    border: T.ink,
+    active: T.accent,
+    error: T.fail,
+    par: T.muted,
+    shadow: T.shadow,
+  };
+}
 
-/** A card as on the canvas: `fill`, an ink border of `stroke` px and the hard 3px shadow (`--sh-sm`). */
+/**
+ * The canvas's design tokens (light unless drawn `withTheme`): paper background, white cards, ink borders; `active` and `error` are what use case playback highlights with.
+ * Read at draw time, so code drawing inside `withTheme` gets that theme's values.
+ */
+export const COLORS = paletteOf('light');
+
+let theme: Theme = 'light';
+
+/** The theme being drawn. */
+export const currentTheme = (): Theme => theme;
+
+/** Runs `draw` (synchronous) with COLORS set to `next`'s tokens, then puts the light ones back. */
+export function withTheme<T>(next: Theme, draw: () => T): T {
+  if (next === theme) return draw();
+  const before = { ...COLORS };
+  const was = theme;
+  Object.assign(COLORS, paletteOf(next));
+  theme = next;
+  try {
+    return draw();
+  } finally {
+    Object.assign(COLORS, before);
+    theme = was;
+  }
+}
+
+/** A card as on the canvas: `fill`, an ink border of `stroke` px and the hard 3px shadow (`--sh-sm`); `shade` and `depth` recolour and deepen the shadow. */
 export function card(
   x: number,
   y: number,
   w: number,
   h: number,
-  o: { fill?: string; stroke?: number; rx?: number; shadow?: boolean; line?: string; dash?: string } = {},
+  o: { fill?: string; stroke?: number; rx?: number; shadow?: boolean; line?: string; dash?: string; shade?: string; depth?: number } = {},
 ): string {
   const sw = o.stroke ?? 3;
   const rx = o.rx ?? 4;
   const dash = o.dash ? ` stroke-dasharray="${o.dash}"` : '';
   return [
-    o.shadow === false ? '' : `<rect x="${r(x + 3)}" y="${r(y + 3)}" width="${r(w)}" height="${r(h)}" rx="${rx}" fill="${T.shadow}"/>`,
+    o.shadow === false ? '' : `<rect x="${r(x + (o.depth ?? 3))}" y="${r(y + (o.depth ?? 3))}" width="${r(w)}" height="${r(h)}" rx="${rx}" fill="${o.shade ?? COLORS.shadow}"/>`,
     `<rect x="${r(x + sw / 2)}" y="${r(y + sw / 2)}" width="${r(w - sw)}" height="${r(h - sw)}" rx="${rx}" fill="${o.fill ?? COLORS.surface}" stroke="${o.line ?? COLORS.border}" stroke-width="${sw}"${dash}/>`,
   ]
     .filter(Boolean)
