@@ -1,0 +1,24 @@
+tooling/src/render/svg.ts
+  s_50cc5c1ed1a510::t_e83c6c6b148e16 170-175,180
+plugin/hooks/raster.cjs
+  s_50cc5c1ed1a510::t_aa3d810fbf9712 106
+tooling/test/ui.test.ts
+  s_50cc5c1ed1a510::t_253de8350c9656 159-165,167-168,177-185,187-188
+  s_50cc5c1ed1a510::t_8f966c470e7ac0 166,169-176,186
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8d4f31da42e03c854ff1bfebd45c1db5c6aa7de8",
+  "prompts": {},
+  "sessions": {
+    "s_50cc5c1ed1a510": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7e5513ad-e496-40de-9a6e-d587aa393ce5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
