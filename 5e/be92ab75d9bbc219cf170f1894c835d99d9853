@@ -1,0 +1,53 @@
+tooling/src/render/ui/kit.ts
+  s_50cc5c1ed1a510::t_54788d63899f74 44,53-54,72,87
+  s_50cc5c1ed1a510::t_daf7a6733eb8e1 8-9,16,37-43,45-52,55-68,84-86,88-93,96,99,106-118
+tooling/src/render/ui/tiles.ts
+  s_50cc5c1ed1a510::t_cf2590ff5db7f8 8-12,32-35,46-47,51-54,56-57,59,63-73
+plugin/src/graphics.ts
+  s_50cc5c1ed1a510::t_edd7fbb255a53d 116-117,121,125
+  s_50cc5c1ed1a510::t_7d50661a2c2d13 32-33
+plugin/hooks/raster.cjs
+  s_50cc5c1ed1a510::t_dacba72aa0b819 1-3,5-7,9,18-22,24,26,30-32,34-35,39,41,44,49,51,63-65,67-68,71-72,74-75,79-80,82,85,90,92,100,103-104,106,108-115,118,1451-1454,1465,1467-1473
+plugin/hooks/register.js
+  s_50cc5c1ed1a510::t_dacba72aa0b819 9804,9850,9854
+docs/impl/terminal-rendered-ui.md
+  s_50cc5c1ed1a510::t_91ce60da236985 90-106
+tooling/test/raster.test.ts
+  s_50cc5c1ed1a510::t_69a260ce25747f 108
+tooling/test/ui.test.ts
+  s_50cc5c1ed1a510::t_262d67a6f87678 73
+  s_50cc5c1ed1a510::t_5100522a3f7eee 15
+  s_50cc5c1ed1a510::t_8a48b4852c1721 61
+  s_50cc5c1ed1a510::t_36f962d5a32db5 92-121
+  s_50cc5c1ed1a510::t_d3beea76f0ca00 170,174
+tooling/src/terminal/panelHost.ts
+  s_50cc5c1ed1a510::t_cf2590ff5db7f8 20,23,81
+tooling/src/render/ui/blocks.ts
+  s_50cc5c1ed1a510::t_d9d84229d164f5 86-94,96-108,111,113,115,126,208-210
+  s_50cc5c1ed1a510::t_e322d54263ab9c 95
+  s_50cc5c1ed1a510::t_b13460e9725b4e 479
+  s_50cc5c1ed1a510::t_0e44d072699475 537-538
+  s_50cc5c1ed1a510::t_1ed8afc6e056d1 477-478
+  s_50cc5c1ed1a510::t_2353cb90d2ed10 464-466,468
+  s_50cc5c1ed1a510::t_bf87c05b7c821c 246-247,249-250
+  s_50cc5c1ed1a510::t_d5b4830971f38d 373
+  s_50cc5c1ed1a510::t_e948a6d1414f04 85
+tooling/src/terminal/rasterHost.ts
+  s_50cc5c1ed1a510::t_69a260ce25747f 23,90
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5ebe92ab75d9bbc219cf170f1894c835d99d9853",
+  "prompts": {},
+  "sessions": {
+    "s_50cc5c1ed1a510": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7e5513ad-e496-40de-9a6e-d587aa393ce5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
