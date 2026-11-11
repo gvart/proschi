@@ -2,7 +2,7 @@ import { renderSequenceSvg } from '../sequence';
 import { withTheme } from '../svg';
 import { loadDocument } from '../../terminal/document';
 import type { ActionBarPanel, Block, Control, DrawerPanel, ExplorerPanel, Item, MenuPanel, NoticesPanel, Panel, PlayerBarPanel, Rich, ScenarioChip, Select, SequencePanel, StepCard, SystemBarPanel, TabBarPanel, UiTheme } from './contract';
-import { BODY, CODE, CONTROL_ROW, blocks, codeBox, itemsRow, measureRich, menu, placeButton, upToRow } from './blocks';
+import { BODY, CODE, CONTROL_ROW, blocks, codeBox, embedded, itemsRow, measureRich, menu, placeButton, upToRow } from './blocks';
 import { CELL, CONTROL, Surface, buttonColumns, chip, drawLaid, drawSelect, icon, layoutRich, line, paragraph, rect, selectColumns, surfaceFrame, tint, txt, width, type Box, type ControlState, type Edges } from './kit';
 import { clip } from './metrics';
 import { alpha, mix, paletteOf, type Palette } from './theme';
@@ -492,20 +492,6 @@ function page(S: Surface, b: Extract<Panel, { kind: 'page' }>): number {
   return y;
 }
 
-/**
- * A nested <svg> (an icon) as a <g> with the same placement, which resvg can
- * crop: its x, y, width, height and viewBox become a transform, the other
- * attributes (fill, stroke, color) stay for the children to inherit.
- */
-function flatten(attrs: string, body: string): string {
-  const num = (name: string, fallback = 0) => Number(new RegExp(`\\s${name}="([-\\d.]+)"`).exec(attrs)?.[1] ?? fallback);
-  const box = /viewBox="([^"]+)"/.exec(attrs)?.[1].split(/[\s,]+/).map(Number) ?? [0, 0, num('width', 1), num('height', 1)];
-  const kx = num('width', box[2]) / box[2];
-  const ky = num('height', box[3]) / box[3];
-  const rest = attrs.replace(/\s(x|y|width|height|viewBox|xmlns(:\w+)?|preserveAspectRatio)="[^"]*"/g, '');
-  return `<g transform="translate(${num('x') - box[0] * kx} ${num('y') - box[1] * ky}) scale(${kx} ${ky})"${rest}>${body}</g>`;
-}
-
 /** The sequence SVG of `proschi render`, its outer <svg> taken off so it draws inside the panel. */
 function sequence(S: Surface, p: SequencePanel, theme: UiTheme): number {
   return framed(S, (S, top) => sequenceDrawing(S, p, theme, top), 0, ROW / 2);
@@ -531,14 +517,7 @@ function sequenceDrawing(S: Surface, p: SequencePanel, theme: UiTheme, top: numb
   const s = p.scenario === undefined ? u.scenarios[0] : u.scenarios.find((c) => c.id === p.scenario || c.name === p.scenario);
   if (!s) throw new Error(`No scenario '${p.scenario}' in '${u.id}'`);
   const svg = withTheme(theme, () => renderSequenceSvg(doc.diagram, u, s, 'seq-', { current: p.current ?? [] }));
-  const w = Number(/width="(\d+)"/.exec(svg)![1]);
-  const h = Number(/height="(\d+)"/.exec(svg)![1]);
-  const inner = svg
-    .replace(/^<svg[^>]*>\n?/, '')
-    .replace(/<\/svg>\s*$/, '')
-    .replace(/<title>[\s\S]*?<\/title>\n?/, '')
-    .replace(/<rect width="100%" height="100%"[^>]*\/>\n?/, '')
-    .replace(/<svg\b([^>]*)>([\s\S]*?)<\/svg>/g, (_, attrs: string, body: string) => flatten(attrs, body));
+  const { width: w, height: h, body: inner } = embedded(svg);
   // Narrower than the card: drawn at its size; wider: scaled to fit.
   const k = Math.min(1, (S.width - 2 * CELL.width) / w);
   S.addWithin({ x: 0, y, w: S.width, h: h * k }, `<g transform="translate(${CELL.width} ${y})${k < 1 ? ` scale(${Math.round(k * 1000) / 1000})` : ''}">${inner}</g>`);

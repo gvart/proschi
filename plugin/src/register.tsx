@@ -13,12 +13,12 @@ import { idList, systemAt, viewError, type SystemsView } from '../../tooling/src
 import type { DiagramScenario, DiagramUseCase, FlowStep } from '../../frontend/src/dsl/types'
 import { groupByEndpoint } from '../../frontend/src/playground/useCaseGroups'
 import type { PaneSource, PaneTab, Player } from '../types'
-import { analysisPage, hldPage, stepCardsOf, tabBarPanel, testsPage } from '../../tooling/src/render/ui/data'
+import { analysisPage, hldAnchor, hldPage, stepCardsOf, tabBarPanel, testsPage } from '../../tooling/src/render/ui/data'
 import type { Control, DrawerPanel, ExplorerPanel, Notice, NoticesPanel, Option, Panel, PlayerBarPanel, SequencePanel, Span } from '../../tooling/src/render/ui/contract'
 import { cellPx, graphicsMode, gridFrame, imageSize, maxWidthPx, probe, probeKey, probeOf, probeSource, rasterOf, sourceOf, themeOf, TMUX_HINT, type GraphicsMode, type RasterGrid, type RasterRequest } from './graphics'
 import { loading, markOpened, paneWindow, pictureSite, pressTimings, registerPicture, scrollToAnchor, type Action, type Ahead, type Float, type Picture, type Piece, type Site } from './picture'
 import { setCellAspect } from './helper'
-import { hldMarkdown, hldTab } from './views/hld'
+import { hldDocument, hldMarkdown, hldTab } from './views/hld'
 import { legendLine, verdictLine } from './views/lines'
 import { lineView, type Ui } from './views/render'
 import { sequenceTab } from './views/sequenceTab'
@@ -305,8 +305,11 @@ function pagePart($: EngineInterface, tab: Exclude<PaneTab, 'diagram'>, c: PageC
   }
   if (tab === 'hld') {
     const markdown = hldMarkdown(doc, key)
+    const h = hldDocument(doc, key)
     actions['hld-copy'] = surface => void copy($, surface, markdown, 'the HLD markdown')
-    return { panel: hldPage(markdown), actions }
+    // The table of contents: each entry scrolls the pane to its section.
+    for (const s of h.sections) actions[`toc=${s.kind}`] = () => void scrollToAnchor($, PANE_VIEW, hldAnchor(s.kind))
+    return { panel: hldPage(h, c.source), actions }
   }
   // The Sequence tab: a still of the picked scenario (`proschi render`'s sequence) under its picker; the Diagram tab's player lights its step.
   const picks = doc.diagram.useCases.flatMap(u => u.scenarios.map(s => ({ value: `${u.id}:${s.id}`, useCase: u, scenario: s })))

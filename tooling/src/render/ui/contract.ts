@@ -263,7 +263,8 @@ export interface Row {
 }
 
 export type Block =
-  | { type: 'heading'; text: Rich; level?: 1 | 2 | 3 }
+  /** `anchor`: the row it starts on is in the panel's answer (PanelOutput.anchors), for a table of contents to scroll to. */
+  | { type: 'heading'; text: Rich; level?: 1 | 2 | 3; anchor?: string }
   | { type: 'paragraph'; text: Rich; tone?: Tone; indent?: number; small?: boolean }
   | { type: 'stats'; items: { label: string; value: string; tone?: Tone }[] }
   | { type: 'table'; columns: Column[]; rows: Row[] }
@@ -274,12 +275,24 @@ export type Block =
   | { type: 'check'; passed: boolean; title: Rich; where?: string; message?: string; hint?: string; indent?: number }
   | { type: 'quote'; text: Rich }
   | { type: 'rule' }
-  | { type: 'space'; rows?: number };
+  | { type: 'space'; rows?: number }
+  /**
+   * A drawing of the page's `source` (PagePanel.source): the architecture or
+   * a use case's sequence, framed, scaled down to the page's width and to at
+   * most `maxRows` rows. The raster helper draws it into `svg` before laying
+   * the page out; without one it says it was not drawn.
+   */
+  | { type: 'figure'; of: Figure; caption?: string; maxRows?: number; svg?: string };
+
+/** What a figure draws: the architecture, or a use case's scenario (its first when none is named) as a sequence. */
+export type Figure = { architecture: true } | { useCase: string; scenario?: string };
 
 /** A tab's body as blocks top to bottom: Analysis, Tests, HLD (data.ts builds them). */
 export interface PagePanel {
   kind: 'page';
   blocks: Block[];
+  /** The design its figures draw. */
+  source?: { source: string; path?: string; imports?: Record<string, string> };
 }
 
 /** The Sequence tab: the scenario picker and the scenario as `proschi render` draws it, a still with the Diagram tab's current steps lit. */

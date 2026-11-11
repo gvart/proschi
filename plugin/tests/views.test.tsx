@@ -193,7 +193,8 @@ test('the HLD tab draws the design document, and copies it with its Mermaid diag
   await p.press({ key: 'tab-hld' })
   const md = (await p.find({ type: 'Markdown' })) as unknown as { props: { text: string } }
   expect(md.props.text).toMatch(/^# Checkout\n/)
-  expect(md.props.text).toMatch(/## Capacity estimates/)
+  expect(md.props.text).toMatch(/\*\*Contents\*\* 1 Overview · 2 Requirements · 3 Capacity estimates/)
+  expect(md.props.text).toMatch(/## 3\. Capacity estimates/)
   expect(md.props.text).not.toMatch(/```mermaid/)
   expect(md.props.text).toMatch(/_The Diagram tab draws the architecture\._/)
   await p.press({ key: 'hld-copy' })

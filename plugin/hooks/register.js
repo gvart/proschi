@@ -8616,9 +8616,9 @@ function onCard(scene, x, y) {
   }
   return false;
 }
-function drawPath(grid, path, color, dash, heavy = false) {
+function drawPath(grid, path, color, dash2, heavy = false) {
   const { cells, dirs, head } = path;
-  const g = dash ? LINES[dash] : void 0;
+  const g = dash2 ? LINES[dash2] : void 0;
   for (let i = 0; i < cells.length - 1; i++) {
     const { x, y } = cells[i];
     const straight = dirs[i] === (N | S) || dirs[i] === (E | W);
@@ -8708,10 +8708,10 @@ var HEAVY_LINES = {
   dashed: { h: "\u254D", v: "\u254F" },
   dotted: { h: "\u2505", v: "\u2507" }
 };
-function frame(grid, r, color, dash = "solid", heavy = false) {
+function frame(grid, r, color, dash2 = "solid", heavy = false) {
   const right = r.x + r.w - 1;
   const bottom = r.y + r.h - 1;
-  const { h: h2, v } = (heavy ? HEAVY_LINES : LINES)[dash];
+  const { h: h2, v } = (heavy ? HEAVY_LINES : LINES)[dash2];
   const [tl, tr, bl, br] = heavy ? "\u250F\u2513\u2517\u251B" : "\u256D\u256E\u2570\u256F";
   for (let x = r.x + 1; x < right; x++) {
     grid.set(x, r.y, h2, color);
@@ -9023,104 +9023,273 @@ function groupByEndpoint(useCases) {
   return [...groups].map(([label, list]) => ({ label, useCases: list }));
 }
 
-// src/render/ui/markdown.ts
-var MARKS = {
-  "\u2705": { text: "\u2713", tone: "good", bold: true },
-  "\u274C": { text: "\u2717", tone: "bad", bold: true },
-  "\u{1F534}": { text: "\u25CF", tone: "bad" },
-  "\u{1F7E0}": { text: "\u25CF", tone: "warn" },
-  "\u26AA": { text: "\u25CF", tone: "muted" },
-  "\u26A0\uFE0F": { text: "\u26A0", tone: "warn" }
-};
-function inline2(text) {
-  const out = [];
-  const re = /\*\*(.+?)\*\*|`([^`]+)`|\[([^\]]+)\]\(([^)\s]+)\)|(?<![\w*])\*(?!\s)(.+?)\*(?!\w)|(?<!\w)_(?!\s)(.+?)_(?!\w)|(✅|❌|🔴|🟠|⚪|⚠️)/gu;
-  let last = 0;
-  for (const m of text.matchAll(re)) {
-    if (m.index > last) out.push({ text: text.slice(last, m.index) });
-    if (m[1] !== void 0) out.push({ text: m[1], bold: true });
-    else if (m[2] !== void 0) out.push({ text: m[2], mono: true });
-    else if (m[3] !== void 0) out.push({ text: m[3], tone: "info" });
-    else if (m[5] !== void 0 || m[6] !== void 0) out.push({ text: m[5] ?? m[6], tone: "muted" });
-    else out.push({ ...MARKS[m[7]] });
-    last = m.index + m[0].length;
-  }
-  if (last < text.length) out.push({ text: text.slice(last) });
-  return out.length === 1 && Object.keys(out[0]).length === 1 ? out[0].text : out;
+// ../frontend/src/hld/hld.ts
+var HOT_UTILIZATION = 0.7;
+function selectorLabel(s) {
+  if ("node" in s) return s.node;
+  if ("tech" in s) return `[${s.tech}]`;
+  if ("anyOf" in s) return s.anyOf.map(selectorLabel).join(" or ");
+  if ("consistency" in s) return `any ${s.consistency} store`;
+  return `any ${s.kind}`;
 }
-var cellsOf = (row) => row.trim().replace(/^\|/, "").replace(/(?<!\\)\|$/, "").split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, "|"));
-function markdownBlocks(markdown) {
-  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
-  const out = [];
-  let para = [];
-  const flush2 = () => {
-    if (para.length) out.push({ type: "paragraph", text: inline2(para.join(" ")) });
-    para = [];
-  };
-  for (let i = 0; i < lines.length; i++) {
-    const ln = lines[i];
-    const fence2 = /^```(\w*)/.exec(ln);
-    if (fence2) {
-      flush2();
-      const code2 = [];
-      while (++i < lines.length && !/^```/.test(lines[i])) code2.push(lines[i]);
-      if (fence2[1] === "mermaid") out.push({ type: "paragraph", small: true, text: code2[0]?.startsWith("sequenceDiagram") ? "The Sequence tab draws this scenario." : "The Diagram tab draws the architecture." });
-      else out.push({ type: "code", text: code2.join("\n"), ...fence2[1] ? { language: fence2[1] } : {} });
-      continue;
-    }
-    const heading2 = /^(#{1,6})\s+(.*)$/.exec(ln);
-    if (heading2) {
-      flush2();
-      out.push({ type: "heading", level: Math.min(3, heading2[1].length), text: inline2(heading2[2]) });
-      continue;
-    }
-    if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(ln)) {
-      flush2();
-      out.push({ type: "rule" });
-      continue;
-    }
-    if (/^\s*\|/.test(ln) && i + 1 < lines.length && /^\s*\|?\s*:?-{3,}/.test(lines[i + 1])) {
-      flush2();
-      const head = cellsOf(ln);
-      const aligns = cellsOf(lines[i + 1]).map((c) => /^:?-+:$/.test(c) && c.endsWith(":") && !c.startsWith(":") ? "right" : "left");
-      const rows = [];
-      i += 1;
-      while (i + 1 < lines.length && /^\s*\|/.test(lines[i + 1])) rows.push(cellsOf(lines[++i]));
-      const columns = head.map((title, k) => ({ title, ...aligns[k] === "right" ? { align: "right" } : {} }));
-      out.push({ type: "table", columns, rows: rows.map((r) => ({ cells: head.map((_, k) => r[k] === void 0 || r[k] === "\u2014" ? [{ text: r[k] ?? "", tone: "muted" }] : inline2(r[k])) })) });
-      continue;
-    }
-    const item = /^(\s*)([-*+]|\d+\.)\s+(.*)$/.exec(ln);
-    if (item) {
-      flush2();
-      const ordered = /\d/.test(item[2]);
-      const indent = Math.floor(item[1].length / 2) * 2;
-      const items = [inline2(item[3])];
-      while (i + 1 < lines.length) {
-        const next = /^(\s*)([-*+]|\d+\.)\s+(.*)$/.exec(lines[i + 1]);
-        if (next && Math.floor(next[1].length / 2) * 2 === indent && /\d/.test(next[2]) === ordered) {
-          items.push(inline2(next[3]));
-          i++;
-        } else if (!next && /^\s{2,}\S/.test(lines[i + 1])) {
-          items[items.length - 1] = inline2(`${typeof items.at(-1) === "string" ? items.at(-1) : ""} ${lines[++i].trim()}`);
-        } else break;
-      }
-      out.push({ type: "list", items, ordered, ...indent ? { indent } : {} });
-      continue;
-    }
-    const quote2 = /^>\s?(.*)$/.exec(ln);
-    if (quote2) {
-      flush2();
-      const text = [quote2[1]];
-      while (i + 1 < lines.length && /^>/.test(lines[i + 1])) text.push(lines[++i].replace(/^>\s?/, ""));
-      out.push({ type: "quote", text: inline2(text.join(" ")) });
-      continue;
-    }
-    if (!ln.trim()) flush2();
-    else para.push(ln.trim());
+var formatNumber = (n) => Number.isInteger(n) ? String(n) : String(Number(n.toFixed(3)));
+var requirementLabel = requirementName;
+var REQUIREMENT_CATEGORY = {
+  latency: "latency",
+  availability: "availability",
+  durable: "durability",
+  survive: "resilience",
+  cost: "cost",
+  lag: "latency"
+};
+function callLabel(target, match) {
+  if (match?.op !== void 0) return `uses ${match.op} on ${selectorLabel(target)}`;
+  if (match?.header !== void 0) return `sends header ${match.header} to ${selectorLabel(target)}`;
+  if (match?.method !== void 0) return `calls ${selectorLabel(target)} with ${match.method} ${match.path ?? ""}`.trimEnd();
+  return `calls ${selectorLabel(target)}`;
+}
+function assertionLabel(a) {
+  const uc = "useCase" in a ? `"${a.useCase}"${"scenario" in a && a.scenario && a.kind !== "hasScenario" ? ` scenario "${a.scenario}"` : ""}` : "";
+  switch (a.kind) {
+    case "calls":
+      return `${uc} ${a.quantifier === "every" ? "every scenario " : a.quantifier === "never" ? "never " : ""}${callLabel(a.target, a.match)}`;
+    case "before":
+      return `${uc} ${callLabel(a.first, a.match)} before ${selectorLabel(a.then)}`;
+    case "beforeResponding":
+      return `${uc} ${callLabel(a.target, a.match)} before responding`;
+    case "writesBeforeResponding":
+      return `${uc} writes ${selectorLabel(a.target)} before responding`;
+    case "responds":
+      return `${uc} responds ${a.status}`;
+    case "hasScenario":
+      return `${uc} has scenario "${a.scenario}"`;
+    case "handlesFailure":
+      return `${uc} handles failure of ${selectorLabel(a.target)}`;
+    case "noPath":
+      return `no path from ${selectorLabel(a.from)} to ${selectorLabel(a.to)}`;
+    case "replicas":
+      return `${selectorLabel(a.target)} has replicas >= ${a.min}`;
+    case "neverWaits":
+      return `${uc} never waits for ${selectorLabel(a.target)}`;
+    case "after":
+      return `${uc} ${callLabel(a.target, a.match)} after ${selectorLabel(a.after)}`;
+    case "senderCalls":
+      return `${a.useCase ? `in "${a.useCase}" ` : ""}${selectorLabel(a.from)} ${a.quantifier === "never" ? "never calls" : "calls"} ${selectorLabel(a.to)}`;
+    case "startsAt":
+      return `${uc} starts at ${selectorLabel(a.target)}`;
   }
-  flush2();
-  return out;
+}
+var sameLoc = (a, b) => !!a && a.line === b.line && a.file === b.file;
+function resultFor(tests, loc, name) {
+  return tests.find((t) => sameLoc(t.loc, loc)) ?? tests.find((t) => t.name === name);
+}
+var statusOf = (result) => result ? result.passed ? "pass" : "fail" : "unchecked";
+var components2 = (d) => d.nodes.filter((n) => n.kind === "component");
+function scenarioShares(useCase, diagram) {
+  const entry = diagram.traffic?.find((t) => t.useCase === useCase.name);
+  if (!entry) return void 0;
+  const shares = /* @__PURE__ */ new Map();
+  const mix2 = (entry.mix ?? []).filter((m) => useCase.scenarios.some((s) => s.name === m.scenario));
+  const total = mix2.reduce((sum, m) => sum + m.share, 0);
+  if (total > 0) for (const m of mix2) shares.set(m.scenario, m.share / total);
+  else if (useCase.scenarios[0]) shares.set(useCase.scenarios[0].name, 1);
+  return shares;
+}
+function entryResponse(scenario) {
+  const first = scenario.steps[0];
+  if (!first) return {};
+  if (first.failed) return { status: "failed" };
+  return { status: first.statusCode !== void 0 ? String(first.statusCode) : void 0, body: first.responseBody || void 0 };
+}
+function buildApis(diagram, name) {
+  const groups = /* @__PURE__ */ new Map();
+  for (const useCase of diagram.useCases) {
+    if (!useCase.endpoint) continue;
+    const key = useCase.endpointGroup ?? useCase.endpoint;
+    let group = groups.get(key);
+    if (!group) {
+      const [method, ...path] = key.split(" ");
+      const first = useCase.steps[0];
+      group = { endpoint: key, method, path: path.join(" "), service: first ? name(first.toServiceId) : void 0, operations: [] };
+      groups.set(key, group);
+    }
+    group.operations.push({
+      useCaseId: useCase.id,
+      useCase: useCase.name,
+      endpoint: useCase.endpoint,
+      request: useCase.steps[0]?.requestBody || void 0,
+      responses: useCase.scenarios.map((s) => ({ scenario: s.name, outcome: s.outcome, ...entryResponse(s) }))
+    });
+  }
+  return [...groups.values()];
+}
+function lacksErrorHandling(useCase) {
+  return useCase.scenarios.length > 0 && useCase.scenarios.every((s) => s.outcome === "success" && !s.steps.some((st) => st.failed));
+}
+function hld(diagram, analysis, tests = []) {
+  const byId = new Map(diagram.nodes.map((n) => [n.id, n]));
+  const name = (id) => byId.get(id)?.name ?? id;
+  const nodes = components2(diagram);
+  const nodeAnalysis = new Map(analysis?.nodes.map((n) => [n.id, n]));
+  const sections = [];
+  const teams = [...new Set(nodes.map((n) => n.ownerTeam).filter((t) => !!t))];
+  if (nodes.length > 0 || diagram.summary) {
+    sections.push({ kind: "overview", title: "Overview", summary: diagram.summary, components: nodes.length, useCases: diagram.useCases.length, teams });
+  }
+  const functional = diagram.useCases.map((u) => ({
+    useCaseId: u.id,
+    name: u.name,
+    description: u.description,
+    scenarios: u.scenarios.map((s) => ({ id: s.id, name: s.name, outcome: s.outcome, condition: s.condition }))
+  }));
+  const nonFunctional = (diagram.requirements ?? []).map((r) => {
+    const label = requirementLabel(r);
+    const result = resultFor(tests, r.loc, label);
+    return { label, category: REQUIREMENT_CATEGORY[r.kind], status: statusOf(result), measured: result?.message, hint: result?.passed ? void 0 : result?.hint, loc: r.loc };
+  });
+  const flowTests = (diagram.tests ?? []).map((t) => {
+    const result = resultFor(tests, t.loc, t.name);
+    return { name: t.name, assertions: t.assertions.map(assertionLabel), status: statusOf(result), measured: result?.message, hint: result?.passed ? void 0 : result?.hint, loc: t.loc };
+  });
+  if (functional.length || nonFunctional.length || flowTests.length) {
+    sections.push({ kind: "requirements", title: "Requirements", functional, nonFunctional, flowTests });
+  }
+  const traffic = (diagram.traffic ?? []).map((t) => ({ useCase: t.useCase, rps: t.rps, ...t.avgRps !== void 0 ? { avgRps: t.avgRps } : {}, mix: t.mix ?? [] }));
+  const load = (analysis?.nodes ?? []).filter((n) => n.kind !== "client").map((n) => ({
+    id: n.id,
+    name: name(n.id),
+    loadRps: n.loadRps,
+    capacityRps: n.capacityRps,
+    utilization: n.utilization,
+    saturated: n.saturated,
+    replicas: n.replicas,
+    shards: n.shards,
+    readLoadRps: n.readLoadRps,
+    readCapacityRps: n.readCapacityRps,
+    readUtilization: n.readUtilization,
+    writeLoadRps: n.writeLoadRps,
+    writeCapacityRps: n.writeCapacityRps,
+    writeUtilization: n.writeUtilization,
+    writeScaling: n.writeScaling,
+    bandwidthLoadMBps: n.bandwidthLoadMBps,
+    bandwidthCapacityMBps: n.bandwidthCapacityMBps,
+    bandwidthUtilization: n.bandwidthUtilization,
+    egressGbPerMonth: n.egressGbPerMonth,
+    egressUsd: n.egressUsd,
+    costUsd: n.costUsd
+  }));
+  if (traffic.length || load.length) {
+    sections.push({ kind: "capacity", title: "Capacity estimates", traffic, load, totalCostUsd: analysis?.totalCostUsd, totalEgressUsd: analysis?.totalEgressUsd });
+  }
+  const entities = diagram.entities ?? [];
+  const group = (n) => n.parent ? byId.get(n.parent)?.name : void 0;
+  const componentRows = nodes.map((n) => ({
+    id: n.id,
+    name: n.name,
+    tech: n.implicit ? void 0 : n.techStack,
+    kind: nodeAnalysis.get(n.id)?.kind ?? kindOf(n),
+    team: n.ownerTeam,
+    replicas: nodeAnalysis.get(n.id)?.replicas ?? n.replicas ?? 1,
+    responsibility: n.description,
+    group: group(n),
+    entities: entities.filter((e) => e.store === n.id).map((e) => e.name)
+  }));
+  if (componentRows.length) sections.push({ kind: "components", title: "Components", components: componentRows });
+  if (entities.length) {
+    sections.push({ kind: "dataModel", title: "Data model", entities: entities.map((e) => ({ ...e, storeName: e.store ? name(e.store) : void 0 })) });
+  }
+  const endpoints = buildApis(diagram, name);
+  if (endpoints.length) sections.push({ kind: "apis", title: "APIs", endpoints });
+  const useCaseAnalysis = new Map(analysis?.useCases.map((u) => [u.id, u]));
+  const scenarioUseCases = diagram.useCases.map((u) => {
+    const ua = useCaseAnalysis.get(u.id);
+    const shares = scenarioShares(u, diagram);
+    return {
+      useCaseId: u.id,
+      name: u.name,
+      description: u.description,
+      endpoint: u.endpoint,
+      rps: ua?.rps ?? diagram.traffic?.find((t) => t.useCase === u.name)?.rps,
+      scenarios: u.scenarios.map((s) => {
+        const sa = ua?.scenarios.find((x) => x.id === s.id);
+        return {
+          id: s.id,
+          name: s.name,
+          outcome: s.outcome,
+          condition: s.condition,
+          share: sa?.share ?? (shares ? shares.get(s.name) ?? 0 : void 0),
+          latency: sa?.percentiles,
+          meanMs: sa?.meanMs,
+          steps: s.steps.length
+        };
+      })
+    };
+  });
+  if (scenarioUseCases.length) sections.push({ kind: "scenarios", title: "Scenarios", useCases: scenarioUseCases });
+  if (diagram.decisions?.length) sections.push({ kind: "decisions", title: "Decisions", decisions: diagram.decisions });
+  const risks = [];
+  for (const r of nonFunctional.filter((r2) => r2.status === "fail")) {
+    risks.push({ severity: "high", kind: "requirement", title: `Requirement not met: ${r.label}`, detail: r.measured, hint: r.hint });
+  }
+  for (const t of flowTests.filter((t2) => t2.status === "fail")) {
+    risks.push({ severity: "high", kind: "test", title: `Test failing: ${t.name}`, detail: t.measured, hint: t.hint });
+  }
+  for (const n of load) {
+    const pct = `${Math.round(n.utilization * 100)}%`;
+    if (n.saturated) {
+      const bandwidth = n.bandwidthUtilization >= n.utilization && n.bandwidthUtilization > 0;
+      risks.push({
+        severity: "high",
+        kind: "saturated",
+        title: `${n.name} is saturated`,
+        detail: bandwidth ? `${Math.round(n.bandwidthLoadMBps).toLocaleString("en-US")} MB/s of payloads against ${Math.round(n.bandwidthCapacityMBps).toLocaleString("en-US")} MB/s of bandwidth (${pct})` : `${formatRps2(n.loadRps)} against a capacity of ${formatRps2(n.capacityRps)} (${pct})`,
+        hint: bandwidth ? "Send the bytes around it (presigned URLs to storage, a CDN), or add replicas." : "Add replicas, cache in front of it, or move work async."
+      });
+    } else if (n.utilization > HOT_UTILIZATION) {
+      risks.push({ severity: "medium", kind: "hot", title: `${n.name} runs hot`, detail: `${pct} utilisation; latency climbs steeply near saturation`, hint: "Add headroom with another replica." });
+    }
+  }
+  for (const id of analysis?.singlePointsOfFailure ?? []) {
+    const node = byId.get(id);
+    risks.push({ severity: "medium", kind: "spof", title: `Single point of failure: ${name(id)}${node && !node.implicit ? ` (${node.techStack})` : ""}`, hint: "Add a replica or a fallback scenario." });
+  }
+  for (const u of diagram.useCases.filter(lacksErrorHandling)) {
+    risks.push({ severity: "low", kind: "no-error-handling", title: `${u.name} has no error scenario`, detail: "Nothing describes what happens when a call fails or is rejected.", hint: "Add an alt branch with a -x call or a 4xx/5xx response." });
+  }
+  for (const w of analysis?.warnings ?? []) risks.push({ severity: "low", kind: "warning", title: w });
+  if (risks.length) sections.push({ kind: "risks", title: "Risks", risks });
+  return { title: diagram.title ?? "Architecture", summary: diagram.summary, checked: !!analysis || tests.length > 0, sections, diagram };
+}
+function formatRps2(rps) {
+  if (rps >= 1e6) return `${formatNumber(Number((rps / 1e6).toFixed(2)))}M rps`;
+  if (rps >= 1e3) return `${formatNumber(Number((rps / 1e3).toFixed(2)))}k rps`;
+  return `${formatNumber(Number(rps.toFixed(2)))} rps`;
+}
+function formatTraffic2(rps, avgRps) {
+  if (avgRps === void 0 || avgRps === rps) return formatRps2(rps);
+  return `avg ${formatRps2(avgRps).replace(/ rps$/, "")} \xB7 peak ${formatRps2(rps)}`;
+}
+var formatMs2 = (ms) => `${ms >= 100 ? Math.round(ms) : formatNumber(Number(ms.toFixed(1)))} ms`;
+var formatPercent2 = (fraction) => `${formatNumber(Number((fraction * 100).toFixed(1)))}%`;
+var formatUsd2 = (usd4) => `$${Math.round(usd4).toLocaleString("en-US")}`;
+function formatGb(gb) {
+  const n = (x, digits) => Number(x.toFixed(digits)).toLocaleString("en-US");
+  return gb >= 1e3 ? `${n(gb / 1e3, 1)} TB` : `${n(gb, gb < 10 ? 1 : 0)} GB`;
+}
+function accessText(n, access) {
+  const [load, capacity, utilization] = access === "read" ? [n.readLoadRps, n.readCapacityRps, n.readUtilization] : [n.writeLoadRps, n.writeCapacityRps, n.writeUtilization];
+  return load > 0 ? `${formatRps2(load)} of ${formatRps2(capacity)} (${formatPercent2(utilization)})` : "\u2014";
+}
+var replicasText = (n) => n.shards > 1 ? `${n.replicas} \xD7 ${n.shards} shards` : String(n.replicas);
+var egressText = (n) => n.egressGbPerMonth > 0 ? `${formatGb(n.egressGbPerMonth)}, ${formatUsd2(n.egressUsd)}` : "\u2014";
+var LOAD_HEADINGS = ["Component", "Reads", "Writes", "Utilisation", "Replicas", "Egress / month", "Cost / month"];
+var totalCostText = (totalUsd, egressUsd = 0) => `${formatUsd2(totalUsd)} / month${egressUsd > 0 ? ` (${formatUsd2(egressUsd)} of it egress)` : ""}`;
+var plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+function overviewFacts(s) {
+  return [plural(s.components, "component"), plural(s.useCases, "use case"), s.teams.length ? `teams: ${s.teams.join(", ")}` : ""].filter(Boolean).join(" \xB7 ");
+}
+function responseText(r) {
+  return [r.status, r.body].filter(Boolean).join(" ") || "\u2014";
 }
 
 // src/render/ui/data.ts
@@ -9362,17 +9531,153 @@ function testsPage(doc, open) {
   }
   return { kind: "page", blocks };
 }
-function hldPage(markdown) {
-  return {
-    kind: "page",
-    blocks: [
-      {
-        type: "controls",
-        items: [{ control: { id: "hld-copy", icon: "copy", label: "Copy HLD markdown", hotkey: "c", variant: "primary" } }, { text: [{ text: "with its Mermaid diagrams, for a README or a wiki", tone: "muted" }] }]
-      },
-      ...markdownBlocks(markdown)
-    ]
-  };
+var STATUS2 = {
+  pass: [{ text: "pass", chip: "good" }],
+  fail: [{ text: "fail", chip: "bad" }],
+  unchecked: [{ text: "not checked", tone: "muted" }]
+};
+var measured = (text, hint) => [...text ? [{ text }] : [{ text: "\u2014", tone: "muted" }], ...hint ? [{ text: `  Fix: ${hint}`, tone: "warn" }] : []];
+var dash = (text) => text === void 0 || text === "" ? [{ text: "\u2014", tone: "muted" }] : [{ text: String(text) }];
+var RISK_TONE = { high: "bad", medium: "warn", low: "info" };
+var hldAnchor = (kind) => `hld-${kind}`;
+function hldSection(doc, s) {
+  const out = [];
+  const h3 = (text) => ({ type: "heading", level: 3, text });
+  switch (s.kind) {
+    case "overview":
+      if (s.summary) out.push({ type: "paragraph", text: s.summary });
+      out.push({
+        type: "stats",
+        items: [
+          { label: "Components", value: String(s.components) },
+          { label: "Use cases", value: String(s.useCases) },
+          ...s.teams.length ? [{ label: s.teams.length === 1 ? "Team" : "Teams", value: s.teams.length === 1 ? s.teams[0] : String(s.teams.length) }] : [],
+          ...doc.sections.flatMap((c) => c.kind === "capacity" && c.totalCostUsd !== void 0 ? [{ label: "Cost / month", value: formatUsd2(c.totalCostUsd) }] : [])
+        ]
+      });
+      if (s.teams.length > 1) out.push({ type: "paragraph", small: true, text: [{ text: "Teams  ", tone: "muted" }, { text: s.teams.join(", ") }] });
+      if (s.components) out.push({ type: "figure", of: { architecture: true }, maxRows: 26 });
+      break;
+    case "requirements": {
+      const failing = [...s.nonFunctional, ...s.flowTests].filter((r) => r.status === "fail").length;
+      const checked = [...s.nonFunctional, ...s.flowTests].filter((r) => r.status !== "unchecked").length;
+      if (checked) out.push(failing ? { type: "callout", tone: "bad", text: [{ text: `${failing} of ${checked} checks fail`, bold: true }, { text: ": the measured values and their fixes are below." }] } : { type: "callout", tone: "good", text: [{ text: `All ${checked} checks pass`, bold: true }, { text: " against the simulation." }] });
+      if (s.functional.length) {
+        out.push(h3("Functional"));
+        out.push({ type: "list", items: s.functional.map((f) => [{ text: f.name, bold: true }, ...f.description ? [{ text: ` \u2014 ${f.description}`, tone: "muted" }] : []]) });
+        const alts = s.functional.filter((f) => f.scenarios.length > 1 || f.scenarios[0]?.condition);
+        if (alts.length) {
+          out.push({
+            type: "table",
+            columns: [{ title: "Use case" }, { title: "Scenario" }, { title: "When", drop: 1 }],
+            rows: alts.flatMap((f) => f.scenarios.map((sc, i) => ({ cells: [i === 0 ? [{ text: f.name, bold: true }] : "", [{ text: sc.name, ...sc.outcome === "error" ? { tone: "bad" } : {} }], dash(sc.condition)] })))
+          });
+        }
+      }
+      if (s.nonFunctional.length) {
+        out.push(h3("Non-functional"));
+        out.push({ type: "table", columns: [{ title: "Requirement" }, { title: "Status" }, { title: "Measured" }], rows: s.nonFunctional.map((r) => ({ cells: [r.label, STATUS2[r.status], measured(r.measured, r.hint)] })) });
+      }
+      if (s.flowTests.length) {
+        out.push(h3("Flow tests"));
+        out.push({
+          type: "table",
+          columns: [{ title: "Test" }, { title: "Status" }, { title: "Asserts", drop: 1 }, { title: "Result" }],
+          rows: s.flowTests.map((t) => ({ cells: [[{ text: t.name, bold: true }], STATUS2[t.status], [{ text: t.assertions.join("; "), mono: true }], measured(t.measured, t.hint)] }))
+        });
+      }
+      break;
+    }
+    case "capacity":
+      if (s.traffic.length) {
+        out.push(h3("Traffic"));
+        out.push({ type: "table", columns: [{ title: "Use case" }, { title: "Rate", align: "right" }, { title: "Mix", drop: 1 }], rows: s.traffic.map((t) => ({ cells: [[{ text: t.useCase, bold: true }], formatTraffic2(t.rps, t.avgRps), [{ text: t.mix.map((m) => `${m.scenario} ${formatPercent2(m.share)}`).join(", ") || "\u2014", tone: "muted" }]] })) });
+      }
+      if (s.load.length) {
+        out.push(h3("Load per component"));
+        out.push({
+          type: "table",
+          columns: [{ title: LOAD_HEADINGS[0] }, { title: LOAD_HEADINGS[1], drop: 2 }, { title: LOAD_HEADINGS[2], drop: 3 }, { title: LOAD_HEADINGS[3] }, { title: LOAD_HEADINGS[4], align: "right", drop: 4 }, { title: LOAD_HEADINGS[5], align: "right", drop: 1 }, { title: LOAD_HEADINGS[6], align: "right" }],
+          rows: s.load.map((n) => ({ cells: [[{ text: n.name, bold: true }], accessText(n, "read"), accessText(n, "write"), { bar: n.utilization, text: formatPercent2(n.utilization), ...n.saturated ? { tone: "bad" } : {} }, replicasText(n), dash(egressText(n) === "\u2014" ? void 0 : egressText(n)), formatUsd2(n.costUsd)] }))
+        });
+      }
+      if (s.totalCostUsd !== void 0) out.push({ type: "paragraph", text: [{ text: "Total cost  ", tone: "muted" }, { text: totalCostText(s.totalCostUsd, s.totalEgressUsd), bold: true }] });
+      break;
+    case "components":
+      out.push({
+        type: "table",
+        columns: [{ title: "Component" }, { title: "Tech" }, { title: "Kind", drop: 3 }, { title: "Team", drop: 4 }, { title: "Replicas", align: "right", drop: 2 }, { title: "Responsibility", drop: 1 }, { title: "Stores", drop: 5 }],
+        rows: s.components.map((c) => ({
+          cells: [
+            [{ text: c.name, bold: true }, ...c.group ? [{ text: `  in ${c.group}`, tone: "muted" }] : []],
+            dash(c.tech),
+            dash(c.kind),
+            dash(c.team),
+            String(c.replicas),
+            dash(c.responsibility),
+            dash(c.entities.join(", "))
+          ]
+        }))
+      });
+      break;
+    case "dataModel":
+      for (const e of s.entities) {
+        out.push(h3([{ text: e.name }, ...e.storeName ? [{ text: `  in ${e.storeName}`, tone: "muted" }] : []]));
+        if (e.description) out.push({ type: "paragraph", small: true, text: e.description });
+        out.push({ type: "table", columns: [{ title: "Field" }, { title: "Type" }, { title: "Flags" }], rows: e.fields.map((f) => ({ cells: [[{ text: f.name, mono: true }], f.type, dash(f.flags.join(", "))] })) });
+      }
+      break;
+    case "apis":
+      for (const ep of s.endpoints) {
+        out.push(h3([{ text: ep.endpoint, mono: true }, ...ep.service ? [{ text: `  served by ${ep.service}`, tone: "muted" }] : []]));
+        for (const op of ep.operations) {
+          out.push({ type: "paragraph", text: [{ text: op.useCase, bold: true }, ...op.endpoint !== ep.endpoint ? [{ text: `  ${op.endpoint}`, mono: true, tone: "muted" }] : []] });
+          if (op.request) out.push({ type: "code", text: op.request, language: "json", maxLines: 12 });
+          out.push({ type: "table", columns: [{ title: "Scenario" }, { title: "Response" }], rows: op.responses.map((r) => ({ cells: [[{ text: r.scenario, ...r.outcome === "error" ? { tone: "bad" } : {} }], [{ text: responseText(r), mono: true }]] })) });
+        }
+      }
+      break;
+    case "scenarios":
+      for (const u of s.useCases) {
+        out.push(h3(u.name));
+        const about = [u.endpoint, u.rps !== void 0 ? formatRps2(u.rps) : "", u.description].filter(Boolean).join(" \xB7 ");
+        if (about) out.push({ type: "paragraph", small: true, text: about });
+        out.push({
+          type: "table",
+          columns: [{ title: "Scenario" }, { title: "When", drop: 2 }, { title: "Share", align: "right", drop: 1 }, { title: "p50", align: "right", drop: 3 }, { title: "p99", align: "right" }],
+          rows: u.scenarios.map((sc) => ({
+            cells: [[{ text: sc.outcome === "error" ? "\u2717 " : "\u2713 ", tone: sc.outcome === "error" ? "bad" : "good", bold: true }, { text: sc.name, bold: true }], dash(sc.condition), dash(sc.share !== void 0 ? formatPercent2(sc.share) : void 0), dash(sc.latency ? formatMs2(sc.latency.p50) : void 0), dash(sc.latency ? formatMs2(sc.latency.p99) : void 0)]
+          }))
+        });
+        const first = u.scenarios.find((sc) => sc.steps > 0);
+        if (first) out.push({ type: "figure", of: { useCase: u.useCaseId, scenario: first.id }, caption: u.scenarios.length > 1 ? `${first.name}; the Sequence tab draws the others` : void 0, maxRows: 34 });
+      }
+      break;
+    case "decisions":
+      for (const d of s.decisions) {
+        out.push(h3(d.title));
+        if (d.because) out.push({ type: "paragraph", text: [{ text: "Because ", bold: true }, { text: d.because }] });
+        if (d.rejected.length) out.push({ type: "list", items: d.rejected.map((r) => [{ text: "Rejected ", tone: "muted" }, { text: r.option, bold: true }, { text: ` \u2014 ${r.reason}`, tone: "muted" }]) });
+      }
+      break;
+    case "risks":
+      for (const r of s.risks) out.push({ type: "callout", tone: RISK_TONE[r.severity], chip: r.severity.toUpperCase(), text: [{ text: r.title, bold: true }, ...r.detail ? [{ text: ` \u2014 ${r.detail}` }] : [], ...r.hint ? [{ text: `  Fix: ${r.hint}`, tone: "muted" }] : []] });
+      break;
+  }
+  return out;
+}
+function hldPage(doc, source) {
+  const blocks = [{ type: "heading", level: 1, text: doc.title }, { type: "paragraph", small: true, text: "High-level design, generated from the model and its simulation" }];
+  if (!doc.checked && doc.sections.some((s) => s.kind === "requirements" && (s.nonFunctional.length || s.flowTests.length))) blocks.push({ type: "callout", tone: "warn", text: "The simulation did not run, so requirements and tests are listed but not checked." });
+  blocks.push({ type: "controls", items: [{ control: { id: "hld-copy", icon: "copy", label: "Copy HLD markdown", hotkey: "c", variant: "primary" } }, { text: [{ text: "with Mermaid diagrams, for a README or a wiki", tone: "muted" }] }] });
+  if (doc.sections.length === 0) return { kind: "page", blocks: [...blocks, { type: "paragraph", text: "Add components and use cases to generate a design document." }] };
+  blocks.push({ type: "heading", level: 3, text: [{ text: "CONTENTS", tone: "muted" }] });
+  blocks.push({ type: "controls", items: doc.sections.map((s, i) => ({ control: { id: `toc=${s.kind}`, label: `${i + 1}  ${s.title}`, variant: "quiet" } })) });
+  doc.sections.forEach((s, i) => {
+    blocks.push({ type: "heading", level: 2, anchor: hldAnchor(s.kind), text: [{ text: `${i + 1}`, tone: "accent" }, { text: `  ${s.title}` }] });
+    blocks.push(...hldSection(doc, s));
+  });
+  return { kind: "page", source, blocks };
 }
 
 // ../plugin/src/graphics.ts
@@ -10005,274 +10310,16 @@ async function scrollKey($, id, key) {
   going.delete(id);
   if (moved.deny) $.ui.log(`proschi: scroll key ${key} refused: ${moved.deny}`, { to: "debug" });
 }
-
-// ../frontend/src/hld/hld.ts
-var HOT_UTILIZATION = 0.7;
-function selectorLabel(s) {
-  if ("node" in s) return s.node;
-  if ("tech" in s) return `[${s.tech}]`;
-  if ("anyOf" in s) return s.anyOf.map(selectorLabel).join(" or ");
-  if ("consistency" in s) return `any ${s.consistency} store`;
-  return `any ${s.kind}`;
-}
-var formatNumber = (n) => Number.isInteger(n) ? String(n) : String(Number(n.toFixed(3)));
-var requirementLabel = requirementName;
-var REQUIREMENT_CATEGORY = {
-  latency: "latency",
-  availability: "availability",
-  durable: "durability",
-  survive: "resilience",
-  cost: "cost",
-  lag: "latency"
-};
-function callLabel(target, match) {
-  if (match?.op !== void 0) return `uses ${match.op} on ${selectorLabel(target)}`;
-  if (match?.header !== void 0) return `sends header ${match.header} to ${selectorLabel(target)}`;
-  if (match?.method !== void 0) return `calls ${selectorLabel(target)} with ${match.method} ${match.path ?? ""}`.trimEnd();
-  return `calls ${selectorLabel(target)}`;
-}
-function assertionLabel(a) {
-  const uc = "useCase" in a ? `"${a.useCase}"${"scenario" in a && a.scenario && a.kind !== "hasScenario" ? ` scenario "${a.scenario}"` : ""}` : "";
-  switch (a.kind) {
-    case "calls":
-      return `${uc} ${a.quantifier === "every" ? "every scenario " : a.quantifier === "never" ? "never " : ""}${callLabel(a.target, a.match)}`;
-    case "before":
-      return `${uc} ${callLabel(a.first, a.match)} before ${selectorLabel(a.then)}`;
-    case "beforeResponding":
-      return `${uc} ${callLabel(a.target, a.match)} before responding`;
-    case "writesBeforeResponding":
-      return `${uc} writes ${selectorLabel(a.target)} before responding`;
-    case "responds":
-      return `${uc} responds ${a.status}`;
-    case "hasScenario":
-      return `${uc} has scenario "${a.scenario}"`;
-    case "handlesFailure":
-      return `${uc} handles failure of ${selectorLabel(a.target)}`;
-    case "noPath":
-      return `no path from ${selectorLabel(a.from)} to ${selectorLabel(a.to)}`;
-    case "replicas":
-      return `${selectorLabel(a.target)} has replicas >= ${a.min}`;
-    case "neverWaits":
-      return `${uc} never waits for ${selectorLabel(a.target)}`;
-    case "after":
-      return `${uc} ${callLabel(a.target, a.match)} after ${selectorLabel(a.after)}`;
-    case "senderCalls":
-      return `${a.useCase ? `in "${a.useCase}" ` : ""}${selectorLabel(a.from)} ${a.quantifier === "never" ? "never calls" : "calls"} ${selectorLabel(a.to)}`;
-    case "startsAt":
-      return `${uc} starts at ${selectorLabel(a.target)}`;
-  }
-}
-var sameLoc = (a, b) => !!a && a.line === b.line && a.file === b.file;
-function resultFor(tests, loc, name) {
-  return tests.find((t) => sameLoc(t.loc, loc)) ?? tests.find((t) => t.name === name);
-}
-var statusOf = (result) => result ? result.passed ? "pass" : "fail" : "unchecked";
-var components2 = (d) => d.nodes.filter((n) => n.kind === "component");
-function scenarioShares(useCase, diagram) {
-  const entry = diagram.traffic?.find((t) => t.useCase === useCase.name);
-  if (!entry) return void 0;
-  const shares = /* @__PURE__ */ new Map();
-  const mix2 = (entry.mix ?? []).filter((m) => useCase.scenarios.some((s) => s.name === m.scenario));
-  const total = mix2.reduce((sum, m) => sum + m.share, 0);
-  if (total > 0) for (const m of mix2) shares.set(m.scenario, m.share / total);
-  else if (useCase.scenarios[0]) shares.set(useCase.scenarios[0].name, 1);
-  return shares;
-}
-function entryResponse(scenario) {
-  const first = scenario.steps[0];
-  if (!first) return {};
-  if (first.failed) return { status: "failed" };
-  return { status: first.statusCode !== void 0 ? String(first.statusCode) : void 0, body: first.responseBody || void 0 };
-}
-function buildApis(diagram, name) {
-  const groups = /* @__PURE__ */ new Map();
-  for (const useCase of diagram.useCases) {
-    if (!useCase.endpoint) continue;
-    const key = useCase.endpointGroup ?? useCase.endpoint;
-    let group = groups.get(key);
-    if (!group) {
-      const [method, ...path] = key.split(" ");
-      const first = useCase.steps[0];
-      group = { endpoint: key, method, path: path.join(" "), service: first ? name(first.toServiceId) : void 0, operations: [] };
-      groups.set(key, group);
-    }
-    group.operations.push({
-      useCaseId: useCase.id,
-      useCase: useCase.name,
-      endpoint: useCase.endpoint,
-      request: useCase.steps[0]?.requestBody || void 0,
-      responses: useCase.scenarios.map((s) => ({ scenario: s.name, outcome: s.outcome, ...entryResponse(s) }))
-    });
-  }
-  return [...groups.values()];
-}
-function lacksErrorHandling(useCase) {
-  return useCase.scenarios.length > 0 && useCase.scenarios.every((s) => s.outcome === "success" && !s.steps.some((st) => st.failed));
-}
-function hld(diagram, analysis, tests = []) {
-  const byId = new Map(diagram.nodes.map((n) => [n.id, n]));
-  const name = (id) => byId.get(id)?.name ?? id;
-  const nodes = components2(diagram);
-  const nodeAnalysis = new Map(analysis?.nodes.map((n) => [n.id, n]));
-  const sections = [];
-  const teams = [...new Set(nodes.map((n) => n.ownerTeam).filter((t) => !!t))];
-  if (nodes.length > 0 || diagram.summary) {
-    sections.push({ kind: "overview", title: "Overview", summary: diagram.summary, components: nodes.length, useCases: diagram.useCases.length, teams });
-  }
-  const functional = diagram.useCases.map((u) => ({
-    useCaseId: u.id,
-    name: u.name,
-    description: u.description,
-    scenarios: u.scenarios.map((s) => ({ id: s.id, name: s.name, outcome: s.outcome, condition: s.condition }))
-  }));
-  const nonFunctional = (diagram.requirements ?? []).map((r) => {
-    const label = requirementLabel(r);
-    const result = resultFor(tests, r.loc, label);
-    return { label, category: REQUIREMENT_CATEGORY[r.kind], status: statusOf(result), measured: result?.message, hint: result?.passed ? void 0 : result?.hint, loc: r.loc };
-  });
-  const flowTests = (diagram.tests ?? []).map((t) => {
-    const result = resultFor(tests, t.loc, t.name);
-    return { name: t.name, assertions: t.assertions.map(assertionLabel), status: statusOf(result), measured: result?.message, hint: result?.passed ? void 0 : result?.hint, loc: t.loc };
-  });
-  if (functional.length || nonFunctional.length || flowTests.length) {
-    sections.push({ kind: "requirements", title: "Requirements", functional, nonFunctional, flowTests });
-  }
-  const traffic = (diagram.traffic ?? []).map((t) => ({ useCase: t.useCase, rps: t.rps, ...t.avgRps !== void 0 ? { avgRps: t.avgRps } : {}, mix: t.mix ?? [] }));
-  const load = (analysis?.nodes ?? []).filter((n) => n.kind !== "client").map((n) => ({
-    id: n.id,
-    name: name(n.id),
-    loadRps: n.loadRps,
-    capacityRps: n.capacityRps,
-    utilization: n.utilization,
-    saturated: n.saturated,
-    replicas: n.replicas,
-    shards: n.shards,
-    readLoadRps: n.readLoadRps,
-    readCapacityRps: n.readCapacityRps,
-    readUtilization: n.readUtilization,
-    writeLoadRps: n.writeLoadRps,
-    writeCapacityRps: n.writeCapacityRps,
-    writeUtilization: n.writeUtilization,
-    writeScaling: n.writeScaling,
-    bandwidthLoadMBps: n.bandwidthLoadMBps,
-    bandwidthCapacityMBps: n.bandwidthCapacityMBps,
-    bandwidthUtilization: n.bandwidthUtilization,
-    egressGbPerMonth: n.egressGbPerMonth,
-    egressUsd: n.egressUsd,
-    costUsd: n.costUsd
-  }));
-  if (traffic.length || load.length) {
-    sections.push({ kind: "capacity", title: "Capacity estimates", traffic, load, totalCostUsd: analysis?.totalCostUsd, totalEgressUsd: analysis?.totalEgressUsd });
-  }
-  const entities = diagram.entities ?? [];
-  const group = (n) => n.parent ? byId.get(n.parent)?.name : void 0;
-  const componentRows = nodes.map((n) => ({
-    id: n.id,
-    name: n.name,
-    tech: n.implicit ? void 0 : n.techStack,
-    kind: nodeAnalysis.get(n.id)?.kind ?? kindOf(n),
-    team: n.ownerTeam,
-    replicas: nodeAnalysis.get(n.id)?.replicas ?? n.replicas ?? 1,
-    responsibility: n.description,
-    group: group(n),
-    entities: entities.filter((e) => e.store === n.id).map((e) => e.name)
-  }));
-  if (componentRows.length) sections.push({ kind: "components", title: "Components", components: componentRows });
-  if (entities.length) {
-    sections.push({ kind: "dataModel", title: "Data model", entities: entities.map((e) => ({ ...e, storeName: e.store ? name(e.store) : void 0 })) });
-  }
-  const endpoints = buildApis(diagram, name);
-  if (endpoints.length) sections.push({ kind: "apis", title: "APIs", endpoints });
-  const useCaseAnalysis = new Map(analysis?.useCases.map((u) => [u.id, u]));
-  const scenarioUseCases = diagram.useCases.map((u) => {
-    const ua = useCaseAnalysis.get(u.id);
-    const shares = scenarioShares(u, diagram);
-    return {
-      useCaseId: u.id,
-      name: u.name,
-      description: u.description,
-      endpoint: u.endpoint,
-      rps: ua?.rps ?? diagram.traffic?.find((t) => t.useCase === u.name)?.rps,
-      scenarios: u.scenarios.map((s) => {
-        const sa = ua?.scenarios.find((x) => x.id === s.id);
-        return {
-          id: s.id,
-          name: s.name,
-          outcome: s.outcome,
-          condition: s.condition,
-          share: sa?.share ?? (shares ? shares.get(s.name) ?? 0 : void 0),
-          latency: sa?.percentiles,
-          meanMs: sa?.meanMs,
-          steps: s.steps.length
-        };
-      })
-    };
-  });
-  if (scenarioUseCases.length) sections.push({ kind: "scenarios", title: "Scenarios", useCases: scenarioUseCases });
-  if (diagram.decisions?.length) sections.push({ kind: "decisions", title: "Decisions", decisions: diagram.decisions });
-  const risks = [];
-  for (const r of nonFunctional.filter((r2) => r2.status === "fail")) {
-    risks.push({ severity: "high", kind: "requirement", title: `Requirement not met: ${r.label}`, detail: r.measured, hint: r.hint });
-  }
-  for (const t of flowTests.filter((t2) => t2.status === "fail")) {
-    risks.push({ severity: "high", kind: "test", title: `Test failing: ${t.name}`, detail: t.measured, hint: t.hint });
-  }
-  for (const n of load) {
-    const pct = `${Math.round(n.utilization * 100)}%`;
-    if (n.saturated) {
-      const bandwidth = n.bandwidthUtilization >= n.utilization && n.bandwidthUtilization > 0;
-      risks.push({
-        severity: "high",
-        kind: "saturated",
-        title: `${n.name} is saturated`,
-        detail: bandwidth ? `${Math.round(n.bandwidthLoadMBps).toLocaleString("en-US")} MB/s of payloads against ${Math.round(n.bandwidthCapacityMBps).toLocaleString("en-US")} MB/s of bandwidth (${pct})` : `${formatRps2(n.loadRps)} against a capacity of ${formatRps2(n.capacityRps)} (${pct})`,
-        hint: bandwidth ? "Send the bytes around it (presigned URLs to storage, a CDN), or add replicas." : "Add replicas, cache in front of it, or move work async."
-      });
-    } else if (n.utilization > HOT_UTILIZATION) {
-      risks.push({ severity: "medium", kind: "hot", title: `${n.name} runs hot`, detail: `${pct} utilisation; latency climbs steeply near saturation`, hint: "Add headroom with another replica." });
-    }
-  }
-  for (const id of analysis?.singlePointsOfFailure ?? []) {
-    const node = byId.get(id);
-    risks.push({ severity: "medium", kind: "spof", title: `Single point of failure: ${name(id)}${node && !node.implicit ? ` (${node.techStack})` : ""}`, hint: "Add a replica or a fallback scenario." });
-  }
-  for (const u of diagram.useCases.filter(lacksErrorHandling)) {
-    risks.push({ severity: "low", kind: "no-error-handling", title: `${u.name} has no error scenario`, detail: "Nothing describes what happens when a call fails or is rejected.", hint: "Add an alt branch with a -x call or a 4xx/5xx response." });
-  }
-  for (const w of analysis?.warnings ?? []) risks.push({ severity: "low", kind: "warning", title: w });
-  if (risks.length) sections.push({ kind: "risks", title: "Risks", risks });
-  return { title: diagram.title ?? "Architecture", summary: diagram.summary, checked: !!analysis || tests.length > 0, sections, diagram };
-}
-function formatRps2(rps) {
-  if (rps >= 1e6) return `${formatNumber(Number((rps / 1e6).toFixed(2)))}M rps`;
-  if (rps >= 1e3) return `${formatNumber(Number((rps / 1e3).toFixed(2)))}k rps`;
-  return `${formatNumber(Number(rps.toFixed(2)))} rps`;
-}
-function formatTraffic2(rps, avgRps) {
-  if (avgRps === void 0 || avgRps === rps) return formatRps2(rps);
-  return `avg ${formatRps2(avgRps).replace(/ rps$/, "")} \xB7 peak ${formatRps2(rps)}`;
-}
-var formatMs2 = (ms) => `${ms >= 100 ? Math.round(ms) : formatNumber(Number(ms.toFixed(1)))} ms`;
-var formatPercent2 = (fraction) => `${formatNumber(Number((fraction * 100).toFixed(1)))}%`;
-var formatUsd2 = (usd4) => `$${Math.round(usd4).toLocaleString("en-US")}`;
-function formatGb(gb) {
-  const n = (x, digits) => Number(x.toFixed(digits)).toLocaleString("en-US");
-  return gb >= 1e3 ? `${n(gb / 1e3, 1)} TB` : `${n(gb, gb < 10 ? 1 : 0)} GB`;
-}
-function accessText(n, access) {
-  const [load, capacity, utilization] = access === "read" ? [n.readLoadRps, n.readCapacityRps, n.readUtilization] : [n.writeLoadRps, n.writeCapacityRps, n.writeUtilization];
-  return load > 0 ? `${formatRps2(load)} of ${formatRps2(capacity)} (${formatPercent2(utilization)})` : "\u2014";
-}
-var replicasText = (n) => n.shards > 1 ? `${n.replicas} \xD7 ${n.shards} shards` : String(n.replicas);
-var egressText = (n) => n.egressGbPerMonth > 0 ? `${formatGb(n.egressGbPerMonth)}, ${formatUsd2(n.egressUsd)}` : "\u2014";
-var LOAD_HEADINGS = ["Component", "Reads", "Writes", "Utilisation", "Replicas", "Egress / month", "Cost / month"];
-var totalCostText = (totalUsd, egressUsd = 0) => `${formatUsd2(totalUsd)} / month${egressUsd > 0 ? ` (${formatUsd2(egressUsd)} of it egress)` : ""}`;
-var plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
-function overviewFacts(s) {
-  return [plural(s.components, "component"), plural(s.useCases, "use case"), s.teams.length ? `teams: ${s.teams.join(", ")}` : ""].filter(Boolean).join(" \xB7 ");
-}
-function responseText(r) {
-  return [r.status, r.body].filter(Boolean).join(" ") || "\u2014";
+async function scrollToAnchor($, site, anchor) {
+  const l = live.get(site);
+  const row = l?.page?.anchors[anchor];
+  if (!l?.page || row === void 0) return;
+  const to = l.page.top + row;
+  going.set(l.requestId, to);
+  $.ui.log(`proschi: ${anchor} scrolls ${l.requestId} to row ${to}`, { to: "debug" });
+  const moved = await $.ui.scroll({ to: "start", in: l.requestId }).catch((error) => ({ deny: String(error) }));
+  going.delete(l.requestId);
+  if (moved.deny) $.ui.log(`proschi: scroll to ${anchor} refused: ${moved.deny}`, { to: "debug" });
 }
 
 // ../frontend/src/dsl/mermaid.ts
@@ -10423,12 +10470,12 @@ function toMermaidArchitecture(diagram) {
   lines.push(...colorLines(diagram, id));
   return lines.join("\n") + "\n";
 }
-function className(base, dash) {
+function className(base, dash2) {
   const name = COLOR_NAMES.find((n) => PALETTE[n] === base) ?? `c${base.slice(1)}`;
-  return dash ? `${name}_${dash}` : name;
+  return dash2 ? `${name}_${dash2}` : name;
 }
-function dashArray(dash) {
-  return dash ? `,stroke-dasharray:${DASH_ARRAY[dash]}` : "";
+function dashArray(dash2) {
+  return dash2 ? `,stroke-dasharray:${DASH_ARRAY[dash2]}` : "";
 }
 function colorLines(diagram, id) {
   const classes = /* @__PURE__ */ new Map();
@@ -10437,21 +10484,21 @@ function colorLines(diagram, id) {
     const base = nodeBaseColor(node);
     if (!base) continue;
     const t = tint(base, "light");
-    const dash = node.style?.dash;
+    const dash2 = node.style?.dash;
     if (node.kind === "group") {
-      groups.push(`  style ${id(node.id)} fill:${t.groupFill},stroke:${t.line},color:${t.text}${dashArray(dash)}`);
+      groups.push(`  style ${id(node.id)} fill:${t.groupFill},stroke:${t.line},color:${t.text}${dashArray(dash2)}`);
       continue;
     }
-    const name = className(base, dash);
-    const entry = classes.get(name) ?? { def: `fill:${t.fill},stroke:${t.line},color:${t.text}${dashArray(dash)}`, members: [] };
+    const name = className(base, dash2);
+    const entry = classes.get(name) ?? { def: `fill:${t.fill},stroke:${t.line},color:${t.text}${dashArray(dash2)}`, members: [] };
     entry.members.push(id(node.id));
     classes.set(name, entry);
   }
   const links = /* @__PURE__ */ new Map();
   diagram.edges.forEach((edge, i) => {
-    const { color, dash } = edge.style ?? {};
-    if (!color && !dash) return;
-    const key = [color && `stroke:${tint(color, "light").line}`, dash && `stroke-dasharray:${DASH_ARRAY[dash]}`].filter(Boolean).join(",");
+    const { color, dash: dash2 } = edge.style ?? {};
+    if (!color && !dash2) return;
+    const key = [color && `stroke:${tint(color, "light").line}`, dash2 && `stroke-dasharray:${DASH_ARRAY[dash2]}`].filter(Boolean).join(",");
     links.set(key, [...links.get(key) ?? [], i]);
   });
   return [
@@ -10463,7 +10510,7 @@ function colorLines(diagram, id) {
 }
 
 // ../frontend/src/hld/markdown.ts
-var STATUS2 = { pass: "\u2705", fail: "\u274C", unchecked: "\u2014" };
+var STATUS3 = { pass: "\u2705", fail: "\u274C", unchecked: "\u2014" };
 var SEVERITY = { high: "\u{1F534}", medium: "\u{1F7E0}", low: "\u26AA" };
 function cell(text) {
   return text === void 0 || text === "" ? "\u2014" : String(text).replace(/\|/g, "\\|").replace(/\s*\r?\n\s*/g, " ");
@@ -10494,10 +10541,10 @@ function renderSection(doc, s) {
         out.push("");
       }
       if (s.nonFunctional.length) {
-        out.push("### Non-functional", "", ...table(["Requirement", "Status", "Measured"], s.nonFunctional.map((r) => [r.label, STATUS2[r.status], r.measured])));
+        out.push("### Non-functional", "", ...table(["Requirement", "Status", "Measured"], s.nonFunctional.map((r) => [r.label, STATUS3[r.status], r.measured])));
       }
       if (s.flowTests.length) {
-        out.push("### Flow tests", "", ...table(["Test", "Status", "Asserts", "Result"], s.flowTests.map((t) => [t.name, STATUS2[t.status], t.assertions.map(code).join("<br>"), t.measured])));
+        out.push("### Flow tests", "", ...table(["Test", "Status", "Asserts", "Result"], s.flowTests.map((t) => [t.name, STATUS3[t.status], t.assertions.map(code).join("<br>"), t.measured])));
       }
       break;
     }
@@ -10599,20 +10646,37 @@ function toMarkdown(doc) {
 }
 
 // ../plugin/src/views/hld.tsx
+var documents = /* @__PURE__ */ new Map();
 var markdowns = /* @__PURE__ */ new Map();
+function hldDocument(doc, key) {
+  let h2 = documents.get(key);
+  if (!h2) {
+    h2 = hld(doc.root, doc.analysis, doc.tests);
+    documents.set(key, h2);
+  }
+  return h2;
+}
 function hldMarkdown(doc, key) {
   let text = markdowns.get(key);
   if (!text) {
-    text = toMarkdown(hld(doc.root, doc.analysis, doc.tests));
+    text = toMarkdown(hldDocument(doc, key));
     markdowns.set(key, text);
   }
   return text;
 }
 function shownMarkdown(markdown) {
-  return markdown.replace(
+  const text = markdown.replace(
     /```mermaid\n([\s\S]*?)```\n?/g,
     (_, code2) => code2.startsWith("sequenceDiagram") ? "_The Sequence tab draws this scenario._\n" : "_The Diagram tab draws the architecture._\n"
   );
+  const titles = [];
+  const numbered = text.replace(/^## (.+)$/gm, (_, title) => `## ${titles.push(title)}. ${title}`);
+  if (titles.length === 0) return numbered;
+  const contents = `**Contents** ${titles.map((t, i) => `${i + 1} ${t}`).join(" \xB7 ")}
+
+`;
+  const at = numbered.search(/^## /m);
+  return numbered.slice(0, at) + contents + numbered.slice(at);
 }
 function hldTab(ui, doc, key, copy2) {
   const markdown = hldMarkdown(doc, key);
@@ -11179,7 +11243,7 @@ var HINT = [
 ].join(" ");
 var layouts = /* @__PURE__ */ new Map();
 var pending2 = /* @__PURE__ */ new Set();
-var documents = /* @__PURE__ */ new Map();
+var documents2 = /* @__PURE__ */ new Map();
 var scenes = /* @__PURE__ */ new Map();
 var timers = /* @__PURE__ */ new Map();
 var FENCE = /^```proschi[^\n]*\n([\s\S]*?)\n```[ \t]*$/gm;
@@ -11347,8 +11411,10 @@ function pagePart($, tab, c) {
   }
   if (tab === "hld") {
     const markdown = hldMarkdown(doc, key);
+    const h2 = hldDocument(doc, key);
     actions["hld-copy"] = (surface) => void copy($, surface, markdown, "the HLD markdown");
-    return { panel: hldPage(markdown), actions };
+    for (const s of h2.sections) actions[`toc=${s.kind}`] = () => void scrollToAnchor($, PANE_VIEW, hldAnchor(s.kind));
+    return { panel: hldPage(h2, c.source), actions };
   }
   const picks = doc.diagram.useCases.flatMap((u) => u.scenarios.map((s) => ({ value: `${u.id}:${s.id}`, useCase: u, scenario: s })));
   const player = c.player;
@@ -11538,10 +11604,10 @@ async function documentOf($, viewId, written, file) {
   const shown2 = { ...player.expanded.length ? { expanded: player.expanded } : {}, ...player.focus !== void 0 ? { focus: player.focus } : {} };
   const source = shown2.expanded || shown2.focus !== void 0 ? { ...written, view: shown2 } : written;
   const key = keyOf(source);
-  let doc = documents.get(key);
+  let doc = documents2.get(key);
   if (!doc) {
     doc = loadDocument(source);
-    documents.set(key, doc);
+    documents2.set(key, doc);
   }
   const where4 = file ?? "The diagram";
   if (doc.errors.length > 0) {

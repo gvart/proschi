@@ -473,6 +473,54 @@ function list(S: Surface, items: Rich[], ordered: boolean, x: number, top: numbe
   return y - top - 2;
 }
 
+/**
+ * A nested <svg> (an icon) as a <g> with the same placement, which resvg can
+ * crop: its x, y, width, height and viewBox become a transform, the other
+ * attributes (fill, stroke, color) stay for the children to inherit.
+ */
+function flatten(attrs: string, body: string): string {
+  const num = (name: string, fallback = 0) => Number(new RegExp(`\\s${name}="([-\\d.]+)"`).exec(attrs)?.[1] ?? fallback);
+  const box = /viewBox="([^"]+)"/.exec(attrs)?.[1].split(/[\s,]+/).map(Number) ?? [0, 0, num('width', 1), num('height', 1)];
+  const kx = num('width', box[2]) / box[2];
+  const ky = num('height', box[3]) / box[3];
+  const rest = attrs.replace(/\s(x|y|width|height|viewBox|xmlns(:\w+)?|preserveAspectRatio)="[^"]*"/g, '');
+  return `<g transform="translate(${num('x') - box[0] * kx} ${num('y') - box[1] * ky}) scale(${kx} ${ky})"${rest}>${body}</g>`;
+}
+
+/** An SVG drawing (`proschi render`'s) to draw inside a panel: its size, and its body without the outer <svg>, title and background, nested <svg>s flattened. */
+export function embedded(svg: string): { width: number; height: number; body: string } {
+  const width = Number(/width="([\d.]+)"/.exec(svg)![1]);
+  const height = Number(/height="([\d.]+)"/.exec(svg)![1]);
+  const body = svg
+    .replace(/^<svg[^>]*>\n?/, '')
+    .replace(/<\/svg>\s*$/, '')
+    .replace(/<title>[\s\S]*?<\/title>\n?/, '')
+    .replace(/<rect width="100%" height="100%"[^>]*\/>\n?/, '')
+    .replace(/<svg\b([^>]*)>([\s\S]*?)<\/svg>/g, (_, attrs: string, inner: string) => flatten(attrs, inner));
+  return { width, height, body };
+}
+
+/** A figure: the drawing in a frame of the page's wash, centred, no wider than the page and no taller than its rows; its caption under it. */
+function figure(S: Surface, b: Extract<Block, { type: 'figure' }>, x: number, top: number, w: number): number {
+  const P = S.P;
+  if (!b.svg) {
+    const p = paragraph(P, 'This drawing could not be made here: ↗ Open in Proschi draws it.', x, top, w, { size: 13 }, P.muted, 19);
+    S.add(p.svg);
+    return p.height;
+  }
+  const d = embedded(b.svg);
+  const pad = 10;
+  const k = Math.min(1, (w - 2 * pad) / d.width, ((b.maxRows ?? 30) * ROW - 2 * pad) / d.height);
+  const h = up(d.height * k + 2 * pad);
+  S.add(rect(x + 0.5, top + 0.5, w - 1, h - 1, { fill: P.wash, stroke: P.card.line, sw: 1, rx: 8 }));
+  const kk = Math.round(k * 1000) / 1000;
+  S.addWithin({ x, y: top, w, h }, `<g transform="translate(${r(x + (w - d.width * kk) / 2)} ${r(top + (h - d.height * kk) / 2)})${kk < 1 ? ` scale(${kk})` : ''}">${d.body}</g>`);
+  if (!b.caption) return h;
+  const c = paragraph(P, b.caption, x + 4, top + h + 4, w - 8, { size: 12.5 }, P.muted, 18);
+  S.add(c.svg);
+  return h + 4 + c.height;
+}
+
 const HEADING = { 1: { size: 20, weight: 600, before: 8 }, 2: { size: 16.5, weight: 600, before: 8 }, 3: { size: 14.5, weight: 600, before: 4 } } as const;
 
 /** The space before a block, after the one before it. */
@@ -497,6 +545,7 @@ export function blocks(S: Surface, list_: Block[], x: number, top: number, w: nu
     prev = b;
     switch (b.type) {
       case 'heading': {
+        if (b.anchor) S.anchors[b.anchor] = y;
         const h = HEADING[b.level ?? 2];
         const laid = layoutRich(b.text, w, { size: h.size, weight: h.weight }, true);
         laid.forEach((l, i) => S.add(drawLaid(P, l, x, y + h.size + i * h.size * 1.35, { size: h.size, weight: h.weight }, P.ink)));
@@ -546,6 +595,9 @@ export function blocks(S: Surface, list_: Block[], x: number, top: number, w: nu
         break;
       case 'space':
         y += (b.rows ?? 1) * ROW;
+        break;
+      case 'figure':
+        y += figure(S, b, x, y, w);
         break;
     }
     // Boxes read as one: never cut across.

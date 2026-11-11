@@ -9,14 +9,13 @@ import { renderSequenceSvg } from '../src/render/sequence';
 import type { Panel, PanelOutput, PanelsOutput } from '../src/render/ui/contract';
 import { analysisPage, hldPage, stepCardsOf, tabBarPanel, testsPage } from '../src/render/ui/data';
 import { CELL } from '../src/render/ui/kit';
-import { markdownBlocks } from '../src/render/ui/markdown';
 import { loadFonts, measure } from '../src/render/ui/metrics';
 import { drawPanel } from '../src/render/ui/panels';
 import { cellsOf, cut } from '../src/render/ui/tiles';
 import { loadDocument } from '../src/terminal/document';
 import { answer } from '../src/terminal/rasterHost';
+import { withFigures } from '../src/terminal/panelHost';
 import { hld } from '../../frontend/src/hld/hld';
-import { toMarkdown } from '../../frontend/src/hld/markdown';
 
 const HOOKS = fileURLToPath(new URL('../../plugin/hooks/', import.meta.url));
 loadFonts(join(HOOKS, 'fonts'));
@@ -56,7 +55,7 @@ const PANELS: Record<string, Panel> = {
   notices: { kind: 'notices', notices: [{ text: 'A warning', hint: 'a hint' }], legend: {}, verdict: { passed: 1, total: 3, first: 'p99: too slow' }, details: { id: 'details', label: 'Details' } },
   analysis: analysisPage(doc),
   tests: testsPage(now, true),
-  hld: hldPage(toMarkdown(hld(doc.root, doc.analysis, doc.tests))),
+  hld: hldPage(hld(doc.root, doc.analysis, doc.tests), source),
   sequence: { kind: 'sequence', source, useCase: redirect.id, current: [2], controls: [{ text: [{ text: 'Scenario', bold: true }] }, { select: { id: 'pick', value: 'redirect', options: [{ value: 'redirect', label: 'Redirect' }] } }, { text: [{ text: 'Step 2 of 3', bold: true }] }] },
 };
 
@@ -171,15 +170,7 @@ describe('UI panels: the cell grid', () => {
   });
 });
 
-describe('UI panels: Markdown and the sequence', () => {
-  it('reads the HLD Markdown as blocks', () => {
-    const blocks = markdownBlocks('# Title\n\nSome **bold** and `code`.\n\n| A | B |\n|---|---:|\n| ✅ | 2 |\n\n- one\n- two\n\n```mermaid\nsequenceDiagram\n```\n');
-    expect(blocks.map((b) => b.type)).toEqual(['heading', 'paragraph', 'table', 'list', 'paragraph']);
-    expect(blocks[1]).toEqual({ type: 'paragraph', text: [{ text: 'Some ' }, { text: 'bold', bold: true }, { text: ' and ' }, { text: 'code', mono: true }, { text: '.' }] });
-    expect(blocks[2]).toMatchObject({ columns: [{ title: 'A' }, { title: 'B', align: 'right' }], rows: [{ cells: [[{ text: '✓', tone: 'good' }], '2'] }] });
-    expect(blocks[4]).toMatchObject({ text: 'The Sequence tab draws this scenario.' });
-  });
-
+describe('UI panels: the sequence', () => {
   it('leaves the default sequence SVG as it was and lights the current steps on request', () => {
     const scenario = redirect.scenarios[0];
     const plain = renderSequenceSvg(doc.diagram, redirect, scenario);
@@ -243,6 +234,29 @@ describe('UI panels: the raster helper', () => {
     expect(((await answer(input, { dir: HOOKS })) as PanelsOutput).panels[0]).toEqual(tabs);
   });
 
+  const svgOf = ({ surface, height }: { surface: { svg(h: number): string }; height: number }) => surface.svg(height);
+
+  it('draws the HLD as the editor does: numbered sections a table of contents scrolls to, the architecture and each sequence as figures', async () => {
+    const page = PANELS.hld as Extract<Panel, { kind: 'page' }>;
+    const toc = page.blocks.find((b) => b.type === 'controls' && b.items.some((it) => 'control' in it && it.control.id.startsWith('toc=')));
+    const kinds = hld(doc.root, doc.analysis, doc.tests).sections.map((s) => s.kind);
+    expect(toc && toc.type === 'controls' && toc.items.map((it) => ('control' in it ? it.control.id : ''))).toEqual(kinds.map((k) => `toc=${k}`));
+    expect(page.blocks.filter((b) => b.type === 'heading' && b.level === 2).map((b) => b.type === 'heading' && b.anchor)).toEqual(kinds.map((k) => `hld-${k}`));
+    const figures = page.blocks.filter((b) => b.type === 'figure');
+    expect(figures.map((b) => b.type === 'figure' && ('architecture' in b.of ? 'architecture' : b.of.useCase))).toEqual(['architecture', ...doc.diagram.useCases.filter((u) => u.scenarios.some((s) => s.steps.length)).map((u) => u.id)]);
+    const out = (await answer({ kind: 'panels', outDir: mkdtempSync(join(tmpdir(), 'proschi-ui-')), theme: 'dark', panels: [{ panel: page, columns: 100 }] }, { dir: HOOKS })) as PanelsOutput;
+    const drawn = out.panels[0] as PanelOutput;
+    // Each section's row, in order, inside the page.
+    const rows = kinds.map((k) => drawn.anchors![`hld-${k}`]);
+    expect(rows).toEqual([...rows].sort((a, b) => a - b));
+    expect(rows.at(-1)).toBeLessThan(drawn.rows);
+    // The figures drawn by the helper, not their placeholder.
+    expect(svgOf(drawPanel(page, 100, 'dark'))).toMatch(/> ?could\b/);
+    const resolved = await withFigures(page, 'dark');
+    expect(resolved.kind === 'page' && resolved.blocks.filter((b) => b.type === 'figure').every((b) => b.type === 'figure' && b.svg?.startsWith('<svg'))).toBe(true);
+    expect(svgOf(drawPanel(resolved, 100, 'dark'))).not.toMatch(/> ?could\b/);
+  });
+
   it('serves requests from a folder with --serve', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'proschi-serve-'));
     const child = spawn('node', [join(HOOKS, 'raster.cjs'), '--serve', dir], { stdio: ['ignore', 'pipe', 'inherit'] });
@@ -298,7 +312,7 @@ describe('UI panels: every block within the pane width', () => {
     for (const e of examples) {
       const d = loadDocument({ source: e.source });
       if (d.errors.length) continue;
-      const page = hldPage(toMarkdown(hld(d.root, d.analysis, d.tests)));
+      const page = hldPage(hld(d.root, d.analysis, d.tests), { source: e.source });
       for (const columns of [60, 80, 100, 140]) {
         const { surface, height } = drawPanel(page, columns, 'dark');
         for (const t of texts(surface.svg(height))) {

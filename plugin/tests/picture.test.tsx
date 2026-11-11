@@ -637,3 +637,75 @@ test('the HLD tab: every strip of the page lies within the pane\'s rows and colu
   await p.unmount()
 })
 
+test('the HLD tab\'s contents: each entry scrolls the pane to its section\'s row', SLOW, async ($, on) => {
+  const clock = mock.clock(on)
+  const h = host(on, clock)
+  const ui = await settle($, clock)
+  await click(ui, 'm1:0', 'links/focus')
+  await ui.unmount()
+  const site = 'proschi-view:0'
+  let p = await settle($, clock, pane, site, has('tabs/hld'))
+  await click(p, site, 'tabs/hld')
+  await p.unmount()
+  p = await settle($, clock, pane, site, has('page-hld/toc=overview'))
+  const toc = (await ids(p, site)).filter(id => id.startsWith('page-hld/toc='))
+  expect(toc.slice(0, 3)).toEqual(['page-hld/toc=overview', 'page-hld/toc=requirements', 'page-hld/toc=capacity'])
+  const root = layout((await p.drawn()) as never)
+  const top = Math.min(...[...nodes(root)].filter(n => n.el.type === 'Image' && String(n.key).startsWith(`t-${site}-page-hld-`)).map(n => n.y))
+  h.logs.length = 0
+  await click(p, site, 'page-hld/toc=capacity')
+  await click(p, site, 'page-hld/toc=requirements')
+  // The fake helper puts the page's sections 32 rows apart from under its controls: each entry scrolls to its own, from the page's top.
+  const rows = h.logs.flatMap(l => /^proschi: hld-(\w+) scrolls proschi-view to row (\d+)$/.exec(l)?.slice(1) ?? [])
+  expect(rows.filter((_, i) => i % 2 === 0)).toEqual(['capacity', 'requirements'])
+  const [capacity, requirements] = [Number(rows[1]), Number(rows[3])]
+  expect(capacity - requirements).toBe(32)
+  expect(requirements).toBeGreaterThan(top)
+  await p.unmount()
+})
+
+test('the Sequence tab\'s picker floats over the page: opening it moves nothing', SLOW, async ($, on) => {
+  const clock = mock.clock(on)
+  host(on, clock, { worker: 'refused' })
+  const ui = await settle($, clock)
+  await click(ui, 'm1:0', 'links/focus')
+  await ui.unmount()
+  const site = 'proschi-view:0'
+  let p = await settle($, clock, pane, site, has('tabs/sequence'))
+  p = await step($, clock, p, pane, site, 'tabs/sequence', has('page-sequence/seq-pick'))
+  const before = await shapeOf(p, site)
+  p = await step($, clock, p, pane, site, 'page-sequence/seq-pick', c => c.some(x => x.id.startsWith('menu/seq-pick=')))
+  expect((await controlsOf(p, site)).filter(c => c.id.startsWith('menu/seq-pick=')).every(c => FLOATS.test(c.in))).toBe(true)
+  expect(await shapeOf(p, site)).toEqual(before)
+  // Picking another scenario closes it, the page where it was.
+  const other = (await ids(p, site)).filter(id => id.startsWith('menu/seq-pick=')).at(-1)!
+  p = await step($, clock, p, pane, site, other, hasNo('menu/'))
+  expect(await shapeOf(p, site)).toEqual(before)
+  await p.unmount()
+})
+
+test('the pane opened on another tab draws its Diagram first: ahead of every page drawn ahead', SLOW, async ($, on) => {
+  const clock = mock.clock(on)
+  const h = host(on, clock)
+  // The pane as it was left: on Tests.
+  on('state.get', { plugin: 'proschi', key: 'paneTab' }, async ($, e, next) => {
+    const read = (await next(e)) as { value: { version: number } }
+    return { value: { ...read.value, value: 'tests' } }
+  })
+  const ui = await settle($, clock)
+  const from = h.requests.length
+  await click(ui, 'm1:0', 'links/focus')
+  await ui.unmount()
+  const site = 'proschi-view:0'
+  const p = await settle($, clock, pane, site, has('page-tests/passing'))
+  const asked = h.requests.slice(from)
+  // The pane's diagram (its grid, not a panel), hidden behind Tests: `b…`, which the worker answers before any `c…`.
+  const diagram = asked.filter(r => r.input.kind !== 'panels' && (r.input.options as { grid?: unknown } | undefined)?.grid)
+  expect(diagram.length).toBeGreaterThan(0)
+  expect(diagram[0]!.id).toMatch(/^b/)
+  const pages = asked.filter(r => r.input.kind === 'panels' && (r.input.panels as { panel: { kind: string } }[]).some(q => q.panel.kind === 'page' || q.panel.kind === 'sequence'))
+  expect(pages.filter(r => r.id.startsWith('c')).length).toBeGreaterThan(0)
+  expect(pages.every(r => r.id[0]! !== 'b' || r.id > diagram[0]!.id)).toBe(true)
+  await p.unmount()
+})
+

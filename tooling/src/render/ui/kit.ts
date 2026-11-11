@@ -71,6 +71,8 @@ export class Surface {
   readonly controls: Placed[] = [];
   readonly spans: Reach[] = [];
   private cards: Reach[] = [];
+  /** The px each anchored heading starts at, by anchor (Block heading `anchor`). */
+  readonly anchors: Record<string, number> = {};
 
   constructor(
     readonly P: Palette,

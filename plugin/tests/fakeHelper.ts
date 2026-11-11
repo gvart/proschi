@@ -25,7 +25,7 @@ function controlsOf(panel: Record<string, unknown>): { id: string; hotkey?: stri
     const o = v as Record<string, unknown>
     if (key !== 'source' && typeof o.id === 'string' && ('label' in o || 'icon' in o || 'outcome' in o || 'options' in o)) {
       out.push({ id: o.id, ...(typeof o.hotkey === 'string' ? { hotkey: o.hotkey } : {}), ...(o.disabled ? { disabled: true } : {}) })
-      if (Array.isArray(o.options) && o.open) for (const opt of o.options as { value: string }[]) out.push({ id: `${o.id}=${opt.value}` })
+      if (Array.isArray(o.options) && o.open && !o.floats) for (const opt of o.options as { value: string }[]) out.push({ id: `${o.id}=${opt.value}` })
     }
     for (const [k, x] of Object.entries(o)) if (k !== 'options') walk(x, k)
   }
@@ -80,7 +80,10 @@ export function answer(input: Record<string, unknown>, size = { width: 1600, hei
       const under = tiles.length
       if (controls.some(c => c.id === 'hld-copy')) for (let i = 0; i < 4; i++) tiles.push({ col: 0, row: under + i * 64, columns: req.columns, rows: 64, file: `${name}-hld-${i}.png` } as never)
       const rows = tiles.reduce((n, t) => n + t.rows, 0)
-      return { id: req.id, kind: req.panel.kind, columns: req.columns, rows, cellPx: { width: 16, height: 34 }, tiles }
+      // Its sections' headings 32 rows apart down the plain strips.
+      const headings = req.panel.kind === 'page' ? (req.panel.blocks as { type: string; anchor?: string }[]).filter(b => b.type === 'heading' && b.anchor) : []
+      const anchors = Object.fromEntries(headings.map((b, i) => [b.anchor!, under + i * 32]))
+      return { id: req.id, kind: req.panel.kind, columns: req.columns, rows, cellPx: { width: 16, height: 34 }, tiles, ...(headings.length ? { anchors } : {}) }
     })
     return { panels }
   }

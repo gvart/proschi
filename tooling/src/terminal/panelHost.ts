@@ -13,10 +13,15 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Resvg } from '@resvg/resvg-wasm';
-import { CELL_ASPECT, type PanelOutput, type PanelRequest, type PanelsInput, type Tile, type TileArea } from '../render/ui/contract';
+import { drawArchitecture, layoutArchitecture, type ArchitectureLayout } from '../render/architecture';
+import { renderSequenceSvg } from '../render/sequence';
+import { withTheme } from '../render/svg';
+import { CELL_ASPECT, type Block, type Panel, type PanelOutput, type PanelRequest, type PanelsInput, type Tile, type TileArea, type UiTheme } from '../render/ui/contract';
 import { CELL, type Box, type ControlState } from '../render/ui/kit';
 import { drawPanel } from '../render/ui/panels';
+import { paletteOf } from '../render/ui/theme';
 import { cellsOf, cut } from '../render/ui/tiles';
+import { loadDocument } from './document';
 import { Writer, hash, put, touch, type Pixels } from './png';
 
 /** PNG px per CSS px across: 16 a column, a Retina screen's pixels for a terminal cell 8 points wide. */
@@ -63,6 +68,43 @@ function inset(whole: Pixels, piece: Pixels, x: number): Pixels {
   return { width: whole.width, height: whole.height, data };
 }
 
+/**
+ * A page with its figures drawn (Block `figure`): the architecture as the
+ * diagram's strip draws it, on the figure's wash, and a use case's sequence
+ * as the Sequence tab draws it. A figure that cannot be drawn is left
+ * without its SVG, which the page says.
+ */
+export async function withFigures(p: Panel, theme: UiTheme): Promise<Panel> {
+  if (p.kind !== 'page' || !p.source || !p.blocks.some((b) => b.type === 'figure')) return p;
+  const doc = loadDocument(p.source);
+  if (doc.errors.length) return p;
+  let laid: ArchitectureLayout | undefined;
+  const out: Block[] = [];
+  for (const [i, b] of p.blocks.entries()) {
+    if (b.type !== 'figure') {
+      out.push(b);
+      continue;
+    }
+    try {
+      let svg: string;
+      if ('architecture' in b.of) {
+        laid ??= await layoutArchitecture(doc.diagram);
+        svg = drawArchitecture(laid, { theme, systems: doc.systems, terminal: true, background: paletteOf(theme).wash });
+      } else {
+        const { useCase, scenario } = b.of;
+        const u = doc.diagram.useCases.find((c) => c.id === useCase || c.name === useCase);
+        const s = scenario === undefined ? u?.scenarios[0] : u?.scenarios.find((c) => c.id === scenario || c.name === scenario);
+        if (!u || !s) throw new Error(`No scenario '${scenario ?? ''}' in '${useCase}'`);
+        svg = withTheme(theme, () => renderSequenceSvg(doc.diagram, u, s, `fig${i}-`, { current: [] }));
+      }
+      out.push({ ...b, svg });
+    } catch {
+      out.push(b);
+    }
+  }
+  return { ...p, blocks: out };
+}
+
 async function panel(req: PanelRequest, input: PanelsInput, env: PanelEnv, writer: Writer): Promise<PanelOutput> {
   const theme = input.theme ?? 'light';
   const px = cellPxOf(input.cellAspect);
@@ -75,8 +117,9 @@ async function panel(req: PanelRequest, input: PanelsInput, env: PanelEnv, write
       return { ...done, ...(req.id !== undefined ? { id: req.id } : {}) };
     }
   }
-  const { surface, height } = drawPanel(req.panel, req.columns, theme, req.edges);
+  const { surface, height } = drawPanel(await withFigures(req.panel, theme), req.columns, theme, req.edges);
   const rows = height / CELL.height;
+  const anchors = Object.entries(surface.anchors);
   const strips = cut(
     rows,
     surface.controls.map((c) => ({ control: c.control, cells: cellsOf(c.box, req.columns, rows) })),
@@ -107,7 +150,7 @@ async function panel(req: PanelRequest, input: PanelsInput, env: PanelEnv, write
     }
     tiles.push(tile);
   }
-  const out: PanelOutput = { kind: req.panel.kind, columns: req.columns, rows, cellPx: px, tiles };
+  const out: PanelOutput = { kind: req.panel.kind, columns: req.columns, rows, cellPx: px, tiles, ...(anchors.length ? { anchors: Object.fromEntries(anchors.map(([id, y]) => [id, Math.floor(y / CELL.height)])) } : {}) };
   await writer.done();
   put(manifest, JSON.stringify(out));
   return { ...out, ...(req.id !== undefined ? { id: req.id } : {}) };
