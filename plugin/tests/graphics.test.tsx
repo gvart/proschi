@@ -98,19 +98,25 @@ test('auto: a terminal that draws the alt gets the text cells, remembered for th
   })
   const runs = host(on)
   const ui = await draw($)
-  // The first picture is drawn, then asked about: refused by name and as bytes, every try.
-  expect(await ui.find({ type: 'Image' })).toBeDefined()
+  // While it asks, the text cells stand, and the one Image is the probe: a transparent cell whose alt is a space, so nothing flashes.
+  expect(await ui.find({ type: 'Raster' })).toBeDefined()
+  const images = (await ui.findAll({ type: 'Image' })) as unknown as NonNullable<Found>[]
+  expect(images).toHaveLength(1)
+  expect(images[0]!.props).toMatchObject({ alt: ' ', columns: 1, rows: 1, source: { file: expect.stringMatching(/\/hooks\/probe\.png$/), format: 'png' } })
   await clock.advance(2000)
-  expect(blits.some(b => 'source' in (b as object))).toBe(true)
+  // Refused by name and as bytes, every try, on the probe's key.
+  const asked = blits as { key: string; source?: { png?: string } }[]
+  expect(asked.every(b => b.key === 'probe-m1:0')).toBe(true)
+  expect(asked.some(b => b.source?.png)).toBe(true)
   await ui.unmount()
   const again = await $.ui.mount(reply)
   expect(await again.find({ type: 'Raster' })).toBeDefined()
   expect(await again.find({ type: 'Image' })).toBeUndefined()
   expect(remembered(runs, { status: 'no' })).toBe(true)
   // Remembered: no more asking.
-  const asked = blits.length
+  const count = blits.length
   await clock.advance(2000)
-  expect(blits.length).toBe(asked)
+  expect(blits.length).toBe(count)
   await again.unmount()
 })
 

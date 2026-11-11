@@ -9099,6 +9099,7 @@ var probed = atom({ plugin: "proschi", key: "graphics" }, UNKNOWN);
 var TMUX_HINT = "tmux: set allow-passthrough on and focus-events on for pixel diagrams";
 var PX_PER_COLUMN = 16;
 var MAX_PNG_BYTES = 2 * 1024 * 1024;
+var PROBE_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNgAAIAAAUAAen63NgAAAAASUVORK5CYII=";
 var PROBE_TRIES = 6;
 var PROBE_MS = 150;
 var rasters = /* @__PURE__ */ new Map();
@@ -9172,7 +9173,11 @@ async function probeOf($) {
   const p = await read($, probed);
   return p && (p.status === "yes" || p.status === "no" || p.status === "tmux") ? p : UNKNOWN;
 }
-function probe($, requestId, key, file) {
+var probeKey = (viewId) => `probe-${viewId}`;
+function probeSource($) {
+  return { file: `${$.plugin.root}/hooks/probe.png`, format: "png" };
+}
+function probe($, requestId, key) {
   if (probing) return;
   probing = true;
   let tries = 0;
@@ -9185,13 +9190,11 @@ function probe($, requestId, key, file) {
   };
   const timer = $.clock.every(PROBE_MS, async () => {
     if (tries++ >= PROBE_TRIES) return settle({ status: "no" });
-    const byName = await $.ui.blit({ requestId, key, source: { file, format: "png" } }).catch((error) => ({ deny: String(error), fix: void 0 }));
+    const byName = await $.ui.blit({ requestId, key, source: probeSource($) }).catch((error) => ({ deny: String(error), fix: void 0 }));
     if (!byName.deny) return settle({ status: "yes", form: "file" });
     if (byName.fix === "tmux-passthrough") return settle({ status: "tmux" });
     if (/no-surface/.test(byName.deny)) return settle(void 0);
-    const png = await pngOf($, file);
-    if (!png) return;
-    const asBytes = await $.ui.blit({ requestId, key, source: { png } }).catch((error) => ({ deny: String(error), fix: void 0 }));
+    const asBytes = await $.ui.blit({ requestId, key, source: { png: PROBE_PNG } }).catch((error) => ({ deny: String(error), fix: void 0 }));
     if (!asBytes.deny) return settle({ status: "yes", form: "png" });
     if (asBytes.fix === "tmux-passthrough") return settle({ status: "tmux" });
   });
@@ -10875,7 +10878,7 @@ async function diagramView($, d, viewId, written, file, whatIf) {
     }
   };
   const picture = await pictureOf($, view, request2, `${doc.diagram.title ?? title}: the architecture diagram as a picture`, step, progress === 0);
-  return { element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, playing ? playerHeader($, view, playing, player) : doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, picture.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, TMUX_HINT), !picture.image && grid.columns > d.columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", grid.columns, " columns wide, wider than the ", d.columns, " here: ", view.inPane ? "widen the window" : "use \u26F6 Focus or a wider window", " to see it whole."), lost.some((name) => !importReasons.has(name)) && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u26A0 Not found, so drawn as plain boxes: ", lost.filter((name) => !importReasons.has(name)).join(", ")), lost.filter((name) => importReasons.has(name)).map((name) => /* @__PURE__ */ h(ui.Text, { key: `lost-${name}`, dimColor: true }, "\u26A0 ", importReasons.get(name))), doc.notes.map((note2) => /* @__PURE__ */ h(ui.Text, { color: "yellow" }, "\u26A0 ", note2.text, note2.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true }, " \u2192 ", note2.hint))), (view.inPane ? doc.warnings : doc.warnings.slice(0, INLINE_WARNINGS)).map((w) => /* @__PURE__ */ h(ui.Text, { key: `warn-${w}`, color: "yellow", wrap: "truncate-end" }, "\u26A0 ", w)), !view.inPane && doc.warnings.length > INLINE_WARNINGS && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2026 ", doc.warnings.length - INLINE_WARNINGS, " more: \u26F6 Focus, then Analysis"), picture.image ?? /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), doc.edges && !playing && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)), verdict && !playing && /* @__PURE__ */ h(ui.Box, { key: `verdict-${viewId}`, flexDirection: "row", gap: 1, width: view.width }, lineView(ui, verdict), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `tests-${viewId}`, label: "\u26F6 Details", dimColor: true, onPress: () => focus($, view, title, what, "tests") })), hasSystems && !playing && systemBar($, view, doc, systems, selected, player), playing ? stepPanel($, view, playing, step, player) : pick2 && useCaseBar($, view, doc, pick2, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: roomy ? "\u29C9 Copy source" : "\u29C9 Source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: roomy ? "\u29C9 Copy share link" : "\u29C9 Link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: roomy ? "\u2197 Open in Proschi" : "\u2197 Open", variant: "primary", onPress: (press) => void openLink($, press.surface, link) }), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `focus-${viewId}`, label: "\u26F6 Focus", onPress: () => focus($, view, title, what) }))), systems: hasSystems };
+  return { element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, playing ? playerHeader($, view, playing, player) : doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, picture.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, TMUX_HINT), !picture.image && grid.columns > d.columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", grid.columns, " columns wide, wider than the ", d.columns, " here: ", view.inPane ? "widen the window" : "use \u26F6 Focus or a wider window", " to see it whole."), lost.some((name) => !importReasons.has(name)) && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u26A0 Not found, so drawn as plain boxes: ", lost.filter((name) => !importReasons.has(name)).join(", ")), lost.filter((name) => importReasons.has(name)).map((name) => /* @__PURE__ */ h(ui.Text, { key: `lost-${name}`, dimColor: true }, "\u26A0 ", importReasons.get(name))), doc.notes.map((note2) => /* @__PURE__ */ h(ui.Text, { color: "yellow" }, "\u26A0 ", note2.text, note2.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true }, " \u2192 ", note2.hint))), (view.inPane ? doc.warnings : doc.warnings.slice(0, INLINE_WARNINGS)).map((w) => /* @__PURE__ */ h(ui.Text, { key: `warn-${w}`, color: "yellow", wrap: "truncate-end" }, "\u26A0 ", w)), !view.inPane && doc.warnings.length > INLINE_WARNINGS && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2026 ", doc.warnings.length - INLINE_WARNINGS, " more: \u26F6 Focus, then Analysis"), picture.image ?? /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), doc.edges && !playing && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)), verdict && !playing && /* @__PURE__ */ h(ui.Box, { key: `verdict-${viewId}`, flexDirection: "row", gap: 1, width: view.width }, lineView(ui, verdict), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `tests-${viewId}`, label: "\u26F6 Details", dimColor: true, onPress: () => focus($, view, title, what, "tests") })), hasSystems && !playing && systemBar($, view, doc, systems, selected, player), playing ? stepPanel($, view, playing, step, player) : pick2 && useCaseBar($, view, doc, pick2, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: roomy ? "\u29C9 Copy source" : "\u29C9 Source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: roomy ? "\u29C9 Copy share link" : "\u29C9 Link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: roomy ? "\u2197 Open in Proschi" : "\u2197 Open", variant: "primary", onPress: (press) => void openLink($, press.surface, link) }), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `focus-${viewId}`, label: "\u26F6 Focus", onPress: () => focus($, view, title, what) }), picture.probe)), systems: hasSystems };
 }
 var images = /* @__PURE__ */ new Map();
 async function pictureOf($, view, request2, alt, step, fromStart) {
@@ -10886,16 +10889,22 @@ async function pictureOf($, view, request2, alt, step, fromStart) {
   const hint = probed2.status === "tmux";
   if (graphics === "auto" && (probed2.status === "no" || probed2.status === "tmux")) return { hint };
   const out = rasterOf($, request2);
-  if (!out || "error" in out) return { hint };
+  let asking;
+  if (probed2.status === "unknown") {
+    const key2 = probeKey(view.viewId);
+    probe($, view.d.requestId, key2);
+    asking = /* @__PURE__ */ h(ui.Image, { key: key2, source: probeSource($), columns: 1, rows: 1, alt: " " });
+    if (graphics === "auto") return { probe: asking };
+  }
+  if (!out || "error" in out) return { hint, ...asking ? { probe: asking } : {} };
   const frames = request2.options.play ? out.frames : void 0;
-  if (request2.options.play && !frames?.length) return { hint };
+  if (request2.options.play && !frames?.length) return { hint, ...asking ? { probe: asking } : {} };
   const shown = frames?.[step];
   const file = shown?.length ? shown[fromStart ? 0 : shown.length - 1] : out.base;
   const size = imageSize(out, view.d.columns, view.d.rows ?? INLINE_ROWS);
   const key = `img-${view.viewId}`;
   images.set(view.viewId, { key, ...frames ? { frames } : {}, ...probed2.form ? { form: probed2.form } : {} });
-  if (probed2.status === "unknown") probe($, view.d.requestId, key, file);
-  return { hint, image: /* @__PURE__ */ h(ui.Image, { key, source: await sourceOf($, file, probed2.form), columns: size.columns, rows: size.rows, alt }) };
+  return { hint, ...asking ? { probe: asking } : {}, image: /* @__PURE__ */ h(ui.Image, { key, source: await sourceOf($, file, probed2.form), columns: size.columns, rows: size.rows, alt }) };
 }
 function selectable(scene, focus2) {
   return [...scene.nodes.values()].map((n) => n.node).filter((n) => n.kind === "system" || n.kind === "group" && n.system === n.id).map((n) => ({ id: n.id, path: focus2 !== void 0 ? `${focus2}.${n.id}` : n.id, name: n.name, expanded: n.kind === "group" }));

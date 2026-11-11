@@ -147,17 +147,21 @@ text. The code is `plugin/src/graphics.ts`.
   never runs the helper. `on` always draws the Image, its `alt` where the
   terminal has no pictures.
 - **Probe.** The API says nothing up front about images, but `$.ui.blit` of
-  a keyed Image is refused while it draws its alt. So the first Image of a
-  session is swapped to the same PNG, by file name and then as `{ png }`
-  bytes (what iTerm2 and tmux need), a try every 150 ms, six tries (it may
-  not be mounted yet). The answer goes in `$.state` (`graphics`): `yes`
-  with the form that worked, `tmux` for a refusal with
-  `fix: 'tmux-passthrough'`, else `no`; every drawing is drawn again by it,
-  and none asks again that session. Under `auto`, `no` and `tmux` draw the
-  Raster, `tmux` with a one-line hint to turn passthrough and focus events on.
-- **No flicker where avoidable.** Until the helper answers (0.2 to 2.5 s),
-  the Raster is drawn; the Image replaces it on the redraw that follows. A
-  terminal without pictures sees the alt for under a second, once.
+  a keyed Image is refused while it draws its alt. So until the session
+  knows, each drawing carries a probe: a 1×1 Image of a transparent PNG
+  whose alt is a space (`hooks/probe.png`, keyed `probe-<view>`, at the end
+  of the buttons row), and the first is swapped to the same PNG, by file
+  name and then as `{ png }` bytes (what iTerm2 and tmux need), a try every
+  150 ms, six tries (it may not be mounted yet). The answer goes in
+  `$.state` (`graphics`): `yes` with the form that worked, `tmux` for a
+  refusal with `fix: 'tmux-passthrough'`, else `no`; every drawing is drawn
+  again by it, and none asks again that session. Under `auto`, `no` and
+  `tmux` draw the Raster, `tmux` with a one-line hint to turn passthrough
+  and focus events on.
+- **No flicker.** Under `auto` the Raster is drawn until the probe says yes
+  and the helper has answered (0.2 to 2.5 s, drawn while the probe asks);
+  the Image replaces it on the redraw that follows. A terminal without
+  pictures never sees an alt: the probe's is a blank cell.
 - **Size.** The helper is asked for at most 16 px a column of the room
   (`maxWidthPx`), about twice a cell's width. The Image is as wide as the
   PNG's `cellHint` at most the room, and as tall as its aspect ratio over
