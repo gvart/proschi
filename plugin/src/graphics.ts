@@ -13,7 +13,8 @@ import { ask, cacheDir, withPrune, type Priority } from './helper'
  * has none), `auto` asks the terminal once a session and remembers the
  * answer in `$.state`: it swaps a 1×1 transparent Image whose alt is a space
  * (`$.ui.blit` refuses where an Image draws its alt), so nothing shows while
- * it asks, and the text cells stand until the answer is yes.
+ * it asks: a reserved blank area with one dim line stands meanwhile, and the
+ * text drawing only once the answer is no (src/picture.tsx draws the rest).
  */
 
 export type GraphicsMode = 'auto' | 'on' | 'off'

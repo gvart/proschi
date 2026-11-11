@@ -11,10 +11,11 @@
  * content comes from the simulation) and lays the answer's tiles out:
  *
  *   for each strip (tiles of one `row`, left to right, `columns` adding up to
- *   the panel's): a row Box of `rows` height; a tile with `control` inside a
- *   Button (`control.hotkey`, onPress by `control.id`), every other tile a plain
- *   Image. `hoverFile`, when asked for, is the control drawn under the pointer
- *   (a hidden Image a `hover` style shows).
+ *   the panel's): a row Box of `rows` height, each tile a keyed Image. One
+ *   overlay Client over the drawing maps the pointer to the tiles with a
+ *   `control` (plugin/src/picture.tsx); `hoverFile` and `pressedFile`, when
+ *   asked for, are blitted into the control's tile under the pointer and
+ *   while its button is down.
  */
 
 /** The theme a panel is drawn in: the canvas's tokens (frontend/src/utils/canvasColors.ts CANVAS_TOKENS). */
