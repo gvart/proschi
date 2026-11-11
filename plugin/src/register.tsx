@@ -19,6 +19,7 @@ import { legendLine, verdictLine } from './views/lines'
 import { lineView, type Ui } from './views/render'
 import { sequenceTab } from './views/sequenceTab'
 import { tabBar, tabBody, tabOf, testsTab } from './views/tabs'
+import { openUiCheck, registerUiCheck } from './uiCheck'
 import { liveOf, NO_WHATIF, optionsOf, whatIfOf } from './views/whatif'
 import { whatIfBanner, whatIfTab } from './views/whatifTab'
 
@@ -98,6 +99,7 @@ export function register(on: On, options: PluginOptions): void {
 
   on('command.run', { command: 'proschi' }, async ($, e) => {
     const [verb, ...rest] = e.args.trim().split(/\s+/)
+    if (verb === 'ui-check') return openUiCheck($)
     const words: string[] = []
     const view: SystemsView = {}
     for (let i = 0; i < rest.length; i++) {
@@ -124,6 +126,8 @@ export function register(on: On, options: PluginOptions): void {
     watch($, file)
     return { text: `Showing ${file} in the Proschi pane.` }
   })
+
+  registerUiCheck(on)
 
   on('ui.close', { id: PANE }, async ($, e, next) => {
     stop(PANE_VIEW)
