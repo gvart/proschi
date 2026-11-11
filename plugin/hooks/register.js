@@ -5776,6 +5776,26 @@ function criticalPathOf(diagram, analysis, useCase) {
     links: hops.map((h2) => ({ from: h2.step.fromServiceId, to: h2.step.toServiceId }))
   };
 }
+var joins = (a, b, from, to) => a === from && b === to || a === to && b === from;
+function edgeOverlays(edges, overlay) {
+  const result = {};
+  for (const e of edges) {
+    const flows = overlay.flows.filter((f) => f.rps > 0 && joins(e.source, e.target, f.from, f.to));
+    const critical = overlay.critical?.links.some((l) => joins(e.source, e.target, l.from, l.to)) ?? false;
+    if (flows.length === 0 && !critical) continue;
+    const busiest = flows.reduce((best, f) => !best || f.rps > best.rps ? f : best, void 0);
+    const target = busiest ? overlay.nodes[busiest.to] : void 0;
+    result[e.id] = {
+      rps: flows.reduce((sum, f) => sum + f.rps, 0),
+      async: flows.length > 0 && flows.every((f) => f.async),
+      ...busiest?.latencyMs !== void 0 ? { latencyMs: busiest.latencyMs } : {},
+      ...target?.utilization !== void 0 ? { utilization: target.utilization } : {},
+      ...target?.saturated ? { saturated: true } : {},
+      ...critical ? { critical: true } : {}
+    };
+  }
+  return result;
+}
 
 // ../frontend/src/sim/systems.ts
 var teamKey = (s) => s.resolved ?? s.diagram;
@@ -7532,7 +7552,7 @@ function applyView(diagram, view = {}) {
 }
 var idList = (value) => value.split(",").map((s) => s.trim()).filter(Boolean);
 function viewOverlay(diagram, analysis, view = {}) {
-  const out = { nodes: {}, systems: {}, notes: [] };
+  const out = { nodes: {}, flows: [], systems: {}, notes: [] };
   const { expanded } = viewOptions(view);
   let scope2 = diagram;
   let scoped = analysis;
@@ -7550,7 +7570,7 @@ function viewOverlay(diagram, analysis, view = {}) {
     }
   }
   collect(scope2, scoped, load, "", path, expanded, out);
-  return out;
+  return load?.critical ? { ...out, critical: load.critical } : out;
 }
 function teamAnalysis(system, result) {
   return result?.analysis ?? (system.diagram ? contractOf(system).baseline : void 0);
@@ -7560,6 +7580,7 @@ function teamLoad(system, result, analysis) {
 }
 function collect(diagram, analysis, load, at, path, expanded, out) {
   for (const [id, o] of Object.entries(load?.nodes ?? {})) out.nodes[at + id] = o;
+  for (const f of load?.flows ?? []) out.flows.push({ ...f, from: at + f.from, to: at + f.to });
   for (const system of diagram.systems ?? []) {
     const result = analysis?.systems?.find((s) => s.id === system.id);
     out.systems[at + system.id] = badgeOf(diagram, system, result);
@@ -7615,11 +7636,18 @@ function loadDocument(input) {
     for (const c of diagram.capacity ?? []) if (c.size && sim.nodes[c.node]) sim.nodes[c.node].size = c.size;
   }
   const overlay = sim && Object.keys(sim.nodes).length ? sim.nodes : void 0;
+  const shown = errors.length ? diagram : applyView(diagram, view);
+  const edges = sim && overlay ? edgeOverlays(shown.edges.map((e) => ({ id: e.id, source: e.source, target: e.target })), { nodes: sim.nodes, flows: sim.flows, ...sim.critical ? { critical: sim.critical } : {} }) : {};
+  const noted = new Set(sim?.notes.map((n) => n.text));
   return {
-    diagram: errors.length ? diagram : applyView(diagram, view),
+    diagram: shown,
     root: diagram,
     errors,
     ...overlay ? { overlay } : {},
+    ...Object.keys(edges).length ? { edges } : {},
+    ...overlay && sim?.critical ? { critical: sim.critical } : {},
+    ...analysis ? { analysis } : {},
+    warnings: (analysis?.warnings ?? []).filter((w) => !noted.has(w)),
     systems: sim?.systems ?? {},
     notes: sim?.notes ?? [],
     tests: analysis ? runTests(diagram, analysis) : [],
@@ -8320,7 +8348,8 @@ var COLOR = {
   good: 2278750,
   warn: 15381256,
   bad: 15680580,
-  /** The canvas's load overlay (utils/heat.ts): a busy card's fill, from yellow through pink to red. */
+  /** The canvas's load overlay (utils/heat.ts): a busy card's fill, from pale yellow through yellow and pink to red. */
+  heatPale: 16509350,
   heatWarm: 16765503,
   heatHot: 16743092,
   heatOver: 16739169
@@ -8340,11 +8369,14 @@ function paint(scene, options = {}) {
   const frameOf2 = (n) => isFrame(n.node) ? { badge: options.systems?.[n.node.id], selected: options.selected === n.node.id } : void 0;
   for (const g of all.filter((n) => n.node.kind === "group").sort((a, b) => a.depth - b.depth)) drawGroup(grid, g, play ? "path" : void 0, frameOf2(g));
   for (const n of all) drawStack(grid, scene, n, options.overlay?.[n.node.id], lookOf(play, n.node.id));
-  for (const { edge, path } of scene.edges) {
+  const loadOf = (id) => play ? void 0 : options.edges?.[id];
+  const edges = [...scene.edges].sort((a, b) => Number(!!loadOf(a.edge.id)?.critical) - Number(!!loadOf(b.edge.id)?.critical));
+  for (const { edge, path } of edges) {
     const own = edge.style?.color ? hex(edge.style.color) : COLOR.line;
     const off = !!play && !play.pathEdges.has(edge.id);
-    const color = play ? off ? COLOR.fadedMore : COLOR.faded : own;
-    drawPath(grid, path, color, off ? "dotted" : edge.style?.dash);
+    const load = loadOf(edge.id);
+    const color = play ? off ? COLOR.fadedMore : COLOR.faded : edgeHeat(load) ?? (load?.critical ? DEFAULT : own);
+    drawPath(grid, path, color, off ? "dotted" : load?.critical ? void 0 : edge.style?.dash, !!load?.critical);
   }
   for (const active of play?.edges ?? []) {
     const color = active.error ? COLOR.fail : DEFAULT;
@@ -8359,18 +8391,25 @@ function paint(scene, options = {}) {
     grid.set(last.x, last.y, HEAD[head], color);
   }
   const taken = /* @__PURE__ */ new Set();
-  for (const { edge, label } of scene.edges) {
-    if (!label || !edge.label) continue;
-    const text = ` ${edge.label} `;
-    const x = label.x - Math.floor(text.length / 2);
-    const free = (y2) => y2 >= 0 && y2 < grid.rows && Array.from(text, (_, i) => `${x + i},${y2}`).every((k) => !taken.has(k));
-    const y = [0, -1, 1, -2, 2].map((d) => label.y + d).find(free) ?? label.y;
-    const color = play && !play.pathEdges.has(edge.id) ? COLOR.fadedMore : COLOR.muted;
+  const owner = /* @__PURE__ */ new Map();
+  scene.edges.forEach(({ path }, i) => path.cells.forEach(({ x, y }) => owner.set(`${x},${y}`, (owner.get(`${x},${y}`) ?? i) === i ? i : -1)));
+  scene.edges.forEach(({ edge, path, label }, index) => {
+    const load = loadOf(edge.id);
+    const chip2 = loadChip(load);
+    const words = [edge.label ?? "", chip2].filter(Boolean).join(" \xB7 ");
+    if (!words || !label && !chip2) return;
+    const text = ` ${words} `;
+    const spot = (at, dy) => ({ x: Math.max(0, Math.min(grid.columns - text.length, at.x - Math.floor(text.length / 2))), y: at.y + dy });
+    const fits = ({ x: x2, y: y2 }, alone) => y2 >= 0 && y2 < grid.rows && Array.from(text, (_, i) => `${x2 + i},${y2}`).every((k, i) => !taken.has(k) && (!alone || (owner.get(k) ?? index) === index && !onCard(scene, x2 + i, y2)));
+    const plain = [0, -1, 1, -2, 2].map((d) => spot(label ?? runsOf(path)[0], d));
+    const spots = chip2 ? [...label ? plain : [], ...runsOf(path).flatMap((at) => [0, -1, 1].map((d) => spot(at, d)))] : [];
+    const { x, y } = spots.find((p) => fits(p, true)) ?? plain.find((p) => fits(p, false)) ?? plain[0];
+    const color = play && !play.pathEdges.has(edge.id) ? COLOR.fadedMore : load?.critical ? DEFAULT : COLOR.muted;
     for (let i = 0; i < text.length; i++) {
       taken.add(`${x + i},${y}`);
       if (!onCard(scene, x + i, y)) grid.set(x + i, y, text[i], color);
     }
-  }
+  });
   for (const g of all) if (g.node.kind === "group") drawGroupHeading(grid, g, play ? "path" : void 0, frameOf2(g));
   for (const n of all) drawStackCount(grid, scene, n, options.overlay?.[n.node.id], lookOf(play, n.node.id));
   for (const packet of play?.packets ?? []) grid.set(packet.at.x, packet.at.y, packet.cut ? "\u2717" : "\u25A0", packet.error ? COLOR.fail : COLOR.pink);
@@ -8391,17 +8430,39 @@ function onCard(scene, x, y) {
   }
   return false;
 }
-function drawPath(grid, path, color, dash) {
+function drawPath(grid, path, color, dash, heavy = false) {
   const { cells, dirs, head } = path;
   const g = dash ? LINES[dash] : void 0;
   for (let i = 0; i < cells.length - 1; i++) {
     const { x, y } = cells[i];
     const straight = dirs[i] === (N | S) || dirs[i] === (E | W);
     if (g && straight) grid.set(x, y, dirs[i] === (N | S) ? g.v : g.h, color);
-    else grid.line(x, y, dirs[i], color);
+    else grid.line(x, y, dirs[i], color, heavy);
   }
   const last = cells[cells.length - 1];
   grid.set(last.x, last.y, HEAD[head], color);
+}
+function edgeHeat(load) {
+  const u = load?.utilization;
+  if (load?.saturated || u !== void 0 && u >= 1) return COLOR.heatOver;
+  if (u === void 0 || u < 0.4) return void 0;
+  return u < 0.9 ? COLOR.heatWarm : COLOR.heatHot;
+}
+function loadChip(load) {
+  if (!load || !(load.rps > 0)) return "";
+  return load.latencyMs !== void 0 ? `${formatRps(load.rps)} \xB7 +${formatMs(load.latencyMs)}` : formatRps(load.rps);
+}
+function runsOf(path) {
+  const { cells, dirs } = path;
+  const runs = [];
+  for (let i = 0; i < cells.length - 1; ) {
+    let j = i;
+    while (j + 1 < cells.length - 1 && dirs[j + 1] === dirs[i]) j++;
+    runs.push({ from: i, length: j - i + 1 });
+    i = j + 1;
+  }
+  const mids = runs.sort((a, b) => b.length - a.length).map((r) => cells[r.from + Math.floor(r.length / 2)]);
+  return mids.length ? mids : [cells[0]];
 }
 function baseColor(node, fallback) {
   const base = nodeBaseColor(node);
@@ -8524,7 +8585,8 @@ function heatOf(overlay) {
   if (!overlay || overlay.down || u === void 0) return void 0;
   if (overlay.saturated || u >= 1) return COLOR.heatOver;
   if (u >= 0.9) return COLOR.heatHot;
-  return u >= 0.7 ? COLOR.heatWarm : void 0;
+  if (u >= 0.7) return COLOR.heatWarm;
+  return u >= 0.4 ? COLOR.heatPale : void 0;
 }
 var replicasOf2 = (node, overlay) => overlay?.replicas ?? node.replicas ?? 1;
 function stackRoom(grid, scene, { node, rect }) {
@@ -8590,6 +8652,7 @@ function drawCard(grid, scene, n, overlay, look, icons2) {
   const load = overlay ? loadRow(grid, { x: left, y: rect.y + 3, room }, node, overlay, look, heat, stackShown(grid, scene, n, overlay)) : false;
   if (!load && node.ownerTeam) grid.text(left, rect.y + 3, fit(`Team: ${node.ownerTeam}`, room), muted, Infinity, heat);
   if (node.critical) grid.text(rect.x + rect.w - 4, rect.y, " ! ", look === "off" ? muted : COLOR.critical);
+  if (overlay?.bottleneck && !look && !down && rect.w >= 10) grid.text(rect.x + 2, rect.y, fit(" BOTTLENECK ", rect.w - (node.critical ? 8 : 4)), COLOR.onColor, Infinity, COLOR.heatOver);
 }
 function loadRow(grid, at, node, o, look, heat, stack) {
   const u = o.utilization;

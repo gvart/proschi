@@ -2,16 +2,16 @@ import { isRemoteSpec, joinImportPath, mapResolver } from '../../../frontend/src
 import { parse } from '../../../frontend/src/dsl/parser';
 import type { Diagram, Diagnostic } from '../../../frontend/src/dsl/types';
 import { encodeShareHash, type PlaybackTarget } from '../../../frontend/src/playground/share';
-import { analyze, runTests, type TestResult } from '../../../frontend/src/sim';
-import type { NodeOverlay } from '../../../frontend/src/sim/overlay';
+import { analyze, runTests, type Analysis, type TestResult } from '../../../frontend/src/sim';
+import { edgeOverlays, type CriticalPathOverlay, type EdgeOverlay, type NodeOverlay } from '../../../frontend/src/sim/overlay';
 import { applyView, viewOverlay, type SystemBadge, type SystemNote, type SystemsView } from './systems';
 
 /**
  * A Proschi document as the terminal view needs it: the diagram as its view
  * draws it (systems collapsed, expanded or focused, systems.ts), its errors,
- * the simulation's per-node overlay, system badges and warnings, and
- * requirement results (when the document has `traffic`), and the link that
- * opens it in the web editor.
+ * the simulation's per-node and per-edge overlay with its p99 path, system
+ * badges and warnings, the analysis and requirement results (when the
+ * document has `traffic`), and the link that opens it in the web editor.
  */
 
 export interface Source {
@@ -31,6 +31,14 @@ export interface Document {
   root: Diagram;
   errors: Diagnostic[];
   overlay?: Record<string, NodeOverlay>;
+  /** What each drawn edge carries (rps, the latency it adds, its heat, whether it is on the p99 path), by edge id; edges that carry nothing left out. */
+  edges?: Record<string, EdgeOverlay>;
+  /** The p99 path of the busiest use case, as the canvas's load legend names it. */
+  critical?: CriticalPathOverlay;
+  /** The simulation of the whole document under its `traffic`. */
+  analysis?: Analysis;
+  /** The simulation's warnings that are not about a system (those are `notes`). */
+  warnings: string[];
   /** Promise, headroom and status of each system box and expanded frame, by its id in the view. */
   systems: Record<string, SystemBadge>;
   /** The simulation's warnings about systems. */
@@ -63,11 +71,18 @@ export function loadDocument(input: Source): Document {
   const top = view.focus === undefined;
   if (sim && analysis && top) for (const c of diagram.capacity ?? []) if (c.size && sim.nodes[c.node]) sim.nodes[c.node].size = c.size;
   const overlay = sim && Object.keys(sim.nodes).length ? sim.nodes : undefined;
+  const shown = errors.length ? diagram : applyView(diagram, view);
+  const edges = sim && overlay ? edgeOverlays(shown.edges.map((e) => ({ id: e.id, source: e.source, target: e.target })), { nodes: sim.nodes, flows: sim.flows, ...(sim.critical ? { critical: sim.critical } : {}) }) : {};
+  const noted = new Set(sim?.notes.map((n) => n.text));
   return {
-    diagram: errors.length ? diagram : applyView(diagram, view),
+    diagram: shown,
     root: diagram,
     errors,
     ...(overlay ? { overlay } : {}),
+    ...(Object.keys(edges).length ? { edges } : {}),
+    ...(overlay && sim?.critical ? { critical: sim.critical } : {}),
+    ...(analysis ? { analysis } : {}),
+    warnings: (analysis?.warnings ?? []).filter((w) => !noted.has(w)),
     systems: sim?.systems ?? {},
     notes: sim?.notes ?? [],
     tests: analysis ? runTests(diagram, analysis) : [],

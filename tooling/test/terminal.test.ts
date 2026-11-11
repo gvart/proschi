@@ -97,9 +97,35 @@ describe('terminal scene', () => {
     expect(grid.toText()).toMatch(/L · \d+%/);
     expect(grid.glyph(api.x, api.y + 1)).toBe('┇');
     expect(grid.toText()).toContain('down');
-    expect(heatOf({ utilization: 0.5 })).toBeUndefined();
+    expect(heatOf({ utilization: 0.3 })).toBeUndefined();
+    expect(heatOf({ utilization: 0.5 })).toBe(COLOR.heatPale);
     expect(heatOf({ utilization: 0.95 })).toBe(COLOR.heatHot);
     expect(heatOf({ utilization: 2, down: true })).toBeUndefined();
+  });
+
+  it('puts what each edge carries on it: heat, rps and latency chips, the p99 path heavy, and the bottleneck chip', async () => {
+    const { doc, scene } = await sceneOf(STRESSED);
+    expect(doc.edges?.['api->db']).toMatchObject({ saturated: true, critical: true });
+    expect(doc.edges?.['api->db']?.rps).toBeCloseTo(50_000);
+    expect(doc.critical).toMatchObject({ useCase: 'Write', nodes: ['web', 'api', 'db', 'q'] });
+    expect(doc.overlay?.db.bottleneck).toBe(true);
+    const grid = paint(scene, { overlay: doc.overlay, edges: doc.edges });
+    const text = grid.toText();
+    expect(text).toMatch(/write · 50k rps · \+[\d.]+ ms/);
+    expect(text).toContain('BOTTLENECK');
+    // The edge into the saturated db is drawn heavy and red; one off the p99 path keeps its own style.
+    const into = scene.edges.find((e) => e.edge.id === 'api->db')!.path.cells[0];
+    expect(grid.fg[into.y * grid.columns + into.x]).toBe(COLOR.heatOver);
+    expect('┃━┏┓┗┛┣┫'.includes(grid.glyph(into.x, into.y))).toBe(true);
+    // Playback fades the load away: no chips.
+    expect(paint(scene, { overlay: doc.overlay, edges: doc.edges, play: playAt(scene, doc.diagram.useCases[0].scenarios[0].steps, 0, 0) }).toText()).not.toMatch(/50k rps/);
+  });
+
+  it('keeps the simulation\'s warnings that are not about a system', () => {
+    const doc = loadDocument({ source: `${STRESSED}\ncapacity {\n  nope 5 rps\n}\n` });
+    expect(doc.warnings.some((w) => /saturated/.test(w))).toBe(true);
+    expect(doc.warnings.some((w) => /unknown node 'nope'/.test(w))).toBe(true);
+    expect(doc.analysis?.useCases[0].name).toBe('Write');
   });
 
   it('draws the legend as a panel, dashed and dotted lines apart, and group descriptions', async () => {
