@@ -1,0 +1,36 @@
+plugin/tests/views.test.tsx
+  s_50cc5c1ed1a510::t_ff837685662209 214
+  s_50cc5c1ed1a510::t_da1f97639e37ee 188-193,220,223-224,226-228,231
+plugin/src/register.tsx
+  s_50cc5c1ed1a510::t_8f39de7a3cac8b 254,338,1407
+tooling/test/ui.test.ts
+  s_50cc5c1ed1a510::t_da1f97639e37ee 51
+plugin/src/views/sequenceTab.tsx
+  s_50cc5c1ed1a510::t_8f39de7a3cac8b 12-13
+tooling/src/render/ui/contract.ts
+  s_50cc5c1ed1a510::t_da1f97639e37ee 271,279
+docs/design/terminal-mod.md
+  s_50cc5c1ed1a510::t_bfc78524a1c788 125-128
+docs/impl/terminal-rendered-ui.md
+  s_50cc5c1ed1a510::t_bfc78524a1c788 144-148
+plugin/hooks/register.js
+  s_50cc5c1ed1a510::t_92c57dc823b917 11153,11576
+docs/AGENT-SKILLS.md
+  s_50cc5c1ed1a510::t_bfc78524a1c788 118-120
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "eab5c0aacb7d96917a14082206acd365ae22264e",
+  "prompts": {},
+  "sessions": {
+    "s_50cc5c1ed1a510": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7e5513ad-e496-40de-9a6e-d587aa393ce5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
