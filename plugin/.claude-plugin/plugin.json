@@ -29,6 +29,17 @@
         "none"
       ],
       "default": "nerd-font"
+    },
+    "graphics": {
+      "type": "string",
+      "title": "Diagram pictures",
+      "description": "Draw diagrams as pictures where the terminal shows images (kitty, Ghostty; iTerm2 and tmux with passthrough): auto asks the terminal once a session and falls back to text cells; on always draws a picture; off always draws text cells.",
+      "options": [
+        "auto",
+        "on",
+        "off"
+      ],
+      "default": "auto"
     }
   }
 }
