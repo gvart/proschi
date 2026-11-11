@@ -4,7 +4,7 @@ import { test } from './textUi'
 
 import { LAYOUT, SOURCE } from './fixture'
 
-// The pane's saved what-ifs, Sequence and HLD tabs (docs/design/terminal-mod.md D8 to D10).
+// The pane's saved what-ifs and HLD tab (docs/design/terminal-mod.md D8 to D10).
 
 type On = Parameters<Parameters<typeof test>[1]>[1]
 type T = Parameters<Parameters<typeof test>[1]>[0]
@@ -77,9 +77,9 @@ test('the Analysis tab lists the saved what-ifs with their results, and opens th
   const opened: string[] = []
   engine(on, [], opened)
   const p = await focused($, SAVED)
-  // No What-if tab: five tabs, Analysis by its digit.
-  expect(await p.find({ key: 'tab-whatif' })).toBeUndefined()
-  expect((await labelOf(p, 'tab-tests'))?.hotkey).toBe('5')
+  // No What-if, Sequence or Tests tab: three tabs, Analysis by its digit.
+  for (const key of ['tab-whatif', 'tab-sequence', 'tab-tests']) expect(await p.find({ key })).toBeUndefined()
+  expect((await labelOf(p, 'tab-hld'))?.hotkey).toBe('3')
   await p.press({ key: 'tab-analysis' })
   expect(await has(p, /^What-ifs$/)).toBe(true)
   // The fixture fails its availability as written, so each what-if fails too; the numbers say how far each moves.
@@ -92,98 +92,27 @@ test('the Analysis tab lists the saved what-ifs with their results, and opens th
   await p.unmount()
 })
 
-test('a design without saved what-ifs says how to save one; a stored What-if tab opens on Analysis', async ($, on) => {
+test('a design without saved what-ifs says how to save one; a stored What-if tab opens on Analysis, a stored Sequence or Tests tab on HLD', async ($, on) => {
   engine(on)
   // The tab as an older version stored it, once the block is focused.
-  let stored = false
+  let stored: string | undefined
   on('state.get', { plugin: 'proschi', key: 'paneTab' }, async ($, e, next) => {
     const read = (await next(e)) as { value: { version: number } }
-    return stored ? { value: { ...read.value, value: 'whatif' } } : read
+    return stored ? { value: { ...read.value, value: stored } } : read
   })
   await (await focused($, SOURCE)).unmount()
-  stored = true
-  const p = await $.ui.mount(pane)
+  stored = 'whatif'
+  let p = await $.ui.mount(pane)
   expect((await labelOf(p, 'tab-analysis'))?.variant).toBe('primary')
   expect(await has(p, /^None saved yet: a whatif block/)).toBe(true)
   await p.unmount()
-})
-
-const ASYNC = `title "Orders"
-web "Web" [Browser]
-api "API" [REST API]
-db "DB" [PostgreSQL]
-q "Events" [Kafka]
-web -> api
-api -> db
-api -> q
-usecase "Order" {
-  web -> api : POST /orders
-  alt "Stored" {
-    api -> db : INSERT order
-    api ->> q : OrderPlaced
-    api --> web : 201
-  } alt "Down" {
-    api -x db : INSERT order
-    api --> web : 503
+  for (const old of ['sequence', 'tests']) {
+    stored = old
+    p = await $.ui.mount(pane)
+    expect((await labelOf(p, 'tab-hld'))?.variant).toBe('primary')
+    expect(await p.find({ key: 'hld-copy' })).toBeDefined()
+    await p.unmount()
   }
-}
-`
-
-type Found = { text: string; props: { backgroundColor?: string; color?: string; bold?: boolean } }
-
-test('a scenario draws as a sequence: async dashed and hollow, a failed call ✕, an error reply red, the current step pink', async ($, on) => {
-  engine(on)
-  const p = await focused($, ASYNC)
-  await p.press({ key: 'tab-sequence' })
-  expect(await has(p, /^┌─ alt ✓ Stored ─+┐$/)).toBe(true)
-  expect(await has(p, /│ Web │.*│ API │.*│ DB │.*│ Events │/)).toBe(true)
-  expect(await has(p, /├╌+▷│/)).toBe(true)
-  expect(await has(p, /◁┄+┤/)).toBe(true)
-  // The Diagram tab's player at a step lights the current request here: a yellow badge, a pink arrow.
-  await p.press({ key: 'tab-diagram' })
-  await p.press({ key: 'play-proschi-view:0' })
-  await p.press({ key: 'play-proschi-view:0' })
-  await p.press({ key: 'next-proschi-view:0' })
-  await p.press({ key: 'tab-sequence' })
-  const texts = (await p.findAll({ type: 'Text' })) as unknown as Found[]
-  expect(texts.find(t => t.text === ' 2 ')?.props.backgroundColor).toBe('#ffd23f')
-  expect(texts.find(t => t.text === ' 1 ')?.props.backgroundColor).toBe('#ff5da2')
-  // The arrow in the colour alone: a bold line glyph comes from another font in some terminals, wider than its cell.
-  expect(texts.some(t => t.props.color === '#ff5da2' && /^─+▶$/.test(t.text) && t.props.bold !== true)).toBe(true)
-  expect(texts.some(t => t.props.color === '#ff5da2' && t.props.bold === true && /INSERT order/.test(t.text))).toBe(true)
-
-  await p.select({ key: 'seq-pick', value: 'order:down' })
-  expect(await has(p, /^┌─ alt ✗ Down ─+┐$/)).toBe(true)
-  expect(await has(p, /─ ✕│/)).toBe(true)
-  const down = (await p.findAll({ type: 'Text' })) as unknown as Found[]
-  expect(down.find(t => t.text === '503')?.props.color).toBe('#ef4444')
-  await p.unmount()
-
-  // A pane too narrow for the participants keeps their columns, says so, and is cut at the edge.
-  const narrow = await $.ui.mount({ ...pane, props: { ...pane.props, bodyColumns: 30 } })
-  expect(await has(narrow, /^↔ 3 participants take \d+ columns, wider than the 30 here/)).toBe(true)
-  await narrow.unmount()
-})
-
-test('the Sequence tab is a still of the picked scenario: a picker and no step keys, the Diagram tab step lit', async ($, on) => {
-  engine(on)
-  const p = await focused($, ASYNC)
-  await p.press({ key: 'tab-sequence' })
-  expect(await has(p, /^Scenario$/)).toBe(true)
-  expect(await has(p, /^3 steps$/)).toBe(true)
-  expect((await p.findAll({ type: 'Button' })).filter(b => /^seq-/.test(String((b as { key?: string }).key)))).toHaveLength(0)
-  await p.select({ key: 'seq-pick', value: 'order:down' })
-  expect(await has(p, /alt ✗ Down/)).toBe(true)
-  expect(await has(p, /^2 steps$/)).toBe(true)
-  // Played, paused and stepped on the Diagram tab: the same player.
-  await p.press({ key: 'tab-diagram' })
-  await p.press({ key: 'play-proschi-view:0' })
-  await p.press({ key: 'play-proschi-view:0' })
-  await p.press({ key: 'next-proschi-view:0' })
-  expect(await has(p, /^Step 2\/2$/)).toBe(true)
-  await p.press({ key: 'tab-sequence' })
-  expect(await has(p, /^Step 2 of 2$/)).toBe(true)
-  await p.unmount()
 })
 
 test('the HLD tab draws the design document, and copies it with its Mermaid diagrams', async ($, on) => {
@@ -191,7 +120,12 @@ test('the HLD tab draws the design document, and copies it with its Mermaid diag
   engine(on, copied)
   const p = await focused($, SOURCE)
   await p.press({ key: 'tab-hld' })
-  const md = (await p.find({ type: 'Markdown' })) as unknown as { props: { text: string } }
+  // The Markdown in two: up to its Requirements, then from them on in a Box a failing verdict's Details scrolls to.
+  const parts = (await p.findAll({ type: 'Markdown' })) as unknown as { props: { text: string } }[]
+  expect(parts).toHaveLength(2)
+  expect(parts[1]!.props.text).toMatch(/^## 2\. Requirements/)
+  expect(await p.find({ key: 'hld-requirements' })).toBeDefined()
+  const md = { props: { text: parts.map(m => m.props.text).join('') } }
   expect(md.props.text).toMatch(/^# Checkout\n/)
   expect(md.props.text).toMatch(/\*\*Contents\*\* 1 Overview · 2 Requirements · 3 Capacity estimates/)
   expect(md.props.text).toMatch(/## 3\. Capacity estimates/)

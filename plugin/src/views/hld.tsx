@@ -2,6 +2,7 @@ import type { RenderElement, RenderSurface } from 'claude-code'
 
 import { hld, type HldDocument } from '../../../frontend/src/hld/hld'
 import { toMarkdown } from '../../../frontend/src/hld/markdown'
+import { hldAnchor } from '../../../tooling/src/render/ui/data'
 import type { Document } from '../../../tooling/src/terminal/document'
 import type { Ui } from './render'
 
@@ -9,8 +10,10 @@ import type { Ui } from './render'
  * The HLD tab: the high-level design document as the editor's "Download
  * Markdown" writes it (frontend/src/hld), drawn by the terminal's own Markdown
  * renderer, with a button that copies it whole. The Mermaid blocks it carries
- * for GitHub are left out of the drawing: the Diagram and Sequence tabs draw
- * them (docs/design/terminal-mod.md D10).
+ * for GitHub are left out of the drawing: the Diagram tab draws the
+ * architecture and plays the scenarios (docs/design/terminal-mod.md D10).
+ * Its Requirements section is a keyed Box of its own, which a failing
+ * verdict's Details scrolls the pane to.
  */
 
 // Per module load, by document key.
@@ -37,10 +40,10 @@ export function hldMarkdown(doc: Document, key: string): string {
   return text
 }
 
-/** The Markdown as the pane draws it: its sections numbered under a line of contents, each Mermaid block a line naming the tab that draws it. */
+/** The Markdown as the pane draws it: its sections numbered under a line of contents, each Mermaid block a line naming what draws it. */
 export function shownMarkdown(markdown: string): string {
   const text = markdown.replace(/```mermaid\n([\s\S]*?)```\n?/g, (_, code: string) =>
-    code.startsWith('sequenceDiagram') ? '_The Sequence tab draws this scenario._\n' : '_The Diagram tab draws the architecture._\n',
+    code.startsWith('sequenceDiagram') ? "_The Diagram tab's player plays this scenario._\n" : '_The Diagram tab draws the architecture._\n',
   )
   const titles: string[] = []
   const numbered = text.replace(/^## (.+)$/gm, (_, title: string) => `## ${titles.push(title)}. ${title}`)
@@ -52,6 +55,8 @@ export function shownMarkdown(markdown: string): string {
 
 export function hldTab(ui: Ui, doc: Document, key: string, copy: (surface: RenderSurface, text: string) => void): RenderElement {
   const markdown = hldMarkdown(doc, key)
+  const text = shownMarkdown(markdown)
+  const at = text.search(/^## \d+\. Requirements$/m)
   return (
     <ui.Box key="body-hld" flexDirection="column">
       <ui.Box flexDirection="row" gap={1} alignItems="center">
@@ -60,7 +65,12 @@ export function hldTab(ui: Ui, doc: Document, key: string, copy: (surface: Rende
           with its Mermaid diagrams, for a README or a wiki
         </ui.Text>
       </ui.Box>
-      <ui.Markdown key="hld-md" text={shownMarkdown(markdown)} />
+      <ui.Markdown key="hld-md" text={at < 0 ? text : text.slice(0, at)} />
+      {at >= 0 && (
+        <ui.Box key={hldAnchor('requirements')} flexDirection="column">
+          <ui.Markdown key="hld-md-requirements" text={text.slice(at)} />
+        </ui.Box>
+      )}
     </ui.Box>
   )
 }

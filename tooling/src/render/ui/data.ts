@@ -1,5 +1,5 @@
 import type { DiagramScenario, FlowStep } from '../../../../frontend/src/dsl/types';
-import { HOT, availabilityRow, costBreakdown, costRow, headlineOf, p99Row, runWhatIfs, type CostShare, type DeltaRow, type NodeAnalysis, type TestResult, type WhatIfResult } from '../../../../frontend/src/sim';
+import { HOT, availabilityRow, costBreakdown, costRow, headlineOf, p99Row, runWhatIfs, type CostShare, type DeltaRow, type NodeAnalysis, type WhatIfResult } from '../../../../frontend/src/sim';
 import { formatAvailability, formatCount, formatDuration, formatMs, formatPercent, formatRps, formatTraffic, formatUsd } from '../../../../frontend/src/sim/format';
 import { BOTTLENECK_FROM, busiestOf } from '../../../../frontend/src/sim/overlay';
 import { currentStepsOf, isErrorStep } from '../../terminal/playback';
@@ -16,19 +16,17 @@ import * as H from '../../../../frontend/src/hld/hld';
 
 const usd = (x: number) => formatUsd(x).replace('/month', '');
 
-/** The pane's tabs (views/tabs.tsx TABS), Tests with its failing count, and the way to the same view in the editor (control `open`). */
+/** The pane's tabs (views/tabs.tsx TABS), HLD with its failing check count, and the way to the same view in the editor (control `open`). */
 export function tabBarPanel(active: string, failing: number): TabBarPanel {
   const tabs = [
     ['diagram', 'Diagram'],
     ['analysis', 'Analysis'],
-    ['sequence', 'Sequence'],
     ['hld', 'HLD'],
-    ['tests', 'Tests'],
   ] as const;
   return {
     kind: 'tabs',
     active,
-    tabs: tabs.map(([id, label], i) => ({ id, label, hotkey: String(i + 1), ...(id === 'tests' && failing > 0 ? { badge: { text: `✗ ${failing}`, tone: 'bad' as const } } : {}) })),
+    tabs: tabs.map(([id, label], i) => ({ id, label, hotkey: String(i + 1), ...(id === 'hld' && failing > 0 ? { badge: { text: `✗ ${failing}`, tone: 'bad' as const } } : {}) })),
     open: { id: 'open', icon: 'open', label: 'Open in Proschi', variant: 'quiet' },
   };
 }
@@ -249,46 +247,6 @@ function whatIfBlocks(doc: Document, results: WhatIfResult[]): Block[] {
   return blocks;
 }
 
-// ---------- Tests ----------
-
-const where = (r: { loc?: { line: number; file?: string } }) => (r.loc ? `${r.loc.file ? `${r.loc.file}:` : 'line '}${r.loc.line}` : undefined);
-
-function checkBlocks(r: TestResult): Block[] {
-  const out: Block[] = [{ type: 'check', passed: r.passed, title: r.name, ...(where(r) ? { where: where(r) } : {}), message: r.message, ...(!r.passed && r.hint ? { hint: r.hint } : {}) }];
-  if (r.assertions && r.assertions.length > 1) {
-    for (const a of r.assertions) out.push({ type: 'check', passed: a.passed, title: [{ text: a.message, bold: false }], ...(where(a) ? { where: where(a) } : {}), ...(!a.passed && a.hint ? { hint: a.hint } : {}), indent: 3 });
-  }
-  return out;
-}
-
-/** The editor's Requirements and tests (ResultsPanel.tsx): the summary, what fails open, what passes under a toggle (`a`). */
-export function testsPage(doc: Document, open: boolean): PagePanel {
-  if (!doc.analysis) return { kind: 'page', blocks: [{ type: 'paragraph', text: 'Requirements and tests run against the simulation: add a traffic { … } block first.' }] };
-  const results = doc.tests;
-  if (results.length === 0) {
-    return {
-      kind: 'page',
-      blocks: [
-        { type: 'paragraph', text: 'No requirements or tests yet. Requirements are checked against the analysis of the traffic; tests check how the flows work, e.g.' },
-        { type: 'code', text: 'requirements {\n  p99 "Redirect" < 100ms\n  availability >= 99.9%\n}\ntest "Redirect is served from the cache" {\n  "Redirect" calls any cache before any database\n}' },
-      ],
-    };
-  }
-  const failing = results.filter((r) => !r.passed);
-  const passing = results.filter((r) => r.passed);
-  const blocks: Block[] = [
-    failing.length
-      ? { type: 'callout', tone: 'bad', text: [{ text: `${failing.length} of ${results.length} failing`, bold: true }] }
-      : { type: 'callout', tone: 'good', text: [{ text: `All ${results.length} passing`, bold: true }] },
-  ];
-  for (const r of failing) blocks.push(...checkBlocks(r));
-  if (passing.length) {
-    blocks.push({ type: 'controls', items: [{ control: { id: 'passing', icon: open ? 'chevron-down' : 'next', label: `${passing.length} passing`, hotkey: 'a', variant: 'quiet', active: open } }] });
-    if (open) for (const r of passing) blocks.push({ type: 'check', passed: true, title: r.name, ...(where(r) ? { where: where(r) } : {}), message: r.message });
-  }
-  return { kind: 'page', blocks };
-}
-
 // ---------- HLD ----------
 
 const STATUS: Record<H.CheckStatus, Span[]> = {
@@ -413,9 +371,9 @@ function hldSection(doc: H.HldDocument, s: H.HldSection): Block[] {
             cells: [[{ text: sc.outcome === 'error' ? '✗ ' : '✓ ', tone: sc.outcome === 'error' ? 'bad' : 'good', bold: true }, { text: sc.name, bold: true }], dash(sc.condition), dash(sc.share !== undefined ? H.formatPercent(sc.share) : undefined), dash(sc.latency ? H.formatMs(sc.latency.p50) : undefined), dash(sc.latency ? H.formatMs(sc.latency.p99) : undefined)],
           })),
         });
-        // The use case's sequence: its first scenario with steps, as the Sequence tab draws it.
+        // The use case's sequence: its first scenario with steps.
         const first = u.scenarios.find((sc) => sc.steps > 0);
-        if (first) out.push({ type: 'figure', of: { useCase: u.useCaseId, scenario: first.id }, caption: u.scenarios.length > 1 ? `The Sequence tab draws the other ${u.scenarios.length - 1 === 1 ? 'scenario' : `${u.scenarios.length - 1} scenarios`}.` : undefined, maxRows: 24 });
+        if (first) out.push({ type: 'figure', of: { useCase: u.useCaseId, scenario: first.id }, caption: u.scenarios.length > 1 ? `The Diagram tab's player plays the other ${u.scenarios.length - 1 === 1 ? 'scenario' : `${u.scenarios.length - 1} scenarios`}.` : undefined, maxRows: 24 });
       }
       break;
     case 'decisions':

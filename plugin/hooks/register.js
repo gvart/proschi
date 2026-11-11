@@ -6988,17 +6988,17 @@ function writesCheck(run, u, scenarios, accept, what) {
     return pass(`${label} writes to ${what} before responding`);
   }
   const details = gaps.map((s) => ({ s, gap: writeGap(run, u, s, accept) }));
-  const where4 = (s) => u.scenarios.length > 1 ? `"${s.name}"` : `"${u.name}"`;
+  const where2 = (s) => u.scenarios.length > 1 ? `"${s.name}"` : `"${u.name}"`;
   const text = (s, gap) => {
     switch (gap.kind) {
       case "async":
-        return `${where4(s)} writes to ${what} only asynchronously: ${stepText(gap.step)}`;
+        return `${where2(s)} writes to ${what} only asynchronously: ${stepText(gap.step)}`;
       case "after":
-        return `${where4(s)} writes to ${what} only after responding: ${stepText(gap.step)}`;
+        return `${where2(s)} writes to ${what} only after responding: ${stepText(gap.step)}`;
       case "read":
-        return `${where4(s)} only reads from ${what} before responding: ${stepText(gap.step)} is a read`;
+        return `${where2(s)} only reads from ${what} before responding: ${stepText(gap.step)} is a read`;
       case "none":
-        return `${where4(s)} never writes to ${what} before responding`;
+        return `${where2(s)} never writes to ${what} before responding`;
     }
   };
   const message = details.map(({ s, gap }) => text(s, gap)).join("; ");
@@ -7305,9 +7305,9 @@ function before(run, a) {
     checked++;
     const ix = order.findIndex((m) => first.has(m.to) && stepMatches(m.step, a.match));
     if (ix < 0 || ix > iy) {
-      const where4 = sc.scenarios.length > 1 || a.scenario ? `In ${quote(s.name)}` : `In ${quote(sc.u.name)}`;
+      const where2 = sc.scenarios.length > 1 || a.scenario ? `In ${quote(s.name)}` : `In ${quote(sc.u.name)}`;
       return fail(
-        ix < 0 ? `${where4}, ${order[iy].to} is called (${stepText(order[iy].step)}) but ${x} never is` : `${where4}, ${order[iy].to} is called (${stepText(order[iy].step)}) before ${order[ix].to} (${stepText(order[ix].step)})`,
+        ix < 0 ? `${where2}, ${order[iy].to} is called (${stepText(order[iy].step)}) but ${x} never is` : `${where2}, ${order[iy].to} is called (${stepText(order[iy].step)}) before ${order[ix].to} (${stepText(order[ix].step)})`,
         `Call ${x} before the first call to ${y}`
       );
     }
@@ -7329,12 +7329,12 @@ function beforeResponding(run, a) {
   const isMatch = (step) => stepMatches(step, a.match);
   const gaps = success.filter((s) => !writesBeforeResponse(sc.u, s, accept, isMatch));
   if (gaps.length === 0) return pass(`${success.length === 1 ? sc.label : `Every success scenario of ${sc.label}`} ${phrase} before responding`);
-  const where4 = (s) => sc.u.scenarios.length > 1 ? quote(s.name) : quote(sc.u.name);
+  const where2 = (s) => sc.u.scenarios.length > 1 ? quote(s.name) : quote(sc.u.name);
   const text = (s) => {
     const g = writeGap(run, sc.u, s, accept, isMatch);
-    if (g.kind === "async") return `${where4(s)} ${phrase} only asynchronously: ${stepText(g.step)}`;
-    if (g.kind === "after") return `${where4(s)} ${phrase} only after responding: ${stepText(g.step)}`;
-    return `${where4(s)} never ${phrase} before responding${otherSteps([s], ids, a.match)}`;
+    if (g.kind === "async") return `${where2(s)} ${phrase} only asynchronously: ${stepText(g.step)}`;
+    if (g.kind === "after") return `${where2(s)} ${phrase} only after responding: ${stepText(g.step)}`;
+    return `${where2(s)} never ${phrase} before responding${otherSteps([s], ids, a.match)}`;
   };
   return fail(gaps.map(text).join("; "), `${matchHint(a.target, a.match)}, sent with -> before the line that answers the entry request`);
 }
@@ -7346,9 +7346,9 @@ function neverWaits(run, a) {
   for (const s of sc.scenarios) {
     const hop = criticalPath(sc.u, s).flat().find((h2) => !h2.async && ids.has(h2.target));
     if (hop) {
-      const where4 = sc.scenarios.length > 1 ? quote(s.name) : sc.label;
+      const where2 = sc.scenarios.length > 1 ? quote(s.name) : sc.label;
       return fail(
-        `${where4} waits for ${nodeLabel(run.diagram, hop.target)} before responding: ${stepText(hop.step)}${hop.failed ? " times out on the request path" : " is synchronous"}`,
+        `${where2} waits for ${nodeLabel(run.diagram, hop.target)} before responding: ${stepText(hop.step)}${hop.failed ? " times out on the request path" : " is synchronous"}`,
         `Send it with ->> (through a queue if it must not be lost), or move it after the line that answers the entry request`
       );
     }
@@ -7375,9 +7375,9 @@ function after(run, a) {
     if (ix < 0 || iy < 0) continue;
     checked++;
     if (iy < ix) {
-      const where4 = sc.scenarios.length > 1 || a.scenario ? `In ${quote(s.name)}` : `In ${quote(sc.u.name)}`;
+      const where2 = sc.scenarios.length > 1 || a.scenario ? `In ${quote(s.name)}` : `In ${quote(sc.u.name)}`;
       return fail(
-        `${where4}, the last call to ${y} (${stepText(order[iy].step)}) comes before the first call to ${x} (${stepText(order[ix].step)})`,
+        `${where2}, the last call to ${y} (${stepText(order[iy].step)}) comes before the first call to ${x} (${stepText(order[ix].step)})`,
         `Call ${y} after ${x}: move the step to ${order[iy].to} below the call to ${order[ix].to}`
       );
     }
@@ -7405,10 +7405,10 @@ function senderCalls(run, a) {
     for (const s of u.scenarios) {
       const step = s.steps.find((st) => from.has(st.fromServiceId) && to.has(st.toServiceId));
       if (!step) continue;
-      const where4 = u.scenarios.length > 1 ? `${quote(u.name)} scenario ${quote(s.name)}` : quote(u.name);
-      if (a.quantifier === "some") return pass(`${x} calls ${y}${within}: ${stepText(step)} in ${where4}`);
+      const where2 = u.scenarios.length > 1 ? `${quote(u.name)} scenario ${quote(s.name)}` : quote(u.name);
+      if (a.quantifier === "some") return pass(`${x} calls ${y}${within}: ${stepText(step)} in ${where2}`);
       return fail(
-        `${x} calls ${y}${within}: ${stepText(step)} in ${where4}`,
+        `${x} calls ${y}${within}: ${stepText(step)} in ${where2}`,
         `Let another node make this call (e.g. the client uploads to storage with a presigned URL), or remove the step`
       );
     }
@@ -7459,8 +7459,8 @@ function noPath(run, from, to) {
     for (const s of u.scenarios) {
       const step = s.steps.find((st) => sources.has(st.fromServiceId) && targets.has(st.toServiceId));
       if (step) {
-        const where4 = u.scenarios.length > 1 ? `${quote(u.name)} scenario ${quote(s.name)}` : quote(u.name);
-        return fail(`The step ${step.fromServiceId} -> ${step.toServiceId} in ${where4} (${lineOf(step.loc)}) goes directly from ${x} to ${y}`, hint);
+        const where2 = u.scenarios.length > 1 ? `${quote(u.name)} scenario ${quote(s.name)}` : quote(u.name);
+        return fail(`The step ${step.fromServiceId} -> ${step.toServiceId} in ${where2} (${lineOf(step.loc)}) goes directly from ${x} to ${y}`, hint);
       }
     }
   }
@@ -9298,14 +9298,12 @@ function tabBarPanel(active, failing) {
   const tabs = [
     ["diagram", "Diagram"],
     ["analysis", "Analysis"],
-    ["sequence", "Sequence"],
-    ["hld", "HLD"],
-    ["tests", "Tests"]
+    ["hld", "HLD"]
   ];
   return {
     kind: "tabs",
     active,
-    tabs: tabs.map(([id, label], i) => ({ id, label, hotkey: String(i + 1), ...id === "tests" && failing > 0 ? { badge: { text: `\u2717 ${failing}`, tone: "bad" } } : {} })),
+    tabs: tabs.map(([id, label], i) => ({ id, label, hotkey: String(i + 1), ...id === "hld" && failing > 0 ? { badge: { text: `\u2717 ${failing}`, tone: "bad" } } : {} })),
     open: { id: "open", icon: "open", label: "Open in Proschi", variant: "quiet" }
   };
 }
@@ -9499,38 +9497,6 @@ function whatIfBlocks(doc, results) {
   blocks.push({ type: "controls", items: [{ control: { id: "explore-whatifs", icon: "open", label: "Explore what-ifs in Proschi" } }, { text: [{ text: "more traffic, nodes down, a sweep", tone: "muted" }] }] });
   return blocks;
 }
-var where2 = (r) => r.loc ? `${r.loc.file ? `${r.loc.file}:` : "line "}${r.loc.line}` : void 0;
-function checkBlocks(r) {
-  const out = [{ type: "check", passed: r.passed, title: r.name, ...where2(r) ? { where: where2(r) } : {}, message: r.message, ...!r.passed && r.hint ? { hint: r.hint } : {} }];
-  if (r.assertions && r.assertions.length > 1) {
-    for (const a of r.assertions) out.push({ type: "check", passed: a.passed, title: [{ text: a.message, bold: false }], ...where2(a) ? { where: where2(a) } : {}, ...!a.passed && a.hint ? { hint: a.hint } : {}, indent: 3 });
-  }
-  return out;
-}
-function testsPage(doc, open) {
-  if (!doc.analysis) return { kind: "page", blocks: [{ type: "paragraph", text: "Requirements and tests run against the simulation: add a traffic { \u2026 } block first." }] };
-  const results = doc.tests;
-  if (results.length === 0) {
-    return {
-      kind: "page",
-      blocks: [
-        { type: "paragraph", text: "No requirements or tests yet. Requirements are checked against the analysis of the traffic; tests check how the flows work, e.g." },
-        { type: "code", text: 'requirements {\n  p99 "Redirect" < 100ms\n  availability >= 99.9%\n}\ntest "Redirect is served from the cache" {\n  "Redirect" calls any cache before any database\n}' }
-      ]
-    };
-  }
-  const failing = results.filter((r) => !r.passed);
-  const passing = results.filter((r) => r.passed);
-  const blocks = [
-    failing.length ? { type: "callout", tone: "bad", text: [{ text: `${failing.length} of ${results.length} failing`, bold: true }] } : { type: "callout", tone: "good", text: [{ text: `All ${results.length} passing`, bold: true }] }
-  ];
-  for (const r of failing) blocks.push(...checkBlocks(r));
-  if (passing.length) {
-    blocks.push({ type: "controls", items: [{ control: { id: "passing", icon: open ? "chevron-down" : "next", label: `${passing.length} passing`, hotkey: "a", variant: "quiet", active: open } }] });
-    if (open) for (const r of passing) blocks.push({ type: "check", passed: true, title: r.name, ...where2(r) ? { where: where2(r) } : {}, message: r.message });
-  }
-  return { kind: "page", blocks };
-}
 var STATUS2 = {
   pass: [{ text: "pass", chip: "good" }],
   fail: [{ text: "fail", chip: "bad" }],
@@ -9647,7 +9613,7 @@ function hldSection(doc, s) {
           }))
         });
         const first = u.scenarios.find((sc) => sc.steps > 0);
-        if (first) out.push({ type: "figure", of: { useCase: u.useCaseId, scenario: first.id }, caption: u.scenarios.length > 1 ? `The Sequence tab draws the other ${u.scenarios.length - 1 === 1 ? "scenario" : `${u.scenarios.length - 1} scenarios`}.` : void 0, maxRows: 24 });
+        if (first) out.push({ type: "figure", of: { useCase: u.useCaseId, scenario: first.id }, caption: u.scenarios.length > 1 ? `The Diagram tab's player plays the other ${u.scenarios.length - 1 === 1 ? "scenario" : `${u.scenarios.length - 1} scenarios`}.` : void 0, maxRows: 24 });
       }
       break;
     case "decisions":
@@ -10043,6 +10009,11 @@ async function pictureSite($, ui, s) {
   } else now = shown.get(s.site);
   if (!now) return { element: loading(ui, s.site, s.rows) };
   const built = await build($, ui, s, now);
+  const want = pending2.get(s.site);
+  if (want && !waiting && live.get(s.site)?.page?.anchors[want] !== void 0) {
+    pending2.delete(s.site);
+    $.clock.after(0, () => void scrollToAnchor($, s.site, want));
+  }
   const done = await $.clock.now();
   const l = live.get(s.site);
   if (!waiting && l?.pressedAt !== void 0) {
@@ -10202,12 +10173,6 @@ async function build($, ui, s, d) {
     const pages = [];
     for (const pg of d.pages) {
       const rows = await strips(ui, s, pg.id, pg.out, source, pg.shown ? into : void 0);
-      const f = pg.shown && d.float?.def.anchor.piece === pg.id ? d.float : void 0;
-      if (f) {
-        const laid = await floatOver(ui, s, f, { row: 0, out: pg.out }, pg.out.rows, Math.max(width, pg.out.columns), source, into, $);
-        rows.push(...laid.elements);
-        floatTop = top + laid.top;
-      }
       pages.push(
         /* @__PURE__ */ h(ui.Box, { key: `pg-${s.site}-${pg.id}`, flexDirection: "column", height: pg.out.rows, display: pg.shown ? "flex" : "none" }, rows)
       );
@@ -10321,6 +10286,11 @@ async function scrollToAnchor($, site, anchor) {
   const moved = await $.ui.scroll({ to: "start", in: l.requestId }).catch((error) => ({ deny: String(error) }));
   going.delete(l.requestId);
   if (moved.deny) $.ui.log(`proschi: scroll to ${anchor} refused: ${moved.deny}`, { to: "debug" });
+}
+var pending2 = /* @__PURE__ */ new Map();
+function scrollToAnchorOnceShown($, site, anchor) {
+  if (live.get(site)?.page?.anchors[anchor] === void 0) pending2.set(site, anchor);
+  else $.clock.after(0, () => void scrollToAnchor($, site, anchor));
 }
 
 // ../frontend/src/dsl/mermaid.ts
@@ -10668,7 +10638,7 @@ function hldMarkdown(doc, key) {
 function shownMarkdown(markdown) {
   const text = markdown.replace(
     /```mermaid\n([\s\S]*?)```\n?/g,
-    (_, code2) => code2.startsWith("sequenceDiagram") ? "_The Sequence tab draws this scenario._\n" : "_The Diagram tab draws the architecture._\n"
+    (_, code2) => code2.startsWith("sequenceDiagram") ? "_The Diagram tab's player plays this scenario._\n" : "_The Diagram tab draws the architecture._\n"
   );
   const titles = [];
   const numbered = text.replace(/^## (.+)$/gm, (_, title) => `## ${titles.push(title)}. ${title}`);
@@ -10681,7 +10651,9 @@ function shownMarkdown(markdown) {
 }
 function hldTab(ui, doc, key, copy2) {
   const markdown = hldMarkdown(doc, key);
-  return /* @__PURE__ */ h(ui.Box, { key: "body-hld", flexDirection: "column" }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Button, { key: "hld-copy", label: "\u29C9 Copy HLD markdown", hotkey: "c", variant: "primary", onPress: (press) => copy2(press.surface, markdown) }), /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "with its Mermaid diagrams, for a README or a wiki")), /* @__PURE__ */ h(ui.Markdown, { key: "hld-md", text: shownMarkdown(markdown) }));
+  const text = shownMarkdown(markdown);
+  const at = text.search(/^## \d+\. Requirements$/m);
+  return /* @__PURE__ */ h(ui.Box, { key: "body-hld", flexDirection: "column" }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Button, { key: "hld-copy", label: "\u29C9 Copy HLD markdown", hotkey: "c", variant: "primary", onPress: (press) => copy2(press.surface, markdown) }), /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "with its Mermaid diagrams, for a README or a wiki")), /* @__PURE__ */ h(ui.Markdown, { key: "hld-md", text: at < 0 ? text : text.slice(0, at) }), at >= 0 && /* @__PURE__ */ h(ui.Box, { key: hldAnchor("requirements"), flexDirection: "column" }, /* @__PURE__ */ h(ui.Markdown, { key: "hld-md-requirements", text: text.slice(at) })));
 }
 
 // ../plugin/src/views/lines.ts
@@ -10891,38 +10863,6 @@ function verdictLine(results, width) {
   const head = `\u2717 ${failing.length} of ${results.length} ${checks} fail`;
   return line({ text: head, color: TONE.bad, bold: true }, { text: cut(`: ${failing[0].name}: ${failing[0].message}`, width - head.length) });
 }
-function testLines(results, width) {
-  if (results.length === 0) {
-    return [
-      { segs: [{ text: "No requirements or tests yet. Requirements are checked against the analysis of the traffic; tests check how the flows work, e.g." }], wrap: true },
-      blank(),
-      ...["requirements {", '  p99 "Redirect" < 100ms', "  availability >= 99.9%", "}", 'test "Redirect is served from the cache" {', '  "Redirect" calls any cache before any database', "}"].map((t) => line({ text: t, dim: true }))
-    ];
-  }
-  const failing = results.filter((r) => !r.passed);
-  const out = [line(failing.length ? { text: `${failing.length} of ${results.length} failing`, color: TONE.bad, bold: true } : { text: `All ${results.length} passing`, color: TONE.good, bold: true })];
-  const item = (r) => {
-    const mark = r.passed ? { text: "\u2713 ", color: TONE.good } : { text: "\u2717 ", color: TONE.bad };
-    out.push(line(mark, { text: r.name, bold: !r.passed }, { text: where3(r), dim: true }));
-    out.push({ segs: [{ text: r.message, dim: r.passed }], wrap: true, indent: 2 });
-    if (!r.passed && r.hint) out.push({ segs: [{ text: `\u2192 ${r.hint}`, color: TONE.warn }], wrap: true, indent: 2 });
-    if (r.assertions && r.assertions.length > 1) {
-      for (const a of r.assertions) {
-        out.push({ segs: [a.passed ? { text: "\u2713 ", color: TONE.good } : { text: "\u2717 ", color: TONE.bad }, { text: a.message, dim: a.passed }, { text: where3(a), dim: true }], wrap: true, indent: 4 });
-        if (!a.passed && a.hint) out.push({ segs: [{ text: `\u2192 ${a.hint}`, color: TONE.warn }], wrap: true, indent: 6 });
-      }
-    }
-  };
-  if (failing.length) {
-    out.push(blank());
-    failing.forEach(item);
-  }
-  return out;
-}
-var where3 = (r) => r.loc ? ` ${r.loc.file ? `${r.loc.file}:` : "line "}${r.loc.line}` : "";
-function passingLines(results, width) {
-  return results.filter((r) => r.passed).map((r) => line({ text: "\u2713 ", color: TONE.good }, { text: cut(`${r.name}: ${r.message}`, width - 2 - where3(r).length), dim: true }, { text: where3(r), dim: true }));
-}
 function legendLine(critical, width) {
   const swatch = (bg) => ({ text: "  ", bg });
   const segs = [
@@ -10953,181 +10893,6 @@ function lineView(ui, l, key) {
 }
 function linesView(ui, lines, key) {
   return /* @__PURE__ */ h(ui.Box, { key, flexDirection: "column" }, lines.map((l, i) => lineView(ui, l, `${key}-${i}`)));
-}
-
-// ../plugin/src/views/sequence.ts
-var PINK = "#ff5da2";
-var YELLOW = "#ffd23f";
-var RED = "#ef4444";
-var FRAME2 = "#8b5cf6";
-var MIN_SLOT = 9;
-var MAX_SLOT = 28;
-var MARGIN2 = 2;
-var Grid2 = class {
-  constructor(width) {
-    this.width = width;
-  }
-  width;
-  rows = [];
-  row() {
-    this.rows.push(Array.from({ length: this.width }, () => ({ ch: " " })));
-    return this.rows.length - 1;
-  }
-  put(y, x, ch, style = {}) {
-    if (x < 0 || x >= this.width) return;
-    this.rows[y][x] = { ch, ...style };
-  }
-  text(y, x, text, style = {}) {
-    for (const ch of text) this.put(y, x++, ch, style);
-    return x;
-  }
-};
-function columnsOf(seq2, width) {
-  const n = Math.max(1, seq2.participants.length);
-  const slot = Math.max(MIN_SLOT, Math.min(MAX_SLOT, Math.floor((width - 2 * MARGIN2) / n)));
-  const x = new Map(seq2.participants.map((p, i) => [p.id, MARGIN2 + slot * i + Math.floor(slot / 2)]));
-  return { slot, total: 2 * MARGIN2 + slot * n, x };
-}
-var sequenceWidth = (seq2, width) => columnsOf(seq2, width).total;
-function sequenceLines(seq2, width, current = []) {
-  if (seq2.participants.length === 0) return [{ segs: [{ text: "This scenario has no steps.", dim: true }] }];
-  const { slot, total, x } = columnsOf(seq2, width);
-  const g = new Grid2(total);
-  const lifelines = () => {
-    const y = g.row();
-    for (const at of x.values()) g.put(y, at, "\u2502", { dim: true });
-    return y;
-  };
-  const sides = [];
-  const body = () => {
-    const y = lifelines();
-    for (const at of sides) {
-      g.put(y, at, "\u2502", { color: FRAME2 });
-      g.put(y, total - 1 - at, "\u2502", { color: FRAME2 });
-    }
-    return y;
-  };
-  const rule = (at, left, right, title, fill2 = "\u2500") => {
-    const y = body();
-    for (let i = at; i < total - at; i++) g.put(y, i, fill2, { color: FRAME2 });
-    g.put(y, at, left, { color: FRAME2 });
-    g.put(y, total - 1 - at, right, { color: FRAME2 });
-    if (title) g.text(y, at + 2, cut(` ${title} `, total - 2 * at - 4), { color: FRAME2, bold: true });
-  };
-  const names = seq2.participants.map((p) => nameRows(p.name, slot - 5));
-  const top = Array.from({ length: Math.max(...names.map((n) => n.length)) + 2 }, () => g.row());
-  seq2.participants.forEach((p, i) => {
-    const at = x.get(p.id);
-    const w = Math.max(...names[i].map((n) => n.length)) + 4;
-    const left = at - Math.floor(w / 2);
-    g.text(top[0], left, `\u256D${"\u2500".repeat(w - 2)}\u256E`);
-    for (let r = 1; r < top.length - 1; r++) {
-      const name = names[i][r - 1] ?? "";
-      g.text(top[r], left, `\u2502${" ".repeat(w - 2)}\u2502`);
-      g.text(top[r], left + 2, name, { bold: true });
-    }
-    g.text(top[top.length - 1], left, `\u2570${"\u2500".repeat(w - 2)}\u256F`);
-    g.put(top[top.length - 1], at, "\u252C");
-  });
-  const multiple = seq2.useCase.scenarios.length > 1 || !!seq2.condition;
-  if (multiple) {
-    const error = seq2.scenario.outcome === "error";
-    rule(0, "\u250C", "\u2510", `alt ${error ? "\u2717" : "\u2713"} ${seq2.scenario.name}${seq2.condition ? ` \xB7 when ${seq2.condition}` : ""}`);
-    sides.push(0);
-  }
-  const now = new Set(current);
-  const draw = (m) => {
-    const from = x.get(m.from);
-    const to = x.get(m.to);
-    const on = m.kind === "request" && now.has(m.step);
-    const color = on ? PINK : m.error ? RED : void 0;
-    const arrow2 = { ...color ? { color } : {}, ...m.kind === "response" && !color ? { dim: true } : {} };
-    const line2 = { ...arrow2, ...on ? { bold: true } : {} };
-    const y = body();
-    let at = Math.min(from, to) + 2;
-    if (m.kind === "request") at = g.text(y, at, ` ${m.number} `, { bg: on ? YELLOW : m.error ? RED : PINK, color: TONE.ink, bold: true }) + 1;
-    const room = total - MARGIN2 - at;
-    if (m.kind === "response" && m.status !== void 0 && m.label.startsWith(String(m.status))) {
-      const status = cut(String(m.status), room);
-      g.text(y, g.text(y, at, status, { ...line2, bold: true, dim: false }), cut(m.label.slice(status.length), room - status.length), line2);
-    } else g.text(y, at, cut(m.label, room), m.kind === "response" ? line2 : { ...line2, dim: false });
-    const a = body();
-    if (from === to) {
-      g.text(a, from, "\u251C\u2500\u21BA", arrow2);
-      return;
-    }
-    const right = to > from;
-    const fill2 = m.kind === "response" ? "\u2504" : m.async ? "\u254C" : "\u2500";
-    const head = m.kind === "response" || m.async ? right ? "\u25B7" : "\u25C1" : right ? "\u25B6" : "\u25C0";
-    const lo = Math.min(from, to) + 1;
-    const hi = Math.max(from, to) - 1;
-    for (let i = lo; i <= hi; i++) g.put(a, i, fill2, arrow2);
-    g.put(a, from, right ? "\u251C" : "\u2524", { dim: true });
-    if (m.failed) {
-      g.put(a, right ? hi : lo, "\u2715", { color: RED, bold: true });
-      g.put(a, right ? hi - 1 : lo + 1, " ");
-    } else g.put(a, right ? hi : lo, head, arrow2);
-  };
-  for (const item of seq2.items) {
-    if (item.kind === "message") {
-      draw(item.message);
-      continue;
-    }
-    const inset = multiple ? 1 : 0;
-    rule(inset, "\u250C", "\u2510", "par");
-    sides.push(inset);
-    item.branches.forEach((branch, i) => {
-      if (i > 0) {
-        sides.pop();
-        rule(inset, "\u251C", "\u2524", "and", "\u254C");
-        sides.push(inset);
-      }
-      branch.forEach(draw);
-    });
-    sides.pop();
-    rule(inset, "\u2514", "\u2518", "");
-  }
-  if (multiple) {
-    sides.pop();
-    rule(0, "\u2514", "\u2518", "");
-  }
-  lifelines();
-  return g.rows.map((row) => ({ segs: segsOf(row) }));
-}
-function nameRows(name, room) {
-  if (name.length <= room) return [name];
-  const space = name.lastIndexOf(" ", room);
-  if (space <= 0) return [cut(name, room)];
-  return [name.slice(0, space), cut(name.slice(space + 1), room)];
-}
-function segsOf(row) {
-  const segs = [];
-  const same = (a, c) => a.color === c.color && a.bg === c.bg && !!a.bold === !!c.bold && !!a.dim === !!c.dim;
-  for (const c of row) {
-    const last = segs[segs.length - 1];
-    if (last && same(last, c)) last.text += c.ch;
-    else segs.push({ text: c.ch, ...c.color ? { color: c.color } : {}, ...c.bg ? { bg: c.bg } : {}, ...c.bold ? { bold: true } : {}, ...c.dim ? { dim: true } : {} });
-  }
-  const end = segs[segs.length - 1];
-  if (end && !end.bg) end.text = end.text.trimEnd();
-  return segs;
-}
-
-// ../plugin/src/views/sequenceTab.tsx
-function sequenceTab(t) {
-  const { ui, diagram, player, columns } = t;
-  const picks = diagram.useCases.flatMap((u) => u.scenarios.map((s) => ({ value: `${u.id}:${s.id}`, useCase: u, scenario: s })));
-  const pick2 = picks.find((p) => p.value === player.pick) ?? picks[0];
-  if (!pick2) return linesView(ui, [{ segs: [{ text: 'No use cases yet: a usecase "Name" { a -> b : call } block draws as a sequence here.' }], wrap: true }], "body-sequence");
-  const steps = pick2.scenario.steps;
-  const playing = player.mode === "play" && player.pick === pick2.value;
-  const step = Math.max(0, Math.min(player.step, steps.length - 1));
-  const seq2 = buildSequence(pick2.useCase, pick2.scenario, diagram.nodes);
-  const wide = sequenceWidth(seq2, columns);
-  const label = (u, s) => `${u.name}${u.scenarios.length > 1 ? ` \u203A ${s.outcome === "error" ? "\u2717" : "\u2713"} ${s.name}` : ""}`;
-  const total = steps.length;
-  const counter = playing ? `Step ${String(step + 1).padStart(String(total).length)} of ${total}` : `${total} step${total === 1 ? "" : "s"}`;
-  return /* @__PURE__ */ h(ui.Box, { key: "body-sequence", flexDirection: "column" }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "Scenario"), /* @__PURE__ */ h(ui.Select, { key: "seq-pick", value: pick2.value, options: picks.map((p) => ({ value: p.value, label: label(p.useCase, p.scenario) })), onSelect: t.pick }), /* @__PURE__ */ h(ui.Text, null, counter)), wide > columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", seq2.participants.length, " participants take ", wide, " columns, wider than the ", columns, " here: widen the window to see the right side."), linesView(ui, sequenceLines(seq2, columns, playing ? currentStepsOf(steps, step) : []), "seq-lines"));
 }
 
 // ../plugin/src/views/whatif.ts
@@ -11177,45 +10942,29 @@ function whatIfLines(base, results, width) {
 var TABS = [
   { id: "diagram", label: "Diagram", key: "1" },
   { id: "analysis", label: "Analysis", key: "2" },
-  { id: "sequence", label: "Sequence", key: "3" },
-  { id: "hld", label: "HLD", key: "4" },
-  { id: "tests", label: "Tests", key: "5" }
+  { id: "hld", label: "HLD", key: "3" }
 ];
-var tabOf = (stored) => stored === "whatif" ? "analysis" : TABS.find((t) => t.id === stored)?.id ?? "diagram";
+var MOVED = { whatif: "analysis", sequence: "hld", tests: "hld" };
+var tabOf = (stored) => typeof stored === "string" && MOVED[stored] || (TABS.find((t) => t.id === stored)?.id ?? "diagram");
 function tabBar(ui, current, failing, pick2, open) {
   return /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap" }, TABS.map((t) => /* @__PURE__ */ h(
     ui.Button,
     {
       key: `tab-${t.id}`,
-      label: t.id === "tests" && failing > 0 ? `${t.label} \u2717${failing}` : t.label,
+      label: t.id === "hld" && failing > 0 ? `${t.label} \u2717${failing}` : t.label,
       hotkey: t.key,
       ...t.id === current ? { variant: "primary" } : { dimColor: true },
       onPress: () => pick2(t.id)
     }
   )), open && /* @__PURE__ */ h(ui.Button, { key: "tab-open", label: "\u2197 Open in Proschi", dimColor: true, onPress: (press) => open(press.surface) }));
 }
-function tabBody(ui, tab, doc, columns) {
-  return linesView(ui, bodyLines(tab, doc, columns), `body-${tab}`);
-}
-function bodyLines(tab, doc, columns) {
-  if (tab === "analysis") {
-    if (!doc.analysis) return [{ segs: [{ text: "No traffic yet: add a traffic { \u2026 } block and Proschi estimates load, latency, availability and cost for every node, e.g." }], wrap: true }, { segs: [] }, { segs: [{ text: "traffic {", dim: true }] }, { segs: [{ text: '  "Redirect" 10k rps  mix "Cache hit" 90%, "Cache miss" 10%', dim: true }] }, { segs: [{ text: "}", dim: true }] }];
-    return analysisLines(doc.root, doc.analysis, columns);
-  }
-  if (tab === "tests") {
-    if (!doc.analysis) return [{ segs: [{ text: "Requirements and tests run against the simulation: add a traffic { \u2026 } block first." }], wrap: true }];
-    return testLines(doc.tests, columns);
-  }
-  const what = TABS.find((t) => t.id === tab).label;
-  return [{ segs: [{ text: `${what} in the terminal is coming; \u2197 Open in Proschi shows it in the editor now.`, dim: true }], wrap: true }];
+function analysisBody(doc, columns) {
+  if (!doc.analysis) return [{ segs: [{ text: "No traffic yet: add a traffic { \u2026 } block and Proschi estimates load, latency, availability and cost for every node, e.g." }], wrap: true }, { segs: [] }, { segs: [{ text: "traffic {", dim: true }] }, { segs: [{ text: '  "Redirect" 10k rps  mix "Cache hit" 90%, "Cache miss" 10%', dim: true }] }, { segs: [{ text: "}", dim: true }] }];
+  return analysisLines(doc.root, doc.analysis, columns);
 }
 function analysisTab(ui, doc, whatIfs, columns, explore) {
-  if (!doc.analysis) return tabBody(ui, "analysis", doc, columns);
+  if (!doc.analysis) return linesView(ui, analysisBody(doc, columns), "body-analysis");
   return /* @__PURE__ */ h(ui.Box, { key: "body-analysis", flexDirection: "column" }, linesView(ui, analysisLines(doc.root, doc.analysis, columns), "analysis-lines"), linesView(ui, whatIfLines(doc.analysis, whatIfs, columns), "whatif-lines"), /* @__PURE__ */ h(ui.Box, { marginTop: 1 }, /* @__PURE__ */ h(ui.Button, { key: "explore-whatifs", label: "\u2197 Explore what-ifs in Proschi", onPress: (press) => explore(press.surface) })));
-}
-function testsTab(ui, doc, columns, open, toggle) {
-  const passing = doc.analysis ? doc.tests.filter((t) => t.passed).length : 0;
-  return /* @__PURE__ */ h(ui.Box, { key: "body-tests", flexDirection: "column" }, linesView(ui, bodyLines("tests", doc, columns), "tests-lines"), passing > 0 && /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, /* @__PURE__ */ h(ui.Button, { key: "tests-passing", label: `${open ? "\u25BE" : "\u25B8"} ${passing} passing`, hotkey: "a", dimColor: !open, onPress: toggle }), open && linesView(ui, passingLines(doc.tests, columns), "tests-passing-lines")));
 }
 
 // ../plugin/src/register.tsx
@@ -11230,12 +10979,12 @@ var paneFile = atom2({ plugin: "proschi", key: "paneFile" }, "");
 var paneSource = atom2({ plugin: "proschi", key: "paneSource" }, NO_SOURCE);
 var players = atom2({ plugin: "proschi", key: "player" }, IDLE);
 var paneTab = atom2({ plugin: "proschi", key: "paneTab" }, "diagram");
-var panePassing = atom2({ plugin: "proschi", key: "panePassing" }, false);
-var PANE_KEYS = "1-5 tabs \xB7 p play \xB7 n/b step \xB7 r first \xB7 e last \xB7 d stop \xB7 esc back to the prompt";
-var TAB_KEYS = "1-5 tabs \xB7 \u2191\u2193 scroll \xB7 esc back to the prompt";
+var paneAnchor;
+var PANE_KEYS = "1-3 tabs \xB7 p play \xB7 n/b step \xB7 r first \xB7 e last \xB7 d stop \xB7 esc back to the prompt";
+var TAB_KEYS = "1-3 tabs \xB7 \u2191\u2193 scroll \xB7 esc back to the prompt";
 var SYSTEM_KEYS = "s next system \xB7 o open/close \xB7 f focus in \xB7 u back out";
-var FRAME3 = 33;
-var FRAMES = Math.round(TRAVEL_MS / FRAME3) + 1;
+var FRAME2 = 33;
+var FRAMES = Math.round(TRAVEL_MS / FRAME2) + 1;
 var HINT = [
   "Proschi diagrams render in this terminal: put a Proschi document in a ```proschi fenced block",
   "(or write a .proschi file) and Claude Code draws it as the architecture, with a player for its",
@@ -11243,7 +10992,7 @@ var HINT = [
   "Mermaid or ASCII art when showing an architecture or a request flow."
 ].join(" ");
 var layouts = /* @__PURE__ */ new Map();
-var pending2 = /* @__PURE__ */ new Set();
+var pending3 = /* @__PURE__ */ new Set();
 var documents2 = /* @__PURE__ */ new Map();
 var scenes = /* @__PURE__ */ new Map();
 var timers = /* @__PURE__ */ new Map();
@@ -11353,7 +11102,7 @@ function register(on, options) {
     const mode = await modeOf($, ui, PANE, PANE_VIEW);
     if (mode.kind !== "text" && !("error" in loaded)) {
       const W2 = panelColumns(columns);
-      const { doc, key, player } = loaded;
+      const { doc, key } = loaded;
       const pieces = [{ id: "tabs", panel: tabBarPanel(tab, failing), columns: W2 }];
       const actions = {};
       for (const t of TABS)
@@ -11361,34 +11110,43 @@ function register(on, options) {
           menus.delete(PANE_VIEW);
           void update2($, paneTab, () => t.id);
         };
-      const link = tabLink(doc, tab, player);
+      const link = doc.link();
       actions["tabs/open"] = (surface) => void openLink($, surface, link);
-      const page = { doc, key, player, source: loaded.source, passing: await read2($, panePassing) === true, columns: W2 };
+      const page = { doc, key, source: loaded.source };
       const ahead = TABS.filter((t) => t.id !== tab).map((t) => ({ panel: tabBarPanel(t.id, failing), columns: W2 }));
       const pages = [];
-      let float;
       for (const t of TABS) {
         if (t.id === "diagram") continue;
         const body = pagePart($, t.id, page);
         pages.push({ id: `page-${t.id}`, panel: body.panel, columns: W2, shown: t.id === tab });
         if (t.id !== tab) continue;
         for (const [id, fn] of Object.entries(body.actions)) actions[`page-${t.id}/${id}`] = fn;
-        float = body.float;
       }
-      const view2 = await drawDiagram($, draw, PANE_VIEW, source, void 0, { pieces, actions, ahead, pages, hidden: tab !== "diagram", ...float ? { float } : {} }, mode);
+      const view2 = await drawDiagram($, draw, PANE_VIEW, source, void 0, { pieces, actions, ahead, pages, hidden: tab !== "diagram" }, mode);
       if ("error" in view2) {
         if (tab === "diagram") return /* @__PURE__ */ h(ui.Text, { color: "red" }, view2.error);
         $.ui.log(`proschi: the ${tab} tab in text: ${view2.error}`, { to: "debug" });
-      } else if (view2.picture) return view2.element;
+      } else if (view2.picture) {
+        if (paneAnchor && tab === "hld") {
+          scrollToAnchorOnceShown($, PANE_VIEW, paneAnchor);
+          paneAnchor = void 0;
+        }
+        return view2.element;
+      }
     }
-    const opens = "error" in loaded ? void 0 : tabLink(loaded.doc, tab, loaded.player);
+    const opens = "error" in loaded ? void 0 : loaded.doc.link();
     const bar = tabBar(ui, tab, failing, (to) => void update2($, paneTab, () => to), opens === void 0 ? void 0 : (surface) => void openLink($, surface, opens));
     const keys = (systems) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, isFocused ? tab === "diagram" ? PANE_KEYS : TAB_KEYS : "ctrl+x tab focuses the pane for its keys"), isFocused && systems && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, SYSTEM_KEYS));
     if (tab !== "diagram") {
       if ("error" in loaded) return /* @__PURE__ */ h(ui.Text, { color: "red" }, loaded.error);
-      const { doc, key, player } = loaded;
+      const { doc, key } = loaded;
       const link = opens;
-      const body = tab === "sequence" ? sequenceTab({ ui, diagram: doc.diagram, player, columns, pick: (value) => void paneStep($, doc, (p) => ({ ...p, pick: value, step: 0, isPlaying: false })) }) : tab === "hld" ? hldTab(ui, doc, key, (surface, text) => void copy($, surface, text, "the HLD markdown")) : tab === "tests" ? testsTab(ui, doc, columns, await read2($, panePassing) === true, () => void update2($, panePassing, (open) => !open)) : tab === "analysis" ? analysisTab(ui, doc, savedWhatIfs(key, doc), columns, (surface) => void openLink($, surface, link)) : tabBody(ui, tab, doc, columns);
+      const body = tab === "hld" ? hldTab(ui, doc, key, (surface, text) => void copy($, surface, text, "the HLD markdown")) : analysisTab(ui, doc, savedWhatIfs(key, doc), columns, (surface) => void openLink($, surface, link));
+      if (paneAnchor && tab === "hld") {
+        const anchor = paneAnchor;
+        paneAnchor = void 0;
+        $.clock.after(0, () => void scroll($, { to: { key: anchor }, in: PANE, block: "start" }));
+      }
       return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, bar, body, keys(false));
     }
     const view = await drawDiagram($, draw, PANE_VIEW, source, void 0, void 0, { kind: "text" });
@@ -11399,68 +11157,17 @@ function register(on, options) {
 }
 function pagePart($, tab, c) {
   const actions = {};
-  const open = menus.get(PANE_VIEW);
   const { doc, key } = c;
-  const link = tabLink(doc, tab, c.player);
   if (tab === "analysis") {
+    const link = doc.link();
     actions["explore-whatifs"] = (surface) => void openLink($, surface, link);
     return { panel: analysisPage(doc, savedWhatIfs(key, doc)), actions };
   }
-  if (tab === "tests") {
-    actions.passing = () => void update2($, panePassing, (was) => !was);
-    return { panel: testsPage(doc, c.passing), actions };
-  }
-  if (tab === "hld") {
-    const markdown = hldMarkdown(doc, key);
-    const h2 = hldDocument(doc, key);
-    actions["hld-copy"] = (surface) => void copy($, surface, markdown, "the HLD markdown");
-    for (const s of h2.sections) actions[`toc=${s.kind}`] = () => void scrollToAnchor($, PANE_VIEW, hldAnchor(s.kind));
-    return { panel: hldPage(h2, c.source), actions };
-  }
-  const picks = doc.diagram.useCases.flatMap((u) => u.scenarios.map((s) => ({ value: `${u.id}:${s.id}`, useCase: u, scenario: s })));
-  const player = c.player;
-  const now = picks.find((p) => p.value === player.pick) ?? picks[0];
-  if (!now) return { panel: { kind: "page", blocks: [{ type: "paragraph", text: 'No use cases yet: a usecase "Name" { a -> b : call } block draws as a sequence here.' }] }, actions };
-  const steps = now.scenario.steps;
-  const total = steps.length;
-  const playing = player.mode === "play" && player.pick === now.value;
-  const step = Math.max(0, Math.min(player.step, total - 1));
-  actions["seq-pick"] = () => toggleMenu($, PANE_VIEW, "seq-pick");
-  const label = (p) => `${p.useCase.name}${p.useCase.scenarios.length > 1 ? ` \u203A ${p.scenario.name}` : ""}`;
-  const select = {
-    id: "seq-pick",
-    value: now.value,
-    options: picks.map((p) => ({ value: p.value, label: label(p), icon: p.scenario.outcome === "error" ? "cross" : "check", tone: p.scenario.outcome === "error" ? "bad" : "good" }))
-  };
-  let float;
-  if (open === "seq-pick") {
-    const menu = { kind: "menu", select };
-    const close = () => {
-      if (menus.delete(PANE_VIEW)) $.ui.invalidate("ui.render");
-    };
-    const picked = {};
-    for (const p of picks) {
-      picked[`menu/seq-pick=${p.value}`] = () => {
-        menus.delete(PANE_VIEW);
-        void paneStep($, doc, (q) => ({ ...q, pick: p.value, step: 0, isPlaying: false }));
-      };
-    }
-    picked["menu/close"] = close;
-    float = { id: "menu", panel: menu, columns: floatColumns(c.columns, menu), anchor: { piece: "page-sequence", control: "seq-pick" }, close, actions: picked };
-  }
-  const panel = {
-    kind: "sequence",
-    source: { source: c.source.source, ...c.source.path ? { path: c.source.path } : {}, ...c.source.imports ? { imports: c.source.imports } : {} },
-    useCase: now.useCase.id,
-    scenario: now.scenario.id,
-    current: playing ? currentStepsOf(steps, step).map((s) => steps.indexOf(s) + 1) : [],
-    controls: [
-      { text: [{ text: "Scenario", bold: true }] },
-      { select: { ...select, floats: true, ...open === "seq-pick" ? { open: true } : {} } },
-      { text: [{ text: playing ? `Step ${step + 1} of ${total}` : `${total} step${total === 1 ? "" : "s"}`, bold: true }] }
-    ]
-  };
-  return { panel, actions, ...float ? { float } : {} };
+  const markdown = hldMarkdown(doc, key);
+  const h2 = hldDocument(doc, key);
+  actions["hld-copy"] = (surface) => void copy($, surface, markdown, "the HLD markdown");
+  for (const s of h2.sections) actions[`toc=${s.kind}`] = () => void scrollToAnchor($, PANE_VIEW, hldAnchor(s.kind));
+  return { panel: hldPage(h2, c.source), actions };
 }
 async function drawDiagram($, d, viewId, source, file, top = { pieces: [], actions: {}, ahead: [] }, known) {
   const mode = known ?? await modeOf($, d.ui, d.requestId, viewId);
@@ -11472,7 +11179,7 @@ async function drawDiagram($, d, viewId, source, file, top = { pieces: [], actio
     if (view.kind === "loading") return { element: loading(d.ui, viewId, view.rows, mode.kind === "loading" ? mode.probe : void 0), systems: false, picture: true };
   } else if (mode.kind === "loading") return { element: loading(d.ui, viewId, d.rows ?? INLINE_ROWS, mode.probe), systems: false, picture: true };
   const pic = !("error" in view) && view.kind === "picture" ? view : void 0;
-  const float = hidden ? top.float : pic?.float;
+  const float = hidden ? void 0 : pic?.float;
   const drawn = await pictureSite($, d.ui, {
     requestId: d.requestId,
     site: viewId,
@@ -11569,8 +11276,8 @@ function watch($, file) {
   );
 }
 function requestLayout($, key, source) {
-  if (pending2.has(key)) return;
-  pending2.add(key);
+  if (pending3.has(key)) return;
+  pending3.add(key);
   void $.process.run(["node", `${$.plugin.root}/hooks/layout.cjs`], { stdin: JSON.stringify(source), timeoutMs: 3e4 }).then(
     ({ exitCode, stdout, stderr }) => {
       layouts.set(key, exitCode === 0 ? JSON.parse(stdout) : { error: stderr.trim() || `layout exited with ${exitCode}` });
@@ -11579,7 +11286,7 @@ function requestLayout($, key, source) {
       layouts.set(key, { error: `Proschi lays diagrams out with Node.js 18 or newer, which did not start: ${String(error)}` });
     }
   ).finally(() => {
-    pending2.delete(key);
+    pending3.delete(key);
     $.ui.invalidate("ui.render");
   });
 }
@@ -11596,9 +11303,9 @@ function normal(p) {
     ...typeof p?.selected === "string" ? { selected: p.selected } : {}
   };
 }
-var PINK2 = "#ff5da2";
+var PINK = "#ff5da2";
 var INK = "#111111";
-var YELLOW2 = "#ffd23f";
+var YELLOW = "#ffd23f";
 var BARS_WIDTH = 80;
 async function documentOf($, viewId, written, file) {
   const player = normal(await read2($, memberOf(players, { requestId: viewId })));
@@ -11610,12 +11317,12 @@ async function documentOf($, viewId, written, file) {
     doc = loadDocument(source);
     documents2.set(key, doc);
   }
-  const where4 = file ?? "The diagram";
+  const where2 = file ?? "The diagram";
   if (doc.errors.length > 0) {
     const [first] = doc.errors;
-    return { error: `${where4} has errors (line ${first.line}: ${first.message})${file ? `: run \`npx proschi check ${file}\`` : ""}.` };
+    return { error: `${where2} has errors (line ${first.line}: ${first.message})${file ? `: run \`npx proschi check ${file}\`` : ""}.` };
   }
-  if (doc.diagram.nodes.length === 0) return { error: `${where4} has no components to draw.` };
+  if (doc.diagram.nodes.length === 0) return { error: `${where2} has no components to draw.` };
   return { doc, source, key, player };
 }
 var INLINE_WARNINGS = 2;
@@ -11717,7 +11424,7 @@ async function diagramView($, d, viewId, written, file, mode = { kind: "text" },
   const grid = paint(scene, { overlay: doc.overlay, edges: doc.edges, icons, systems: doc.systems, ...view.selected ? { selected: view.selected } : {}, ...steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {} });
   const verdict = verdictLine(doc.tests, view.width - (view.inPane ? 0 : 13));
   const m = pick2 && playerModel($, view, doc, pick2, playing, step, player);
-  return { kind: "text", element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, m && playerBarText(view, doc, m), doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, mode.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, TMUX_HINT), grid.columns > d.columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", grid.columns, " columns wide, wider than the ", d.columns, " here: ", view.inPane ? "widen the window" : "use \u26F6 Focus or a wider window", " to see it whole."), lost.some((name) => !importReasons.has(name)) && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u26A0 Not found, so drawn as plain boxes: ", lost.filter((name) => !importReasons.has(name)).join(", ")), lost.filter((name) => importReasons.has(name)).map((name) => /* @__PURE__ */ h(ui.Text, { key: `lost-${name}`, dimColor: true }, "\u26A0 ", importReasons.get(name))), doc.notes.map((note) => /* @__PURE__ */ h(ui.Text, { color: "yellow" }, "\u26A0 ", note.text, note.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true }, " \u2192 ", note.hint))), (view.inPane ? doc.warnings : doc.warnings.slice(0, INLINE_WARNINGS)).map((w) => /* @__PURE__ */ h(ui.Text, { key: `warn-${w}`, color: "yellow", wrap: "truncate-end" }, "\u26A0 ", w)), !view.inPane && doc.warnings.length > INLINE_WARNINGS && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2026 ", doc.warnings.length - INLINE_WARNINGS, " more: \u26F6 Focus, then Analysis"), /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), doc.edges && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)), verdict && /* @__PURE__ */ h(ui.Box, { key: `verdict-${viewId}`, flexDirection: "row", gap: 1, width: view.width }, lineView(ui, verdict), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `tests-${viewId}`, label: "\u26F6 Details", dimColor: true, onPress: () => focus($, view, title, what, "tests") })), hasSystems && systemBar($, view, doc, systems, selected, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: roomy ? "\u29C9 Copy source" : "\u29C9 Source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: roomy ? "\u29C9 Copy share link" : "\u29C9 Link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: roomy ? "\u2197 Open in Proschi" : "\u2197 Open", variant: "primary", onPress: (press) => void openLink($, press.surface, link) }), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `focus-${viewId}`, label: "\u26F6 Focus", onPress: () => focus($, view, title, what) }))), systems: hasSystems };
+  return { kind: "text", element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, m && playerBarText(view, doc, m), doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, mode.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, TMUX_HINT), grid.columns > d.columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", grid.columns, " columns wide, wider than the ", d.columns, " here: ", view.inPane ? "widen the window" : "use \u26F6 Focus or a wider window", " to see it whole."), lost.some((name) => !importReasons.has(name)) && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u26A0 Not found, so drawn as plain boxes: ", lost.filter((name) => !importReasons.has(name)).join(", ")), lost.filter((name) => importReasons.has(name)).map((name) => /* @__PURE__ */ h(ui.Text, { key: `lost-${name}`, dimColor: true }, "\u26A0 ", importReasons.get(name))), doc.notes.map((note) => /* @__PURE__ */ h(ui.Text, { color: "yellow" }, "\u26A0 ", note.text, note.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true }, " \u2192 ", note.hint))), (view.inPane ? doc.warnings : doc.warnings.slice(0, INLINE_WARNINGS)).map((w) => /* @__PURE__ */ h(ui.Text, { key: `warn-${w}`, color: "yellow", wrap: "truncate-end" }, "\u26A0 ", w)), !view.inPane && doc.warnings.length > INLINE_WARNINGS && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2026 ", doc.warnings.length - INLINE_WARNINGS, " more: \u26F6 Focus, then Analysis"), /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), doc.edges && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)), verdict && /* @__PURE__ */ h(ui.Box, { key: `verdict-${viewId}`, flexDirection: "row", gap: 1, width: view.width }, lineView(ui, verdict), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `tests-${viewId}`, label: "\u26F6 Details", dimColor: true, onPress: () => focus($, view, title, what, "hld", "requirements") })), hasSystems && systemBar($, view, doc, systems, selected, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: roomy ? "\u29C9 Copy source" : "\u29C9 Source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: roomy ? "\u29C9 Copy share link" : "\u29C9 Link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: roomy ? "\u2197 Open in Proschi" : "\u2197 Open", variant: "primary", onPress: (press) => void openLink($, press.surface, link) }), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `focus-${viewId}`, label: "\u26F6 Focus", onPress: () => focus($, view, title, what) }))), systems: hasSystems };
 }
 var images = /* @__PURE__ */ new Map();
 var menus = /* @__PURE__ */ new Map();
@@ -11778,7 +11485,7 @@ function pictureParts($, view, doc, c) {
     };
     pieces.push({ id: "below", panel: below, columns: W2 });
   }
-  on("below", "details", () => focus($, view, c.title, c.what, "tests"));
+  on("below", "details", () => focus($, view, c.title, c.what, "hld", "requirements"));
   if (c.systems.length > 0 || player.focus !== void 0) {
     const s = systemActions($, view, doc, c.systems, c.selected, player);
     const controls = [
@@ -11821,7 +11528,7 @@ function selectable(scene, focus2) {
 function systemBar($, view, doc, systems, selected, player) {
   const { ui } = view.d;
   const { design, open, next, toggle, enter, leave } = systemActions($, view, doc, systems, selected, player);
-  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, player.focus !== void 0 && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "Inside ", player.focus.split(".").join(" \u203A "), " \xB7 ", doc.diagram.title ?? "its design"), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "System"), /* @__PURE__ */ h(ui.Text, { color: PINK2, wrap: "truncate-end" }, selected ? `${selected.name} (${selected.path})` : "none here"), systems.length > 1 && /* @__PURE__ */ h(ui.Button, { key: `sys-next-${view.viewId}`, label: "\u21E5 Next", ...hotkey(view, "s"), onPress: next }), selected && design && /* @__PURE__ */ h(ui.Button, { key: `sys-open-${view.viewId}`, label: open ? "\u229F Collapse" : "\u229E Expand", ...hotkey(view, "o"), onPress: toggle }), selected && design && /* @__PURE__ */ h(ui.Button, { key: `sys-focus-${view.viewId}`, label: "\u2922 Focus in", ...hotkey(view, "f"), onPress: enter }), player.focus !== void 0 && /* @__PURE__ */ h(ui.Button, { key: `sys-back-${view.viewId}`, label: "\u2191 Back out", ...hotkey(view, "u"), onPress: leave })));
+  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, player.focus !== void 0 && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "Inside ", player.focus.split(".").join(" \u203A "), " \xB7 ", doc.diagram.title ?? "its design"), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "System"), /* @__PURE__ */ h(ui.Text, { color: PINK, wrap: "truncate-end" }, selected ? `${selected.name} (${selected.path})` : "none here"), systems.length > 1 && /* @__PURE__ */ h(ui.Button, { key: `sys-next-${view.viewId}`, label: "\u21E5 Next", ...hotkey(view, "s"), onPress: next }), selected && design && /* @__PURE__ */ h(ui.Button, { key: `sys-open-${view.viewId}`, label: open ? "\u229F Collapse" : "\u229E Expand", ...hotkey(view, "o"), onPress: toggle }), selected && design && /* @__PURE__ */ h(ui.Button, { key: `sys-focus-${view.viewId}`, label: "\u2922 Focus in", ...hotkey(view, "f"), onPress: enter }), player.focus !== void 0 && /* @__PURE__ */ h(ui.Button, { key: `sys-back-${view.viewId}`, label: "\u2191 Back out", ...hotkey(view, "u"), onPress: leave })));
 }
 function systemActions($, view, doc, systems, selected, player) {
   const design = selected !== void 0 && !!systemAt2(doc.root, selected.path)?.diagram;
@@ -12014,7 +11721,7 @@ function playerBarText(view, doc, m) {
   const bar = Math.max(0, Math.min(30, view.width - 4 - used));
   const filled = on && total ? Math.round(bar * (at + 1) / total) : 0;
   const line2 = m.line;
-  return /* @__PURE__ */ h(ui.Box, { key: `bar-${id}`, flexDirection: "column", borderStyle: "round", borderColor: PINK2, paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true, color: PINK2 }, "Use case"), /* @__PURE__ */ h(ui.Select, { key: `uc-${id}`, value: m.pick.useCase.id, options: useCaseOptions(doc).map((o) => ({ value: o.value, label: o.value === EXPLORE_ALL ? "\u2261 Explore all\u2026" : o.label })), onSelect: (v) => m.actions[`uc=${v}`]?.() }), /* @__PURE__ */ h(ui.Select, { key: `sc-${id}`, value: m.pick.scenario.id, options: m.pick.useCase.scenarios.map((s) => ({ value: s.id, label: `${s.outcome === "error" ? "\u2717" : "\u2713"} ${scenarioName(m.pick.useCase, s)}` })), onSelect: (v) => m.actions[`sc=${v}`]?.() }), step("r", "\u21E4", "first", on && at > 0), step("b", "\u2039", "prev", on && at > 0), /* @__PURE__ */ h(ui.Button, { key: `play-${id}`, label: m.isPlaying ? "\u275A\u275A" : " \u25B6", variant: "primary", ...key("p"), onPress: () => m.actions.play() }), step("n", "\u203A", "next", on && at < total - 1), step("e", "\u21E5", "last", on && at < total - 1), step("d", "\u2715", "stop", on), /* @__PURE__ */ h(ui.Text, { bold: on, dimColor: !on }, counter), bar > 0 && /* @__PURE__ */ h(ui.Text, null, /* @__PURE__ */ h(ui.Text, { color: YELLOW2 }, "\u2501".repeat(filled)), /* @__PURE__ */ h(ui.Text, { dimColor: true }, "\u2501".repeat(bar - filled)))), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1 }, /* @__PURE__ */ h(ui.Box, { flexGrow: 1 }, /* @__PURE__ */ h(ui.Text, { wrap: "truncate-end" }, line2.number !== void 0 && chip(ui, String(line2.number), line2.error ? "#ff3b30" : PINK2), line2.number !== void 0 ? " " : "", line2.spans.map((s) => /* @__PURE__ */ h(ui.Text, { bold: s.bold === true, dimColor: s.tone === "muted", color: s.tone === "bad" ? "red" : s.tone === "good" ? "green" : s.tone === "warn" ? "yellow" : s.tone === "info" ? "magenta" : void 0 }, s.text)))), /* @__PURE__ */ h(ui.Button, { key: `body-${id}`, label: m.open === "body" ? "Body \u25B4" : "Body \u25BE", dimColor: !on, onPress: () => m.actions.body() })), m.open === "body" && m.playing && stepRows(ui, view, m.playing.scenario.steps, at).nodes, m.open === "explore" && groupByEndpoint(doc.diagram.useCases).map((g) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, g.label && /* @__PURE__ */ h(ui.Text, { bold: true, color: "cyan" }, g.label), g.useCases.map((u) => /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap", paddingLeft: g.label ? 2 : 0 }, /* @__PURE__ */ h(ui.Text, { bold: u.id === m.pick.useCase.id }, u.name), u.scenarios.map((s) => /* @__PURE__ */ h(ui.Button, { key: `x-${id}-${u.id}-${s.id}`, onPress: () => m.actions[`x-${u.id}-${s.id}`]() }, /* @__PURE__ */ h(ui.Text, { color: s.outcome === "error" ? "red" : "green" }, s.outcome === "error" ? "\u2717" : "\u2713", " ", u.scenarios.length > 1 ? scenarioName(u, s) : "Play"))))))));
+  return /* @__PURE__ */ h(ui.Box, { key: `bar-${id}`, flexDirection: "column", borderStyle: "round", borderColor: PINK, paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true, color: PINK }, "Use case"), /* @__PURE__ */ h(ui.Select, { key: `uc-${id}`, value: m.pick.useCase.id, options: useCaseOptions(doc).map((o) => ({ value: o.value, label: o.value === EXPLORE_ALL ? "\u2261 Explore all\u2026" : o.label })), onSelect: (v) => m.actions[`uc=${v}`]?.() }), /* @__PURE__ */ h(ui.Select, { key: `sc-${id}`, value: m.pick.scenario.id, options: m.pick.useCase.scenarios.map((s) => ({ value: s.id, label: `${s.outcome === "error" ? "\u2717" : "\u2713"} ${scenarioName(m.pick.useCase, s)}` })), onSelect: (v) => m.actions[`sc=${v}`]?.() }), step("r", "\u21E4", "first", on && at > 0), step("b", "\u2039", "prev", on && at > 0), /* @__PURE__ */ h(ui.Button, { key: `play-${id}`, label: m.isPlaying ? "\u275A\u275A" : " \u25B6", variant: "primary", ...key("p"), onPress: () => m.actions.play() }), step("n", "\u203A", "next", on && at < total - 1), step("e", "\u21E5", "last", on && at < total - 1), step("d", "\u2715", "stop", on), /* @__PURE__ */ h(ui.Text, { bold: on, dimColor: !on }, counter), bar > 0 && /* @__PURE__ */ h(ui.Text, null, /* @__PURE__ */ h(ui.Text, { color: YELLOW }, "\u2501".repeat(filled)), /* @__PURE__ */ h(ui.Text, { dimColor: true }, "\u2501".repeat(bar - filled)))), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1 }, /* @__PURE__ */ h(ui.Box, { flexGrow: 1 }, /* @__PURE__ */ h(ui.Text, { wrap: "truncate-end" }, line2.number !== void 0 && chip(ui, String(line2.number), line2.error ? "#ff3b30" : PINK), line2.number !== void 0 ? " " : "", line2.spans.map((s) => /* @__PURE__ */ h(ui.Text, { bold: s.bold === true, dimColor: s.tone === "muted", color: s.tone === "bad" ? "red" : s.tone === "good" ? "green" : s.tone === "warn" ? "yellow" : s.tone === "info" ? "magenta" : void 0 }, s.text)))), /* @__PURE__ */ h(ui.Button, { key: `body-${id}`, label: m.open === "body" ? "Body \u25B4" : "Body \u25BE", dimColor: !on, onPress: () => m.actions.body() })), m.open === "body" && m.playing && stepRows(ui, view, m.playing.scenario.steps, at).nodes, m.open === "explore" && groupByEndpoint(doc.diagram.useCases).map((g) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, g.label && /* @__PURE__ */ h(ui.Text, { bold: true, color: "cyan" }, g.label), g.useCases.map((u) => /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap", paddingLeft: g.label ? 2 : 0 }, /* @__PURE__ */ h(ui.Text, { bold: u.id === m.pick.useCase.id }, u.name), u.scenarios.map((s) => /* @__PURE__ */ h(ui.Button, { key: `x-${id}-${u.id}-${s.id}`, onPress: () => m.actions[`x-${u.id}-${s.id}`]() }, /* @__PURE__ */ h(ui.Text, { color: s.outcome === "error" ? "red" : "green" }, s.outcome === "error" ? "\u2717" : "\u2713", " ", u.scenarios.length > 1 ? scenarioName(u, s) : "Play"))))))));
 }
 var FORMAT2 = { JSON: "JSON", XML: "XML", FREE_TEXT: "Text" };
 var LANGUAGE = { JSON: "json", XML: "xml", FREE_TEXT: void 0 };
@@ -12058,7 +11765,7 @@ function stepRows(ui, view, steps, at) {
     const call = `${s.httpMethod} ${s.endpoint}`.trim();
     if (i > 0) row(/* @__PURE__ */ h(ui.Text, null, " "));
     row(
-      /* @__PURE__ */ h(ui.Text, { wrap: "truncate-end" }, chip(ui, String(steps.indexOf(s) + 1), error ? "#ff3b30" : PINK2), " ", /* @__PURE__ */ h(ui.Text, { bold: true }, s.stepName), s.failed && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Failed", "#fca5a5")), !s.failed && (s.statusCode ?? 0) >= 400 && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, String(s.statusCode), "#fca5a5")), s.executionType === "SYNC_REQUEST_RESPONSE" && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Sync", "#86efac")), s.executionType === "ASYNC_FIRE_AND_FORGET" && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Fire & Forget", "#fdba74")), s.executionType === "ASYNC_REQUEST_RESPONSE" && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Async", "#d8b4fe")))
+      /* @__PURE__ */ h(ui.Text, { wrap: "truncate-end" }, chip(ui, String(steps.indexOf(s) + 1), error ? "#ff3b30" : PINK), " ", /* @__PURE__ */ h(ui.Text, { bold: true }, s.stepName), s.failed && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Failed", "#fca5a5")), !s.failed && (s.statusCode ?? 0) >= 400 && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, String(s.statusCode), "#fca5a5")), s.executionType === "SYNC_REQUEST_RESPONSE" && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Sync", "#86efac")), s.executionType === "ASYNC_FIRE_AND_FORGET" && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Fire & Forget", "#fdba74")), s.executionType === "ASYNC_REQUEST_RESPONSE" && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Async", "#d8b4fe")))
     );
     row(
       /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, name(s.fromServiceId), " \u2192 ", name(s.toServiceId), call && call !== s.stepName ? `   ${call}` : "")
@@ -12095,8 +11802,9 @@ async function scroll($, args) {
   if (moved.deny) $.ui.log(`proschi: scroll to ${JSON.stringify(args.to)} refused: ${moved.deny}`, { to: "debug" });
   return moved;
 }
-function focus($, view, title, what, tab = "diagram") {
+function focus($, view, title, what, tab = "diagram", section) {
   const opened = $.ui.open({ id: PANE, title: `Proschi \xB7 ${title}`, focus: true, closeOnEscape: true });
+  paneAnchor = section && hldAnchor(section);
   void (async () => {
     await markOpened($, PANE_VIEW);
     await update2($, paneTab, () => tab);
@@ -12122,15 +11830,6 @@ async function setPlayer($, view, fn, steps) {
   if (steps && steps.length > 0) animate($, view, steps);
   await update2($, memberOf(players, { requestId: view.viewId }), (p) => fn(normal(p)));
 }
-async function paneStep($, doc, fn) {
-  stop(PANE_VIEW);
-  await update2($, memberOf(players, { requestId: PANE_VIEW }), (p) => {
-    const next = fn(normal(p));
-    const picks = doc.diagram.useCases.flatMap((u) => u.scenarios.map((s) => ({ value: `${u.id}:${s.id}`, steps: s.steps.length })));
-    const pick2 = picks.find((x) => x.value === next.pick) ?? picks[0];
-    return { ...next, pick: pick2?.value ?? "", step: Math.max(0, Math.min(next.step, (pick2?.steps ?? 1) - 1)) };
-  });
-}
 function stop(viewId) {
   timers.get(viewId)?.cancel();
   timers.delete(viewId);
@@ -12140,7 +11839,7 @@ function animate($, view, steps) {
   let started = -1;
   let tick = 0;
   let sent = "";
-  const timer = $.clock.every(FRAME3, async () => {
+  const timer = $.clock.every(FRAME2, async () => {
     const player = normal(await read2($, memberOf(players, { requestId: view.viewId })));
     if (player.mode !== "play") return stop(view.viewId);
     const step = Math.max(0, Math.min(player.step, steps.length - 1));
@@ -12183,12 +11882,6 @@ function animate($, view, steps) {
 async function copy($, surface, text, what) {
   const copied = await $.ui.copy({ text, surface });
   $.ui.toast(copied.isCopied ? `Copied ${what} to the clipboard` : `Could not copy ${what}: ${copied.reason === "no-clipboard" ? "no clipboard tool answered" : copied.reason}`);
-}
-function tabLink(doc, tab, player) {
-  if (tab !== "sequence") return doc.link();
-  const picks = doc.diagram.useCases.flatMap((u) => u.scenarios.map((s) => pickOf(u, s)));
-  const pick2 = picks.find((p) => p.value === player.pick) ?? picks[0];
-  return doc.link(pick2 ? { useCase: pick2.useCase.id, ...pick2.useCase.scenarios.length > 1 ? { scenario: pick2.scenario.id } : {}, step: 1 } : void 0);
 }
 async function openLink($, surface, link) {
   for (const opener of ["open", "xdg-open"]) {

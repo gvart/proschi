@@ -4,7 +4,7 @@ import { formatAvailability, formatCount, formatDuration, formatMs, formatPercen
 import { BOTTLENECK_FROM, busiestOf, type CriticalPathOverlay } from '../../../frontend/src/sim/overlay'
 
 /**
- * What the pane's Analysis and Tests tabs and the lines under a drawing say,
+ * What the pane's Analysis tab and the lines under a drawing say,
  * as rows of coloured text: pure, so tests and dumps read them without a
  * surface. The numbers and wording are the editor's (components/Analysis),
  * from the same sim functions; tables drop their least needed columns, then
@@ -268,48 +268,6 @@ export function verdictLine(results: TestResult[], width: number): Line | undefi
   if (failing.length === 0) return line({ text: `✓ All ${results.length} ${checks} pass`, color: TONE.good, bold: true })
   const head = `✗ ${failing.length} of ${results.length} ${checks} fail`
   return line({ text: head, color: TONE.bad, bold: true }, { text: cut(`: ${failing[0].name}: ${failing[0].message}`, width - head.length) })
-}
-
-/**
- * The editor's Requirements and tests (components/Analysis/ResultsPanel.tsx):
- * the summary, then what fails with its hint and assertions. What passes is
- * folded under a toggle, as the editor's `N passing`: `passingLines`.
- */
-export function testLines(results: TestResult[], width: number): Line[] {
-  if (results.length === 0) {
-    return [
-      { segs: [{ text: 'No requirements or tests yet. Requirements are checked against the analysis of the traffic; tests check how the flows work, e.g.' }], wrap: true },
-      blank(),
-      ...['requirements {', '  p99 "Redirect" < 100ms', '  availability >= 99.9%', '}', 'test "Redirect is served from the cache" {', '  "Redirect" calls any cache before any database', '}'].map(t => line({ text: t, dim: true })),
-    ]
-  }
-  const failing = results.filter(r => !r.passed)
-  const out: Line[] = [line(failing.length ? { text: `${failing.length} of ${results.length} failing`, color: TONE.bad, bold: true } : { text: `All ${results.length} passing`, color: TONE.good, bold: true })]
-  const item = (r: TestResult) => {
-    const mark = r.passed ? { text: '✓ ', color: TONE.good } : { text: '✗ ', color: TONE.bad }
-    out.push(line(mark, { text: r.name, bold: !r.passed }, { text: where(r), dim: true }))
-    out.push({ segs: [{ text: r.message, dim: r.passed }], wrap: true, indent: 2 })
-    if (!r.passed && r.hint) out.push({ segs: [{ text: `→ ${r.hint}`, color: TONE.warn }], wrap: true, indent: 2 })
-    if (r.assertions && r.assertions.length > 1) {
-      for (const a of r.assertions) {
-        out.push({ segs: [a.passed ? { text: '✓ ', color: TONE.good } : { text: '✗ ', color: TONE.bad }, { text: a.message, dim: a.passed }, { text: where(a), dim: true }], wrap: true, indent: 4 })
-        if (!a.passed && a.hint) out.push({ segs: [{ text: `→ ${a.hint}`, color: TONE.warn }], wrap: true, indent: 6 })
-      }
-    }
-  }
-  if (failing.length) {
-    out.push(blank())
-    failing.forEach(item)
-  }
-  return out
-}
-
-/** Where a check is written: ` line 12`, ` teams/a.proschi:4`. */
-const where = (r: { loc?: { line: number; file?: string } }) => (r.loc ? ` ${r.loc.file ? `${r.loc.file}:` : 'line '}${r.loc.line}` : '')
-
-/** The checks that pass, one row each, under the Tests tab's `N passing` toggle. */
-export function passingLines(results: TestResult[], width: number): Line[] {
-  return results.filter(r => r.passed).map(r => line({ text: '✓ ', color: TONE.good }, { text: cut(`${r.name}: ${r.message}`, width - 2 - where(r).length), dim: true }, { text: where(r), dim: true }))
 }
 
 /** The canvas's load legend (Overlay/LoadLegend.tsx) on one row: the heat scale, the p99 path, what the edges say. */

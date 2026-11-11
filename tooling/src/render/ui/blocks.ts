@@ -1,6 +1,6 @@
 import { r } from '../svg';
 import type { Block, Cell, Column, Control, Item, Rich, Select, Tone } from './contract';
-import { CELL, CONTROL, Surface, buttonColumns, chip, drawButton, drawLaid, drawSelect, icon, layoutRich, line, paragraph, plain, rect, selectColumns, spansOf, toneColor, txt, width, type Box, type TextStyle } from './kit';
+import { CELL, CONTROL, Surface, buttonColumns, chip, drawButton, drawLaid, drawSelect, icon, layoutRich, line, paragraph, plain, rect, selectColumns, toneColor, txt, width, type Box, type TextStyle } from './kit';
 import { clip, measure } from './metrics';
 import { alpha, mix, type Palette } from './theme';
 
@@ -436,30 +436,6 @@ function stats(S: Surface, items: { label: string; value: string; tone?: Tone }[
   return Math.ceil(items.length / per) * (h + 10) - 10;
 }
 
-function check(S: Surface, b: Extract<Block, { type: 'check' }>, x: number, top: number, w: number): number {
-  const P = S.P;
-  const ix = x + (b.indent ?? 0) * CELL.width;
-  const tone = b.passed ? P.tone.good : P.tone.bad;
-  const parts: string[] = [];
-  parts.push(icon(b.passed ? 'check' : 'cross', ix, top + 4, 14, tone, 2.4));
-  const title = spansOf(b.title).map((s) => ({ ...s, bold: s.bold ?? !b.passed }));
-  const head = layoutRich([...title, ...(b.where ? [{ text: `  ${b.where}`, tone: 'muted' as const }] : [])], x + w - ix - 20, BODY, false)[0];
-  parts.push(drawLaid(P, head, ix + 22, top + 16, BODY, b.passed ? mix(P.ink, P.surface, 0.8) : P.ink));
-  let y = top + 23;
-  S.add(...parts);
-  if (b.message) {
-    const m = paragraph(P, b.message, ix + 22, y, x + w - ix - 22, { size: 13 }, b.passed ? P.muted : mix(P.ink, P.surface, 0.85), 19);
-    S.add(m.svg);
-    y += m.height;
-  }
-  if (b.hint) {
-    const hnt = paragraph(P, `→ ${b.hint}`, ix + 22, y, x + w - ix - 22, { size: 13 }, P.tone.warn, 19);
-    S.add(hnt.svg);
-    y += hnt.height;
-  }
-  return y - top;
-}
-
 function list(S: Surface, items: Rich[], ordered: boolean, x: number, top: number, w: number): number {
   const P = S.P;
   let y = top;
@@ -528,7 +504,6 @@ function gapBefore(b: Block, prev: Block | undefined): number {
   if (!prev) return 0;
   if (b.type === 'heading') return ROW;
   if (prev.type === 'heading') return 2;
-  if (b.type === 'check' && prev.type === 'check') return 2;
   if (b.type === 'space') return 0;
   return 8;
 }
@@ -579,9 +554,6 @@ export function blocks(S: Surface, list_: Block[], x: number, top: number, w: nu
         break;
       case 'list':
         y += list(S, b.items, b.ordered === true, x + (b.indent ?? 0) * CELL.width, y, w - (b.indent ?? 0) * CELL.width);
-        break;
-      case 'check':
-        y += check(S, b, x, y, w);
         break;
       case 'quote': {
         const p = paragraph(P, b.text, x + 14, y, w - 14, BODY, P.muted, 21);

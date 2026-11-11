@@ -12,17 +12,17 @@ import { buildScene, type Scene } from '../../tooling/src/terminal/scene'
 import { idList, systemAt, viewError, type SystemsView } from '../../tooling/src/terminal/systems'
 import type { DiagramScenario, DiagramUseCase, FlowStep } from '../../frontend/src/dsl/types'
 import { groupByEndpoint } from '../../frontend/src/playground/useCaseGroups'
+import type { HldSectionKind } from '../../frontend/src/hld/hld'
 import type { PaneSource, PaneTab, Player } from '../types'
-import { analysisPage, hldAnchor, hldPage, stepCardsOf, tabBarPanel, testsPage } from '../../tooling/src/render/ui/data'
-import type { Control, DrawerPanel, ExplorerPanel, Notice, NoticesPanel, Option, Panel, PlayerBarPanel, SequencePanel, Span } from '../../tooling/src/render/ui/contract'
+import { analysisPage, hldAnchor, hldPage, stepCardsOf, tabBarPanel } from '../../tooling/src/render/ui/data'
+import type { Control, DrawerPanel, ExplorerPanel, Notice, NoticesPanel, Option, Panel, PlayerBarPanel, Span } from '../../tooling/src/render/ui/contract'
 import { cellPx, graphicsMode, gridFrame, imageSize, maxWidthPx, probe, probeKey, probeOf, probeSource, rasterOf, sourceOf, themeOf, TMUX_HINT, type GraphicsMode, type RasterGrid, type RasterRequest } from './graphics'
-import { loading, markOpened, paneWindow, pictureSite, pressTimings, registerPicture, scrollToAnchor, type Action, type Ahead, type Float, type Picture, type Piece, type Site } from './picture'
+import { loading, markOpened, paneWindow, pictureSite, pressTimings, registerPicture, scrollToAnchor, scrollToAnchorOnceShown, type Action, type Ahead, type Float, type Picture, type Piece, type Site } from './picture'
 import { setCellAspect } from './helper'
 import { hldDocument, hldMarkdown, hldTab } from './views/hld'
 import { legendLine, verdictLine } from './views/lines'
 import { lineView, type Ui } from './views/render'
-import { sequenceTab } from './views/sequenceTab'
-import { analysisTab, TABS, tabBar, tabBody, tabOf, testsTab } from './views/tabs'
+import { analysisTab, TABS, tabBar, tabOf } from './views/tabs'
 import { savedWhatIfs } from './views/whatif'
 
 /**
@@ -57,11 +57,12 @@ const paneFile = atom({ plugin: 'proschi', key: 'paneFile' } as const, '')
 const paneSource = atom({ plugin: 'proschi', key: 'paneSource' } as const, NO_SOURCE)
 const players = atom({ plugin: 'proschi', key: 'player' } as const, IDLE)
 const paneTab = atom({ plugin: 'proschi', key: 'paneTab' } as const, 'diagram' as PaneTab)
-const panePassing = atom({ plugin: 'proschi', key: 'panePassing' } as const, false)
+/** The HLD heading the pane opens scrolled to (a failing verdict's Details), until its next render takes it. */
+let paneAnchor: string | undefined
 
 /** The pane's keys, as its Buttons' hotkeys name them; the system keys where the diagram has systems. */
-const PANE_KEYS = '1-5 tabs · p play · n/b step · r first · e last · d stop · esc back to the prompt'
-const TAB_KEYS = '1-5 tabs · ↑↓ scroll · esc back to the prompt'
+const PANE_KEYS = '1-3 tabs · p play · n/b step · r first · e last · d stop · esc back to the prompt'
+const TAB_KEYS = '1-3 tabs · ↑↓ scroll · esc back to the prompt'
 const SYSTEM_KEYS = 's next system · o open/close · f focus in · u back out'
 
 /** One animation frame, in ms: about 30 a second. */
@@ -206,7 +207,7 @@ export function register(on: On, options: PluginOptions): void {
     const mode = await modeOf($, ui, PANE, PANE_VIEW)
     if (mode.kind !== 'text' && !('error' in loaded)) {
       const W = panelColumns(columns)
-      const { doc, key, player } = loaded
+      const { doc, key } = loaded
       const pieces: Piece[] = [{ id: 'tabs', panel: tabBarPanel(tab, failing), columns: W }]
       const actions: Record<string, Action> = {}
       for (const t of TABS)
@@ -214,30 +215,35 @@ export function register(on: On, options: PluginOptions): void {
           menus.delete(PANE_VIEW)
           void update($, paneTab, () => t.id)
         }
-      const link = tabLink(doc, tab, player)
+      const link = doc.link()
       actions['tabs/open'] = surface => void openLink($, surface, link)
-      const page = { doc, key, player, source: loaded.source, passing: (await read($, panePassing)) === true, columns: W }
+      const page = { doc, key, source: loaded.source }
       // Ahead: every other tab's bar. Every page is drawn, the shown one waited on, the others hidden once ready, so a switch only shows one.
       const ahead = TABS.filter(t => t.id !== tab).map(t => ({ panel: tabBarPanel(t.id, failing) as Panel, columns: W }))
       const pages: NonNullable<Site['pages']> = []
-      let float: Float | undefined
       for (const t of TABS) {
         if (t.id === 'diagram') continue
         const body = pagePart($, t.id, page)
         pages.push({ id: `page-${t.id}`, panel: body.panel, columns: W, shown: t.id === tab })
         if (t.id !== tab) continue
         for (const [id, fn] of Object.entries(body.actions)) actions[`page-${t.id}/${id}`] = fn
-        float = body.float
       }
       // The Diagram tab whichever tab shows: drawn ahead of every other page and kept mounted, so going back to it is instant.
-      const view = await drawDiagram($, draw, PANE_VIEW, source, undefined, { pieces, actions, ahead, pages, hidden: tab !== 'diagram', ...(float ? { float } : {}) }, mode)
+      const view = await drawDiagram($, draw, PANE_VIEW, source, undefined, { pieces, actions, ahead, pages, hidden: tab !== 'diagram' }, mode)
       if ('error' in view) {
         if (tab === 'diagram') return <ui.Text color="red">{view.error}</ui.Text>
         $.ui.log(`proschi: the ${tab} tab in text: ${view.error}`, { to: 'debug' })
-      } else if (view.picture) return view.element
+      } else if (view.picture) {
+        // Opened on a section (a failing verdict's Details): the pane scrolls to it once its page shows.
+        if (paneAnchor && tab === 'hld') {
+          scrollToAnchorOnceShown($, PANE_VIEW, paneAnchor)
+          paneAnchor = undefined
+        }
+        return view.element
+      }
     }
 
-    const opens = 'error' in loaded ? undefined : tabLink(loaded.doc, tab, loaded.player)
+    const opens = 'error' in loaded ? undefined : loaded.doc.link()
     const bar = tabBar(ui, tab, failing, to => void update($, paneTab, () => to), opens === undefined ? undefined : surface => void openLink($, surface, opens))
     const keys = (systems: boolean) => (
       <ui.Box flexDirection="column">
@@ -249,14 +255,17 @@ export function register(on: On, options: PluginOptions): void {
     )
     if (tab !== 'diagram') {
       if ('error' in loaded) return <ui.Text color="red">{loaded.error}</ui.Text>
-      const { doc, key, player } = loaded
+      const { doc, key } = loaded
       const link = opens!
       const body =
-        tab === 'sequence' ? sequenceTab({ ui, diagram: doc.diagram, player, columns, pick: value => void paneStep($, doc, p => ({ ...p, pick: value, step: 0, isPlaying: false })) })
-        : tab === 'hld' ? hldTab(ui, doc, key, (surface, text) => void copy($, surface, text, 'the HLD markdown'))
-        : tab === 'tests' ? testsTab(ui, doc, columns, (await read($, panePassing)) === true, () => void update($, panePassing, open => !open))
-        : tab === 'analysis' ? analysisTab(ui, doc, savedWhatIfs(key, doc), columns, surface => void openLink($, surface, link))
-        : tabBody(ui, tab, doc, columns)
+        tab === 'hld' ? hldTab(ui, doc, key, (surface, text) => void copy($, surface, text, 'the HLD markdown'))
+        : analysisTab(ui, doc, savedWhatIfs(key, doc), columns, surface => void openLink($, surface, link))
+      // Opened on a section: the pane scrolls to its heading once drawn.
+      if (paneAnchor && tab === 'hld') {
+        const anchor = paneAnchor
+        paneAnchor = undefined
+        $.clock.after(0, () => void scroll($, { to: { key: anchor }, in: PANE, block: 'start' }))
+      }
       return (
         <ui.Box flexDirection="column">
           {bar}
@@ -279,84 +288,28 @@ export function register(on: On, options: PluginOptions): void {
   registerPicture(on)
 }
 
-/** What the pane's other tabs draw from: the document, the player, whether the passing checks are open. */
+/** What the pane's other tabs draw from: the document and its source. */
 interface PageContext {
   doc: Document
   key: string
-  player: Player
-  passing: boolean
   source: Source
-  columns: number
 }
 
 /** A tab other than the diagram as a page panel (tooling/src/render/ui/data.ts), with what its controls do by control id. */
-function pagePart($: EngineInterface, tab: Exclude<PaneTab, 'diagram'>, c: PageContext): { panel: Panel; actions: Record<string, Action>; float?: Float } {
+function pagePart($: EngineInterface, tab: Exclude<PaneTab, 'diagram'>, c: PageContext): { panel: Panel; actions: Record<string, Action> } {
   const actions: Record<string, Action> = {}
-  const open = menus.get(PANE_VIEW)
   const { doc, key } = c
-  const link = tabLink(doc, tab, c.player)
   if (tab === 'analysis') {
+    const link = doc.link()
     actions['explore-whatifs'] = surface => void openLink($, surface, link)
     return { panel: analysisPage(doc, savedWhatIfs(key, doc)), actions }
   }
-  if (tab === 'tests') {
-    actions.passing = () => void update($, panePassing, was => !was)
-    return { panel: testsPage(doc, c.passing), actions }
-  }
-  if (tab === 'hld') {
-    const markdown = hldMarkdown(doc, key)
-    const h = hldDocument(doc, key)
-    actions['hld-copy'] = surface => void copy($, surface, markdown, 'the HLD markdown')
-    // The table of contents: each entry scrolls the pane to its section.
-    for (const s of h.sections) actions[`toc=${s.kind}`] = () => void scrollToAnchor($, PANE_VIEW, hldAnchor(s.kind))
-    return { panel: hldPage(h, c.source), actions }
-  }
-  // The Sequence tab: a still of the picked scenario (`proschi render`'s sequence) under its picker; the Diagram tab's player lights its step.
-  const picks = doc.diagram.useCases.flatMap(u => u.scenarios.map(s => ({ value: `${u.id}:${s.id}`, useCase: u, scenario: s })))
-  const player = c.player
-  const now = picks.find(p => p.value === player.pick) ?? picks[0]
-  if (!now) return { panel: { kind: 'page', blocks: [{ type: 'paragraph', text: 'No use cases yet: a usecase "Name" { a -> b : call } block draws as a sequence here.' }] }, actions }
-  const steps = now.scenario.steps
-  const total = steps.length
-  const playing = player.mode === 'play' && player.pick === now.value
-  const step = Math.max(0, Math.min(player.step, total - 1))
-  actions['seq-pick'] = () => toggleMenu($, PANE_VIEW, 'seq-pick')
-  const label = (p: (typeof picks)[number]) => `${p.useCase.name}${p.useCase.scenarios.length > 1 ? ` › ${p.scenario.name}` : ''}`
-  const select = {
-    id: 'seq-pick',
-    value: now.value,
-    options: picks.map(p => ({ value: p.value, label: label(p), icon: p.scenario.outcome === 'error' ? ('cross' as const) : ('check' as const), tone: p.scenario.outcome === 'error' ? ('bad' as const) : ('good' as const) })),
-  }
-  // Its menu floats over the page under the picker, as the player bar's do: nothing under it moves.
-  let float: Float | undefined
-  if (open === 'seq-pick') {
-    const menu: Panel = { kind: 'menu', select }
-    const close = () => {
-      if (menus.delete(PANE_VIEW)) $.ui.invalidate('ui.render')
-    }
-    const picked: Record<string, Action> = {}
-    for (const p of picks) {
-      picked[`menu/seq-pick=${p.value}`] = () => {
-        menus.delete(PANE_VIEW)
-        void paneStep($, doc, q => ({ ...q, pick: p.value, step: 0, isPlaying: false }))
-      }
-    }
-    picked['menu/close'] = close
-    float = { id: 'menu', panel: menu, columns: floatColumns(c.columns, menu), anchor: { piece: 'page-sequence', control: 'seq-pick' }, close, actions: picked }
-  }
-  const panel: SequencePanel = {
-    kind: 'sequence',
-    source: { source: c.source.source, ...(c.source.path ? { path: c.source.path } : {}), ...(c.source.imports ? { imports: c.source.imports } : {}) },
-    useCase: now.useCase.id,
-    scenario: now.scenario.id,
-    current: playing ? currentStepsOf(steps, step).map(s => steps.indexOf(s) + 1) : [],
-    controls: [
-      { text: [{ text: 'Scenario', bold: true }] },
-      { select: { ...select, floats: true, ...(open === 'seq-pick' ? { open: true } : {}) } },
-      { text: [{ text: playing ? `Step ${step + 1} of ${total}` : `${total} step${total === 1 ? '' : 's'}`, bold: true }] },
-    ],
-  }
-  return { panel, actions, ...(float ? { float } : {}) }
+  const markdown = hldMarkdown(doc, key)
+  const h = hldDocument(doc, key)
+  actions['hld-copy'] = surface => void copy($, surface, markdown, 'the HLD markdown')
+  // The table of contents: each entry scrolls the pane to its section.
+  for (const s of h.sections) actions[`toc=${s.kind}`] = () => void scrollToAnchor($, PANE_VIEW, hldAnchor(s.kind))
+  return { panel: hldPage(h, c.source), actions }
 }
 
 /** A diagram drawn at a site: in pictures where the terminal shows them (with `top`'s pieces over it, the pane's tabs), else in text cells. */
@@ -366,7 +319,7 @@ async function drawDiagram(
   viewId: string,
   source: Source,
   file?: string,
-  top: { pieces: Piece[]; actions: Record<string, Action>; ahead: { panel: Panel; columns: number }[]; pages?: Site['pages']; hidden?: boolean; float?: Float } = { pieces: [], actions: {}, ahead: [] },
+  top: { pieces: Piece[]; actions: Record<string, Action>; ahead: { panel: Panel; columns: number }[]; pages?: Site['pages']; hidden?: boolean } = { pieces: [], actions: {}, ahead: [] },
   known?: Mode,
 ): Promise<{ element: RenderElement; systems: boolean; picture: boolean } | { error: string }> {
   const mode = known ?? (await modeOf($, d.ui, d.requestId, viewId))
@@ -380,7 +333,7 @@ async function drawDiagram(
   } else if (mode.kind === 'loading') return { element: loading(d.ui, viewId, d.rows ?? INLINE_ROWS, mode.probe), systems: false, picture: true }
   // Behind another tab: the page alone until the diagram can be drawn, then the diagram's pieces too, hidden.
   const pic = !('error' in view) && view.kind === 'picture' ? view : undefined
-  const float = hidden ? top.float : pic?.float
+  const float = hidden ? undefined : pic?.float
   const drawn = await pictureSite($, d.ui, {
     requestId: d.requestId,
     site: viewId,
@@ -775,7 +728,7 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
       {verdict && (
         <ui.Box key={`verdict-${viewId}`} flexDirection="row" gap={1} width={view.width}>
           {lineView(ui, verdict)}
-          {!view.inPane && <ui.Button key={`tests-${viewId}`} label="⛶ Details" dimColor onPress={() => focus($, view, title, what, 'tests')} />}
+          {!view.inPane && <ui.Button key={`tests-${viewId}`} label="⛶ Details" dimColor onPress={() => focus($, view, title, what, 'hld', 'requirements')} />}
         </ui.Box>
       )}
       {hasSystems && systemBar($, view, doc, systems, selected, player)}
@@ -882,7 +835,7 @@ function pictureParts($: EngineInterface, view: View, doc: Document, c: Parts): 
 
   pieces.push({ id: 'diagram', ...(c.picture ? { picture: c.picture } : {}) })
 
-  // The verdict only when a check fails (the Tests tab's badge says all pass), the legend in the diagram's corner.
+  // The verdict only when a check fails (the HLD tab's badge says how many), the legend in the diagram's corner.
   const failing = doc.tests.filter(t => !t.passed)
   if (failing[0]) {
     const below: NoticesPanel = {
@@ -892,7 +845,7 @@ function pictureParts($: EngineInterface, view: View, doc: Document, c: Parts): 
     }
     pieces.push({ id: 'below', panel: below, columns: W })
   }
-  on('below', 'details', () => focus($, view, c.title, c.what, 'tests'))
+  on('below', 'details', () => focus($, view, c.title, c.what, 'hld', 'requirements'))
 
   if (c.systems.length > 0 || player.focus !== undefined) {
     const s = systemActions($, view, doc, c.systems, c.selected, player)
@@ -1432,9 +1385,11 @@ async function scroll($: EngineInterface, args: UiScrollArgs): Promise<{ deny?: 
  * press itself, so it counts as the person's and is placed at any width; what
  * it shows follows. A file keeps its watch; a block from a reply is stored
  * whole. The pane's player starts where this one stands, and this one pauses.
+ * With `section`, the HLD tab opens scrolled to that section.
  */
-function focus($: EngineInterface, view: View, title: string, what: { file: string } | { source: Source }, tab: PaneTab = 'diagram'): void {
+function focus($: EngineInterface, view: View, title: string, what: { file: string } | { source: Source }, tab: PaneTab = 'diagram', section?: HldSectionKind): void {
   const opened = $.ui.open({ id: PANE, title: `Proschi · ${title}`, focus: true, closeOnEscape: true })
+  paneAnchor = section && hldAnchor(section)
   void (async () => {
     await markOpened($, PANE_VIEW)
     await update($, paneTab, () => tab)
@@ -1462,17 +1417,6 @@ async function setPlayer($: EngineInterface, view: View, fn: (p: Player) => Play
   // Started before the redraw, so the redraw draws the step's first frame rather than its last.
   if (steps && steps.length > 0) animate($, view, steps)
   await update($, memberOf(players, { requestId: view.viewId }), p => fn(normal(p)))
-}
-
-/** Changes the pane's player from a tab without the drawing: the Sequence tab's picker. */
-async function paneStep($: EngineInterface, doc: Document, fn: (p: Player) => Player): Promise<void> {
-  stop(PANE_VIEW)
-  await update($, memberOf(players, { requestId: PANE_VIEW }), p => {
-    const next = fn(normal(p))
-    const picks = doc.diagram.useCases.flatMap(u => u.scenarios.map(s => ({ value: `${u.id}:${s.id}`, steps: s.steps.length })))
-    const pick = picks.find(x => x.value === next.pick) ?? picks[0]
-    return { ...next, pick: pick?.value ?? '', step: Math.max(0, Math.min(next.step, (pick?.steps ?? 1) - 1)) }
-  })
 }
 
 function stop(viewId: string): void {
@@ -1534,18 +1478,6 @@ function animate($: EngineInterface, view: View, steps: FlowStep[]): void {
 async function copy($: EngineInterface, surface: RenderSurface, text: string, what: string): Promise<void> {
   const copied = await $.ui.copy({ text, surface })
   $.ui.toast(copied.isCopied ? `Copied ${what} to the clipboard` : `Could not copy ${what}: ${copied.reason === 'no-clipboard' ? 'no clipboard tool answered' : copied.reason}`)
-}
-
-/**
- * The editor's link for a tab: the Sequence tab's at its scenario's first
- * step (the share link opens the player there); the others at the document,
- * as the link names no other view.
- */
-function tabLink(doc: Document, tab: PaneTab, player: Player): string {
-  if (tab !== 'sequence') return doc.link()
-  const picks = doc.diagram.useCases.flatMap(u => u.scenarios.map(s => pickOf(u, s)))
-  const pick = picks.find(p => p.value === player.pick) ?? picks[0]
-  return doc.link(pick ? { useCase: pick.useCase.id, ...(pick.useCase.scenarios.length > 1 ? { scenario: pick.scenario.id } : {}), step: 1 } : undefined)
 }
 
 /** Opens the editor in the browser; where nothing opens it, copies the link instead. */

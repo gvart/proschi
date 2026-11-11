@@ -1,11 +1,11 @@
-import { expect } from 'claude-code/testing'
+import { expect, mock } from 'claude-code/testing'
 
 import { test } from './textUi'
 
 import { LAYOUT, SOURCE } from './fixture'
 
 // The editor's read-only experience in the terminal (docs/design/terminal-mod.md): the load on the edges, the
-// requirement verdict under a drawing, the pane's Analysis and Tests tabs, and the share link's step.
+// requirement verdict under a drawing, the pane's Analysis and HLD tabs, and the share link's step.
 
 const reply = (text: string) =>
   ({
@@ -56,13 +56,19 @@ test('the edges carry their load, a legend names the p99 path, and the verdict s
   await ui.unmount()
 })
 
-test('a failing check reads in one line, and Details opens the pane on its Tests tab', async ($, on) => {
+test('a failing check reads in one line, and Details opens the pane on its HLD tab at its Requirements', async ($, on) => {
+  const clock = mock.clock(on)
   const opens: Record<string, unknown>[] = []
+  const logs: string[] = []
   on('process.run', () => ({ value: { exitCode: 0, stdout: LAYOUT, stderr: '' } }))
   on('ui.invalidate', () => ({ value: undefined }))
   on('ui.open', (_, e) => {
     opens.push({ ...e })
     return { value: { isPlaced: true } }
+  })
+  on('ui.log', (_, e) => {
+    logs.push(e.text)
+    return { value: undefined }
   })
   await (await $.ui.mount(reply(block(FAILING)))).unmount()
   const ui = await $.ui.mount(reply(block(FAILING)))
@@ -72,21 +78,20 @@ test('a failing check reads in one line, and Details opens the pane on its Tests
   expect(opens[0]).toMatchObject({ id: 'proschi-view', focus: true })
 
   const p = await $.ui.mount(pane)
-  expect(((await p.find({ key: 'tab-tests' })) as unknown as { props: { label: string; variant?: string; hotkey?: string } }).props).toMatchObject({ label: 'Tests ✗2', variant: 'primary', hotkey: '5' })
-  expect(await texts(p, /^2 of 3 failing$/)).toBeDefined()
-  expect(await texts(p, /^→ /)).toBeDefined()
-  // What fails comes first, open; what passes is folded under a toggle, as the editor's Results.
-  expect(await texts(p, /^✗ availability of every use case/)).toBeDefined()
-  expect(((await p.find({ key: 'tests-passing' })) as unknown as { props: { label: string; hotkey?: string } }).props).toMatchObject({ label: '▸ 1 passing', hotkey: 'a' })
-  expect(await texts(p, /Orders are stored/)).toBeUndefined()
-  await p.press({ key: 'tests-passing' })
-  expect(((await p.find({ key: 'tests-passing' })) as unknown as { props: { label: string } }).props.label).toBe('▾ 1 passing')
-  expect(await texts(p, /^✓ Orders are stored/)).toBeDefined()
-  await p.press({ key: 'tests-passing' })
-  expect(await texts(p, /Orders are stored/)).toBeUndefined()
-  // No drawing on the Tests tab; the keys say how to change tabs.
+  // The HLD tab, its badge the failing count; no Sequence or Tests tab.
+  expect(((await p.find({ key: 'tab-hld' })) as unknown as { props: { label: string; variant?: string; hotkey?: string } }).props).toMatchObject({ label: 'HLD ✗2', variant: 'primary', hotkey: '3' })
+  expect(await p.find({ key: 'tab-tests' })).toBeUndefined()
+  expect(await p.find({ key: 'tab-sequence' })).toBeUndefined()
+  // Its Requirements section in a Box of its own, which the pane scrolls to.
+  const section = (await p.find({ key: 'hld-md-requirements' })) as unknown as { props: { text: string } }
+  expect(section.props.text).toMatch(/^## \d+\. Requirements/)
+  expect(section.props.text).toMatch(/fail/)
+  // The harness moves no window for a plugin's $.ui.scroll: the refusal, naming its target, goes to the debug log.
+  await clock.advance(1)
+  expect(logs.filter(line => line.startsWith('proschi: scroll to ')).map(line => line.split(' refused')[0])).toEqual(['proschi: scroll to {"key":"hld-requirements"}'])
+  // No drawing on the HLD tab; the keys say how to change tabs.
   expect(await p.find({ type: 'Raster' })).toBeUndefined()
-  expect(await texts(p, /^1-5 tabs · ↑↓ scroll/)).toBeDefined()
+  expect(await texts(p, /^1-3 tabs · ↑↓ scroll/)).toBeDefined()
   await p.unmount()
 })
 

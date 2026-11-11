@@ -71,7 +71,7 @@ function inset(whole: Pixels, piece: Pixels, x: number): Pixels {
 /**
  * A page with its figures drawn (Block `figure`): the architecture as the
  * diagram's strip draws it, on the figure's wash, and a use case's sequence
- * as the Sequence tab draws it. A figure that cannot be drawn is left
+ * as `proschi render` draws it. A figure that cannot be drawn is left
  * without its SVG, which the page says.
  */
 export async function withFigures(p: Panel, theme: UiTheme): Promise<Panel> {
@@ -95,7 +95,7 @@ export async function withFigures(p: Panel, theme: UiTheme): Promise<Panel> {
         const u = doc.diagram.useCases.find((c) => c.id === useCase || c.name === useCase);
         const s = scenario === undefined ? u?.scenarios[0] : u?.scenarios.find((c) => c.id === scenario || c.name === scenario);
         if (!u || !s) throw new Error(`No scenario '${scenario ?? ''}' in '${useCase}'`);
-        svg = withTheme(theme, () => renderSequenceSvg(doc.diagram, u, s, `fig${i}-`, { current: [] }));
+        svg = withTheme(theme, () => renderSequenceSvg(doc.diagram, u, s, `fig${i}-`));
       }
       out.push({ ...b, svg });
     } catch {

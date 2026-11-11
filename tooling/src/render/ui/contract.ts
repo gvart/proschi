@@ -121,7 +121,7 @@ export type Item = { text: Rich; columns?: number } | { control: Control } | { s
 
 // ---------- the chrome panels around the diagram ----------
 
-/** The pane's tabs (D3): each with its digit; a badge (Tests' failing count) in its tone; `open` at the row's right end (↗ Open in Proschi), shortened where the row is narrow. */
+/** The pane's tabs (D3): each with its digit; a badge (HLD's failing check count) in its tone; `open` at the row's right end (↗ Open in Proschi), shortened where the row is narrow. */
 export interface TabBarPanel {
   kind: 'tabs';
   tabs: { id: string; label: string; hotkey?: string; badge?: { text: string; tone: Tone } }[];
@@ -272,7 +272,6 @@ export type Block =
   | { type: 'controls'; items: Item[] }
   | { type: 'code'; text: string; language?: string; maxLines?: number }
   | { type: 'list'; items: Rich[]; ordered?: boolean; indent?: number }
-  | { type: 'check'; passed: boolean; title: Rich; where?: string; message?: string; hint?: string; indent?: number }
   | { type: 'quote'; text: Rich }
   | { type: 'rule' }
   | { type: 'space'; rows?: number }
@@ -287,7 +286,7 @@ export type Block =
 /** What a figure draws: the architecture, or a use case's scenario (its first when none is named) as a sequence. */
 export type Figure = { architecture: true } | { useCase: string; scenario?: string };
 
-/** A tab's body as blocks top to bottom: Analysis, Tests, HLD (data.ts builds them). */
+/** A tab's body as blocks top to bottom: Analysis, HLD (data.ts builds them). */
 export interface PagePanel {
   kind: 'page';
   blocks: Block[];
@@ -295,19 +294,7 @@ export interface PagePanel {
   source?: { source: string; path?: string; imports?: Record<string, string> };
 }
 
-/** The Sequence tab: the scenario picker and the scenario as `proschi render` draws it, a still with the Diagram tab's current steps lit. */
-export interface SequencePanel {
-  kind: 'sequence';
-  source: { source: string; path?: string; imports?: Record<string, string> };
-  useCase: string;
-  scenario?: string;
-  /** The 1-based step numbers lit (the current step and its par siblings). */
-  current?: number[];
-  /** The controls over the drawing (the scenario picker), as a page's controls row. */
-  controls?: Item[];
-}
-
-export type Panel = TabBarPanel | PlayerBarPanel | MenuPanel | DrawerPanel | ExplorerPanel | SystemBarPanel | ActionBarPanel | NoticesPanel | PagePanel | SequencePanel;
+export type Panel = TabBarPanel | PlayerBarPanel | MenuPanel | DrawerPanel | ExplorerPanel | SystemBarPanel | ActionBarPanel | NoticesPanel | PagePanel;
 
 // ---------- the request and the answer ----------
 

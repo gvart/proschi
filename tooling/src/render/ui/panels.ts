@@ -1,8 +1,5 @@
-import { renderSequenceSvg } from '../sequence';
-import { withTheme } from '../svg';
-import { loadDocument } from '../../terminal/document';
-import type { ActionBarPanel, Block, Control, DrawerPanel, ExplorerPanel, Item, MenuPanel, NoticesPanel, Panel, PlayerBarPanel, Rich, ScenarioChip, Select, SequencePanel, StepCard, SystemBarPanel, TabBarPanel, UiTheme } from './contract';
-import { BODY, CODE, CONTROL_ROW, blocks, codeBox, embedded, itemsRow, measureRich, menu, placeButton, upToRow } from './blocks';
+import type { ActionBarPanel, Block, Control, DrawerPanel, ExplorerPanel, Item, MenuPanel, NoticesPanel, Panel, PlayerBarPanel, Rich, ScenarioChip, Select, StepCard, SystemBarPanel, TabBarPanel, UiTheme } from './contract';
+import { BODY, CODE, CONTROL_ROW, blocks, codeBox, itemsRow, menu, placeButton, upToRow } from './blocks';
 import { CELL, CONTROL, Surface, buttonColumns, chip, drawLaid, drawSelect, icon, layoutRich, line, paragraph, rect, selectColumns, surfaceFrame, tint, txt, width, type Box, type ControlState, type Edges } from './kit';
 import { clip } from './metrics';
 import { alpha, mix, paletteOf, type Palette } from './theme';
@@ -493,38 +490,6 @@ function page(S: Surface, b: Extract<Panel, { kind: 'page' }>): number {
   return y;
 }
 
-/** The sequence SVG of `proschi render`, its outer <svg> taken off so it draws inside the panel. */
-function sequence(S: Surface, p: SequencePanel, theme: UiTheme): number {
-  return framed(S, (S, top) => sequenceDrawing(S, p, theme, top), 0, ROW / 2);
-}
-
-function sequenceDrawing(S: Surface, p: SequencePanel, theme: UiTheme, top: number): number {
-  let y = top;
-  if (p.controls?.length) {
-    // One row however long the scenario's name: a select as wide whichever option shows, narrowed (its label cut) to leave the rest room.
-    const room = S.columns - 5;
-    const others = p.controls.reduce((s, it) => s + ('text' in it ? Math.ceil((measureRich(it.text, BODY) + 2) / CELL.width) + 1 : 'control' in it ? buttonColumns(it.control) + 1 : 0), 0);
-    const controls = p.controls.map((it): Item => {
-      if (!('select' in it)) return it;
-      const widest = Math.max(...it.select.options.map((o) => selectColumns(o.label, it.select.hotkey, !!o.icon)));
-      return { select: { ...it.select, columns: Math.max(12, Math.min(it.select.columns ?? widest, room - others)) } };
-    });
-    y += itemsRow(S, controls, 2, y, S.columns - 3);
-  }
-  const doc = loadDocument(p.source);
-  if (doc.errors.length) throw new Error(doc.errors.map((e) => `${e.line}:${e.col} ${e.message}`).join('\n'));
-  const u = doc.diagram.useCases.find((c) => c.id === p.useCase || c.name === p.useCase);
-  if (!u) throw new Error(`No use case '${p.useCase}'`);
-  const s = p.scenario === undefined ? u.scenarios[0] : u.scenarios.find((c) => c.id === p.scenario || c.name === p.scenario);
-  if (!s) throw new Error(`No scenario '${p.scenario}' in '${u.id}'`);
-  const svg = withTheme(theme, () => renderSequenceSvg(doc.diagram, u, s, 'seq-', { current: p.current ?? [] }));
-  const { width: w, height: h, body: inner } = embedded(svg);
-  // Narrower than the card: drawn at its size; wider: scaled to fit.
-  const k = Math.min(1, (S.width - 2 * CELL.width) / w);
-  S.addWithin({ x: 0, y, w: S.width, h: h * k }, `<g transform="translate(${CELL.width} ${y})${k < 1 ? ` scale(${Math.round(k * 1000) / 1000})` : ''}">${inner}</g>`);
-  return y + h * k - top;
-}
-
 /** Lays `panel` out `columns` wide in `theme`, on the drawing's surface at its `edges`. */
 export function drawPanel(panel: Panel, columns: number, theme: UiTheme, edges: Edges = {}): Drawn {
   if (!Number.isInteger(columns) || columns < 20 || columns > 255) throw new Error(`A panel is 20 to 255 columns wide, not ${columns}`);
@@ -557,9 +522,6 @@ export function drawPanel(panel: Panel, columns: number, theme: UiTheme, edges: 
       break;
     case 'page':
       h = page(S, panel);
-      break;
-    case 'sequence':
-      h = sequence(S, panel, theme);
       break;
     default:
       throw new Error(`Unknown panel kind '${(panel as { kind: string }).kind}'`);

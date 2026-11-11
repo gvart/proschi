@@ -94,7 +94,7 @@ export interface Site {
    * and nothing waits on them.
    */
   paged?: { from: string; shown: boolean }
-  /** What floats over the drawing now: anchored to a piece, or to a control of the page shown. */
+  /** What floats over the drawing now, anchored to a piece. */
   float?: Float
   /** The rows the drawing is expected to take, reserved while its first pictures are drawn. */
   rows: number
@@ -280,6 +280,11 @@ export async function pictureSite($: EngineInterface, ui: Ui, s: Site): Promise<
   } else now = shown.get(s.site)
   if (!now) return { element: loading(ui, s.site, s.rows) }
   const built = await build($, ui, s, now)
+  const want = pending.get(s.site)
+  if (want && !waiting && live.get(s.site)?.page?.anchors[want] !== undefined) {
+    pending.delete(s.site)
+    $.clock.after(0, () => void scrollToAnchor($, s.site, want))
+  }
   const done = await $.clock.now()
   const l = live.get(s.site)
   if (!waiting && l?.pressedAt !== undefined) {
@@ -485,13 +490,6 @@ async function build($: EngineInterface, ui: Ui, s: Site, d: Shown): Promise<{ e
     const pages: RenderElement[] = []
     for (const pg of d.pages) {
       const rows = await strips(ui, s, pg.id, pg.out, source, pg.shown ? into : undefined)
-      // What floats over the page shown, anchored to one of its controls (the Sequence tab's picker).
-      const f = pg.shown && d.float?.def.anchor.piece === pg.id ? d.float : undefined
-      if (f) {
-        const laid = await floatOver(ui, s, f, { row: 0, out: pg.out }, pg.out.rows, Math.max(width, pg.out.columns), source, into, $)
-        rows.push(...laid.elements)
-        floatTop = top + laid.top
-      }
       pages.push(
         <ui.Box key={`pg-${s.site}-${pg.id}`} flexDirection="column" height={pg.out.rows} display={pg.shown ? 'flex' : 'none'}>
           {rows}
@@ -649,8 +647,22 @@ export async function scrollToAnchor($: EngineInterface, site: string, anchor: s
   if (moved.deny) $.ui.log(`proschi: scroll to ${anchor} refused: ${moved.deny}`, { to: 'debug' })
 }
 
+/** An anchor to scroll to once the page shown has it, by site: the pane opened on a section. */
+const pending = new Map<string, string>()
+
+/**
+ * Scrolls the pane to an anchor of its page (scrollToAnchor) once that page
+ * is drawn: after this drawing where it shows already, else after the first
+ * drawing that shows it.
+ */
+export function scrollToAnchorOnceShown($: EngineInterface, site: string, anchor: string): void {
+  if (live.get(site)?.page?.anchors[anchor] === undefined) pending.set(site, anchor)
+  else $.clock.after(0, () => void scrollToAnchor($, site, anchor))
+}
+
 /** For tests: forget what was drawn. */
 export function resetPictures(): void {
+  pending.clear()
   windows.clear()
   going.clear()
   shown.clear()

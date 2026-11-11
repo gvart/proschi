@@ -265,8 +265,8 @@ test('the pane: tabs and pages are pictures, each press and hotkey runs its cont
   await ui.unmount()
   const site = 'proschi-view:0'
   let p = await settle($, clock, pane, site, c => c.some(x => x.id === 'tabs/analysis'))
-  expect(await ids(p, site)).toEqual(expect.arrayContaining(['tabs/diagram', 'tabs/analysis', 'tabs/sequence', 'tabs/hld', 'tabs/tests', 'tabs/open', 'links/src']))
-  expect(await ids(p, site)).not.toEqual(expect.arrayContaining(['tabs/whatif']))
+  expect(await ids(p, site)).toEqual(expect.arrayContaining(['tabs/diagram', 'tabs/analysis', 'tabs/hld', 'tabs/open', 'links/src']))
+  for (const gone of ['tabs/whatif', 'tabs/sequence', 'tabs/tests']) expect(await ids(p, site)).not.toContain(gone)
   // In the pane, the hotkeys are Buttons drawn as nothing.
   expect(((await p.find({ key: `hk-${site}-2` })) as Found)?.props).toMatchObject({ hotkey: '2' })
   await click(p, site, 'tabs/analysis')
@@ -274,21 +274,21 @@ test('the pane: tabs and pages are pictures, each press and hotkey runs its cont
   p = await settle($, clock, pane, site, c => c.some(x => x.id.startsWith('page-analysis/')) || !c.some(x => x.id === 'links/src'))
   expect(await p.find({ type: 'Text' })).toBeUndefined()
   // Every page is mounted, the ones not shown drawn as nothing, so a switch only shows one.
-  for (let i = 0; i < 12 && !(await p.find({ key: `pg-${site}-page-tests` })); i++) {
+  for (let i = 0; i < 12 && !(await p.find({ key: `pg-${site}-page-hld` })); i++) {
     await p.unmount()
     await clock.advance(250)
     p = await $.ui.mount(pane)
   }
   expect(((await p.find({ key: `pg-${site}-page-analysis` })) as Found)?.props).toMatchObject({ display: 'flex' })
-  const tests = (await p.find({ key: `pg-${site}-page-tests` })) as Found
-  expect(tests?.props).toMatchObject({ display: 'none' })
-  const hidden = ((await p.findAll({ type: 'Image' })) as unknown as NonNullable<Found>[]).filter(x => String(x.key).includes('page-tests'))
+  const hld = (await p.find({ key: `pg-${site}-page-hld` })) as Found
+  expect(hld?.props).toMatchObject({ display: 'none' })
+  const hidden = ((await p.findAll({ type: 'Image' })) as unknown as NonNullable<Found>[]).filter(x => String(x.key).includes('page-hld'))
   expect(hidden.length).toBeGreaterThan(0)
-  await p.press({ key: `hk-${site}-5` })
+  await p.press({ key: `hk-${site}-3` })
   await p.unmount()
   p = await $.ui.mount(pane)
-  expect(((await p.find({ key: `pg-${site}-page-tests` })) as Found)?.props).toMatchObject({ display: 'flex' })
-  const shown = ((await p.findAll({ type: 'Image' })) as unknown as NonNullable<Found>[]).filter(x => String(x.key).includes('page-tests'))
+  expect(((await p.find({ key: `pg-${site}-page-hld` })) as Found)?.props).toMatchObject({ display: 'flex' })
+  const shown = ((await p.findAll({ type: 'Image' })) as unknown as NonNullable<Found>[]).filter(x => String(x.key).includes('page-hld'))
   expect(shown.map(x => [x.key, x.props.source])).toEqual(hidden.map(x => [x.key, x.props.source]))
   await p.unmount()
 })
@@ -417,7 +417,7 @@ test('pictures shown: Play blits only the tiles a frame changes, asked for once 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /** What a control opens: the floats' controls behind it, by the prefix of their ids. */
-const OPENS: Record<string, string[]> = { 'bar/uc': ['menu/uc=', 'explorer/'], 'bar/sc': ['menu/sc='], 'bar/body': ['drawer/'], 'menu/uc=__explore': ['explorer/'], 'page-sequence/seq-pick': ['menu/seq-pick='] }
+const OPENS: Record<string, string[]> = { 'bar/uc': ['menu/uc=', 'explorer/'], 'bar/sc': ['menu/sc='], 'bar/body': ['drawer/'], 'menu/uc=__explore': ['explorer/'] }
 
 /** The overlays of what floats over a drawing. */
 const FLOATS = /^ov-t-[^]*-(menu|drawer|explorer)-\d+$/
@@ -528,9 +528,8 @@ test('every control in the pane runs its own action when pressed on its cell, th
   on('command.register', () => ({ value: { command: 'proschi' } }))
   await $.command.run({ command: 'proschi', args: `view ${root}/org-busy.proschi` })
   const pressed = await tour($, clock, h, pane, 'proschi-view:0')
-  expect(panelsOf(pressed)).toEqual(['bar', 'drawer', 'explorer', 'links', 'menu', 'page-analysis', 'page-hld', 'page-sequence', 'page-tests', 'systems', 'tabs'])
-  expect(pressed).toEqual(expect.arrayContaining(['systems/next', 'systems/open', 'systems/focus', 'systems/back', 'tabs/diagram', 'tabs/analysis', 'tabs/sequence', 'tabs/hld', 'tabs/tests', 'tabs/open', 'links/src', 'links/lnk', 'links/open', ...BAR, 'menu/uc=__explore', 'drawer/close', 'page-analysis/explore-whatifs', 'page-sequence/seq-pick']))
-  expect(pressed.some(id => id.startsWith('menu/seq-pick='))).toBe(true)
+  expect(panelsOf(pressed)).toEqual(['bar', 'drawer', 'explorer', 'links', 'menu', 'page-analysis', 'page-hld', 'systems', 'tabs'])
+  expect(pressed).toEqual(expect.arrayContaining(['systems/next', 'systems/open', 'systems/focus', 'systems/back', 'tabs/diagram', 'tabs/analysis', 'tabs/hld', 'tabs/open', 'links/src', 'links/lnk', 'links/open', ...BAR, 'menu/uc=__explore', 'drawer/close', 'page-analysis/explore-whatifs', 'page-hld/hld-copy']))
   expect(pressed.some(id => id.startsWith('menu/sc='))).toBe(true)
   expect(pressed.some(id => id.startsWith('explorer/x-'))).toBe(true)
 })
@@ -664,46 +663,43 @@ test('the HLD tab\'s contents: each entry scrolls the pane to its section\'s row
   await p.unmount()
 })
 
-test('the Sequence tab\'s picker floats over the page: opening it moves nothing', SLOW, async ($, on) => {
+test('a failing verdict\'s Details opens the pane on HLD, scrolled to its Requirements', SLOW, async ($, on) => {
   const clock = mock.clock(on)
-  host(on, clock, { worker: 'refused' })
-  const ui = await settle($, clock)
-  await click(ui, 'm1:0', 'links/focus')
+  const h = host(on, clock)
+  const failing = SOURCE.replace(/\n*$/, '\nrequirements {\n  availability >= 99.9999%\n}\n')
+  const block = { ...reply, props: { ...reply.props, text: `\`\`\`proschi\n${failing}\n\`\`\`` } }
+  const ui = await settle($, clock, block, 'm1:0', has('below/details'))
+  await click(ui, 'm1:0', 'below/details')
   await ui.unmount()
   const site = 'proschi-view:0'
-  let p = await settle($, clock, pane, site, has('tabs/sequence'))
-  p = await step($, clock, p, pane, site, 'tabs/sequence', has('page-sequence/seq-pick'))
-  const before = await shapeOf(p, site)
-  p = await step($, clock, p, pane, site, 'page-sequence/seq-pick', c => c.some(x => x.id.startsWith('menu/seq-pick=')))
-  expect((await controlsOf(p, site)).filter(c => c.id.startsWith('menu/seq-pick=')).every(c => FLOATS.test(c.in))).toBe(true)
-  expect(await shapeOf(p, site)).toEqual(before)
-  // Picking another scenario closes it, the page where it was.
-  const other = (await ids(p, site)).filter(id => id.startsWith('menu/seq-pick=')).at(-1)!
-  p = await step($, clock, p, pane, site, other, hasNo('menu/'))
-  expect(await shapeOf(p, site)).toEqual(before)
+  h.logs.length = 0
+  const p = await settle($, clock, pane, site, has('page-hld/hld-copy'))
+  await clock.advance(1)
+  expect(((await p.find({ key: `pg-${site}-page-hld` })) as Found)?.props).toMatchObject({ display: 'flex' })
+  expect(h.logs.filter(l => /^proschi: hld-\w+ scrolls proschi-view to row \d+$/.test(l)).map(l => l.split(' ')[1])).toEqual(['hld-requirements'])
   await p.unmount()
 })
 
 test('the pane opened on another tab draws its Diagram first: ahead of every page drawn ahead', SLOW, async ($, on) => {
   const clock = mock.clock(on)
   const h = host(on, clock)
-  // The pane as it was left: on Tests.
+  // The pane as it was left: on HLD.
   on('state.get', { plugin: 'proschi', key: 'paneTab' }, async ($, e, next) => {
     const read = (await next(e)) as { value: { version: number } }
-    return { value: { ...read.value, value: 'tests' } }
+    return { value: { ...read.value, value: 'hld' } }
   })
   const ui = await settle($, clock)
   const from = h.requests.length
   await click(ui, 'm1:0', 'links/focus')
   await ui.unmount()
   const site = 'proschi-view:0'
-  const p = await settle($, clock, pane, site, has('page-tests/passing'))
+  const p = await settle($, clock, pane, site, has('page-hld/hld-copy'))
   const asked = h.requests.slice(from)
-  // The pane's diagram (its grid, not a panel), hidden behind Tests: `b…`, which the worker answers before any `c…`.
+  // The pane's diagram (its grid, not a panel), hidden behind HLD: `b…`, which the worker answers before any `c…`.
   const diagram = asked.filter(r => r.input.kind !== 'panels' && (r.input.options as { grid?: unknown } | undefined)?.grid)
   expect(diagram.length).toBeGreaterThan(0)
   expect(diagram[0]!.id).toMatch(/^b/)
-  const pages = asked.filter(r => r.input.kind === 'panels' && (r.input.panels as { panel: { kind: string } }[]).some(q => q.panel.kind === 'page' || q.panel.kind === 'sequence'))
+  const pages = asked.filter(r => r.input.kind === 'panels' && (r.input.panels as { panel: { kind: string } }[]).some(q => q.panel.kind === 'page'))
   expect(pages.filter(r => r.id.startsWith('c')).length).toBeGreaterThan(0)
   expect(pages.every(r => r.id[0]! !== 'b' || r.id > diagram[0]!.id)).toBe(true)
   await p.unmount()
