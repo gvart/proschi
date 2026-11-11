@@ -1,0 +1,59 @@
+tooling/src/render/ui/tiles.ts
+  s_50cc5c1ed1a510::t_3bf08ba76fe626 67
+  s_50cc5c1ed1a510::t_ad078281f799a3 1-66,68-80
+tooling/src/terminal/png.ts
+  s_50cc5c1ed1a510::t_06aa64cfc11820 1-112
+tooling/src/render/ui/data.ts
+  s_50cc5c1ed1a510::t_196ce2f0ca3b32 1-470
+tooling/src/render/ui/markdown.ts
+  s_50cc5c1ed1a510::t_c632b4b0865084 1-118
+tooling/src/render/ui/blocks.ts
+  s_50cc5c1ed1a510::t_f744996e6ea23a 208-210,217
+  s_50cc5c1ed1a510::t_d124acb88927c6 196-206
+  s_50cc5c1ed1a510::t_3506944dfb016c 1-91,93-150,152-175,177-195,207,211-216,218-240,242-512
+  s_50cc5c1ed1a510::t_cb74d839eddc44 92,151
+  s_50cc5c1ed1a510::t_3bf08ba76fe626 176,241
+tooling/src/terminal/rasterHost.ts
+  s_50cc5c1ed1a510::t_5e991b3c0fafb6 50-52
+  s_50cc5c1ed1a510::t_dd38129222407f 271-284,288-289,292-298,300-355,357-372,374-378,383-391,394-395
+  s_50cc5c1ed1a510::t_e4ddc856b84b9a 41
+  s_50cc5c1ed1a510::t_06aa64cfc11820 49
+tooling/src/terminal/panelHost.ts
+  s_50cc5c1ed1a510::t_8b6e5b32b3ea9f 1-133
+tooling/src/render/ui/metrics.ts
+  s_50cc5c1ed1a510::t_f88041032d880b 1-121
+tooling/src/render/ui/contract.ts
+  s_50cc5c1ed1a510::t_39130a5fb03ee8 1-347
+tooling/src/render/ui/panels.ts
+  s_50cc5c1ed1a510::t_39c122aba26639 472
+  s_50cc5c1ed1a510::t_a14706a8d6acbd 1-436,451-467,470-471,473-518
+  s_50cc5c1ed1a510::t_fa665167548333 437-450,468-469
+tooling/src/render/ui/theme.ts
+  s_50cc5c1ed1a510::t_43c86db167815c 1-98
+tooling/src/render/ui/kit.ts
+  s_50cc5c1ed1a510::t_3bf08ba76fe626 285,353,378
+  s_50cc5c1ed1a510::t_39c122aba26639 37,53-57,68-72
+  s_50cc5c1ed1a510::t_4c594def016f86 276
+  s_50cc5c1ed1a510::t_17d2973d6c7952 1-36,38-52,58-67,73-275,277-284,286-352,354-359,361-377,379-381
+  s_50cc5c1ed1a510::t_f744996e6ea23a 360
+tooling/src/render/sequence.ts
+  s_50cc5c1ed1a510::t_95e9b1b75f5eab 36-41,152,155-158,171-173
+  s_50cc5c1ed1a510::t_ebd93d8a3885e3 204,210
+  s_50cc5c1ed1a510::t_46306387400ac5 197
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bea04590a22b46b0e8549b2bc74da785d1939fdf",
+  "prompts": {},
+  "sessions": {
+    "s_50cc5c1ed1a510": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7e5513ad-e496-40de-9a6e-d587aa393ce5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
