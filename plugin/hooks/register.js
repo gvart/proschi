@@ -794,11 +794,11 @@ var DIGIT = /[0-9]/;
 var LETTER = /[A-Za-z]/;
 var HEX_COLOR = /^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})(?![A-Za-z0-9_])/;
 var SEPARATE_UNIT = /^[ \t]+(rps|rpm|rpd|ms|s|%|usd\/month|usd\/GB|MB\/s|GB\/s)(?![A-Za-z0-9_/])/;
-function tokenizeLine(text, line) {
+function tokenizeLine(text, line2) {
   const tokens = [];
   const diagnostics = [];
   let i = 0;
-  const error = (message, col, length) => diagnostics.push({ severity: "error", message, line, col, length });
+  const error = (message, col, length) => diagnostics.push({ severity: "error", message, line: line2, col, length });
   while (i < text.length) {
     const ch = text[i];
     if (ch === " " || ch === "	" || ch === "\r") {
@@ -1300,11 +1300,11 @@ var ROOT_TYPE = "Component";
 
 // ../frontend/src/dsl/typesys/resolve.ts
 var typeKey = techKey;
-function lookupType(table, name) {
-  const own = table.get(typeKey(name));
+function lookupType(table2, name) {
+  const own = table2.get(typeKey(name));
   if (own && !own.builtin) return own;
   const tech = findTech(name);
-  return tech ? table.get(typeKey(tech.techStack)) : own;
+  return tech ? table2.get(typeKey(tech.techStack)) : own;
 }
 function techNamed(name) {
   const tech = findTech(name);
@@ -1327,12 +1327,12 @@ function resolveTypes(decls, base = /* @__PURE__ */ new Map()) {
       order.push(decl);
     }
   }
-  const table = new Map(base);
+  const table2 = new Map(base);
   const resolving = [];
   const broken = /* @__PURE__ */ new Set();
   const resolve = (decl) => {
     const key = typeKey(decl.name);
-    const done = table.get(key);
+    const done = table2.get(key);
     if (done) return done;
     let parent;
     const parentName = decl.parent ?? (typeKey(decl.name) === typeKey(ROOT_TYPE) ? void 0 : ROOT_TYPE);
@@ -1343,7 +1343,7 @@ function resolveTypes(decls, base = /* @__PURE__ */ new Map()) {
       if (cycleStart !== -1) {
         const names = [...resolving.slice(cycleStart), decl, parentDecl].map((d) => d.name);
         error(`Type cycle: ${names.join(" \u2192 ")}`, decl.parentLoc ?? decl.loc);
-        parent = table.get(typeKey(ROOT_TYPE));
+        parent = table2.get(typeKey(ROOT_TYPE));
         broken.add(key);
       } else if (parentDecl) {
         resolving.push(decl);
@@ -1351,12 +1351,12 @@ function resolveTypes(decls, base = /* @__PURE__ */ new Map()) {
         resolving.pop();
         if (broken.has(parentKey)) broken.add(key);
       } else {
-        parent = base.get(parentKey) ?? lookupType(base, parentName) ?? catalogType(parentName, table);
+        parent = base.get(parentKey) ?? lookupType(base, parentName) ?? catalogType(parentName, table2);
         if (!parent) {
           broken.add(key);
-          const suggestion = suggestType(parentName, [...table.values()].map((t) => t.name).concat([...byKey2.values()].map((d) => d.name)));
+          const suggestion = suggestType(parentName, [...table2.values()].map((t) => t.name).concat([...byKey2.values()].map((d) => d.name)));
           error(`Unknown parent type '${parentName}'${suggestion ? `. Did you mean '${suggestion}'?` : ""}`, decl.parentLoc ?? decl.loc);
-          parent = table.get(typeKey(ROOT_TYPE));
+          parent = table2.get(typeKey(ROOT_TYPE));
         }
       }
     }
@@ -1391,16 +1391,16 @@ function resolveTypes(decls, base = /* @__PURE__ */ new Map()) {
       ...pick("doc", decl.doc ?? parent?.doc),
       loc: decl.loc
     };
-    table.set(key, resolved);
+    table2.set(key, resolved);
     return resolved;
   };
   const types = order.map(resolve);
-  return { table, types, diagnostics };
+  return { table: table2, types, diagnostics };
 }
-function catalogType(name, table) {
+function catalogType(name, table2) {
   const tech = findTech(name);
   if (!tech) return void 0;
-  const root = table.get(typeKey(ROOT_TYPE));
+  const root = table2.get(typeKey(ROOT_TYPE));
   return {
     name: tech.techStack,
     abstract: false,
@@ -2065,8 +2065,8 @@ function loadStdlib(read2) {
 }
 
 // ../frontend/src/dsl/typesys/ops.ts
-function opNamesMostSpecificFirst(type, table) {
-  const chain = [type, ...type.parents.flatMap((p) => table.get(typeKey(p)) ?? [])];
+function opNamesMostSpecificFirst(type, table2) {
+  const chain = [type, ...type.parents.flatMap((p) => table2.get(typeKey(p)) ?? [])];
   const seen = /* @__PURE__ */ new Set();
   const names = [];
   chain.forEach((t, i) => {
@@ -2323,18 +2323,18 @@ var Parser = class _Parser {
   }
   /** Parses the line at `index` and returns the index of the last line it consumed. */
   parseLine(index) {
-    const line = index + 1;
+    const line2 = index + 1;
     const typeFrame = this.top();
     if (typeFrame?.kind === "type" && /^\s*header(\s|$)/.test(this.lines[index])) {
-      if (!typeFrame.discard) this.parseHeaders(typeFrame.decl, this.lines[index], line);
+      if (!typeFrame.discard) this.parseHeaders(typeFrame.decl, this.lines[index], line2);
       return index;
     }
-    const { tokens: lexed, diagnostics } = tokenizeLine(this.lines[index], line);
+    const { tokens: lexed, diagnostics } = tokenizeLine(this.lines[index], line2);
     const tokens = qualify(lexed);
     this.diagnostics.push(...diagnostics.map((d) => ({ ...d, ...this.fileField() })));
     if (tokens.length === 0 || diagnostics.some((d) => d.severity === "error")) return index;
     const [first, second, third] = tokens;
-    const loc = (t) => this.locOf(t, line);
+    const loc = (t) => this.locOf(t, line2);
     const top = this.top();
     if (isLet(tokens) && !(top?.kind === "section" && top.skipped !== void 0)) {
       if (top) this.error("Define constants at the top level, not inside a block", loc(first));
@@ -2347,7 +2347,7 @@ var Parser = class _Parser {
         else if (top.nested) top.nested += opens ? 0 : -1;
         else {
           this.stack.pop();
-          if (second?.kind === "ident" && second.value === "alt") this.parseAlt(tokens.slice(1), line);
+          if (second?.kind === "ident" && second.value === "alt") this.parseAlt(tokens.slice(1), line2);
           else if (second) this.error("Unexpected input after }", loc(second));
         }
         return index;
@@ -2355,15 +2355,15 @@ var Parser = class _Parser {
       if (first.kind === "rbrace") {
         this.stack.pop();
         if (!top.discard) this.closeSection(top);
-        if (!top.discard && this.file === this.rootFile) this.blocks.push({ kind: top.section, start: top.loc.line, end: line });
+        if (!top.discard && this.file === this.rootFile) this.blocks.push({ kind: top.section, start: top.loc.line, end: line2 });
         if (second) this.error("Unexpected input after }", loc(second));
       } else if (!top.discard) {
-        this.parseSectionLine(top, tokens, line);
+        this.parseSectionLine(top, tokens, line2);
       }
       return index;
     }
     if (top?.kind === "system" || top?.kind === "stub") {
-      this.parseSystemLine(top, tokens, line);
+      this.parseSystemLine(top, tokens, line2);
       return index;
     }
     if (top?.kind === "type") {
@@ -2371,14 +2371,14 @@ var Parser = class _Parser {
         this.stack.pop();
         if (second) this.error("Unexpected input after }", loc(second));
       } else if (!top.discard) {
-        this.parseTypeLine(top.decl, tokens, line);
+        this.parseTypeLine(top.decl, tokens, line2);
       }
       return index;
     }
     if (first.kind === "rbrace") {
       if (this.stack.length === 0) this.error("Unmatched }", loc(first));
       else this.closeFrame();
-      if (second?.kind === "ident" && second.value === "alt") this.parseAlt(tokens.slice(1), line);
+      if (second?.kind === "ident" && second.value === "alt") this.parseAlt(tokens.slice(1), line2);
       else if (second) this.error("Unexpected input after }", loc(second));
       return index;
     }
@@ -2391,80 +2391,80 @@ var Parser = class _Parser {
     }
     switch (first.value) {
       case "title":
-        this.parseTitle(tokens, line);
+        this.parseTitle(tokens, line2);
         break;
       case "group":
-        this.parseGroup(tokens, line);
+        this.parseGroup(tokens, line2);
         break;
       // A keyword only as `system id … {`, so a node may still be called system.
       case "system":
-        if (second?.kind === "ident" && tokens[tokens.length - 1].kind === "lbrace") this.parseSystem(tokens, line);
-        else this.parseNode(tokens, line);
+        if (second?.kind === "ident" && tokens[tokens.length - 1].kind === "lbrace") this.parseSystem(tokens, line2);
+        else this.parseNode(tokens, line2);
         break;
       case "usecase":
-        this.parseUseCase(tokens, line);
+        this.parseUseCase(tokens, line2);
         break;
       // Keywords only in the shape of a type header, so a node may still be called type or abstract.
       case "type":
-        if (isTypeHeader(tokens, 1)) this.parseType(tokens, 1, line);
-        else this.parseNode(tokens, line);
+        if (isTypeHeader(tokens, 1)) this.parseType(tokens, 1, line2);
+        else this.parseNode(tokens, line2);
         break;
       case "abstract":
-        if (isWord(second, "type") && isTypeHeader(tokens, 2)) this.parseType(tokens, 2, line);
-        else this.parseNode(tokens, line);
+        if (isWord(second, "type") && isTypeHeader(tokens, 2)) this.parseType(tokens, 2, line2);
+        else this.parseNode(tokens, line2);
         break;
       case "par":
-        this.parsePar(tokens, line);
+        this.parsePar(tokens, line2);
         break;
       case "alt":
-        this.parseAlt(tokens, line);
+        this.parseAlt(tokens, line2);
         break;
       case "import":
-        this.parseImport(tokens, line);
+        this.parseImport(tokens, line2);
         break;
       // These words are keywords only in the shape of their statement, so older documents may still use them as ids.
       case "traffic":
       case "requirements":
       case "capacity":
       case "legend":
-        if (second?.kind === "lbrace") this.openSection(first.value, tokens, line);
-        else this.parseNode(tokens, line);
+        if (second?.kind === "lbrace") this.openSection(first.value, tokens, line2);
+        else this.parseNode(tokens, line2);
         break;
       case "entity":
-        if (second?.kind === "ident" && second.value !== "pos" && !REPLICAS.test(second.value)) this.parseEntity(tokens, line);
-        else this.parseNode(tokens, line);
+        if (second?.kind === "ident" && second.value !== "pos" && !REPLICAS.test(second.value)) this.parseEntity(tokens, line2);
+        else this.parseNode(tokens, line2);
         break;
       case "decision":
         if (second?.kind === "string" && (third?.kind === "lbrace" || third?.kind === "ident" && third.value !== "pos" && !REPLICAS.test(third.value)))
-          this.parseDecision(tokens, line);
-        else this.parseNode(tokens, line);
+          this.parseDecision(tokens, line2);
+        else this.parseNode(tokens, line2);
         break;
       case "test":
-        if (second?.kind === "string" && tokens[tokens.length - 1].kind === "lbrace") this.parseTest(tokens, line);
-        else this.parseNode(tokens, line);
+        if (second?.kind === "string" && tokens[tokens.length - 1].kind === "lbrace") this.parseTest(tokens, line2);
+        else this.parseNode(tokens, line2);
         break;
       case "whatif":
-        if (second?.kind === "string" && tokens[tokens.length - 1].kind === "lbrace") this.parseWhatIf(tokens, line);
-        else this.parseNode(tokens, line);
+        if (second?.kind === "string" && tokens[tokens.length - 1].kind === "lbrace") this.parseWhatIf(tokens, line2);
+        else this.parseNode(tokens, line2);
         break;
       // Keywords only as `direction <word>` and `layout <word>`, so a node may still be called direction or layout.
       case "direction":
-        if (this.isHint(tokens)) this.parseDirection(tokens, line);
-        else this.parseNode(tokens, line);
+        if (this.isHint(tokens)) this.parseDirection(tokens, line2);
+        else this.parseNode(tokens, line2);
         break;
       case "layout":
-        if (this.isHint(tokens)) this.parseLayoutMode(tokens, line);
-        else this.parseNode(tokens, line);
+        if (this.isHint(tokens)) this.parseLayoutMode(tokens, line2);
+        else this.parseNode(tokens, line2);
         break;
       default:
-        this.parseNode(tokens, line);
+        this.parseNode(tokens, line2);
     }
     return index;
   }
-  parseTitle(tokens, line) {
+  parseTitle(tokens, line2) {
     const value = tokens[1];
     if (!value || value.kind !== "string" && value.kind !== "ident") {
-      this.error('Expected a title, e.g. title "My System"', this.locOf(tokens[0], line));
+      this.error('Expected a title, e.g. title "My System"', this.locOf(tokens[0], line2));
       return;
     }
     const summary = tokens[2]?.kind === "string" ? tokens[2] : void 0;
@@ -2472,7 +2472,7 @@ var Parser = class _Parser {
       this.title = value.value;
       if (summary) this.summary = summary.value;
     }
-    this.expectEnd(tokens, summary ? 3 : 2, line);
+    this.expectEnd(tokens, summary ? 3 : 2, line2);
   }
   /** `direction right`, `layout ordered`: a keyword and one plain word that is not a node part. */
   isHint(tokens) {
@@ -2480,9 +2480,9 @@ var Parser = class _Parser {
     return tokens.length === 2 && second.kind === "ident" && !["pos", "critical", "color", "rank"].includes(second.value) && !REPLICAS.test(second.value);
   }
   /** `direction down|right|up|left`: at the top level for the whole diagram, inside a group for its members. */
-  parseDirection(tokens, line) {
+  parseDirection(tokens, line2) {
     const [keyword, value] = tokens;
-    const loc = this.locOf(value, line);
+    const loc = this.locOf(value, line2);
     if (!DIRECTIONS.includes(value.value)) {
       this.error(`Unknown direction '${value.value}'; use direction down, right, up or left`, loc);
       return;
@@ -2492,37 +2492,37 @@ var Parser = class _Parser {
     if (top?.kind === "group") {
       const group = this.nodes.get(top.id);
       if (!group || group.loc !== top.loc) return;
-      if (group.direction) this.warning(`Group '${group.id}' already has direction ${group.direction}; this one is ignored`, this.locOf(keyword, line));
+      if (group.direction) this.warning(`Group '${group.id}' already has direction ${group.direction}; this one is ignored`, this.locOf(keyword, line2));
       else group.direction = direction;
       return;
     }
     if (top) {
-      this.error("direction is only allowed at the top level or inside a group", this.locOf(keyword, line));
+      this.error("direction is only allowed at the top level or inside a group", this.locOf(keyword, line2));
       return;
     }
     if (this.file !== this.rootFile) return;
     if (this.layoutLocs.direction) {
-      this.warning(`direction is already set ${this.where(this.layoutLocs.direction, loc)}; this one is ignored`, this.locOf(keyword, line));
+      this.warning(`direction is already set ${this.where(this.layoutLocs.direction, loc)}; this one is ignored`, this.locOf(keyword, line2));
       return;
     }
     this.layout.direction = direction;
     this.layoutLocs.direction = loc;
   }
   /** `layout ordered`: lay edges out by declaration order. */
-  parseLayoutMode(tokens, line) {
+  parseLayoutMode(tokens, line2) {
     const [keyword, value] = tokens;
-    const loc = this.locOf(value, line);
+    const loc = this.locOf(value, line2);
     if (value.value !== "ordered") {
       this.error(`Unknown layout mode '${value.value}'; the only one is layout ordered`, loc);
       return;
     }
     if (this.top()) {
-      this.error("layout ordered applies to the whole diagram; write it at the top level", this.locOf(keyword, line));
+      this.error("layout ordered applies to the whole diagram; write it at the top level", this.locOf(keyword, line2));
       return;
     }
     if (this.file !== this.rootFile) return;
     if (this.layoutLocs.ordered) {
-      this.warning(`layout ordered is already set ${this.where(this.layoutLocs.ordered, loc)}`, this.locOf(keyword, line));
+      this.warning(`layout ordered is already set ${this.where(this.layoutLocs.ordered, loc)}`, this.locOf(keyword, line2));
       return;
     }
     this.layout.ordered = true;
@@ -2533,13 +2533,13 @@ var Parser = class _Parser {
    * Returns how many tokens it used (0 when the token is something else), or
    * undefined after reporting an error.
    */
-  readRank(tokens, i, line, current) {
+  readRank(tokens, i, line2, current) {
     const t = tokens[i];
     if (!isWord(t, "rank")) return 0;
     const value = tokens[i + 1];
     const help = "a layer number from 0 (rank 0, rank 1, \u2026), rank first or rank last";
     if (current.rank !== void 0) {
-      this.error(`A node takes one rank; rank ${current.rank} is already set`, this.locOf(t, line));
+      this.error(`A node takes one rank; rank ${current.rank} is already set`, this.locOf(t, line2));
       return void 0;
     }
     if (value?.kind === "number" && /^\d+$/.test(value.value)) {
@@ -2551,23 +2551,23 @@ var Parser = class _Parser {
       return 2;
     }
     const numeric = value?.kind === "number" || value?.kind === "quantity";
-    this.error(numeric ? `'${value.value}' is not a layer number; use ${help}` : `Expected ${help} after rank`, this.locOf(value ?? t, line));
+    this.error(numeric ? `'${value.value}' is not a layer number; use ${help}` : `Expected ${help} after rank`, this.locOf(value ?? t, line2));
     return void 0;
   }
-  parseImport(tokens, line) {
+  parseImport(tokens, line2) {
     const keyword = tokens[0];
     if (this.stack.length > 0) {
-      this.error("import is only allowed at the top level", this.locOf(keyword, line));
+      this.error("import is only allowed at the top level", this.locOf(keyword, line2));
       return;
     }
     const pathToken = tokens[1];
     if (pathToken?.kind !== "string" || !pathToken.value.trim()) {
-      this.error('Expected a file path, e.g. import "infra.proschi"', this.locOf(pathToken ?? keyword, line));
+      this.error('Expected a file path, e.g. import "infra.proschi"', this.locOf(pathToken ?? keyword, line2));
       return;
     }
-    this.expectEnd(tokens, 2, line);
+    this.expectEnd(tokens, 2, line2);
     const path = pathToken.value;
-    const loc = this.locOf(pathToken, line);
+    const loc = this.locOf(pathToken, line2);
     const entry = { path, loc };
     this.imports.push(entry);
     const { resolve } = this.options;
@@ -2615,16 +2615,16 @@ var Parser = class _Parser {
     if (!target) this.error(`Cannot find '${path}'`, loc);
     return target;
   }
-  parseGroup(tokens, line) {
+  parseGroup(tokens, line2) {
     const keyword = tokens[0];
     const top = this.top();
     if (top && top.kind !== "group") {
-      this.error("Groups cannot be declared inside a usecase", this.locOf(keyword, line));
+      this.error("Groups cannot be declared inside a usecase", this.locOf(keyword, line2));
       return;
     }
     const idToken = tokens[1];
     if (idToken?.kind !== "ident") {
-      this.error('Expected a group id, e.g. group vpc "AWS VPC" {', this.locOf(keyword, line));
+      this.error('Expected a group id, e.g. group vpc "AWS VPC" {', this.locOf(keyword, line2));
       return;
     }
     let i = 2;
@@ -2635,13 +2635,13 @@ var Parser = class _Parser {
       const tech = tokens[i++];
       const resolved = findTech(tech.value);
       if (resolved?.type === "group") techStack = resolved.techStack;
-      else this.warning(`'${tech.value}' is not a group style; using ${DEFAULT_GROUP_TECH}`, this.locOf(tech, line));
+      else this.warning(`'${tech.value}' is not a group style; using ${DEFAULT_GROUP_TECH}`, this.locOf(tech, line2));
     }
     let position;
     const style = {};
     const ranked = {};
     while (i < tokens.length && tokens[i].kind !== "lbrace") {
-      const rankUsed = this.readRank(tokens, i, line, ranked);
+      const rankUsed = this.readRank(tokens, i, line2, ranked);
       if (rankUsed === void 0) return;
       if (rankUsed) {
         i += rankUsed;
@@ -2650,24 +2650,24 @@ var Parser = class _Parser {
       if (tokens[i].kind === "ident" && tokens[i].value === "pos") {
         const [x, comma, y] = [tokens[i + 1], tokens[i + 2], tokens[i + 3]];
         if (x?.kind !== "number" || comma?.kind !== "comma" || y?.kind !== "number") {
-          this.error("Expected pos x,y", this.locOf(tokens[i], line));
+          this.error("Expected pos x,y", this.locOf(tokens[i], line2));
           return;
         }
         position = { x: Number(x.value), y: Number(y.value) };
         i += 4;
         continue;
       }
-      const used = this.readStylePart(tokens, i, line, style, false);
+      const used = this.readStylePart(tokens, i, line2, style, false);
       if (used === void 0) return;
       if (used === 0) break;
       i += used;
     }
     if (tokens[i]?.kind !== "lbrace") {
-      this.error("Expected { after group header", this.locOf(tokens[i] ?? tokens[i - 1], line));
+      this.error("Expected { after group header", this.locOf(tokens[i] ?? tokens[i - 1], line2));
       return;
     }
-    this.expectEnd(tokens, i + 1, line);
-    const loc = this.locOf(idToken, line);
+    this.expectEnd(tokens, i + 1, line2);
+    const loc = this.locOf(idToken, line2);
     const group = { id: idToken.value, kind: "group", name, type: "group", techStack, parent: this.currentGroup(), position, loc };
     if (ranked.rank !== void 0) group.rank = ranked.rank;
     this.applyStyle(group, style);
@@ -2676,24 +2676,24 @@ var Parser = class _Parser {
   }
   // ---- Systems: a team's design behind a contract (docs/design/team-systems-and-imports.md) ----
   /** `system id ["Name"] [@team] [pos x,y] [color c] [.tag] [rank N] {` */
-  parseSystem(tokens, line) {
+  parseSystem(tokens, line2) {
     const [keyword, idToken] = tokens;
     const top = this.top();
     if (top && top.kind !== "group") {
-      this.error("A system is declared at the top level or inside a group", this.locOf(keyword, line));
-      this.skipSection("test", tokens, line);
+      this.error("A system is declared at the top level or inside a group", this.locOf(keyword, line2));
+      this.skipSection("test", tokens, line2);
       return;
     }
-    const loc = this.locOf(idToken, line);
+    const loc = this.locOf(idToken, line2);
     const node = { id: idToken.value, kind: "system", name: idToken.value, type: "service", techStack: SYSTEM_TECH, parent: this.currentGroup(), loc };
     const style = {};
     let named = false;
     let i = 2;
     while (i < tokens.length - 1) {
       const t = tokens[i];
-      const styleUsed = this.readStylePart(tokens, i, line, style, false);
-      const used = styleUsed === 0 ? this.readRank(tokens, i, line, node) : styleUsed;
-      if (used === void 0) return this.skipSection("test", tokens, line);
+      const styleUsed = this.readStylePart(tokens, i, line2, style, false);
+      const used = styleUsed === 0 ? this.readRank(tokens, i, line2, node) : styleUsed;
+      if (used === void 0) return this.skipSection("test", tokens, line2);
       if (used > 0) {
         i += used;
         continue;
@@ -2708,14 +2708,14 @@ var Parser = class _Parser {
       } else if (isWord(t, "pos")) {
         const [x, comma, y] = [tokens[i + 1], tokens[i + 2], tokens[i + 3]];
         if (x?.kind !== "number" || comma?.kind !== "comma" || y?.kind !== "number") {
-          this.error("Expected pos x,y", this.locOf(t, line));
-          return this.skipSection("test", tokens, line);
+          this.error("Expected pos x,y", this.locOf(t, line2));
+          return this.skipSection("test", tokens, line2);
         }
         node.position = { x: Number(x.value), y: Number(y.value) };
         i += 3;
       } else {
-        this.error(`Unexpected ${describe(t)} in system header; write system id "Name" @Team {`, this.locOf(t, line));
-        return this.skipSection("test", tokens, line);
+        this.error(`Unexpected ${describe(t)} in system header; write system id "Name" @Team {`, this.locOf(t, line2));
+        return this.skipSection("test", tokens, line2);
       }
       i++;
     }
@@ -2729,71 +2729,71 @@ var Parser = class _Parser {
     this.stack.push({ kind: "system", system, useCaseLocs: /* @__PURE__ */ new Map(), loc });
   }
   /** A line inside `system … { }` or its multi-line `capacity { }`. */
-  parseSystemLine(frame2, tokens, line) {
+  parseSystemLine(frame2, tokens, line2) {
     const [first, second] = tokens;
     const { system } = frame2;
     if (first.kind === "rbrace") {
       this.stack.pop();
       if (frame2.kind === "system") this.finishSystem(frame2);
-      if (second) this.error("Unexpected input after }", this.locOf(second, line));
+      if (second) this.error("Unexpected input after }", this.locOf(second, line2));
       return;
     }
     if (frame2.kind === "stub") {
-      this.readStub(system.stub, tokens, 0, tokens.length, line);
+      this.readStub(system.stub, tokens, 0, tokens.length, line2);
       return;
     }
     if (isWord(first, "from")) {
       if (second?.kind !== "string" || !second.value.trim()) {
-        this.error('Expected the team file, e.g. from "teams/orders.proschi"', this.locOf(second ?? first, line));
+        this.error('Expected the team file, e.g. from "teams/orders.proschi"', this.locOf(second ?? first, line2));
         return;
       }
       if (system.from !== void 0) {
-        this.error(`System '${system.id}' already has from "${system.from}"`, this.locOf(first, line));
+        this.error(`System '${system.id}' already has from "${system.from}"`, this.locOf(first, line2));
         return;
       }
-      this.expectEnd(tokens, 2, line);
+      this.expectEnd(tokens, 2, line2);
       system.from = second.value;
-      frame2.fromLoc = this.locOf(second, line);
+      frame2.fromLoc = this.locOf(second, line2);
       return;
     }
-    if (isWord(first, "expose")) return this.parseExpose(frame2, tokens, line);
+    if (isWord(first, "expose")) return this.parseExpose(frame2, tokens, line2);
     if (isWord(first, "capacity") && second?.kind === "lbrace") {
       const opens = tokens[tokens.length - 1].kind !== "rbrace";
       if (system.stub) {
-        this.error(`System '${system.id}' already has a capacity`, this.locOf(first, line));
-        if (opens) this.stack.push({ kind: "section", section: "capacity", discard: true, loc: this.locOf(first, line) });
+        this.error(`System '${system.id}' already has a capacity`, this.locOf(first, line2));
+        if (opens) this.stack.push({ kind: "section", section: "capacity", discard: true, loc: this.locOf(first, line2) });
         return;
       }
-      const stub = { loc: this.lineLoc(tokens, line) };
+      const stub = { loc: this.lineLoc(tokens, line2) };
       system.stub = stub;
-      this.readStub(stub, tokens, 2, opens ? tokens.length : tokens.length - 1, line);
-      if (opens) this.stack.push({ kind: "stub", system, loc: this.locOf(first, line) });
+      this.readStub(stub, tokens, 2, opens ? tokens.length : tokens.length - 1, line2);
+      if (opens) this.stack.push({ kind: "stub", system, loc: this.locOf(first, line2) });
       return;
     }
-    this.error('Inside a system, write from "file", expose <id> "Name" -> "Use case" or capacity { \u2026 }', this.locOf(first, line));
-    if (tokens[tokens.length - 1].kind === "lbrace") this.stack.push({ kind: "section", section: "test", discard: true, loc: this.locOf(first, line) });
+    this.error('Inside a system, write from "file", expose <id> "Name" -> "Use case" or capacity { \u2026 }', this.locOf(first, line2));
+    if (tokens[tokens.length - 1].kind === "lbrace") this.stack.push({ kind: "section", section: "test", discard: true, loc: this.locOf(first, line2) });
   }
   /** `expose id ["Name"] [-> "Use case"]` */
-  parseExpose(frame2, tokens, line) {
+  parseExpose(frame2, tokens, line2) {
     const [keyword, idToken] = tokens;
     if (idToken?.kind !== "ident") {
-      this.error('Expected an entry point id, e.g. expose api "Orders API" -> "Place order"', this.locOf(idToken ?? keyword, line));
+      this.error('Expected an entry point id, e.g. expose api "Orders API" -> "Place order"', this.locOf(idToken ?? keyword, line2));
       return;
     }
-    const entry = { id: idToken.value, name: idToken.value, loc: this.locOf(idToken, line) };
+    const entry = { id: idToken.value, name: idToken.value, loc: this.locOf(idToken, line2) };
     let i = 2;
     if (tokens[i]?.kind === "string") entry.name = tokens[i++].value;
     if (tokens[i]?.kind === "arrow") {
       const useCase = tokens[i + 1];
       if (tokens[i].value !== "->" || useCase?.kind !== "string" && useCase?.kind !== "ident") {
-        this.error('Expected -> "Use case" after the entry point', this.locOf(useCase ?? tokens[i], line));
+        this.error('Expected -> "Use case" after the entry point', this.locOf(useCase ?? tokens[i], line2));
         return;
       }
       entry.useCase = useCase.value;
-      frame2.useCaseLocs.set(entry, this.locOf(useCase, line));
+      frame2.useCaseLocs.set(entry, this.locOf(useCase, line2));
       i += 2;
     }
-    if (!this.expectEnd(tokens, i, line)) return;
+    if (!this.expectEnd(tokens, i, line2)) return;
     if (frame2.system.entries.some((e) => e.id === entry.id)) {
       this.error(`System '${frame2.system.id}' already exposes '${entry.id}'`, entry.loc);
       return;
@@ -2801,23 +2801,23 @@ var Parser = class _Parser {
     frame2.system.entries.push(entry);
   }
   /** The parts of a system's `capacity { … }` in `tokens[from, to)`. */
-  readStub(stub, tokens, from, to, line) {
+  readStub(stub, tokens, from, to, line2) {
     for (let i = from; i < to; ) {
       const t = tokens[i];
       if (t.kind === "quantity" || t.kind === "number" || isConstUse(t)) {
-        const rps = this.quantityOf(t, "rps", t, line);
+        const rps = this.quantityOf(t, "rps", t, line2);
         if (rps === void 0) return;
         stub.rps = rps;
         i++;
       } else if (isWord(t, "p99") || isWord(t, "latency") || isWord(t, "availability")) {
-        const value = this.quantityOf(i + 1 < to ? tokens[i + 1] : void 0, t.value === "availability" ? "%" : "ms", t, line);
+        const value = this.quantityOf(i + 1 < to ? tokens[i + 1] : void 0, t.value === "availability" ? "%" : "ms", t, line2);
         if (value === void 0) return;
         if (t.value === "p99") stub.p99Ms = value;
         else if (t.value === "latency") stub.latencyMs = value;
         else stub.availability = value;
         i += 2;
       } else {
-        this.error(`Expected ${STUB_HELP}`, this.locOf(t, line));
+        this.error(`Expected ${STUB_HELP}`, this.locOf(t, line2));
         return;
       }
     }
@@ -2941,41 +2941,41 @@ var Parser = class _Parser {
     this.errorOnce(`Say which entry point of '${id}' this step enters: ${system.entries.map((e) => `${id}.${e.id}`).join(" or ")}`, loc);
     return void 0;
   }
-  parseUseCase(tokens, line) {
+  parseUseCase(tokens, line2) {
     const keyword = tokens[0];
     if (this.stack.length > 0) {
-      this.error("A usecase must be declared at the top level", this.locOf(keyword, line));
+      this.error("A usecase must be declared at the top level", this.locOf(keyword, line2));
       return;
     }
     const nameToken = tokens[1];
     if (nameToken?.kind !== "string" && nameToken?.kind !== "ident") {
-      this.error('Expected a usecase name, e.g. usecase "Place order" {', this.locOf(keyword, line));
+      this.error('Expected a usecase name, e.g. usecase "Place order" {', this.locOf(keyword, line2));
       return;
     }
     let i = 2;
     let description;
     if (tokens[i]?.kind === "string") description = tokens[i++].value;
     if (tokens[i]?.kind !== "lbrace") {
-      this.error("Expected { after usecase name", this.locOf(tokens[i] ?? tokens[i - 1], line));
+      this.error("Expected { after usecase name", this.locOf(tokens[i] ?? tokens[i - 1], line2));
       return;
     }
-    this.expectEnd(tokens, i + 1, line);
-    const loc = this.locOf(nameToken, line);
+    this.expectEnd(tokens, i + 1, line2);
+    const loc = this.locOf(nameToken, line2);
     const useCase = { id: this.useCaseId(nameToken.value), name: nameToken.value, description, steps: [], scenarios: [], loc };
     const frame2 = { kind: "usecase", useCase, body: { items: [] }, parCount: 0, loc };
     this.useCases.push({ useCase, body: frame2.body });
     this.stack.push(frame2);
   }
-  parseAlt(tokens, line) {
+  parseAlt(tokens, line2) {
     const keyword = tokens[0];
     const top = this.top();
     if (top?.kind !== "usecase" && top?.kind !== "alt") {
-      this.error(top?.kind === "par" ? "alt blocks cannot be inside a par block" : "alt is only allowed inside a usecase", this.locOf(keyword, line));
+      this.error(top?.kind === "par" ? "alt blocks cannot be inside a par block" : "alt is only allowed inside a usecase", this.locOf(keyword, line2));
       return;
     }
     const nameToken = tokens[1];
     if (nameToken?.kind !== "string" && nameToken?.kind !== "ident") {
-      this.error('Expected a scenario name, e.g. alt "Not found" {', this.locOf(keyword, line));
+      this.error('Expected a scenario name, e.g. alt "Not found" {', this.locOf(keyword, line2));
       return;
     }
     let i = 2;
@@ -2983,19 +2983,19 @@ var Parser = class _Parser {
     if (tokens[i]?.kind === "ident" && tokens[i].value === "when") {
       const conditionToken = tokens[i + 1];
       if (conditionToken?.kind !== "string") {
-        this.error('Expected a condition after when, e.g. alt "Not found" when "the order does not exist" {', this.locOf(conditionToken ?? tokens[i], line));
+        this.error('Expected a condition after when, e.g. alt "Not found" when "the order does not exist" {', this.locOf(conditionToken ?? tokens[i], line2));
         return;
       }
       condition = conditionToken.value.trim() || void 0;
       i += 2;
     }
     if (tokens[i]?.kind !== "lbrace") {
-      this.error(i === 2 ? "Expected { after alt name" : "Expected { after the alt condition", this.locOf(tokens[i] ?? tokens[i - 1], line));
+      this.error(i === 2 ? "Expected { after alt name" : "Expected { after the alt condition", this.locOf(tokens[i] ?? tokens[i - 1], line2));
       return;
     }
-    this.expectEnd(tokens, i + 1, line);
+    this.expectEnd(tokens, i + 1, line2);
     if (this.stack.filter((f) => f.kind === "alt").length >= MAX_ALT_DEPTH) {
-      const loc2 = this.locOf(keyword, line);
+      const loc2 = this.locOf(keyword, line2);
       this.error(`alt blocks can nest at most ${MAX_ALT_DEPTH} deep; this one is skipped`, loc2);
       this.stack.push({ kind: "section", section: "test", discard: true, skipped: `alt '${nameToken.value}'`, loc: loc2 });
       return;
@@ -3006,7 +3006,7 @@ var Parser = class _Parser {
       set = { kind: "alt", branches: [] };
       owner.items.push(set);
     }
-    const loc = this.locOf(nameToken, line);
+    const loc = this.locOf(nameToken, line2);
     if (set.branches.some((b) => b.name === nameToken.value)) this.warning(`Duplicate alt name '${nameToken.value}'`, loc);
     const body = { items: [] };
     set.branches.push({ name: nameToken.value, condition, items: body.items, loc });
@@ -3017,26 +3017,26 @@ var Parser = class _Parser {
     const frame2 = this.stack.pop();
     if (frame2?.kind === "alt") frame2.owner.openAlt = frame2.set;
   }
-  parsePar(tokens, line) {
+  parsePar(tokens, line2) {
     const keyword = tokens[0];
     const top = this.top();
     if (top?.kind !== "usecase" && top?.kind !== "alt") {
-      this.error(top?.kind === "par" ? "par blocks cannot be nested" : "par is only allowed inside a usecase", this.locOf(keyword, line));
+      this.error(top?.kind === "par" ? "par blocks cannot be nested" : "par is only allowed inside a usecase", this.locOf(keyword, line2));
       return;
     }
     if (tokens[1]?.kind !== "lbrace") {
-      this.error("Expected { after par", this.locOf(tokens[1] ?? keyword, line));
+      this.error("Expected { after par", this.locOf(tokens[1] ?? keyword, line2));
       return;
     }
-    this.expectEnd(tokens, 2, line);
+    this.expectEnd(tokens, 2, line2);
     top.body.openAlt = void 0;
     const useCase = this.currentUseCase();
     useCase.parCount++;
-    this.stack.push({ kind: "par", group: useCase.parCount, loc: this.locOf(keyword, line) });
+    this.stack.push({ kind: "par", group: useCase.parCount, loc: this.locOf(keyword, line2) });
   }
-  parseNode(tokens, line) {
+  parseNode(tokens, line2) {
     const idToken = tokens[0];
-    const loc = this.locOf(idToken, line);
+    const loc = this.locOf(idToken, line2);
     if (this.inUseCase()) {
       this.error("Declare nodes outside usecase blocks; steps look like a -> b : label", loc);
       return;
@@ -3046,8 +3046,8 @@ var Parser = class _Parser {
     const style = {};
     for (let i = 1; i < tokens.length; i++) {
       const t = tokens[i];
-      const styleUsed = this.readStylePart(tokens, i, line, style, true);
-      const used = styleUsed === 0 ? this.readRank(tokens, i, line, node) : styleUsed;
+      const styleUsed = this.readStylePart(tokens, i, line2, style, true);
+      const used = styleUsed === 0 ? this.readRank(tokens, i, line2, node) : styleUsed;
       if (used === void 0) return;
       if (used > 0) {
         i += used - 1;
@@ -3063,13 +3063,13 @@ var Parser = class _Parser {
           node.techStack = found.techStack;
           node.kind = found.type === "text" ? "text" : found.type === "group" ? "group" : "component";
         }
-        this.techRefs.push({ node, value: t.value, loc: this.locOf(t, line) });
+        this.techRefs.push({ node, value: t.value, loc: this.locOf(t, line2) });
       } else if (t.kind === "team") {
         node.ownerTeam = t.value;
       } else if (t.kind === "ident" && t.value === "pos") {
         const [x, comma, y] = [tokens[i + 1], tokens[i + 2], tokens[i + 3]];
         if (x?.kind !== "number" || comma?.kind !== "comma" || y?.kind !== "number") {
-          this.error("Expected pos x,y", this.locOf(t, line));
+          this.error("Expected pos x,y", this.locOf(t, line2));
           return;
         }
         node.position = { x: Number(x.value), y: Number(y.value) };
@@ -3077,19 +3077,19 @@ var Parser = class _Parser {
       } else if (t.kind === "ident" && REPLICAS.test(t.value)) {
         const replicas = Number(REPLICAS.exec(t.value)[1]);
         if (replicas < 1) {
-          this.error("A node needs at least one replica: x1, x2, \u2026", this.locOf(t, line));
+          this.error("A node needs at least one replica: x1, x2, \u2026", this.locOf(t, line2));
           return;
         }
         node.replicas = replicas;
       } else if (t.kind === "const") {
-        const replicas = this.replicasOf(t, line, "A node needs a whole number of replicas, at least 1: x1, x2, \u2026");
+        const replicas = this.replicasOf(t, line2, "A node needs a whole number of replicas, at least 1: x1, x2, \u2026");
         if (replicas === void 0) return;
         node.replicas = replicas;
       } else if (t.kind === "label" || t.kind === "arrow") {
-        this.error(`Expected '${idToken.value} -> target' for a connection`, this.locOf(t, line));
+        this.error(`Expected '${idToken.value} -> target' for a connection`, this.locOf(t, line2));
         return;
       } else {
-        this.error(`Unexpected ${describe(t)} in node declaration`, this.locOf(t, line));
+        this.error(`Unexpected ${describe(t)} in node declaration`, this.locOf(t, line2));
         return;
       }
     }
@@ -3097,20 +3097,20 @@ var Parser = class _Parser {
     this.addNode(node);
   }
   parseConnection(tokens, index) {
-    const line = index + 1;
+    const line2 = index + 1;
     const [fromToken, arrowToken, toToken] = tokens;
     const tagToken = tokens[3]?.kind === "tag" ? tokens[3] : void 0;
     const labelToken = tokens[tagToken ? 4 : 3];
     if (toToken?.kind !== "ident") {
-      this.error("Expected a target id after the arrow", this.locOf(toToken ?? arrowToken, line));
+      this.error("Expected a target id after the arrow", this.locOf(toToken ?? arrowToken, line2));
       return index;
     }
     if (tagToken && tokens[4]?.kind === "tag") {
-      this.error("A connection takes one tag", this.locOf(tokens[4], line));
+      this.error("A connection takes one tag", this.locOf(tokens[4], line2));
       return index;
     }
     if (tokens.length > (tagToken ? 5 : 4) || labelToken && labelToken.kind !== "label") {
-      this.error("Expected : before the connection label", this.locOf(labelToken, line));
+      this.error("Expected : before the connection label", this.locOf(labelToken, line2));
       return index;
     }
     let label = labelToken?.value ?? "";
@@ -3124,11 +3124,11 @@ var Parser = class _Parser {
         label += more;
         depth = brackets.feed(more);
       }
-      if (depth > 0) this.error("Unclosed { or [ in payload", this.locOf(labelToken, line));
+      if (depth > 0) this.error("Unclosed { or [ in payload", this.locOf(labelToken, line2));
       label = label.trimEnd();
     }
     const loc = {
-      line,
+      line: line2,
       col: fromToken.col,
       length: (labelToken ?? toToken).col + (labelToken ?? toToken).length - fromToken.col,
       ...this.fileField()
@@ -3136,18 +3136,18 @@ var Parser = class _Parser {
     const from = fromToken.value;
     const to = toToken.value;
     const arrow = arrowToken.value;
-    const toRef = { id: to, loc: this.locOf(toToken, line) };
-    this.references.push({ id: from, loc: this.locOf(fromToken, line) }, toRef);
+    const toRef = { id: to, loc: this.locOf(toToken, line2) };
+    this.references.push({ id: from, loc: this.locOf(fromToken, line2) }, toRef);
     const top = this.top();
     const inUseCase = top?.kind === "usecase" || top?.kind === "alt" || top?.kind === "par";
     if (tagToken && inUseCase) {
-      this.error("Tags style connections in the architecture, not use case steps", this.locOf(tagToken, line));
+      this.error("Tags style connections in the architecture, not use case steps", this.locOf(tagToken, line2));
       return lastLine;
     }
     if (inUseCase) {
       const body = this.currentBody();
       body.openAlt = void 0;
-      const prefixes = arrow === "-->" ? { rest: label, col: labelToken && this.labelStart(labelToken, line) } : this.readLabelPrefixes(label, labelToken, line);
+      const prefixes = arrow === "-->" ? { rest: label, col: labelToken && this.labelStart(labelToken, line2) } : this.readLabelPrefixes(label, labelToken, line2);
       body.items.push({
         kind: "step",
         step: {
@@ -3163,7 +3163,7 @@ var Parser = class _Parser {
         }
       });
     } else if (arrow === "-x") {
-      this.error("'-x' marks a failed call and is only allowed in use case steps", this.locOf(arrowToken, line));
+      this.error("'-x' marks a failed call and is only allowed in use case steps", this.locOf(arrowToken, line2));
     } else {
       const base = `${from}->${to}`;
       const count = this.edgeCount.get(base) ?? 0;
@@ -3171,7 +3171,7 @@ var Parser = class _Parser {
       const edge = { id: count ? `${base}#${count + 1}` : base, source: from, target: to, label: unquote(label) || void 0, loc };
       if (tagToken) {
         edge.tag = tagToken.value;
-        this.tagRefs.push({ tag: tagToken.value, loc: this.locOf(tagToken, line), target: edge });
+        this.tagRefs.push({ tag: tagToken.value, loc: this.locOf(tagToken, line2), target: edge });
       }
       if (!tagToken) toRef.edgeTarget = edge;
       this.edges.push(edge);
@@ -3184,14 +3184,14 @@ var Parser = class _Parser {
    * prefix must be followed by whitespace or end the label, so `xml …` and
    * `x-request-id` are ordinary labels. Problems are reported at the prefix.
    */
-  readLabelPrefixes(label, token, line) {
+  readLabelPrefixes(label, token, line2) {
     const out = { rest: label };
     if (!token) return out;
-    const base = this.labelStart(token, line);
+    const base = this.labelStart(token, line2);
     let offset = 0;
     for (; ; ) {
       const rest = label.slice(offset);
-      const at = (length) => ({ line, col: base + offset, length, ...this.fileField() });
+      const at = (length) => ({ line: line2, col: base + offset, length, ...this.fileField() });
       const fanOut = /^x(\d+)(?=\s|$)/.exec(rest);
       const size = rest.startsWith("~") ? /^~(\S*)/.exec(rest) : null;
       const match = fanOut ?? size;
@@ -3215,8 +3215,8 @@ var Parser = class _Parser {
     return out;
   }
   /** Column of a label's first character: the label token starts at ':' and its value is trimmed. */
-  labelStart(token, line) {
-    const after2 = this.lines[line - 1].slice(token.col);
+  labelStart(token, line2) {
+    const after2 = this.lines[line2 - 1].slice(token.col);
     return token.col + 1 + (after2.length - after2.trimStart().length);
   }
   // ---- HLD sections: traffic, requirements, capacity, entity, decision, test (docs/design/hld-and-practice.md §1) ----
@@ -3225,47 +3225,47 @@ var Parser = class _Parser {
    * one whose header is broken, still opens a block so that its lines and its
    * `}` are not mistaken for nodes and the end of an enclosing block.
    */
-  openSection(section, tokens, line, fill2 = {}) {
+  openSection(section, tokens, line2, fill2 = {}) {
     const keyword = tokens[0];
-    const loc = this.locOf(keyword, line);
+    const loc = this.locOf(keyword, line2);
     if (this.stack.length > 0) {
       this.error(`${section} is only allowed at the top level`, loc);
-      this.skipSection(section, tokens, line);
+      this.skipSection(section, tokens, line2);
       return false;
     }
-    if (section === "traffic" || section === "requirements" || section === "capacity" || section === "legend") this.expectEnd(tokens, 2, line);
+    if (section === "traffic" || section === "requirements" || section === "capacity" || section === "legend") this.expectEnd(tokens, 2, line2);
     this.stack.push({ kind: "section", section, ...fill2, loc });
     return true;
   }
   /** After an error in a section header: skips the block, if the line opens one. */
-  skipSection(section, tokens, line) {
-    if (tokens[tokens.length - 1].kind === "lbrace") this.stack.push({ kind: "section", section, discard: true, loc: this.locOf(tokens[0], line) });
+  skipSection(section, tokens, line2) {
+    if (tokens[tokens.length - 1].kind === "lbrace") this.stack.push({ kind: "section", section, discard: true, loc: this.locOf(tokens[0], line2) });
   }
   closeSection(frame2) {
     if (frame2.test && frame2.test.assertions.length === 0) this.warning(`Test '${frame2.test.name}' has no assertions`, frame2.test.loc);
     if (frame2.whatif && frame2.whatif.changes.length === 0) this.warning(`What-if '${frame2.whatif.name}' changes nothing`, frame2.whatif.loc);
   }
-  parseSectionLine(frame2, tokens, line) {
+  parseSectionLine(frame2, tokens, line2) {
     switch (frame2.section) {
       case "traffic":
-        return this.parseTrafficLine(tokens, line);
+        return this.parseTrafficLine(tokens, line2);
       case "requirements":
-        return this.parseRequirement(tokens, line);
+        return this.parseRequirement(tokens, line2);
       case "capacity":
-        return this.parseCapacityLine(tokens, line);
+        return this.parseCapacityLine(tokens, line2);
       case "legend":
-        return this.parseLegendLine(tokens, line);
+        return this.parseLegendLine(tokens, line2);
       case "entity":
-        return this.parseField(frame2.entity, tokens, line);
+        return this.parseField(frame2.entity, tokens, line2);
       case "decision":
-        return this.parseDecisionLine(frame2.decision, tokens, line);
+        return this.parseDecisionLine(frame2.decision, tokens, line2);
       case "test": {
-        const assertion2 = this.parseAssertion(tokens, line);
+        const assertion2 = this.parseAssertion(tokens, line2);
         if (assertion2) frame2.test.assertions.push(assertion2);
         return;
       }
       case "whatif":
-        return this.parseWhatIfLine(frame2.whatif, tokens, line);
+        return this.parseWhatIfLine(frame2.whatif, tokens, line2);
     }
   }
   /**
@@ -3273,18 +3273,18 @@ var Parser = class _Parser {
    * `.tag` and, on nodes, `critical`. Returns how many tokens it used (0 when
    * the token is something else), or undefined after reporting an error.
    */
-  readStylePart(tokens, i, line, parts, isNode) {
+  readStylePart(tokens, i, line2, parts, isNode) {
     const t = tokens[i];
     if (t.kind === "tag") {
       if (parts.tag) {
-        this.error(`A ${isNode ? "node" : "group"} takes one tag; '.${parts.tag.value}' is already set`, this.locOf(t, line));
+        this.error(`A ${isNode ? "node" : "group"} takes one tag; '.${parts.tag.value}' is already set`, this.locOf(t, line2));
         return void 0;
       }
-      parts.tag = { value: t.value, loc: this.locOf(t, line) };
+      parts.tag = { value: t.value, loc: this.locOf(t, line2) };
       return 1;
     }
     if (isWord(t, "color")) {
-      const value = this.readColor(tokens[i + 1], t, line);
+      const value = this.readColor(tokens[i + 1], t, line2);
       if (value === void 0) return void 0;
       parts.color = value;
       return 2;
@@ -3296,16 +3296,16 @@ var Parser = class _Parser {
     return 0;
   }
   /** The color in `token`, a palette name or `#hex`, or undefined after reporting an error. */
-  readColor(token, after2, line) {
+  readColor(token, after2, line2) {
     const choices = `${COLOR_NAMES.join(", ")}, or a hex value after color, like color #3b82f6`;
     if (token?.kind !== "ident" && token?.kind !== "hex") {
-      this.error(`Expected a color after ${after2.value}: ${choices}`, this.locOf(token ?? after2, line));
+      this.error(`Expected a color after ${after2.value}: ${choices}`, this.locOf(token ?? after2, line2));
       return void 0;
     }
     const hex2 = resolveColor(token.value);
     if (!hex2) {
       const suggestion = suggestColor(token.value);
-      this.error(`Unknown color '${token.value}'.${suggestion ? ` Did you mean '${suggestion}'?` : ""} Use ${choices}`, this.locOf(token, line));
+      this.error(`Unknown color '${token.value}'.${suggestion ? ` Did you mean '${suggestion}'?` : ""} Use ${choices}`, this.locOf(token, line2));
       return void 0;
     }
     return { name: token.value, hex: hex2 };
@@ -3322,13 +3322,13 @@ var Parser = class _Parser {
     }
   }
   /** `owned "Owned by Order Fulfillment" green dashed`: an id, a label, then a color and a dash in any order. */
-  parseLegendLine(tokens, line) {
+  parseLegendLine(tokens, line2) {
     const [idToken] = tokens;
     if (idToken.kind !== "ident") {
-      this.error('Expected a legend entry, e.g. owned "Owned by us" green', this.locOf(idToken, line));
+      this.error('Expected a legend entry, e.g. owned "Owned by us" green', this.locOf(idToken, line2));
       return;
     }
-    const loc = this.locOf(idToken, line);
+    const loc = this.locOf(idToken, line2);
     const entry = { id: idToken.value, label: idToken.value, loc };
     let i = 1;
     if (tokens[i]?.kind === "string") entry.label = tokens[i++].value;
@@ -3340,14 +3340,14 @@ var Parser = class _Parser {
       }
       if (t.kind === "ident") {
         const keyword = t.value === "color";
-        const color = this.readColor(keyword ? tokens[i + 1] : t, t, line);
+        const color = this.readColor(keyword ? tokens[i + 1] : t, t, line2);
         if (!color) return;
         entry.colorName = color.name;
         entry.color = color.hex;
         if (keyword) i++;
         continue;
       }
-      this.error(`Unexpected ${describe(t)} in legend entry; expected a color, dashed or dotted`, this.locOf(t, line));
+      this.error(`Unexpected ${describe(t)} in legend entry; expected a color, dashed or dotted`, this.locOf(t, line2));
       return;
     }
     const existing = this.legend.find((e) => e.id === entry.id);
@@ -3373,15 +3373,15 @@ var Parser = class _Parser {
     }
   }
   /** `"Redirect" 100k rps mix "Cache hit" 90%, "Cache miss" 10%` */
-  parseTrafficLine(tokens, line) {
+  parseTrafficLine(tokens, line2) {
     const [name, rate] = tokens;
     if (name.kind !== "string") {
-      this.error('Expected a use case name in quotes and a rate, e.g. "Redirect" 100k rps', this.locOf(name, line));
+      this.error('Expected a use case name in quotes and a rate, e.g. "Redirect" 100k rps', this.locOf(name, line2));
       return;
     }
-    const rps = this.quantityOf(rate, "rps", name, line);
+    const rps = this.quantityOf(rate, "rps", name, line2);
     if (rps === void 0) return;
-    const entry = { useCase: name.value, rps, loc: this.lineLoc(tokens, line) };
+    const entry = { useCase: name.value, rps, loc: this.lineLoc(tokens, line2) };
     let i = 2;
     if (isWord(tokens[i], "peak")) {
       const word = tokens[i];
@@ -3389,17 +3389,17 @@ var Parser = class _Parser {
       let peak;
       if (value?.kind === "ident" && MULTIPLIER.test(value.value)) peak = rps * Number(MULTIPLIER.exec(value.value)[1]);
       else if (value?.kind === "const" && value.value.startsWith("x")) {
-        const factor = this.countOf(value, line);
+        const factor = this.countOf(value, line2);
         if (factor === void 0) return;
         peak = rps * factor;
-      } else if (value?.kind === "quantity" || value?.kind === "number" || isConstUse(value)) peak = this.quantityOf(value, "rps", word, line);
+      } else if (value?.kind === "quantity" || value?.kind === "number" || isConstUse(value)) peak = this.quantityOf(value, "rps", word, line2);
       else {
-        this.error(`Expected the peak after peak, as a multiple of the average (peak x3) or a rate (peak 60k rps)${value ? `, not ${describe(value)}` : ""}`, this.locOf(value ?? word, line));
+        this.error(`Expected the peak after peak, as a multiple of the average (peak x3) or a rate (peak 60k rps)${value ? `, not ${describe(value)}` : ""}`, this.locOf(value ?? word, line2));
         return;
       }
       if (peak === void 0) return;
       if (peak < rps) {
-        this.error(`The peak cannot be below the average, ${rps.toLocaleString("en-US")} rps`, this.locOf(value, line));
+        this.error(`The peak cannot be below the average, ${rps.toLocaleString("en-US")} rps`, this.locOf(value, line2));
         return;
       }
       entry.avgRps = rps;
@@ -3410,18 +3410,18 @@ var Parser = class _Parser {
     if (tokens[i]) {
       const mix = tokens[i++];
       if (!isWord(mix, "mix")) {
-        this.error(`Unexpected ${describe(mix)}; expected mix "Scenario" 90%, "Other" 10%`, this.locOf(mix, line));
+        this.error(`Unexpected ${describe(mix)}; expected mix "Scenario" 90%, "Other" 10%`, this.locOf(mix, line2));
         return;
       }
       for (; ; ) {
         const scenario = tokens[i];
         if (scenario?.kind !== "string") {
-          this.error('Expected a scenario name in quotes and its share, e.g. "Cache hit" 90%', this.locOf(scenario ?? tokens[i - 1], line));
+          this.error('Expected a scenario name in quotes and its share, e.g. "Cache hit" 90%', this.locOf(scenario ?? tokens[i - 1], line2));
           return;
         }
-        const share2 = this.quantityOf(tokens[i + 1], "%", scenario, line);
+        const share2 = this.quantityOf(tokens[i + 1], "%", scenario, line2);
         if (share2 === void 0) return;
-        const loc = this.locOf(scenario, line);
+        const loc = this.locOf(scenario, line2);
         if (shares.some((s) => s.scenario === scenario.value)) {
           this.error(`Scenario '${scenario.value}' is in the mix twice`, loc);
           return;
@@ -3430,22 +3430,22 @@ var Parser = class _Parser {
         i += 2;
         if (!tokens[i]) break;
         if (tokens[i].kind !== "comma") {
-          this.error(`Expected , between mix shares, not ${describe(tokens[i])}`, this.locOf(tokens[i], line));
+          this.error(`Expected , between mix shares, not ${describe(tokens[i])}`, this.locOf(tokens[i], line2));
           return;
         }
         i++;
       }
       const total = shares.reduce((sum, s) => sum + s.share, 0);
       if (total <= 0) {
-        this.error("Mix shares must add up to more than 0%", this.locOf(mix, line));
+        this.error("Mix shares must add up to more than 0%", this.locOf(mix, line2));
         return;
       }
       if (Math.abs(total - 100) > 1e-9) {
-        this.warning(`Mix shares add up to ${Number(total.toFixed(3))}%, not 100%; they are scaled to fit`, this.locOf(mix, line));
+        this.warning(`Mix shares add up to ${Number(total.toFixed(3))}%, not 100%; they are scaled to fit`, this.locOf(mix, line2));
       }
       entry.mix = shares.map((s) => ({ scenario: s.scenario, share: s.share / total }));
     }
-    const nameLoc = this.locOf(name, line);
+    const nameLoc = this.locOf(name, line2);
     const first = this.traffic.find((t) => t.useCase === entry.useCase);
     if (first) {
       this.error(`Duplicate traffic for '${entry.useCase}' (first ${this.where(first.loc, nameLoc)})`, nameLoc);
@@ -3458,12 +3458,12 @@ var Parser = class _Parser {
     });
   }
   /** One line of `requirements { … }`. */
-  parseRequirement(tokens, line) {
+  parseRequirement(tokens, line2) {
     const [first] = tokens;
-    const loc = this.lineLoc(tokens, line);
+    const loc = this.lineLoc(tokens, line2);
     const help = 'Expected a requirement: p99 "Use case" < 50ms, availability >= 99.9%, durable "Use case", survive any node failure, cost <= 3000 usd/month';
     if (first.kind !== "ident") {
-      this.error(help, this.locOf(first, line));
+      this.error(help, this.locOf(first, line2));
       return;
     }
     const word = first.value;
@@ -3471,7 +3471,7 @@ var Parser = class _Parser {
     let useCase;
     const readUseCase = () => {
       if (tokens[i]?.kind !== "string") return;
-      useCase = { name: tokens[i].value, loc: this.locOf(tokens[i], line) };
+      useCase = { name: tokens[i].value, loc: this.locOf(tokens[i], line2) };
       i++;
     };
     const commit = (requirement2, scenario) => {
@@ -3487,7 +3487,7 @@ var Parser = class _Parser {
     if (/^p\d+$/.test(word)) {
       const percentile = PERCENTILES[word];
       if (percentile === void 0) {
-        this.error(`Unknown percentile '${word}'; use p50, p90, p95, p99 or p999`, this.locOf(first, line));
+        this.error(`Unknown percentile '${word}'; use p50, p90, p95, p99 or p999`, this.locOf(first, line2));
         return;
       }
       readUseCase();
@@ -3495,103 +3495,103 @@ var Parser = class _Parser {
       if (isWord(tokens[i], "scenario")) {
         const name = tokens[i + 1];
         if (!useCase) {
-          this.error(`A scenario belongs to a use case; write ${word} "Use case" scenario "Scenario" < 100ms`, this.locOf(tokens[i], line));
+          this.error(`A scenario belongs to a use case; write ${word} "Use case" scenario "Scenario" < 100ms`, this.locOf(tokens[i], line2));
           return;
         }
         if (name?.kind !== "string") {
-          this.error("Expected a scenario name in quotes after scenario", this.locOf(name ?? tokens[i], line));
+          this.error("Expected a scenario name in quotes after scenario", this.locOf(name ?? tokens[i], line2));
           return;
         }
-        scenario = { name: name.value, loc: this.locOf(name, line) };
+        scenario = { name: name.value, loc: this.locOf(name, line2) };
         i += 2;
       }
-      if (!this.expectOp(tokens, i, ["<", "<="], `${word} "Use case" < 50ms`, line)) return;
-      const maxMs = this.quantityOf(tokens[i + 1], "ms", tokens[i], line);
-      if (maxMs === void 0 || !this.expectEnd(tokens, i + 2, line)) return;
+      if (!this.expectOp(tokens, i, ["<", "<="], `${word} "Use case" < 50ms`, line2)) return;
+      const maxMs = this.quantityOf(tokens[i + 1], "ms", tokens[i], line2);
+      if (maxMs === void 0 || !this.expectEnd(tokens, i + 2, line2)) return;
       commit({ kind: "latency", percentile, ...withUseCase(), ...scenario ? { scenario: scenario.name } : {}, maxMs, loc }, scenario);
       return;
     }
     switch (word) {
       case "availability": {
         readUseCase();
-        if (!this.expectOp(tokens, i, [">=", ">"], 'availability "Use case" >= 99.9%', line)) return;
-        const minPercent = this.quantityOf(tokens[i + 1], "%", tokens[i], line);
+        if (!this.expectOp(tokens, i, [">=", ">"], 'availability "Use case" >= 99.9%', line2)) return;
+        const minPercent = this.quantityOf(tokens[i + 1], "%", tokens[i], line2);
         if (minPercent === void 0) return;
         if (minPercent > 100) {
-          this.error("Availability cannot be more than 100%", this.locOf(tokens[i + 1], line));
+          this.error("Availability cannot be more than 100%", this.locOf(tokens[i + 1], line2));
           return;
         }
-        if (!this.expectEnd(tokens, i + 2, line)) return;
+        if (!this.expectEnd(tokens, i + 2, line2)) return;
         commit({ kind: "availability", ...withUseCase(), minPercent, loc });
         return;
       }
       case "lag": {
         readUseCase();
         if (!useCase) {
-          this.error('Expected a use case name in quotes, e.g. lag "Place order" < 30s', this.locOf(tokens[1] ?? first, line));
+          this.error('Expected a use case name in quotes, e.g. lag "Place order" < 30s', this.locOf(tokens[1] ?? first, line2));
           return;
         }
-        if (!this.expectOp(tokens, i, ["<", "<="], 'lag "Use case" < 30s', line)) return;
-        const maxMs = this.quantityOf(tokens[i + 1], "ms", tokens[i], line);
-        if (maxMs === void 0 || !this.expectEnd(tokens, i + 2, line)) return;
+        if (!this.expectOp(tokens, i, ["<", "<="], 'lag "Use case" < 30s', line2)) return;
+        const maxMs = this.quantityOf(tokens[i + 1], "ms", tokens[i], line2);
+        if (maxMs === void 0 || !this.expectEnd(tokens, i + 2, line2)) return;
         commit({ kind: "lag", useCase: useCase.name, maxMs, loc });
         return;
       }
       case "durable":
         readUseCase();
         if (!useCase) {
-          this.error('Expected a use case name in quotes, e.g. durable "Shorten"', this.locOf(tokens[1] ?? first, line));
+          this.error('Expected a use case name in quotes, e.g. durable "Shorten"', this.locOf(tokens[1] ?? first, line2));
           return;
         }
-        if (!this.expectEnd(tokens, i, line)) return;
+        if (!this.expectEnd(tokens, i, line2)) return;
         commit({ kind: "durable", useCase: useCase.name, loc });
         return;
       case "survive": {
         if (isWord(tokens[1], "any") && isWord(tokens[2], "node") && isWord(tokens[3], "failure")) {
-          if (this.expectEnd(tokens, 4, line)) commit({ kind: "survive", target: "any", loc });
+          if (this.expectEnd(tokens, 4, line2)) commit({ kind: "survive", target: "any", loc });
           return;
         }
         if (!isWord(tokens[1], "failure") || !isWord(tokens[2], "of")) {
-          this.error("Expected survive any node failure, or survive failure of <node | [Tech] | any kind>", this.locOf(tokens[1] ?? first, line));
+          this.error("Expected survive any node failure, or survive failure of <node | [Tech] | any kind>", this.locOf(tokens[1] ?? first, line2));
           return;
         }
-        const target = this.parseSelector(tokens, 3, line);
-        if (!target || !this.expectEnd(tokens, target.next, line)) return;
+        const target = this.parseSelector(tokens, 3, line2);
+        if (!target || !this.expectEnd(tokens, target.next, line2)) return;
         commit({ kind: "survive", target: target.selector, loc });
         this.checkSelectorLater(target);
         return;
       }
       case "cost": {
-        const scoped = this.parseCostScope(tokens, line);
+        const scoped = this.parseCostScope(tokens, line2);
         if (!scoped) return;
         const at = scoped.next;
-        if (!this.expectOp(tokens, at, ["<=", "<"], scoped.scope ? "cost @Payments <= 500 usd/month" : "cost <= 3000 usd/month", line)) return;
-        const maxUsdPerMonth = this.quantityOf(tokens[at + 1], "usd/month", tokens[at], line);
-        if (maxUsdPerMonth === void 0 || !this.expectEnd(tokens, at + 2, line)) return;
+        if (!this.expectOp(tokens, at, ["<=", "<"], scoped.scope ? "cost @Payments <= 500 usd/month" : "cost <= 3000 usd/month", line2)) return;
+        const maxUsdPerMonth = this.quantityOf(tokens[at + 1], "usd/month", tokens[at], line2);
+        if (maxUsdPerMonth === void 0 || !this.expectEnd(tokens, at + 2, line2)) return;
         commit({ kind: "cost", maxUsdPerMonth, ...scoped.scope ? { scope: scoped.scope } : {}, loc });
-        if (scoped.scope) this.checkCostScope(scoped.scope, this.locOf(tokens[at - 1], line));
+        if (scoped.scope) this.checkCostScope(scoped.scope, this.locOf(tokens[at - 1], line2));
         return;
       }
       default:
-        this.error(`Unknown requirement '${word}'. ${help}`, this.locOf(first, line));
+        this.error(`Unknown requirement '${word}'. ${help}`, this.locOf(first, line2));
     }
   }
   /** What follows `cost` before its operator: nothing, `@team`, `.tag` or `group <id>`; the index after it. */
-  parseCostScope(tokens, line) {
+  parseCostScope(tokens, line2) {
     const t = tokens[1];
     if (t?.kind === "team") return { scope: { team: t.value }, next: 2 };
     if (t?.kind === "tag") return { scope: { tag: t.value }, next: 2 };
     if (isWord(t, "group")) {
       const id = tokens[2];
       if (id?.kind !== "ident") {
-        this.error("Expected a group id after group, e.g. cost group checkout <= 500 usd/month", this.locOf(id ?? t, line));
+        this.error("Expected a group id after group, e.g. cost group checkout <= 500 usd/month", this.locOf(id ?? t, line2));
         return void 0;
       }
       return { scope: { group: id.value }, next: 3 };
     }
     if (t?.kind === "string") {
       const name = t.value.replace(/^@/, "");
-      this.error(`A budget names a team as @${name}, a tag as .${name} or a group as group ${name}, without quotes`, this.locOf(t, line));
+      this.error(`A budget names a team as @${name}, a tag as .${name} or a group as group ${name}, without quotes`, this.locOf(t, line2));
       return void 0;
     }
     return { next: 1 };
@@ -3612,13 +3612,13 @@ var Parser = class _Parser {
     });
   }
   /** `db 20k rps latency 4ms availability 99.95% cost 400 usd/month durable`, parts in any order. */
-  parseCapacityLine(tokens, line) {
+  parseCapacityLine(tokens, line2) {
     const [id] = tokens;
     if (id.kind !== "ident") {
-      this.error("Expected a node id and its overrides, e.g. db 20k rps latency 4ms", this.locOf(id, line));
+      this.error("Expected a node id and its overrides, e.g. db 20k rps latency 4ms", this.locOf(id, line2));
       return;
     }
-    const override = { node: id.value, loc: this.lineLoc(tokens, line) };
+    const override = { node: id.value, loc: this.lineLoc(tokens, line2) };
     const seen = /* @__PURE__ */ new Set();
     let hitLoc;
     let drainLoc;
@@ -3627,14 +3627,14 @@ var Parser = class _Parser {
       let part;
       if (t.kind === "quantity" || t.kind === "number" || isConstUse(t)) {
         part = "rate";
-        const rps = this.quantityOf(t, "rps", t, line);
+        const rps = this.quantityOf(t, "rps", t, line2);
         if (rps === void 0) return;
         override.rps = rps;
         i++;
       } else if (isWord(t, "latency") || isWord(t, "availability") || isWord(t, "cost") || isWord(t, "timeout")) {
         part = t.value;
         const unit = part === "latency" || part === "timeout" ? "ms" : part === "availability" ? "%" : "usd/month";
-        const value = this.quantityOf(tokens[i + 1], unit, t, line);
+        const value = this.quantityOf(tokens[i + 1], unit, t, line2);
         if (value === void 0) return;
         if (part === "latency") override.latencyMs = value;
         else if (part === "timeout") override.timeoutMs = value;
@@ -3643,39 +3643,39 @@ var Parser = class _Parser {
         i += 2;
       } else if (isWord(t, "hit")) {
         part = "hit";
-        const value = this.quantityOf(tokens[i + 1], "%", t, line);
+        const value = this.quantityOf(tokens[i + 1], "%", t, line2);
         if (value === void 0) return;
         if (value > 100) {
-          this.error("A hit rate cannot be more than 100%", this.locOf(tokens[i + 1], line));
+          this.error("A hit rate cannot be more than 100%", this.locOf(tokens[i + 1], line2));
           return;
         }
         override.hitPercent = value;
-        hitLoc = this.locOf(t, line);
+        hitLoc = this.locOf(t, line2);
         i += 2;
       } else if (isWord(t, "errors")) {
         part = "errors";
-        const value = this.quantityOf(tokens[i + 1], "%", t, line);
+        const value = this.quantityOf(tokens[i + 1], "%", t, line2);
         if (value === void 0) return;
         if (value > 100) {
-          this.error("An error rate cannot be more than 100%", this.locOf(tokens[i + 1], line));
+          this.error("An error rate cannot be more than 100%", this.locOf(tokens[i + 1], line2));
           return;
         }
         override.errorPercent = value;
         i += 2;
       } else if (isWord(t, "drain")) {
         part = "drain";
-        const value = this.quantityOf(tokens[i + 1], "rps", t, line);
+        const value = this.quantityOf(tokens[i + 1], "rps", t, line2);
         if (value === void 0) return;
         override.drainRps = value;
-        drainLoc = this.locOf(t, line);
+        drainLoc = this.locOf(t, line2);
         i += 2;
       } else if (isWord(t, "retries")) {
         part = "retries";
         const n = tokens[i + 1];
-        const retries = isConstUse(n) ? this.countOf(n, line) : n?.kind === "number" ? Number(n.value) : NaN;
+        const retries = isConstUse(n) ? this.countOf(n, line2) : n?.kind === "number" ? Number(n.value) : NaN;
         if (retries === void 0) return;
         if (!Number.isInteger(retries) || retries < 0 || retries > MAX_RETRIES) {
-          this.error(`Expected a whole number of retries from 0 to ${MAX_RETRIES}, e.g. retries 3`, this.locOf(n ?? t, line));
+          this.error(`Expected a whole number of retries from 0 to ${MAX_RETRIES}, e.g. retries 3`, this.locOf(n ?? t, line2));
           return;
         }
         override.retries = retries;
@@ -3686,7 +3686,7 @@ var Parser = class _Parser {
         i++;
       } else if (isWord(t, "reads") || isWord(t, "writes")) {
         part = t.value;
-        const value = this.quantityOf(tokens[i + 1], "rps", t, line);
+        const value = this.quantityOf(tokens[i + 1], "rps", t, line2);
         if (value === void 0) return;
         if (part === "reads") override.readRps = value;
         else override.writeRps = value;
@@ -3694,10 +3694,10 @@ var Parser = class _Parser {
       } else if (isWord(t, "shards")) {
         part = "shards";
         const n = tokens[i + 1];
-        const shards = isConstUse(n) ? this.countOf(n, line) : n?.kind === "number" ? Number(n.value) : NaN;
+        const shards = isConstUse(n) ? this.countOf(n, line2) : n?.kind === "number" ? Number(n.value) : NaN;
         if (shards === void 0) return;
         if (!Number.isInteger(shards) || shards < 1) {
-          this.error("Expected a whole number of shards, at least 1, e.g. shards 4", this.locOf(n ?? t, line));
+          this.error("Expected a whole number of shards, at least 1, e.g. shards 4", this.locOf(n ?? t, line2));
           return;
         }
         override.shards = shards;
@@ -3706,7 +3706,7 @@ var Parser = class _Parser {
         part = "size";
         const value = tokens[i + 1];
         if (!isWord(value, "S") && !isWord(value, "M") && !isWord(value, "L")) {
-          this.error(`Expected S, M or L after size${value ? `, not ${describe(value)}` : ""}`, this.locOf(value ?? t, line));
+          this.error(`Expected S, M or L after size${value ? `, not ${describe(value)}` : ""}`, this.locOf(value ?? t, line2));
           return;
         }
         override.size = value.value;
@@ -3715,39 +3715,39 @@ var Parser = class _Parser {
         part = "consistency";
         const value = tokens[i + 1];
         if (!isWord(value, "strong") && !isWord(value, "eventual")) {
-          this.error(`Expected strong or eventual after consistency${value ? `, not ${describe(value)}` : ""}`, this.locOf(value ?? t, line));
+          this.error(`Expected strong or eventual after consistency${value ? `, not ${describe(value)}` : ""}`, this.locOf(value ?? t, line2));
           return;
         }
         override.consistency = value.value;
         i += 2;
       } else if (isWord(t, "bandwidth") || isWord(t, "egress")) {
         part = t.value;
-        const value = this.quantityOf(tokens[i + 1], part === "bandwidth" ? "MBps" : "usd/GB", t, line);
+        const value = this.quantityOf(tokens[i + 1], part === "bandwidth" ? "MBps" : "usd/GB", t, line2);
         if (value === void 0) return;
         if (part === "bandwidth") {
           if (value <= 0) {
-            this.error("Bandwidth must be more than 0", this.locOf(tokens[i + 1], line));
+            this.error("Bandwidth must be more than 0", this.locOf(tokens[i + 1], line2));
             return;
           }
           override.bandwidthMBps = value;
         } else override.egressUsdPerGb = value;
         i += 2;
       } else {
-        this.error(`Unexpected ${describe(t)}; expected ${CAPACITY_PARTS}`, this.locOf(t, line));
+        this.error(`Unexpected ${describe(t)}; expected ${CAPACITY_PARTS}`, this.locOf(t, line2));
         return;
       }
       const clash = part === "rate" ? ["reads", "writes"].find((p) => seen.has(p)) : part === "reads" || part === "writes" ? seen.has("rate") ? part : void 0 : void 0;
       if (clash) {
-        this.error(`A rate sets both reads and writes; give either a rate or reads and writes for '${id.value}'`, this.locOf(t, line));
+        this.error(`A rate sets both reads and writes; give either a rate or reads and writes for '${id.value}'`, this.locOf(t, line2));
         return;
       }
       if (seen.has(part)) {
-        this.error(`${part[0].toUpperCase()}${part.slice(1)} is given twice for '${id.value}'`, this.locOf(t, line));
+        this.error(`${part[0].toUpperCase()}${part.slice(1)} is given twice for '${id.value}'`, this.locOf(t, line2));
         return;
       }
       seen.add(part);
     }
-    const idLoc = this.locOf(id, line);
+    const idLoc = this.locOf(id, line2);
     if (seen.size === 0) {
       this.warning(`Capacity line for '${id.value}' overrides nothing; add ${CAPACITY_PARTS}`, idLoc);
       return;
@@ -3787,36 +3787,36 @@ var Parser = class _Parser {
     }
   }
   /** `entity Url [in db] ["description"] {` */
-  parseEntity(tokens, line) {
+  parseEntity(tokens, line2) {
     const name = tokens[1];
     let i = 2;
     let store;
     if (isWord(tokens[i], "in")) {
       const id = tokens[i + 1];
       if (id?.kind !== "ident") {
-        this.error("Expected the id of the node that stores the entity after in, e.g. entity Url in db {", this.locOf(id ?? tokens[i], line));
-        this.skipSection("entity", tokens, line);
+        this.error("Expected the id of the node that stores the entity after in, e.g. entity Url in db {", this.locOf(id ?? tokens[i], line2));
+        this.skipSection("entity", tokens, line2);
         return;
       }
-      store = { id: id.value, loc: this.locOf(id, line) };
+      store = { id: id.value, loc: this.locOf(id, line2) };
       i += 2;
     }
     const description = tokens[i]?.kind === "string" ? tokens[i++].value : void 0;
     if (tokens[i]?.kind !== "lbrace") {
-      this.error('Expected { after the entity header, e.g. entity Url in db "Short codes" {', this.locOf(tokens[i] ?? tokens[i - 1], line));
-      this.skipSection("entity", tokens, line);
+      this.error('Expected { after the entity header, e.g. entity Url in db "Short codes" {', this.locOf(tokens[i] ?? tokens[i - 1], line2));
+      this.skipSection("entity", tokens, line2);
       return;
     }
-    this.expectEnd(tokens, i + 1, line);
-    const loc = this.locOf(name, line);
+    this.expectEnd(tokens, i + 1, line2);
+    const loc = this.locOf(name, line2);
     const entity = { name: name.value, ...store ? { store: store.id } : {}, ...description !== void 0 ? { description } : {}, fields: [], loc };
     const first = this.entities.find((e) => e.name === entity.name);
     if (first) {
       this.error(`Duplicate entity '${entity.name}' (first ${this.where(first.loc, loc)})`, loc);
-      this.skipSection("entity", tokens, line);
+      this.skipSection("entity", tokens, line2);
       return;
     }
-    if (!this.openSection("entity", tokens, line, { entity })) return;
+    if (!this.openSection("entity", tokens, line2, { entity })) return;
     this.entities.push(entity);
     if (store) {
       const { id, loc: storeLoc } = store;
@@ -3829,147 +3829,147 @@ var Parser = class _Parser {
     }
   }
   /** `code string key`: a field name, a type and flags. */
-  parseField(entity, tokens, line) {
+  parseField(entity, tokens, line2) {
     const [name, type] = tokens;
     if (name.kind !== "ident") {
-      this.error("Expected a field: name type [key] [index] [unique] [optional], e.g. code string key", this.locOf(name, line));
+      this.error("Expected a field: name type [key] [index] [unique] [optional], e.g. code string key", this.locOf(name, line2));
       return;
     }
     if (type?.kind !== "ident") {
-      this.error(`Expected a type after '${name.value}', e.g. ${name.value} string`, this.locOf(type ?? name, line));
+      this.error(`Expected a type after '${name.value}', e.g. ${name.value} string`, this.locOf(type ?? name, line2));
       return;
     }
     const flags = [];
     for (const t of tokens.slice(2)) {
       if (t.kind !== "ident" || !FIELD_FLAGS.includes(t.value)) {
-        this.error(`Unknown field flag ${describe(t)}; use key, index, unique or optional`, this.locOf(t, line));
+        this.error(`Unknown field flag ${describe(t)}; use key, index, unique or optional`, this.locOf(t, line2));
         return;
       }
       if (flags.includes(t.value)) {
-        this.error(`Flag '${t.value}' is given twice`, this.locOf(t, line));
+        this.error(`Flag '${t.value}' is given twice`, this.locOf(t, line2));
         return;
       }
       flags.push(t.value);
     }
     if (entity.fields.some((f) => f.name === name.value)) {
-      this.error(`Duplicate field '${name.value}' in entity '${entity.name}'`, this.locOf(name, line));
+      this.error(`Duplicate field '${name.value}' in entity '${entity.name}'`, this.locOf(name, line2));
       return;
     }
     entity.fields.push({ name: name.value, type: type.value, flags });
   }
   /** `decision "Title" because "Reason"`, or `decision "Title" {` with because / rejected lines. */
-  parseDecision(tokens, line) {
+  parseDecision(tokens, line2) {
     const title = tokens[1];
-    const decision = { title: title.value, rejected: [], loc: this.locOf(title, line) };
+    const decision = { title: title.value, rejected: [], loc: this.locOf(title, line2) };
     const third = tokens[2];
     if (third.kind === "lbrace") {
-      this.expectEnd(tokens, 3, line);
-      if (this.openSection("decision", tokens, line, { decision })) this.decisions.push(decision);
+      this.expectEnd(tokens, 3, line2);
+      if (this.openSection("decision", tokens, line2, { decision })) this.decisions.push(decision);
       return;
     }
     if (!isWord(third, "because")) {
-      this.error(`Expected because "reason" or { after the decision title, not ${describe(third)}`, this.locOf(third, line));
-      this.skipSection("decision", tokens, line);
+      this.error(`Expected because "reason" or { after the decision title, not ${describe(third)}`, this.locOf(third, line2));
+      this.skipSection("decision", tokens, line2);
       return;
     }
     if (this.stack.length > 0) {
-      this.error("decision is only allowed at the top level", this.locOf(tokens[0], line));
+      this.error("decision is only allowed at the top level", this.locOf(tokens[0], line2));
       return;
     }
     const reason = tokens[3];
     if (reason?.kind !== "string") {
-      this.error("Expected the reason in quotes after because", this.locOf(reason ?? third, line));
+      this.error("Expected the reason in quotes after because", this.locOf(reason ?? third, line2));
       return;
     }
-    if (!this.expectEnd(tokens, 4, line)) return;
+    if (!this.expectEnd(tokens, 4, line2)) return;
     decision.because = reason.value;
     this.decisions.push(decision);
   }
-  parseDecisionLine(decision, tokens, line) {
+  parseDecisionLine(decision, tokens, line2) {
     const [word] = tokens;
     if (isWord(word, "because")) {
       if (tokens[1]?.kind !== "string") {
-        this.error("Expected the reason in quotes after because", this.locOf(tokens[1] ?? word, line));
+        this.error("Expected the reason in quotes after because", this.locOf(tokens[1] ?? word, line2));
         return;
       }
       if (decision.because !== void 0) {
-        this.error('A decision has one because; list the other options with rejected "option" "reason"', this.locOf(word, line));
+        this.error('A decision has one because; list the other options with rejected "option" "reason"', this.locOf(word, line2));
         return;
       }
-      if (this.expectEnd(tokens, 2, line)) decision.because = tokens[1].value;
+      if (this.expectEnd(tokens, 2, line2)) decision.because = tokens[1].value;
       return;
     }
     if (isWord(word, "rejected")) {
       const [, option, reason] = tokens;
       if (option?.kind !== "string" || reason?.kind !== "string") {
         const bad = option?.kind !== "string" ? option : reason;
-        this.error('Expected rejected "option" "reason"', this.locOf(bad ?? tokens[tokens.length - 1], line));
+        this.error('Expected rejected "option" "reason"', this.locOf(bad ?? tokens[tokens.length - 1], line2));
         return;
       }
-      if (this.expectEnd(tokens, 3, line)) decision.rejected.push({ option: option.value, reason: reason.value });
+      if (this.expectEnd(tokens, 3, line2)) decision.rejected.push({ option: option.value, reason: reason.value });
       return;
     }
-    this.error('Expected because "reason" or rejected "option" "reason"', this.locOf(word, line));
+    this.error('Expected because "reason" or rejected "option" "reason"', this.locOf(word, line2));
   }
   /** `test "Name" {` */
-  parseTest(tokens, line) {
+  parseTest(tokens, line2) {
     const name = tokens[1];
-    const loc = this.locOf(name, line);
+    const loc = this.locOf(name, line2);
     if (tokens[2].kind !== "lbrace") {
-      this.error(`Expected { after the test name, not ${describe(tokens[2])}`, this.locOf(tokens[2], line));
-      this.skipSection("test", tokens, line);
+      this.error(`Expected { after the test name, not ${describe(tokens[2])}`, this.locOf(tokens[2], line2));
+      this.skipSection("test", tokens, line2);
       return;
     }
-    this.expectEnd(tokens, 3, line);
+    this.expectEnd(tokens, 3, line2);
     const first = this.tests.find((t) => t.name === name.value);
     if (first) {
       this.error(`Duplicate test '${name.value}' (first ${this.where(first.loc, loc)})`, loc);
-      this.skipSection("test", tokens, line);
+      this.skipSection("test", tokens, line2);
       return;
     }
     const test = { name: name.value, assertions: [], loc };
-    if (this.openSection("test", tokens, line, { test })) this.tests.push(test);
+    if (this.openSection("test", tokens, line2, { test })) this.tests.push(test);
   }
   /** `whatif "Name" {` */
-  parseWhatIf(tokens, line) {
+  parseWhatIf(tokens, line2) {
     const name = tokens[1];
-    const loc = this.locOf(name, line);
+    const loc = this.locOf(name, line2);
     if (tokens[2].kind !== "lbrace") {
-      this.error(`Expected { after the what-if name, not ${describe(tokens[2])}`, this.locOf(tokens[2], line));
-      this.skipSection("whatif", tokens, line);
+      this.error(`Expected { after the what-if name, not ${describe(tokens[2])}`, this.locOf(tokens[2], line2));
+      this.skipSection("whatif", tokens, line2);
       return;
     }
-    this.expectEnd(tokens, 3, line);
+    this.expectEnd(tokens, 3, line2);
     const first = this.whatifs.find((w) => w.name === name.value);
     if (first) {
       this.error(`Duplicate what-if '${name.value}' (first ${this.where(first.loc, loc)})`, loc);
-      this.skipSection("whatif", tokens, line);
+      this.skipSection("whatif", tokens, line2);
       return;
     }
     const whatif = { name: name.value, changes: [], loc };
-    if (this.openSection("whatif", tokens, line, { whatif })) this.whatifs.push(whatif);
+    if (this.openSection("whatif", tokens, line2, { whatif })) this.whatifs.push(whatif);
   }
   /** One line of a what-if: `traffic "Use case" x3`, `traffic "Use case" 50k rps`, `fail <node>` or `<node> x4`. */
-  parseWhatIfLine(whatif, tokens, line) {
+  parseWhatIfLine(whatif, tokens, line2) {
     const [first, second, third] = tokens;
-    const loc = this.lineLoc(tokens, line);
+    const loc = this.lineLoc(tokens, line2);
     const help = 'Expected a what-if change: traffic "Use case" x3, traffic "Use case" 50k rps, fail <node>, <node> x4, <node> hit 40% or <node> errors 20%';
     const checkNode = (id) => {
-      const idLoc = this.locOf(id, line);
+      const idLoc = this.locOf(id, line2);
       this.deferred.push(() => {
         if (!this.nodes.has(id.value)) this.warning(`Unknown node '${id.value}' in what-if`, idLoc);
       });
     };
     if (first.kind === "ident" && (second?.kind === "ident" && REPLICAS.test(second.value) || second?.kind === "const")) {
-      if (!this.expectEnd(tokens, 2, line)) return;
-      const replicas = second.kind === "const" ? this.replicasOf(second, line, "A what-if needs a whole number of replicas, at least x1; to take a node down, write fail <node>") : Number(REPLICAS.exec(second.value)[1]);
+      if (!this.expectEnd(tokens, 2, line2)) return;
+      const replicas = second.kind === "const" ? this.replicasOf(second, line2, "A what-if needs a whole number of replicas, at least x1; to take a node down, write fail <node>") : Number(REPLICAS.exec(second.value)[1]);
       if (replicas === void 0) return;
       if (replicas < 1) {
-        this.error("A what-if needs at least one replica, x1; to take a node down, write fail <node>", this.locOf(second, line));
+        this.error("A what-if needs at least one replica, x1; to take a node down, write fail <node>", this.locOf(second, line2));
         return;
       }
       if (whatif.changes.some((c) => c.kind === "replicas" && c.node === first.value)) {
-        this.error(`Replicas of '${first.value}' are set twice in this what-if`, this.locOf(first, line));
+        this.error(`Replicas of '${first.value}' are set twice in this what-if`, this.locOf(first, line2));
         return;
       }
       checkNode(first);
@@ -3977,18 +3977,18 @@ var Parser = class _Parser {
       return;
     }
     if (first.kind === "ident" && second?.kind === "ident" && MULTIPLIER.test(second.value)) {
-      this.error(`Replicas are a whole number, e.g. ${first.value} x4`, this.locOf(second, line));
+      this.error(`Replicas are a whole number, e.g. ${first.value} x4`, this.locOf(second, line2));
       return;
     }
     if (first.kind === "ident" && isWord(second, "hit") && tokens.length > 2) {
-      const percent = this.quantityOf(third, "%", second, line);
-      if (percent === void 0 || !this.expectEnd(tokens, 3, line)) return;
+      const percent = this.quantityOf(third, "%", second, line2);
+      if (percent === void 0 || !this.expectEnd(tokens, 3, line2)) return;
       if (percent > 100) {
-        this.error("A hit rate cannot be more than 100%", this.locOf(third, line));
+        this.error("A hit rate cannot be more than 100%", this.locOf(third, line2));
         return;
       }
       if (whatif.changes.some((c) => c.kind === "hit" && c.node === first.value)) {
-        this.error(`The hit rate of '${first.value}' is set twice in this what-if`, this.locOf(first, line));
+        this.error(`The hit rate of '${first.value}' is set twice in this what-if`, this.locOf(first, line2));
         return;
       }
       checkNode(first);
@@ -3996,14 +3996,14 @@ var Parser = class _Parser {
       return;
     }
     if (first.kind === "ident" && isWord(second, "errors") && tokens.length > 2) {
-      const percent = this.quantityOf(third, "%", second, line);
-      if (percent === void 0 || !this.expectEnd(tokens, 3, line)) return;
+      const percent = this.quantityOf(third, "%", second, line2);
+      if (percent === void 0 || !this.expectEnd(tokens, 3, line2)) return;
       if (percent > 100) {
-        this.error("An error rate cannot be more than 100%", this.locOf(third, line));
+        this.error("An error rate cannot be more than 100%", this.locOf(third, line2));
         return;
       }
       if (whatif.changes.some((c) => c.kind === "errors" && c.node === first.value)) {
-        this.error(`The error rate of '${first.value}' is set twice in this what-if`, this.locOf(first, line));
+        this.error(`The error rate of '${first.value}' is set twice in this what-if`, this.locOf(first, line2));
         return;
       }
       checkNode(first);
@@ -4012,12 +4012,12 @@ var Parser = class _Parser {
     }
     if (isWord(first, "fail")) {
       if (second?.kind !== "ident") {
-        this.error("Expected the node that fails, e.g. fail cache", this.locOf(second ?? first, line));
+        this.error("Expected the node that fails, e.g. fail cache", this.locOf(second ?? first, line2));
         return;
       }
-      if (!this.expectEnd(tokens, 2, line)) return;
+      if (!this.expectEnd(tokens, 2, line2)) return;
       if (whatif.changes.some((c) => c.kind === "fail" && c.node === second.value)) {
-        this.error(`'${second.value}' fails twice in this what-if`, this.locOf(second, line));
+        this.error(`'${second.value}' fails twice in this what-if`, this.locOf(second, line2));
         return;
       }
       checkNode(second);
@@ -4026,7 +4026,7 @@ var Parser = class _Parser {
     }
     if (isWord(first, "traffic")) {
       if (second?.kind !== "string") {
-        this.error('Expected a use case name in quotes, e.g. traffic "Checkout" x3 or traffic "Checkout" 50k rps', this.locOf(second ?? first, line));
+        this.error('Expected a use case name in quotes, e.g. traffic "Checkout" x3 or traffic "Checkout" 50k rps', this.locOf(second ?? first, line2));
         return;
       }
       let change;
@@ -4034,45 +4034,45 @@ var Parser = class _Parser {
         const multiply = Number(MULTIPLIER.exec(third.value)[1]);
         change = { kind: "traffic", useCase: second.value, multiply, loc };
       } else if (third?.kind === "const" && third.value.startsWith("x")) {
-        const multiply = this.countOf(third, line);
+        const multiply = this.countOf(third, line2);
         if (multiply === void 0) return;
         change = { kind: "traffic", useCase: second.value, multiply, loc };
       } else {
-        const rps = this.quantityOf(third, "rps", second, line);
+        const rps = this.quantityOf(third, "rps", second, line2);
         if (rps === void 0) return;
         change = { kind: "traffic", useCase: second.value, rps, loc };
       }
-      if (!this.expectEnd(tokens, 3, line)) return;
+      if (!this.expectEnd(tokens, 3, line2)) return;
       if (whatif.changes.some((c) => c.kind === "traffic" && c.useCase === second.value)) {
-        this.error(`Traffic of '${second.value}' is changed twice in this what-if`, this.locOf(second, line));
+        this.error(`Traffic of '${second.value}' is changed twice in this what-if`, this.locOf(second, line2));
         return;
       }
-      const nameLoc = this.locOf(second, line);
+      const nameLoc = this.locOf(second, line2);
       this.deferred.push(() => this.checkUseCase(second.value, nameLoc));
       whatif.changes.push(change);
       return;
     }
-    this.error(help, this.locOf(first, line));
+    this.error(help, this.locOf(first, line2));
   }
   /** One assertion line of a test (docs/design/hld-and-practice.md §1.9). */
-  parseAssertion(tokens, line) {
-    const loc = this.lineLoc(tokens, line);
+  parseAssertion(tokens, line2) {
+    const loc = this.lineLoc(tokens, line2);
     const [first] = tokens;
     const selectors = [];
     const selector = (i2) => {
-      const s = this.parseSelector(tokens, i2, line);
+      const s = this.parseSelector(tokens, i2, line2);
       if (s) selectors.push(s);
       return s;
     };
     const done = (assertion3, end) => {
-      if (!this.expectEnd(tokens, end, line)) return void 0;
+      if (!this.expectEnd(tokens, end, line2)) return void 0;
       selectors.forEach((s) => this.checkSelectorLater(s));
       return assertion3;
     };
     const expectWords = (i2, words, example) => {
       for (const [k, w] of words.entries()) {
         if (!isWord(tokens[i2 + k], w)) {
-          this.error(`Expected '${w}' here, e.g. ${example}`, this.locOf(tokens[i2 + k] ?? tokens[tokens.length - 1], line));
+          this.error(`Expected '${w}' here, e.g. ${example}`, this.locOf(tokens[i2 + k] ?? tokens[tokens.length - 1], line2));
           return false;
         }
       }
@@ -4089,10 +4089,10 @@ var Parser = class _Parser {
     }
     if (first.kind !== "string") {
       if (first.kind !== "ident" && first.kind !== "tech") {
-        this.error(ASSERTION_HELP, this.locOf(first, line));
+        this.error(ASSERTION_HELP, this.locOf(first, line2));
         return;
       }
-      const inUseCase = isWord(first, "in") && tokens[1]?.kind === "string" ? { name: tokens[1].value, loc: this.locOf(tokens[1], line) } : void 0;
+      const inUseCase = isWord(first, "in") && tokens[1]?.kind === "string" ? { name: tokens[1].value, loc: this.locOf(tokens[1], line2) } : void 0;
       const target = selector(inUseCase ? 2 : 0);
       if (!target) return;
       const word = tokens[target.next];
@@ -4109,34 +4109,34 @@ var Parser = class _Parser {
         return assertion3;
       }
       if (inUseCase) {
-        this.error(`Expected calls or never calls here, e.g. in "${inUseCase.name}" api calls db`, this.locOf(word ?? tokens[tokens.length - 1], line));
+        this.error(`Expected calls or never calls here, e.g. in "${inUseCase.name}" api calls db`, this.locOf(word ?? tokens[tokens.length - 1], line2));
         return;
       }
       if (!isWord(word, "has")) {
-        this.error(ASSERTION_HELP, this.locOf(word ?? first, line));
+        this.error(ASSERTION_HELP, this.locOf(word ?? first, line2));
         return;
       }
       const i2 = target.next + 1;
       const example = "api has replicas >= 2";
-      if (!expectWords(i2, ["replicas"], example) || !this.expectOp(tokens, i2 + 1, [">="], example, line)) return;
+      if (!expectWords(i2, ["replicas"], example) || !this.expectOp(tokens, i2 + 1, [">="], example, line2)) return;
       const n = tokens[i2 + 2];
       if (n?.kind !== "number" || Number(n.value) < 1) {
-        this.error("Expected a whole number of replicas, at least 1", this.locOf(n ?? tokens[i2 + 1], line));
+        this.error("Expected a whole number of replicas, at least 1", this.locOf(n ?? tokens[i2 + 1], line2));
         return;
       }
       return done({ kind: "replicas", target: target.selector, min: Number(n.value), loc }, i2 + 3);
     }
     const useCase = first.value;
-    const useCaseLoc = this.locOf(first, line);
+    const useCaseLoc = this.locOf(first, line2);
     let i = 1;
     let scenario;
     if (isWord(tokens[i], "scenario")) {
       const s = tokens[i + 1];
       if (s?.kind !== "string") {
-        this.error("Expected a scenario name in quotes after scenario", this.locOf(s ?? tokens[i], line));
+        this.error("Expected a scenario name in quotes after scenario", this.locOf(s ?? tokens[i], line2));
         return;
       }
-      scenario = { name: s.value, loc: this.locOf(s, line) };
+      scenario = { name: s.value, loc: this.locOf(s, line2) };
       i += 2;
     }
     const withScenario = scenario ? { scenario: scenario.name } : {};
@@ -4151,7 +4151,7 @@ var Parser = class _Parser {
       const nameAt = (k, what, example2) => {
         const t = tokens[k];
         if (t?.kind === "ident" || t?.kind === "string") return t.value;
-        this.error(`Expected ${what} here, e.g. ${example2}`, this.locOf(t ?? tokens[tokens.length - 1], line));
+        this.error(`Expected ${what} here, e.g. ${example2}`, this.locOf(t ?? tokens[tokens.length - 1], line2));
         return void 0;
       };
       if (isWord(word, "uses")) {
@@ -4170,7 +4170,7 @@ var Parser = class _Parser {
         return target2 && { target: target2, match: { header }, next: target2.next };
       }
       if (!isWord(word, "calls")) {
-        this.error(`Expected calls, uses or sends header here, e.g. "${useCase}" never calls any database`, this.locOf(word ?? tokens[tokens.length - 1], line));
+        this.error(`Expected calls, uses or sends header here, e.g. "${useCase}" never calls any database`, this.locOf(word ?? tokens[tokens.length - 1], line2));
         return;
       }
       const target = selector(j + 1);
@@ -4179,11 +4179,11 @@ var Parser = class _Parser {
       const [method, path] = [tokens[target.next + 1], tokens[target.next + 2]];
       const example = `"${useCase}" calls api with GET /urls/{code}`;
       if (method?.kind !== "ident" || !HTTP_METHODS.includes(method.value.toUpperCase())) {
-        this.error(`Expected an HTTP method after with (${HTTP_METHODS.join(", ")}), e.g. ${example}`, this.locOf(method ?? tokens[target.next], line));
+        this.error(`Expected an HTTP method after with (${HTTP_METHODS.join(", ")}), e.g. ${example}`, this.locOf(method ?? tokens[target.next], line2));
         return;
       }
       if (path?.kind !== "path") {
-        this.error(`Expected a path starting with / after ${method.value}, e.g. ${example}`, this.locOf(path ?? method, line));
+        this.error(`Expected a path starting with / after ${method.value}, e.g. ${example}`, this.locOf(path ?? method, line2));
         return;
       }
       return { target, match: { method: method.value.toUpperCase(), path: path.value }, next: target.next + 3 };
@@ -4233,7 +4233,7 @@ var Parser = class _Parser {
     } else if (isWord(verb, "responds")) {
       const status = tokens[i + 1];
       if (!status || status.kind !== "number" && status.kind !== "quantity" || !/^[1-5](\d\d|xx)$/.test(status.value)) {
-        this.error("Expected a status code or class after responds, e.g. 201 or 4xx", this.locOf(status ?? verb, line));
+        this.error("Expected a status code or class after responds, e.g. 201 or 4xx", this.locOf(status ?? verb, line2));
         return;
       }
       assertion2 = done({ kind: "responds", useCase, ...withScenario, status: status.value, loc }, i + 2);
@@ -4241,7 +4241,7 @@ var Parser = class _Parser {
       if (!wholeUseCase("has scenario") || !expectWords(i + 1, ["scenario"], `"${useCase}" has scenario "Not found"`)) return;
       const name = tokens[i + 2];
       if (name?.kind !== "string") {
-        this.error("Expected a scenario name in quotes after has scenario", this.locOf(name ?? tokens[i + 1], line));
+        this.error("Expected a scenario name in quotes after has scenario", this.locOf(name ?? tokens[i + 1], line2));
         return;
       }
       assertion2 = done({ kind: "hasScenario", useCase, scenario: name.value, loc }, i + 3);
@@ -4251,7 +4251,7 @@ var Parser = class _Parser {
       if (!target) return;
       assertion2 = done({ kind: "handlesFailure", useCase, target: target.selector, loc }, target.next);
     } else {
-      this.error(`Expected ${ASSERTION_VERBS} after "${useCase}"`, this.locOf(verb ?? first, line));
+      this.error(`Expected ${ASSERTION_VERBS} after "${useCase}"`, this.locOf(verb ?? first, line2));
       return;
     }
     if (assertion2) {
@@ -4263,11 +4263,11 @@ var Parser = class _Parser {
     return assertion2;
   }
   /** A selector starting at `tokens[i]`: one or more of node id, `[Tech]`, `any <kind>`, `any strong store`, joined by `or`. */
-  parseSelector(tokens, i, line) {
+  parseSelector(tokens, i, line2) {
     const atoms = [];
     let next = i;
     for (; ; ) {
-      const atom2 = this.parseSelectorAtom(tokens, next, line);
+      const atom2 = this.parseSelectorAtom(tokens, next, line2);
       if (!atom2) return void 0;
       atoms.push(atom2);
       next = atom2.next;
@@ -4278,29 +4278,29 @@ var Parser = class _Parser {
     return { selector, next, atoms };
   }
   /** One node id, `[Tech]`, `any <kind>` or `any strong|eventual store` at `tokens[i]`. */
-  parseSelectorAtom(tokens, i, line) {
+  parseSelectorAtom(tokens, i, line2) {
     const t = tokens[i];
     if (t?.kind === "tech") {
       const tech = findTech(t.value)?.techStack ?? t.value;
-      return { selector: { tech }, next: i + 1, token: t, loc: this.locOf(t, line) };
+      return { selector: { tech }, next: i + 1, token: t, loc: this.locOf(t, line2) };
     }
     if (isWord(t, "any")) {
       const kind = tokens[i + 1];
       if (isWord(kind, "strong") || isWord(kind, "eventual")) {
         if (!isWord(tokens[i + 2], "store")) {
-          this.error(`Expected 'store' here, e.g. any ${kind.value} store`, this.locOf(tokens[i + 2] ?? kind, line));
+          this.error(`Expected 'store' here, e.g. any ${kind.value} store`, this.locOf(tokens[i + 2] ?? kind, line2));
           return void 0;
         }
-        return { selector: { consistency: kind.value }, next: i + 3, token: t, loc: this.locOf(t, line) };
+        return { selector: { consistency: kind.value }, next: i + 3, token: t, loc: this.locOf(t, line2) };
       }
       if (kind?.kind !== "ident" || !isKind(kind.value)) {
-        this.error(`Expected a kind after any: ${KINDS.join(", ")}, or strong store / eventual store`, this.locOf(kind ?? t, line));
+        this.error(`Expected a kind after any: ${KINDS.join(", ")}, or strong store / eventual store`, this.locOf(kind ?? t, line2));
         return void 0;
       }
-      return { selector: { kind: kind.value }, next: i + 2, token: t, loc: this.locOf(t, line) };
+      return { selector: { kind: kind.value }, next: i + 2, token: t, loc: this.locOf(t, line2) };
     }
-    if (t?.kind === "ident") return { selector: { node: t.value }, next: i + 1, token: t, loc: this.locOf(t, line) };
-    this.error(`Expected a node id, [Tech] or any <kind>${t ? `, not ${describe(t)}` : ""}`, this.locOf(t ?? tokens[tokens.length - 1], line));
+    if (t?.kind === "ident") return { selector: { node: t.value }, next: i + 1, token: t, loc: this.locOf(t, line2) };
+    this.error(`Expected a node id, [Tech] or any <kind>${t ? `, not ${describe(t)}` : ""}`, this.locOf(t ?? tokens[tokens.length - 1], line2));
     return void 0;
   }
   /** Warns about a selector naming a tech stack that does not exist, and (once every file is read) a node that does not. */
@@ -4331,23 +4331,23 @@ var Parser = class _Parser {
     this.warning(`Use case '${useCase.name}' has no scenario '${name}'; its scenarios are ${names}`, loc);
   }
   /** The value of a quantity token in `unit`, or undefined after reporting what is wrong. `after` locates a missing token. */
-  quantityOf(token, unit, after2, line) {
+  quantityOf(token, unit, after2, line2) {
     const expected = UNIT_EXAMPLES[unit];
     if (isConstUse(token)) {
-      const c = this.constantOf(token, line);
+      const c = this.constantOf(token, line2);
       if (!c) return void 0;
       if (c.unit !== unit) {
-        this.error(`'${token.value}' is ${c.text}, ${kindName(c.unit)}; expected ${expected}`, this.locOf(token, line));
+        this.error(`'${token.value}' is ${c.text}, ${kindName(c.unit)}; expected ${expected}`, this.locOf(token, line2));
         return void 0;
       }
       return c.value;
     }
     if (token?.kind !== "quantity" && token?.kind !== "number") {
-      this.error(`Expected ${expected}${token ? `, not ${describe(token)}` : ""}`, this.locOf(token ?? after2, line));
+      this.error(`Expected ${expected}${token ? `, not ${describe(token)}` : ""}`, this.locOf(token ?? after2, line2));
       return void 0;
     }
-    const loc = this.locOf(token, line);
-    const written = this.lines[line - 1].slice(token.col - 1, token.col - 1 + token.length);
+    const loc = this.locOf(token, line2);
+    const written = this.lines[line2 - 1].slice(token.col - 1, token.col - 1 + token.length);
     const q = parseQuantity(written);
     if ("error" in q) {
       this.error(q.error, loc);
@@ -4360,20 +4360,20 @@ var Parser = class _Parser {
     return q.value;
   }
   /** `let name = value`, read before the rest of its file. */
-  defineConstant(tokens, line) {
+  defineConstant(tokens, line2) {
     const [, name, eq, value] = tokens;
     if (value?.kind !== "quantity" && value?.kind !== "number") {
-      this.error(`Expected a number or quantity after =, e.g. let ${name.value} = 120k rps${value ? `, not ${describe(value)}` : ""}`, this.locOf(value ?? eq, line));
+      this.error(`Expected a number or quantity after =, e.g. let ${name.value} = 120k rps${value ? `, not ${describe(value)}` : ""}`, this.locOf(value ?? eq, line2));
       return;
     }
-    if (!this.expectEnd(tokens, 4, line)) return;
-    const text = this.lines[line - 1].slice(value.col - 1, value.col - 1 + value.length);
+    if (!this.expectEnd(tokens, 4, line2)) return;
+    const text = this.lines[line2 - 1].slice(value.col - 1, value.col - 1 + value.length);
     const q = parseQuantity(text);
     if ("error" in q) {
-      this.error(q.error, this.locOf(value, line));
+      this.error(q.error, this.locOf(value, line2));
       return;
     }
-    const loc = this.locOf(name, line);
+    const loc = this.locOf(name, line2);
     const first = this.constants.get(name.value);
     if (first) {
       this.error(`Constant '${name.value}' is defined twice (first ${this.where(first.loc, loc)})`, loc);
@@ -4382,42 +4382,42 @@ var Parser = class _Parser {
     this.constants.set(name.value, { name: name.value, value: q.value, ...q.unit ? { unit: q.unit } : {}, text: text.replace(/[ \t]+/g, " "), loc });
   }
   /** The constant `$name` or `x$name` names, or undefined after reporting that there is none. */
-  constantOf(token, line) {
+  constantOf(token, line2) {
     const name = token.value.replace(/^x?\$/, "");
     const found = this.constants.get(name);
     if (found) return found;
     const near = [...this.constants.keys()].find((k) => editDistance2(k, name) <= 2);
-    this.error(`Unknown constant '$${name}'${near ? `; did you mean '$${near}'?` : `; define it with let ${name} = \u2026`}`, this.locOf(token, line));
+    this.error(`Unknown constant '$${name}'${near ? `; did you mean '$${near}'?` : `; define it with let ${name} = \u2026`}`, this.locOf(token, line2));
     return void 0;
   }
   /** The value of a constant used as a count (`x$n`, `shards $n`): a plain number. */
-  countOf(token, line) {
-    const c = this.constantOf(token, line);
+  countOf(token, line2) {
+    const c = this.constantOf(token, line2);
     if (!c) return void 0;
     if (c.unit !== void 0) {
-      this.error(`'${token.value}' needs a plain number, as in let ${c.name} = 3; '$${c.name}' is ${c.text}, ${kindName(c.unit)}`, this.locOf(token, line));
+      this.error(`'${token.value}' needs a plain number, as in let ${c.name} = 3; '$${c.name}' is ${c.text}, ${kindName(c.unit)}`, this.locOf(token, line2));
       return void 0;
     }
     return c.value;
   }
   /** `x$n` after a node: its replicas, a whole number of at least 1. */
-  replicasOf(token, line, wrong) {
+  replicasOf(token, line2, wrong) {
     if (!token.value.startsWith("x")) {
-      this.error(`Write x${token.value} for replicas`, this.locOf(token, line));
+      this.error(`Write x${token.value} for replicas`, this.locOf(token, line2));
       return void 0;
     }
-    const n = this.countOf(token, line);
+    const n = this.countOf(token, line2);
     if (n === void 0) return void 0;
     if (!Number.isInteger(n) || n < 1) {
-      this.error(`${wrong} ('${token.value}' is ${n})`, this.locOf(token, line));
+      this.error(`${wrong} ('${token.value}' is ${n})`, this.locOf(token, line2));
       return void 0;
     }
     return n;
   }
-  expectOp(tokens, i, ops, example, line) {
+  expectOp(tokens, i, ops, example, line2) {
     const t = tokens[i];
     if (t?.kind === "op" && ops.includes(t.value)) return true;
-    this.error(`Expected ${ops[0]} here, e.g. ${example}`, this.locOf(t ?? tokens[tokens.length - 1], line));
+    this.error(`Expected ${ops[0]} here, e.g. ${example}`, this.locOf(t ?? tokens[tokens.length - 1], line2));
     return false;
   }
   buildUseCase(useCase, body) {
@@ -4676,31 +4676,31 @@ var Parser = class _Parser {
     else node.inferredKind = kind;
   }
   /** `[abstract] type Name [extends Parent] {`, or a whole one-line block `… { op write APPEND }`; `at` is the name's index. */
-  parseType(tokens, at, line) {
+  parseType(tokens, at, line2) {
     const nameToken = tokens[at];
     const extendsAt = isWord(tokens[at + 1], "extends") ? at + 1 : -1;
     const parentToken = extendsAt === -1 ? void 0 : tokens[extendsAt + 1];
     const decl = {
       name: nameToken.value,
       abstract: at === 2,
-      ...parentToken && (parentToken.kind === "ident" || parentToken.kind === "tech") ? { parent: parentToken.value, parentLoc: this.locOf(parentToken, line) } : {},
+      ...parentToken && (parentToken.kind === "ident" || parentToken.kind === "tech") ? { parent: parentToken.value, parentLoc: this.locOf(parentToken, line2) } : {},
       props: {},
       ops: [],
       statuses: [],
       headers: [],
       builtin: false,
-      loc: this.locOf(nameToken, line)
+      loc: this.locOf(nameToken, line2)
     };
     const braceAt = extendsAt === -1 ? at + 1 : extendsAt + 2;
     const skip = () => {
       if (tokens[tokens.length - 1].kind === "lbrace") this.stack.push({ kind: "type", decl, discard: true, loc: decl.loc });
     };
     if (extendsAt !== -1 && decl.parent === void 0) {
-      this.error("Expected the parent type after extends, e.g. type LedgerDb extends PostgreSQL {", this.locOf(parentToken ?? tokens[extendsAt], line));
+      this.error("Expected the parent type after extends, e.g. type LedgerDb extends PostgreSQL {", this.locOf(parentToken ?? tokens[extendsAt], line2));
       return skip();
     }
     if (tokens[braceAt]?.kind !== "lbrace") {
-      this.error("Expected { after the type header, e.g. type LedgerDb extends PostgreSQL {", this.locOf(tokens[braceAt] ?? tokens[braceAt - 1], line));
+      this.error("Expected { after the type header, e.g. type LedgerDb extends PostgreSQL {", this.locOf(tokens[braceAt] ?? tokens[braceAt - 1], line2));
       return skip();
     }
     if (!decl.name.trim()) {
@@ -4708,15 +4708,15 @@ var Parser = class _Parser {
       return skip();
     }
     if (this.stack.length > 0) {
-      this.error("Declare types at the top level, not inside a block", this.locOf(tokens[0], line));
+      this.error("Declare types at the top level, not inside a block", this.locOf(tokens[0], line2));
       return skip();
     }
     const last = tokens[tokens.length - 1];
     if (last.kind === "rbrace" && tokens.length > braceAt + 1) {
       const body = tokens.slice(braceAt + 1, -1);
-      if (body.length) this.parseTypeLine(decl, body, line);
+      if (body.length) this.parseTypeLine(decl, body, line2);
     } else if (tokens.length > braceAt + 1) {
-      this.error("Expected the type body on the next lines, or on this one closed with }", this.locOf(tokens[braceAt + 1], line));
+      this.error("Expected the type body on the next lines, or on this one closed with }", this.locOf(tokens[braceAt + 1], line2));
       return skip();
     } else {
       this.stack.push({ kind: "type", decl, loc: decl.loc });
@@ -4724,9 +4724,9 @@ var Parser = class _Parser {
     this.typeDecls.push(decl);
   }
   /** One line of a type block: `kind database`, `op read SELECT`, `latencyMs 4`, … */
-  parseTypeLine(decl, tokens, line) {
+  parseTypeLine(decl, tokens, line2) {
     const [key, value] = tokens;
-    const loc = (t) => this.locOf(t ?? tokens[tokens.length - 1], line);
+    const loc = (t) => this.locOf(t ?? tokens[tokens.length - 1], line2);
     if (key.kind !== "ident") {
       this.error(`Expected a type property: ${TYPE_LINES}`, loc(key));
       return;
@@ -4737,7 +4737,7 @@ var Parser = class _Parser {
         this.error(`Expected ${example}`, loc(value ?? key));
         return void 0;
       }
-      this.expectEnd(tokens, 2, line);
+      this.expectEnd(tokens, 2, line2);
       return value.value;
     };
     switch (word) {
@@ -4764,10 +4764,10 @@ var Parser = class _Parser {
         return;
       }
       case "op":
-        this.parseTypeOp(decl, tokens, line);
+        this.parseTypeOp(decl, tokens, line2);
         return;
       case "status": {
-        const codes = this.readList(tokens, 1, line, ["number"], "status codes, e.g. status 200, 201, 404");
+        const codes = this.readList(tokens, 1, line2, ["number"], "status codes, e.g. status 200, 201, 404");
         for (const code of codes ?? []) {
           const n = Number(code.value);
           if (n < 100 || n > 599) this.error(`'${code.value}' is not an HTTP status code (100 to 599)`, loc(code));
@@ -4776,7 +4776,7 @@ var Parser = class _Parser {
         return;
       }
       case "header": {
-        const names = this.readList(tokens, 1, line, ["ident", "string"], 'header names, e.g. header Authorization, "Content-Type"');
+        const names = this.readList(tokens, 1, line2, ["ident", "string"], 'header names, e.g. header Authorization, "Content-Type"');
         for (const name of names ?? []) if (!decl.headers.some((h2) => h2.toLowerCase() === name.value.toLowerCase())) decl.headers.push(name.value);
         return;
       }
@@ -4800,7 +4800,7 @@ var Parser = class _Parser {
         this.error(`Expected ${example}`, loc(value ?? key));
         return;
       }
-      this.expectEnd(tokens, 2, line);
+      this.expectEnd(tokens, 2, line2);
       const q = parseQuantity(value.value);
       if ("error" in q) {
         this.error(q.error, loc(value));
@@ -4818,27 +4818,27 @@ var Parser = class _Parser {
     this.error(`Unknown type property '${word}'; use ${TYPE_LINES}`, loc(key));
   }
   /** `op read SELECT, Scan latency 8 cost 2`: operations with their access (read, write or forward) and optional multipliers. */
-  parseTypeOp(decl, tokens, line) {
+  parseTypeOp(decl, tokens, line2) {
     const access = tokens[1];
     if (!isWord(access, "read") && !isWord(access, "write") && !isWord(access, "forward")) {
-      this.error("Expected read, write or forward after op, e.g. op read SELECT", this.locOf(access ?? tokens[0], line));
+      this.error("Expected read, write or forward after op, e.g. op read SELECT", this.locOf(access ?? tokens[0], line2));
       return;
     }
     let end = 2;
     while (end < tokens.length && !isWord(tokens[end], "latency") && !isWord(tokens[end], "cost")) end++;
     const example = `operation names after op ${access.value}, e.g. op ${access.value} ${access.value === "read" ? "SELECT" : access.value === "forward" ? "MESSAGE" : "INSERT, UPDATE"}`;
-    const names = this.readList(tokens.slice(0, end), 2, line, ["ident", "string"], example);
+    const names = this.readList(tokens.slice(0, end), 2, line2, ["ident", "string"], example);
     if (!names) return;
     const multipliers = {};
     for (let i = end; i < tokens.length; i += 2) {
       const [word, number] = [tokens[i], tokens[i + 1]];
       if (!isWord(word, "latency") && !isWord(word, "cost")) {
-        this.error(`Unexpected ${describe(word)}; an op ends with latency <n> and cost <n>`, this.locOf(word, line));
+        this.error(`Unexpected ${describe(word)}; an op ends with latency <n> and cost <n>`, this.locOf(word, line2));
         return;
       }
       const q = number && (number.kind === "number" || number.kind === "quantity") ? parseQuantity(number.value) : void 0;
       if (!q || "error" in q || q.unit !== void 0 || q.value <= 0) {
-        this.error(`Expected a multiplier after ${word.value}, e.g. ${word.value} 2 or ${word.value} 0.5`, this.locOf(number ?? word, line));
+        this.error(`Expected a multiplier after ${word.value}, e.g. ${word.value} 2 or ${word.value} 0.5`, this.locOf(number ?? word, line2));
         return;
       }
       multipliers[word.value] = q.value;
@@ -4851,41 +4851,41 @@ var Parser = class _Parser {
     }
   }
   /** `header Authorization, Content-Type`, read from the line's text. */
-  parseHeaders(decl, text, line) {
+  parseHeaders(decl, text, line2) {
     const keyword = text.indexOf("header");
     const start2 = keyword + "header".length;
     const body = stripTrailingComment(text.slice(start2));
     if (!body.trim()) {
-      this.error("Expected header names, e.g. header Authorization, Content-Type", { line, col: keyword + 1, length: 6, ...this.fileField() });
+      this.error("Expected header names, e.g. header Authorization, Content-Type", { line: line2, col: keyword + 1, length: 6, ...this.fileField() });
       return;
     }
     let col = start2 + 1;
     for (const part of body.split(",")) {
       const raw = part.trim();
       const name = raw.length > 1 && raw.startsWith('"') && raw.endsWith('"') ? raw.slice(1, -1) : raw;
-      const loc = { line, col: col + part.indexOf(raw), length: Math.max(1, raw.length), ...this.fileField() };
+      const loc = { line: line2, col: col + part.indexOf(raw), length: Math.max(1, raw.length), ...this.fileField() };
       col += part.length + 1;
       if (!HEADER_NAME.test(name)) this.error(`Expected a header name, e.g. Content-Type${raw ? `, not '${raw}'` : ""}`, loc);
       else if (!decl.headers.some((h2) => h2.toLowerCase() === name.toLowerCase())) decl.headers.push(name);
     }
   }
   /** Comma-separated tokens of `kinds` from `tokens[from]` to the end; undefined (after an error) when malformed. */
-  readList(tokens, from, line, kinds, example) {
+  readList(tokens, from, line2, kinds, example) {
     const items = [];
     for (let i = from; i < tokens.length; i += 2) {
       const [item, sep] = [tokens[i], tokens[i + 1]];
       if (!kinds.includes(item.kind)) {
-        this.error(`Expected ${example}`, this.locOf(item, line));
+        this.error(`Expected ${example}`, this.locOf(item, line2));
         return void 0;
       }
       items.push(item);
       if (sep && (sep.kind !== "comma" || i + 2 >= tokens.length)) {
-        this.error(sep.kind === "comma" ? "Expected another name after ," : `Expected , or the end of the line, not ${describe(sep)}`, this.locOf(sep, line));
+        this.error(sep.kind === "comma" ? "Expected another name after ," : `Expected , or the end of the line, not ${describe(sep)}`, this.locOf(sep, line2));
         return void 0;
       }
     }
     if (!items.length) {
-      this.error(`Expected ${example}`, this.locOf(tokens[from - 1], line));
+      this.error(`Expected ${example}`, this.locOf(tokens[from - 1], line2));
       return void 0;
     }
     return items;
@@ -4922,19 +4922,19 @@ var Parser = class _Parser {
     return this.currentUseCase() !== void 0;
   }
   /** Reports the first token from `from` on; true when there is none. */
-  expectEnd(tokens, from, line) {
+  expectEnd(tokens, from, line2) {
     if (tokens.length <= from) return true;
-    this.error(`Unexpected ${describe(tokens[from])}`, this.locOf(tokens[from], line));
+    this.error(`Unexpected ${describe(tokens[from])}`, this.locOf(tokens[from], line2));
     return false;
   }
   /** From the first token of a line to the end of its last one. */
-  lineLoc(tokens, line) {
+  lineLoc(tokens, line2) {
     const first = tokens[0];
     const last = tokens[tokens.length - 1];
-    return { line, col: first.col, length: last.col + last.length - first.col, ...this.fileField() };
+    return { line: line2, col: first.col, length: last.col + last.length - first.col, ...this.fileField() };
   }
-  locOf(token, line) {
-    return token ? { line, col: token.col, length: token.length, ...this.fileField() } : { line, col: 1, length: 1, ...this.fileField() };
+  locOf(token, line2) {
+    return token ? { line: line2, col: token.col, length: token.length, ...this.fileField() } : { line: line2, col: 1, length: 1, ...this.fileField() };
   }
   /** `{ file }` inside an imported file; nothing for the root document, whose locations stay as they were. */
   fileField() {
@@ -5668,6 +5668,10 @@ function formatRps(rps) {
   if (rps >= 1e3) return `${trim(rps / 1e3, 1)}k rps`;
   return `${trim(rps, rps < 10 ? 2 : 0)} rps`;
 }
+function formatTraffic(rps, avgRps) {
+  if (avgRps === void 0 || avgRps === rps) return formatRps(rps);
+  return `avg ${formatRps(avgRps).replace(/ rps$/, "")} \xB7 peak ${formatRps(rps)}`;
+}
 function formatMs(ms) {
   return `${trim(ms, ms < 100 ? 1 : 0)} ms`;
 }
@@ -5693,8 +5697,8 @@ function formatCount(n) {
   if (n >= 1e3) return `${trim(n / 1e3, 1)}k`;
   return trim(n, 0);
 }
-function formatUsd(usd) {
-  return `$${Math.round(usd).toLocaleString("en-US")}/month`;
+function formatUsd(usd2) {
+  return `$${Math.round(usd2).toLocaleString("en-US")}/month`;
 }
 
 // ../frontend/src/sim/overlay.ts
@@ -5753,6 +5757,9 @@ function analysisOverlay(diagram, analysis) {
   return { nodes, flows, ...critical ? { critical } : {} };
 }
 var BOTTLENECK_FROM = 0.7;
+function busiestOf(analysis) {
+  return analysis.nodes.filter((n) => works(n) && n.utilization > 0).reduce((best, n) => !best || n.utilization > best.utilization ? n : best, void 0);
+}
 function bottlenecksOf(analysis) {
   return analysis.nodes.filter((n) => works(n) && (n.saturated || n.utilization >= BOTTLENECK_FROM)).map((n) => n.id);
 }
@@ -6710,6 +6717,22 @@ function share(id, label, nodes) {
     nodes: sorted.map((n) => n.id)
   };
 }
+var byCost = (a, b) => b.costUsd - a.costUsd || a.id.localeCompare(b.id);
+function costBreakdown(diagram, analysis) {
+  const byId = new Map(diagram.nodes.map((n) => [n.id, n]));
+  const costed = analysis.nodes.filter((n) => byId.has(n.id));
+  const teams = [...new Set(costed.map((n) => byId.get(n.id).ownerTeam).filter((t) => t !== void 0))];
+  const groups = diagram.nodes.filter((n) => n.kind === "group");
+  const tags = [...new Set(diagram.nodes.map((n) => n.tag).filter((t) => t !== void 0))];
+  const unowned = costed.filter((n) => byId.get(n.id).ownerTeam === void 0 && n.costUsd > 0);
+  return {
+    teams: teams.map((team) => scopedCost(diagram, analysis, { team })).sort(byCost),
+    groups: groups.map((g) => scopedCost(diagram, analysis, { group: g.id })).filter((s) => s.nodes.length > 0).sort(byCost),
+    tags: tags.map((tag) => scopedCost(diagram, analysis, { tag })).filter((s) => s.nodes.length > 0).sort(byCost),
+    ...teams.length && unowned.length ? { unowned: share("no team", "No team", unowned) } : {},
+    totalCostUsd: analysis.totalCostUsd
+  };
+}
 
 // ../frontend/src/sim/tests.ts
 var pass = (message) => ({ passed: true, message });
@@ -7022,9 +7045,9 @@ function cost(run, max) {
   const ofWhich = egress > 0 ? `, ${formatUsd(egress)} of it egress` : "";
   const message = `Total cost is ${formatUsd(total)}${ofWhich} (limit ${formatUsd(max)})`;
   if (total <= max) return pass(message);
-  const usd = (x) => formatUsd(x).replace("/month", "");
+  const usd2 = (x) => formatUsd(x).replace("/month", "");
   const top = [...run.analysis.nodes].filter((n) => n.costUsd > 0).sort((a, b) => b.costUsd - a.costUsd).slice(0, 3).map((n) => {
-    const notes = [n.replicas > 1 ? `${n.replicas} replicas` : "", n.shards > 1 ? `${n.shards} shards` : "", n.egressUsd > 0 ? `${usd(n.egressUsd)} of it egress` : ""].filter(Boolean);
+    const notes = [n.replicas > 1 ? `${n.replicas} replicas` : "", n.shards > 1 ? `${n.shards} shards` : "", n.egressUsd > 0 ? `${usd2(n.egressUsd)} of it egress` : ""].filter(Boolean);
     return `${n.id} ${formatUsd(n.costUsd)}${notes.length ? ` (${notes.join(", ")})` : ""}`;
   });
   const egressHint = egress > total / 2 ? " Most of it is egress: serve repeated downloads from a CDN ($0.02/GB) instead of storage ($0.09/GB), or send fewer bytes." : "";
@@ -8393,21 +8416,26 @@ function paint(scene, options = {}) {
   const taken = /* @__PURE__ */ new Set();
   const owner = /* @__PURE__ */ new Map();
   scene.edges.forEach(({ path }, i) => path.cells.forEach(({ x, y }) => owner.set(`${x},${y}`, (owner.get(`${x},${y}`) ?? i) === i ? i : -1)));
+  for (const { path } of scene.edges) owner.set(`${path.cells[path.cells.length - 1].x},${path.cells[path.cells.length - 1].y}`, -1);
+  const frames = all.filter((n) => n.node.kind === "group").map((n) => n.rect);
+  const onFrame = (x, y) => frames.some((r) => y === r.y || y === r.y + r.h - 1 ? x >= r.x && x < r.x + r.w : (x === r.x || x === r.x + r.w - 1) && y > r.y && y < r.y + r.h);
   scene.edges.forEach(({ edge, path, label }, index) => {
     const load = loadOf(edge.id);
     const chip2 = loadChip(load);
-    const words = [edge.label ?? "", chip2].filter(Boolean).join(" \xB7 ");
-    if (!words || !label && !chip2) return;
-    const text = ` ${words} `;
-    const spot = (at, dy) => ({ x: Math.max(0, Math.min(grid.columns - text.length, at.x - Math.floor(text.length / 2))), y: at.y + dy });
-    const fits = ({ x: x2, y: y2 }, alone) => y2 >= 0 && y2 < grid.rows && Array.from(text, (_, i) => `${x2 + i},${y2}`).every((k, i) => !taken.has(k) && (!alone || (owner.get(k) ?? index) === index && !onCard(scene, x2 + i, y2)));
-    const plain = [0, -1, 1, -2, 2].map((d) => spot(label ?? runsOf(path)[0], d));
-    const spots = chip2 ? [...label ? plain : [], ...runsOf(path).flatMap((at) => [0, -1, 1].map((d) => spot(at, d)))] : [];
-    const { x, y } = spots.find((p) => fits(p, true)) ?? plain.find((p) => fits(p, false)) ?? plain[0];
+    const place = (words, alone) => {
+      const text = ` ${words} `;
+      const spot = (at2, dy) => ({ text, x: Math.max(0, Math.min(grid.columns - text.length, at2.x - Math.floor(text.length / 2))), y: at2.y + dy });
+      const fits = ({ x, y }) => y >= 0 && y < grid.rows && Array.from(text, (_, i) => `${x + i},${y}`).every((k, i) => !taken.has(k) && (!alone || (owner.get(k) ?? index) === index && !onCard(scene, x + i, y) && !onFrame(x + i, y)));
+      if (alone) return [...label ? [0, -1, 1].map((d) => spot(label, d)) : [], ...runsOf(path).flatMap((at2) => [0, -1, 1].map((d) => spot(at2, d)))].find(fits);
+      const plain = [0, -1, 1, -2, 2].map((d) => spot(label, d));
+      return plain.find(fits) ?? plain[0];
+    };
+    const at = (chip2 ? place([edge.label ?? "", chip2].filter(Boolean).join(" \xB7 "), true) : void 0) ?? (label && edge.label ? place(edge.label, false) : void 0);
+    if (!at) return;
     const color = play && !play.pathEdges.has(edge.id) ? COLOR.fadedMore : load?.critical ? DEFAULT : COLOR.muted;
-    for (let i = 0; i < text.length; i++) {
-      taken.add(`${x + i},${y}`);
-      if (!onCard(scene, x + i, y)) grid.set(x + i, y, text[i], color);
+    for (let i = 0; i < at.text.length; i++) {
+      taken.add(`${at.x + i},${at.y}`);
+      if (!onCard(scene, at.x + i, at.y)) grid.set(at.x + i, at.y, at.text[i], color);
     }
   });
   for (const g of all) if (g.node.kind === "group") drawGroupHeading(grid, g, play ? "path" : void 0, frameOf2(g));
@@ -8685,16 +8713,16 @@ function drawNote(grid, { node, rect }, look) {
   grid.text(rect.x + 2, rect.y + 1, fit(node.name, room), look === "off" ? COLOR.fadedMore : DEFAULT);
   const words = (node.description ?? "").split(/\s+/).filter(Boolean);
   let y = rect.y + 2;
-  let line = "";
+  let line2 = "";
   for (const word of words) {
     if (y >= rect.y + rect.h - 1) break;
-    if (line && line.length + 1 + word.length > room) {
-      grid.text(rect.x + 2, y++, line, muted);
-      line = "";
+    if (line2 && line2.length + 1 + word.length > room) {
+      grid.text(rect.x + 2, y++, line2, muted);
+      line2 = "";
     }
-    line = line ? `${line} ${word}` : fit(word, room);
+    line2 = line2 ? `${line2} ${word}` : fit(word, room);
   }
-  if (line && y < rect.y + rect.h - 1) grid.text(rect.x + 2, y, line, muted);
+  if (line2 && y < rect.y + rect.h - 1) grid.text(rect.x + 2, y, line2, muted);
 }
 function drawLegend(grid, scene) {
   const legend = scene.diagram.legend;
@@ -8786,6 +8814,316 @@ function groupByEndpoint(useCases) {
   return [...groups].map(([label, list]) => ({ label, useCases: list }));
 }
 
+// ../plugin/src/views/lines.ts
+var TONE = { good: "#22c55e", warn: "#eab308", bad: "#ef4444", ink: "#111111", pink: "#ff5da2" };
+var HEAT = { pale: "#fbe9a6", warm: "#ffd23f", hot: "#ff7ab4", over: "#ff6b61" };
+var line = (...segs) => ({ segs: segs.map((s) => typeof s === "string" ? { text: s } : s) });
+var blank = () => line("");
+var heading = (text) => line({ text, bold: true });
+var usd = (x) => formatUsd(x).replace("/month", "");
+var cut = (text, room) => text.length <= room ? text : room <= 0 ? "" : `${text.slice(0, Math.max(0, room - 1))}\u2026`;
+function table(cols, rows, width) {
+  const seg = (c) => c === void 0 ? { text: "" } : typeof c === "string" ? { text: c } : c;
+  let shown = cols.map((_, i) => i);
+  const widths = cols.map((c, i) => Math.max(c.title.length, ...rows.map((r) => seg(r[i]).text.length)));
+  const total = () => shown.reduce((sum, i) => sum + widths[i], 0) + 2 * (shown.length - 1);
+  while (total() > width) {
+    const droppable = shown.filter((i) => cols[i].drop !== void 0).sort((a, b) => cols[b].drop - cols[a].drop);
+    if (droppable.length === 0) break;
+    shown = shown.filter((i) => i !== droppable[0]);
+  }
+  const first = Math.max(6, widths[shown[0]] - Math.max(0, total() - width));
+  const w = (i) => i === shown[0] ? Math.min(widths[i], first) : widths[i];
+  const row = (cells, header = false) => ({
+    segs: shown.flatMap((i, k) => {
+      const s = cells[i];
+      const text = cut(s.text, w(i));
+      const padded = cols[i].right ? text.padStart(w(i)) : k === shown.length - 1 ? text : text.padEnd(w(i));
+      return [...k > 0 ? [{ text: "  " }] : [], header ? { text: padded, dim: true } : { ...s, text: padded }];
+    })
+  });
+  return [row(cols.map((c) => ({ text: c.title.toUpperCase() })), true), ...rows.map((r) => row(cols.map((_, i) => seg(r[i]))))];
+}
+function stats(items, width) {
+  const out = [];
+  let current = [];
+  let used = 0;
+  for (const item of items) {
+    const size = item.label.length + 1 + item.value.length;
+    if (current.length && used + 3 + size > width) {
+      out.push({ segs: current });
+      current = [];
+      used = 0;
+    }
+    if (current.length) current.push({ text: " \xB7 ", dim: true });
+    current.push({ text: `${item.label} `, dim: true }, { text: item.value, bold: true, ...item.tone ? { color: item.tone } : {} });
+    used += (used ? 3 : 0) + size;
+  }
+  if (current.length) out.push({ segs: current });
+  return out;
+}
+var splits = (n) => n.writeLoadRps > 0 && (n.writeScaling === "shards" || n.readCapacityRps !== n.writeCapacityRps);
+var utilTone = (n) => n.saturated ? TONE.bad : n.utilization > HOT ? TONE.warn : void 0;
+function utilCell(u, tone) {
+  const filled = Math.max(u > 0 ? 1 : 0, Math.min(5, Math.round(u * 5)));
+  return { text: `${"\u2501".repeat(filled)}${"\u2500".repeat(5 - filled)} ${formatPercent(u)}`, ...tone ? { color: tone } : {} };
+}
+function busiestLine(analysis) {
+  const node = busiestOf(analysis);
+  if (!node) return void 0;
+  const u = node.utilization;
+  const bottleneck = node.saturated || u >= BOTTLENECK_FROM;
+  const headroom = u >= 1 ? "past its capacity: requests are dropped" : `${(Math.floor(1 / u * 10) / 10).toFixed(1)}\xD7 headroom before it saturates`;
+  return {
+    segs: [
+      bottleneck ? { text: " BOTTLENECK ", bg: HEAT.over, color: TONE.ink, bold: true } : { text: " BUSIEST ", bold: true, dim: true },
+      { text: " " },
+      { text: node.id, bold: true },
+      { text: ` at ${formatPercent(u)}: ${headroom}.` }
+    ],
+    wrap: true
+  };
+}
+function analysisLines(diagram, analysis, width) {
+  const out = [];
+  const nodes = analysis.nodes.filter((n) => n.kind !== "client" && n.kind !== "other");
+  const saturated = nodes.filter((n) => n.saturated || n.queue !== void 0 && n.queue.utilization >= 1).length;
+  const spofs = analysis.singlePointsOfFailure;
+  out.push(
+    ...stats(
+      [
+        { label: "Total cost", value: `${formatUsd(analysis.totalCostUsd)}${analysis.totalEgressUsd > 0 ? ` (incl. ${usd(analysis.totalEgressUsd)} egress)` : ""}` },
+        { label: "Saturated", value: String(saturated), tone: saturated ? TONE.bad : TONE.good },
+        { label: "SPOFs", value: String(spofs.length), tone: spofs.length ? TONE.warn : TONE.good },
+        { label: "Use cases with traffic", value: String(analysis.useCases.filter((u) => u.rps > 0).length) }
+      ],
+      width
+    )
+  );
+  const busiest = busiestLine(analysis);
+  if (busiest) out.push(blank(), busiest);
+  if (analysis.warnings.length) out.push(blank(), ...analysis.warnings.map((w) => ({ segs: [{ text: `\u26A0 ${w}`, color: TONE.warn }], wrap: true })));
+  out.push(blank(), heading("Nodes"));
+  const rows = [];
+  for (const n of nodes) {
+    const tone = utilTone(n);
+    const name = `${n.id}${n.replicas > 1 ? ` \xD7${n.replicas}` : ""}`;
+    const cells = [
+      { text: name, bold: true },
+      splits(n) ? `R ${formatRps(n.readLoadRps).replace(" rps", "")} / ${formatRps(n.readCapacityRps)}` : `${formatRps(n.loadRps).replace(" rps", "")} / ${formatRps(n.capacityRps)}`,
+      utilCell(n.utilization, tone),
+      formatMs(n.latencyMs),
+      formatAvailability(n.availability),
+      `${usd(n.costUsd)}${n.egressUsd > 0 ? ` +${usd(n.egressUsd)}` : ""}`
+    ];
+    rows.push(cells);
+    if (splits(n)) {
+      rows.push([
+        { text: `  ${n.shards > 1 ? `${n.shards} shards` : ""}`, dim: true },
+        `W ${formatRps(n.writeLoadRps).replace(" rps", "")} / ${formatRps(n.writeCapacityRps)}`,
+        { text: `R ${formatPercent(n.readUtilization)} W ${formatPercent(n.writeUtilization)}`, dim: true }
+      ]);
+    }
+  }
+  out.push(
+    ...table(
+      [{ title: "Node" }, { title: "Load / capacity" }, { title: "Util", drop: 1 }, { title: "Latency", right: true, drop: 2 }, { title: "Avail", right: true, drop: 3 }, { title: "Cost", right: true, drop: 4 }],
+      rows,
+      width
+    )
+  );
+  const queues = analysis.nodes.filter((n) => n.queue);
+  if (queues.length) {
+    out.push(blank(), heading("Queues"));
+    out.push(
+      ...table(
+        [{ title: "Queue" }, { title: "In / drain" }, { title: "Consumers", right: true, drop: 1 }, { title: "Backlog or lag", right: true }],
+        queues.map((n) => {
+          const q = n.queue;
+          const behind = q.backlogPerHour > 0;
+          return [
+            { text: n.id, bold: true },
+            `${formatRps(q.inflowRps).replace(" rps", "")} / ${formatRps(q.drainRps)}`,
+            Number.isFinite(q.utilization) ? formatPercent(q.utilization) : "\u2014",
+            behind ? { text: `+${formatCount(q.backlogPerHour)} msgs/h`, color: TONE.bad } : `lag ${formatDuration(q.lagMs)}`
+          ];
+        }),
+        width
+      )
+    );
+  }
+  if (analysis.useCases.length) {
+    out.push(blank(), heading("Use cases"));
+    const rows2 = [];
+    for (const u of analysis.useCases) {
+      rows2.push([{ text: u.name, bold: true }, u.rps > 0 ? formatTraffic(u.rps, u.avgRps) : "no traffic", ...["p50", "p95", "p99", "p999"].map((p) => formatMs(u.percentiles[p])), formatAvailability(u.availability)]);
+      if (u.scenarios.length > 1) {
+        for (const s of u.scenarios) {
+          const dim = !(s.share > 0);
+          rows2.push([{ text: `  ${s.name}`, dim }, { text: `${formatPercent(s.share)} \xB7 mean ${formatMs(s.meanMs)}`, dim }, ...["p50", "p95", "p99", "p999"].map((p) => ({ text: formatMs(s.percentiles[p]), dim })), ""]);
+        }
+      }
+    }
+    out.push(
+      ...table(
+        [{ title: "Use case" }, { title: "Traffic", drop: 1 }, { title: "p50", right: true, drop: 4 }, { title: "p95", right: true, drop: 5 }, { title: "p99", right: true }, { title: "p99.9", right: true, drop: 3 }, { title: "Avail", right: true, drop: 2 }],
+        rows2,
+        width
+      )
+    );
+  }
+  const b = costBreakdown(diagram, analysis);
+  const sections = [
+    ["Team", b.unowned ? [...b.teams, b.unowned] : b.teams],
+    ["Group", b.groups],
+    ["Tag", b.tags]
+  ];
+  if (sections.some(([, r]) => r.length > 0)) {
+    const budgets = /* @__PURE__ */ new Map();
+    for (const r of diagram.requirements ?? []) {
+      if (r.kind !== "cost" || !r.scope) continue;
+      budgets.set("team" in r.scope ? `@${r.scope.team}` : "tag" in r.scope ? `.${r.scope.tag}` : r.scope.group, r.maxUsdPerMonth);
+    }
+    out.push(blank(), heading("Cost breakdown"));
+    out.push(
+      ...table(
+        [{ title: "By", drop: 2 }, { title: "Name" }, { title: "Cost", right: true }, { title: "Share", right: true, drop: 3 }, { title: "Budget", right: true, drop: 1 }, { title: "Nodes", drop: 4 }],
+        sections.flatMap(
+          ([by, shares]) => shares.map((s, i) => {
+            const budget2 = budgets.get(s.id);
+            const over = budget2 !== void 0 && s.costUsd > budget2;
+            return [
+              { text: i === 0 ? by : "", dim: true },
+              { text: s.label, bold: true },
+              usd(s.costUsd),
+              b.totalCostUsd > 0 ? formatPercent(s.costUsd / b.totalCostUsd) : "\u2014",
+              budget2 === void 0 ? { text: "\u2014", dim: true } : { text: `${usd(budget2)}${over ? " over" : ""}`, color: over ? TONE.bad : TONE.good },
+              { text: s.nodes.join(", "), dim: true }
+            ];
+          })
+        ),
+        width
+      )
+    );
+  }
+  if (spofs.length) {
+    out.push(blank(), heading("Single points of failure"));
+    out.push({ segs: [{ text: `${spofs.join(", ")}`, color: TONE.warn, bold: true }, { text: ": one replica, and a use case cannot do without it. Add x2, or a fallback scenario that calls it with -x and still completes." }], wrap: true });
+  }
+  out.push(blank(), { segs: [{ text: "Teaching numbers from default profiles per technology and a simple queueing model; override them with capacity { \u2026 }.", dim: true }], wrap: true });
+  return out;
+}
+function verdictLine(results, width) {
+  if (results.length === 0) return void 0;
+  const failing = results.filter((r) => !r.passed);
+  const checks = results.length === 1 ? "check" : "checks";
+  if (failing.length === 0) return line({ text: `\u2713 All ${results.length} ${checks} pass`, color: TONE.good, bold: true });
+  const head = `\u2717 ${failing.length} of ${results.length} ${checks} fail`;
+  return line({ text: head, color: TONE.bad, bold: true }, { text: cut(`: ${failing[0].name}: ${failing[0].message}`, width - head.length) });
+}
+function testLines(results, width) {
+  if (results.length === 0) {
+    return [
+      { segs: [{ text: "No requirements or tests yet. Requirements are checked against the analysis of the traffic; tests check how the flows work, e.g." }], wrap: true },
+      blank(),
+      ...["requirements {", '  p99 "Redirect" < 100ms', "  availability >= 99.9%", "}", 'test "Redirect is served from the cache" {', '  "Redirect" calls any cache before any database', "}"].map((t) => line({ text: t, dim: true }))
+    ];
+  }
+  const failing = results.filter((r) => !r.passed);
+  const passing = results.filter((r) => r.passed);
+  const where2 = (r) => r.loc ? ` ${r.loc.file ? `${r.loc.file}:` : "line "}${r.loc.line}` : "";
+  const out = [line(failing.length ? { text: `${failing.length} of ${results.length} failing`, color: TONE.bad, bold: true } : { text: `All ${results.length} passing`, color: TONE.good, bold: true })];
+  const item = (r) => {
+    const mark = r.passed ? { text: "\u2713 ", color: TONE.good } : { text: "\u2717 ", color: TONE.bad };
+    out.push(line(mark, { text: r.name, bold: !r.passed }, { text: where2(r), dim: true }));
+    out.push({ segs: [{ text: r.message, dim: r.passed }], wrap: true, indent: 2 });
+    if (!r.passed && r.hint) out.push({ segs: [{ text: `\u2192 ${r.hint}`, color: TONE.warn }], wrap: true, indent: 2 });
+    if (r.assertions && r.assertions.length > 1) {
+      for (const a of r.assertions) {
+        out.push({ segs: [a.passed ? { text: "\u2713 ", color: TONE.good } : { text: "\u2717 ", color: TONE.bad }, { text: a.message, dim: a.passed }, { text: where2(a), dim: true }], wrap: true, indent: 4 });
+        if (!a.passed && a.hint) out.push({ segs: [{ text: `\u2192 ${a.hint}`, color: TONE.warn }], wrap: true, indent: 6 });
+      }
+    }
+  };
+  if (failing.length) {
+    out.push(blank());
+    failing.forEach(item);
+  }
+  if (passing.length) {
+    out.push(blank(), ...failing.length ? [heading(`${passing.length} passing`)] : []);
+    for (const r of passing) out.push(line({ text: "\u2713 ", color: TONE.good }, { text: cut(`${r.name}: ${r.message}`, width - 2), dim: true }));
+  }
+  return out;
+}
+function legendLine(critical, width) {
+  const swatch = (bg) => ({ text: "  ", bg });
+  const segs = [
+    { text: "Load ", dim: true },
+    swatch(HEAT.pale),
+    { text: " 40 ", dim: true },
+    swatch(HEAT.warm),
+    { text: " 70 ", dim: true },
+    swatch(HEAT.hot),
+    { text: " 90 ", dim: true },
+    swatch(HEAT.over),
+    { text: " 100%", dim: true }
+  ];
+  const path = critical ? ` \xB7 \u2501 p99 path of "${critical.useCase}" ${formatMs(critical.p99Ms)}` : "";
+  const edges = " \xB7 edges: rps \xB7 +latency";
+  const used = segs.reduce((n, s) => n + s.text.length, 0);
+  if (path && used + path.length <= width) segs.push({ text: path, dim: true });
+  if (segs.reduce((n, s) => n + s.text.length, 0) + edges.length <= width) segs.push({ text: edges, dim: true });
+  return { segs };
+}
+
+// ../plugin/src/views/render.tsx
+var span = (ui, s, i) => /* @__PURE__ */ h(ui.Text, { key: String(i), ...s.color ? { color: s.color } : {}, ...s.bg ? { backgroundColor: s.bg } : {}, bold: s.bold === true, dimColor: s.dim === true }, s.text);
+function lineView(ui, l, key) {
+  const text = /* @__PURE__ */ h(ui.Text, { wrap: l.wrap ? "wrap" : "truncate-end" }, l.segs.length === 0 || l.segs.every((s) => s.text === "") ? " " : l.segs.map((s, i) => span(ui, s, i)));
+  return l.indent ? /* @__PURE__ */ h(ui.Box, { key, paddingLeft: l.indent }, text) : /* @__PURE__ */ h(ui.Box, { key }, text);
+}
+function linesView(ui, lines, key) {
+  return /* @__PURE__ */ h(ui.Box, { key, flexDirection: "column" }, lines.map((l, i) => lineView(ui, l, `${key}-${i}`)));
+}
+
+// ../plugin/src/views/tabs.tsx
+var TABS = [
+  { id: "diagram", label: "Diagram", key: "1" },
+  { id: "analysis", label: "Analysis", key: "2" },
+  { id: "whatif", label: "What-if", key: "3" },
+  { id: "sequence", label: "Sequence", key: "4" },
+  { id: "hld", label: "HLD", key: "5" },
+  { id: "tests", label: "Tests", key: "6" }
+];
+var tabOf = (stored) => TABS.find((t) => t.id === stored)?.id ?? "diagram";
+function tabBar(ui, current, failing, pick2) {
+  return /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap" }, TABS.map((t) => /* @__PURE__ */ h(
+    ui.Button,
+    {
+      key: `tab-${t.id}`,
+      label: t.id === "tests" && failing > 0 ? `${t.label} \u2717${failing}` : t.label,
+      hotkey: t.key,
+      ...t.id === current ? { variant: "primary" } : { dimColor: true },
+      onPress: () => pick2(t.id)
+    }
+  )));
+}
+function tabBody(ui, tab, doc, columns) {
+  return linesView(ui, bodyLines(tab, doc, columns), `body-${tab}`);
+}
+function bodyLines(tab, doc, columns) {
+  if (tab === "analysis") {
+    if (!doc.analysis) return [{ segs: [{ text: "No traffic yet: add a traffic { \u2026 } block and Proschi estimates load, latency, availability and cost for every node, e.g." }], wrap: true }, { segs: [] }, { segs: [{ text: "traffic {", dim: true }] }, { segs: [{ text: '  "Redirect" 10k rps  mix "Cache hit" 90%, "Cache miss" 10%', dim: true }] }, { segs: [{ text: "}", dim: true }] }];
+    return analysisLines(doc.root, doc.analysis, columns);
+  }
+  if (tab === "tests") {
+    if (!doc.analysis) return [{ segs: [{ text: "Requirements and tests run against the simulation: add a traffic { \u2026 } block first." }], wrap: true }];
+    return testLines(doc.tests, columns);
+  }
+  const what = TABS.find((t) => t.id === tab).label;
+  return [{ segs: [{ text: `${what} in the terminal is coming; \u2197 Open in Proschi shows it in the editor now.`, dim: true }], wrap: true }];
+}
+
 // ../plugin/src/register.tsx
 var icons = "nerd-font";
 var PANE = "proschi-view";
@@ -8795,7 +9133,9 @@ var NO_SOURCE = { source: "" };
 var paneFile = atom({ plugin: "proschi", key: "paneFile" }, "");
 var paneSource = atom({ plugin: "proschi", key: "paneSource" }, NO_SOURCE);
 var players = atom({ plugin: "proschi", key: "player" }, IDLE);
-var PANE_KEYS = "p play \xB7 n/b step \xB7 r restart \xB7 e end \xB7 x explorer \xB7 d diagram \xB7 esc back to the prompt";
+var paneTab = atom({ plugin: "proschi", key: "paneTab" }, "diagram");
+var PANE_KEYS = "1-6 tabs \xB7 p play \xB7 n/b step \xB7 r restart \xB7 e end \xB7 x explorer \xB7 d diagram \xB7 esc back to the prompt";
+var TAB_KEYS = "1-6 tabs \xB7 \u2191\u2193 scroll \xB7 esc back to the prompt";
 var SYSTEM_KEYS = "s next system \xB7 o open/close \xB7 f focus in \xB7 u back out";
 var FRAME2 = 50;
 var HINT = [
@@ -8896,10 +9236,19 @@ function register(on, options) {
     const source = file ? await readWithImports($, file).catch(() => void 0) : focused;
     if (!source) return /* @__PURE__ */ h(ui.Text, { color: "red" }, "Cannot read ", file, ".");
     const columns = "bodyColumns" in e.props && typeof e.props.bodyColumns === "number" ? e.props.bodyColumns : (e.viewport?.columns ?? 120) - 4;
+    const isFocused = "isFocused" in e.props && e.props.isFocused === true;
+    const tab = tabOf(await read($, paneTab));
+    const loaded = await documentOf($, PANE_VIEW, source);
+    const failing = "error" in loaded ? 0 : loaded.doc.tests.filter((t) => !t.passed).length;
+    const bar = tabBar(ui, tab, failing, (to) => void update($, paneTab, () => to));
+    const keys = (systems) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, isFocused ? tab === "diagram" ? PANE_KEYS : TAB_KEYS : "ctrl+x tab focuses the pane for its keys"), isFocused && systems && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, SYSTEM_KEYS));
+    if (tab !== "diagram") {
+      if ("error" in loaded) return /* @__PURE__ */ h(ui.Text, { color: "red" }, loaded.error);
+      return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, bar, tabBody(ui, tab, loaded.doc, columns), keys(false));
+    }
     const view = await diagramView($, { ui, requestId: PANE, columns }, PANE_VIEW, source);
     if ("error" in view) return /* @__PURE__ */ h(ui.Text, { color: "red" }, view.error);
-    const isFocused = "isFocused" in e.props && e.props.isFocused === true;
-    return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, view.element, /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, isFocused ? PANE_KEYS : "ctrl+x tab focuses the pane for its keys"), isFocused && view.systems && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, SYSTEM_KEYS));
+    return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, bar, view.element, keys(view.systems));
   });
 }
 function proschiFile(tool, input) {
@@ -9006,8 +9355,7 @@ var YELLOW = "#ffd23f";
 var PAUSE = "\u275A\u275A Pause";
 var PLAY = " \u25B6 Play ";
 var BARS_WIDTH = 80;
-async function diagramView($, d, viewId, written, file) {
-  const { ui } = d;
+async function documentOf($, viewId, written, file) {
   const player = normal(await read($, memberOf(players, { requestId: viewId })));
   const shown = { ...player.expanded.length ? { expanded: player.expanded } : {}, ...player.focus !== void 0 ? { focus: player.focus } : {} };
   const source = shown.expanded || shown.focus !== void 0 ? { ...written, view: shown } : written;
@@ -9023,6 +9371,14 @@ async function diagramView($, d, viewId, written, file) {
     return { error: `${where2} has errors (line ${first.line}: ${first.message})${file ? `: run \`npx proschi check ${file}\`` : ""}.` };
   }
   if (doc.diagram.nodes.length === 0) return { error: `${where2} has no components to draw.` };
+  return { doc, source, key, player };
+}
+var INLINE_WARNINGS = 2;
+async function diagramView($, d, viewId, written, file) {
+  const { ui } = d;
+  const loaded = await documentOf($, viewId, written, file);
+  if ("error" in loaded) return loaded;
+  const { doc, source, key, player } = loaded;
   const layout = layouts.get(key);
   if (!layout) {
     requestLayout($, key, source);
@@ -9044,15 +9400,18 @@ async function diagramView($, d, viewId, written, file) {
   const width = Math.min(Math.max(40, d.columns), Math.max(scene.columns, BARS_WIDTH));
   const systems = selectable(scene, player.focus);
   const selected = systems.find((s) => s.path === player.selected) ?? systems[0];
-  const view = { d, viewId, rasterKey: `d-${viewId}`, anchorKey: `at-${viewId}`, scene, width, overlay: doc.overlay, systems: doc.systems, ...selected ? { selected: selected.id } : {}, inPane: d.requestId === PANE };
+  const view = { d, viewId, rasterKey: `d-${viewId}`, anchorKey: `at-${viewId}`, scene, width, overlay: doc.overlay, edges: doc.edges, systems: doc.systems, ...selected ? { selected: selected.id } : {}, inPane: d.requestId === PANE };
   if (playing && player.isPlaying && !timers.has(viewId)) animate($, view, steps);
   const progress = timers.has(viewId) ? 0 : 100;
-  const grid = paint(scene, { overlay: doc.overlay, icons, systems: doc.systems, ...view.selected ? { selected: view.selected } : {}, ...steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {} });
-  const link = doc.link(playing ? { useCase: playing.useCase.id, ...playing.useCase.scenarios.length > 1 ? { scenario: playing.scenario.id } : {}, step } : void 0);
+  const grid = paint(scene, { overlay: doc.overlay, edges: doc.edges, icons, systems: doc.systems, ...view.selected ? { selected: view.selected } : {}, ...steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {} });
+  const link = doc.link(playing ? { useCase: playing.useCase.id, ...playing.useCase.scenarios.length > 1 ? { scenario: playing.scenario.id } : {}, step: step + 1 } : void 0);
   const lost = lostImports(written, keyOf(written));
+  const title = file ? basename(file) : doc.diagram.title ?? "diagram";
+  const what = file ? { file } : { source };
+  const verdict = verdictLine(doc.tests, view.width - (view.inPane ? 0 : 13));
   const hasSystems = systems.length > 0 || player.focus !== void 0;
   const roomy = view.width >= 79;
-  return { element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, playing ? playerHeader($, view, playing, player) : doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, grid.columns > d.columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", grid.columns, " columns wide, wider than the ", d.columns, " here: ", view.inPane ? "widen the window" : "use \u26F6 Focus or a wider window", " to see it whole."), lost.some((name) => !importReasons.has(name)) && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u26A0 Not found, so drawn as plain boxes: ", lost.filter((name) => !importReasons.has(name)).join(", ")), lost.filter((name) => importReasons.has(name)).map((name) => /* @__PURE__ */ h(ui.Text, { key: `lost-${name}`, dimColor: true }, "\u26A0 ", importReasons.get(name))), doc.notes.map((note) => /* @__PURE__ */ h(ui.Text, { color: "yellow" }, "\u26A0 ", note.text, note.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true }, " \u2192 ", note.hint))), /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() })), hasSystems && !playing && systemBar($, view, doc, systems, selected, player), playing ? stepPanel($, view, playing, step, player) : pick2 && useCaseBar($, view, doc, pick2, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: roomy ? "\u29C9 Copy source" : "\u29C9 Source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: roomy ? "\u29C9 Copy share link" : "\u29C9 Link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: roomy ? "\u2197 Open in Proschi" : "\u2197 Open", variant: "primary", onPress: (press) => void openLink($, press.surface, link) }), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `focus-${viewId}`, label: "\u26F6 Focus", onPress: () => focus($, view, file ? basename(file) : doc.diagram.title ?? "diagram", file ? { file } : { source }) }))), systems: hasSystems };
+  return { element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, playing ? playerHeader($, view, playing, player) : doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, grid.columns > d.columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", grid.columns, " columns wide, wider than the ", d.columns, " here: ", view.inPane ? "widen the window" : "use \u26F6 Focus or a wider window", " to see it whole."), lost.some((name) => !importReasons.has(name)) && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u26A0 Not found, so drawn as plain boxes: ", lost.filter((name) => !importReasons.has(name)).join(", ")), lost.filter((name) => importReasons.has(name)).map((name) => /* @__PURE__ */ h(ui.Text, { key: `lost-${name}`, dimColor: true }, "\u26A0 ", importReasons.get(name))), doc.notes.map((note) => /* @__PURE__ */ h(ui.Text, { color: "yellow" }, "\u26A0 ", note.text, note.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true }, " \u2192 ", note.hint))), (view.inPane ? doc.warnings : doc.warnings.slice(0, INLINE_WARNINGS)).map((w) => /* @__PURE__ */ h(ui.Text, { key: `warn-${w}`, color: "yellow", wrap: "truncate-end" }, "\u26A0 ", w)), !view.inPane && doc.warnings.length > INLINE_WARNINGS && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2026 ", doc.warnings.length - INLINE_WARNINGS, " more: \u26F6 Focus, then Analysis"), /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), doc.edges && !playing && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)), verdict && !playing && /* @__PURE__ */ h(ui.Box, { key: `verdict-${viewId}`, flexDirection: "row", gap: 1, width: view.width }, lineView(ui, verdict), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `tests-${viewId}`, label: "\u26F6 Details", dimColor: true, onPress: () => focus($, view, title, what, "tests") })), hasSystems && !playing && systemBar($, view, doc, systems, selected, player), playing ? stepPanel($, view, playing, step, player) : pick2 && useCaseBar($, view, doc, pick2, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: roomy ? "\u29C9 Copy source" : "\u29C9 Source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: roomy ? "\u29C9 Copy share link" : "\u29C9 Link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: roomy ? "\u2197 Open in Proschi" : "\u2197 Open", variant: "primary", onPress: (press) => void openLink($, press.surface, link) }), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `focus-${viewId}`, label: "\u26F6 Focus", onPress: () => focus($, view, title, what) }))), systems: hasSystems };
 }
 function selectable(scene, focus2) {
   return [...scene.nodes.values()].map((n) => n.node).filter((n) => n.kind === "system" || n.kind === "group" && n.system === n.id).map((n) => ({ id: n.id, path: focus2 !== void 0 ? `${focus2}.${n.id}` : n.id, name: n.name, expanded: n.kind === "group" }));
@@ -9104,7 +9463,7 @@ function lostImports(source, key) {
 }
 var EXPLORE = { long: ["\u2261 Explore use cases", "\u2261 Hide explorer"], short: ["\u2261 Explore", "\u2261 Hide"] };
 var toggle = (labels, open) => labels[open ? 1 : 0].padEnd(Math.max(...labels.map((l) => l.length)));
-var cut = (text, room) => text.length <= room ? text : `${text.slice(0, Math.max(0, room - 1))}\u2026`;
+var cut2 = (text, room) => text.length <= room ? text : `${text.slice(0, Math.max(0, room - 1))}\u2026`;
 function useCaseBar($, view, doc, pick2, player) {
   const { ui } = view.d;
   const groups = groupByEndpoint(doc.diagram.useCases);
@@ -9115,7 +9474,7 @@ function useCaseBar($, view, doc, pick2, player) {
   const picker = 9 + Math.max(...labels.map((o) => o.label.length)) + 2;
   const oneRow = picker + 1 + 10 + 1 + longToggle <= inner;
   const explore = toggle(10 + 1 + longToggle <= inner ? EXPLORE.long : EXPLORE.short, player.explorer);
-  const options = oneRow ? labels : labels.map((o) => ({ ...o, label: cut(o.label, inner - 9 - 2) }));
+  const options = oneRow ? labels : labels.map((o) => ({ ...o, label: cut2(o.label, inner - 9 - 2) }));
   const select = /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Text, { bold: true, color: PINK }, "Use case"), /* @__PURE__ */ h(
     ui.Select,
     {
@@ -9248,9 +9607,10 @@ async function scroll($, args) {
   if (moved.deny) $.ui.log(`proschi: scroll to ${JSON.stringify(args.to)} refused: ${moved.deny}`, { to: "debug" });
   return moved;
 }
-function focus($, view, title, what) {
+function focus($, view, title, what, tab = "diagram") {
   const opened = $.ui.open({ id: PANE, title: `Proschi \xB7 ${title}`, focus: true, closeOnEscape: true });
   void (async () => {
+    await update($, paneTab, () => tab);
     const player = normal(await read($, memberOf(players, { requestId: view.viewId })));
     if (player.isPlaying) await setPlayer($, view, (p) => ({ ...p, isPlaying: false }));
     stop(PANE_VIEW);
@@ -9289,7 +9649,7 @@ function animate($, view, steps) {
     if (started < 0) started = now;
     const elapsed = now - started;
     const play = playAt(view.scene, steps, step, Math.min(100, elapsed / TRAVEL_MS * 100), tick++);
-    await $.ui.blit({ requestId: view.d.requestId, key: view.rasterKey, cells: paint(view.scene, { overlay: view.overlay, icons, systems: view.systems, ...view.selected ? { selected: view.selected } : {}, play }).toBase64() });
+    await $.ui.blit({ requestId: view.d.requestId, key: view.rasterKey, cells: paint(view.scene, { overlay: view.overlay, edges: view.edges, icons, systems: view.systems, ...view.selected ? { selected: view.selected } : {}, play }).toBase64() });
     if (!player.isPlaying) {
       if (elapsed >= TRAVEL_MS) stop(view.viewId);
       return;

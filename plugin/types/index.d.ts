@@ -20,6 +20,9 @@ export type Player = {
 /** A document the pane draws when it shows no file: a fenced block focused from a reply, with its imports. */
 export type PaneSource = { source: string; path?: string; imports?: Record<string, string> }
 
+/** The pane's tabs (src/views/tabs.tsx), as the editor's views. */
+export type PaneTab = 'diagram' | 'analysis' | 'whatif' | 'sequence' | 'hld' | 'tests'
+
 declare module 'claude-code' {
   interface PluginState {
     proschi: {
@@ -29,6 +32,8 @@ declare module 'claude-code' {
       paneFile: string
       /** What the pane draws while `paneFile` is empty: the block a Focus press opened. */
       paneSource: PaneSource
+      /** The pane's tab; read through `tabOf`, as a version before tabs stored none. */
+      paneTab: PaneTab
     }
   }
 }
