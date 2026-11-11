@@ -268,7 +268,7 @@ export interface PagePanel {
   blocks: Block[];
 }
 
-/** The Sequence tab: the scenario picker, the step keys, and the scenario as `proschi render` draws it, its current steps lit. */
+/** The Sequence tab: the scenario picker and the scenario as `proschi render` draws it, a still with the Diagram tab's current steps lit. */
 export interface SequencePanel {
   kind: 'sequence';
   source: { source: string; path?: string; imports?: Record<string, string> };
@@ -276,7 +276,7 @@ export interface SequencePanel {
   scenario?: string;
   /** The 1-based step numbers lit (the current step and its par siblings). */
   current?: number[];
-  /** The controls over the drawing (a picker and the step keys), as a page's controls row. */
+  /** The controls over the drawing (the scenario picker), as a page's controls row. */
   controls?: Item[];
 }
 

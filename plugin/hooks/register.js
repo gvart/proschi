@@ -11150,7 +11150,7 @@ function sequenceTab(t) {
   const label = (u, s) => `${u.name}${u.scenarios.length > 1 ? ` \u203A ${s.outcome === "error" ? "\u2717" : "\u2713"} ${s.name}` : ""}`;
   const total = steps.length;
   const counter = playing ? `Step ${String(step + 1).padStart(String(total).length)} of ${total}` : `${total} step${total === 1 ? "" : "s"}`;
-  return /* @__PURE__ */ h(ui.Box, { key: "body-sequence", flexDirection: "column" }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "Scenario"), /* @__PURE__ */ h(ui.Select, { key: "seq-pick", value: pick2.value, options: picks.map((p) => ({ value: p.value, label: label(p.useCase, p.scenario) })), onSelect: t.pick })), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Button, { key: "seq-reset", label: "\u21E4", hotkey: "r", onPress: () => t.go(0, false) }), /* @__PURE__ */ h(ui.Button, { key: "seq-prev", label: "\u2039", hotkey: "b", onPress: () => t.go(playing ? step - 1 : 0, false) }), /* @__PURE__ */ h(ui.Button, { key: "seq-play", label: playing && player.isPlaying ? "\u275A\u275A Pause" : " \u25B6 Play ", variant: "primary", hotkey: "p", onPress: () => playing && player.isPlaying ? t.pause() : t.go(playing && step < total - 1 ? step : 0, true) }), /* @__PURE__ */ h(ui.Button, { key: "seq-next", label: "\u203A", hotkey: "n", onPress: () => t.go(playing ? step + 1 : 0, false) }), /* @__PURE__ */ h(ui.Button, { key: "seq-end", label: "\u21E5", hotkey: "e", onPress: () => t.go(total - 1, false) }), /* @__PURE__ */ h(ui.Text, null, counter)), wide > columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", seq2.participants.length, " participants take ", wide, " columns, wider than the ", columns, " here: widen the window to see the right side."), linesView(ui, sequenceLines(seq2, columns, playing ? currentStepsOf(steps, step) : []), "seq-lines"));
+  return /* @__PURE__ */ h(ui.Box, { key: "body-sequence", flexDirection: "column" }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "Scenario"), /* @__PURE__ */ h(ui.Select, { key: "seq-pick", value: pick2.value, options: picks.map((p) => ({ value: p.value, label: label(p.useCase, p.scenario) })), onSelect: t.pick }), /* @__PURE__ */ h(ui.Text, null, counter)), wide > columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", seq2.participants.length, " participants take ", wide, " columns, wider than the ", columns, " here: widen the window to see the right side."), linesView(ui, sequenceLines(seq2, columns, playing ? currentStepsOf(steps, step) : []), "seq-lines"));
 }
 
 // ../plugin/src/views/tabs.tsx
@@ -11536,7 +11536,6 @@ function register(on, options) {
     const setWhatIf = (fn) => void update2($, paneWhatIf, (w) => fn(whatIfOf(w)));
     const resetWhatIf = () => setWhatIf((w) => ({ ...NO_WHATIF, ...w.node ? { node: w.node } : {} }));
     const draw = { ui, requestId: PANE, columns, rows: Math.max(INLINE_ROWS, bodyRows2 - 10) };
-    if (tab === "sequence" && !("error" in loaded) && loaded.player.mode === "play" && loaded.player.isPlaying && !timers.has(PANE_VIEW)) stepper($, loaded.doc);
     const mode = await modeOf($, ui, PANE, PANE_VIEW);
     if (mode.kind !== "text" && !("error" in loaded)) {
       const W2 = panelColumns(columns);
@@ -11574,7 +11573,7 @@ function register(on, options) {
     if (tab !== "diagram") {
       if ("error" in loaded) return /* @__PURE__ */ h(ui.Text, { color: "red" }, loaded.error);
       const { doc, base, key, player } = loaded;
-      const body = tab === "whatif" ? whatIfTab({ ui, base, key, now: doc, w: whatIf, set: setWhatIf, columns }) : tab === "sequence" ? sequenceTab({ ui, diagram: doc.diagram, player, columns, pick: (value) => void paneStep($, doc, (p) => ({ ...p, pick: value, step: 0, isPlaying: false })), go: (step, isPlaying) => void paneStep($, doc, (p) => ({ ...p, mode: "play", step, isPlaying })), pause: () => void paneStep($, doc, (p) => ({ ...p, isPlaying: false })) }) : tab === "hld" ? hldTab(ui, base, key, (surface, text) => void copy($, surface, text, "the HLD markdown")) : tab === "tests" ? testsTab(ui, doc, columns, await read2($, panePassing) === true, () => void update2($, panePassing, (open) => !open)) : tabBody(ui, tab, doc, columns);
+      const body = tab === "whatif" ? whatIfTab({ ui, base, key, now: doc, w: whatIf, set: setWhatIf, columns }) : tab === "sequence" ? sequenceTab({ ui, diagram: doc.diagram, player, columns, pick: (value) => void paneStep($, doc, (p) => ({ ...p, pick: value, step: 0, isPlaying: false })) }) : tab === "hld" ? hldTab(ui, base, key, (surface, text) => void copy($, surface, text, "the HLD markdown")) : tab === "tests" ? testsTab(ui, doc, columns, await read2($, panePassing) === true, () => void update2($, panePassing, (open) => !open)) : tabBody(ui, tab, doc, columns);
       return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, bar, banner, body, keys(false));
     }
     const view = await drawDiagram($, draw, PANE_VIEW, source, void 0, whatIf, void 0, { kind: "text" });
@@ -11632,7 +11631,6 @@ function pagePart($, tab, c) {
   const total = steps.length;
   const playing = player.mode === "play" && player.pick === now.value;
   const step = Math.max(0, Math.min(player.step, total - 1));
-  const go = (to, isPlaying2) => void paneStep($, doc, (p) => ({ ...p, mode: "play", step: to, isPlaying: isPlaying2 }));
   actions["seq-pick"] = () => toggleMenu($, PANE_VIEW, "seq-pick");
   for (const p of picks) {
     actions[`seq-pick=${p.value}`] = () => {
@@ -11640,13 +11638,7 @@ function pagePart($, tab, c) {
       void paneStep($, doc, (q) => ({ ...q, pick: p.value, step: 0, isPlaying: false }));
     };
   }
-  actions["seq-first"] = () => go(0, false);
-  actions["seq-prev"] = () => go(playing ? step - 1 : 0, false);
-  actions["seq-play"] = () => playing && player.isPlaying ? void paneStep($, doc, (p) => ({ ...p, isPlaying: false })) : go(playing && step < total - 1 ? step : 0, true);
-  actions["seq-next"] = () => go(playing ? step + 1 : 0, false);
-  actions["seq-last"] = () => go(total - 1, false);
   const label = (p) => `${p.useCase.name}${p.useCase.scenarios.length > 1 ? ` \u203A ${p.scenario.name}` : ""}`;
-  const isPlaying = playing && player.isPlaying;
   const panel = {
     kind: "sequence",
     source: { source: c.source.source, ...c.source.path ? { path: c.source.path } : {}, ...c.source.imports ? { imports: c.source.imports } : {} },
@@ -11656,11 +11648,6 @@ function pagePart($, tab, c) {
     controls: [
       { text: [{ text: "Scenario", bold: true }] },
       { select: { id: "seq-pick", value: now.value, options: picks.map((p) => ({ value: p.value, label: label(p), ...p.scenario.outcome === "error" ? { detail: "\u2717" } : {} })), ...open === "seq-pick" ? { open: true } : {} } },
-      { control: { id: "seq-first", icon: "first", hotkey: "r", variant: "quiet" } },
-      { control: { id: "seq-prev", icon: "prev", hotkey: "b", variant: "quiet" } },
-      { control: { id: "seq-play", icon: isPlaying ? "pause" : "play", label: isPlaying ? "Pause" : "Play", hotkey: "p", variant: "primary", columns: 14 } },
-      { control: { id: "seq-next", icon: "next", hotkey: "n", variant: "quiet" } },
-      { control: { id: "seq-last", icon: "last", hotkey: "e", variant: "quiet" } },
       { text: [{ text: playing ? `Step ${step + 1} of ${total}` : `${total} step${total === 1 ? "" : "s"}`, bold: true }] }
     ]
   };
@@ -12276,23 +12263,6 @@ async function paneStep($, doc, fn) {
     const pick2 = picks.find((x) => x.value === next.pick) ?? picks[0];
     return { ...next, pick: pick2?.value ?? "", step: Math.max(0, Math.min(next.step, (pick2?.steps ?? 1) - 1)) };
   });
-}
-function stepper($, doc) {
-  timers.set(
-    PANE_VIEW,
-    $.clock.every(STEP_MS, async () => {
-      const p = normal(await read2($, memberOf(players, { requestId: PANE_VIEW })));
-      const steps = doc.diagram.useCases.flatMap((u) => u.scenarios.map((s) => ({ value: `${u.id}:${s.id}`, steps: s.steps }))).find((x) => x.value === p.pick)?.steps ?? [];
-      if (tabOf(await read2($, paneTab)) !== "sequence" || p.mode !== "play" || !p.isPlaying || steps.length === 0) {
-        stop(PANE_VIEW);
-        $.ui.invalidate("ui.render");
-        return;
-      }
-      const last = p.step >= steps.length - 1;
-      if (last) stop(PANE_VIEW);
-      await update2($, memberOf(players, { requestId: PANE_VIEW }), (q) => ({ ...normal(q), step: last ? p.step : p.step + 1, isPlaying: !last }));
-    })
-  );
 }
 function stop(viewId) {
   timers.get(viewId)?.cancel();

@@ -141,7 +141,11 @@ text cells** (today's drawing). Never a text preview followed by a picture.
   bold runs; body 14.5 px, tables 14 px, on the 8×17 cell, drawn at 2×,
   which is a Retina screen's own pixels for that cell (3× would be scaled
   back down by the terminal: no sharper, 2.25× the pixels to draw and send).
-- [ ] R6. The Sequence tab is a static picture: no Play or step keys.
+- [x] R6. **The Sequence tab is a still.** No Play or step keys in either
+  UI (the stepper that played it is gone): the scenario picker and the step
+  count, and while the Diagram tab's player is in that scenario its current
+  step is lit. Tests: the text tab has no `seq-*` Button and lights the step
+  the Diagram tab moved to.
 
 ## Risks
 

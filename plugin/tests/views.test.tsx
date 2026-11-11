@@ -185,9 +185,12 @@ test('a scenario draws as a sequence: async dashed and hollow, a failed call ✕
   expect(await has(p, /│ Web │.*│ API │.*│ DB │.*│ Events │/)).toBe(true)
   expect(await has(p, /├╌+▷│/)).toBe(true)
   expect(await has(p, /◁┄+┤/)).toBe(true)
-  // Stepping highlights the current request: a yellow badge, a pink arrow.
-  await p.press({ key: 'seq-next' })
-  await p.press({ key: 'seq-next' })
+  // The Diagram tab's player at a step lights the current request here: a yellow badge, a pink arrow.
+  await p.press({ key: 'tab-diagram' })
+  await p.press({ key: 'play-proschi-view:0' })
+  await p.press({ key: 'play-proschi-view:0' })
+  await p.press({ key: 'next-proschi-view:0' })
+  await p.press({ key: 'tab-sequence' })
   const texts = (await p.findAll({ type: 'Text' })) as unknown as Found[]
   expect(texts.find(t => t.text === ' 2 ')?.props.backgroundColor).toBe('#ffd23f')
   expect(texts.find(t => t.text === ' 1 ')?.props.backgroundColor).toBe('#ff5da2')
@@ -208,36 +211,24 @@ test('a scenario draws as a sequence: async dashed and hollow, a failed call ✕
   await narrow.unmount()
 })
 
-test('the Sequence tab draws the picked scenario and its keys move the player the Diagram tab draws', async ($, on) => {
+test('the Sequence tab is a still of the picked scenario: a picker and no step keys, the Diagram tab step lit', async ($, on) => {
   engine(on)
   const p = await focused($, ASYNC)
   await p.press({ key: 'tab-sequence' })
   expect(await has(p, /^Scenario$/)).toBe(true)
   expect(await has(p, /^3 steps$/)).toBe(true)
+  expect((await p.findAll({ type: 'Button' })).filter(b => /^seq-/.test(String((b as { key?: string }).key)))).toHaveLength(0)
   await p.select({ key: 'seq-pick', value: 'order:down' })
   expect(await has(p, /alt ✗ Down/)).toBe(true)
-  await p.press({ key: 'seq-next' })
-  await p.press({ key: 'seq-next' })
-  expect(await has(p, /^Step 2 of 2$/)).toBe(true)
-  for (const [key, hotkey] of [['seq-prev', 'b'], ['seq-play', 'p'], ['seq-next', 'n'], ['seq-reset', 'r'], ['seq-end', 'e']] as const) expect((await labelOf(p, key))?.hotkey).toBe(hotkey)
+  expect(await has(p, /^2 steps$/)).toBe(true)
+  // Played, paused and stepped on the Diagram tab: the same player.
   await p.press({ key: 'tab-diagram' })
+  await p.press({ key: 'play-proschi-view:0' })
+  await p.press({ key: 'play-proschi-view:0' })
+  await p.press({ key: 'next-proschi-view:0' })
   expect(await has(p, /^Step 2 of 2$/)).toBe(true)
-  await p.unmount()
-})
-
-test('Play on the Sequence tab steps through the scenario', async ($, on) => {
-  engine(on)
-  const clock = mock.clock(on)
-  const p = await focused($, ASYNC)
   await p.press({ key: 'tab-sequence' })
-  await p.press({ key: 'seq-play' })
-  expect(await has(p, /^Step 1 of 3$/)).toBe(true)
-  expect((await labelOf(p, 'seq-play'))?.label).toBe('❚❚ Pause')
-  await clock.advance(2000)
-  expect(await has(p, /^Step 2 of 3$/)).toBe(true)
-  await clock.advance(4000)
-  expect(await has(p, /^Step 3 of 3$/)).toBe(true)
-  expect((await labelOf(p, 'seq-play'))?.label).toBe(' ▶ Play ')
+  expect(await has(p, /^Step 2 of 2$/)).toBe(true)
   await p.unmount()
 })
 

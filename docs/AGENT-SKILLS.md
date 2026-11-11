@@ -115,8 +115,9 @@ hints, the passing ones folded under **N passing**).
   with a Preview, and sweeps a use case from half to ten times its traffic.
   While a what-if is on, the Diagram, Analysis and Tests tabs show its
   numbers under a yellow banner with a reset. The file never changes.
-- **Sequence** draws the picked scenario as a sequence diagram and follows
-  the player: its keys and the Diagram tab's move the same step.
+- **Sequence** draws the picked scenario as a sequence diagram, a still
+  with a scenario picker. While the Diagram tab's player plays that
+  scenario, its current step is lit here too.
 - **HLD** shows the [HLD document](EDITORS.md#hld-documents), and
   **⧉ Copy HLD markdown** copies it with its Mermaid diagrams.
 

@@ -122,11 +122,10 @@ numbered badge per request, synchronous calls solid `─▶`, async dashed
 `par` frames with `and` rules, and an `alt` frame naming the scenario when
 its use case has several or a condition. Columns share the pane's width up to
 28 cells each; a long name takes two rows; at least 9 cells a column, so a
-pane too narrow says so and the right side is cut. The tab's keys move the
-pane's player, so the Diagram tab and the Sequence tab show the same step,
-the current request in pink with a yellow badge; Play on this tab runs its
-own stepper (`STEP_MS`), which stops on another tab, where the drawing's
-animation takes over.
+pane too narrow says so and the right side is cut. The tab is a still with
+a scenario picker and no step keys of its own: playback is the Diagram
+tab's, and while its player is in that scenario the Sequence tab lights the
+same step, the current request in pink with a yellow badge.
 
 ## D10. The HLD through the terminal's Markdown
 

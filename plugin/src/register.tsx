@@ -200,7 +200,6 @@ export function register(on: On, options: PluginOptions): void {
     const setWhatIf = (fn: (w: WhatIfState) => WhatIfState) => void update($, paneWhatIf, w => fn(whatIfOf(w)))
     const resetWhatIf = () => setWhatIf(w => ({ ...NO_WHATIF, ...(w.node ? { node: w.node } : {}) }))
     const draw: Draw = { ui, requestId: PANE, columns, rows: Math.max(INLINE_ROWS, bodyRows - 10) }
-    if (tab === 'sequence' && !('error' in loaded) && loaded.player.mode === 'play' && loaded.player.isPlaying && !timers.has(PANE_VIEW)) stepper($, loaded.doc)
 
     // In pictures: the tab bar, the what-if banner and the tab's body, one drawing under one overlay.
     const mode = await modeOf($, ui, PANE, PANE_VIEW)
@@ -252,7 +251,7 @@ export function register(on: On, options: PluginOptions): void {
       const { doc, base, key, player } = loaded
       const body =
         tab === 'whatif' ? whatIfTab({ ui, base, key, now: doc, w: whatIf, set: setWhatIf, columns })
-        : tab === 'sequence' ? sequenceTab({ ui, diagram: doc.diagram, player, columns, pick: value => void paneStep($, doc, p => ({ ...p, pick: value, step: 0, isPlaying: false })), go: (step, isPlaying) => void paneStep($, doc, p => ({ ...p, mode: 'play', step, isPlaying })), pause: () => void paneStep($, doc, p => ({ ...p, isPlaying: false })) })
+        : tab === 'sequence' ? sequenceTab({ ui, diagram: doc.diagram, player, columns, pick: value => void paneStep($, doc, p => ({ ...p, pick: value, step: 0, isPlaying: false })) })
         : tab === 'hld' ? hldTab(ui, base, key, (surface, text) => void copy($, surface, text, 'the HLD markdown'))
         : tab === 'tests' ? testsTab(ui, doc, columns, (await read($, panePassing)) === true, () => void update($, panePassing, open => !open))
         : tabBody(ui, tab, doc, columns)
@@ -336,7 +335,7 @@ function pagePart($: EngineInterface, tab: Exclude<PaneTab, 'diagram'>, c: PageC
     const view = { ...w, ...(open === 'wi-mult' || open === 'wi-node' || open === 'wi-sweep-uc' ? { open: open as 'wi-mult' | 'wi-node' | 'wi-sweep-uc' } : {}) }
     return { panel: whatIfPage(base, doc, view, { saved: r.saved, ...(r.sweep ? { sweep: r.sweep } : {}) }), actions }
   }
-  // The Sequence tab: the scenario picker and the step keys over `proschi render`'s sequence, its current steps lit.
+  // The Sequence tab: a still of the picked scenario (`proschi render`'s sequence) under its picker; the Diagram tab's player lights its step.
   const picks = doc.diagram.useCases.flatMap(u => u.scenarios.map(s => ({ value: `${u.id}:${s.id}`, useCase: u, scenario: s })))
   const player = c.player
   const now = picks.find(p => p.value === player.pick) ?? picks[0]
@@ -345,7 +344,6 @@ function pagePart($: EngineInterface, tab: Exclude<PaneTab, 'diagram'>, c: PageC
   const total = steps.length
   const playing = player.mode === 'play' && player.pick === now.value
   const step = Math.max(0, Math.min(player.step, total - 1))
-  const go = (to: number, isPlaying: boolean) => void paneStep($, doc, p => ({ ...p, mode: 'play', step: to, isPlaying }))
   actions['seq-pick'] = () => toggleMenu($, PANE_VIEW, 'seq-pick')
   for (const p of picks) {
     actions[`seq-pick=${p.value}`] = () => {
@@ -353,13 +351,7 @@ function pagePart($: EngineInterface, tab: Exclude<PaneTab, 'diagram'>, c: PageC
       void paneStep($, doc, q => ({ ...q, pick: p.value, step: 0, isPlaying: false }))
     }
   }
-  actions['seq-first'] = () => go(0, false)
-  actions['seq-prev'] = () => go(playing ? step - 1 : 0, false)
-  actions['seq-play'] = () => (playing && player.isPlaying ? void paneStep($, doc, p => ({ ...p, isPlaying: false })) : go(playing && step < total - 1 ? step : 0, true))
-  actions['seq-next'] = () => go(playing ? step + 1 : 0, false)
-  actions['seq-last'] = () => go(total - 1, false)
   const label = (p: (typeof picks)[number]) => `${p.useCase.name}${p.useCase.scenarios.length > 1 ? ` › ${p.scenario.name}` : ''}`
-  const isPlaying = playing && player.isPlaying
   const panel: SequencePanel = {
     kind: 'sequence',
     source: { source: c.source.source, ...(c.source.path ? { path: c.source.path } : {}), ...(c.source.imports ? { imports: c.source.imports } : {}) },
@@ -369,11 +361,6 @@ function pagePart($: EngineInterface, tab: Exclude<PaneTab, 'diagram'>, c: PageC
     controls: [
       { text: [{ text: 'Scenario', bold: true }] },
       { select: { id: 'seq-pick', value: now.value, options: picks.map(p => ({ value: p.value, label: label(p), ...(p.scenario.outcome === 'error' ? { detail: '✗' } : {}) })), ...(open === 'seq-pick' ? { open: true } : {}) } },
-      { control: { id: 'seq-first', icon: 'first', hotkey: 'r', variant: 'quiet' } },
-      { control: { id: 'seq-prev', icon: 'prev', hotkey: 'b', variant: 'quiet' } },
-      { control: { id: 'seq-play', icon: isPlaying ? 'pause' : 'play', label: isPlaying ? 'Pause' : 'Play', hotkey: 'p', variant: 'primary', columns: 14 } },
-      { control: { id: 'seq-next', icon: 'next', hotkey: 'n', variant: 'quiet' } },
-      { control: { id: 'seq-last', icon: 'last', hotkey: 'e', variant: 'quiet' } },
       { text: [{ text: playing ? `Step ${step + 1} of ${total}` : `${total} step${total === 1 ? '' : 's'}`, bold: true }] },
     ],
   }
@@ -1417,7 +1404,7 @@ async function setPlayer($: EngineInterface, view: View, fn: (p: Player) => Play
   await update($, memberOf(players, { requestId: view.viewId }), p => fn(normal(p)))
 }
 
-/** Changes the pane's player from a tab without the drawing: the Sequence tab's keys; playing, a stepper moves it on. */
+/** Changes the pane's player from a tab without the drawing: the Sequence tab's picker. */
 async function paneStep($: EngineInterface, doc: Document, fn: (p: Player) => Player): Promise<void> {
   stop(PANE_VIEW)
   await update($, memberOf(players, { requestId: PANE_VIEW }), p => {
@@ -1426,29 +1413,6 @@ async function paneStep($: EngineInterface, doc: Document, fn: (p: Player) => Pl
     const pick = picks.find(x => x.value === next.pick) ?? picks[0]
     return { ...next, pick: pick?.value ?? '', step: Math.max(0, Math.min(next.step, (pick?.steps ?? 1) - 1)) }
   })
-}
-
-/**
- * Plays the pane's scenario on the Sequence tab, a step every STEP_MS as the
- * drawing does; it stops on another tab, where the drawing's animation (or
- * nothing) takes over.
- */
-function stepper($: EngineInterface, doc: Document): void {
-  timers.set(
-    PANE_VIEW,
-    $.clock.every(STEP_MS, async () => {
-      const p = normal(await read($, memberOf(players, { requestId: PANE_VIEW })))
-      const steps = doc.diagram.useCases.flatMap(u => u.scenarios.map(s => ({ value: `${u.id}:${s.id}`, steps: s.steps }))).find(x => x.value === p.pick)?.steps ?? []
-      if (tabOf(await read($, paneTab)) !== 'sequence' || p.mode !== 'play' || !p.isPlaying || steps.length === 0) {
-        stop(PANE_VIEW)
-        $.ui.invalidate('ui.render')
-        return
-      }
-      const last = p.step >= steps.length - 1
-      if (last) stop(PANE_VIEW)
-      await update($, memberOf(players, { requestId: PANE_VIEW }), q => ({ ...normal(q), step: last ? p.step : p.step + 1, isPlaying: !last }))
-    }),
-  )
 }
 
 function stop(viewId: string): void {

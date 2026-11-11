@@ -48,7 +48,7 @@ const PANELS: Record<string, Panel> = {
   whatIf: whatIfPage(doc, now, { multiplier: 3, failed: ['cache'], sweep: 'redirect', open: 'wi-node' }),
   tests: testsPage(now, true),
   hld: hldPage(toMarkdown(hld(doc.root, doc.analysis, doc.tests))),
-  sequence: { kind: 'sequence', source, useCase: redirect.id, current: [2], controls: [{ control: { id: 'play', icon: 'play', label: 'Play' } }] },
+  sequence: { kind: 'sequence', source, useCase: redirect.id, current: [2], controls: [{ text: [{ text: 'Scenario', bold: true }] }, { select: { id: 'pick', value: 'redirect', options: [{ value: 'redirect', label: 'Redirect' }] } }, { text: [{ text: 'Step 2 of 3', bold: true }] }] },
 };
 
 describe('UI panels: the cell grid', () => {
