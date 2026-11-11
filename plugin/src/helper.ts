@@ -14,7 +14,8 @@ import { CELL_ASPECT, type PanelOutput, type PanelRequest, type PanelsInput, typ
  * (`$.process.run`, ≈150 ms more each).
  */
 
-export type Priority = 'now' | 'later'
+/** `now` for a drawing waited on, `later` for a prefetch, `mount` for a prefetch that redraws when ready (a hidden page). */
+export type Priority = 'now' | 'later' | 'mount'
 
 type Waiter = { resolve: (output: unknown) => void; reject: (error: Error) => void; input: object }
 
@@ -182,16 +183,14 @@ export function panelOf($: EngineInterface, p: PanelAsk, priority: Priority = 'n
   const key = panelKey(p)
   const done = panels.get(key)
   if (done) return done
-  if (drawing.has(key)) {
-    if (priority === 'now') wanted.add(key)
-    return undefined
-  }
+  if (priority !== 'later') wanted.add(key)
+  if (drawing.has(key)) return undefined
   drawing.add(key)
   if (!batch) {
     batch = { now: new Map(), later: new Map() }
     void Promise.resolve().then(() => flush($))
   }
-  batch[priority].set(key, p)
+  batch[priority === 'now' ? 'now' : 'later'].set(key, p)
   return undefined
 }
 

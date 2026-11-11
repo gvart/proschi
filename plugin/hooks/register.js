@@ -9757,16 +9757,14 @@ function panelOf($, p, priority = "now") {
   const key = panelKey(p);
   const done = panels.get(key);
   if (done) return done;
-  if (drawing.has(key)) {
-    if (priority === "now") wanted.add(key);
-    return void 0;
-  }
+  if (priority !== "later") wanted.add(key);
+  if (drawing.has(key)) return void 0;
   drawing.add(key);
   if (!batch) {
     batch = { now: /* @__PURE__ */ new Map(), later: /* @__PURE__ */ new Map() };
     void Promise.resolve().then(() => flush($));
   }
-  batch[priority].set(key, p);
+  batch[priority === "now" ? "now" : "later"].set(key, p);
   return void 0;
 }
 function prefetch($, asks) {
@@ -9922,10 +9920,16 @@ var live2 = /* @__PURE__ */ new Map();
 var overlayKey = (site) => `ov-${site}`;
 var tileKey = (site, piece, i) => `t-${site}-${piece}-${i}`;
 var timings = {};
+var PERF_KEEP = 40;
+var perf = [];
+var pressTimings = () => perf;
 function loading(ui, key, rows, probe2) {
   return /* @__PURE__ */ h(ui.Box, { key: `load-${key}`, flexDirection: "column", height: Math.max(1, rows) }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row" }, /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Rendering diagram\u2026"), probe2));
 }
 async function pictureSite($, ui, s) {
+  const started = await $.clock.now();
+  const was = live2.get(s.site);
+  if (was?.pressedAt !== void 0 && was.renderedAt === void 0) was.renderedAt = started;
   const resolved = [];
   let waiting = false;
   for (const p of s.pieces) {
@@ -9939,26 +9943,64 @@ async function pictureSite($, ui, s) {
     if (!out) waiting = true;
     else resolved.push({ id: p.id, out });
   }
+  const pages = [];
+  for (const page of s.pages ?? []) {
+    const out = panelOf($, { panel: page.panel, columns: page.columns, theme: s.theme }, page.shown ? "now" : "mount");
+    if (out && "error" in out) {
+      if (page.shown) return { error: out.error };
+      continue;
+    }
+    if (out) pages.push({ id: page.id, out, shown: page.shown });
+    else if (page.shown) waiting = true;
+  }
   if (s.ahead?.length) prefetch($, s.ahead.map((a) => ({ ...a, theme: s.theme })));
   let now;
   if (!waiting) {
-    now = { pieces: resolved, actions: s.actions };
-    const was = live2.get(s.site);
-    if (was?.pressedAt !== void 0) {
-      timings.press = await $.clock.now() - was.pressedAt;
-      $.ui.log(`proschi: a press drew in ${timings.press} ms`, { to: "debug" });
-      was.pressedAt = void 0;
-    }
+    now = { pieces: resolved, pages, actions: s.actions };
     shown.set(s.site, now);
   } else now = shown.get(s.site);
   if (!now) return { element: loading(ui, s.site, s.rows) };
-  return { element: await build($, ui, s, now) };
+  const built = await build($, ui, s, now);
+  const done = await $.clock.now();
+  const l = live2.get(s.site);
+  if (!waiting && l?.pressedAt !== void 0) {
+    const t = { at: l.pressedAt, site: s.site, control: l.pressed ?? "", toRender: (l.renderedAt ?? started) - l.pressedAt, toShown: done - l.pressedAt, build: done - started, images: built.images, sent: built.sent };
+    timings.press = t.toShown;
+    perf.push(t);
+    if (perf.length > PERF_KEEP) perf.shift();
+    $.ui.log(`proschi: ${t.control} drew in ${t.toShown} ms (render after ${t.toRender} ms, built in ${t.build} ms, ${t.sent} of ${t.images} pictures new)`, { to: "debug" });
+    l.pressedAt = void 0;
+    l.renderedAt = void 0;
+  }
+  return { element: built.element };
+}
+async function strips(ui, s, piece, out, source, top, into) {
+  const rows = [];
+  for (const [i, tile] of out.tiles.entries()) {
+    const key = tileKey(s.site, piece, i);
+    const file = tile.file;
+    rows.push(file ? /* @__PURE__ */ h(ui.Image, { key, source: await source(key, file), columns: tile.columns, rows: tile.rows, alt: " " }) : /* @__PURE__ */ h(ui.Box, { key, width: tile.columns, height: tile.rows }));
+    if (!into) continue;
+    for (const a of tile.controls ?? []) {
+      const c = a.control;
+      if (c.disabled || !file) continue;
+      const id = `${piece}/${c.id}`;
+      into.tiles.set(id, { key, file, ...a.hoverFile ? { hoverFile: a.hoverFile } : {}, ...a.pressedFile ? { pressedFile: a.pressedFile } : {} });
+      into.controls.push({ id, col: tile.col + a.col, row: top + tile.row, columns: a.columns, rows: tile.rows });
+      if (c.hotkey && s.hotkeys && s.actions[id]) into.hotkeys.set(c.hotkey, id);
+    }
+  }
+  return rows;
 }
 async function build($, ui, s, d) {
-  const source = (file) => sourceOf($, file, s.form);
-  const tiles = /* @__PURE__ */ new Map();
-  const controls = [];
-  const hotkeys = /* @__PURE__ */ new Map();
+  const was = live2.get(s.site);
+  const before2 = was?.sources ?? /* @__PURE__ */ new Map();
+  const sources = /* @__PURE__ */ new Map();
+  const source = (key, file) => {
+    sources.set(key, file);
+    return sourceOf($, file, s.form);
+  };
+  const into = { tiles: /* @__PURE__ */ new Map(), controls: [], hotkeys: /* @__PURE__ */ new Map() };
   const parts = [];
   let top = 0;
   let width = 1;
@@ -9966,37 +10008,50 @@ async function build($, ui, s, d) {
     if ("picture" in p) {
       const pic = p.picture;
       parts.push(
-        /* @__PURE__ */ h(ui.Box, { key: pic.anchorKey ?? `pic-${s.site}-${p.id}`, flexDirection: "column", height: pic.rows }, /* @__PURE__ */ h(ui.Image, { key: pic.key, source: await source(pic.file), columns: pic.columns, rows: pic.rows, alt: pic.alt }))
+        /* @__PURE__ */ h(ui.Box, { key: pic.anchorKey ?? `pic-${s.site}-${p.id}`, flexDirection: "column", height: pic.rows }, /* @__PURE__ */ h(ui.Image, { key: pic.key, source: await source(pic.key, pic.file), columns: pic.columns, rows: pic.rows, alt: pic.alt }))
       );
       top += pic.rows;
       width = Math.max(width, pic.columns);
       continue;
     }
     const { out } = p;
-    const rows = [];
-    for (const [i, tile] of out.tiles.entries()) {
-      const key = tileKey(s.site, p.id, i);
-      const file = tile.file;
-      rows.push(file ? /* @__PURE__ */ h(ui.Image, { key, source: await source(file), columns: tile.columns, rows: tile.rows, alt: " " }) : /* @__PURE__ */ h(ui.Box, { key, width: tile.columns, height: tile.rows }));
-      for (const a of tile.controls ?? []) {
-        const c = a.control;
-        if (c.disabled || !file) continue;
-        const id = `${p.id}/${c.id}`;
-        tiles.set(id, { key, file, ...a.hoverFile ? { hoverFile: a.hoverFile } : {}, ...a.pressedFile ? { pressedFile: a.pressedFile } : {} });
-        controls.push({ id, col: tile.col + a.col, row: top + tile.row, columns: a.columns, rows: tile.rows });
-        if (c.hotkey && s.hotkeys && s.actions[id]) hotkeys.set(c.hotkey, id);
-      }
-    }
     parts.push(
-      /* @__PURE__ */ h(ui.Box, { key: `p-${s.site}-${p.id}`, flexDirection: "column", height: out.rows }, rows)
+      /* @__PURE__ */ h(ui.Box, { key: `p-${s.site}-${p.id}`, flexDirection: "column", height: out.rows }, await strips(ui, s, p.id, out, source, top, into))
     );
     top += out.rows;
     width = Math.max(width, out.columns);
   }
-  const was = live2.get(s.site);
-  live2.set(s.site, { requestId: s.requestId, tiles, actions: d.actions, hotkeys, ...s.form ? { form: s.form } : {}, ...was?.pressedAt !== void 0 ? { pressedAt: was.pressedAt } : {} });
+  if (d.pages.length) {
+    const pages = [];
+    for (const page of d.pages) {
+      const rows = await strips(ui, s, page.id, page.out, source, top, page.shown ? into : void 0);
+      pages.push(
+        /* @__PURE__ */ h(ui.Box, { key: `pg-${s.site}-${page.id}`, flexDirection: "column", height: page.out.rows, display: page.shown ? "flex" : "none" }, rows)
+      );
+      if (page.shown) {
+        top += page.out.rows;
+        width = Math.max(width, page.out.columns);
+      }
+    }
+    parts.push(
+      /* @__PURE__ */ h(ui.Box, { key: `pages-${s.site}`, flexDirection: "column" }, pages)
+    );
+  }
+  const { tiles, controls, hotkeys } = into;
+  live2.set(s.site, {
+    requestId: s.requestId,
+    tiles,
+    actions: d.actions,
+    hotkeys,
+    sources,
+    ...s.form ? { form: s.form } : {},
+    ...was?.pressedAt !== void 0 ? { pressedAt: was.pressedAt, ...was.pressed ? { pressed: was.pressed } : {}, ...was.renderedAt !== void 0 ? { renderedAt: was.renderedAt } : {} } : {}
+  });
+  let sent = 0;
+  for (const [key, file] of sources) if (before2.get(key) !== file) sent++;
   const overlay = overlayKey(s.site);
-  return /* @__PURE__ */ h(ui.Box, { key: `site-${s.site}`, flexDirection: "column", width, height: top }, parts, /* @__PURE__ */ h(ui.Box, { position: "absolute", top: 0, left: 0, width, height: top }, /* @__PURE__ */ h(ui.Client, { key: overlay, module: "./uiOverlay.js", props: { controls }, width, height: top })), hotkeys.size > 0 && /* @__PURE__ */ h(ui.Box, { key: `keys-${s.site}`, display: "none" }, [...hotkeys].map(([key, id]) => /* @__PURE__ */ h(ui.Button, { key: `hk-${s.site}-${key}`, label: key, hotkey: key, onPress: (press) => void act($, s.site, id, press.surface) }))));
+  const element = /* @__PURE__ */ h(ui.Box, { key: `site-${s.site}`, flexDirection: "column", width, height: top }, parts, /* @__PURE__ */ h(ui.Box, { position: "absolute", top: 0, left: 0, width, height: top }, /* @__PURE__ */ h(ui.Client, { key: overlay, module: "./uiOverlay.js", props: { controls }, width, height: top })), hotkeys.size > 0 && /* @__PURE__ */ h(ui.Box, { key: `keys-${s.site}`, display: "none" }, [...hotkeys].map(([key, id]) => /* @__PURE__ */ h(ui.Button, { key: `hk-${s.site}-${key}`, label: key, hotkey: key, onPress: (press) => void act($, s.site, id, press.surface) }))));
+  return { element, images: sources.size, sent };
 }
 async function blit($, l, ref, file) {
   if (!ref || !file) return;
@@ -10008,6 +10063,8 @@ async function act($, site, id, surface) {
   const action = l?.actions[id];
   if (!l || !action) return;
   l.pressedAt = await $.clock.now();
+  l.pressed = id;
+  l.renderedAt = void 0;
   action(surface);
 }
 function registerPicture(on) {
@@ -11406,6 +11463,7 @@ function register(on, options) {
       } else words.push(rest[i]);
     }
     const file = words.join(" ");
+    if (verb === "perf") return { text: perfReport(Number(words[0]) || 10) };
     if (verb !== "view" || !file) return { text: USAGE };
     if (!await $.fs.exists(file)) return { text: `No such file: ${file}` };
     if (view.expanded || view.focus !== void 0) {
@@ -11491,16 +11549,21 @@ function register(on, options) {
         actions["banner/reset"] = resetWhatIf;
       }
       const page = { doc, base, key, player, source: loaded.source, whatIf, setWhatIf, passing: await read2($, panePassing) === true, columns: W2 };
-      const ahead = TABS.filter((t) => t.id !== tab).flatMap((t) => [{ panel: tabBarPanel(t.id, failing), columns: W2 }, ...t.id === "diagram" ? [] : [{ panel: pagePart($, t.id, page).panel, columns: W2 }]]);
+      const ahead = TABS.filter((t) => t.id !== tab).map((t) => ({ panel: tabBarPanel(t.id, failing), columns: W2 }));
+      const pages = [];
+      for (const t of TABS) {
+        if (t.id === "diagram") continue;
+        const body = pagePart($, t.id, page);
+        pages.push({ id: `page-${t.id}`, panel: body.panel, columns: W2, shown: t.id === tab });
+        if (t.id === tab) for (const [id, fn] of Object.entries(body.actions)) actions[`page-${t.id}/${id}`] = fn;
+      }
       if (tab === "diagram") {
-        const view2 = await drawDiagram($, draw, PANE_VIEW, source, void 0, whatIf, { pieces, actions, ahead }, mode);
+        const view2 = await drawDiagram($, draw, PANE_VIEW, source, void 0, whatIf, { pieces, actions, ahead, pages }, mode);
         if ("error" in view2) return /* @__PURE__ */ h(ui.Text, { color: "red" }, view2.error);
         if (view2.picture) return view2.element;
       } else if (mode.kind === "loading") return loading(ui, PANE_VIEW, Math.max(10, bodyRows2 - 2), mode.probe);
       else {
-        const body = pagePart($, tab, page);
-        for (const [id, fn] of Object.entries(body.actions)) actions[`page/${id}`] = fn;
-        const drawn = await pictureSite($, ui, { requestId: PANE, site: PANE_VIEW, theme: await themeOf($), pieces: [...pieces, { id: "page", panel: body.panel, columns: W2 }], actions, hotkeys: true, ahead, rows: Math.max(10, bodyRows2 - 2), ...mode.form ? { form: mode.form } : {} });
+        const drawn = await pictureSite($, ui, { requestId: PANE, site: PANE_VIEW, theme: await themeOf($), pieces, pages, actions, hotkeys: true, ahead, rows: Math.max(10, bodyRows2 - 2), ...mode.form ? { form: mode.form } : {} });
         if ("element" in drawn) return drawn.element;
         $.ui.log(`proschi: the ${tab} tab in text: ${drawn.error}`, { to: "debug" });
       }
@@ -11617,6 +11680,7 @@ async function drawDiagram($, d, viewId, source, file, whatIf, top = { pieces: [
     actions: { ...top.actions, ...view.actions },
     hotkeys: d.requestId === PANE,
     ahead: [...top.ahead, ...view.ahead],
+    ...top.pages ? { pages: top.pages } : {},
     rows: view.rows,
     ...mode.kind === "picture" && mode.form ? { form: mode.form } : {}
   });
@@ -11629,7 +11693,13 @@ function proschiFile(tool, input) {
   const path = input?.file_path;
   return typeof path === "string" && path.endsWith(".proschi") ? path : void 0;
 }
-var USAGE = "Usage: /proschi view [--expand <system>[,<system>\u2026]] [--focus <system>] <file.proschi>";
+var USAGE = "Usage: /proschi view [--expand <system>[,<system>\u2026]] [--focus <system>] <file.proschi>, or /proschi perf [count]";
+function perfReport(n) {
+  const last = pressTimings().slice(-n);
+  if (last.length === 0) return "No presses timed yet: press a tab or a control in the pictures, then run /proschi perf again.";
+  const lines = last.map((t) => `${t.control.padEnd(22)} ${String(t.toShown).padStart(5)} ms  (render after ${t.toRender} ms, built in ${t.build} ms, ${t.sent}/${t.images} pictures new)`);
+  return [`The last ${last.length} presses, press to drawn:`, ...lines].join("\n");
+}
 var basename = (path) => path.split("/").pop() ?? path;
 var dirname = (path) => path.slice(0, Math.max(0, path.lastIndexOf("/")));
 async function projectRoot($, dir) {

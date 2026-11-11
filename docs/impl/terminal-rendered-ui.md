@@ -112,7 +112,21 @@ text cells** (today's drawing). Never a text preview followed by a picture.
   of the terminal's background), so a letterbox of a pixel or two falls where
   nothing is drawn. Contact sheets at a 9×19 px cell (2.11, not 2.125): no
   seam, no misalignment.
-- [ ] R2. Tab switching lag.
+- [x] R2. **Tab switching lag.** Measured: a press is timed from the
+  overlay's post (or hotkey) to the first render after it, to the render
+  with every picture ready, with how many Images it holds and how many have
+  a source not sent at that key before; `/proschi perf [n]` lists the last
+  ones (the debug log has each). The pages were prefetched already, so the
+  worker was not the wait: a switch mounted the new page's every strip
+  afresh (What-if 30 Images at 120 columns, HLD 17), each one sent to the
+  terminal. Fix: strips are full width and end only between lines (R1), so
+  a page is fewer pictures (What-if 10, HLD 8, Analysis 1, Tests 3); and
+  every page is mounted at once, the shown one waited on, the others in
+  `display: none` Boxes once the helper has them (a prefetch that redraws,
+  `mount`), at keys that do not change with the tab (`page-<tab>`), so a
+  switch shows one Box and hides another: one new picture (the tab bar).
+  Test: a hidden page's Images are the ones shown after the switch, same
+  keys and sources.
 - [ ] R3. Playback at ≈5 fps.
 - [x] R4. **Panels blend into the terminal background.** Every panel is an
   opaque card (#1C1C21 dark, #FFFFFF light, border rgba(255,255,255,.14) /

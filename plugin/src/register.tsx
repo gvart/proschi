@@ -19,7 +19,7 @@ import { components } from '../../frontend/src/sim/analyze'
 import { formatMs } from '../../frontend/src/sim/format'
 import { MULTIPLIERS, stopOf, toggleFailed } from '../../frontend/src/components/WhatIf/whatIf'
 import { graphicsMode, imageSize, maxWidthPx, probe, probeKey, probeOf, probeSource, rasterOf, sourceOf, themeOf, TMUX_HINT, type GraphicsMode, type RasterRequest } from './graphics'
-import { loading, pictureSite, registerPicture, type Action, type Picture, type Piece } from './picture'
+import { loading, pictureSite, pressTimings, registerPicture, type Action, type Picture, type Piece, type Site } from './picture'
 import { setCellAspect } from './helper'
 import { hldMarkdown, hldTab } from './views/hld'
 import { legendLine, verdictLine } from './views/lines'
@@ -117,6 +117,7 @@ export function register(on: On, options: PluginOptions): void {
       } else words.push(rest[i])
     }
     const file = words.join(' ')
+    if (verb === 'perf') return { text: perfReport(Number(words[0]) || 10) }
     if (verb !== 'view' || !file) return { text: USAGE }
     if (!(await $.fs.exists(file))) return { text: `No such file: ${file}` }
     if (view.expanded || view.focus !== undefined) {
@@ -214,17 +215,22 @@ export function register(on: On, options: PluginOptions): void {
         actions['banner/reset'] = resetWhatIf
       }
       const page = { doc, base, key, player, source: loaded.source, whatIf, setWhatIf, passing: (await read($, panePassing)) === true, columns: W }
-      // Ahead: every other tab, its bar and its body.
-      const ahead = TABS.filter(t => t.id !== tab).flatMap(t => [{ panel: tabBarPanel(t.id, failing) as Panel, columns: W }, ...(t.id === 'diagram' ? [] : [{ panel: pagePart($, t.id, page).panel, columns: W }])])
+      // Ahead: every other tab's bar. Every page is drawn, the shown one waited on, the others hidden once ready, so a switch only shows one.
+      const ahead = TABS.filter(t => t.id !== tab).map(t => ({ panel: tabBarPanel(t.id, failing) as Panel, columns: W }))
+      const pages: NonNullable<Site['pages']> = []
+      for (const t of TABS) {
+        if (t.id === 'diagram') continue
+        const body = pagePart($, t.id, page)
+        pages.push({ id: `page-${t.id}`, panel: body.panel, columns: W, shown: t.id === tab })
+        if (t.id === tab) for (const [id, fn] of Object.entries(body.actions)) actions[`page-${t.id}/${id}`] = fn
+      }
       if (tab === 'diagram') {
-        const view = await drawDiagram($, draw, PANE_VIEW, source, undefined, whatIf, { pieces, actions, ahead }, mode)
+        const view = await drawDiagram($, draw, PANE_VIEW, source, undefined, whatIf, { pieces, actions, ahead, pages }, mode)
         if ('error' in view) return <ui.Text color="red">{view.error}</ui.Text>
         if (view.picture) return view.element
       } else if (mode.kind === 'loading') return loading(ui, PANE_VIEW, Math.max(10, bodyRows - 2), mode.probe)
       else {
-        const body = pagePart($, tab, page)
-        for (const [id, fn] of Object.entries(body.actions)) actions[`page/${id}`] = fn
-        const drawn = await pictureSite($, ui, { requestId: PANE, site: PANE_VIEW, theme: await themeOf($), pieces: [...pieces, { id: 'page', panel: body.panel, columns: W }], actions, hotkeys: true, ahead, rows: Math.max(10, bodyRows - 2), ...(mode.form ? { form: mode.form } : {}) })
+        const drawn = await pictureSite($, ui, { requestId: PANE, site: PANE_VIEW, theme: await themeOf($), pieces, pages, actions, hotkeys: true, ahead, rows: Math.max(10, bodyRows - 2), ...(mode.form ? { form: mode.form } : {}) })
         if ('element' in drawn) return drawn.element
         $.ui.log(`proschi: the ${tab} tab in text: ${drawn.error}`, { to: 'debug' })
       }
@@ -382,7 +388,7 @@ async function drawDiagram(
   source: Source,
   file?: string,
   whatIf?: WhatIfState,
-  top: { pieces: Piece[]; actions: Record<string, Action>; ahead: { panel: Panel; columns: number }[] } = { pieces: [], actions: {}, ahead: [] },
+  top: { pieces: Piece[]; actions: Record<string, Action>; ahead: { panel: Panel; columns: number }[]; pages?: Site['pages'] } = { pieces: [], actions: {}, ahead: [] },
   known?: Mode,
 ): Promise<{ element: RenderElement; systems: boolean; picture: boolean } | { error: string }> {
   const mode = known ?? (await modeOf($, d.ui, d.requestId, viewId))
@@ -398,6 +404,7 @@ async function drawDiagram(
     actions: { ...top.actions, ...view.actions },
     hotkeys: d.requestId === PANE,
     ahead: [...top.ahead, ...view.ahead],
+    ...(top.pages ? { pages: top.pages } : {}),
     rows: view.rows,
     ...(mode.kind === 'picture' && mode.form ? { form: mode.form } : {}),
   })
@@ -413,7 +420,15 @@ function proschiFile(tool: string, input: unknown): string | undefined {
   return typeof path === 'string' && path.endsWith('.proschi') ? path : undefined
 }
 
-const USAGE = 'Usage: /proschi view [--expand <system>[,<system>…]] [--focus <system>] <file.proschi>'
+const USAGE = 'Usage: /proschi view [--expand <system>[,<system>…]] [--focus <system>] <file.proschi>, or /proschi perf [count]'
+
+/** The last `n` presses in pictures, timed (`/proschi perf`): what the user reports when a press feels slow. */
+function perfReport(n: number): string {
+  const last = pressTimings().slice(-n)
+  if (last.length === 0) return 'No presses timed yet: press a tab or a control in the pictures, then run /proschi perf again.'
+  const lines = last.map(t => `${t.control.padEnd(22)} ${String(t.toShown).padStart(5)} ms  (render after ${t.toRender} ms, built in ${t.build} ms, ${t.sent}/${t.images} pictures new)`)
+  return [`The last ${last.length} presses, press to drawn:`, ...lines].join('\n')
+}
 
 const basename = (path: string) => path.split('/').pop() ?? path
 const dirname = (path: string) => path.slice(0, Math.max(0, path.lastIndexOf('/')))

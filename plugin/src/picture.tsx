@@ -55,12 +55,20 @@ export interface Site {
   /** The rows the drawing is expected to take, reserved while its first pictures are drawn. */
   rows: number
   form?: 'file' | 'png'
+  /**
+   * Pages under the pieces, one shown at most: the pane's tabs. Each is drawn
+   * whenever its panel is ready, the others in Boxes drawn as nothing, so a
+   * tab switch shows a page whose pictures are mounted already. A page's
+   * control actions are `<page id>/<control id>`.
+   */
+  pages?: { id: string; panel: Panel; columns: number; shown: boolean }[]
 }
 
 type Resolved = { id: string; out: PanelOutput } | { id: string; picture: Picture }
 
 interface Shown {
   pieces: Resolved[]
+  pages: { id: string; out: PanelOutput; shown: boolean }[]
   actions: Record<string, Action>
 }
 
@@ -79,8 +87,13 @@ interface Live {
   hotkeys: Map<string, string>
   hovered?: string
   form?: 'file' | 'png'
-  /** When the last press came, to time how long its drawing took. */
+  /** When the last press came, and what it pressed, to time how long its drawing took. */
   pressedAt?: number
+  pressed?: string
+  /** When the first drawing after the press started (the press's state change reached the render). */
+  renderedAt?: number
+  /** The source of every Image last drawn, by key: what a redraw sends anew. */
+  sources: Map<string, string>
 }
 
 // Per module load: the drawing shown last per site, and what its overlay maps.
@@ -92,6 +105,29 @@ const tileKey = (site: string, piece: string, i: number) => `t-${site}-${piece}-
 
 /** How long the last press took to show its drawing, in ms (src/picture.tsx's measure, for the debug log and tests). */
 export const timings: { press?: number; hover?: number } = {}
+
+/**
+ * A press, timed (`/proschi perf` lists the last ones): from the overlay's
+ * post or the hotkey to the first render after it (`toRender`: the action's
+ * state change and the redraw it asks for), to the render that has every
+ * picture ready (`toShown`: the helper's drawing if it was not prefetched),
+ * then how long that render took to build, how many Images it holds and how
+ * many of them have a source the terminal has not been sent at that key.
+ */
+export interface PressTiming {
+  at: number
+  site: string
+  control: string
+  toRender: number
+  toShown: number
+  build: number
+  images: number
+  sent: number
+}
+
+const PERF_KEEP = 40
+const perf: PressTiming[] = []
+export const pressTimings = (): readonly PressTiming[] => perf
 
 /** The reserved blank area while the first pictures are drawn, with the probe's invisible Image when it asks. */
 export function loading(ui: Ui, key: string, rows: number, probe?: RenderElement): RenderElement {
@@ -111,6 +147,9 @@ export function loading(ui: Ui, key: string, rows: number, probe?: RenderElement
  * cannot be drawn, for the text drawing to stand instead.
  */
 export async function pictureSite($: EngineInterface, ui: Ui, s: Site): Promise<{ element: RenderElement } | { error: string }> {
+  const started = await $.clock.now()
+  const was = live.get(s.site)
+  if (was?.pressedAt !== undefined && was.renderedAt === undefined) was.renderedAt = started
   const resolved: Resolved[] = []
   let waiting = false
   for (const p of s.pieces) {
@@ -124,27 +163,68 @@ export async function pictureSite($: EngineInterface, ui: Ui, s: Site): Promise<
     if (!out) waiting = true
     else resolved.push({ id: p.id, out })
   }
+  // The page shown is waited for; the others are drawn once the helper has them (they are prefetched).
+  const pages: Shown['pages'] = []
+  for (const page of s.pages ?? []) {
+    const out = panelOf($, { panel: page.panel, columns: page.columns, theme: s.theme }, page.shown ? 'now' : 'mount')
+    if (out && 'error' in out) {
+      if (page.shown) return { error: out.error }
+      continue
+    }
+    if (out) pages.push({ id: page.id, out, shown: page.shown })
+    else if (page.shown) waiting = true
+  }
   if (s.ahead?.length) prefetch($, s.ahead.map(a => ({ ...a, theme: s.theme })))
   let now: Shown | undefined
   if (!waiting) {
-    now = { pieces: resolved, actions: s.actions }
-    const was = live.get(s.site)
-    if (was?.pressedAt !== undefined) {
-      timings.press = (await $.clock.now()) - was.pressedAt
-      $.ui.log(`proschi: a press drew in ${timings.press} ms`, { to: 'debug' })
-      was.pressedAt = undefined
-    }
+    now = { pieces: resolved, pages, actions: s.actions }
     shown.set(s.site, now)
   } else now = shown.get(s.site)
   if (!now) return { element: loading(ui, s.site, s.rows) }
-  return { element: await build($, ui, s, now) }
+  const built = await build($, ui, s, now)
+  const done = await $.clock.now()
+  const l = live.get(s.site)
+  if (!waiting && l?.pressedAt !== undefined) {
+    const t: PressTiming = { at: l.pressedAt, site: s.site, control: l.pressed ?? '', toRender: (l.renderedAt ?? started) - l.pressedAt, toShown: done - l.pressedAt, build: done - started, images: built.images, sent: built.sent }
+    timings.press = t.toShown
+    perf.push(t)
+    if (perf.length > PERF_KEEP) perf.shift()
+    $.ui.log(`proschi: ${t.control} drew in ${t.toShown} ms (render after ${t.toRender} ms, built in ${t.build} ms, ${t.sent} of ${t.images} pictures new)`, { to: 'debug' })
+    l.pressedAt = undefined
+    l.renderedAt = undefined
+  }
+  return { element: built.element }
 }
 
-async function build($: EngineInterface, ui: Ui, s: Site, d: Shown): Promise<RenderElement> {
-  const source = (file: string): Promise<ImageSource> => sourceOf($, file, s.form)
-  const tiles = new Map<string, TileRef>()
-  const controls: OverlayControl[] = []
-  const hotkeys = new Map<string, string>()
+/** The strips of a panel output, keyed for `site` and `piece`; their controls into `into` (from row `top`), unless `inert`. */
+async function strips(ui: Ui, s: Site, piece: string, out: PanelOutput, source: (key: string, file: string) => Promise<ImageSource>, top: number, into?: { tiles: Map<string, TileRef>; controls: OverlayControl[]; hotkeys: Map<string, string> }): Promise<RenderElement[]> {
+  const rows: RenderElement[] = []
+  for (const [i, tile] of out.tiles.entries()) {
+    const key = tileKey(s.site, piece, i)
+    const file = tile.file
+    rows.push(file ? <ui.Image key={key} source={await source(key, file)} columns={tile.columns} rows={tile.rows} alt=" " /> : <ui.Box key={key} width={tile.columns} height={tile.rows} />)
+    if (!into) continue
+    for (const a of tile.controls ?? []) {
+      const c = a.control
+      if (c.disabled || !file) continue
+      const id = `${piece}/${c.id}`
+      into.tiles.set(id, { key, file, ...(a.hoverFile ? { hoverFile: a.hoverFile } : {}), ...(a.pressedFile ? { pressedFile: a.pressedFile } : {}) })
+      into.controls.push({ id, col: tile.col + a.col, row: top + tile.row, columns: a.columns, rows: tile.rows })
+      if (c.hotkey && s.hotkeys && s.actions[id]) into.hotkeys.set(c.hotkey, id)
+    }
+  }
+  return rows
+}
+
+async function build($: EngineInterface, ui: Ui, s: Site, d: Shown): Promise<{ element: RenderElement; images: number; sent: number }> {
+  const was = live.get(s.site)
+  const before = was?.sources ?? new Map<string, string>()
+  const sources = new Map<string, string>()
+  const source = (key: string, file: string): Promise<ImageSource> => {
+    sources.set(key, file)
+    return sourceOf($, file, s.form)
+  }
+  const into = { tiles: new Map<string, TileRef>(), controls: [] as OverlayControl[], hotkeys: new Map<string, string>() }
   const parts: RenderElement[] = []
   let top = 0
   let width = 1
@@ -153,7 +233,7 @@ async function build($: EngineInterface, ui: Ui, s: Site, d: Shown): Promise<Ren
       const pic = p.picture
       parts.push(
         <ui.Box key={pic.anchorKey ?? `pic-${s.site}-${p.id}`} flexDirection="column" height={pic.rows}>
-          <ui.Image key={pic.key} source={await source(pic.file)} columns={pic.columns} rows={pic.rows} alt={pic.alt} />
+          <ui.Image key={pic.key} source={await source(pic.key, pic.file)} columns={pic.columns} rows={pic.rows} alt={pic.alt} />
         </ui.Box>,
       )
       top += pic.rows
@@ -161,32 +241,49 @@ async function build($: EngineInterface, ui: Ui, s: Site, d: Shown): Promise<Ren
       continue
     }
     const { out } = p
-    const rows: RenderElement[] = []
-    for (const [i, tile] of out.tiles.entries()) {
-      const key = tileKey(s.site, p.id, i)
-      const file = tile.file
-      rows.push(file ? <ui.Image key={key} source={await source(file)} columns={tile.columns} rows={tile.rows} alt=" " /> : <ui.Box key={key} width={tile.columns} height={tile.rows} />)
-      for (const a of tile.controls ?? []) {
-        const c = a.control
-        if (c.disabled || !file) continue
-        const id = `${p.id}/${c.id}`
-        tiles.set(id, { key, file, ...(a.hoverFile ? { hoverFile: a.hoverFile } : {}), ...(a.pressedFile ? { pressedFile: a.pressedFile } : {}) })
-        controls.push({ id, col: tile.col + a.col, row: top + tile.row, columns: a.columns, rows: tile.rows })
-        if (c.hotkey && s.hotkeys && s.actions[id]) hotkeys.set(c.hotkey, id)
-      }
-    }
     parts.push(
       <ui.Box key={`p-${s.site}-${p.id}`} flexDirection="column" height={out.rows}>
-        {rows}
+        {await strips(ui, s, p.id, out, source, top, into)}
       </ui.Box>,
     )
     top += out.rows
     width = Math.max(width, out.columns)
   }
-  const was = live.get(s.site)
-  live.set(s.site, { requestId: s.requestId, tiles, actions: d.actions, hotkeys, ...(s.form ? { form: s.form } : {}), ...(was?.pressedAt !== undefined ? { pressedAt: was.pressedAt } : {}) })
+  // Every page drawn, in the order given whichever is shown, so a switch only shows one and hides another.
+  if (d.pages.length) {
+    const pages: RenderElement[] = []
+    for (const page of d.pages) {
+      const rows = await strips(ui, s, page.id, page.out, source, top, page.shown ? into : undefined)
+      pages.push(
+        <ui.Box key={`pg-${s.site}-${page.id}`} flexDirection="column" height={page.out.rows} display={page.shown ? 'flex' : 'none'}>
+          {rows}
+        </ui.Box>,
+      )
+      if (page.shown) {
+        top += page.out.rows
+        width = Math.max(width, page.out.columns)
+      }
+    }
+    parts.push(
+      <ui.Box key={`pages-${s.site}`} flexDirection="column">
+        {pages}
+      </ui.Box>,
+    )
+  }
+  const { tiles, controls, hotkeys } = into
+  live.set(s.site, {
+    requestId: s.requestId,
+    tiles,
+    actions: d.actions,
+    hotkeys,
+    sources,
+    ...(s.form ? { form: s.form } : {}),
+    ...(was?.pressedAt !== undefined ? { pressedAt: was.pressedAt, ...(was.pressed ? { pressed: was.pressed } : {}), ...(was.renderedAt !== undefined ? { renderedAt: was.renderedAt } : {}) } : {}),
+  })
+  let sent = 0
+  for (const [key, file] of sources) if (before.get(key) !== file) sent++
   const overlay = overlayKey(s.site)
-  return (
+  const element = (
     <ui.Box key={`site-${s.site}`} flexDirection="column" width={width} height={top}>
       {parts}
       <ui.Box position="absolute" top={0} left={0} width={width} height={top}>
@@ -201,6 +298,7 @@ async function build($: EngineInterface, ui: Ui, s: Site, d: Shown): Promise<Ren
       )}
     </ui.Box>
   )
+  return { element, images: sources.size, sent }
 }
 
 async function blit($: EngineInterface, l: Live, ref: TileRef | undefined, file: string | undefined): Promise<void> {
@@ -215,6 +313,8 @@ async function act($: EngineInterface, site: string, id: string, surface: Render
   const action = l?.actions[id]
   if (!l || !action) return
   l.pressedAt = await $.clock.now()
+  l.pressed = id
+  l.renderedAt = undefined
   action(surface)
 }
 
