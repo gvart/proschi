@@ -5,15 +5,17 @@ import type { ActionBarPanel, BannerPanel, Control, NoticesPanel, Panel, PlayerH
 import { BODY, CODE, CONTROL_ROW, blocks, codeBox, itemsRow, placeButton, upToRow } from './blocks';
 import { CELL, CONTROL, Surface, buttonColumns, chip, drawLaid, icon, layoutRich, line, paragraph, rect, tint, txt, width, type Box, type ControlState } from './kit';
 import { clip } from './metrics';
-import { mix, paletteOf, type Palette } from './theme';
+import { alpha, mix, paletteOf, type Palette } from './theme';
 
 /**
  * Each panel kind laid out on a Surface `columns` cells wide, in the
- * editor's look: bars as cards with an ink border and a hard shadow (the use
- * case bar's in pink, as the text UI frames it), tabs with the thick
- * underline (design/widgets.css .ps-tab), the player's step card as
- * UseCasePlayback.tsx, pages as the Analysis and Results panels. The height
- * is whole rows.
+ * editor's content in a terminal's clothes: drawn on a transparent
+ * background so the terminal's own colour shows, bars as faint rounded
+ * cards with a hairline (the use case bar's pink, as the text UI frames it),
+ * tabs over a hairline with a slim accent underline under the current one,
+ * the player's step card as UseCasePlayback.tsx, pages as the Analysis and
+ * Results panels. Type is the terminal's size (14 px on an 8×16 cell),
+ * control rows three cells tall. The height is whole rows.
  */
 
 export interface Drawn {
@@ -26,9 +28,9 @@ const ROW = CELL.height;
 /** A page's or a card's inner margin: two columns. */
 const GUTTER = 2 * CELL.width;
 
-/** A card: surface, an ink (or `border`) frame, the hard shadow. */
-function card(P: Palette, x: number, y: number, w: number, h: number, border = P.ink): string {
-  return [rect(x + 3, y + 3, w - 3, h - 3, { fill: P.shadow, rx: 8 }), rect(x + 1, y + 1, w - 5, h - 5, { fill: P.surface, stroke: border, sw: 2, rx: 7 })].join('');
+/** A card: a faint rounded surface with a hairline (`border` for a coloured one), the terminal's background showing through. */
+function card(P: Palette, x: number, y: number, w: number, h: number, border = P.card.line): string {
+  return rect(x + 0.5, y + 0.5, w - 1, h - 1, { fill: P.card.fill, stroke: border, sw: 1, rx: 10 });
 }
 
 /**
@@ -38,54 +40,49 @@ function card(P: Palette, x: number, y: number, w: number, h: number, border = P
  */
 function framed(S: Surface, border: string, inner: (S: Surface, top: number) => number): number {
   const scratch = new Surface(S.P, S.columns);
-  const h = upToRow(inner(scratch, ROW) + ROW + 6);
-  S.add(card(S.P, 0, 2, S.width, h - 2, border));
+  const h = upToRow(inner(scratch, ROW) + ROW);
+  S.add(card(S.P, 0, 0, S.width, h, border));
   inner(S, ROW);
   return h;
 }
 
+const TAB_LABEL = { size: 14, weight: 600 };
+
 function tabs(S: Surface, p: TabBarPanel): number {
   const P = S.P;
   const H = CONTROL_ROW;
-  const base = H - 3;
-  S.add(rect(0, base, S.width, 3, { fill: P.ink }));
-  let col = 1;
+  // A hairline under the tabs, the current one's slim accent underline over it.
+  S.add(rect(0, H - 1, S.width, 1, { fill: P.line }));
+  let col = 0;
   for (const t of p.tabs) {
-    const label = { size: 13.5, weight: 650 };
-    const capW = t.hotkey ? 16 + 6 : 0;
-    const badgeW = t.badge ? width(t.badge.text, { size: 11, weight: 700 }) + 14 + 6 : 0;
-    const contentW = capW + width(t.label, label) + badgeW;
-    const columns = Math.ceil((contentW + 24) / CELL.width);
+    const capW = t.hotkey ? CONTROL.keycap + 8 : 0;
+    const badgeW = t.badge ? width(t.badge.text, { size: 12, weight: 700 }) + 14 + 7 : 0;
+    const contentW = capW + width(t.label, { ...TAB_LABEL, weight: 700 }) + badgeW;
+    const columns = Math.ceil((contentW + 28) / CELL.width);
     if (col + columns > S.columns) break;
-    const box: Box = { x: col * CELL.width, y: 0, w: columns * CELL.width, h: base };
+    const box: Box = { x: col * CELL.width, y: 0, w: columns * CELL.width, h: H };
     const active = t.id === p.active;
     S.place({
       control: { id: t.id, kind: 'tab', ...(t.hotkey ? { hotkey: t.hotkey } : {}) },
       box,
       draw: (state: ControlState) => {
-        const on = active || state === 'pressed';
-        const color = on || state === 'hover' ? P.ink : P.muted;
+        const color = active || state !== 'rest' ? P.ink : P.muted;
         const out: string[] = [];
-        if (state === 'hover' && !active) out.push(rect(box.x + 2, 3, box.w - 4, base - 5, { fill: P.hover, rx: 5 }));
-        let x = box.x + 12;
-        const cy = 14;
+        if (state !== 'rest') out.push(rect(box.x + 3, 7, box.w - 6, H - 15, { fill: alpha(P.ink, state === 'pressed' ? 0.15 : 0.08), rx: 7 }));
+        let x = box.x + 14;
+        const cy = H / 2 - 1;
         if (t.hotkey) {
-          out.push(rect(x, cy - 7.5, 16, 15, { fill: 'none', stroke: mix(color, P.paper, 0.5), sw: 1, rx: 3 }), txt(x + 8, cy + 3.5, t.hotkey, { size: 9.5, mono: true, weight: 700, color: mix(color, P.paper, 0.8), anchor: 'middle' }));
-          x += 22;
+          out.push(rect(x + 0.5, cy - 8.5, CONTROL.keycap - 1, 17, { stroke: alpha(color, 0.42), sw: 1, rx: 4 }), txt(x + CONTROL.keycap / 2, cy + 3.8, t.hotkey, { size: 10.5, mono: true, weight: 700, color: alpha(color, 0.85), anchor: 'middle' }));
+          x += CONTROL.keycap + 8;
         }
-        out.push(txt(x, cy + 4.8, t.label, { ...label, color }));
-        x += width(t.label, label) + 6;
+        out.push(txt(x, cy + 5, t.label, { ...TAB_LABEL, weight: active ? 700 : 600, color }));
+        x += width(t.label, { ...TAB_LABEL, weight: active ? 700 : 600 }) + 7;
         if (t.badge) {
-          const bw = width(t.badge.text, { size: 11, weight: 700 }) + 14;
+          const bw = width(t.badge.text, { size: 12, weight: 700 }) + 14;
           const tone = P.tone[t.badge.tone];
-          out.push(rect(x, cy - 8, bw, 16, { fill: mix(tone, P.paper, 0.12), stroke: tone, sw: 1.5, rx: 8 }), txt(x + bw / 2, cy + 3.8, t.badge.text, { size: 11, weight: 700, color: tone, anchor: 'middle' }));
+          out.push(rect(x, cy - 9, bw, 18, { fill: alpha(tone, 0.16), rx: 9 }), txt(x + bw / 2, cy + 4.2, t.badge.text, { size: 12, weight: 700, color: tone, anchor: 'middle' }));
         }
-        // The underline: whole under the current tab, a third of it under the pointer.
-        const u = active ? 1 : state === 'pressed' ? 1 : state === 'hover' ? 0.3 : 0;
-        if (u > 0) {
-          const full = box.w - 16;
-          out.push(rect(box.x + 8 + (full * (1 - u)) / 2, base - 6, full * u, 6, { fill: P.ink, rx: 3 }));
-        }
+        if (active) out.push(rect(box.x + 10, H - 3, box.w - 20, 3, { fill: P.accent, rx: 1.5 }));
         return out.join('');
       },
     });
@@ -94,29 +91,30 @@ function tabs(S: Surface, p: TabBarPanel): number {
   return H;
 }
 
-/** A scenario as the editor's scenario tabs name it: ✓ or ✗, the name, the status an error ends with. */
+const CHIP_LABEL = { size: 14, weight: 600 };
+const chipText = (s: ScenarioChip) => `${s.name}${s.status ? ` · ${s.status}` : ''}`;
+const chipColumns = (s: ScenarioChip) => Math.ceil((width(chipText(s), { ...CHIP_LABEL, weight: 700 }) + 14 + 8 + 2 * CONTROL.pad + 2) / CELL.width);
+
+/** A scenario as the editor's scenario tabs name it: ✓ or ✗, the name, the status an error ends with; the current one filled. */
 function scenarioControl(S: Surface, s: ScenarioChip, col: number, top: number, current?: boolean): number {
   const P = S.P;
-  const text = `${s.name}${s.status ? ` · ${s.status}` : ''}`;
+  const text = chipText(s);
   const error = s.outcome === 'error';
-  const columns = Math.ceil((width(text, { size: 12.5, weight: 600 }) + 14 + 6 + 2 * CONTROL.pad + 4) / CELL.width);
-  const box: Box = { x: col * CELL.width, y: top + 3, w: columns * CELL.width, h: CONTROL.height };
+  const columns = chipColumns(s);
+  const box: Box = { x: col * CELL.width, y: top + (CONTROL_ROW - CONTROL.height) / 2, w: columns * CELL.width, h: CONTROL.height };
   S.place({
     control: { id: s.id, kind: 'button' },
     box,
     draw: (state) => {
-      const c = error ? P.chip.red : P.chip.green;
-      const on = current || state === 'pressed';
-      const lift = state === 'hover' ? -1 : state === 'pressed' ? 1 : 0;
-      const x = box.x + 1 + lift;
-      const y = box.y + lift;
-      const w = box.w - 5;
-      const fill = on ? (error ? mix(P.fail, P.surface, 0.28) : mix(P.pass, P.surface, 0.28)) : state === 'hover' ? mix(c.fill, P.ink, 0.88) : c.fill;
+      const tone = error ? P.tone.bad : P.tone.good;
+      const fill = state === 'pressed' ? alpha(tone, 0.34) : current ? alpha(tone, 0.24) : state === 'hover' ? alpha(tone, 0.2) : alpha(tone, 0.1);
+      const x = box.x + 1;
+      const w = box.w - 2;
+      const dy = state === 'pressed' ? 1 : 0;
       return [
-        on || state === 'hover' ? rect(x + 2, y + 2, w, box.h, { fill: P.shadow, rx: 6 }) : '',
-        rect(x + 1, y + 1, w - 2, box.h - 2, { fill, rx: 5, ...(on || state === 'hover' ? { stroke: P.ink, sw: 2 } : { stroke: mix(c.text, c.fill, 0.35), sw: 1 }) }),
-        icon(error ? 'cross' : 'check', x + CONTROL.pad, y + box.h / 2 - 6.5, 13, c.text, 2.4),
-        txt(x + CONTROL.pad + 19, y + box.h / 2 + 4.5, text, { size: 12.5, weight: on ? 700 : 600, color: on ? P.ink : c.text }),
+        rect(x + 0.5, box.y + 0.5, w - 1, box.h - 1, { fill, rx: 7, ...(current || state !== 'rest' ? { stroke: alpha(tone, current ? 0.85 : 0.5), sw: current ? 1.5 : 1 } : {}) }),
+        icon(error ? 'cross' : 'check', x + CONTROL.pad, box.y + box.h / 2 - 7 + dy, 14, tone, 2.4),
+        txt(x + CONTROL.pad + 22, box.y + box.h / 2 + 5 + dy, text, { ...CHIP_LABEL, weight: current ? 700 : 600, color: current || state !== 'rest' ? P.ink : tone }),
       ].join('');
     },
   });
@@ -125,38 +123,35 @@ function scenarioControl(S: Surface, s: ScenarioChip, col: number, top: number, 
 
 function useCaseBar(S: Surface, p: UseCaseBarPanel): number {
   const P = S.P;
-  return framed(S, P.accent, (S, top) => {
-    const label = { text: [{ text: 'USE CASE', tone: 'accent' as const, bold: true }] };
+  return framed(S, alpha(P.accent, 0.55), (S, top) => {
+    const label = { text: [{ text: 'Use case', tone: 'accent' as const, bold: true }] };
+    const right = S.columns - 3;
     let y = top;
-    y += itemsRow(S, [label, { select: p.picker }, { control: p.play }, { control: p.explore }], 2, y, S.columns - 3);
+    y += itemsRow(S, [label, { select: p.picker }, { control: p.play }, { control: p.explore }], 2, y, right);
     for (const g of p.explorer ?? []) {
-      y += 6;
+      y = upToRow(y);
       if (g.label) {
-        S.add(txt(GUTTER, y + 13, g.label, { size: 12, weight: 700, color: P.blue, mono: true }));
-        y += 20;
+        S.add(txt(GUTTER, y + 13, g.label, { size: 13, weight: 700, color: P.blue, mono: true }));
+        y += ROW + 4;
       }
       for (const u of g.useCases) {
         y = upToRow(y);
-        const nameW = width(u.name, { size: 13, weight: u.current ? 700 : 500 });
         const indent = g.label ? 4 : 2;
-        let col = indent;
-        const chips = u.scenarios.map((s) => ({ s, columns: Math.ceil((width(`${s.name}${s.status ? ` · ${s.status}` : ''}`, { size: 12.5, weight: 600 }) + 14 + 6 + 2 * CONTROL.pad + 4) / CELL.width) }));
+        const name = { size: 14, weight: u.current ? 700 : 500 };
+        const nameCols = Math.ceil((width(u.name, name) + 14) / CELL.width);
         // The name on its own line when it and the scenarios do not fit one.
-        const nameCols = Math.ceil((nameW + 12) / CELL.width);
-        const inline = nameCols + chips.reduce((s, c) => s + c.columns + 1, 0) <= S.columns - 3 - indent;
-        if (u.current) S.add(rect(col * CELL.width - 6, y + 9, 3, 14, { fill: P.accent, rx: 1.5 }));
-        S.add(txt(col * CELL.width, y + CONTROL_ROW / 2 + 4.6, u.name, { size: 13, weight: u.current ? 700 : 500, color: P.ink }));
-        if (inline) col += nameCols;
-        else y += 24;
-        for (const c of chips) {
-          if (col + c.columns > S.columns - 3) {
+        const inline = nameCols + u.scenarios.reduce((s, c) => s + chipColumns(c) + 1, 0) <= right - indent;
+        if (u.current) S.add(rect(indent * CELL.width - 8, y + CONTROL_ROW / 2 - 8, 3, 16, { fill: P.accent, rx: 1.5 }));
+        S.add(txt(indent * CELL.width, inline ? y + CONTROL_ROW / 2 + 5 : y + 14, u.name, { ...name, color: P.ink }));
+        let col = indent + (inline ? nameCols : 2);
+        if (!inline) y += ROW + 2;
+        y = upToRow(y);
+        for (const c of u.scenarios) {
+          if (col + chipColumns(c) > right) {
             col = indent + 2;
             y += CONTROL_ROW;
           }
-          if (!inline && col === indent) col = indent + 2;
-          y = upToRow(y);
-          scenarioControl(S, c.s, col, y);
-          col += c.columns + 1;
+          col += scenarioControl(S, c, col, y) + 1;
         }
         y += CONTROL_ROW;
       }
@@ -167,20 +162,20 @@ function useCaseBar(S: Surface, p: UseCaseBarPanel): number {
 
 function playerHeader(S: Surface, p: PlayerHeaderPanel): number {
   const P = S.P;
-  return framed(S, P.accent, (S, top) => {
+  return framed(S, alpha(P.accent, 0.55), (S, top) => {
     let y = top;
     const back = buttonColumns(p.back);
     placeButton(S, p.back, 2, y);
-    const x = (2 + back + 1) * CELL.width;
-    const titleW = width(p.title, { size: 14, weight: 700 });
-    S.add(txt(x, y + CONTROL_ROW / 2 + 5, clip(p.title, S.width - x - 24, 14, 700), { size: 14, weight: 700, color: P.ink }));
-    if (p.note) S.add(txt(x + titleW + 10, y + CONTROL_ROW / 2 + 4.6, clip(p.note, S.width - x - titleW - 34, 12.5), { size: 12.5, color: P.muted }));
+    const x = (2 + back + 2) * CELL.width;
+    const title = { size: 16, weight: 700 };
+    const titleW = Math.min(width(p.title, title), S.width - x - 3 * CELL.width);
+    S.add(txt(x, y + CONTROL_ROW / 2 + 5.5, clip(p.title, S.width - x - 3 * CELL.width, 16, 700), { ...title, color: P.ink }));
+    if (p.note && x + titleW + 60 < S.width - 3 * CELL.width) S.add(txt(x + titleW + 12, y + CONTROL_ROW / 2 + 5, clip(p.note, S.width - x - titleW - 12 - 3 * CELL.width, 13.5), { size: 13.5, color: P.muted }));
     y += CONTROL_ROW;
     if (p.scenarios?.length) {
       let col = 2;
       for (const s of p.scenarios) {
-        const need = Math.ceil((width(`${s.name}${s.status ? ` · ${s.status}` : ''}`, { size: 12.5, weight: 700 }) + 14 + 6 + 2 * CONTROL.pad + 4) / CELL.width);
-        if (col + need > S.columns - 3) {
+        if (col + chipColumns(s) > S.columns - 3) {
           col = 2;
           y += CONTROL_ROW;
         }
@@ -210,28 +205,28 @@ function stepCard(S: Surface, s: StepCard, x: number, top: number, w: number): n
   let y = top;
   // The number: a disc, blue, or red once the call errs.
   const err = s.error === true || s.failed === true;
-  const disc = err ? P.chip.red : { fill: mix(P.blue, P.surface, 0.15), text: P.blue };
-  parts.push(`<circle cx="${x + 14}" cy="${y + 14}" r="14" fill="${disc.fill}"/>`, txt(x + 14, y + 18.5, String(s.number), { size: 13, weight: 700, color: disc.text, anchor: 'middle' }));
-  const tx = x + 40;
+  const disc = err ? P.tone.bad : P.blue;
+  parts.push(`<circle cx="${x + 15}" cy="${y + 15}" r="15" fill="${alpha(disc, 0.18)}"/>`, txt(x + 15, y + 20, String(s.number), { size: 14, weight: 700, color: disc, anchor: 'middle' }));
+  const tx = x + 44;
   let cx = tx;
-  const right = s.call ? width(s.call, { size: 12, mono: true }) + 16 : 0;
-  const name = clip(s.name, w - 40 - right - 160, 14.5, 700);
-  parts.push(txt(cx, y + 12, name, { size: 14.5, weight: 700, color: P.ink }));
-  cx += width(name, { size: 14.5, weight: 700 }) + 10;
+  const right = s.call ? width(s.call, { size: 13, mono: true }) + 16 : 0;
+  const name = clip(s.name, w - 44 - right - 170, 15.5, 700);
+  parts.push(txt(cx, y + 13, name, { size: 15.5, weight: 700, color: P.ink }));
+  cx += width(name, { size: 15.5, weight: 700 }) + 10;
   const chips: { svg: string; width: number }[] = [];
-  if (s.failed) chips.push(tint(P, cx, y + 12, 'Failed', 'red'));
-  else if (s.status !== undefined && s.status >= 400) chips.push(tint(P, cx, y + 12, String(s.status), 'red'));
+  if (s.failed) chips.push(tint(P, cx, y + 13, 'Failed', 'red'));
+  else if (s.status !== undefined && s.status >= 400) chips.push(tint(P, cx, y + 13, String(s.status), 'red'));
   for (const c of chips) {
     parts.push(c.svg);
     cx += c.width + 6;
   }
-  if (!(s.exec === 'sync' && s.failed)) parts.push(tint(P, cx, y + 12, EXEC[s.exec].label, EXEC[s.exec].color).svg);
-  if (s.call) parts.push(txt(x + w, y + 12, clip(s.call, right, 12, 500, true), { size: 12, mono: true, color: P.muted, anchor: 'end' }));
-  parts.push(txt(tx, y + 29, clip(`${s.from}  →  ${s.to}`, w - 40, 12.5), { size: 12.5, color: P.muted }));
-  y += 38;
+  if (!(s.exec === 'sync' && s.failed)) parts.push(tint(P, cx, y + 13, EXEC[s.exec].label, EXEC[s.exec].color).svg);
+  if (s.call) parts.push(txt(x + w, y + 13, clip(s.call, right, 13, 500, true), { size: 13, mono: true, color: P.muted, anchor: 'end' }));
+  parts.push(txt(tx, y + 33, clip(`${s.from}  →  ${s.to}`, w - 44, 13.5), { size: 13.5, color: P.muted }));
+  y += 44;
   S.add(...parts);
   if (s.description) {
-    const p = paragraph(P, s.description.replace(/\s*\n\s*/g, ' '), tx, y, w - 40, { size: 12.5 }, mix(P.ink, P.surface, 0.78), 18, 2);
+    const p = paragraph(P, s.description.replace(/\s*\n\s*/g, ' '), tx, y, w - 44, { size: 13.5 }, mix(P.ink, P.surface, 0.82), 20, 2);
     S.add(p.svg);
     y += p.height + 6;
   }
@@ -240,26 +235,26 @@ function stepCard(S: Surface, s: StepCard, x: number, top: number, w: number): n
   );
   if (bodies.length) {
     // Side by side where both fit (the editor's two columns from `sm`), else one under the other.
-    const side = bodies.length === 2 && w - 40 >= 560;
-    const bw = side ? (w - 40 - 14) / 2 : w - 40;
+    const side = bodies.length === 2 && w - 44 >= 560;
+    const bw = side ? (w - 44 - 14) / 2 : w - 44;
     let tallest = 0;
     let by = y;
     bodies.forEach((b, i) => {
       const bx = side ? tx + i * (bw + 14) : tx;
       const at = side ? y : by;
-      S.add(txt(bx, at + 11, b.label, { size: 11.5, weight: 600, color: b.error ? P.tone.bad : P.muted }));
-      const h = 16 + codeBox(S, b.body.text, bx, at + 16, bw, { language: b.body.format === 'JSON' ? 'json' : b.body.format === 'XML' ? 'xml' : undefined, maxLines: BODY_LINES, error: b.error, fill: P.paper });
+      S.add(txt(bx, at + 12, b.label, { size: 12.5, weight: 600, color: b.error ? P.tone.bad : P.muted }));
+      const h = 18 + codeBox(S, b.body.text, bx, at + 18, bw, { language: b.body.format === 'JSON' ? 'json' : b.body.format === 'XML' ? 'xml' : undefined, maxLines: BODY_LINES, error: b.error });
       tallest = Math.max(tallest, h);
       by = at + h + 8;
     });
     y = side ? y + tallest + 6 : by;
   }
   if (s.failed) {
-    S.add(txt(tx, y + 13, 'No response: the call failed (timeout, connection refused or similar).', { size: 12.5, weight: 500, color: P.tone.bad }));
-    y += 20;
+    S.add(txt(tx, y + 14, 'No response: the call failed (timeout, connection refused or similar).', { size: 13.5, weight: 500, color: P.tone.bad }));
+    y += 22;
   } else if (!s.response && s.status !== undefined && s.status >= 400) {
-    S.add(txt(tx, y + 13, `Answered with ${s.status}`, { size: 12.5, weight: 500, color: P.tone.bad }));
-    y += 20;
+    S.add(txt(tx, y + 14, `Answered with ${s.status}`, { size: 13.5, weight: 500, color: P.tone.bad }));
+    y += 22;
   }
   return y - top;
 }
@@ -269,17 +264,17 @@ function stepCards(S: Surface, p: StepPanel, cards: StepCard[], x: number, top: 
   const P = S.P;
   let y = top;
   if (p.condition) {
-    const laid = layoutRich([{ text: 'When: ', bold: true }, { text: p.condition }], w, { size: 12.5 }, false)[0];
-    S.add(drawLaid(P, laid, x, y + 13, { size: 12.5 }, mix(P.ink, P.surface, 0.8)));
-    y += 24;
+    const laid = layoutRich([{ text: 'When: ', bold: true }, { text: p.condition }], w, { size: 13.5 }, false)[0];
+    S.add(drawLaid(P, laid, x, y + 14, { size: 13.5 }, mix(P.ink, P.surface, 0.82)));
+    y += 26;
   }
   if (cards.length > 1) {
-    S.add(icon('bolt', x, y + 1, 14, P.blue), txt(x + 20, y + 12.5, `Parallel Execution (${cards.length} steps running simultaneously)`, { size: 12.5, weight: 600, color: P.blue }));
-    y += 24;
+    S.add(icon('bolt', x, y + 1, 15, P.blue), txt(x + 22, y + 13, `Parallel Execution (${cards.length} steps running simultaneously)`, { size: 13.5, weight: 600, color: P.blue }));
+    y += 26;
   }
   if (cards.length === 0) {
-    S.add(txt(x, y + 14, 'This scenario has no steps.', { size: 13, color: P.muted }));
-    y += 24;
+    S.add(txt(x, y + 15, 'This scenario has no steps.', { size: 14, color: P.muted }));
+    y += 26;
   }
   cards.forEach((c, i) => {
     if (i > 0) {
@@ -296,14 +291,14 @@ function stepPanel(S: Surface, p: StepPanel): number {
   const total = p.steps.length;
   const at = Math.max(0, Math.min(p.at, total - 1));
   const x = GUTTER;
-  const w = S.width - 2 * GUTTER - 4;
+  const w = S.width - 2 * GUTTER;
   // As tall as the tallest step, so stepping moves nothing.
   const scratch = new Surface(P, S.columns);
   const tallest = Math.max(0, ...p.steps.map((cards) => stepCards(scratch, p, cards, x, 0, w)), stepCards(scratch, p, p.steps[at] ?? [], x, 0, w));
-  return framed(S, P.ink, (S, top) => {
-    stepCards(S, p, p.steps[at] ?? [], x, top, w);
-    let y = upToRow(top + tallest + 4);
-    S.add(line(6, y + 0.5, S.width - 10, y + 0.5, P.line, 1));
+  return framed(S, P.card.line, (S, top) => {
+    stepCards(S, p, p.steps[at] ?? [], x, top - 2, w);
+    let y = upToRow(top - 2 + tallest + 6);
+    S.add(line(1, y + 0.5, S.width - 1, y + 0.5, P.line, 1));
     const k = p.hotkeys ?? {};
     const hk = (id: keyof NonNullable<StepPanel['hotkeys']>) => (k[id] ? { hotkey: k[id] } : {});
     const ctl = (c: Control): { control: Control } => ({ control: c });
@@ -319,34 +314,34 @@ function stepPanel(S: Surface, p: StepPanel): number {
         ctl({ id: 'last', icon: 'last', ...hk('last'), variant: 'quiet', disabled: at >= total - 1 }),
         { text: [{ text: counter, bold: true }] },
         { progress: total ? (at + 1) / total : 0 },
-        ctl({ id: 'exit', icon: 'exit', label: S.columns >= 90 ? 'Exit playback' : 'Exit', ...hk('exit'), variant: 'quiet' }),
+        ctl({ id: 'exit', icon: 'exit', label: S.columns >= 96 ? 'Exit playback' : 'Exit', ...hk('exit'), variant: 'quiet' }),
       ],
       2,
-      y + 2,
-      S.columns - 3,
-    ) + 2;
+      y,
+      S.columns - 2,
+    );
     return y - top;
   });
 }
 
 function systemBar(S: Surface, p: SystemBarPanel): number {
   const P = S.P;
-  return framed(S, P.ink, (S, top) => {
+  return framed(S, P.card.line, (S, top) => {
     let y = top;
     if (p.inside) {
-      S.add(txt(GUTTER, y + 12, clip(`Inside ${p.inside}`, S.width - 2 * GUTTER, 12), { size: 12, color: P.muted }));
-      y += 18;
+      S.add(txt(GUTTER, y + 13, clip(`Inside ${p.inside}`, S.width - 2 * GUTTER, 13), { size: 13, color: P.muted }));
+      y += ROW + 2;
     }
     const selected: { text: { text: string; tone?: 'accent' | 'muted'; bold?: boolean }[] } = p.selected
       ? { text: [{ text: 'System  ', bold: true }, { text: p.selected.name, tone: 'accent', bold: true }, { text: `  ${p.selected.path}`, tone: 'muted' }] }
       : { text: [{ text: 'System  ', bold: true }, { text: 'none here', tone: 'muted' }] };
-    y += itemsRow(S, [selected, ...p.controls.map((c) => ({ control: c }))], 2, y, S.columns - 3);
+    y += itemsRow(S, [selected, ...p.controls.map((c) => ({ control: c }))], 2, y, S.columns - 2);
     return y - top;
   });
 }
 
 function actionBar(S: Surface, p: ActionBarPanel): number {
-  return itemsRow(S, p.controls.map((c) => ({ control: c })), 0, 0, S.columns - 1);
+  return itemsRow(S, p.controls.map((c) => ({ control: c })), 0, 0, S.columns);
 }
 
 function banner(S: Surface, p: BannerPanel): number {
@@ -354,9 +349,11 @@ function banner(S: Surface, p: BannerPanel): number {
   const resetCols = buttonColumns(p.reset);
   placeButton(S, p.reset, 0, 0);
   const x = (resetCols + 1) * CELL.width;
-  const lw = Math.min(S.width - x - 8, width(p.label, { size: 12.5, weight: 700 }) + 22);
-  S.add(rect(x, 6, lw, 20, { fill: P.yellow, stroke: P.theme === 'dark' ? P.yellow : P.ink, sw: 1.5, rx: 10 }), txt(x + 11, 20.5, clip(p.label, lw - 22, 12.5, 700), { size: 12.5, weight: 700, color: P.onAccent }));
-  if (p.note && x + lw + 12 < S.width - 60) S.add(txt(x + lw + 10, 20.5, clip(p.note, S.width - x - lw - 18, 12.5), { size: 12.5, color: P.muted }));
+  const label = { size: 13.5, weight: 700 };
+  const lw = Math.min(S.width - x - 8, width(p.label, label) + 24);
+  const cy = CONTROL_ROW / 2;
+  S.add(rect(x, cy - 12, lw, 24, { fill: P.yellow, rx: 12 }), txt(x + 12, cy + 5, clip(p.label, lw - 24, 13.5, 700), { ...label, color: P.onAccent }));
+  if (p.note && x + lw + 12 < S.width - 60) S.add(txt(x + lw + 12, cy + 5, clip(p.note, S.width - x - lw - 20, 13.5), { size: 13.5, color: P.muted }));
   return CONTROL_ROW;
 }
 
@@ -364,7 +361,7 @@ function banner(S: Surface, p: BannerPanel): number {
 function legend(S: Surface, critical: { useCase: string; p99: string } | undefined, x: number, y: number): void {
   const P = S.P;
   const out: string[] = [];
-  const small = { size: 11.5, color: P.muted };
+  const small = { size: 12.5, color: P.muted };
   let cx = x;
   const put = (s: string, style = small) => {
     out.push(txt(cx, y, s, style));
@@ -379,13 +376,13 @@ function legend(S: Surface, critical: { useCase: string; p99: string } | undefin
     ['#FF7AB4', '90'],
     ['#FF6B61', '100%'],
   ] as const) {
-    out.push(rect(cx, y - 9, 12, 12, { fill, stroke: P.ink, sw: 1, rx: 2 }));
-    cx += 16;
+    out.push(rect(cx, y - 10, 13, 13, { fill, rx: 3 }));
+    cx += 17;
     put(label);
   }
   if (critical) {
     cx += 8;
-    out.push(line(cx, y - 4, cx + 18, y - 4, P.ink, 3.5));
+    out.push(line(cx, y - 4.5, cx + 18, y - 4.5, P.ink, 3.5));
     cx += 24;
     const t = `p99 path of "${critical.useCase}" ${critical.p99}`;
     if (cx + width(t, small) < S.width - 8) put(t);
@@ -406,13 +403,13 @@ function notices(S: Surface, p: NoticesPanel): number {
   for (const n of p.notices ?? []) {
     const tone = n.tone ?? 'warn';
     const color = tone === 'muted' ? P.muted : tone === 'bad' ? P.tone.bad : P.tone.warn;
-    const laid = layoutRich([{ text: n.text }, ...(n.hint ? [{ text: `  → ${n.hint}`, tone: 'muted' as const }] : [])], w - 22, { size: 12.5 }, false)[0];
-    S.add(icon(tone === 'muted' ? 'warn' : 'warn', x, y + 3, 13, color, 1.8), drawLaid(P, laid, x + 20, y + 14, { size: 12.5 }, color));
-    y += 20;
+    const laid = layoutRich([{ text: n.text }, ...(n.hint ? [{ text: `  → ${n.hint}`, tone: 'muted' as const }] : [])], w - 24, BODY, false)[0];
+    S.add(icon('warn', x, y + 3, 15, color, 1.8), drawLaid(P, laid, x + 23, y + 15, BODY, color));
+    y += 22;
   }
   if (p.legend) {
-    legend(S, p.legend.critical, x, y + 14);
-    y += 22;
+    legend(S, p.legend.critical, x, y + 15);
+    y += 24;
   }
   if (p.verdict) {
     y = upToRow(y);
@@ -420,10 +417,10 @@ function notices(S: Surface, p: NoticesPanel): number {
     const failing = total - passed;
     const checks = total === 1 ? 'check' : 'checks';
     const detailsCols = p.details ? buttonColumns(p.details) + 1 : 0;
-    const room = w - detailsCols * CELL.width - 22;
+    const room = w - detailsCols * CELL.width - 24;
     const head = failing === 0 ? `All ${total} ${checks} pass` : `${failing} of ${total} ${checks} fail`;
     const laid = layoutRich([{ text: head, bold: true, tone: failing ? 'bad' : 'good' }, ...(failing && first ? [{ text: `: ${first}` }] : [])], room, BODY, false)[0];
-    S.add(icon(failing ? 'cross' : 'check', x, y + CONTROL_ROW / 2 - 7, 14, failing ? P.tone.bad : P.tone.good, 2.4), drawLaid(P, laid, x + 20, y + CONTROL_ROW / 2 + 4.6, BODY, P.ink));
+    S.add(icon(failing ? 'cross' : 'check', x, y + CONTROL_ROW / 2 - 8, 16, failing ? P.tone.bad : P.tone.good, 2.4), drawLaid(P, laid, x + 23, y + CONTROL_ROW / 2 + 5, BODY, P.ink));
     if (p.details) placeButton(S, p.details, S.columns - detailsCols, y);
     y += CONTROL_ROW;
   }

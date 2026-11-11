@@ -292,7 +292,8 @@ const IDLE_MS = 30 * 60 * 1000;
  * The session-long worker: `raster.cjs --serve <dir>`. The mod's stdin is
  * one-shot, so requests come as files: `<id>.req.json` (an input as stdin
  * takes it) put into `dir`, best written under another name and renamed in,
- * answered in order of name, each by a line on stdout, `{"id","output"}` or
+ * answered lowest name first (the folder read again after each, so a request
+ * named lower overtakes those waiting), each by a line on stdout, `{"id","output"}` or
  * `{"id","error"}`, the same JSON also in `<id>.res.json`. The first line,
  * `{"ready":true}`, comes once the wasm and the fonts are loaded. It exits
  * when idle for `idleMs`, or once its parent is gone (it is re-parented).
@@ -342,6 +343,9 @@ export function serve(dir: string, assets: RasterAssets, write: (line: string) =
             reply(id, { error: error instanceof Error ? error.message : String(error) });
           }
           last = Date.now();
+          // Read the folder again after each answer: a request named lower that came meanwhile (a press's, over prefetches) goes next.
+          again = true;
+          break;
         }
       } while (again);
     } finally {

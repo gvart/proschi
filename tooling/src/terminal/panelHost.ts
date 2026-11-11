@@ -11,8 +11,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Resvg } from '@resvg/resvg-wasm';
-import { CANVAS_TOKENS } from '../../../frontend/src/utils/canvasColors';
-import type { PanelOutput, PanelRequest, PanelsInput, Tile, UiTheme } from '../render/ui/contract';
+import type { PanelOutput, PanelRequest, PanelsInput, Tile } from '../render/ui/contract';
 import { CELL, type ControlState } from '../render/ui/kit';
 import { drawPanel } from '../render/ui/panels';
 import { cellsOf, cut, type Strip } from '../render/ui/tiles';
@@ -29,10 +28,10 @@ export interface PanelEnv {
   build?: string;
 }
 
-function draw(svg: string, zoom: number, env: PanelEnv, theme: UiTheme): Pixels {
+/** A panel's SVG as pixels on a transparent background, so the terminal's own colour shows through. */
+function draw(svg: string, zoom: number, env: PanelEnv): Pixels {
   const resvg = new Resvg(svg, {
     font: { fontBuffers: env.fonts, defaultFontFamily: 'Inter', sansSerifFamily: 'Inter', monospaceFamily: 'JetBrains Mono' },
-    background: CANVAS_TOKENS[theme].paper,
     fitTo: { mode: 'zoom', value: zoom },
   });
   const image = resvg.render();
@@ -93,7 +92,7 @@ async function panel(req: PanelRequest, input: PanelsInput, env: PanelEnv, write
   for (const piece of pieces) {
     const top = piece[0].row;
     const bottom = piece.at(-1)!.row + piece.at(-1)!.rows;
-    const pixels = draw(surface.svg(height, new Map(), { x: 0, y: top * CELL.height, w: surface.width, h: (bottom - top) * CELL.height }), zoom, env, theme);
+    const pixels = draw(surface.svg(height, new Map(), { x: 0, y: top * CELL.height, w: surface.width, h: (bottom - top) * CELL.height }), zoom, env);
     for (const s of piece) {
       for (const t of s.tiles) {
         const box = { x: t.col * px.width, y: t.row * px.height, w: t.columns * px.width, h: t.rows * px.height };
@@ -102,7 +101,7 @@ async function panel(req: PanelRequest, input: PanelsInput, env: PanelEnv, write
           tile.control = t.control;
           for (const state of variants) {
             const window = { x: t.col * CELL.width, y: t.row * CELL.height, w: t.columns * CELL.width, h: t.rows * CELL.height };
-            const file = await save(input.outDir, draw(surface.svg(height, new Map<string, ControlState>([[t.control.id, state]]), window), zoom, env, theme), writer);
+            const file = await save(input.outDir, draw(surface.svg(height, new Map<string, ControlState>([[t.control.id, state]]), window), zoom, env), writer);
             if (state === 'hover') tile.hoverFile = file;
             else tile.pressedFile = file;
           }

@@ -1,7 +1,7 @@
 import { esc, r } from '../svg';
 import type { Control, Icon, Rich, Span, Tone, TileControl } from './contract';
 import { clip, measure } from './metrics';
-import { mix, type Palette } from './theme';
+import { alpha, mix, type Palette } from './theme';
 
 /**
  * The UI kit's drawing: a Surface collects SVG for a panel `columns` cells
@@ -61,7 +61,7 @@ export class Surface {
     this.parts.push({ control: p.control.id });
   }
 
-  /** The panel as SVG `height` px tall, controls in their states (rest unless named); `crop` draws only that window, at its size. */
+  /** The panel as SVG `height` px tall, controls in their states (rest unless named); `crop` draws only that window, at its size. No background: the terminal's shows through. */
   svg(height: number, states: Map<string, ControlState> = new Map(), crop?: Box): string {
     const byId = new Map(this.controls.map((c) => [c.control.id, c]));
     const view = crop ?? { x: 0, y: 0, w: this.width, h: height };
@@ -72,7 +72,6 @@ export class Surface {
       .join('\n');
     return [
       `<svg xmlns="http://www.w3.org/2000/svg" width="${view.w}" height="${view.h}" viewBox="${view.x} ${view.y} ${view.w} ${view.h}" font-family="${SANS}">`,
-      `<rect x="${view.x}" y="${view.y}" width="${view.w}" height="${view.h}" fill="${this.P.paper}"/>`,
       body,
       '</svg>',
     ].join('\n');
@@ -121,7 +120,7 @@ export const toneColor = (P: Palette, tone: Tone | undefined, fallback = P.ink) 
 const CHIP_OF: Record<Tone, keyof Palette['chip']> = { ink: 'gray', muted: 'gray', accent: 'pink', good: 'green', warn: 'yellow', bad: 'red', info: 'blue' };
 
 /** A chip: a pill of `text` in a tone, `size` px type, its left at x and its text's baseline at y. */
-export function chip(P: Palette, x: number, y: number, text: string, tone: Tone, size = 11): { svg: string; width: number } {
+export function chip(P: Palette, x: number, y: number, text: string, tone: Tone, size = 12): { svg: string; width: number } {
   const c = P.chip[CHIP_OF[tone]];
   const w = width(text, { size, weight: 600 }) + 12;
   const h = size + 7;
@@ -132,7 +131,7 @@ export function chip(P: Palette, x: number, y: number, text: string, tone: Tone,
 }
 
 /** A chip of a named tint (Sync green, Async purple, Fire & Forget orange). */
-export function tint(P: Palette, x: number, y: number, text: string, color: keyof Palette['chip'], size = 11): { svg: string; width: number } {
+export function tint(P: Palette, x: number, y: number, text: string, color: keyof Palette['chip'], size = 12): { svg: string; width: number } {
   const c = P.chip[color];
   const w = width(text, { size, weight: 600 }) + 12;
   return { svg: [rect(x, y - size - 1.5, w, size + 7, { fill: c.fill, rx: 4 }), txt(x + 6, y, text, { size, weight: 600, color: c.text })].join(''), width: w };
@@ -157,7 +156,7 @@ interface Laid {
 
 const styleOf = (s: Span, base: TextStyle): TextStyle => ({ ...base, weight: s.bold ? Math.max(600, base.weight ?? 400) : base.weight, mono: s.mono ?? base.mono });
 
-const pieceWidth = (s: Span, text: string, base: TextStyle) => (s.chip ? width(text, { size: (base.size ?? 13) - 2, weight: 600 }) + 12 : width(text, styleOf(s, base)));
+const pieceWidth = (s: Span, text: string, base: TextStyle) => (s.chip ? width(text, { size: (base.size ?? 13) - 1.5, weight: 600 }) + 12 : width(text, styleOf(s, base)));
 
 /** Rich text broken into lines of at most `max` px (one line, clipped, with `max` and `wrap` false). */
 export function layoutRich(rich: Rich, max: number, base: TextStyle, wrap = true): Laid[] {
@@ -215,7 +214,7 @@ export function layoutRich(rich: Rich, max: number, base: TextStyle, wrap = true
 export function drawLaid(P: Palette, laid: Laid, x: number, y: number, base: TextStyle, color: string): string {
   return laid.pieces
     .map((p) => {
-      if (p.span.chip) return chip(P, x + p.x, y, p.text, p.span.chip, (base.size ?? 13) - 2).svg;
+      if (p.span.chip) return chip(P, x + p.x, y, p.text, p.span.chip, (base.size ?? 13) - 1.5).svg;
       const s = styleOf(p.span, base);
       return txt(x + p.x, y, p.text, { ...s, color: p.span.tone ? P.tone[p.span.tone] : color });
     })
@@ -278,13 +277,19 @@ export function icon(name: Icon, x: number, y: number, size: number, color: stri
 
 // ---------- controls ----------
 
-/** A control's height and its type size. */
-export const CONTROL = { height: 26, size: 12.5, pad: 10, icon: 14, gap: 6, keycap: 15 };
+/**
+ * A control's height and its type size: the label as large as the terminal's
+ * own text (a cell is 8×16 px, so 14 px type), the control in a row three
+ * cells tall (CONTROL_ROW in blocks.ts).
+ */
+export const CONTROL = { height: 34, size: 14, pad: 12, icon: 16, gap: 7, keycap: 18 };
 
-/** A keycap with `key` in it, its left at x, centred on cy. */
-function keycap(x: number, cy: number, key: string, on: string, border: string): string {
-  const w = Math.max(CONTROL.keycap, width(key, { size: 9.5, mono: true }) + 7);
-  return [rect(x, cy - 7.5, w, 15, { fill: on, stroke: border, sw: 1, rx: 3 }), txt(x + w / 2, cy + 3.4, key, { size: 9.5, mono: true, weight: 700, color: border, anchor: 'middle' })].join('');
+const KEY = { size: 10.5, mono: true, weight: 700 } as const;
+
+/** A keycap with `key` in it, its left at x, centred on cy, in `color` (#rrggbb). */
+function keycap(x: number, cy: number, key: string, color: string): string {
+  const w = Math.max(CONTROL.keycap, width(key, KEY) + 8);
+  return [rect(x + 0.5, cy - 8.5, w - 1, 17, { stroke: alpha(color, 0.42), sw: 1, rx: 4 }), txt(x + w / 2, cy + 3.8, key, { ...KEY, color: alpha(color, 0.85), anchor: 'middle' })].join('');
 }
 
 /** The px a button's contents take. */
@@ -292,90 +297,77 @@ export function buttonContent(c: Pick<Control, 'label' | 'icon' | 'hotkey'>): nu
   let w = 0;
   if (c.icon) w += CONTROL.icon;
   if (c.label) w += (w ? CONTROL.gap : 0) + width(c.label, { size: CONTROL.size, weight: 600 });
-  if (c.hotkey) w += (w ? 8 : 0) + Math.max(CONTROL.keycap, width(c.hotkey, { size: 9.5, mono: true }) + 7);
+  if (c.hotkey) w += (w ? 9 : 0) + Math.max(CONTROL.keycap, width(c.hotkey, KEY) + 8);
   return w;
 }
 
-/** Columns a button takes: its contents, padding and shadow, rounded up to whole cells; `columns` when fixed. */
-export const buttonColumns = (c: Control) => c.columns ?? Math.ceil((buttonContent(c) + 2 * (c.variant === 'quiet' ? 6 : CONTROL.pad) + 4) / CELL.width);
+/** Columns a button takes: its contents and padding, rounded up to whole cells; `columns` when fixed. */
+export const buttonColumns = (c: Control) => c.columns ?? Math.ceil((buttonContent(c) + 2 * (c.variant === 'quiet' ? 8 : CONTROL.pad) + 2) / CELL.width);
 
 /**
- * A button as the editor draws one (border-bw-1, shadow-brutal-sm, rounded):
- * surface with an ink border, or the yellow primary; `quiet` without chrome
- * until hovered. Hover lifts it a pixel onto a deeper shadow, pressed sinks it
- * onto its shadow; an `active` toggle is drawn pressed in.
+ * A button: a faint rounded surface with a hairline (the terminal's
+ * background shows through), the yellow primary, or `quiet` without chrome
+ * until hovered. Hover deepens the wash, pressed deepens it more and sinks
+ * the contents a pixel; an `active` toggle is drawn pressed in.
  */
 export function drawButton(P: Palette, c: Control, box: Box, state: ControlState): string {
   const variant = c.variant ?? 'default';
   const disabled = c.disabled === true;
   const pressed = (state === 'pressed' || c.active === true) && !disabled;
   const hover = state === 'hover' && !disabled;
-  const depth = variant === 'quiet' || disabled ? 0 : pressed ? 0 : hover ? 3 : 2;
-  const shift = variant === 'quiet' || disabled ? 0 : pressed ? 2 : hover ? -1 : 0;
-  const x = box.x + 1 + shift;
-  const y = box.y + shift;
-  const w = box.w - 5;
+  const x = box.x + 1;
+  const y = box.y;
+  const w = box.w - 2;
   const h = box.h;
-  const ink = disabled ? mix(P.ink, P.surface, 0.35) : P.ink;
   let fill: string;
+  let stroke: string | undefined;
   let text: string;
-  let border: string | undefined = ink;
   if (variant === 'primary') {
-    fill = hover ? mix(P.yellow, P.surface, 0.85) : P.yellow;
+    fill = disabled ? alpha(P.yellow, 0.35) : pressed ? mix('#000000', P.yellow, 0.14) : hover ? mix('#ffffff', P.yellow, 0.22) : P.yellow;
     text = P.onAccent;
-    border = disabled ? border : P.theme === 'dark' ? P.yellow : P.ink;
-    if (disabled) fill = mix(P.yellow, P.surface, 0.35);
   } else if (variant === 'quiet') {
-    fill = hover || pressed ? P.hover : 'none';
-    text = hover || pressed ? P.ink : disabled ? mix(P.muted, P.surface, 0.5) : P.muted;
-    border = undefined;
+    fill = pressed ? alpha(P.ink, 0.16) : hover ? P.hover : 'none';
+    text = disabled ? alpha(P.muted, 0.5) : hover || pressed ? P.ink : P.muted;
   } else {
-    fill = pressed ? P.hover : hover ? mix(P.ink, P.surface, 0.05) : P.surface;
-    text = ink;
+    fill = pressed ? alpha(P.ink, 0.17) : hover ? alpha(P.ink, 0.11) : alpha(P.ink, 0.05);
+    stroke = pressed || hover ? alpha(P.ink, 0.38) : alpha(P.ink, disabled ? 0.12 : 0.22);
+    text = disabled ? alpha(P.ink, 0.4) : P.ink;
   }
-  const out: string[] = [];
-  if (depth) out.push(rect(x + depth, y + depth, w, h, { fill: P.shadow, rx: 6 }));
-  out.push(rect(x + (border ? 1 : 0), y + (border ? 1 : 0), w - (border ? 2 : 0), h - (border ? 2 : 0), { fill, rx: 5, ...(border ? { stroke: border, sw: 2 } : {}) }));
-  // Contents centred in the box.
+  const out: string[] = [rect(x + 0.5, y + 0.5, w - 1, h - 1, { fill, rx: 7, ...(stroke ? { stroke, sw: 1 } : {}) })];
+  // Contents centred in the box, a pixel lower while pressed.
   const content = buttonContent(c);
   let cx = x + (w - content) / 2;
-  const cy = y + h / 2;
+  const cy = y + h / 2 + (pressed && state === 'pressed' ? 1 : 0);
   if (c.icon) {
-    out.push(icon(c.icon, cx, cy - CONTROL.icon / 2, CONTROL.icon, text));
+    out.push(icon(c.icon, cx, cy - CONTROL.icon / 2, CONTROL.icon, text, 2));
     cx += CONTROL.icon + CONTROL.gap;
   }
   if (c.label) {
     out.push(txt(cx, cy + CONTROL.size * 0.36, c.label, { size: CONTROL.size, weight: 600, color: text }));
-    cx += width(c.label, { size: CONTROL.size, weight: 600 }) + 8;
+    cx += width(c.label, { size: CONTROL.size, weight: 600 }) + 9;
   }
-  if (c.hotkey) {
-    const capBorder = variant === 'primary' ? mix(P.onAccent, fill, 0.55) : mix(text, fill === 'none' ? P.surface : fill, 0.55);
-    out.push(keycap(c.label || c.icon ? cx : x + (w - CONTROL.keycap) / 2, cy, c.hotkey, variant === 'primary' ? mix('#ffffff', fill, 0.35) : fill, capBorder));
-  }
+  if (c.hotkey && !disabled) out.push(keycap(c.label || c.icon ? cx : x + (w - CONTROL.keycap) / 2, cy, c.hotkey, variant === 'primary' ? P.onAccent : variant === 'quiet' && !hover && !pressed ? P.muted : P.ink));
   return out.join('');
 }
 
 /** A closed dropdown: the value, a chevron; drawn as a default button. */
 export function selectColumns(value: string, hotkey?: string): number {
-  return Math.ceil((width(value, { size: CONTROL.size, weight: 500 }) + 2 * CONTROL.pad + 6 + 14 + (hotkey ? 23 : 0) + 12) / CELL.width);
+  return Math.ceil((width(value, { size: CONTROL.size, weight: 500 }) + 2 * CONTROL.pad + 8 + 16 + (hotkey ? 27 : 0) + 2) / CELL.width);
 }
 
 export function drawSelect(P: Palette, value: string, box: Box, state: ControlState, open: boolean, hotkey?: string): string {
   const hover = state === 'hover';
   const pressed = state === 'pressed' || open;
-  const depth = pressed ? 0 : hover ? 3 : 2;
-  const shift = pressed ? 2 : hover ? -1 : 0;
-  const x = box.x + 1 + shift;
-  const y = box.y + shift;
-  const w = box.w - 5;
+  const x = box.x + 1;
+  const y = box.y;
+  const w = box.w - 2;
   const h = box.h;
   const cy = y + h / 2;
-  const room = w - 2 * CONTROL.pad - 20 - (hotkey ? 23 : 0);
+  const room = w - 2 * CONTROL.pad - 24 - (hotkey ? 27 : 0);
   return [
-    depth ? rect(x + depth, y + depth, w, h, { fill: P.shadow, rx: 6 }) : '',
-    rect(x + 1, y + 1, w - 2, h - 2, { fill: hover && !pressed ? mix(P.ink, P.surface, 0.05) : P.surface, stroke: P.ink, sw: 2, rx: 5 }),
+    rect(x + 0.5, y + 0.5, w - 1, h - 1, { fill: pressed ? alpha(P.ink, 0.15) : hover ? alpha(P.ink, 0.11) : alpha(P.ink, 0.05), stroke: open ? P.accent : alpha(P.ink, pressed || hover ? 0.38 : 0.22), sw: open ? 1.5 : 1, rx: 7 }),
     txt(x + CONTROL.pad, cy + CONTROL.size * 0.36, clip(value, room, CONTROL.size, 500), { size: CONTROL.size, weight: 500, color: P.ink }),
-    hotkey ? keycap(x + w - CONTROL.pad - 14 - 8 - CONTROL.keycap, cy, hotkey, P.surface, mix(P.ink, P.surface, 0.55)) : '',
-    icon('chevron-down', x + w - CONTROL.pad - 14, cy - 7, 14, P.ink, 2),
+    hotkey ? keycap(x + w - CONTROL.pad - 16 - 9 - CONTROL.keycap, cy, hotkey, P.ink) : '',
+    icon('chevron-down', x + w - CONTROL.pad - 16, cy - 8, 16, P.muted, 2),
   ].join('');
 }
