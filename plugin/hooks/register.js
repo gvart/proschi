@@ -6988,17 +6988,17 @@ function writesCheck(run, u, scenarios, accept, what) {
     return pass(`${label} writes to ${what} before responding`);
   }
   const details = gaps.map((s) => ({ s, gap: writeGap(run, u, s, accept) }));
-  const where2 = (s) => u.scenarios.length > 1 ? `"${s.name}"` : `"${u.name}"`;
+  const where3 = (s) => u.scenarios.length > 1 ? `"${s.name}"` : `"${u.name}"`;
   const text = (s, gap) => {
     switch (gap.kind) {
       case "async":
-        return `${where2(s)} writes to ${what} only asynchronously: ${stepText(gap.step)}`;
+        return `${where3(s)} writes to ${what} only asynchronously: ${stepText(gap.step)}`;
       case "after":
-        return `${where2(s)} writes to ${what} only after responding: ${stepText(gap.step)}`;
+        return `${where3(s)} writes to ${what} only after responding: ${stepText(gap.step)}`;
       case "read":
-        return `${where2(s)} only reads from ${what} before responding: ${stepText(gap.step)} is a read`;
+        return `${where3(s)} only reads from ${what} before responding: ${stepText(gap.step)} is a read`;
       case "none":
-        return `${where2(s)} never writes to ${what} before responding`;
+        return `${where3(s)} never writes to ${what} before responding`;
     }
   };
   const message = details.map(({ s, gap }) => text(s, gap)).join("; ");
@@ -7305,9 +7305,9 @@ function before(run, a) {
     checked++;
     const ix = order.findIndex((m) => first.has(m.to) && stepMatches(m.step, a.match));
     if (ix < 0 || ix > iy) {
-      const where2 = sc.scenarios.length > 1 || a.scenario ? `In ${quote(s.name)}` : `In ${quote(sc.u.name)}`;
+      const where3 = sc.scenarios.length > 1 || a.scenario ? `In ${quote(s.name)}` : `In ${quote(sc.u.name)}`;
       return fail(
-        ix < 0 ? `${where2}, ${order[iy].to} is called (${stepText(order[iy].step)}) but ${x} never is` : `${where2}, ${order[iy].to} is called (${stepText(order[iy].step)}) before ${order[ix].to} (${stepText(order[ix].step)})`,
+        ix < 0 ? `${where3}, ${order[iy].to} is called (${stepText(order[iy].step)}) but ${x} never is` : `${where3}, ${order[iy].to} is called (${stepText(order[iy].step)}) before ${order[ix].to} (${stepText(order[ix].step)})`,
         `Call ${x} before the first call to ${y}`
       );
     }
@@ -7329,12 +7329,12 @@ function beforeResponding(run, a) {
   const isMatch = (step) => stepMatches(step, a.match);
   const gaps = success.filter((s) => !writesBeforeResponse(sc.u, s, accept, isMatch));
   if (gaps.length === 0) return pass(`${success.length === 1 ? sc.label : `Every success scenario of ${sc.label}`} ${phrase} before responding`);
-  const where2 = (s) => sc.u.scenarios.length > 1 ? quote(s.name) : quote(sc.u.name);
+  const where3 = (s) => sc.u.scenarios.length > 1 ? quote(s.name) : quote(sc.u.name);
   const text = (s) => {
     const g = writeGap(run, sc.u, s, accept, isMatch);
-    if (g.kind === "async") return `${where2(s)} ${phrase} only asynchronously: ${stepText(g.step)}`;
-    if (g.kind === "after") return `${where2(s)} ${phrase} only after responding: ${stepText(g.step)}`;
-    return `${where2(s)} never ${phrase} before responding${otherSteps([s], ids, a.match)}`;
+    if (g.kind === "async") return `${where3(s)} ${phrase} only asynchronously: ${stepText(g.step)}`;
+    if (g.kind === "after") return `${where3(s)} ${phrase} only after responding: ${stepText(g.step)}`;
+    return `${where3(s)} never ${phrase} before responding${otherSteps([s], ids, a.match)}`;
   };
   return fail(gaps.map(text).join("; "), `${matchHint(a.target, a.match)}, sent with -> before the line that answers the entry request`);
 }
@@ -7346,9 +7346,9 @@ function neverWaits(run, a) {
   for (const s of sc.scenarios) {
     const hop = criticalPath(sc.u, s).flat().find((h2) => !h2.async && ids.has(h2.target));
     if (hop) {
-      const where2 = sc.scenarios.length > 1 ? quote(s.name) : sc.label;
+      const where3 = sc.scenarios.length > 1 ? quote(s.name) : sc.label;
       return fail(
-        `${where2} waits for ${nodeLabel(run.diagram, hop.target)} before responding: ${stepText(hop.step)}${hop.failed ? " times out on the request path" : " is synchronous"}`,
+        `${where3} waits for ${nodeLabel(run.diagram, hop.target)} before responding: ${stepText(hop.step)}${hop.failed ? " times out on the request path" : " is synchronous"}`,
         `Send it with ->> (through a queue if it must not be lost), or move it after the line that answers the entry request`
       );
     }
@@ -7375,9 +7375,9 @@ function after(run, a) {
     if (ix < 0 || iy < 0) continue;
     checked++;
     if (iy < ix) {
-      const where2 = sc.scenarios.length > 1 || a.scenario ? `In ${quote(s.name)}` : `In ${quote(sc.u.name)}`;
+      const where3 = sc.scenarios.length > 1 || a.scenario ? `In ${quote(s.name)}` : `In ${quote(sc.u.name)}`;
       return fail(
-        `${where2}, the last call to ${y} (${stepText(order[iy].step)}) comes before the first call to ${x} (${stepText(order[ix].step)})`,
+        `${where3}, the last call to ${y} (${stepText(order[iy].step)}) comes before the first call to ${x} (${stepText(order[ix].step)})`,
         `Call ${y} after ${x}: move the step to ${order[iy].to} below the call to ${order[ix].to}`
       );
     }
@@ -7405,10 +7405,10 @@ function senderCalls(run, a) {
     for (const s of u.scenarios) {
       const step = s.steps.find((st) => from.has(st.fromServiceId) && to.has(st.toServiceId));
       if (!step) continue;
-      const where2 = u.scenarios.length > 1 ? `${quote(u.name)} scenario ${quote(s.name)}` : quote(u.name);
-      if (a.quantifier === "some") return pass(`${x} calls ${y}${within}: ${stepText(step)} in ${where2}`);
+      const where3 = u.scenarios.length > 1 ? `${quote(u.name)} scenario ${quote(s.name)}` : quote(u.name);
+      if (a.quantifier === "some") return pass(`${x} calls ${y}${within}: ${stepText(step)} in ${where3}`);
       return fail(
-        `${x} calls ${y}${within}: ${stepText(step)} in ${where2}`,
+        `${x} calls ${y}${within}: ${stepText(step)} in ${where3}`,
         `Let another node make this call (e.g. the client uploads to storage with a presigned URL), or remove the step`
       );
     }
@@ -7459,8 +7459,8 @@ function noPath(run, from, to) {
     for (const s of u.scenarios) {
       const step = s.steps.find((st) => sources.has(st.fromServiceId) && targets.has(st.toServiceId));
       if (step) {
-        const where2 = u.scenarios.length > 1 ? `${quote(u.name)} scenario ${quote(s.name)}` : quote(u.name);
-        return fail(`The step ${step.fromServiceId} -> ${step.toServiceId} in ${where2} (${lineOf(step.loc)}) goes directly from ${x} to ${y}`, hint);
+        const where3 = u.scenarios.length > 1 ? `${quote(u.name)} scenario ${quote(s.name)}` : quote(u.name);
+        return fail(`The step ${step.fromServiceId} -> ${step.toServiceId} in ${where3} (${lineOf(step.loc)}) goes directly from ${x} to ${y}`, hint);
       }
     }
   }
@@ -10026,8 +10026,6 @@ function testLines(results, width) {
     ];
   }
   const failing = results.filter((r) => !r.passed);
-  const passing2 = results.filter((r) => r.passed);
-  const where2 = (r) => r.loc ? ` ${r.loc.file ? `${r.loc.file}:` : "line "}${r.loc.line}` : "";
   const out = [line(failing.length ? { text: `${failing.length} of ${results.length} failing`, color: TONE.bad, bold: true } : { text: `All ${results.length} passing`, color: TONE.good, bold: true })];
   const item = (r) => {
     const mark = r.passed ? { text: "\u2713 ", color: TONE.good } : { text: "\u2717 ", color: TONE.bad };
@@ -10045,11 +10043,11 @@ function testLines(results, width) {
     out.push(blank());
     failing.forEach(item);
   }
-  if (passing2.length) {
-    out.push(blank(), ...failing.length ? [heading(`${passing2.length} passing`)] : []);
-    for (const r of passing2) out.push(line({ text: "\u2713 ", color: TONE.good }, { text: cut(`${r.name}: ${r.message}`, width - 2), dim: true }));
-  }
   return out;
+}
+var where2 = (r) => r.loc ? ` ${r.loc.file ? `${r.loc.file}:` : "line "}${r.loc.line}` : "";
+function passingLines(results, width) {
+  return results.filter((r) => r.passed).map((r) => line({ text: "\u2713 ", color: TONE.good }, { text: cut(`${r.name}: ${r.message}`, width - 2 - where2(r).length), dim: true }, { text: where2(r), dim: true }));
 }
 function legendLine(critical, width) {
   const swatch = (bg) => ({ text: "  ", bg });
@@ -10294,6 +10292,10 @@ function bodyLines(tab, doc, columns) {
   }
   const what = TABS.find((t) => t.id === tab).label;
   return [{ segs: [{ text: `${what} in the terminal is coming; \u2197 Open in Proschi shows it in the editor now.`, dim: true }], wrap: true }];
+}
+function testsTab(ui, doc, columns, open, toggle2) {
+  const passing2 = doc.analysis ? doc.tests.filter((t) => t.passed).length : 0;
+  return /* @__PURE__ */ h(ui.Box, { key: "body-tests", flexDirection: "column" }, linesView(ui, bodyLines("tests", doc, columns), "tests-lines"), passing2 > 0 && /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, /* @__PURE__ */ h(ui.Button, { key: "tests-passing", label: `${open ? "\u25BE" : "\u25B8"} ${passing2} passing`, hotkey: "a", dimColor: !open, onPress: toggle2 }), open && linesView(ui, passingLines(doc.tests, columns), "tests-passing-lines")));
 }
 
 // ../frontend/src/components/WhatIf/whatIf.ts
@@ -10566,6 +10568,7 @@ var paneSource = atom2({ plugin: "proschi", key: "paneSource" }, NO_SOURCE);
 var players = atom2({ plugin: "proschi", key: "player" }, IDLE);
 var paneTab = atom2({ plugin: "proschi", key: "paneTab" }, "diagram");
 var paneWhatIf = atom2({ plugin: "proschi", key: "paneWhatIf" }, NO_WHATIF);
+var panePassing = atom2({ plugin: "proschi", key: "panePassing" }, false);
 var PANE_KEYS = "1-6 tabs \xB7 p play \xB7 n/b step \xB7 r restart \xB7 e end \xB7 x explorer \xB7 d diagram \xB7 esc back to the prompt";
 var TAB_KEYS = "1-6 tabs \xB7 \u2191\u2193 scroll \xB7 esc back to the prompt";
 var SYSTEM_KEYS = "s next system \xB7 o open/close \xB7 f focus in \xB7 u back out";
@@ -10683,7 +10686,7 @@ function register(on, options) {
       if ("error" in loaded) return /* @__PURE__ */ h(ui.Text, { color: "red" }, loaded.error);
       const { doc, base, key, player } = loaded;
       if (tab === "sequence" && player.mode === "play" && player.isPlaying && !timers.has(PANE_VIEW)) stepper($, doc);
-      const body = tab === "whatif" ? whatIfTab({ ui, base, key, now: doc, w: whatIf, set: setWhatIf, columns }) : tab === "sequence" ? sequenceTab({ ui, diagram: doc.diagram, player, columns, pick: (value) => void paneStep($, doc, (p) => ({ ...p, pick: value, step: 0, isPlaying: false })), go: (step, isPlaying) => void paneStep($, doc, (p) => ({ ...p, mode: "play", step, isPlaying })), pause: () => void paneStep($, doc, (p) => ({ ...p, isPlaying: false })) }) : tab === "hld" ? hldTab(ui, base, key, (surface, text) => void copy($, surface, text, "the HLD markdown")) : tabBody(ui, tab, doc, columns);
+      const body = tab === "whatif" ? whatIfTab({ ui, base, key, now: doc, w: whatIf, set: setWhatIf, columns }) : tab === "sequence" ? sequenceTab({ ui, diagram: doc.diagram, player, columns, pick: (value) => void paneStep($, doc, (p) => ({ ...p, pick: value, step: 0, isPlaying: false })), go: (step, isPlaying) => void paneStep($, doc, (p) => ({ ...p, mode: "play", step, isPlaying })), pause: () => void paneStep($, doc, (p) => ({ ...p, isPlaying: false })) }) : tab === "hld" ? hldTab(ui, base, key, (surface, text) => void copy($, surface, text, "the HLD markdown")) : tab === "tests" ? testsTab(ui, doc, columns, await read2($, panePassing) === true, () => void update2($, panePassing, (open) => !open)) : tabBody(ui, tab, doc, columns);
       return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, bar, banner, body, keys(false));
     }
     const bodyRows2 = "scroll" in e.props && typeof e.props.scroll?.bodyRows === "number" ? e.props.scroll.bodyRows : 0;
@@ -10806,12 +10809,12 @@ async function documentOf($, viewId, written, file, whatIf) {
     doc = loadDocument(source);
     documents.set(key, doc);
   }
-  const where2 = file ?? "The diagram";
+  const where3 = file ?? "The diagram";
   if (doc.errors.length > 0) {
     const [first] = doc.errors;
-    return { error: `${where2} has errors (line ${first.line}: ${first.message})${file ? `: run \`npx proschi check ${file}\`` : ""}.` };
+    return { error: `${where3} has errors (line ${first.line}: ${first.message})${file ? `: run \`npx proschi check ${file}\`` : ""}.` };
   }
-  if (doc.diagram.nodes.length === 0) return { error: `${where2} has no components to draw.` };
+  if (doc.diagram.nodes.length === 0) return { error: `${where3} has no components to draw.` };
   const options = whatIf && optionsOf(doc.root, whatIf);
   if (!options) return { doc, base: doc, source, key, player };
   const under = `${key}?${JSON.stringify(whatIf)}`;

@@ -2,7 +2,7 @@ import type { RenderElement } from 'claude-code'
 
 import type { Document } from '../../../tooling/src/terminal/document'
 import type { PaneTab } from '../../types'
-import { analysisLines, testLines, type Line } from './lines'
+import { analysisLines, passingLines, testLines, type Line } from './lines'
 import { linesView, type Ui } from './render'
 
 /**
@@ -56,4 +56,23 @@ export function bodyLines(tab: Exclude<PaneTab, 'diagram'>, doc: Document, colum
   }
   const what = TABS.find(t => t.id === tab)!.label
   return [{ segs: [{ text: `${what} in the terminal is coming; ↗ Open in Proschi shows it in the editor now.`, dim: true }], wrap: true }]
+}
+
+/**
+ * The Tests tab: the summary and what fails, open, then what passes folded
+ * under a toggle (`a`), as the editor's Results fold their `N passing`.
+ */
+export function testsTab(ui: Ui, doc: Document, columns: number, open: boolean, toggle: () => void): RenderElement {
+  const passing = doc.analysis ? doc.tests.filter(t => t.passed).length : 0
+  return (
+    <ui.Box key="body-tests" flexDirection="column">
+      {linesView(ui, bodyLines('tests', doc, columns), 'tests-lines')}
+      {passing > 0 && (
+        <ui.Box flexDirection="column" marginTop={1}>
+          <ui.Button key="tests-passing" label={`${open ? '▾' : '▸'} ${passing} passing`} hotkey="a" dimColor={!open} onPress={toggle} />
+          {open && linesView(ui, passingLines(doc.tests, columns), 'tests-passing-lines')}
+        </ui.Box>
+      )}
+    </ui.Box>
+  )
 }

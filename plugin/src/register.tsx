@@ -18,7 +18,7 @@ import { hldTab } from './views/hld'
 import { legendLine, verdictLine } from './views/lines'
 import { lineView, type Ui } from './views/render'
 import { sequenceTab } from './views/sequenceTab'
-import { tabBar, tabBody, tabOf } from './views/tabs'
+import { tabBar, tabBody, tabOf, testsTab } from './views/tabs'
 import { liveOf, NO_WHATIF, optionsOf, whatIfOf } from './views/whatif'
 import { whatIfBanner, whatIfTab } from './views/whatifTab'
 
@@ -55,6 +55,7 @@ const paneSource = atom({ plugin: 'proschi', key: 'paneSource' } as const, NO_SO
 const players = atom({ plugin: 'proschi', key: 'player' } as const, IDLE)
 const paneTab = atom({ plugin: 'proschi', key: 'paneTab' } as const, 'diagram' as PaneTab)
 const paneWhatIf = atom({ plugin: 'proschi', key: 'paneWhatIf' } as const, NO_WHATIF as WhatIfState)
+const panePassing = atom({ plugin: 'proschi', key: 'panePassing' } as const, false)
 
 /** The pane's keys, as its Buttons' hotkeys name them; the system keys where the diagram has systems. */
 const PANE_KEYS = '1-6 tabs · p play · n/b step · r restart · e end · x explorer · d diagram · esc back to the prompt'
@@ -206,6 +207,7 @@ export function register(on: On, options: PluginOptions): void {
         tab === 'whatif' ? whatIfTab({ ui, base, key, now: doc, w: whatIf, set: setWhatIf, columns })
         : tab === 'sequence' ? sequenceTab({ ui, diagram: doc.diagram, player, columns, pick: value => void paneStep($, doc, p => ({ ...p, pick: value, step: 0, isPlaying: false })), go: (step, isPlaying) => void paneStep($, doc, p => ({ ...p, mode: 'play', step, isPlaying })), pause: () => void paneStep($, doc, p => ({ ...p, isPlaying: false })) })
         : tab === 'hld' ? hldTab(ui, base, key, (surface, text) => void copy($, surface, text, 'the HLD markdown'))
+        : tab === 'tests' ? testsTab(ui, doc, columns, (await read($, panePassing)) === true, () => void update($, panePassing, open => !open))
         : tabBody(ui, tab, doc, columns)
       return (
         <ui.Box flexDirection="column">

@@ -68,7 +68,9 @@ numbers and words come from the same functions the editor uses
 (`frontend/src/sim`: `costBreakdown`, `busiestOf`, the formatters); nothing
 is recomputed. Tables fit the pane's width by dropping their least needed
 columns first (cost, availability, latency, the p95), then cutting the first
-column; paragraphs wrap.
+column; paragraphs wrap. The Tests tab reads as the editor's Results: the
+summary, what fails open with its hints, and what passes folded under a
+**▸ N passing** toggle (`a`, stored in `$.state` as `panePassing`).
 
 ## D5. The transcript stays compact
 

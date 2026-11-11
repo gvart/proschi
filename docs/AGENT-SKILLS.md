@@ -106,7 +106,7 @@ has tabs: **Diagram**, **Analysis** (cost, the busiest node, load, latency,
 availability and cost per node, percentiles per use case, queues, the cost
 breakdown and single points of failure), **What-if**, **Sequence**, **HLD**
 and **Tests** (each requirement and test, failing ones first with their
-hints).
+hints, the passing ones folded under **N passing**).
 
 - **What-if** multiplies all traffic (×0.5 to ×10) and takes nodes down, as
   the editor's what-if does, and shows what that does to p99, availability,

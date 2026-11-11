@@ -59,6 +59,8 @@ declare module 'claude-code' {
       paneTab: PaneTab
       /** The pane's what-if; read through `whatIfOf`, as a version before what-ifs stored none. */
       paneWhatIf: WhatIfState
+      /** Whether the Tests tab shows the checks that pass, folded by default as the editor's Results. */
+      panePassing: boolean
       /** Whether the terminal shows pictures, once asked; read through `probeOf`. */
       graphics: GraphicsProbe
     }
