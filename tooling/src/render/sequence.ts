@@ -33,7 +33,12 @@ export function scenarioTitle(useCase: DiagramUseCase, scenario: DiagramScenario
   return useCase.scenarios.length > 1 ? `${useCase.name} › ${scenario.name}` : useCase.name;
 }
 
-export function renderSequenceSvg(diagram: Diagram, useCase: DiagramUseCase, scenario: DiagramScenario, idPrefix = ''): string {
+/** Additive options: `current` lights the messages of those 1-based step numbers (the terminal mod's player), as playback lights a step. */
+export interface SequenceOptions {
+  current?: number[];
+}
+
+export function renderSequenceSvg(diagram: Diagram, useCase: DiagramUseCase, scenario: DiagramScenario, idPrefix = '', options: SequenceOptions = {}): string {
   const seq = buildSequence(useCase, scenario, diagram.nodes);
   const participants = seq.participants;
   const index = new Map(participants.map((p, i) => [p.id, i]));
@@ -144,9 +149,13 @@ export function renderSequenceSvg(diagram: Diagram, useCase: DiagramUseCase, sce
   });
 
   if (messages.length === 0) body.push(text(MARGIN, headerTop + 16, 'No steps', { fill: COLORS.muted }));
+  const lit = new Set(options.current ?? []);
   for (const row of rows) {
     if (row.kind !== 'message') continue;
-    body.push(drawMessage(row.message, xs[index.get(row.message.from)!], xs[index.get(row.message.to)!], row.y, idPrefix));
+    const on = lit.has(row.message.number);
+    // A lit step: a band in the accent behind its row.
+    if (on) body.push(`<rect data-current="${row.message.number}" x="${MARGIN / 2}" y="${r(row.y - 26)}" width="${r(width - MARGIN)}" height="34" rx="6" fill="${COLORS.active}" fill-opacity="0.16"/>`);
+    body.push(drawMessage(row.message, xs[index.get(row.message.from)!], xs[index.get(row.message.to)!], row.y, idPrefix, on));
   }
 
   const defs = [
@@ -159,9 +168,9 @@ export function renderSequenceSvg(diagram: Diagram, useCase: DiagramUseCase, sce
   return svgDocument(width, height, title, body.filter(Boolean), defs);
 }
 
-function drawMessage(m: SequenceMessage, x1: number, x2: number, y: number, idPrefix: string): string {
-  // Requests in ink, replies grey and dashed, errors red.
-  const color = m.error ? COLORS.error : m.kind === 'response' ? COLORS.line : COLORS.text;
+function drawMessage(m: SequenceMessage, x1: number, x2: number, y: number, idPrefix: string, lit = false): string {
+  // Requests in ink, replies grey and dashed, errors red; a lit request in ink, heavier.
+  const color = m.error ? COLORS.error : m.kind === 'response' && !lit ? COLORS.line : COLORS.text;
   const dash = m.kind === 'response' ? ' stroke-dasharray="6 4"' : '';
   const head = m.error ? `${m.kind === 'response' || m.async ? 'open' : 'solid'}-error` : m.kind === 'response' ? 'reply' : m.async ? 'open' : 'solid';
   const label = labelText(m);
@@ -185,20 +194,20 @@ function drawMessage(m: SequenceMessage, x1: number, x2: number, y: number, idPr
       tx += 22;
     }
     if (label.trim()) {
-      out.push(`<text x="${r(tx)}" y="${r(ly)}" font-size="${LABEL_SIZE}" fill="${m.error ? COLORS.error : COLORS.text}">${labelContent(label)}</text>`);
+      out.push(`<text x="${r(tx)}" y="${r(ly)}" font-size="${LABEL_SIZE}"${lit ? ' font-weight="700"' : ''} fill="${m.error ? COLORS.error : COLORS.text}">${labelContent(label)}</text>`);
     }
   };
 
   if (x1 === x2) {
     // A call to itself: a small loop to the right of the lifeline.
     const d = `M${r(x1)},${r(y)} H${r(x1 + 36)} V${r(y + 18)} H${r(x1 + 2)}`;
-    out.push(`<path d="${d}" fill="none" stroke="${color}" stroke-width="2"${dash} marker-end="url(#${idPrefix}${head})"/>`);
+    out.push(`<path d="${d}" fill="none" stroke="${color}" stroke-width="${lit ? 2.5 : 2}"${dash} marker-end="url(#${idPrefix}${head})"/>`);
     drawLabel(x1 + 44, y + 13);
   } else {
     const dir = Math.sign(x2 - x1);
     const end = m.failed ? x2 - dir * 14 : x2 - dir * 2;
     out.push(
-      `<line x1="${r(x1)}" y1="${r(y)}" x2="${r(end)}" y2="${r(y)}" stroke="${color}" stroke-width="2"${dash}${m.failed ? '' : ` marker-end="url(#${idPrefix}${head})"`}/>`,
+      `<line x1="${r(x1)}" y1="${r(y)}" x2="${r(end)}" y2="${r(y)}" stroke="${color}" stroke-width="${lit ? 2.5 : 2}"${dash}${m.failed ? '' : ` marker-end="url(#${idPrefix}${head})"`}/>`,
     );
     if (m.failed) {
       // ✕: the request never arrives.

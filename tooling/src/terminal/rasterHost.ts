@@ -38,18 +38,18 @@
  * now, so `prune` (the hooks ask once a session) deletes only what no call
  * used for a week.
  */
-import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, watch, type FSWatcher } from 'node:fs';
 import { join } from 'node:path';
-import { availableParallelism, cpus } from 'node:os';
-import { promisify } from 'node:util';
-import { deflate as deflateCallback } from 'node:zlib';
 import { initWasm, Resvg } from '@resvg/resvg-wasm';
 import { CANVAS_TOKENS } from '../../../frontend/src/utils/canvasColors';
 import { drawArchitecture, layoutArchitecture, type ArchitectureOptions } from '../render/architecture';
 import type { Theme } from '../render/svg';
 import { loadDocument, parseSource, type Source } from './document';
 import { isActive, liveOptions, type LiveWhatIf } from '../../../frontend/src/components/WhatIf/whatIf';
+import { Writer, hash, pngSize, put, touch, type Pixels } from './png';
+import { renderPanels } from './panelHost';
+import { fontsLoaded, loadFonts } from '../render/ui/metrics';
+import type { PanelsInput, PanelsOutput } from '../render/ui/contract';
 
 export interface RasterOptions {
   theme?: Theme;
@@ -123,28 +123,6 @@ export function prune(dir: string, now = Date.now()): number {
     }
   }
   return gone;
-}
-
-/** Marks files as used now, so a prune keeps them. */
-function touch(files: string[]): void {
-  const now = new Date();
-  for (const f of files) {
-    try {
-      utimesSync(f, now, now);
-    } catch {
-      // Pruned by another call meanwhile: it is drawn again next time.
-    }
-  }
-}
-
-const hash = (text: string) => createHash('sha256').update(text).digest('hex').slice(0, 20);
-
-/** Writes `bytes` to `file` unless it is there already, through a temporary name. */
-function put(file: string, bytes: Uint8Array | string): void {
-  if (existsSync(file)) return;
-  const tmp = `${file}.${process.pid}.tmp`;
-  writeFileSync(tmp, bytes);
-  renameSync(tmp, file);
 }
 
 export async function rasterize(input: RasterInput, assets: RasterAssets): Promise<RasterOutput> {
@@ -250,13 +228,6 @@ export async function rasterize(input: RasterInput, assets: RasterAssets): Promi
   return out;
 }
 
-/** RGBA pixels, row by row, premultiplied (as resvg gives them). */
-interface Pixels {
-  width: number;
-  height: number;
-  data: Uint8Array;
-}
-
 /** A packet as render/architecture.ts draws it (drawPacket): its own group, centred on its translate. */
 const PACKET = /<g data-packet="[^"]*" transform="translate\(([-\d.]+) ([-\d.]+)\)"[^>]*>[\s\S]*?<\/g>\n?/g;
 /** How far a packet reaches from its centre, in diagram px: the tumbling square and its shadow, or the cross's disc. */
@@ -297,83 +268,131 @@ function over(into: Pixels, piece: Pixels & { left: number; top: number }): void
   }
 }
 
-/** Width and height from a PNG's IHDR. */
-function pngSize(file: string): { width: number; height: number } {
-  const head = readFileSync(file).subarray(0, 24);
-  return { width: head.readUInt32BE(16), height: head.readUInt32BE(20) };
-}
-
-const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
-  let c = n;
-  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-  return c >>> 0;
-});
-
-function crc32(bytes: Uint8Array): number {
-  let c = 0xffffffff;
-  for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
-  return (c ^ 0xffffffff) >>> 0;
-}
-
-function chunk(type: string, data: Uint8Array): Buffer {
-  const out = Buffer.alloc(12 + data.length);
-  out.writeUInt32BE(data.length, 0);
-  out.write(type, 4, 'latin1');
-  out.set(data, 8);
-  out.writeUInt32BE(crc32(out.subarray(4, 8 + data.length)), 8 + data.length);
+/** Answers one input: a diagram (RasterInput), or panels (PanelsInput) with the diagram it carries drawn in the same run. */
+export async function answer(input: RasterInput | PanelsInput, assets: RasterAssets): Promise<RasterOutput | PanelsOutput> {
+  if (!('kind' in input) || input.kind !== 'panels') return rasterize(input as RasterInput, assets);
+  mkdirSync(input.outDir, { recursive: true });
+  if (input.prune) prune(input.outDir);
+  if (!fontsLoaded()) loadFonts(join(assets.dir, 'fonts'));
+  const fonts = await engine(assets);
+  const out: PanelsOutput = { panels: await renderPanels(input, { fonts, ...(assets.build ? { build: assets.build } : {}) }) };
+  if (input.diagram) {
+    out.diagram = await rasterize({ ...(input.diagram as unknown as RasterInput), outDir: input.outDir }, assets).then(
+      (o) => o as unknown as Record<string, unknown>,
+      (error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }),
+    );
+  }
   return out;
 }
 
-const deflate = promisify(deflateCallback);
+/** How long a worker waits for a request before it exits. */
+const IDLE_MS = 30 * 60 * 1000;
 
 /**
- * An RGBA PNG, unfiltered at zlib level 3: three times as fast as resvg's
- * own encoder for files a third larger, which is the better trade for frames
- * that go to a terminal right away. The rows are copied out at once, so the
- * pixels can go; the compression runs on libuv's thread pool.
+ * The session-long worker: `raster.cjs --serve <dir>`. The mod's stdin is
+ * one-shot, so requests come as files: `<id>.req.json` (an input as stdin
+ * takes it) put into `dir`, best written under another name and renamed in,
+ * answered in order of name, each by a line on stdout, `{"id","output"}` or
+ * `{"id","error"}`, the same JSON also in `<id>.res.json`. The first line,
+ * `{"ready":true}`, comes once the wasm and the fonts are loaded. It exits
+ * when idle for `idleMs`, or once its parent is gone (it is re-parented).
  */
-async function encodePng({ width, height, data }: Pixels): Promise<Buffer> {
-  const stride = width * 4;
-  const raw = Buffer.alloc((stride + 1) * height);
-  for (let y = 0; y < height; y++) raw.set(data.subarray(y * stride, (y + 1) * stride), y * (stride + 1) + 1);
-  const header = Buffer.alloc(13);
-  header.writeUInt32BE(width, 0);
-  header.writeUInt32BE(height, 4);
-  header.set([8, 6, 0, 0, 0], 8);
-  const idat = await deflate(raw, { level: 3 });
-  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', header), chunk('IDAT', idat), chunk('IEND', new Uint8Array(0))]);
+export function serve(dir: string, assets: RasterAssets, write: (line: string) => void = (l) => void process.stdout.write(l), idleMs = IDLE_MS): { stop(): void; ready: Promise<void> } {
+  mkdirSync(dir, { recursive: true });
+  const parent = process.ppid;
+  let busy = false;
+  let again = false;
+  let last = Date.now();
+  const tries = new Map<string, number>();
+  const reply = (id: string, body: { output?: unknown; error?: string }) => {
+    const text = JSON.stringify({ id, ...body });
+    put(join(dir, `${id}.res.json`), text);
+    write(`${text}\n`);
+  };
+  const scan = async (): Promise<void> => {
+    if (busy) {
+      again = true;
+      return;
+    }
+    busy = true;
+    try {
+      do {
+        again = false;
+        for (const name of readdirSync(dir).filter((f) => f.endsWith('.req.json')).sort()) {
+          const file = join(dir, name);
+          const id = name.slice(0, -'.req.json'.length);
+          let input: RasterInput | PanelsInput;
+          try {
+            input = JSON.parse(readFileSync(file, 'utf8')) as RasterInput | PanelsInput;
+          } catch (error) {
+            // Half written: read again on the next scans, for two seconds.
+            const n = (tries.get(name) ?? 0) + 1;
+            tries.set(name, n);
+            if (n < 40 && existsSync(file)) continue;
+            tries.delete(name);
+            safeUnlink(file);
+            reply(id, { error: `Unreadable request: ${error instanceof Error ? error.message : String(error)}` });
+            continue;
+          }
+          tries.delete(name);
+          safeUnlink(file);
+          try {
+            reply(id, { output: await answer(input, assets) });
+          } catch (error) {
+            reply(id, { error: error instanceof Error ? error.message : String(error) });
+          }
+          last = Date.now();
+        }
+      } while (again);
+    } finally {
+      busy = false;
+    }
+  };
+  let watcher: FSWatcher | undefined;
+  try {
+    watcher = watch(dir, () => void scan());
+  } catch {
+    // The poll below finds the requests.
+  }
+  const poll = setInterval(() => {
+    if (Date.now() - last > idleMs || process.ppid !== parent) stop();
+    else void scan();
+  }, 50);
+  const stop = () => {
+    clearInterval(poll);
+    watcher?.close();
+  };
+  const ready = (async () => {
+    if (!fontsLoaded()) loadFonts(join(assets.dir, 'fonts'));
+    await engine(assets);
+    write(`${JSON.stringify({ ready: true, pid: process.pid })}\n`);
+    void scan();
+  })();
+  return { stop, ready };
 }
 
-/** PNGs encoded at once, at most: the thread pool's four, or the cores where there are fewer. Each holds a frame's rows. */
-const ENCODERS = Math.max(1, Math.min(4, typeof availableParallelism === 'function' ? availableParallelism() : cpus().length));
-
-/**
- * Encodes and writes PNGs while the next frames are drawn: `add` waits only
- * while ENCODERS are busy, `done` for the last of them. Compression is
- * most of a frame's time (zlib on 20 MB of rows), drawing the rest.
- */
-class Writer {
-  private busy = new Set<Promise<void>>();
-
-  async add(file: string, pixels: Pixels): Promise<void> {
-    while (this.busy.size >= ENCODERS) await Promise.race(this.busy);
-    const job: Promise<void> = encodePng(pixels)
-      .then((png) => put(file, png))
-      .finally(() => this.busy.delete(job));
-    this.busy.add(job);
-  }
-
-  async done(): Promise<void> {
-    await Promise.all(this.busy);
+function safeUnlink(file: string): void {
+  try {
+    unlinkSync(file);
+  } catch {
+    // Taken already, or gone.
   }
 }
 
 async function main(): Promise<void> {
+  const self = readFileSync(__filename);
+  const assets = { dir: __dirname, build: hash(self.toString('latin1')) };
+  const at = process.argv.indexOf('--serve');
+  if (at >= 0) {
+    const dir = process.argv[at + 1];
+    if (!dir) throw new Error('Usage: raster.cjs --serve <dir>');
+    await serve(dir, assets).ready;
+    return;
+  }
   const chunks: Buffer[] = [];
   for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
-  const input = JSON.parse(Buffer.concat(chunks).toString('utf8')) as RasterInput;
-  const self = readFileSync(__filename);
-  process.stdout.write(JSON.stringify(await rasterize(input, { dir: __dirname, build: hash(self.toString('latin1')) })));
+  const input = JSON.parse(Buffer.concat(chunks).toString('utf8')) as RasterInput | PanelsInput;
+  process.stdout.write(JSON.stringify(await answer(input, assets)));
 }
 
 // Run as the helper, not when a test imports it.
