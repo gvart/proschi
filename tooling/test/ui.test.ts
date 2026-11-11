@@ -156,6 +156,36 @@ describe('UI panels: Markdown and the sequence', () => {
     const lit = renderSequenceSvg(doc.diagram, redirect, scenario, '', { current: [2] });
     expect(lit.match(/data-current="2"/g)?.length).toBe(2);
   });
+
+  it('points every arrowhead into its receiver, a reply right to left too, as resvg draws it', async () => {
+    await answer({ kind: 'panels', outDir: mkdtempSync(join(tmpdir(), 'proschi-ui-')), panels: [] }, { dir: HOOKS });
+    const { Resvg } = await import('@resvg/resvg-wasm');
+    const svg = renderSequenceSvg(doc.diagram, redirect, redirect.scenarios[0]);
+    const image = new Resvg(svg).render();
+    const { width, pixels } = { width: image.width, pixels: image.pixels };
+    // Ink (unlike the paper at the row's left edge) above the line, so not the line itself, in columns [from, to): the arrowhead's arms reach back from its tip.
+    const ink = (from: number, to: number, y: number) => {
+      let n = 0;
+      for (let row = Math.round(y - 7); row <= Math.round(y - 2); row++) {
+        const paper = (row * width + 2) * 4;
+        for (let x = Math.round(from); x < Math.round(to); x++) {
+          const at = (row * width + x) * 4;
+          const d = [0, 1, 2].reduce((m, c) => Math.max(m, Math.abs(pixels[at + c] - pixels[paper + c])), 0);
+          n += d > 40 ? 1 : 0;
+        }
+      }
+      return n;
+    };
+    const lines = [...svg.matchAll(/data-kind="(request|response)"[^>]*>[\s\S]*?<line x1="([\d.]+)" y1="([\d.]+)" x2="([\d.]+)"[^>]*marker-end/g)].map(([, kind, x1, y, x2]) => ({ kind, x1: Number(x1), y: Number(y), x2: Number(x2) }));
+    expect(lines.some((l) => l.kind === 'response' && l.x2 < l.x1)).toBe(true);
+    for (const l of lines) {
+      const dir = Math.sign(l.x2 - l.x1);
+      // Behind the tip (back along the line) the arms; past it, nothing but the receiver's lifeline (left out).
+      const behind = dir > 0 ? ink(l.x2 - 12, l.x2 - 4, l.y) : ink(l.x2 + 4, l.x2 + 12, l.y);
+      const past = dir > 0 ? ink(l.x2 + 4, l.x2 + 12, l.y) : ink(l.x2 - 12, l.x2 - 4, l.y);
+      expect([l.kind, behind > 0, past]).toEqual([l.kind, true, 0]);
+    }
+  });
 });
 
 describe('UI panels: the raster helper', () => {

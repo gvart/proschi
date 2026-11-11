@@ -167,10 +167,15 @@ export function svgDocument(width: number, height: number, title: string, body: 
     .join('\n');
 }
 
-/** An arrowhead marker; `open` draws a chevron instead of a filled triangle. */
+/**
+ * An arrowhead marker for `marker-end`; `open` draws a chevron instead of a
+ * filled triangle. `orient="auto"` turns it along the line, so a reply drawn
+ * right to left points left into its receiver; resvg (the terminal's
+ * pictures) reads `auto-start-reverse` as no turn at all.
+ */
 export function marker(id: string, color: string, open = false): string {
   const shape = open
     ? `<path d="M1,1 L9,5 L1,9" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round"/>`
     : `<path d="M0,0 L10,5 L0,10 z" fill="${color}"/>`;
-  return `<marker id="${id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">${shape}</marker>`;
+  return `<marker id="${id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">${shape}</marker>`;
 }
