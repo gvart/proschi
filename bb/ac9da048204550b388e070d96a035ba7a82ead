@@ -1,0 +1,31 @@
+plugin/tests/picture.test.tsx
+  s_50cc5c1ed1a510::t_bc2a85d76ff593 227,249-250,255
+  s_50cc5c1ed1a510::t_98fb54c49a1a95 229-245
+plugin/src/helper.ts
+  s_50cc5c1ed1a510::t_c18149e3137c2a 17-18,186-187,193
+plugin/src/picture.tsx
+  s_50cc5c1ed1a510::t_2540d76ff1e0d3 58-64,71,90,92-96,109-131,150-152,166-168,170-176,180,184-216,219-227,236,246,252-284,286,301,316-317
+  s_50cc5c1ed1a510::t_c18149e3137c2a 169
+plugin/hooks/register.js
+  s_50cc5c1ed1a510::t_ad0c52d59c43a7 9760-9761,9767,9923-9925,9930-9932,9946-9955,9959,9963-9993,9996-10003,10011,10019,10024-10051,10053-10054,10066-10067,11466,11552-11559,11561,11566,11683,11696-11702
+plugin/src/register.tsx
+  s_50cc5c1ed1a510::t_c18149e3137c2a 22,120,218-226,228,233,391,407,423-431
+docs/impl/terminal-rendered-ui.md
+  s_50cc5c1ed1a510::t_b852e5e01a6b70 115-129
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bbac9da048204550b388e070d96a035ba7a82ead",
+  "prompts": {},
+  "sessions": {
+    "s_50cc5c1ed1a510": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7e5513ad-e496-40de-9a6e-d587aa393ce5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
