@@ -8652,14 +8652,16 @@ function paint(scene, options = {}) {
         y: at.y + i
       }));
     };
-    const first = (words) => anchorsOf(path, label).map((at) => stack(words, at)).find((s) => fits(s, true));
+    const near = anchorsOf(path, label);
+    const far = clearOf(path);
     const plain = (words, at) => {
       const tries = [0, -1, 1, -2, 2].map((dy) => stack([words], { x: at.x, y: at.y + dy })[0]);
       return tries.find((s) => fits([s], false)) ?? tries[0];
     };
     const name = edge.label ?? "";
     let spots;
-    if (chip2) {
+    for (const anchors of chip2 ? [near, far] : []) {
+      const first = (words) => anchors.map((at) => stack(words, at)).find((s) => fits(s, true));
       spots = first([[name, chip2].filter(Boolean).join(" \xB7 ")]) ?? (name ? first([name, chip2]) : void 0);
       for (let room = name.length - 1; !spots && room >= 4; room--) spots = first([`${fit(name, room)} \xB7 ${chip2}`]);
       const numbers = spots ? void 0 : first([chip2]);
@@ -8667,6 +8669,7 @@ function paint(scene, options = {}) {
         take(numbers);
         spots = label && name ? [...numbers, plain(name, label)] : numbers;
       }
+      if (spots) break;
     }
     spots ??= label && name ? [plain(name, label)] : void 0;
     if (!spots) return;
@@ -8740,6 +8743,16 @@ function anchorsOf(path, label) {
     }
   }
   return out;
+}
+function clearOf({ cells, dirs }) {
+  const out = [];
+  for (let i = 0; i < cells.length - 1; ) {
+    let j = i;
+    while (j + 1 < cells.length - 1 && dirs[j + 1] === dirs[i]) j++;
+    if (dirs[i] === (E | W)) out.push(cells[i + Math.floor((j - i) / 2)]);
+    i = j + 1;
+  }
+  return out.flatMap((at) => [-2, -3, -4, -5, 2, 3, 4, 5].map((dy) => ({ x: at.x, y: at.y + dy })));
 }
 function blockedCells(grid, scene) {
   const out = new Uint8Array(grid.columns * grid.rows);

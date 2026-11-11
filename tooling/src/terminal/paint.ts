@@ -115,8 +115,9 @@ export function paint(scene: Scene, options: PaintOptions = {}): Grid {
   // Under the load overlay the label carries the edge's requests and the latency they add (an edge with no label gets them
   // alone), on or beside a straight run of its own line where it covers no other line, card or frame: further off, it would
   // not read as the edge's. Short of room on one row, the label and the numbers go on two, then the label is shortened, then
-  // the numbers go where they fit and the label where it was; only where the numbers fit nowhere does the label stand alone,
-  // the numbers left to the Analysis tab.
+  // the numbers go where they fit and the label where it was. A short run hemmed in by the cards it joins (a gap of a few
+  // cells) has no such room: the same tries then go a few rows up or down from its middle, the first row clear of the
+  // cards. Only where the numbers fit nowhere does the label stand alone, the numbers left to the Analysis tab.
   const taken = new Set<string>();
   const owner = new Map<string, number>();
   scene.edges.forEach(({ path }, i) => path.cells.forEach(({ x, y }) => owner.set(`${x},${y}`, (owner.get(`${x},${y}`) ?? i) === i ? i : -1)));
@@ -140,21 +141,24 @@ export function paint(scene: Scene, options: PaintOptions = {}): Grid {
         y: at.y + i,
       }));
     };
-    const first = (words: string[]) => anchorsOf(path, label).map((at) => stack(words, at)).find((s) => fits(s, true));
+    const near = anchorsOf(path, label);
+    const far = clearOf(path);
     const plain = (words: string, at: Cell): Spot => {
       const tries = [0, -1, 1, -2, 2].map((dy) => stack([words], { x: at.x, y: at.y + dy })[0]);
       return tries.find((s) => fits([s], false)) ?? tries[0];
     };
     const name = edge.label ?? '';
     let spots: Spot[] | undefined;
-    if (chip) {
-      spots = first([[name, chip].filter(Boolean).join(' · ')]) ?? (name ? first([name, chip]) : undefined);
+    for (const anchors of chip ? [near, far] : []) {
+      const first = (words: string[]) => anchors.map((at) => stack(words, at)).find((s) => fits(s, true));
+      spots = first([[name, chip].filter(Boolean).join(' · ')]) ?? (name ? first([name, chip!]) : undefined);
       for (let room = name.length - 1; !spots && room >= 4; room--) spots = first([`${fit(name, room)} · ${chip}`]);
-      const numbers = spots ? undefined : first([chip]);
+      const numbers = spots ? undefined : first([chip!]);
       if (numbers) {
         take(numbers);
         spots = label && name ? [...numbers, plain(name, label)] : numbers;
       }
+      if (spots) break;
     }
     spots ??= label && name ? [plain(name, label)] : undefined;
     if (!spots) return;
@@ -263,6 +267,18 @@ function anchorsOf(path: Path, label: Cell | undefined): Anchor[] {
     }
   }
   return out;
+}
+
+/** Past the rows beside a line: two to five rows up, then down, from the middle of each horizontal run, the longest first. */
+function clearOf({ cells, dirs }: Path): Anchor[] {
+  const out: Anchor[] = [];
+  for (let i = 0; i < cells.length - 1; ) {
+    let j = i;
+    while (j + 1 < cells.length - 1 && dirs[j + 1] === dirs[i]) j++;
+    if (dirs[i] === (E | W)) out.push(cells[i + Math.floor((j - i) / 2)]);
+    i = j + 1;
+  }
+  return out.flatMap((at) => [-2, -3, -4, -5, 2, 3, 4, 5].map((dy) => ({ x: at.x, y: at.y + dy })));
 }
 
 /** Cells a chip never covers: the cards, and the frames of groups. */

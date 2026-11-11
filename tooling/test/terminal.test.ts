@@ -427,6 +427,15 @@ describe('terminal systems', () => {
     expect(flowEnds('web', 'api')).toEqual({ source: 'web', target: 'api' });
   });
 
+  it('shows the chip of every edge of a focused system, the short runs between its cards too', async () => {
+    const src = drone('org-busy.proschi', { focus: 'orders' });
+    const doc = loadDocument(src);
+    const scene = buildScene(doc.diagram, await layoutGraph(viewSource(src).diagram), 100);
+    const text = paint(scene, { overlay: doc.overlay, edges: doc.edges, systems: doc.systems, icons: 'symbols' }).toText();
+    expect(doc.diagram.edges.length).toBeGreaterThan(0);
+    for (const e of doc.diagram.edges) expect(text).toContain(loadChip(doc.edges?.[e.id]));
+  });
+
   it('enters an expanded frame straight, without a jog under its title', async () => {
     for (const columns of [100, 160]) {
       const { scene, text } = await droneText('org-busy.proschi', { expanded: ['orders', 'feed'] }, columns);
