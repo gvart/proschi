@@ -1,5 +1,5 @@
 import { atom, memberOf, read, update } from 'claude-code'
-import type { Elements, EngineInterface, On, PluginOptions, RenderElement, RenderNode, RenderSurface, UiScrollArgs } from 'claude-code'
+import type { EngineInterface, On, PluginOptions, RenderElement, RenderNode, RenderSurface, UiScrollArgs } from 'claude-code'
 
 import type { Layout } from '../../frontend/src/dsl/autoLayout'
 import type { IconStyle } from '../../tooling/src/terminal/icons'
@@ -12,19 +12,23 @@ import { buildScene, type Scene } from '../../tooling/src/terminal/scene'
 import { idList, systemAt, viewError, type SystemsView } from '../../tooling/src/terminal/systems'
 import type { DiagramScenario, DiagramUseCase, FlowStep } from '../../frontend/src/dsl/types'
 import { groupByEndpoint } from '../../frontend/src/playground/useCaseGroups'
-import type { PaneSource, Player } from '../types'
+import type { PaneSource, PaneTab, Player } from '../types'
+import { legendLine, verdictLine } from './views/lines'
+import { lineView, type Ui } from './views/render'
+import { tabBar, tabBody, tabOf } from './views/tabs'
 
 /**
  * Draws Proschi diagrams in Claude Code's terminal: ```proschi blocks in
  * replies, `.proschi` files Claude writes or edits, and `/proschi view <file>`
  * in a pane. Each drawing is the browser's layout in character cells, with
- * the simulation's numbers on the cards and a player for the use cases.
+ * the simulation's numbers on the cards and edges and a player for the use
+ * cases; the pane adds the editor's other views as tabs (src/views,
+ * docs/design/terminal-mod.md).
  *
  * Built from plugin/src by tooling/build.mjs into hooks/register.js (this
  * module) and hooks/layout.cjs (ELK, which the hooks run in Node).
  */
 
-type Ui = Elements['terminal']
 type Draw = { ui: Ui; requestId: string; columns: number }
 
 /** The `icons` setting: Nerd Font glyphs, plain symbols, or none. */
@@ -38,9 +42,11 @@ const NO_SOURCE: PaneSource = { source: '' }
 const paneFile = atom({ plugin: 'proschi', key: 'paneFile' } as const, '')
 const paneSource = atom({ plugin: 'proschi', key: 'paneSource' } as const, NO_SOURCE)
 const players = atom({ plugin: 'proschi', key: 'player' } as const, IDLE)
+const paneTab = atom({ plugin: 'proschi', key: 'paneTab' } as const, 'diagram' as PaneTab)
 
 /** The pane's keys, as its Buttons' hotkeys name them; the system keys where the diagram has systems. */
-const PANE_KEYS = 'p play · n/b step · r restart · e end · x explorer · d diagram · esc back to the prompt'
+const PANE_KEYS = '1-6 tabs · p play · n/b step · r restart · e end · x explorer · d diagram · esc back to the prompt'
+const TAB_KEYS = '1-6 tabs · ↑↓ scroll · esc back to the prompt'
 const SYSTEM_KEYS = 's next system · o open/close · f focus in · u back out'
 
 /** One animation frame, in ms. */
@@ -161,16 +167,36 @@ export function register(on: On, options: PluginOptions): void {
     const source = file ? await readWithImports($, file).catch(() => undefined) : focused
     if (!source) return <ui.Text color="red">Cannot read {file}.</ui.Text>
     const columns = 'bodyColumns' in e.props && typeof e.props.bodyColumns === 'number' ? e.props.bodyColumns : (e.viewport?.columns ?? 120) - 4
+    const isFocused = 'isFocused' in e.props && e.props.isFocused === true
+    const tab = tabOf(await read($, paneTab))
+    const loaded = await documentOf($, PANE_VIEW, source)
+    const failing = 'error' in loaded ? 0 : loaded.doc.tests.filter(t => !t.passed).length
+    const bar = tabBar(ui, tab, failing, to => void update($, paneTab, () => to))
+    const keys = (systems: boolean) => (
+      <ui.Box flexDirection="column">
+        <ui.Text dimColor wrap="truncate-end">
+          {isFocused ? (tab === 'diagram' ? PANE_KEYS : TAB_KEYS) : 'ctrl+x tab focuses the pane for its keys'}
+        </ui.Text>
+        {isFocused && systems && <ui.Text dimColor wrap="truncate-end">{SYSTEM_KEYS}</ui.Text>}
+      </ui.Box>
+    )
+    if (tab !== 'diagram') {
+      if ('error' in loaded) return <ui.Text color="red">{loaded.error}</ui.Text>
+      return (
+        <ui.Box flexDirection="column">
+          {bar}
+          {tabBody(ui, tab, loaded.doc, columns)}
+          {keys(false)}
+        </ui.Box>
+      )
+    }
     const view = await diagramView($, { ui, requestId: PANE, columns }, PANE_VIEW, source)
     if ('error' in view) return <ui.Text color="red">{view.error}</ui.Text>
-    const isFocused = 'isFocused' in e.props && e.props.isFocused === true
     return (
       <ui.Box flexDirection="column">
+        {bar}
         {view.element}
-        <ui.Text dimColor wrap="truncate-end">
-          {isFocused ? PANE_KEYS : 'ctrl+x tab focuses the pane for its keys'}
-        </ui.Text>
-        {isFocused && view.systems && <ui.Text dimColor wrap="truncate-end">{SYSTEM_KEYS}</ui.Text>}
+        {keys(view.systems)}
       </ui.Box>
     )
   })
@@ -309,6 +335,7 @@ interface View {
   /** The width of the bars under the diagram: the diagram's, at least as wide as their controls want where the terminal has room. */
   width: number
   overlay: Document['overlay']
+  edges: Document['edges']
   /** Drawn in the pane, whose Buttons take hotkeys and whose body scrolls under the plugin. */
   inPane: boolean
 }
@@ -339,9 +366,8 @@ const PLAY = ' ▶ Play '
 /** What the bars under a diagram want, so they lay out on one row each. */
 const BARS_WIDTH = 80
 
-/** The drawing of one document: the diagram with its use case picker or player and its links, or why it cannot be drawn. `file` is where the source was read from, if anywhere. */
-async function diagramView($: EngineInterface, d: Draw, viewId: string, written: Source, file?: string): Promise<{ element: RenderElement; systems: boolean } | { error: string }> {
-  const { ui } = d
+/** A document as a drawing's player shows it (its systems opened or focused into), or why it cannot be drawn. */
+async function documentOf($: EngineInterface, viewId: string, written: Source, file?: string): Promise<{ doc: Document; source: Source; key: string; player: Player } | { error: string }> {
   // The systems the player opened or focused into are part of what is laid out.
   const player = normal(await read($, memberOf(players, { requestId: viewId })))
   const shown: SystemsView = { ...(player.expanded.length ? { expanded: player.expanded } : {}), ...(player.focus !== undefined ? { focus: player.focus } : {}) }
@@ -358,6 +384,18 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
     return { error: `${where} has errors (line ${first.line}: ${first.message})${file ? `: run \`npx proschi check ${file}\`` : ''}.` }
   }
   if (doc.diagram.nodes.length === 0) return { error: `${where} has no components to draw.` }
+  return { doc, source, key, player }
+}
+
+/** Warnings a drawing in the transcript lists before it points at the pane's Analysis tab for the rest. */
+const INLINE_WARNINGS = 2
+
+/** The drawing of one document: the diagram with its use case picker or player and its links, or why it cannot be drawn. `file` is where the source was read from, if anywhere. */
+async function diagramView($: EngineInterface, d: Draw, viewId: string, written: Source, file?: string): Promise<{ element: RenderElement; systems: boolean } | { error: string }> {
+  const { ui } = d
+  const loaded = await documentOf($, viewId, written, file)
+  if ('error' in loaded) return loaded
+  const { doc, source, key, player } = loaded
 
   const layout = layouts.get(key)
   if (!layout) {
@@ -382,14 +420,19 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
   const width = Math.min(Math.max(40, d.columns), Math.max(scene.columns, BARS_WIDTH))
   const systems = selectable(scene, player.focus)
   const selected = systems.find(s => s.path === player.selected) ?? systems[0]
-  const view: View = { d, viewId, rasterKey: `d-${viewId}`, anchorKey: `at-${viewId}`, scene, width, overlay: doc.overlay, systems: doc.systems, ...(selected ? { selected: selected.id } : {}), inPane: d.requestId === PANE }
+  const view: View = { d, viewId, rasterKey: `d-${viewId}`, anchorKey: `at-${viewId}`, scene, width, overlay: doc.overlay, edges: doc.edges, systems: doc.systems, ...(selected ? { selected: selected.id } : {}), inPane: d.requestId === PANE }
   if (playing && player.isPlaying && !timers.has(viewId)) animate($, view, steps)
 
   // While a step animates, its frames are blitted in place; a drawing starts it from the beginning.
   const progress = timers.has(viewId) ? 0 : 100
-  const grid = paint(scene, { overlay: doc.overlay, icons, systems: doc.systems, ...(view.selected ? { selected: view.selected } : {}), ...(steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {}) })
-  const link = doc.link(playing ? { useCase: playing.useCase.id, ...(playing.useCase.scenarios.length > 1 ? { scenario: playing.scenario.id } : {}), step } : undefined)
+  const grid = paint(scene, { overlay: doc.overlay, edges: doc.edges, icons, systems: doc.systems, ...(view.selected ? { selected: view.selected } : {}), ...(steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {}) })
+  // The link's step counts from 1, as the editor's player does (playground/share.ts PlaybackTarget).
+  const link = doc.link(playing ? { useCase: playing.useCase.id, ...(playing.useCase.scenarios.length > 1 ? { scenario: playing.scenario.id } : {}), step: step + 1 } : undefined)
   const lost = lostImports(written, keyOf(written))
+  const title = file ? basename(file) : (doc.diagram.title ?? 'diagram')
+  const what = file ? { file } : { source }
+  // The verdict on one row, with room left for its Details button in the transcript.
+  const verdict = verdictLine(doc.tests, view.width - (view.inPane ? 0 : 13))
   const hasSystems = systems.length > 0 || player.focus !== undefined
   // Wide enough for the long labels, else the short ones.
   const roomy = view.width >= 79
@@ -426,15 +469,32 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
             {note.hint && <ui.Text dimColor> → {note.hint}</ui.Text>}
           </ui.Text>
         ))}
+        {(view.inPane ? doc.warnings : doc.warnings.slice(0, INLINE_WARNINGS)).map(w => (
+          <ui.Text key={`warn-${w}`} color="yellow" wrap="truncate-end">
+            ⚠ {w}
+          </ui.Text>
+        ))}
+        {!view.inPane && doc.warnings.length > INLINE_WARNINGS && (
+          <ui.Text dimColor wrap="truncate-end">
+            … {doc.warnings.length - INLINE_WARNINGS} more: ⛶ Focus, then Analysis
+          </ui.Text>
+        )}
         <ui.Raster key={view.rasterKey} columns={grid.columns} rows={grid.rows} cells={grid.toBase64()} />
+        {doc.edges && !playing && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)}
       </ui.Box>
+      {verdict && !playing && (
+        <ui.Box key={`verdict-${viewId}`} flexDirection="row" gap={1} width={view.width}>
+          {lineView(ui, verdict)}
+          {!view.inPane && <ui.Button key={`tests-${viewId}`} label="⛶ Details" dimColor onPress={() => focus($, view, title, what, 'tests')} />}
+        </ui.Box>
+      )}
       {hasSystems && !playing && systemBar($, view, doc, systems, selected, player)}
       {playing ? stepPanel($, view, playing, step, player) : pick && useCaseBar($, view, doc, pick, player)}
       <ui.Box flexDirection="row" gap={1} borderStyle="round" borderColor="gray" paddingX={1} width={view.width}>
         <ui.Button key={`src-${viewId}`} label={roomy ? '⧉ Copy source' : '⧉ Source'} onPress={press => void copy($, press.surface, source.source, 'the Proschi source')} />
         <ui.Button key={`lnk-${viewId}`} label={roomy ? '⧉ Copy share link' : '⧉ Link'} onPress={press => void copy($, press.surface, link, 'the share link')} />
         <ui.Button key={`open-${viewId}`} label={roomy ? '↗ Open in Proschi' : '↗ Open'} variant="primary" onPress={press => void openLink($, press.surface, link)} />
-        {!view.inPane && <ui.Button key={`focus-${viewId}`} label="⛶ Focus" onPress={() => focus($, view, file ? basename(file) : (doc.diagram.title ?? 'diagram'), file ? { file } : { source })} />}
+        {!view.inPane && <ui.Button key={`focus-${viewId}`} label="⛶ Focus" onPress={() => focus($, view, title, what)} />}
       </ui.Box>
     </ui.Box>
   ), systems: hasSystems }
@@ -839,9 +899,10 @@ async function scroll($: EngineInterface, args: UiScrollArgs): Promise<{ deny?: 
  * it shows follows. A file keeps its watch; a block from a reply is stored
  * whole. The pane's player starts where this one stands, and this one pauses.
  */
-function focus($: EngineInterface, view: View, title: string, what: { file: string } | { source: Source }): void {
+function focus($: EngineInterface, view: View, title: string, what: { file: string } | { source: Source }, tab: PaneTab = 'diagram'): void {
   const opened = $.ui.open({ id: PANE, title: `Proschi · ${title}`, focus: true, closeOnEscape: true })
   void (async () => {
+    await update($, paneTab, () => tab)
     const player = normal(await read($, memberOf(players, { requestId: view.viewId })))
     if (player.isPlaying) await setPlayer($, view, p => ({ ...p, isPlaying: false }))
     stop(PANE_VIEW)
@@ -886,7 +947,7 @@ function animate($: EngineInterface, view: View, steps: FlowStep[]): void {
     if (started < 0) started = now
     const elapsed = now - started
     const play = playAt(view.scene, steps, step, Math.min(100, (elapsed / TRAVEL_MS) * 100), tick++)
-    await $.ui.blit({ requestId: view.d.requestId, key: view.rasterKey, cells: paint(view.scene, { overlay: view.overlay, icons, systems: view.systems, ...(view.selected ? { selected: view.selected } : {}), play }).toBase64() })
+    await $.ui.blit({ requestId: view.d.requestId, key: view.rasterKey, cells: paint(view.scene, { overlay: view.overlay, edges: view.edges, icons, systems: view.systems, ...(view.selected ? { selected: view.selected } : {}), play }).toBase64() })
     if (!player.isPlaying) {
       if (elapsed >= TRAVEL_MS) stop(view.viewId)
       return

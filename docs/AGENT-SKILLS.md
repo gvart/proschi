@@ -90,13 +90,27 @@ terminal, with the same layout as the browser. It draws:
 - a file you name with `/proschi view <file>`, in a pane that redraws when
   the file changes.
 
-A drawing shows the cards, groups, legend and, with `traffic`, the load on
-each node. Under it, a use case picker opens a player like the editor's.
+A drawing shows the cards, groups and legend. With `traffic` it also shows
+the load as the editor's overlay does: each card fills with its heat from
+40% of capacity, the first to give way carries a **BOTTLENECK** chip, each
+edge takes the colour of the node it feeds and its label the requests it
+carries and the latency they add, and the p99 path of the busiest use case is
+drawn heavy. The simulation's warnings sit above the drawing, and with
+`requirements` or `test` blocks one line under it says whether they pass;
+its **⛶ Details** opens them in the pane.
+
+Under the drawing, a use case picker opens a player like the editor's.
 Buttons copy the source or a share link, open the diagram in Proschi, or,
-with **⛶ Focus**, move it into a pane you drive from the keyboard:
+with **⛶ Focus**, move it into a pane you drive from the keyboard. The pane
+has tabs: **Diagram**, **Analysis** (cost, the busiest node, load, latency,
+availability and cost per node, percentiles per use case, queues, the cost
+breakdown and single points of failure) and **Tests** (each requirement and
+test, failing ones first with their hints); What-if, Sequence and HLD are
+coming.
 
 | Key | Does |
 |---|---|
+| `1`–`6` | Switch tabs |
 | `p` | Play or pause |
 | `n` / `b` | Next or previous step |
 | `r` / `e` | Restart, or jump to the end |
