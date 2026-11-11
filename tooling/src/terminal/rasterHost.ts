@@ -41,7 +41,9 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { deflateSync } from 'node:zlib';
+import { availableParallelism, cpus } from 'node:os';
+import { promisify } from 'node:util';
+import { deflate as deflateCallback } from 'node:zlib';
 import { initWasm, Resvg } from '@resvg/resvg-wasm';
 import { CANVAS_TOKENS } from '../../../frontend/src/utils/canvasColors';
 import { drawArchitecture, layoutArchitecture, type ArchitectureOptions } from '../render/architecture';
@@ -205,40 +207,42 @@ export async function rasterize(input: RasterInput, assets: RasterAssets): Promi
     return out;
   };
   let size: { width: number; height: number } | undefined;
-  const still = (svg: string): string => {
+  const writer = new Writer();
+  const still = async (svg: string): Promise<string> => {
     const file = fileOf(svg);
     if (existsSync(file)) {
       size ??= pngSize(file);
       touch([file]);
-    }
-    else {
+    } else {
       const pixels = render(svg);
       size ??= pixels;
-      put(file, encodePng(pixels));
+      await writer.add(file, pixels);
     }
     return file;
   };
 
-  const baseFile = still(base);
-  const frames = steps?.map((_, index) => {
+  const baseFile = await still(base);
+  let frames: string[][] | undefined;
+  for (let index = 0; steps && index < steps.length; index++) {
     const count = Math.max(1, Math.round(options.play!.frames ?? DEFAULT_FRAMES));
-    const svgs = Array.from({ length: count }, (_, k) => drawArchitecture(laid, { ...draw, play: { steps: steps!, index, progress: count === 1 ? 100 : (k * 100) / (count - 1) } }));
+    const svgs = Array.from({ length: count }, (_, k) => drawArchitecture(laid, { ...draw, play: { steps, index, progress: count === 1 ? 100 : (k * 100) / (count - 1) } }));
     const files = svgs.map(fileOf);
+    (frames ??= []).push(files);
     if (files.every((f) => existsSync(f))) {
       touch(files);
-      return files;
+      continue;
     }
     // Within a step only the packets move, and they are drawn last: the step is drawn once
     // without them, and each frame lays just its packets over a copy of that.
     const behind = render(svgs[0].replace(PACKET, ''));
-    svgs.forEach((svg, k) => {
-      if (existsSync(files[k])) return;
+    for (const [k, svg] of svgs.entries()) {
+      if (existsSync(files[k])) continue;
       const frame = { ...behind, data: behind.data.slice() };
       for (const [packet, x, y] of svg.matchAll(PACKET)) over(frame, packetPixels(packet, Number(x), Number(y), zoom, frame));
-      put(files[k], encodePng(frame));
-    });
-    return files;
-  });
+      await writer.add(files[k], frame);
+    }
+  }
+  await writer.done();
   const cell = options.cellPx ?? DEFAULT_CELL;
   const { width, height } = size!;
   const out: RasterOutput = { width, height, base: baseFile, ...(frames ? { frames } : {}), cellHint: { columns: Math.ceil(width / cell.width), rows: Math.ceil(height / cell.height) } };
@@ -320,12 +324,15 @@ function chunk(type: string, data: Uint8Array): Buffer {
   return out;
 }
 
+const deflate = promisify(deflateCallback);
+
 /**
  * An RGBA PNG, unfiltered at zlib level 3: three times as fast as resvg's
  * own encoder for files a third larger, which is the better trade for frames
- * that go to a terminal right away.
+ * that go to a terminal right away. The rows are copied out at once, so the
+ * pixels can go; the compression runs on libuv's thread pool.
  */
-function encodePng({ width, height, data }: Pixels): Buffer {
+async function encodePng({ width, height, data }: Pixels): Promise<Buffer> {
   const stride = width * 4;
   const raw = Buffer.alloc((stride + 1) * height);
   for (let y = 0; y < height; y++) raw.set(data.subarray(y * stride, (y + 1) * stride), y * (stride + 1) + 1);
@@ -333,7 +340,32 @@ function encodePng({ width, height, data }: Pixels): Buffer {
   header.writeUInt32BE(width, 0);
   header.writeUInt32BE(height, 4);
   header.set([8, 6, 0, 0, 0], 8);
-  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', header), chunk('IDAT', deflateSync(raw, { level: 3 })), chunk('IEND', new Uint8Array(0))]);
+  const idat = await deflate(raw, { level: 3 });
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', header), chunk('IDAT', idat), chunk('IEND', new Uint8Array(0))]);
+}
+
+/** PNGs encoded at once, at most: the thread pool's four, or the cores where there are fewer. Each holds a frame's rows. */
+const ENCODERS = Math.max(1, Math.min(4, typeof availableParallelism === 'function' ? availableParallelism() : cpus().length));
+
+/**
+ * Encodes and writes PNGs while the next frames are drawn: `add` waits only
+ * while ENCODERS are busy, `done` for the last of them. Compression is
+ * most of a frame's time (zlib on 20 MB of rows), drawing the rest.
+ */
+class Writer {
+  private busy = new Set<Promise<void>>();
+
+  async add(file: string, pixels: Pixels): Promise<void> {
+    while (this.busy.size >= ENCODERS) await Promise.race(this.busy);
+    const job: Promise<void> = encodePng(pixels)
+      .then((png) => put(file, png))
+      .finally(() => this.busy.delete(job));
+    this.busy.add(job);
+  }
+
+  async done(): Promise<void> {
+    await Promise.all(this.busy);
+  }
 }
 
 async function main(): Promise<void> {

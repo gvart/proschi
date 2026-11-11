@@ -105,24 +105,30 @@ in `outDir` no call used for 7 days (`PRUNE_AFTER_MS`).
 Per step the helper renders one still without packets, then each frame lays
 just its packets (a tiny SVG, composited in premultiplied RGBA) over a copy and
 encodes the PNG itself (unfiltered, zlib level 3; about 3× faster than resvg's
-encoder for files about a third larger). Measured on an M-series Mac, scale 2,
-dark theme, 8 frames per step, including Node start-up, ELK layout and the
-still:
+encoder for files about a third larger). Compression is most of a frame's
+time, so it runs on libuv's thread pool, up to four PNGs at once, while the
+next frames are drawn (the bytes are the same). Measured on an M-series Mac,
+scale 2, dark theme, 8 frames per step, including Node start-up, ELK layout
+and the still:
 
 | Diagram | PNG | Frames | Total |
 | --- | --- | --- | --- |
-| `url-shortener` example | 1192×1164 | 32 | 0.83 s |
-| `ecommerce` example (7 nodes) | 1752×1666 | 32 | 1.5 s |
-| `styled` example (12 nodes, 2 groups, legend) | 2502×2258 | 32 | 2.5 s |
+| `url-shortener` example (first use case) | 1192×1164 | 24 | 0.58 s |
+| `ecommerce` example (7 nodes) | 1752×1666 | 32 | 1.0 s |
+| `styled` example (12 nodes, 2 groups, legend) | 2502×2258 | 32 | 1.4 s |
 
 A full resvg render of the 1752×1666 frame takes ≈85 ms and a frame from the
 still ≈25 ms. `maxWidthPx` (or a lower `scale`) cuts both roughly in proportion
-to the pixel count; a terminal rarely shows more than ≈1600 px across.
+to the pixel count; a terminal rarely shows more than ≈1600 px across. The
+four encodes in flight hold their rows: the `styled` example peaks at about
+700 MB resident (470 MB encoding one at a time).
 
 ## Sizes
 
-`raster.cjs` 3.3 MB (it carries ELK, the parser, the simulation, react-dom's
-server renderer and the icon sets), `resvg.wasm` 2.5 MB, fonts 400 KB.
+`raster.cjs` 2.1 MB: ELK (1.4 MB), the parser, the simulation, react-dom's
+server renderer (its production build) and the icons the canvas maps
+(lucide-react's ES module build, so only those). `resvg.wasm` 2.5 MB, fonts
+400 KB.
 
 ## Known limits
 
