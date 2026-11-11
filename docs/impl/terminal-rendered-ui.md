@@ -206,6 +206,30 @@ text cells** (today's drawing). Never a text preview followed by a picture.
   tooling's ui.test checks the rounded edges and divider, and raster.test
   checks the strip's width, the badge's corner and the centring.
 
+## Round 4 fixes (third test: HLD, the player)
+
+- [x] T1. **HLD text out of reach.** Two causes. Across: tables kept every
+  column at its widest cell and only shrank the widest to 60 px with an
+  ellipsis, so a table of several columns ran past the strip's right edge (the
+  url-shortener HLD at 80 columns: 29 runs past the edge, 19 cut off) and its
+  cells were clipped; code lines were cut with an ellipsis; a word longer
+  than a line was clipped. Fix: tables give the text columns what the fixed
+  ones (controls, bars) leave, the narrowest keeping their width, and wrap
+  their cells and titles (rows grow by whole cells); code lines go on under
+  themselves, indented; a word wider than a line is broken over lines
+  (`breakWord` in kit.ts). Down: a click on any control (a tab) gives that
+  strip's overlay `Client` the focus, and with it the keys, so the pane's
+  scroll keys reached the overlay, which dropped them. Fix: the overlay posts
+  the scroll keys (`up`, `down`, `pageup`, `pagedown`, `home`, `end`) and the
+  plugin moves the pane as the engine would: a row, a window, the top or the
+  end (`$.ui.scroll` names no row, so a `ui.scroll` hook sets the offset).
+  Tests: tooling's ui.test, every example's HLD at 60 to 140 columns and every
+  other panel: no text past the edge, none cut with an ellipsis, a long cell,
+  code line and word drawn whole; the plugin's HLD test lays the pane out
+  (tests/screen.ts) and checks the page's strips run on from the tab bar with
+  no gap to the drawing's last row, none wider than the pane, and that the
+  scroll keys an overlay hears move the pane.
+
 ## Risks
 
 - Cell aspect is assumed 1:2; tiles must stay seamless under the terminal's

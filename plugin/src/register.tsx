@@ -18,7 +18,7 @@ import type { Control, Notice, NoticesPanel, Panel, PlayerHeaderPanel, SequenceP
 import { components } from '../../frontend/src/sim/analyze'
 import { MULTIPLIERS, stopOf, toggleFailed } from '../../frontend/src/components/WhatIf/whatIf'
 import { cellPx, graphicsMode, gridFrame, imageSize, maxWidthPx, probe, probeKey, probeOf, probeSource, rasterOf, sourceOf, themeOf, TMUX_HINT, type GraphicsMode, type RasterGrid, type RasterRequest } from './graphics'
-import { loading, pictureSite, pressTimings, registerPicture, type Action, type Picture, type Piece, type Site } from './picture'
+import { loading, paneWindow, pictureSite, pressTimings, registerPicture, type Action, type Picture, type Piece, type Site } from './picture'
 import { setCellAspect } from './helper'
 import { hldMarkdown, hldTab } from './views/hld'
 import { legendLine, verdictLine } from './views/lines'
@@ -193,7 +193,9 @@ export function register(on: On, options: PluginOptions): void {
     if (!source) return <ui.Text color="red">Cannot read {file}.</ui.Text>
     const columns = 'bodyColumns' in e.props && typeof e.props.bodyColumns === 'number' ? e.props.bodyColumns : (e.viewport?.columns ?? 120) - 4
     const isFocused = 'isFocused' in e.props && e.props.isFocused === true
-    const bodyRows = 'scroll' in e.props && typeof (e.props.scroll as { bodyRows?: unknown } | undefined)?.bodyRows === 'number' ? (e.props.scroll as { bodyRows: number }).bodyRows : 0
+    const scrolled = 'scroll' in e.props ? (e.props.scroll as { bodyRows?: unknown; offset?: unknown } | undefined) : undefined
+    const bodyRows = typeof scrolled?.bodyRows === 'number' ? scrolled.bodyRows : 0
+    paneWindow(PANE, typeof scrolled?.offset === 'number' ? scrolled.offset : 0, bodyRows)
     const tab = tabOf(await read($, paneTab))
     const whatIf = whatIfOf(await read($, paneWhatIf))
     const loaded = await documentOf($, PANE_VIEW, source, undefined, whatIf)

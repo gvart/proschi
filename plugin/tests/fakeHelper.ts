@@ -51,7 +51,11 @@ export function answer(input: Record<string, unknown>, size = { width: 1600, hei
           ],
         })),
       ]
-      return { id: req.id, kind: req.panel.kind, columns: req.columns, rows: tiles.length, cellPx: { width: 16, height: 34 }, tiles }
+      // The HLD page as tall as a real one: plain strips of 64 rows under its controls.
+      const under = tiles.length
+      if (controls.some(c => c.id === 'hld-copy')) for (let i = 0; i < 4; i++) tiles.push({ col: 0, row: under + i * 64, columns: req.columns, rows: 64, file: `${name}-hld-${i}.png` } as never)
+      const rows = tiles.reduce((n, t) => n + t.rows, 0)
+      return { id: req.id, kind: req.panel.kind, columns: req.columns, rows, cellPx: { width: 16, height: 34 }, tiles }
     })
     return { panels }
   }

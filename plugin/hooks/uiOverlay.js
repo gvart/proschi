@@ -1,4 +1,5 @@
 // ../plugin/src/uiOverlay.ts
+var SCROLL_KEYS = ["up", "down", "pageup", "pagedown", "home", "end"];
 var controlAt = (controls, x, y) => controls.find((c) => x >= c.col && x < c.col + c.columns && y >= c.row && y < c.row + c.rows)?.id ?? "";
 var UiOverlay = (props, surface) => {
   surface.onPointer((e) => {
@@ -20,12 +21,15 @@ var UiOverlay = (props, surface) => {
     }
   });
   surface.onKey((e) => {
-    if (!e.ctrl && !e.meta && e.key.length === 1) surface.post({ type: "key", key: e.key.toLowerCase() });
+    if (e.ctrl || e.meta) return;
+    if (SCROLL_KEYS.includes(e.key)) surface.post({ type: "scroll", key: e.key });
+    else if (e.key.length === 1) surface.post({ type: "key", key: e.key.toLowerCase() });
   });
   return surface.elements.Box({ width: surface.columns || void 0, height: surface.rows || void 0 });
 };
 var uiOverlay_default = UiOverlay;
 export {
+  SCROLL_KEYS,
   controlAt,
   uiOverlay_default as default
 };

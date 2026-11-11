@@ -201,7 +201,19 @@ function cellWidth(c: Cell | undefined, base: TextStyle): number {
 
 const heatOf = (u: number) => (u >= 1 ? '#EF4444' : u > 0.7 ? '#F59E0B' : '#22C55E');
 
-/** A table: uppercase header, hairline rows, numbers right-aligned; columns dropped by `drop`, then the first cut, to fit `maxW`. */
+/** A cell that never wraps: a control, or a heat bar with its figure. */
+const isFixed = (c: Cell | undefined) => typeof c === 'object' && !Array.isArray(c) && ('control' in c || 'bar' in c);
+
+/** A wrapped line of table text: 19 px at 14 px type, 17 at 13. */
+const lineOf = (s: TextStyle) => ((s.size ?? 13) >= 14 ? 19 : 17);
+
+/**
+ * A table: uppercase header, hairline rows, numbers right-aligned. Columns
+ * marked `drop` go first when it does not fit; then the text columns share
+ * the room (a narrow one keeps its width, the wide ones split the rest) and
+ * their cells and titles wrap, a word too long for its column broken, so
+ * every cell is whole within `maxW`.
+ */
 export function table(S: Surface, columns: Column[], rows: { cells: Cell[]; sub?: boolean; dim?: boolean }[], x0: number, top: number, maxW: number): number {
   const P = S.P;
   const controls = rows.some((row) => row.cells.some((c) => typeof c === 'object' && !Array.isArray(c) && 'control' in c));
@@ -210,9 +222,9 @@ export function table(S: Surface, columns: Column[], rows: { cells: Cell[]; sub?
   const subH = controls ? CONTROL_ROW : ROW;
   const base: TextStyle = { size: 14 };
   const sub: TextStyle = { size: 13 };
-  const widths = columns.map((c, i) =>
-    Math.max(width(c.title.toUpperCase(), HEAD), ...rows.map((row) => cellWidth(row.cells[i], row.sub ? sub : base) + (i === 0 && row.sub ? 12 : 0))),
-  );
+  const indent = (i: number, row: { sub?: boolean }) => (i === 0 && row.sub ? 12 : 0);
+  const widths = columns.map((c, i) => Math.max(width(c.title.toUpperCase(), HEAD), ...rows.map((row) => cellWidth(row.cells[i], row.sub ? sub : base) + indent(i, row))));
+  const fixed = columns.map((_, i) => rows.some((row) => isFixed(row.cells[i])));
   let shown = columns.map((_, i) => i);
   const total = () => shown.reduce((s, i) => s + widths[i], 0) + CELL_PAD * (shown.length - 1);
   while (total() > maxW) {
@@ -220,20 +232,20 @@ export function table(S: Surface, columns: Column[], rows: { cells: Cell[]; sub?
     if (!droppable.length) break;
     shown = shown.filter((i) => i !== droppable[0]);
   }
-  // Still too wide: the widest text columns give way, down to 60 px each; their cells end in an ellipsis.
-  const fitted = [...widths];
-  for (let guard = 0; guard < 50; guard++) {
-    const over = shown.reduce((s, i) => s + fitted[i], 0) + CELL_PAD * (shown.length - 1) - maxW;
-    if (over <= 0) break;
-    const widest = shown.filter((i) => fitted[i] > 60).sort((a, b) => fitted[b] - fitted[a]);
-    if (!widest.length) break;
-    const next = widest.length > 1 ? fitted[widest[1]] : 60;
-    fitted[widest[0]] = Math.max(60, Math.max(next, fitted[widest[0]] - over));
+  // Still too wide: the text columns share what the fixed ones leave, the narrowest keeping their width first.
+  const w = [...widths];
+  if (total() > maxW) {
+    let room = maxW - CELL_PAD * (shown.length - 1) - shown.filter((i) => fixed[i]).reduce((s, i) => s + widths[i], 0);
+    const flex = shown.filter((i) => !fixed[i]).sort((a, b) => widths[a] - widths[b]);
+    flex.forEach((i, k) => {
+      const share = Math.max(24, Math.floor(room / (flex.length - k)));
+      w[i] = Math.min(widths[i], share);
+      room -= w[i];
+    });
   }
-  const w = (i: number) => fitted[i];
   // Column x positions; a column of controls starts on a cell boundary.
   // Narrower than the room: the gaps widen, as the editor's w-full tables, up to a point.
-  const natural = shown.reduce((s, i) => s + w(i), 0) + CELL_PAD * (shown.length - 1);
+  const natural = shown.reduce((s, i) => s + w[i], 0) + CELL_PAD * (shown.length - 1);
   const gap = shown.length > 1 ? Math.min(96, CELL_PAD + Math.max(0, maxW - natural) / (shown.length - 1)) : CELL_PAD;
   const xs = new Map<number, number>();
   let x = x0;
@@ -241,37 +253,54 @@ export function table(S: Surface, columns: Column[], rows: { cells: Cell[]; sub?
     const isControl = rows.some((row) => typeof row.cells[i] === 'object' && !Array.isArray(row.cells[i]) && 'control' in (row.cells[i] as object));
     if (isControl) x = Math.ceil(x / CELL.width) * CELL.width;
     xs.set(i, x);
-    x += w(i) + gap;
+    x += w[i] + gap;
   }
-  // On the cell grid: the header a row, each row whole rows under it.
+  // On the cell grid: the header whole rows, each row whole rows under it.
   let y = up(top);
   const parts: string[] = [];
-  parts.push(...shown.map((i) => txt(columns[i].align === 'right' ? xs.get(i)! + w(i) : xs.get(i)!, y + ROW / 2 + 4, columns[i].title.toUpperCase(), { ...HEAD, color: P.muted, anchor: columns[i].align === 'right' ? 'end' : 'start' })));
-  y += ROW;
-  const right = Math.max(...shown.map((i) => xs.get(i)! + w(i)));
+  const heads = shown.map((i) => layoutRich(columns[i].title.toUpperCase(), w[i], HEAD, true));
+  const headLines = Math.max(1, ...heads.map((l) => l.length));
+  shown.forEach((i, k) =>
+    heads[k].forEach((laid, n) => {
+      const right = columns[i].align === 'right';
+      parts.push(drawLaid(P, laid, right ? xs.get(i)! + w[i] - laid.width : xs.get(i)!, y + ROW / 2 + 4 + n * 14, HEAD, P.muted));
+    }),
+  );
+  y += up(ROW + (headLines - 1) * 14);
+  const right = Math.max(...shown.map((i) => xs.get(i)! + w[i]));
   parts.push(line(x0, y - 0.5, right, y - 0.5, P.line, 1));
   rows.forEach((row, k) => {
-    const h = row.sub ? subH : rowH;
     const style = row.sub ? sub : base;
-    const baseline = y + h / 2 + (style.size ?? 13) * 0.36;
+    const single = row.sub ? subH : rowH;
+    const L = lineOf(style);
+    // Each text cell's lines; the row as tall as its tallest, its first line where a one-line row has it.
+    const laid = new Map<number, ReturnType<typeof layoutRich>>();
+    for (const i of shown) {
+      const c = row.cells[i];
+      if (c === undefined || isFixed(c)) continue;
+      laid.set(i, layoutRich(c as Rich, w[i] - indent(i, row), style, true));
+    }
+    const most = Math.max(1, ...[...laid.values()].map((l) => l.length));
+    const pad = (single - L) / 2;
+    const h = Math.max(single, up(2 * pad + most * L));
+    const baseline = y + pad + L / 2 + (style.size ?? 13) * 0.36;
     for (const i of shown) {
       const c = row.cells[i];
       if (c === undefined) continue;
-      const cx = xs.get(i)! + (i === shown[0] && row.sub ? 12 : 0);
-      const cw = w(i) - (i === shown[0] && row.sub ? 12 : 0);
+      const cx = xs.get(i)! + indent(i, row);
+      const cw = w[i] - indent(i, row);
       if (typeof c === 'object' && !Array.isArray(c) && 'control' in c) {
         placeButton(S, c.control, Math.round(cx / CELL.width), y);
         continue;
       }
       if (typeof c === 'object' && !Array.isArray(c) && 'bar' in c) {
         const u = Math.max(0, c.bar);
-        parts.push(rect(cx, y + h / 2 - 3, BAR_TRACK, 6, { fill: P.hover, rx: 3 }), u > 0 ? rect(cx, y + h / 2 - 3, Math.max(3, Math.min(1, u) * BAR_TRACK), 6, { fill: heatOf(u), rx: 3 }) : '');
+        parts.push(rect(cx, y + single / 2 - 3, BAR_TRACK, 6, { fill: P.hover, rx: 3 }), u > 0 ? rect(cx, y + single / 2 - 3, Math.max(3, Math.min(1, u) * BAR_TRACK), 6, { fill: heatOf(u), rx: 3 }) : '');
         parts.push(txt(cx + BAR_TRACK + 8, baseline, c.text, { size: 13, weight: u >= 1 ? 600 : 400, color: c.tone ? P.tone[c.tone] : u >= 1 ? P.tone.bad : u > 0.7 ? P.tone.warn : mix(P.ink, P.surface, 0.8) }));
         continue;
       }
       const color = row.dim || row.sub ? P.muted : columns[i].align === 'right' ? mix(P.ink, P.surface, 0.85) : P.ink;
-      const laid = layoutRich(c, cw, style, false)[0];
-      parts.push(drawLaid(P, laid, columns[i].align === 'right' ? cx + cw - laid.width : cx, baseline, style, color));
+      laid.get(i)!.forEach((l, n) => parts.push(drawLaid(P, l, columns[i].align === 'right' ? cx + cw - l.width : cx, baseline + n * L, style, color)));
     }
     y += h;
     const next = rows[k + 1];
@@ -325,29 +354,45 @@ export function highlight(P: Palette, text: string, language?: string): Token[] 
 
 export const CODE = { size: 12.5, line: 18 };
 
-/** A code box from (x, top), `w` wide: a line per row (16 px), at most `maxLines` and a count of the rest. */
+/** A code box from (x, top), `w` wide: a row per line (18 px), a line longer than the box going on under itself, indented; at most `maxLines` lines of the source and a count of the rest. */
 export function codeBox(S: Surface, text: string, x: number, top: number, w: number, o: { language?: string; maxLines?: number; error?: boolean; fill?: string } = {}): number {
   const P = S.P;
   const all = text.replace(/\n+$/, '').split('\n');
   const shown = all.slice(0, o.maxLines ?? all.length);
   const more = all.length - shown.length;
-  const h = 10 + (shown.length + (more ? 1 : 0)) * CODE.line;
+  const advance = measure('0', CODE.size, 500, true);
+  const room = Math.max(8, Math.floor((w - 20) / advance));
+  // Each source line as rows of tokens, at a column each.
+  const rows: { col: number; text: string; color: string }[][] = [];
+  for (const ln of shown) {
+    const lead = Math.min(Math.floor(room / 2), /^\s*/.exec(ln)![0].length + 2);
+    let row: { col: number; text: string; color: string }[] = [];
+    let col = 0;
+    rows.push(row);
+    for (const t of highlight(P, ln, o.language)) {
+      let rest = t.text;
+      while (rest) {
+        if (col >= room) {
+          rows.push((row = []));
+          col = lead;
+          rest = rest.replace(/^\s+/, '');
+          if (!rest) break;
+        }
+        const piece = rest.slice(0, room - col);
+        row.push({ col, text: piece, color: t.color });
+        col += piece.length;
+        rest = rest.slice(piece.length);
+      }
+    }
+  }
+  const h = 10 + (rows.length + (more ? 1 : 0)) * CODE.line;
   const fill = o.error ? P.chip.red.fill : (o.fill ?? P.wash);
   const parts = [rect(x + 0.5, top + 0.5, w - 1, h - 1, { fill, stroke: o.error ? alpha(P.fail, 0.45) : P.line, sw: 1, rx: 6 })];
-  const advance = measure('0', CODE.size, 500, true);
-  const room = Math.floor((w - 20) / advance);
-  shown.forEach((ln, i) => {
-    let col = 0;
+  rows.forEach((row, i) => {
     const y = top + 5 + i * CODE.line + 13;
-    for (const t of highlight(P, ln, o.language)) {
-      if (col >= room) break;
-      let piece = t.text;
-      if (col + piece.length > room) piece = `${piece.slice(0, Math.max(0, room - col - 1))}…`;
-      if (piece.trim()) parts.push(txt(x + 10 + col * advance, y, piece, { size: CODE.size, mono: true, color: t.color }));
-      col += piece.length;
-    }
+    for (const t of row) if (t.text.trim()) parts.push(txt(x + 10 + t.col * advance, y, t.text, { size: CODE.size, mono: true, color: t.color }));
   });
-  if (more) parts.push(txt(x + 10, top + 5 + shown.length * CODE.line + 13, `… ${more} more line${more === 1 ? '' : 's'}`, { size: 12, color: P.muted }));
+  if (more) parts.push(txt(x + 10, top + 5 + rows.length * CODE.line + 13, `… ${more} more line${more === 1 ? '' : 's'}`, { size: 12, color: P.muted }));
   S.add(...parts);
   return h;
 }

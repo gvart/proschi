@@ -10,6 +10,9 @@ import type { ClientModule } from 'claude-code'
  *   { type: 'down', id }    a button went down on a control
  *   { type: 'press', id }   it came up on the control it went down on
  *   { type: 'key', key }    a key, while a click has given the region the focus
+ *   { type: 'scroll', key } a scroll key (arrows, page keys, home, end) while it
+ *                           has the focus: the pane's own keys would scroll its
+ *                           body, but the focus is the region's after a click
  *
  * A post can replace one not yet delivered in the same frame, so the press
  * carries everything a press needs (a lost `down` costs only its picture).
@@ -19,6 +22,9 @@ import type { ClientModule } from 'claude-code'
 export type OverlayControl = { id: string; col: number; row: number; columns: number; rows: number }
 export type OverlayProps = { controls: OverlayControl[] }
 type State = { hover: string; down: string }
+
+/** The keys that scroll a pane's body, as `onKey` names them. */
+export const SCROLL_KEYS = ['up', 'down', 'pageup', 'pagedown', 'home', 'end']
 
 export const controlAt = (controls: OverlayControl[], x: number, y: number) =>
   controls.find(c => x >= c.col && x < c.col + c.columns && y >= c.row && y < c.row + c.rows)?.id ?? ''
@@ -43,7 +49,9 @@ const UiOverlay: ClientModule<OverlayProps, State> = (props, surface) => {
     }
   })
   surface.onKey(e => {
-    if (!e.ctrl && !e.meta && e.key.length === 1) surface.post({ type: 'key', key: e.key.toLowerCase() })
+    if (e.ctrl || e.meta) return
+    if (SCROLL_KEYS.includes(e.key)) surface.post({ type: 'scroll', key: e.key })
+    else if (e.key.length === 1) surface.post({ type: 'key', key: e.key.toLowerCase() })
   })
   return surface.elements.Box({ width: surface.columns || undefined, height: surface.rows || undefined })
 }

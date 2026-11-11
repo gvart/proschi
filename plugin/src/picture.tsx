@@ -1,4 +1,4 @@
-import type { EngineInterface, ImageSource, On, RenderElement, RenderSurface } from 'claude-code'
+import type { EngineInterface, ImageSource, On, RenderElement, RenderSurface, UiScrollArgs } from 'claude-code'
 
 import type { Panel, PanelOutput, UiTheme } from '../../tooling/src/render/ui/contract'
 import { sourceOf } from './graphics'
@@ -398,13 +398,58 @@ export function registerPicture(on: On): void {
     } else if (data.type === 'key' && typeof data.key === 'string') {
       const target = l.hotkeys.get(data.key)
       if (target) await act($, site, target, e.surface)
+    } else if (data.type === 'scroll' && typeof data.key === 'string') {
+      await scrollKey($, l.requestId, data.key)
     }
     return {}
   })
+
+  // Where each pane's window stands, and a scroll key's move: `$.ui.scroll` names no row, so its move is set here.
+  on('ui.scroll', { component: 'Pane' }, async ($, e, next) => {
+    const to = going.get(e.requestId)
+    if (to !== undefined && e.origin?.kind === 'plugin') {
+      going.delete(e.requestId)
+      const offset = Math.max(0, Math.min(to, e.contentRows - e.bodyRows))
+      windows.set(e.requestId, { offset, bodyRows: e.bodyRows })
+      return next({ ...e, offset })
+    }
+    if (windows.has(e.requestId)) windows.set(e.requestId, { offset: e.offset, bodyRows: e.bodyRows })
+    return next(e)
+  })
+}
+
+/** Each pane's window over its drawing as last seen (its render's `scroll`, then each `ui.scroll`), by the pane's id. */
+const windows = new Map<string, { offset: number; bodyRows: number }>()
+/** The offset a scroll key asked a pane's window to move to, until its `ui.scroll` sets it. */
+const going = new Map<string, number>()
+
+/** The pane's window as its render saw it: what a scroll key moves from. */
+export function paneWindow(id: string, offset: number, bodyRows: number): void {
+  windows.set(id, { offset, bodyRows })
+}
+
+/**
+ * A scroll key an overlay heard: a click gives the overlay the focus, and
+ * the keys with it, so the pane's own scroll keys reach it instead of the
+ * pane. It moves the pane's window as the engine would: a row an arrow, a
+ * window a page key, Home and End to the top and the bottom.
+ */
+async function scrollKey($: EngineInterface, id: string, key: string): Promise<void> {
+  const w = windows.get(id)
+  if (!w) return
+  const args: UiScrollArgs = key === 'home' || key === 'end' ? { to: key === 'home' ? 'start' : 'end', in: id } : { to: 'start', in: id }
+  const to = key === 'home' ? 0 : key === 'end' ? Infinity : Math.max(0, w.offset + (key === 'up' ? -1 : key === 'down' ? 1 : key === 'pageup' ? -w.bodyRows : w.bodyRows))
+  if (key !== 'home' && key !== 'end') going.set(id, to)
+  $.ui.log(`proschi: scroll key ${key} moves ${id} to row ${to}`, { to: 'debug' })
+  const moved = await $.ui.scroll(args).catch((error: unknown) => ({ deny: String(error) }))
+  going.delete(id)
+  if (moved.deny) $.ui.log(`proschi: scroll key ${key} refused: ${moved.deny}`, { to: 'debug' })
 }
 
 /** For tests: forget what was drawn. */
 export function resetPictures(): void {
+  windows.clear()
+  going.clear()
   shown.clear()
   live.clear()
   overlaySites.clear()

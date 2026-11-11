@@ -272,7 +272,23 @@ const styleOf = (s: Span, base: TextStyle): TextStyle => ({ ...base, weight: s.b
 
 const pieceWidth = (s: Span, text: string, base: TextStyle) => (s.chip ? width(text, { size: (base.size ?? 13) - 1.5, weight: 600 }) + 12 : width(text, styleOf(s, base)));
 
-/** Rich text broken into lines of at most `max` px (one line, clipped, with `max` and `wrap` false). */
+/** `text` cut into pieces each at most `max` px wide (at least one character each): a word too long for its line, broken rather than clipped. */
+export function breakWord(text: string, max: number, s: TextStyle): string[] {
+  const chars = [...text];
+  const out: string[] = [];
+  let cur = '';
+  for (const ch of chars) {
+    if (cur && measure(cur + ch, s.size ?? 13, s.weight ?? 500, s.mono) > max) {
+      out.push(cur);
+      cur = '';
+    }
+    cur += ch;
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
+/** Rich text broken into lines of at most `max` px (one line, clipped, with `max` and `wrap` false); a word wider than a line is broken. */
 export function layoutRich(rich: Rich, max: number, base: TextStyle, wrap = true): Laid[] {
   const lines: Laid[] = [{ pieces: [], width: 0 }];
   const gap = width(' ', base);
@@ -294,31 +310,26 @@ export function layoutRich(rich: Rich, max: number, base: TextStyle, wrap = true
       cur.width += w;
       continue;
     }
-    // Words, each with the spaces before it.
+    // Words, each with the spaces before it; one wider than a whole line goes on in pieces on the lines after.
     for (const word of span.text.match(/\s*\S+|\s+$/g) ?? []) {
       let cur = lines.at(-1)!;
       const w = pieceWidth(span, word, base);
-      if (cur.pieces.length && cur.width + w > max && word.trim()) {
-        lines.push((cur = { pieces: [], width: 0 }));
-        const bare = word.trimStart();
-        let bw = pieceWidth(span, bare, base);
-        let text = bare;
-        if (bw > max) {
-          text = clip(bare, max, base.size ?? 13, styleOf(span, base).weight, styleOf(span, base).mono);
-          bw = pieceWidth(span, text, base);
-        }
-        cur.pieces.push({ span, text, x: 0, w: bw });
-        cur.width = bw;
+      if (cur.width + w <= max || !word.trim()) {
+        const text = cur.pieces.length ? word : word.trimStart();
+        const tw = pieceWidth(span, text, base);
+        cur.pieces.push({ span, text, x: cur.width, w: tw });
+        cur.width += tw;
         continue;
       }
-      let text = cur.pieces.length ? word : word.trimStart();
-      let tw = pieceWidth(span, text, base);
-      if (tw > max - cur.width) {
-        text = clip(text, max - cur.width, base.size ?? 13, styleOf(span, base).weight, styleOf(span, base).mono);
-        tw = pieceWidth(span, text, base);
-      }
-      cur.pieces.push({ span, text, x: cur.width, w: tw });
-      cur.width += tw;
+      const bare = word.trimStart();
+      if (cur.pieces.length) lines.push((cur = { pieces: [], width: 0 }));
+      const parts = pieceWidth(span, bare, base) <= max ? [bare] : breakWord(bare, max, styleOf(span, base));
+      parts.forEach((text, i) => {
+        if (i > 0) lines.push((cur = { pieces: [], width: 0 }));
+        const tw = pieceWidth(span, text, base);
+        cur.pieces.push({ span, text, x: 0, w: tw });
+        cur.width = tw;
+      });
     }
   }
   return lines;

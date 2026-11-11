@@ -10,7 +10,7 @@ import type { Panel, PanelOutput, PanelsOutput } from '../src/render/ui/contract
 import { analysisPage, hldPage, stepPanelOf, tabBarPanel, testsPage, whatIfPage } from '../src/render/ui/data';
 import { CELL } from '../src/render/ui/kit';
 import { markdownBlocks } from '../src/render/ui/markdown';
-import { loadFonts } from '../src/render/ui/metrics';
+import { loadFonts, measure } from '../src/render/ui/metrics';
 import { drawPanel } from '../src/render/ui/panels';
 import { cellsOf, cut } from '../src/render/ui/tiles';
 import { loadDocument } from '../src/terminal/document';
@@ -264,4 +264,58 @@ describe('UI panels: the raster helper', () => {
       child.kill();
     }
   }, 20_000);
+});
+
+describe('UI panels: every block within the pane width', () => {
+  const unescape = (s: string) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+  /** Every <text> of a panel's SVG with how far left and right it reaches, px. */
+  const texts = (svg: string) =>
+    [...svg.matchAll(/<text ([^>]*)>([^<]*)<\/text>/g)].map((m) => {
+      const a = m[1];
+      const x = Number(/(?:^| )x="([-\d.]+)"/.exec(a)![1]);
+      const t = unescape(m[2]);
+      const w = measure(t, Number(/font-size="([\d.]+)"/.exec(a)![1]), Number(/font-weight="(\d+)"/.exec(a)![1]), a.includes('JetBrains'));
+      const anchor = /text-anchor="(\w+)"/.exec(a)?.[1];
+      return { text: t, left: anchor === 'end' ? x - w : anchor === 'middle' ? x - w / 2 : x, right: anchor === 'end' ? x : anchor === 'middle' ? x + w / 2 : x + w };
+    });
+
+  it('wraps the HLD of every example to the pane, tables and code included: nothing past the edge, nothing cut off with an ellipsis', () => {
+    for (const e of examples) {
+      const d = loadDocument({ source: e.source });
+      if (d.errors.length) continue;
+      const page = hldPage(toMarkdown(hld(d.root, d.analysis, d.tests)));
+      for (const columns of [60, 80, 100, 140]) {
+        const { surface, height } = drawPanel(page, columns, 'dark');
+        for (const t of texts(surface.svg(height))) {
+          expect(t.right, `${e.id} at ${columns} columns: "${t.text}" reaches past the edge`).toBeLessThanOrEqual(columns * CELL.width - 1);
+          expect(t.left).toBeGreaterThanOrEqual(0);
+          expect(t.text, `${e.id} at ${columns} columns`).not.toMatch(/…$/);
+        }
+      }
+    }
+  });
+
+  it('keeps every other panel, a long table cell, a long code line and a long word within the pane, drawn whole', () => {
+    const long = 'x'.repeat(300);
+    const extra: Panel = {
+      kind: 'page',
+      blocks: [
+        { type: 'table', columns: ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven'].map((title) => ({ title })), rows: [{ cells: ['a long cell of words that has to wrap over several lines', long, 'c', 'd', 'e', 'f', 'g'] }] },
+        { type: 'code', text: `{"key": "${long}", "n": 1}`, language: 'json' },
+        { type: 'paragraph', text: `see ${long}` },
+      ],
+    };
+    for (const [kind, panel] of Object.entries({ ...PANELS, extra })) {
+      if (kind === 'sequence') continue;
+      for (const columns of [60, 80, 140]) {
+        const { surface, height } = drawPanel(panel, columns, 'dark');
+        for (const t of texts(surface.svg(height))) expect(t.right, `${kind} at ${columns} columns: "${t.text}"`).toBeLessThanOrEqual(columns * CELL.width - 1);
+      }
+    }
+    const { surface, height } = drawPanel(extra, 80, 'dark');
+    const all = texts(surface.svg(height))
+      .map((t) => t.text)
+      .join('');
+    expect(all.split('x').length - 1).toBe(3 * 300);
+  });
 });

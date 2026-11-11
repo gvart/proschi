@@ -498,3 +498,37 @@ test('every control in the pane runs its own action when pressed on its cell, th
   expect(panelsOf(pressed)).toEqual(['banner', 'head', 'links', 'page-hld', 'page-sequence', 'page-tests', 'page-whatif', 'step', 'systems', 'tabs', 'ucbar'])
   expect(pressed).toEqual(expect.arrayContaining(['systems/next', 'systems/open', 'systems/focus', 'systems/back', 'tabs/diagram', 'tabs/analysis', 'tabs/whatif', 'tabs/sequence', 'tabs/hld', 'tabs/tests', 'links/src', 'links/lnk', 'links/open', 'ucbar/play', 'ucbar/explore', 'banner/reset']))
 })
+
+test('the HLD tab: every strip of the page lies within the pane\'s rows and columns, and a scroll key an overlay hears moves the pane', SLOW, async ($, on) => {
+  const clock = mock.clock(on)
+  const h = host(on, clock)
+  const ui = await settle($, clock)
+  await click(ui, 'm1:0', 'links/focus')
+  await ui.unmount()
+  const site = 'proschi-view:0'
+  let p = await settle($, clock, pane, site, c => c.some(x => x.id === 'tabs/hld'))
+  await click(p, site, 'tabs/hld')
+  await p.unmount()
+  p = await settle($, clock, pane, site, c => c.some(x => x.id === 'page-hld/hld-copy'))
+  const root = layout((await p.drawn()) as never)
+  const strips = [...nodes(root)].filter(n => n.el.type === 'Image' && String(n.key).startsWith(`t-${site}-page-hld-`)).sort((a, b) => a.y - b.y)
+  // The page is taller than the pane (the fake helper draws it 4 × 64 rows), so it scrolls.
+  expect(strips.length).toBeGreaterThan(3)
+  expect(root.h).toBeGreaterThan(pane.props.scroll.bodyRows)
+  // Top to bottom with no gap, the last ending where the drawing does: the window reaches each at an offset up to root.h - bodyRows.
+  const tabs = [...nodes(root)].filter(n => n.el.type === 'Image' && String(n.key).startsWith(`t-${site}-tabs-`))
+  expect(strips[0]!.y).toBe(tabs.reduce((s, t) => s + t.h, 0))
+  for (const [i, s] of strips.entries()) {
+    if (i > 0) expect(s.y).toBe(strips[i - 1]!.y + strips[i - 1]!.h)
+    expect(s.x + s.w).toBeLessThanOrEqual(pane.props.bodyColumns)
+  }
+  expect(strips.at(-1)!.y + strips.at(-1)!.h).toBe(root.h)
+  // A click gave an overlay the focus: the pane's scroll keys reach it, and it moves the pane (a window a page key, from where the render saw it).
+  const overlay = (await overlaysOf(p, site)).find(o => String(o.key).includes('page-hld'))!
+  h.logs.length = 0
+  await p.key({ key: 'pagedown', in: String(overlay.key) })
+  await p.key({ key: 'end', in: String(overlay.key) })
+  expect(h.logs.filter(l => / moves /.test(l))).toEqual(['proschi: scroll key pagedown moves proschi-view to row 80', 'proschi: scroll key end moves proschi-view to row Infinity'])
+  await p.unmount()
+})
+

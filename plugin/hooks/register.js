@@ -10125,9 +10125,38 @@ function registerPicture(on) {
     } else if (data.type === "key" && typeof data.key === "string") {
       const target = l.hotkeys.get(data.key);
       if (target) await act($, site, target, e.surface);
+    } else if (data.type === "scroll" && typeof data.key === "string") {
+      await scrollKey($, l.requestId, data.key);
     }
     return {};
   });
+  on("ui.scroll", { component: "Pane" }, async ($, e, next) => {
+    const to = going.get(e.requestId);
+    if (to !== void 0 && e.origin?.kind === "plugin") {
+      going.delete(e.requestId);
+      const offset = Math.max(0, Math.min(to, e.contentRows - e.bodyRows));
+      windows.set(e.requestId, { offset, bodyRows: e.bodyRows });
+      return next({ ...e, offset });
+    }
+    if (windows.has(e.requestId)) windows.set(e.requestId, { offset: e.offset, bodyRows: e.bodyRows });
+    return next(e);
+  });
+}
+var windows = /* @__PURE__ */ new Map();
+var going = /* @__PURE__ */ new Map();
+function paneWindow(id, offset, bodyRows2) {
+  windows.set(id, { offset, bodyRows: bodyRows2 });
+}
+async function scrollKey($, id, key) {
+  const w = windows.get(id);
+  if (!w) return;
+  const args = key === "home" || key === "end" ? { to: key === "home" ? "start" : "end", in: id } : { to: "start", in: id };
+  const to = key === "home" ? 0 : key === "end" ? Infinity : Math.max(0, w.offset + (key === "up" ? -1 : key === "down" ? 1 : key === "pageup" ? -w.bodyRows : w.bodyRows));
+  if (key !== "home" && key !== "end") going.set(id, to);
+  $.ui.log(`proschi: scroll key ${key} moves ${id} to row ${to}`, { to: "debug" });
+  const moved3 = await $.ui.scroll(args).catch((error) => ({ deny: String(error) }));
+  going.delete(id);
+  if (moved3.deny) $.ui.log(`proschi: scroll key ${key} refused: ${moved3.deny}`, { to: "debug" });
 }
 
 // ../frontend/src/hld/hld.ts
@@ -11565,7 +11594,9 @@ function register(on, options) {
     if (!source) return /* @__PURE__ */ h(ui.Text, { color: "red" }, "Cannot read ", file, ".");
     const columns = "bodyColumns" in e.props && typeof e.props.bodyColumns === "number" ? e.props.bodyColumns : (e.viewport?.columns ?? 120) - 4;
     const isFocused = "isFocused" in e.props && e.props.isFocused === true;
-    const bodyRows2 = "scroll" in e.props && typeof e.props.scroll?.bodyRows === "number" ? e.props.scroll.bodyRows : 0;
+    const scrolled = "scroll" in e.props ? e.props.scroll : void 0;
+    const bodyRows2 = typeof scrolled?.bodyRows === "number" ? scrolled.bodyRows : 0;
+    paneWindow(PANE, typeof scrolled?.offset === "number" ? scrolled.offset : 0, bodyRows2);
     const tab = tabOf(await read2($, paneTab));
     const whatIf = whatIfOf(await read2($, paneWhatIf));
     const loaded = await documentOf($, PANE_VIEW, source, void 0, whatIf);
