@@ -375,7 +375,7 @@ function stats(S: Surface, items: { label: string; value: string; tone?: Tone }[
     const cx = x + (i % per) * (cw + 10);
     const cy = top + Math.floor(i / per) * (h + 10);
     S.add(
-      rect(cx + 0.5, cy + 0.5, cw - 1, h - 1, { fill: P.card.fill, stroke: P.card.line, sw: 1, rx: 8 }),
+      rect(cx + 0.5, cy + 0.5, cw - 1, h - 1, { fill: P.button.fill, stroke: P.card.line, sw: 1, rx: 8 }),
       txt(cx + 12, cy + 20, clip(it.label, cw - 24, 12.5, 500), { size: 12.5, weight: 500, color: P.muted }),
       txt(cx + 12, cy + 44, clip(it.value, cw - 24, 18, 600), { size: 18, weight: 600, color: it.tone ? P.tone[it.tone] : P.ink }),
     );

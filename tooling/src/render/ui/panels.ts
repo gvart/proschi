@@ -3,18 +3,21 @@ import { withTheme } from '../svg';
 import { loadDocument } from '../../terminal/document';
 import type { ActionBarPanel, BannerPanel, Block, Control, NoticesPanel, Panel, PlayerHeaderPanel, ScenarioChip, SequencePanel, StepCard, StepPanel, SystemBarPanel, TabBarPanel, UiTheme, UseCaseBarPanel } from './contract';
 import { BODY, CODE, CONTROL_ROW, blocks, codeBox, itemsRow, placeButton, upToRow } from './blocks';
-import { CELL, CONTROL, Surface, buttonColumns, chip, drawLaid, icon, layoutRich, line, paragraph, rect, tint, txt, width, type Box, type ControlState } from './kit';
+import { CELL, CONTROL, Surface, buttonColumns, chip, drawLaid, icon, layoutRich, line, paragraph, rect, surfaceFrame, tint, txt, width, type Box, type ControlState, type Edges } from './kit';
 import { clip } from './metrics';
-import { alpha, mix, paletteOf } from './theme';
+import { alpha, mix, paletteOf, type Palette } from './theme';
 
 /**
  * Each panel kind laid out on a Surface `columns` cells wide, in the
- * editor's content in a terminal's clothes: drawn on a transparent
- * background so the terminal's own colour shows, bars as faint rounded
- * cards with a hairline (the use case bar's pink, as the text UI frames it),
- * tabs over a hairline with a slim accent underline under the current one,
- * the player's step card as UseCasePlayback.tsx, pages as the Analysis and
- * Results panels. Type is the terminal's size (14 px on an 8×16 cell),
+ * editor's content in a terminal's clothes. A drawing is one continuous
+ * surface (the panels stacked, the diagram among them): every panel fills
+ * its width with the surface's opaque colour, a hairline down each side,
+ * a divider along its top unless it is the drawing's first, and rounded
+ * outer corners only where it is the drawing's top or bottom (`Edges`).
+ * Inside, sections are parted by dividers, never by the terminal's
+ * background. Tabs with a slim accent underline under the current one, the
+ * player's step card as UseCasePlayback.tsx, pages as the Analysis and
+ * Results panels. Type is the terminal's size (14 px on an 8×17 cell),
  * control rows three cells tall. The height is whole rows.
  */
 
@@ -28,24 +31,21 @@ const ROW = CELL.height;
 /** A page's or a card's inner margin: two columns. */
 const GUTTER = 2 * CELL.width;
 
-/** The transparent margin around a card, px: two cards one under another stand apart, and a strip cut between them cuts no card. */
-const MARGIN = 2;
-
-/** A card filling rows `top` to `bottom` (px, on row boundaries) less its margin: opaque, rounded, a clear border (`border` for a coloured one). */
-function card(S: Surface, top: number, bottom: number, border = S.P.card.line): void {
+/** A section filling rows `top` to `bottom` (px, on row boundaries): where strips are best cut, a divider along its top unless it is the panel's first (or `divider` is false). */
+function section(S: Surface, top: number, bottom: number, divider = top > 0): void {
   S.card(top, bottom);
-  S.add(rect(MARGIN + 0.5, top + MARGIN + 0.5, S.width - 2 * MARGIN - 1, bottom - top - 2 * MARGIN - 1, { fill: S.P.card.fill, stroke: border, sw: 1, rx: 8 }));
+  if (divider) S.add(line(1, top + 0.5, S.width - 1, top + 0.5, S.P.line, 1));
 }
 
 /**
- * A card around rows drawn by `inner` from `top` (the panel's top): the
- * card is drawn first (behind), so `inner` runs on a scratch surface to learn
- * its height, then again on the real one; `pad` px inside above and below.
+ * A section of rows drawn by `inner` from `top` (the panel's top): `inner`
+ * runs on a scratch surface to learn its height, then on the real one; `pad`
+ * px inside above it.
  */
-function framed(S: Surface, border: string, inner: (S: Surface, top: number) => number, top = 0, pad = ROW): number {
+function framed(S: Surface, inner: (S: Surface, top: number) => number, top = 0, pad = ROW, divider = top > 0): number {
   const scratch = new Surface(S.P, S.columns);
   const h = upToRow(inner(scratch, top + pad) + pad + 4);
-  card(S, top, top + h, border);
+  section(S, top, top + h, divider);
   inner(S, top + pad);
   return h;
 }
@@ -55,8 +55,8 @@ const TAB_LABEL = { size: 14, weight: 600 };
 function tabs(S: Surface, p: TabBarPanel): number {
   const P = S.P;
   const H = CONTROL_ROW;
-  // A card, the current tab's slim accent underline at its foot.
-  card(S, 0, H);
+  // The current tab's slim accent underline at its foot.
+  section(S, 0, H);
   let col = 1;
   for (const t of p.tabs) {
     const capW = t.hotkey ? CONTROL.keycap + 8 : 0;
@@ -127,7 +127,7 @@ function scenarioControl(S: Surface, s: ScenarioChip, col: number, top: number, 
 
 function useCaseBar(S: Surface, p: UseCaseBarPanel): number {
   const P = S.P;
-  return framed(S, alpha(P.accent, 0.55), (S, top) => {
+  return framed(S, (S, top) => {
     const label = { text: [{ text: 'Use case', tone: 'accent' as const, bold: true }] };
     const right = S.columns - 3;
     let y = top;
@@ -166,7 +166,7 @@ function useCaseBar(S: Surface, p: UseCaseBarPanel): number {
 
 function playerHeader(S: Surface, p: PlayerHeaderPanel): number {
   const P = S.P;
-  return framed(S, alpha(P.accent, 0.55), (S, top) => {
+  return framed(S, (S, top) => {
     let y = top;
     const back = buttonColumns(p.back);
     placeButton(S, p.back, 2, y);
@@ -299,10 +299,10 @@ function stepPanel(S: Surface, p: StepPanel): number {
   // As tall as the tallest step, so stepping moves nothing.
   const scratch = new Surface(P, S.columns);
   const tallest = Math.max(0, ...p.steps.map((cards) => stepCards(scratch, p, cards, x, 0, w)), stepCards(scratch, p, p.steps[at] ?? [], x, 0, w));
-  return framed(S, P.card.line, (S, top) => {
+  return framed(S, (S, top) => {
     stepCards(S, p, p.steps[at] ?? [], x, top - 2, w);
     let y = upToRow(top - 2 + tallest + 6);
-    S.add(line(MARGIN + 1, y + 0.5, S.width - MARGIN - 1, y + 0.5, P.line, 1));
+    S.add(line(1, y + 0.5, S.width - 1, y + 0.5, P.line, 1));
     const k = p.hotkeys ?? {};
     const hk = (id: keyof NonNullable<StepPanel['hotkeys']>) => (k[id] ? { hotkey: k[id] } : {});
     const ctl = (c: Control): { control: Control } => ({ control: c });
@@ -330,7 +330,7 @@ function stepPanel(S: Surface, p: StepPanel): number {
 
 function systemBar(S: Surface, p: SystemBarPanel): number {
   const P = S.P;
-  return framed(S, P.card.line, (S, top) => {
+  return framed(S, (S, top) => {
     let y = top;
     if (p.inside) {
       S.add(txt(GUTTER, y + 13, clip(`Inside ${p.inside}`, S.width - 2 * GUTTER, 13), { size: 13, color: P.muted }));
@@ -345,14 +345,14 @@ function systemBar(S: Surface, p: SystemBarPanel): number {
 }
 
 function actionBar(S: Surface, p: ActionBarPanel): number {
-  card(S, 0, CONTROL_ROW);
+  section(S, 0, CONTROL_ROW);
   return itemsRow(S, p.controls.map((c) => ({ control: c })), 1, 0, S.columns - 1);
 }
 
 function banner(S: Surface, p: BannerPanel): number {
   const P = S.P;
   const resetCols = buttonColumns(p.reset);
-  card(S, 0, CONTROL_ROW, alpha(P.yellow, 0.6));
+  section(S, 0, CONTROL_ROW);
   placeButton(S, p.reset, 1, 0);
   const x = (resetCols + 2) * CELL.width;
   const label = { size: 13.5, weight: 600 };
@@ -363,46 +363,47 @@ function banner(S: Surface, p: BannerPanel): number {
   return CONTROL_ROW;
 }
 
-/** The load legend as LoadLegend.tsx: the heat scale, the p99 path, what edges say. */
-function legend(S: Surface, critical: { useCase: string; p99: string } | undefined, x: number, y: number): void {
-  const P = S.P;
+/**
+ * The load legend as LoadLegend.tsx says it, in one short row: the heat
+ * scale as small swatches, the p99 path's stroke and what it is. Its left at
+ * x, its text's baseline at y, at most `max` px wide (the p99 part goes
+ * first, then the scale's labels). The diagram's strip draws it as a badge
+ * (terminal/rasterHost.ts).
+ */
+export function legend(P: Palette, critical: { useCase: string; p99: string } | undefined, x: number, y: number, max = Infinity): { svg: string; width: number } {
   const out: string[] = [];
-  const small = { size: 12.5, color: P.muted };
+  const small = { size: 11, weight: 500, color: P.muted };
   let cx = x;
   const put = (s: string, style = small) => {
     out.push(txt(cx, y, s, style));
-    cx += width(s, style) + 6;
+    cx += width(s, style) + 5;
   };
-  put('Load');
-  out.push(rect(cx, y - 5, 14, 3, { fill: '#FFD23F', rx: 1.5 }));
-  cx += 18;
-  put('40');
+  put('Load', { ...small, weight: 600 });
+  cx += 2;
   for (const [fill, label] of [
+    ['#FFD23F', '40'],
     ['#FFD23F', '70'],
     ['#FF7AB4', '90'],
     ['#FF6B61', '100%'],
   ] as const) {
-    out.push(rect(cx, y - 10, 13, 13, { fill, rx: 3 }));
-    cx += 17;
+    out.push(label === '40' ? rect(cx, y - 5, 10, 3, { fill, rx: 1.5 }) : rect(cx, y - 8.5, 9, 9, { fill, rx: 2 }));
+    cx += label === '40' ? 13 : 12;
     put(label);
   }
   if (critical) {
-    cx += 8;
-    out.push(line(cx, y - 4.5, cx + 18, y - 4.5, P.ink, 3.5));
-    cx += 24;
-    const t = `p99 path of "${critical.useCase}" ${critical.p99}`;
-    if (cx + width(t, small) < S.width - 8) put(t);
+    const t = `p99 ${critical.useCase} ${critical.p99}`;
+    if (cx - x + 30 + width(t, small) <= max) {
+      cx += 7;
+      out.push(line(cx, y - 4, cx + 14, y - 4, P.ink, 3));
+      cx += 19;
+      put(t);
+    }
   }
-  const edges = '·  edges: rps · +latency';
-  if (cx + 8 + width(edges, small) < S.width - 8) {
-    cx += 8;
-    put(edges);
-  }
-  S.add(...out);
+  return { svg: out.join(''), width: cx - 5 - x };
 }
 
 function notices(S: Surface, p: NoticesPanel): number {
-  return framed(S, S.P.card.line, (S, top) => noticeRows(S, p, top), 0, ROW / 2);
+  return framed(S, (S, top) => noticeRows(S, p, top), 0, ROW / 2);
 }
 
 function noticeRows(S: Surface, p: NoticesPanel, top: number): number {
@@ -418,7 +419,7 @@ function noticeRows(S: Surface, p: NoticesPanel, top: number): number {
     y += 22;
   }
   if (p.legend) {
-    legend(S, p.legend.critical, x, y + 15);
+    S.add(legend(P, p.legend.critical, x, y + 15, w).svg);
     y += 24;
   }
   if (p.verdict) {
@@ -438,9 +439,9 @@ function noticeRows(S: Surface, p: NoticesPanel, top: number): number {
 }
 
 /**
- * A page: its blocks in cards, a card from each heading to the next, the
- * stats and callouts cards of their own; a row of the terminal's background
- * between cards, where its strips are best cut.
+ * A page: its blocks in sections, one from each heading to the next, the
+ * stats and callouts of their own; a divider above each heading's section,
+ * where its strips are best cut.
  */
 function page(S: Surface, b: Extract<Panel, { kind: 'page' }>): number {
   const sections: { blocks: Block[]; bare: boolean }[] = [];
@@ -451,11 +452,7 @@ function page(S: Surface, b: Extract<Panel, { kind: 'page' }>): number {
     else last.blocks.push(block);
   }
   let y = 0;
-  for (const [i, section] of sections.entries()) {
-    if (i > 0) y += sections[i - 1].bare && section.bare ? 0 : ROW;
-    if (section.bare) y += upToRow(blocks(S, section.blocks, MARGIN, y + MARGIN, S.width - 2 * MARGIN) + 2 * MARGIN);
-    else y += framed(S, S.P.card.line, (S, top) => blocks(S, section.blocks, GUTTER, top, S.width - 2 * GUTTER), y);
-  }
+  for (const [i, part] of sections.entries()) y += framed(S, (S, top) => blocks(S, part.blocks, GUTTER, top, S.width - 2 * GUTTER), y, part.bare ? ROW / 2 : ROW, i > 0 && !part.bare);
   return y;
 }
 
@@ -475,7 +472,7 @@ function flatten(attrs: string, body: string): string {
 
 /** The sequence SVG of `proschi render`, its outer <svg> taken off so it draws inside the panel. */
 function sequence(S: Surface, p: SequencePanel, theme: UiTheme): number {
-  return framed(S, S.P.card.line, (S, top) => sequenceDrawing(S, p, theme, top), 0, ROW / 2);
+  return framed(S, (S, top) => sequenceDrawing(S, p, theme, top), 0, ROW / 2);
 }
 
 function sequenceDrawing(S: Surface, p: SequencePanel, theme: UiTheme, top: number): number {
@@ -502,8 +499,8 @@ function sequenceDrawing(S: Surface, p: SequencePanel, theme: UiTheme, top: numb
   return y + h * k - top;
 }
 
-/** Lays `panel` out `columns` wide in `theme`. */
-export function drawPanel(panel: Panel, columns: number, theme: UiTheme): Drawn {
+/** Lays `panel` out `columns` wide in `theme`, on the drawing's surface at its `edges`. */
+export function drawPanel(panel: Panel, columns: number, theme: UiTheme, edges: Edges = {}): Drawn {
   if (!Number.isInteger(columns) || columns < 20 || columns > 255) throw new Error(`A panel is 20 to 255 columns wide, not ${columns}`);
   const S = new Surface(paletteOf(theme), columns);
   let h: number;
@@ -541,7 +538,9 @@ export function drawPanel(panel: Panel, columns: number, theme: UiTheme): Drawn 
     default:
       throw new Error(`Unknown panel kind '${(panel as { kind: string }).kind}'`);
   }
-  return { surface: S, height: Math.max(ROW, upToRow(h)) };
+  const height = Math.max(ROW, upToRow(h));
+  S.under(surfaceFrame(S.P, S.width, height, edges));
+  return { surface: S, height };
 }
 
 export { CODE, chip };

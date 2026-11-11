@@ -72,6 +72,8 @@ export interface ArchitectureOptions {
    * show through the numbers. Off by default, which leaves the SVG as it was.
    */
   terminal?: boolean;
+  /** The paper's colour instead of the theme's (the plugin's UI surface, which the picture sits on). */
+  background?: string;
 }
 
 /**
@@ -104,7 +106,17 @@ export async function renderArchitectureSvg(diagram: Diagram, options: Architect
 
 /** The SVG of a laid-out diagram (layoutArchitecture). */
 export function drawArchitecture(laid: ArchitectureLayout, options: ArchitectureOptions = {}): string {
-  return withTheme(options.theme ?? 'light', () => draw(laid, options));
+  return withTheme(options.theme ?? 'light', () => {
+    if (!options.background) return draw(laid, options);
+    const colors = COLORS as { background: string };
+    const was = colors.background;
+    colors.background = options.background;
+    try {
+      return draw(laid, options);
+    } finally {
+      colors.background = was;
+    }
+  });
 }
 
 function draw({ diagram, layout }: ArchitectureLayout, options: ArchitectureOptions): string {

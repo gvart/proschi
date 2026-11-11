@@ -164,6 +164,8 @@ export interface PanelAsk {
   panel: PanelRequest['panel']
   columns: number
   theme: UiTheme
+  /** Where it sits in its drawing: the first piece (top) or the last (bottom). */
+  edges?: PanelRequest['edges']
 }
 
 const panels = new Map<string, PanelOutput | { error: string }>()
@@ -172,7 +174,7 @@ const drawing = new Set<string>()
 const wanted = new Set<string>()
 let batch: { now: Map<string, PanelAsk>; later: Map<string, PanelAsk> } | undefined
 
-export const panelKey = (p: PanelAsk) => JSON.stringify([p.theme, p.columns, p.panel])
+export const panelKey = (p: PanelAsk) => JSON.stringify([p.theme, p.columns, p.edges?.top === true, p.edges?.bottom === true, p.panel])
 
 /**
  * A panel's tiles, or why it could not be drawn; undefined while it is drawn
@@ -209,7 +211,7 @@ async function flush($: EngineInterface): Promise<void> {
     // By theme: one request each.
     for (const theme of new Set(asks.map(([, p]) => p.theme))) {
       const mine = asks.filter(([, p]) => p.theme === theme)
-      const input: PanelsInput = withPrune({ kind: 'panels', outDir, theme, cellAspect, panels: mine.map(([key, p]) => ({ id: key, panel: p.panel, columns: p.columns, variants: ['hover', 'pressed'] })) })
+      const input: PanelsInput = withPrune({ kind: 'panels', outDir, theme, cellAspect, panels: mine.map(([key, p]) => ({ id: key, panel: p.panel, columns: p.columns, variants: ['hover', 'pressed'], ...(p.edges?.top || p.edges?.bottom ? { edges: p.edges } : {}) })) })
       void ask($, input, priority).then(
         out => {
           const answers = (out as PanelsOutput).panels ?? []

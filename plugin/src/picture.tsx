@@ -164,13 +164,15 @@ export async function pictureSite($: EngineInterface, ui: Ui, s: Site): Promise<
   if (was?.pressedAt !== undefined && was.renderedAt === undefined) was.renderedAt = started
   const resolved: Resolved[] = []
   let waiting = false
-  for (const p of s.pieces) {
+  // One continuous surface: the first piece has the drawing's top corners, the last (the page shown, else the last piece) its bottom ones.
+  const last = s.pages?.some(p => p.shown) ? -1 : s.pieces.length - 1
+  for (const [i, p] of s.pieces.entries()) {
     if (!('panel' in p)) {
       if (p.picture) resolved.push({ id: p.id, picture: p.picture })
       else waiting = true
       continue
     }
-    const out = panelOf($, { panel: p.panel, columns: p.columns, theme: s.theme })
+    const out = panelOf($, { panel: p.panel, columns: p.columns, theme: s.theme, edges: { ...(i === 0 ? { top: true } : {}), ...(i === last ? { bottom: true } : {}) } })
     if (out && 'error' in out) return { error: out.error }
     if (!out) waiting = true
     else resolved.push({ id: p.id, out })
@@ -178,7 +180,7 @@ export async function pictureSite($: EngineInterface, ui: Ui, s: Site): Promise<
   // The page shown is waited for; the others are drawn once the helper has them (they are prefetched).
   const pages: Shown['pages'] = []
   for (const page of s.pages ?? []) {
-    const out = panelOf($, { panel: page.panel, columns: page.columns, theme: s.theme }, page.shown ? 'now' : 'mount')
+    const out = panelOf($, { panel: page.panel, columns: page.columns, theme: s.theme, edges: { bottom: true } }, page.shown ? 'now' : 'mount')
     if (out && 'error' in out) {
       if (page.shown) return { error: out.error }
       continue
@@ -186,7 +188,9 @@ export async function pictureSite($: EngineInterface, ui: Ui, s: Site): Promise<
     if (out) pages.push({ id: page.id, out, shown: page.shown })
     else if (page.shown) waiting = true
   }
-  if (s.ahead?.length) prefetch($, s.ahead.map(a => ({ ...a, theme: s.theme })))
+  // Ahead, where each will sit: the tab bar on top, the player's header on top where no tab bar is, the rest between.
+  const onTop = (a: { panel: Panel }) => a.panel.kind === 'tabs' || (a.panel.kind === 'playerHeader' && !s.pieces.some(p => 'panel' in p && p.panel.kind === 'tabs'))
+  if (s.ahead?.length) prefetch($, s.ahead.map(a => ({ ...a, theme: s.theme, edges: onTop(a) ? { top: true } : {} })))
   let now: Shown | undefined
   if (!waiting) {
     now = { pieces: resolved, pages, actions: s.actions }

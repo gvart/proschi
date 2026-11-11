@@ -66,7 +66,7 @@ function inset(whole: Pixels, piece: Pixels, x: number): Pixels {
 async function panel(req: PanelRequest, input: PanelsInput, env: PanelEnv, writer: Writer): Promise<PanelOutput> {
   const theme = input.theme ?? 'light';
   const px = cellPxOf(input.cellAspect);
-  const manifest = join(input.outDir, `p-${hash(JSON.stringify([env.build ?? '', theme, px, req.panel, req.columns, req.variants ?? null]))}.json`);
+  const manifest = join(input.outDir, `p-${hash(JSON.stringify([env.build ?? '', theme, px, req.panel, req.columns, req.variants ?? null, req.edges ?? null]))}.json`);
   if (existsSync(manifest)) {
     const done = JSON.parse(readFileSync(manifest, 'utf8')) as PanelOutput;
     const files = done.tiles.flatMap((t) => [t.file, ...(t.controls ?? []).flatMap((a) => [a.hoverFile, a.pressedFile])].filter((f): f is string => !!f));
@@ -75,7 +75,7 @@ async function panel(req: PanelRequest, input: PanelsInput, env: PanelEnv, write
       return { ...done, ...(req.id !== undefined ? { id: req.id } : {}) };
     }
   }
-  const { surface, height } = drawPanel(req.panel, req.columns, theme);
+  const { surface, height } = drawPanel(req.panel, req.columns, theme, req.edges);
   const rows = height / CELL.height;
   const strips = cut(
     rows,

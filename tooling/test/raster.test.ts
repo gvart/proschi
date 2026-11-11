@@ -146,6 +146,28 @@ describe('raster helper', () => {
     expect(await rasterize(input, { dir: HOOKS })).toEqual(out);
   });
 
+  it('fills a strip as wide as the panels, the diagram centred on it, with the load legend in its corner', async () => {
+    const outDir = mkdtempSync(join(tmpdir(), 'proschi-raster-'));
+    const cellPx = { width: 16, height: 34 };
+    const fill = { columns: 100, top: true, legend: true };
+    const out = await rasterize({ source: source('url-shortener'), outDir, options: { theme: 'dark' as const, maxWidthPx: 100 * 16, overlay: true, grid: { room: 100, maxRows: 30, cellPx, fill } } }, { dir: HOOKS });
+    const g = out.grid!;
+    expect(g.columns).toBe(100);
+    expect(g.tiles.reduce((n, t) => n + t.columns * t.rows, 0)).toBe(g.columns * g.rows);
+    const plain = await rasterize({ source: source('url-shortener'), outDir, options: { theme: 'dark' as const, maxWidthPx: 100 * 16, overlay: true, grid: { room: 100, maxRows: 30, cellPx, fill: { columns: 100, top: true } } } }, { dir: HOOKS });
+    expect(plain.grid!.columns).toBe(100);
+    // The legend sits in the bottom-left corner, where the strip has nothing else; the strip's right edge is the same bare surface either way.
+    const same = (i: number) => readFileSync(g.base[i]).equals(readFileSync(plain.grid!.base[i]));
+    const at = (col: number, row: number) => g.tiles.findIndex((t) => col >= t.col && col < t.col + t.columns && row >= t.row && row < t.row + t.rows);
+    expect(same(at(0, g.rows - 1))).toBe(false);
+    expect(same(at(99, 0))).toBe(true);
+    // The diagram is centred: the tiles it changes reach as far from either edge.
+    const changed = g.tiles.filter((t, i) => !same(i) && t.row + t.rows < g.rows);
+    const left = Math.min(...changed.map((t) => t.col));
+    const right = 100 - Math.max(...changed.map((t) => t.col + t.columns));
+    expect(Math.abs(left - right)).toBeLessThanOrEqual(16);
+  }, 30_000);
+
   it('draws the load under a live what-if', async () => {
     const outDir = mkdtempSync(join(tmpdir(), 'proschi-raster-'));
     const options = { scale: 0.5, overlay: true };

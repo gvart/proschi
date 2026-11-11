@@ -9752,7 +9752,7 @@ var panels = /* @__PURE__ */ new Map();
 var drawing = /* @__PURE__ */ new Set();
 var wanted = /* @__PURE__ */ new Set();
 var batch;
-var panelKey = (p) => JSON.stringify([p.theme, p.columns, p.panel]);
+var panelKey = (p) => JSON.stringify([p.theme, p.columns, p.edges?.top === true, p.edges?.bottom === true, p.panel]);
 function panelOf($, p, priority = "now") {
   const key = panelKey(p);
   const done = panels.get(key);
@@ -9779,7 +9779,7 @@ async function flush($) {
     if (asks.length === 0) continue;
     for (const theme2 of new Set(asks.map(([, p]) => p.theme))) {
       const mine = asks.filter(([, p]) => p.theme === theme2);
-      const input = withPrune({ kind: "panels", outDir, theme: theme2, cellAspect, panels: mine.map(([key, p]) => ({ id: key, panel: p.panel, columns: p.columns, variants: ["hover", "pressed"] })) });
+      const input = withPrune({ kind: "panels", outDir, theme: theme2, cellAspect, panels: mine.map(([key, p]) => ({ id: key, panel: p.panel, columns: p.columns, variants: ["hover", "pressed"], ...p.edges?.top || p.edges?.bottom ? { edges: p.edges } : {} })) });
       void ask($, input, priority).then(
         (out) => {
           const answers = out.panels ?? [];
@@ -9940,20 +9940,21 @@ async function pictureSite($, ui, s) {
   if (was?.pressedAt !== void 0 && was.renderedAt === void 0) was.renderedAt = started;
   const resolved = [];
   let waiting = false;
-  for (const p of s.pieces) {
+  const last = s.pages?.some((p) => p.shown) ? -1 : s.pieces.length - 1;
+  for (const [i, p] of s.pieces.entries()) {
     if (!("panel" in p)) {
       if (p.picture) resolved.push({ id: p.id, picture: p.picture });
       else waiting = true;
       continue;
     }
-    const out = panelOf($, { panel: p.panel, columns: p.columns, theme: s.theme });
+    const out = panelOf($, { panel: p.panel, columns: p.columns, theme: s.theme, edges: { ...i === 0 ? { top: true } : {}, ...i === last ? { bottom: true } : {} } });
     if (out && "error" in out) return { error: out.error };
     if (!out) waiting = true;
     else resolved.push({ id: p.id, out });
   }
   const pages = [];
   for (const page of s.pages ?? []) {
-    const out = panelOf($, { panel: page.panel, columns: page.columns, theme: s.theme }, page.shown ? "now" : "mount");
+    const out = panelOf($, { panel: page.panel, columns: page.columns, theme: s.theme, edges: { bottom: true } }, page.shown ? "now" : "mount");
     if (out && "error" in out) {
       if (page.shown) return { error: out.error };
       continue;
@@ -9961,7 +9962,8 @@ async function pictureSite($, ui, s) {
     if (out) pages.push({ id: page.id, out, shown: page.shown });
     else if (page.shown) waiting = true;
   }
-  if (s.ahead?.length) prefetch($, s.ahead.map((a) => ({ ...a, theme: s.theme })));
+  const onTop = (a) => a.panel.kind === "tabs" || a.panel.kind === "playerHeader" && !s.pieces.some((p) => "panel" in p && p.panel.kind === "tabs");
+  if (s.ahead?.length) prefetch($, s.ahead.map((a) => ({ ...a, theme: s.theme, edges: onTop(a) ? { top: true } : {} })));
   let now;
   if (!waiting) {
     now = { pieces: resolved, pages, actions: s.actions };
@@ -11902,7 +11904,13 @@ async function diagramView($, d, viewId, written, file, whatIf, mode = { kind: "
     ...view.selected ? { selected: view.selected } : {},
     ...whatIf && doc !== base ? { whatIf: liveOf(whatIf) } : {},
     ...play ? { play: { useCase: play.useCase.id, scenario: play.scenario.id, frames: FRAMES } } : {},
-    grid: { room: d.columns, maxRows: d.rows ?? INLINE_ROWS, cellPx: cellPx() }
+    // A strip of the drawing's one surface, as wide as its panels: its top where nothing is above it (no tabs, header, title or notice), the load legend in its corner.
+    grid: {
+      room: d.columns,
+      maxRows: d.rows ?? INLINE_ROWS,
+      cellPx: cellPx(),
+      fill: { columns: panelColumns(d.columns), ...!play && !view.inPane && !doc.diagram.title && noticesOf(view, doc, lost).length === 0 ? { top: true } : {}, ...!play && doc.overlay && doc.edges ? { legend: true } : {} }
+    }
   });
   const request2 = { source, options: optionsFor(playing) };
   const alt = `${doc.diagram.title ?? title}: the architecture diagram as a picture`;
@@ -11960,8 +11968,18 @@ function headerPanel(view, pick2) {
   };
 }
 var stepPanelAt = (view, pick2, step, isPlaying) => stepPanelOf(pick2.scenario, step, isPlaying, (id) => view.scene.nodes.get(id)?.node.name ?? id, view.inPane);
+function noticesOf(view, doc, lost) {
+  const unknown = lost.filter((name) => !importReasons.has(name));
+  return [
+    ...unknown.length ? [{ text: `Not found, so drawn as plain boxes: ${unknown.join(", ")}`, tone: "muted" }] : [],
+    ...lost.filter((name) => importReasons.has(name)).map((name) => ({ text: importReasons.get(name), tone: "muted" })),
+    ...doc.notes.map((n) => ({ text: n.text, ...n.hint ? { hint: n.hint } : {} })),
+    ...(view.inPane ? doc.warnings : doc.warnings.slice(0, INLINE_WARNINGS)).map((text) => ({ text })),
+    ...!view.inPane && doc.warnings.length > INLINE_WARNINGS ? [{ text: `\u2026 ${doc.warnings.length - INLINE_WARNINGS} more: Focus, then Analysis`, tone: "muted" }] : []
+  ];
+}
 function pictureParts($, view, doc, c) {
-  const W2 = panelColumns(view.width);
+  const W2 = panelColumns(view.d.columns);
   const pieces = [];
   const actions = {};
   const ahead = [];
@@ -11974,24 +11992,18 @@ function pictureParts($, view, doc, c) {
   } else if (doc.diagram.title) {
     pieces.push({ id: "title", panel: { kind: "page", blocks: [{ type: "heading", level: 3, text: doc.diagram.title }, ...doc.diagram.summary ? [{ type: "paragraph", small: true, text: doc.diagram.summary }] : []] }, columns: W2 });
   }
-  const unknown = c.lost.filter((name) => !importReasons.has(name));
-  const notices = [
-    ...unknown.length ? [{ text: `Not found, so drawn as plain boxes: ${unknown.join(", ")}`, tone: "muted" }] : [],
-    ...c.lost.filter((name) => importReasons.has(name)).map((name) => ({ text: importReasons.get(name), tone: "muted" })),
-    ...doc.notes.map((n) => ({ text: n.text, ...n.hint ? { hint: n.hint } : {} })),
-    ...(view.inPane ? doc.warnings : doc.warnings.slice(0, INLINE_WARNINGS)).map((text) => ({ text })),
-    ...!view.inPane && doc.warnings.length > INLINE_WARNINGS ? [{ text: `\u2026 ${doc.warnings.length - INLINE_WARNINGS} more: Focus, then Analysis`, tone: "muted" }] : []
-  ];
+  const notices = noticesOf(view, doc, c.lost);
   if (notices.length) pieces.push({ id: "warn", panel: { kind: "notices", notices }, columns: W2 });
   pieces.push({ id: "diagram", ...c.picture ? { picture: c.picture } : {} });
   const failing = doc.tests.filter((t) => !t.passed);
-  const below = {
-    kind: "notices",
-    ...doc.edges && !playing ? { legend: doc.critical ? { critical: { useCase: doc.critical.useCase, p99: formatMs(doc.critical.p99Ms) } } : {} } : {},
-    ...doc.tests.length && !playing ? { verdict: { passed: doc.tests.length - failing.length, total: doc.tests.length, ...failing[0] ? { first: `${failing[0].name}: ${failing[0].message}` } : {} } } : {},
-    ...doc.tests.length && !playing && !view.inPane ? { details: { id: "details", icon: "focus", label: "Details" } } : {}
-  };
-  if (below.legend || below.verdict) pieces.push({ id: "below", panel: below, columns: W2 });
+  if (failing[0] && !playing) {
+    const below = {
+      kind: "notices",
+      verdict: { passed: doc.tests.length - failing.length, total: doc.tests.length, first: `${failing[0].name}: ${failing[0].message}` },
+      ...!view.inPane ? { details: { id: "details", icon: "focus", label: "Details" } } : {}
+    };
+    pieces.push({ id: "below", panel: below, columns: W2 });
+  }
   on("below", "details", () => focus($, view, c.title, c.what, "tests"));
   if ((c.systems.length > 0 || player.focus !== void 0) && !playing) {
     const s = systemActions($, view, doc, c.systems, c.selected, player);

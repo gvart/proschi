@@ -182,9 +182,29 @@ text cells** (today's drawing). Never a text preview followed by a picture.
   down and up on its own cell, the drawing scrolled so that cell is on the
   body's first row, and checks the move blitted its hover picture and the
   press ran its own action. The old single overlay fails it.
-- [ ] S2. **The passing verdict is gone.**
-- [ ] S3. **One continuous surface.**
-- [ ] S4. **A compact legend.**
+- [x] S2. **The passing verdict is gone.** The "✓ All N checks pass" line
+  is no longer drawn (the Tests tab's badge says it). The `below` notices
+  panel comes back only when a check fails: "✕ k of N checks fail: <first>",
+  with Details in the transcript. Never while a scenario plays.
+- [x] S3. **One continuous surface.** Every panel is as wide as the room
+  (`panelColumns(view.d.columns)`), with no margins or gaps. Each paints
+  `surfaceFrame` (ui/kit.ts) under itself: an opaque card fill, hairlines
+  down both sides, rounded corners only at the drawing's outer edges
+  (`edges: { top, bottom }`, part of the panel key and the request), and a
+  1px divider along its top unless it is the top piece. Inside a panel the
+  sections are parted the same way (`section`/`framed` in panels.ts), not
+  as nested cards. The diagram strip (`grid.fill` in rasterHost.ts) is a
+  piece of the same surface: the picture is drawn on the card fill without
+  its own card, centred on a strip as wide as the panels, and the frame is
+  composed in pixel space under the still and every frame's tiles.
+- [x] S4. **A compact legend.** The tall legend card is gone. A one-row
+  badge in the bottom-left corner of the diagram strip shows the load
+  chips (40/70/90/100%) and the critical use case's p99, only on a still
+  with the load overlay (`fill.legend`).
+- Tests: the plugin's "one surface" test checks the panel widths, edges
+  and the strip's fill, and that a passing design has no verdict;
+  tooling's ui.test checks the rounded edges and divider, and raster.test
+  checks the strip's width, the badge's corner and the centring.
 
 ## Risks
 

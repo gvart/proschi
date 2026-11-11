@@ -21,8 +21,9 @@
  *         play?: { useCase, scenario?, frames? },  id or name; scenario defaults to the first; frames per step, default 8
  *         whatIf?: { multiplier, failed, saved? }, the pane's live what-if: the load drawn is the what-if's
  *         cellPx?: { width, height },              the terminal's cell in screen px, for cellHint; default 16×34
- *         grid?: { room, maxRows, cellPx, tile? } } }  the picture as tiles of whole cells (see RasterGrid):
- *                                                  at most room × maxRows cells of cellPx, tiles default 16×8
+ *         grid?: { room, maxRows, cellPx, tile?,   the picture as tiles of whole cells (see RasterGrid):
+ *                  fill? } } }                     at most room × maxRows cells of cellPx, tiles default 16×8;
+ *                                                  `fill` sets it on a strip of the UI's surface (GridOptions)
  *   stdout RasterOutput as JSON:
  *     { width, height,                             PNG size in px, the same for every file
  *       base,                                      absolute path of the still image
@@ -53,6 +54,10 @@ import { isActive, liveOptions, type LiveWhatIf } from '../../../frontend/src/co
 import { Writer, hash, pngSize, put, touch, type Pixels } from './png';
 import { renderPanels } from './panelHost';
 import { fontsLoaded, loadFonts } from '../render/ui/metrics';
+import { rect, surfaceFrame } from '../render/ui/kit';
+import { legend } from '../render/ui/panels';
+import { alpha, paletteOf } from '../render/ui/theme';
+import { formatMs } from '../../../frontend/src/sim/format';
 import type { PanelsInput, PanelsOutput } from '../render/ui/contract';
 
 export interface RasterOptions {
@@ -77,6 +82,15 @@ export interface GridOptions {
   cellPx: { width: number; height: number };
   /** A tile in cells; default 16×8. */
   tile?: { columns: number; rows: number };
+  /**
+   * The picture as a strip of the plugin's drawing, which is one continuous
+   * surface (render/ui/kit.ts surfaceFrame): `columns` wide, the diagram
+   * centred on the UI surface's colour (its paper too), a hairline down each
+   * side, the drawing's rounded corners where it is its first or last piece
+   * (`top`, `bottom`), else a divider along its top; `legend` adds the load
+   * legend as a badge at the bottom left. Without it, the picture is a card.
+   */
+  fill?: { columns: number; top?: boolean; bottom?: boolean; legend?: boolean };
 }
 
 /**
@@ -204,15 +218,26 @@ export async function rasterize(input: RasterInput, assets: RasterAssets): Promi
   const resvgOptions = {
     font: { fontBuffers: fonts, defaultFontFamily: 'Inter', sansSerifFamily: 'Inter', monospaceFamily: 'JetBrains Mono' },
   };
-  const base = asCard(drawArchitecture(laid, draw), theme);
+  const g = options.grid;
+  const fill = g?.fill;
+  // On a strip of the UI, the paper is the UI's surface and the strip is its frame; else the picture is a card.
+  if (fill) draw.background = paletteOf(theme).card.fill;
+  if (fill?.legend && !fontsLoaded()) loadFonts(join(assets.dir, 'fonts'));
+  const asDrawn = (svg: string) => (fill ? svg : asCard(svg, theme));
+  const base = asDrawn(drawArchitecture(laid, draw));
   const svgWidth = Number(/width="(\d+)"/.exec(base)![1]);
   const svgHeight = Number(/height="(\d+)"/.exec(base)![1]);
   const max = options.maxWidthPx;
   const scale = options.scale ?? DEFAULT_SCALE;
   let zoom = max && svgWidth * scale > max ? max / svgWidth : scale;
-  const g = options.grid;
+  // The strip's frame around the picture: a column a side, and the legend's badge under it.
+  const strip = fill && g ? stripOf(fill, g, theme, fill.legend && draw.overlay ? doc.critical : undefined) : undefined;
   // On a grid, no wider than the room and no taller than maxRows: the tiles are drawn at the size they are shown.
-  if (g) zoom *= Math.min(1, (g.room * g.cellPx.width) / (svgWidth * zoom), (g.maxRows * g.cellPx.height) / (svgHeight * zoom));
+  if (g) {
+    const room = strip ? Math.min(g.room, fill!.columns) * g.cellPx.width - strip.side * 2 : g.room * g.cellPx.width;
+    const tall = g.maxRows * g.cellPx.height - (strip ? strip.above + strip.below : 0);
+    zoom *= Math.min(1, room / (svgWidth * zoom), Math.max(1, tall) / (svgHeight * zoom));
+  }
   const fileOf = (svg: string) => join(input.outDir, `${hash(`${zoom}\u0000${svg}`)}.png`);
 
   const render = (svg: string): Pixels => {
@@ -242,15 +267,21 @@ export async function rasterize(input: RasterInput, assets: RasterAssets): Promi
   let frames: string[][] | undefined;
   let grid: RasterGrid | undefined;
   if (g) {
-    const still = render(base);
+    const picture = render(base);
+    // On a strip: the picture laid onto it, centred, and the packets with it.
+    const place = strip ? strip.place(picture, resvgOptions) : undefined;
+    const onStrip = (p: Pixels): Pixels => (place ? place.compose(p) : p);
+    const shift = <P extends { left: number; top: number }>(p: P): P => (place ? { ...p, left: p.left + place.left, top: p.top + place.top } : p);
+    const still = onStrip(picture);
     const cut = cutter(still, g, input.outDir, writer);
     grid = { columns: cut.columns, rows: cut.rows, tiles: cut.tiles, base: await cut.files(still) };
     for (let index = 0; steps && index < steps.length; index++) {
       const count = Math.max(1, Math.round(options.play!.frames ?? DEFAULT_FRAMES));
-      const svgs = Array.from({ length: count }, (_, k) => asCard(drawArchitecture(laid, { ...draw, play: { steps, index, progress: count === 1 ? 100 : (k * 100) / (count - 1) } }), theme));
-      const behind = render(svgs[0].replace(PACKET, ''));
+      const svgs = Array.from({ length: count }, (_, k) => asDrawn(drawArchitecture(laid, { ...draw, play: { steps, index, progress: count === 1 ? 100 : (k * 100) / (count - 1) } })));
+      const drawnBehind = render(svgs[0].replace(PACKET, ''));
+      const behind = onStrip(drawnBehind);
       const step = { behind: await cut.files(behind), frames: [] as Record<string, string>[] };
-      for (const svg of svgs) step.frames.push(await cut.dirty(behind, [...svg.matchAll(PACKET)].map(([packet, x, y]) => packetPixels(packet, Number(x), Number(y), zoom, behind))));
+      for (const svg of svgs) step.frames.push(await cut.dirty(behind, [...svg.matchAll(PACKET)].map(([packet, x, y]) => shift(packetPixels(packet, Number(x), Number(y), zoom, drawnBehind)))));
       (grid.steps ??= []).push(step);
     }
   }
@@ -292,6 +323,60 @@ function asCard(svg: string, theme: Theme): string {
   const h = Number(/height="([\d.]+)"/.exec(svg)![1]);
   const border = theme === 'dark' ? 'rgba(255,255,255,0.14)' : 'rgba(17,17,17,0.12)';
   return svg.replace(/^(<svg[^>]*>)/, `$1<rect x="0.5" y="0.5" width="${w - 1}" height="${h - 1}" rx="6" fill="${CANVAS_TOKENS[theme].paper}" stroke="${border}" stroke-width="1"/>`);
+}
+
+/**
+ * The diagram's strip of the plugin's drawing (GridOptions.fill), in PNG px:
+ * a column of the surface a side (`side`), room above (and below, with the
+ * legend's badge in it); `place` sizes the strip to whole cells around a
+ * picture and lays pictures that size onto it, centred.
+ */
+function stripOf(fill: NonNullable<GridOptions['fill']>, g: GridOptions, theme: Theme, critical: { useCase: string; p99Ms: number } | undefined) {
+  const P = paletteOf(theme);
+  const { width: cw, height: ch } = g.cellPx;
+  // CSS px: the UI kit's 8×17 cell, stretched to cellPx as the panels are.
+  const kx = cw / 8;
+  const badge = { height: 24, margin: 8 };
+  const side = cw;
+  const above = Math.round(ch * 0.5);
+  const below = critical !== undefined || fill.legend ? Math.round((badge.height + 2 * badge.margin) * kx) : above;
+  return {
+    side,
+    above,
+    below,
+    place(picture: Pixels, resvgOptions: object) {
+      const columns = Math.max(fill.columns, Math.ceil((picture.width + 2 * side) / cw));
+      const rows = Math.max(1, Math.ceil((picture.height + above + below) / ch));
+      const width = columns * cw;
+      const height = rows * ch;
+      const left = Math.round((width - picture.width) / 2);
+      const top = above + Math.round((height - above - below - picture.height) / 2);
+      // The frame in CSS px over a viewBox stretched to the strip's pixels, the badge in its bottom left corner.
+      const w = width / kx;
+      const h = height / (ch / 17);
+      const parts = [surfaceFrame(P, w, h, { top: fill.top === true, bottom: fill.bottom === true })];
+      if (fill.legend) {
+        const y = h - badge.margin - badge.height;
+        const drawn = legend(P, critical ? { useCase: critical.useCase, p99: formatMs(critical.p99Ms) } : undefined, badge.margin + 10, y + 16, w - 2 * badge.margin - 20);
+        parts.push(rect(badge.margin + 0.5, y + 0.5, drawn.width + 20 - 1, badge.height - 1, { fill: alpha(P.surface, 0.85), stroke: P.card.line, sw: 1, rx: 6 }), drawn.svg);
+      }
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" font-family="Inter">${parts.join('')}</svg>`;
+      const resvg = new Resvg(svg, resvgOptions);
+      const image = resvg.render();
+      const frame: Pixels = { width: image.width, height: image.height, data: image.pixels };
+      image.free();
+      resvg.free();
+      return {
+        left,
+        top,
+        compose: (p: Pixels): Pixels => {
+          const out = { ...frame, data: frame.data.slice() };
+          over(out, { ...p, left, top });
+          return out;
+        },
+      };
+    },
+  };
 }
 
 /** A packet as render/architecture.ts draws it (drawPacket): its own group, centred on its translate. */

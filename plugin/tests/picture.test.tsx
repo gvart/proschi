@@ -454,6 +454,25 @@ async function tour($: T, clock: Clock, h: ReturnType<typeof host>, props: typeo
 /** The panels a tour pressed a control of: the piece or page before the control's id. */
 const panelsOf = (pressed: string[]) => [...new Set(pressed.map(id => id.slice(0, id.indexOf('/'))))].sort()
 
+test('one surface: every piece as wide as the room, the drawing\'s corners on its first and last, the legend in the diagram\'s strip, no verdict while every check passes', SLOW, async ($, on) => {
+  const clock = mock.clock(on)
+  const h = host(on, clock)
+  const passing = { ...reply, props: { ...reply.props, text: `\`\`\`proschi\n${SOURCE.replace('< 150ms', '< 5000ms').replace('>= 99.9%', '>= 90%')}\n\`\`\`` } } as unknown as typeof reply
+  const ui = await settle($, clock, passing)
+  expect((await ids(ui)).some(id => id.startsWith('below/'))).toBe(false)
+  const panels = h.requests.flatMap(r => (r.input.panels ?? []) as { panel: { kind: string; verdict?: unknown }; columns: number; edges?: { top?: boolean; bottom?: boolean } }[])
+  expect(panels.some(p => p.panel.kind === 'notices')).toBe(false)
+  // 124 columns less the transcript's gutter: every piece the same width.
+  expect(new Set(panels.map(p => p.columns)).size).toBe(1)
+  // The title is the drawing's first piece, the links its last; the diagram's strip neither, with the legend.
+  expect(panels.find(p => p.panel.kind === 'page')?.edges).toEqual({ top: true })
+  expect(panels.find(p => p.panel.kind === 'actionBar')?.edges).toEqual({ bottom: true })
+  expect(panels.find(p => p.panel.kind === 'useCaseBar')?.edges).toBeUndefined()
+  const fill = h.requests.map(r => (r.input.options as { grid?: { fill?: unknown }; play?: unknown } | undefined)).find(o => o?.grid && !o.play)?.grid?.fill
+  expect(fill).toEqual({ columns: panels[0]!.columns, legend: true })
+  await ui.unmount()
+})
+
 // The tours run every request one shot: a worker hook lives 10 s in the kit, and a tour takes longer.
 const TOUR = { timeoutMs: 120_000 }
 

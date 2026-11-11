@@ -16,7 +16,6 @@ import type { PaneSource, PaneTab, Player, WhatIfState } from '../types'
 import { analysisPage, hldPage, stepPanelOf, tabBarPanel, testsPage, whatIfBannerLabel, whatIfPage } from '../../tooling/src/render/ui/data'
 import type { Control, Notice, NoticesPanel, Panel, PlayerHeaderPanel, SequencePanel, UseCaseBarPanel } from '../../tooling/src/render/ui/contract'
 import { components } from '../../frontend/src/sim/analyze'
-import { formatMs } from '../../frontend/src/sim/format'
 import { MULTIPLIERS, stopOf, toggleFailed } from '../../frontend/src/components/WhatIf/whatIf'
 import { cellPx, graphicsMode, gridFrame, imageSize, maxWidthPx, probe, probeKey, probeOf, probeSource, rasterOf, sourceOf, themeOf, TMUX_HINT, type GraphicsMode, type RasterGrid, type RasterRequest } from './graphics'
 import { loading, pictureSite, pressTimings, registerPicture, type Action, type Picture, type Piece, type Site } from './picture'
@@ -687,7 +686,13 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
     ...(view.selected ? { selected: view.selected } : {}),
     ...(whatIf && doc !== base ? { whatIf: liveOf(whatIf) } : {}),
     ...(play ? { play: { useCase: play.useCase.id, scenario: play.scenario.id, frames: FRAMES } } : {}),
-    grid: { room: d.columns, maxRows: d.rows ?? INLINE_ROWS, cellPx: cellPx() },
+    // A strip of the drawing's one surface, as wide as its panels: its top where nothing is above it (no tabs, header, title or notice), the load legend in its corner.
+    grid: {
+      room: d.columns,
+      maxRows: d.rows ?? INLINE_ROWS,
+      cellPx: cellPx(),
+      fill: { columns: panelColumns(d.columns), ...(!play && !view.inPane && !doc.diagram.title && noticesOf(view, doc, lost).length === 0 ? { top: true } : {}), ...(!play && doc.overlay && doc.edges ? { legend: true } : {}) },
+    },
   })
   const request: RasterRequest = { source, options: optionsFor(playing) }
   const alt = `${doc.diagram.title ?? title}: the architecture diagram as a picture`
@@ -852,8 +857,21 @@ const stepPanelAt = (view: View, pick: Pick, step: number, isPlaying: boolean) =
  * links), what each control does, and the panels a press is likely to want
  * next: every step of the scenario playing, or the player of the one picked.
  */
+/** The notices over a drawing in pictures: imports not found, the design's notes and warnings (in the transcript, the first few). */
+function noticesOf(view: View, doc: Document, lost: string[]): Notice[] {
+  const unknown = lost.filter(name => !importReasons.has(name))
+  return [
+    ...(unknown.length ? [{ text: `Not found, so drawn as plain boxes: ${unknown.join(', ')}`, tone: 'muted' as const }] : []),
+    ...lost.filter(name => importReasons.has(name)).map(name => ({ text: importReasons.get(name)!, tone: 'muted' as const })),
+    ...doc.notes.map(n => ({ text: n.text, ...(n.hint ? { hint: n.hint } : {}) })),
+    ...(view.inPane ? doc.warnings : doc.warnings.slice(0, INLINE_WARNINGS)).map(text => ({ text })),
+    ...(!view.inPane && doc.warnings.length > INLINE_WARNINGS ? [{ text: `… ${doc.warnings.length - INLINE_WARNINGS} more: Focus, then Analysis`, tone: 'muted' as const }] : []),
+  ]
+}
+
 function pictureParts($: EngineInterface, view: View, doc: Document, c: Parts): { pieces: Piece[]; actions: Record<string, Action>; ahead: { panel: Panel; columns: number }[] } {
-  const W = panelColumns(view.width)
+  // Every piece as wide as the room: the drawing is one surface, the diagram centred on its strip.
+  const W = panelColumns(view.d.columns)
   const pieces: Piece[] = []
   const actions: Record<string, Action> = {}
   const ahead: { panel: Panel; columns: number }[] = []
@@ -868,26 +886,21 @@ function pictureParts($: EngineInterface, view: View, doc: Document, c: Parts): 
     pieces.push({ id: 'title', panel: { kind: 'page', blocks: [{ type: 'heading', level: 3, text: doc.diagram.title }, ...(doc.diagram.summary ? [{ type: 'paragraph' as const, small: true, text: doc.diagram.summary }] : [])] }, columns: W })
   }
 
-  const unknown = c.lost.filter(name => !importReasons.has(name))
-  const notices: Notice[] = [
-    ...(unknown.length ? [{ text: `Not found, so drawn as plain boxes: ${unknown.join(', ')}`, tone: 'muted' as const }] : []),
-    ...c.lost.filter(name => importReasons.has(name)).map(name => ({ text: importReasons.get(name)!, tone: 'muted' as const })),
-    ...doc.notes.map(n => ({ text: n.text, ...(n.hint ? { hint: n.hint } : {}) })),
-    ...(view.inPane ? doc.warnings : doc.warnings.slice(0, INLINE_WARNINGS)).map(text => ({ text })),
-    ...(!view.inPane && doc.warnings.length > INLINE_WARNINGS ? [{ text: `… ${doc.warnings.length - INLINE_WARNINGS} more: Focus, then Analysis`, tone: 'muted' as const }] : []),
-  ]
+  const notices = noticesOf(view, doc, c.lost)
   if (notices.length) pieces.push({ id: 'warn', panel: { kind: 'notices', notices }, columns: W })
 
   pieces.push({ id: 'diagram', ...(c.picture ? { picture: c.picture } : {}) })
 
+  // The verdict only when a check fails (the Tests tab's badge says all pass), the legend in the diagram's corner.
   const failing = doc.tests.filter(t => !t.passed)
-  const below: NoticesPanel = {
-    kind: 'notices',
-    ...(doc.edges && !playing ? { legend: doc.critical ? { critical: { useCase: doc.critical.useCase, p99: formatMs(doc.critical.p99Ms) } } : {} } : {}),
-    ...(doc.tests.length && !playing ? { verdict: { passed: doc.tests.length - failing.length, total: doc.tests.length, ...(failing[0] ? { first: `${failing[0].name}: ${failing[0].message}` } : {}) } } : {}),
-    ...(doc.tests.length && !playing && !view.inPane ? { details: { id: 'details', icon: 'focus' as const, label: 'Details' } } : {}),
+  if (failing[0] && !playing) {
+    const below: NoticesPanel = {
+      kind: 'notices',
+      verdict: { passed: doc.tests.length - failing.length, total: doc.tests.length, first: `${failing[0].name}: ${failing[0].message}` },
+      ...(!view.inPane ? { details: { id: 'details', icon: 'focus' as const, label: 'Details' } } : {}),
+    }
+    pieces.push({ id: 'below', panel: below, columns: W })
   }
-  if (below.legend || below.verdict) pieces.push({ id: 'below', panel: below, columns: W })
   on('below', 'details', () => focus($, view, c.title, c.what, 'tests'))
 
   if ((c.systems.length > 0 || player.focus !== undefined) && !playing) {

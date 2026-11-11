@@ -292,6 +292,12 @@ export interface PanelRequest {
   columns: number;
   /** Extra pictures per control tile: under the pointer, pressed. Default `['hover']`. */
   variants?: ('hover' | 'pressed')[];
+  /**
+   * Where the panel sits in its drawing, which is one continuous surface: its
+   * first piece (`top`, rounded corners above) or its last (`bottom`), else a
+   * divider along its top and square corners. Default neither.
+   */
+  edges?: { top?: boolean; bottom?: boolean };
 }
 
 /** stdin of `raster.cjs` for panels; `diagram` is the diagram request (RasterInput less outDir and prune) drawn in the same run. */

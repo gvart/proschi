@@ -117,6 +117,23 @@ describe('UI panels: the cell grid', () => {
     }
   });
 
+  it('draws each panel as a piece of one surface: rounded only at its outer edges, a divider above unless on top', () => {
+    const svgOf = (edges: { top?: boolean; bottom?: boolean }) => {
+      const { surface, height } = drawPanel(PANELS.step, 80, 'dark', edges);
+      return surface.svg(height);
+    };
+    const middle = svgOf({});
+    const top = svgOf({ top: true });
+    const bottom = svgOf({ bottom: true });
+    // Arcs only where an outer edge is.
+    expect(middle).not.toMatch(/ A ?8/);
+    expect(top).toMatch(/ A ?8/);
+    expect(bottom).toMatch(/ A ?8/);
+    // The top piece has no divider over it; the others do.
+    expect(top).not.toBe(middle);
+    expect(bottom).not.toBe(top);
+  });
+
   it('refuses controls that share cells', () => {
     const control = (id: string) => ({ id, kind: 'button' as const });
     expect(() => cut(4, [{ control: control('a'), cells: { col: 0, row: 0, columns: 5, rows: 2 } }, { control: control('b'), cells: { col: 4, row: 1, columns: 5, rows: 2 } }])).toThrow(/share cells/);

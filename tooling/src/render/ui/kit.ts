@@ -81,6 +81,11 @@ export class Surface {
     return this.columns * CELL.width;
   }
 
+  /** SVG drawn under everything added so far (the surface's own background). */
+  under(svg: string): void {
+    this.parts.unshift(svg);
+  }
+
   add(...svg: string[]): void {
     for (const s of svg) {
       if (!s) continue;
@@ -132,8 +137,8 @@ export class Surface {
    * The panel as SVG `height` px tall, controls in their states (rest unless
    * named); `crop` draws only that window. `px`, the picture's size, may
    * stretch it unevenly (a cell drawn taller or shorter than 8×17 for the
-   * terminal's own); absent, it is the window's size. No background: the
-   * terminal's shows through around the cards.
+   * terminal's own); absent, it is the window's size. The background is the
+   * panel's surface (`surfaceFrame`), drawn first.
    */
   svg(height: number, states: Map<string, ControlState> = new Map(), crop?: Box, px?: { width: number; height: number }): string {
     const byId = new Map(this.controls.map((c) => [c.control.id, c]));
@@ -149,6 +154,42 @@ export class Surface {
       '</svg>',
     ].join('\n');
   }
+}
+
+// ---------- the surface ----------
+
+/** Where a panel or the diagram's strip sits in its drawing: its first (top) or last (bottom) piece, or both. */
+export interface Edges {
+  top?: boolean;
+  bottom?: boolean;
+}
+
+/** The radius of a drawing's outer corners, px. */
+export const SURFACE_RADIUS = 8;
+
+/**
+ * A piece of a drawing's one continuous surface, `w` × `h` px: the opaque
+ * fill edge to edge, a hairline down both sides, rounded corners and a
+ * hairline across only at the drawing's top and bottom (`edges`), and a
+ * divider along its top where another piece is above it. The corners
+ * outside a rounded one stay transparent.
+ */
+export function surfaceFrame(P: Palette, w: number, h: number, edges: Edges = {}): string {
+  const R = SURFACE_RADIUS;
+  const t = edges.top === true;
+  const b = edges.bottom === true;
+  const rt = t ? R : 0;
+  const rb = b ? R : 0;
+  const fill = [`M0 ${rt}`, t ? `A${R} ${R} 0 0 1 ${R} 0` : '', `H${w - rt}`, t ? `A${R} ${R} 0 0 1 ${w} ${R}` : '', `V${h - rb}`, b ? `A${R} ${R} 0 0 1 ${w - R} ${h}` : '', `H${rb}`, b ? `A${R} ${R} 0 0 1 0 ${h - R}` : '', 'Z'].filter(Boolean).join(' ');
+  const r = R - 0.5;
+  const strokes = [`M0.5 ${t ? R : 0} V${b ? h - R : h}`, `M${w - 0.5} ${t ? R : 0} V${b ? h - R : h}`];
+  if (t) strokes.push(`M0.5 ${R} A${r} ${r} 0 0 1 ${R} 0.5 H${w - R} A${r} ${r} 0 0 1 ${w - 0.5} ${R}`);
+  if (b) strokes.push(`M${w - 0.5} ${h - R} A${r} ${r} 0 0 1 ${w - R} ${h - 0.5} H${R} A${r} ${r} 0 0 1 0.5 ${h - R}`);
+  return [
+    `<path d="${fill}" fill="${P.card.fill}"/>`,
+    `<path d="${strokes.join(' ')}" fill="none" stroke="${P.card.line}" stroke-width="1"/>`,
+    t ? '' : line(1, 0.5, w - 1, 0.5, P.line, 1),
+  ].join('');
 }
 
 // ---------- text ----------

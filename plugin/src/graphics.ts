@@ -45,7 +45,7 @@ export interface RasterOptions {
   selected?: string
   play?: { useCase: string; scenario?: string; frames?: number }
   whatIf?: { multiplier: number; failed: readonly string[]; saved?: string }
-  grid?: { room: number; maxRows: number; cellPx: { width: number; height: number }; tile?: { columns: number; rows: number } }
+  grid?: { room: number; maxRows: number; cellPx: { width: number; height: number }; tile?: { columns: number; rows: number }; fill?: { columns: number; top?: boolean; bottom?: boolean; legend?: boolean } }
 }
 
 /** The picture as tiles of whole cells; per step the tiles behind the packet, per frame the ones it covers. */
