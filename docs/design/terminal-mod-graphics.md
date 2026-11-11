@@ -4,7 +4,8 @@ The Claude Code mod (`plugin/`) draws diagrams as text cells. On terminals with
 an image protocol (kitty, Ghostty, iTerm2), Claude Code's `Image` element can
 show a PNG instead, sized in columns × rows, and a keyed `Image` can be swapped
 with `$.ui.blit` at frame rate. This page covers the part that makes the
-pixels: `plugin/hooks/raster.cjs`. Wiring it into `register.tsx` is separate.
+pixels: `plugin/hooks/raster.cjs`. How the hooks show them is D11 of
+[terminal-mod.md](terminal-mod.md).
 
 ## Pieces
 
@@ -29,6 +30,13 @@ pixels: `plugin/hooks/raster.cjs`. Wiring it into `register.tsx` is separate.
     the scenario at 45%, everything else at 15%. Steps between nodes with no
     edge play along a fallback route. Packets are drawn last, in their own
     `<g data-packet>` groups.
+  - `terminal: true` (always set by the helper): a card with replicas has
+    one or two outlined cards stacked behind it in place of its shadow
+    (canvas.css `[data-stack]`; a card lit by playback keeps its accent
+    shadow instead), its load line is the canvas's `×3 · L · ⧉2 · 42%`, and
+    edge chips are opaque so their own line does not show through the
+    numbers. Chips sit where the canvas puts them (`route.label`). The
+    handles stay: the canvas draws them in read-only views too.
   - `layoutArchitecture` + `drawArchitecture` split layout from drawing, so
     many frames share one ELK layout.
 - `tooling/src/terminal/rasterHost.ts`, bundled by `tooling/build.mjs` to
@@ -56,6 +64,7 @@ stdin, JSON:
     overlay?: boolean;                              // load overlay, when the document has traffic
     selected?: string;                              // node or expanded system id
     play?: { useCase: string; scenario?: string; frames?: number };  // id or name; first scenario; 8 frames per step
+    whatIf?: { multiplier: number; failed: string[]; saved?: string }; // the pane's live what-if: the overlay's load under it
     cellPx?: { width: number; height: number };     // terminal cell in screen px, default 16×32
   };
 }
