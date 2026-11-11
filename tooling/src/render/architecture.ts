@@ -64,6 +64,14 @@ export interface ArchitectureOptions {
   selected?: string;
   /** A moment of a scenario's playback (see PlayMoment). */
   play?: PlayMoment;
+  /**
+   * Drawn for a terminal image (the Claude Code plugin's raster helper), closer
+   * to the canvas than `proschi render`: a card with replicas stacked as the
+   * canvas stacks it (`[data-stack]`), its load line as the canvas's
+   * (`×3 · L · ⧉2 · 42%`), and edge chips opaque, so their own line does not
+   * show through the numbers. Off by default, which leaves the SVG as it was.
+   */
+  terminal?: boolean;
 }
 
 /**
@@ -209,7 +217,7 @@ function draw({ diagram, layout }: ArchitectureLayout, options: ArchitectureOpti
       continue;
     }
     if (play) body.push(`<g opacity="${play.edgeOpacity(edge)}">`);
-    body.push(drawLiveEdge(edge, points, at, load, move));
+    body.push(drawLiveEdge(edge, points, at, load, move, options.terminal));
     if (play) body.push('</g>');
   }
   // The packets go over the cards, so one leaving or reaching a card stays in sight.
@@ -234,7 +242,7 @@ function draw({ diagram, layout }: ArchitectureLayout, options: ArchitectureOpti
     if (p.node.kind === 'group') continue;
     const id = p.node.id;
     if (!play && options.selected === undefined) {
-      body.push(p.node.kind === 'text' ? drawNote(p, dx, dy) : p.node.kind === 'system' ? drawSystem(p, dx, dy, options.systems?.[id]) : drawCard(p, dx, dy, options.nodes?.[id], { overlay: !!options.overlay }));
+      body.push(p.node.kind === 'text' ? drawNote(p, dx, dy) : p.node.kind === 'system' ? drawSystem(p, dx, dy, options.systems?.[id]) : drawCard(p, dx, dy, options.nodes?.[id], { overlay: !!options.overlay, ...(options.terminal ? { terminal: true } : {}) }));
       continue;
     }
     const mark: Mark | undefined = play?.failing.has(id) ? 'failing' : play?.active.has(id) ? 'active' : undefined;
@@ -245,7 +253,7 @@ function draw({ diagram, layout }: ArchitectureLayout, options: ArchitectureOpti
         ? drawNote(p, dx, dy)
         : p.node.kind === 'system'
           ? drawSystem(p, dx, dy, options.systems?.[id], mark)
-          : drawCard(p, dx, dy, options.nodes?.[id], { overlay: !!options.overlay, mark }),
+          : drawCard(p, dx, dy, options.nodes?.[id], { overlay: !!options.overlay, mark, ...(options.terminal ? { terminal: true } : {}) }),
     );
     if (play) body.push('</g>');
   }
@@ -277,9 +285,9 @@ function handle(cx: number, cy: number): string {
 /** How playback lights a card: one of the current step's nodes, or the one whose call failed. */
 type Mark = 'active' | 'failing';
 
-function drawCard(p: Placed, dx: number, dy: number, load?: NodeOverlay, live: { overlay?: boolean; mark?: Mark } = {}): string {
+function drawCard(p: Placed, dx: number, dy: number, load?: NodeOverlay, live: { overlay?: boolean; mark?: Mark; terminal?: boolean } = {}): string {
   const { node, width, height } = p;
-  const { overlay, mark } = live;
+  const { overlay, mark, terminal } = live;
   // Lit by playback, a card lifts off its shadow (canvas.css `.pc-active`).
   const lift = mark ? 2 : 0;
   const x = p.x + dx - lift;
@@ -290,7 +298,11 @@ function drawCard(p: Placed, dx: number, dy: number, load?: NodeOverlay, live: {
   const dash = node.style?.dash ? DASH_ARRAY[node.style.dash].replace(/\d+/g, (n) => String(Number(n) * 1.5)) : undefined;
   // The load, as on the terminal's cards: how busy (or down) after the tech, a bar along the bottom, and the heat as the fill.
   const u = load?.utilization;
-  const busy = load?.down ? 'down' : u !== undefined ? `${Math.round(u * 100)}%` : '';
+  const percent = load?.down ? 'down' : u !== undefined ? `${Math.round(u * 100)}%` : '';
+  const replicas = terminal ? (load?.replicas ?? node.replicas ?? 1) : 1;
+  // For a terminal, the canvas's load line (LoadBadge): replicas, size, shards, then how busy.
+  const busy = terminal && load ? [replicas > 1 ? `×${replicas}` : '', load.size ?? '', load.shards && load.shards > 1 ? `⧉${load.shards}` : '', percent].filter(Boolean).join(' · ') : percent;
+  const stack = node.kind === 'component' ? Math.min(2, replicas - 1) : 0;
   // Under the load overlay, the canvas's heat scale (utils/heat.ts) and, on its solid fills, the dark text drawn on accents.
   const scale = overlay ? canvasHeat(load) : undefined;
   const heat = scale ? scale.fill : heatOf(load);
@@ -305,7 +317,8 @@ function drawCard(p: Placed, dx: number, dy: number, load?: NodeOverlay, live: {
   return [
     `<g data-node="${esc(node.id)}" data-kind="${esc(node.type)}"${busy ? ` data-load="${busy}"` : ''}${mark ? ` data-play="${mark}"` : ''}>`,
     ringed ? bottleneckRing(x, y, width, height) : '',
-    card(x, y, width, height, { fill: heat ?? t?.fill, line: mark === 'failing' ? COLORS.error : t?.line, dash, ...(lit ? { shade: lit, depth: 5 } : {}) }),
+    stack > 0 ? stackOf(x, y, width, height, stack) : '',
+    card(x, y, width, height, { fill: heat ?? t?.fill, line: mark === 'failing' ? COLORS.error : t?.line, dash, ...(lit ? { shade: lit, depth: 5 } : stack > 0 ? { shadow: false } : {}) }),
     `<rect x="${r(x + PAD_X + 1)}" y="${r(y + PAD_Y + 1)}" width="${ICON - 2}" height="${ICON - 2}" rx="4" fill="${lit ?? COLORS.background}" stroke="${lit ?? COLORS.border}" stroke-width="2"/>`,
     techIcon(node.techStack, x + PAD_X + 8, y + PAD_Y + 8, 18, lit ? ON_ACCENT : COLORS.text, node.type),
     text(textX, y + PAD_Y + 15, fit(node.name, textMax, 14, true), { size: 14, weight: 700, ...(fg !== COLORS.text ? { fill: fg } : {}) }),
@@ -321,6 +334,22 @@ function drawCard(p: Placed, dx: number, dy: number, load?: NodeOverlay, live: {
   ]
     .filter(Boolean)
     .join('\n');
+}
+
+/**
+ * The cards behind a card with replicas, as the canvas stacks them in place of
+ * its shadow (canvas.css `.pc-node[data-stack]`): one outlined card per extra
+ * replica, at most two, each 4px further right and down.
+ */
+function stackOf(x: number, y: number, w: number, h: number, count: number): string {
+  const out: string[] = [];
+  for (let k = count; k >= 1; k--) {
+    out.push(
+      `<rect data-stack="${k}" x="${r(x + 4 * k)}" y="${r(y + 4 * k)}" width="${r(w)}" height="${r(h)}" rx="4" fill="${COLORS.border}"/>`,
+      `<rect x="${r(x + 4 * k + 2)}" y="${r(y + 4 * k + 2)}" width="${r(w - 4)}" height="${r(h - 4)}" rx="3" fill="${COLORS.surface}"/>`,
+    );
+  }
+  return out.join('\n');
 }
 
 /** The status word of a system, and its color: red past capacity or its SLA, amber running hot (as the terminal's, paint.ts). */
@@ -603,7 +632,7 @@ const monoWidth = (content: string, size: number) => [...content].length * size 
  * what it carries; on the current step in the accent (red for an error),
  * dashed when the call fails (it never arrives).
  */
-function drawLiveEdge(edge: DiagramEdge | undefined, points: Point[], at: Point, load: EdgeOverlay | undefined, move: Move | undefined): string {
+function drawLiveEdge(edge: DiagramEdge | undefined, points: Point[], at: Point, load: EdgeOverlay | undefined, move: Move | undefined, opaque = false): string {
   const own = edge ? edgeStroke(edge) : {};
   let color = own.color ?? COLORS.line;
   let width = 2;
@@ -638,7 +667,7 @@ function drawLiveEdge(edge: DiagramEdge | undefined, points: Point[], at: Point,
     const w = Math.max(...lines.map((l) => monoWidth(l, 11))) + 12;
     const h = lines.length * 14 + 4;
     out.push(
-      `<rect x="${r(at.x - w / 2)}" y="${r(at.y - h / 2)}" width="${r(w)}" height="${h}" rx="3" fill="${COLORS.background}" fill-opacity="0.92" stroke="${COLORS.text}" stroke-opacity="${load.critical ? 1 : 0.35}" stroke-width="${load.critical ? 1.5 : 1}"/>`,
+      `<rect x="${r(at.x - w / 2)}" y="${r(at.y - h / 2)}" width="${r(w)}" height="${h}" rx="3" fill="${COLORS.background}" fill-opacity="${opaque ? 1 : 0.92}" stroke="${COLORS.text}" stroke-opacity="${load.critical ? 1 : 0.35}" stroke-width="${load.critical ? 1.5 : 1}"/>`,
       ...lines.map((l, i) =>
         text(at.x, at.y - h / 2 + 13 + i * 14, l, { size: 11, weight: label && i === 0 ? 500 : 600, anchor: 'middle', family: MONO, ...(label && i === 0 ? { opacity: 0.75 } : {}) }),
       ),
