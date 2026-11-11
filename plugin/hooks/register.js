@@ -7872,11 +7872,11 @@ function loadDocument(input, options) {
     for (const c of diagram.capacity ?? []) if (c.size && sim.nodes[c.node]) sim.nodes[c.node].size = c.size;
   }
   const overlay = sim && Object.keys(sim.nodes).length ? sim.nodes : void 0;
-  const shown = errors.length ? diagram : applyView(diagram, view);
-  const edges = sim && overlay ? edgeOverlays(shown.edges.map((e) => ({ id: e.id, ...flowEnds(e.source, e.target) })), { nodes: sim.nodes, flows: sim.flows, ...sim.critical ? { critical: sim.critical } : {} }) : {};
+  const shown2 = errors.length ? diagram : applyView(diagram, view);
+  const edges = sim && overlay ? edgeOverlays(shown2.edges.map((e) => ({ id: e.id, ...flowEnds(e.source, e.target) })), { nodes: sim.nodes, flows: sim.flows, ...sim.critical ? { critical: sim.critical } : {} }) : {};
   const noted = new Set(sim?.notes.map((n) => n.text));
   return {
-    diagram: shown,
+    diagram: shown2,
     root: diagram,
     errors,
     ...overlay ? { overlay } : {},
@@ -9838,21 +9838,21 @@ var usd2 = (x) => formatUsd(x).replace("/month", "");
 var cut = (text, room) => text.length <= room ? text : room <= 0 ? "" : `${text.slice(0, Math.max(0, room - 1))}\u2026`;
 function table2(cols, rows, width) {
   const seg = (c) => c === void 0 ? { text: "" } : typeof c === "string" ? { text: c } : c;
-  let shown = cols.map((_, i) => i);
+  let shown2 = cols.map((_, i) => i);
   const widths = cols.map((c, i) => Math.max(c.title.length, ...rows.map((r) => seg(r[i]).text.length)));
-  const total = () => shown.reduce((sum, i) => sum + widths[i], 0) + 2 * (shown.length - 1);
+  const total = () => shown2.reduce((sum, i) => sum + widths[i], 0) + 2 * (shown2.length - 1);
   while (total() > width) {
-    const droppable = shown.filter((i) => cols[i].drop !== void 0).sort((a, b) => cols[b].drop - cols[a].drop);
+    const droppable = shown2.filter((i) => cols[i].drop !== void 0).sort((a, b) => cols[b].drop - cols[a].drop);
     if (droppable.length === 0) break;
-    shown = shown.filter((i) => i !== droppable[0]);
+    shown2 = shown2.filter((i) => i !== droppable[0]);
   }
-  const first = Math.max(6, widths[shown[0]] - Math.max(0, total() - width));
-  const w = (i) => i === shown[0] ? Math.min(widths[i], first) : widths[i];
+  const first = Math.max(6, widths[shown2[0]] - Math.max(0, total() - width));
+  const w = (i) => i === shown2[0] ? Math.min(widths[i], first) : widths[i];
   const row = (cells, header = false) => ({
-    segs: shown.flatMap((i, k) => {
+    segs: shown2.flatMap((i, k) => {
       const s = cells[i];
       const text = cut(s.text, w(i));
-      const padded = cols[i].right ? text.padStart(w(i)) : k === shown.length - 1 ? text : text.padEnd(w(i));
+      const padded = cols[i].right ? text.padStart(w(i)) : k === shown2.length - 1 ? text : text.padEnd(w(i));
       return [...k > 0 ? [{ text: "  " }] : [], header ? { text: padded, dim: true } : { ...s, text: padded }];
     })
   });
@@ -10316,6 +10316,95 @@ function testsTab(ui, doc, columns, open, toggle2) {
   return /* @__PURE__ */ h(ui.Box, { key: "body-tests", flexDirection: "column" }, linesView(ui, bodyLines("tests", doc, columns), "tests-lines"), passing2 > 0 && /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, /* @__PURE__ */ h(ui.Button, { key: "tests-passing", label: `${open ? "\u25BE" : "\u25B8"} ${passing2} passing`, hotkey: "a", dimColor: !open, onPress: toggle2 }), open && linesView(ui, passingLines(doc.tests, columns), "tests-passing-lines")));
 }
 
+// ../plugin/src/uiCheck.tsx
+var UI_CHECK = "proschi-ui-check";
+var OVERLAY = "ui-check-overlay";
+var panels = /* @__PURE__ */ new Map();
+var drawing = /* @__PURE__ */ new Set();
+var hovered = -1;
+var shown;
+async function openUiCheck($) {
+  hovered = -1;
+  await $.ui.open({ id: UI_CHECK, title: "Proschi \xB7 ui-check" });
+  return {};
+}
+function panelOf($, columns) {
+  const done = panels.get(columns);
+  if (done || drawing.has(columns)) return done;
+  drawing.add(columns);
+  void (async () => {
+    const dir = await $.env.get("TMPDIR").catch(() => void 0) || "/tmp";
+    const input = {
+      kind: "panels",
+      outDir: `${dir.replace(/\/+$/, "")}/proschi-raster`,
+      theme: await themeOf($),
+      panels: [{ id: "tabs", columns, panel: { kind: "tabs", active: "diagram", tabs: TABS.map((t) => ({ id: t.id, label: t.label, hotkey: t.key })) } }]
+    };
+    const answer = await $.process.run(["node", `${$.plugin.root}/hooks/raster.cjs`], { stdin: JSON.stringify(input), timeoutMs: 6e4 }).then(
+      ({ exitCode, stdout, stderr }) => {
+        if (exitCode !== 0) return { error: stderr.trim() || `raster exited with ${exitCode}` };
+        return JSON.parse(stdout).panels[0] ?? { error: "no panel" };
+      },
+      (error) => ({ error: String(error) })
+    );
+    panels.set(columns, answer);
+    drawing.delete(columns);
+    $.ui.invalidate("ui.render");
+  })();
+  return void 0;
+}
+var tileKey = (section, i) => `${section}-${i}`;
+function registerUiCheck(on) {
+  on("ui.render", { component: "Pane", requestId: UI_CHECK }, async ($, e) => {
+    if (e.surface !== "terminal") {
+      const { Text } = $.ui.resolve(e);
+      return /* @__PURE__ */ h(Text, null, "ui-check draws in a terminal.");
+    }
+    const ui = $.ui.resolve(e);
+    const body = "bodyColumns" in e.props && typeof e.props.bodyColumns === "number" ? e.props.bodyColumns : (e.viewport?.columns ?? 120) - 4;
+    const panel = panelOf($, Math.max(20, Math.min(100, body - 2)));
+    if (!panel) return /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Drawing the tab bar\u2026");
+    if ("error" in panel) return /* @__PURE__ */ h(ui.Text, { color: "red" }, panel.error);
+    shown = panel;
+    const controls = panel.tiles.flatMap((t) => t.control ? [{ id: t.control.id, col: t.col, row: t.row, columns: t.columns, rows: t.rows }] : []);
+    const strips = (section) => {
+      const rows = /* @__PURE__ */ new Map();
+      panel.tiles.forEach((tile, i) => rows.set(tile.row, [...rows.get(tile.row) ?? [], { tile, i }]));
+      return [...rows.values()].map((strip) => /* @__PURE__ */ h(ui.Box, { flexDirection: "row", height: strip[0].tile.rows }, strip.map(({ tile, i }) => /* @__PURE__ */ h(ui.Image, { key: tileKey(section, i), source: { file: tile.file, format: "png" }, columns: tile.columns, rows: tile.rows, alt: tile.control?.id ?? " " }))));
+    };
+    const frame2 = (section, overlay) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column", width: panel.columns, height: panel.rows }, strips(section), overlay);
+    const first = panel.tiles.find((t) => t.control);
+    return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", gap: 1 }, /* @__PURE__ */ h(ui.Text, { dimColor: true }, "tab bar panel: ", panel.columns, "\xD7", panel.rows, " cells, ", panel.tiles.length, " tiles, ", controls.length, " controls"), /* @__PURE__ */ h(ui.Text, { bold: true }, "A) the Image alone"), frame2("a"), /* @__PURE__ */ h(ui.Text, { bold: true }, "B) the Image under an absolute empty Client (press: toast; hover: blits the hover picture)"), frame2(
+      "b",
+      /* @__PURE__ */ h(ui.Box, { position: "absolute", top: 0, left: 0, width: panel.columns, height: panel.rows }, /* @__PURE__ */ h(ui.Client, { key: OVERLAY, module: "./uiOverlay.js", props: { controls }, width: panel.columns, height: panel.rows }))
+    ), /* @__PURE__ */ h(ui.Text, { bold: true }, "C) the Image under an absolute Box holding a Button of spaces over ", first?.control?.id ?? "no control"), frame2(
+      "c",
+      first && /* @__PURE__ */ h(ui.Box, { position: "absolute", top: first.row, left: first.col }, /* @__PURE__ */ h(ui.Button, { key: "ui-check-c", label: " ".repeat(Math.max(1, first.columns - 4)), onPress: () => void $.ui.toast(`C: pressed ${first.control.id}`) }))
+    ));
+  });
+  on("ui.message", async ($, e, next) => {
+    if (e.element !== OVERLAY) return next(e);
+    const data = e.data;
+    const panel = shown;
+    if (!panel) return {};
+    const id = typeof data.id === "string" ? data.id : "";
+    if (data.type === "press") {
+      const fine = typeof data.fx === "number" && typeof data.fy === "number" ? ` (fine ${data.fx.toFixed(2)},${data.fy.toFixed(2)})` : "";
+      void $.ui.toast(`clicked ${id || "nothing"} at ${String(data.x)},${String(data.y)}${fine}`);
+    } else if (data.type === "hover") {
+      const blit = async (i, file) => {
+        if (i < 0 || !file) return;
+        const r = await $.ui.blit({ requestId: e.requestId, key: tileKey("b", i), source: { file, format: "png" } }).catch((error) => ({ deny: String(error) }));
+        if (r.deny) $.ui.log(`proschi ui-check: blit refused: ${r.deny}`, { to: "debug" });
+      };
+      if (hovered >= 0) await blit(hovered, panel.tiles[hovered]?.file);
+      hovered = panel.tiles.findIndex((t) => t.control?.id === id);
+      if (hovered >= 0) await blit(hovered, panel.tiles[hovered].hoverFile);
+    }
+    return {};
+  });
+}
+
 // ../frontend/src/components/WhatIf/whatIf.ts
 var MULTIPLIERS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 5, 7.5, 10];
 var isActive = (w) => w.multiplier !== 1 || w.failed.length > 0 || w.saved !== void 0;
@@ -10617,6 +10706,7 @@ function register(on, options) {
   });
   on("command.run", { command: "proschi" }, async ($, e) => {
     const [verb, ...rest] = e.args.trim().split(/\s+/);
+    if (verb === "ui-check") return openUiCheck($);
     const words = [];
     const view = {};
     for (let i = 0; i < rest.length; i++) {
@@ -10643,6 +10733,7 @@ function register(on, options) {
     watch($, file);
     return { text: `Showing ${file} in the Proschi pane.` };
   });
+  registerUiCheck(on);
   on("ui.close", { id: PANE }, async ($, e, next) => {
     stop(PANE_VIEW);
     stop(PANE);
@@ -10819,8 +10910,8 @@ var PLAY = " \u25B6 Play ";
 var BARS_WIDTH = 80;
 async function documentOf($, viewId, written, file, whatIf) {
   const player = normal(await read2($, memberOf(players, { requestId: viewId })));
-  const shown = { ...player.expanded.length ? { expanded: player.expanded } : {}, ...player.focus !== void 0 ? { focus: player.focus } : {} };
-  const source = shown.expanded || shown.focus !== void 0 ? { ...written, view: shown } : written;
+  const shown2 = { ...player.expanded.length ? { expanded: player.expanded } : {}, ...player.focus !== void 0 ? { focus: player.focus } : {} };
+  const source = shown2.expanded || shown2.focus !== void 0 ? { ...written, view: shown2 } : written;
   const key = keyOf(source);
   let doc = documents.get(key);
   if (!doc) {
@@ -10914,8 +11005,8 @@ async function pictureOf($, view, request2, alt, step, fromStart) {
   if (!out || "error" in out) return { hint, ...asking ? { probe: asking } : {} };
   const frames = request2.options.play ? out.frames : void 0;
   if (request2.options.play && !frames?.length) return { hint, ...asking ? { probe: asking } : {} };
-  const shown = frames?.[step];
-  const file = shown?.length ? shown[fromStart ? 0 : shown.length - 1] : out.base;
+  const shown2 = frames?.[step];
+  const file = shown2?.length ? shown2[fromStart ? 0 : shown2.length - 1] : out.base;
   const size = imageSize(out, view.d.columns, view.d.rows ?? INLINE_ROWS);
   const key = `img-${view.viewId}`;
   images.set(view.viewId, { key, ...frames ? { frames } : {}, ...probed2.form ? { form: probed2.form } : {} });
@@ -11018,16 +11109,16 @@ var chip = (ui, text, background) => /* @__PURE__ */ h(ui.Text, { backgroundColo
 var BODY_LINES = 8;
 function bodyRows(ui, label, text, format) {
   const lines = text.replace(/\n+$/, "").split("\n");
-  const shown = lines.slice(0, BODY_LINES);
-  const more = lines.length - shown.length;
+  const shown2 = lines.slice(0, BODY_LINES);
+  const more = lines.length - shown2.length;
   const language = LANGUAGE[format];
   return {
     nodes: [
       label,
-      /* @__PURE__ */ h(ui.Code, { source: shown.join("\n"), wrap: "truncate-end", ...language ? { language } : {} }),
+      /* @__PURE__ */ h(ui.Code, { source: shown2.join("\n"), wrap: "truncate-end", ...language ? { language } : {} }),
       ...more > 0 ? [/* @__PURE__ */ h(ui.Text, { dimColor: true }, "\u2026 ", more, " more line", more === 1 ? "" : "s")] : []
     ],
-    height: 1 + shown.length + (more > 0 ? 1 : 0)
+    height: 1 + shown2.length + (more > 0 ? 1 : 0)
   };
 }
 function stepRows(ui, view, steps, at) {
