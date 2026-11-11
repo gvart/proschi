@@ -304,6 +304,27 @@ editor (docs/design/terminal-mod.md D3, D8, D10, D11).
   repeats the scenario's name; the tab bar's Open in Proschi on the tabs'
   centre line; the Sequence picker capped so its row never wraps.
 
+## Round 6: three tabs
+
+The HLD tab already has each use case's sequence and the requirements and
+tests with their measured values and fixes, so the pane keeps Diagram ·
+Analysis · HLD (docs/design/terminal-mod.md D3, D5, D9).
+
+- [x] R1. **Sequence and Tests tabs gone**, in pictures and in text, with
+  what only they used: `views/sequenceTab.tsx`, the text sequence renderer
+  (`views/sequence.ts`), `testLines` and `passingLines`, the page float (the
+  Sequence picker), `paneStep`, `tabLink`, the `panePassing` state, the
+  `sequence` panel, `testsPage`, the `check` block and the sequence SVG's
+  lit steps (`current`). Tabs are `1` to `3`; a stored `sequence` or `tests`
+  tab opens on HLD, `whatif` on Analysis as before.
+- [x] R2. **The failing count on HLD**: the tab bar's badge (`HLD ✗2`) moved
+  from Tests.
+- [x] R3. **Details opens HLD at its Requirements.** A failing verdict's
+  Details under a drawing opens the pane on HLD and scrolls to the
+  Requirements heading: in pictures through the contents' `scrollToAnchor`,
+  held (`scrollToAnchorOnceShown`) until the page that has the anchor is
+  drawn; in text to the Requirements section's keyed Box.
+
 ## Risks
 
 - Cell aspect is assumed 1:2; tiles must stay seamless under the terminal's

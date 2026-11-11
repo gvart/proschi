@@ -53,15 +53,14 @@ names the scale and the p99 path.
 
 ## D3. A tabbed pane
 
-The pane has a tab bar: Diagram · Analysis · Sequence · HLD · Tests, picked
-with `1` to `5` while the pane holds the keys (hotkeys stay in the pane, as
-every other key does: the transcript's drawings share no keyboard). At its
-right end a quiet **↗ Open in Proschi** opens the same view in the editor:
-the Sequence tab at its scenario's first step (the share link's playback
-target), the others at the document, as the share link has no view. The tab
-is stored in `$.state` (`paneTab`) and read through `tabOf`: none is the
-Diagram, and an older version's What-if tab is Analysis (D8). Sequence and
-HLD came second (D9, D10). View code lives in `plugin/src/views/` so
+The pane has a tab bar: Diagram · Analysis · HLD, picked with `1` to `3`
+while the pane holds the keys (hotkeys stay in the pane, as every other key
+does: the transcript's drawings share no keyboard). HLD carries the failing
+check count as a badge (`HLD ✗2`). At its right end a quiet **↗ Open in
+Proschi** opens the design in the editor (the share link has no view). The
+tab is stored in `$.state` (`paneTab`) and read through `tabOf`: none is the
+Diagram, an older version's What-if tab is Analysis (D8), and its Sequence
+and Tests tabs are HLD (D9). View code lives in `plugin/src/views/` so
 `register.tsx` does not keep growing.
 
 The mod is a taste of the editor, not a copy of it: each tab shows a
@@ -70,24 +69,24 @@ rest.
 
 ## D4. Views as rows of styled text
 
-The Analysis and Tests tabs are built as pure functions
+The Analysis tab is built as pure functions
 (`plugin/src/views/lines.ts`) returning rows of styled segments, rendered by
 `views/render.tsx`. Tests and text dumps read them without a surface. The
 numbers and words come from the same functions the editor uses
 (`frontend/src/sim`: `costBreakdown`, `busiestOf`, the formatters); nothing
 is recomputed. Tables fit the pane's width by dropping their least needed
 columns first (cost, availability, latency, the p95), then cutting the first
-column; paragraphs wrap. The Tests tab reads as the editor's Results: the
-summary, what fails open with its hints, and what passes folded under a
-**▸ N passing** toggle (`a`, stored in `$.state` as `panePassing`).
+column; paragraphs wrap.
 
 ## D5. The transcript stays compact
 
 A drawing in the transcript adds at most: the first two global warnings
 (then a count pointing at the pane), the legend row, and a one-line verdict
 (`✓ All 3 checks pass`, `✗ 1 of 3 checks fail: <the first>`) with
-**⛶ Details**, which opens the pane on its Tests tab. Everything else is in
-the pane.
+**⛶ Details**, which opens the pane on its HLD tab scrolled to its
+Requirements section (in pictures through the contents' `scrollToAnchor`,
+once the page is drawn; in text to the section's keyed Box). Everything else
+is in the pane.
 
 ## D6. Warnings: system notes and the rest
 
@@ -114,19 +113,17 @@ Round 5 (a What-if tab, a multiplier, node toggles, a banner and a sweep);
 that is the editor's work, so the pane keeps no what-if state and every tab
 draws the design as written.
 
-## D9. A sequence diagram in text cells
+## D9. Three tabs: the sequences and the checks are the HLD's
 
-The Sequence tab draws `buildSequence` of the player's scenario
-(`plugin/src/views/sequence.ts`): a box and lifeline per participant, a
-numbered badge per request, synchronous calls solid `─▶`, async dashed
-`╌▷`, replies dotted `┄◁` and dim, failed calls `✕` and error replies red,
-`par` frames with `and` rules, and an `alt` frame naming the scenario when
-its use case has several or a condition. Columns share the pane's width up to
-28 cells each; a long name takes two rows; at least 9 cells a column, so a
-pane too narrow says so and the right side is cut. The tab is a still with
-a scenario picker and no step keys of its own: playback is the Diagram
-tab's, and while its player is in that scenario the Sequence tab lights the
-same step, the current request in pink with a yellow badge.
+Until Round 6 the pane had a Sequence tab (the picked scenario as a sequence
+diagram, its step lit while the Diagram tab played it) and a Tests tab (the
+editor's Results). The HLD tab already draws each use case's sequence as a
+figure and puts the requirements and tests, measured with their fixes, in
+its Requirements section, with how the checks stand on top. So the pane
+keeps three tabs, and the Sequence and Tests tabs went with everything only
+they used: the text sequence renderer, the scenario picker floating over a
+page, the `sequence` panel, the sequence SVG's lit steps, the `check` block
+and the `panePassing` state. Playing a scenario is the Diagram tab's.
 
 ## D10. The HLD as the editor's HLD view
 
@@ -143,7 +140,10 @@ section: the helper answers each anchored heading's row (`anchors`), and
 `scrollToAnchor` moves the pane's window there. In text, the tab draws
 `toMarkdown(hld(…))` with the `Markdown` element, its sections numbered
 under a line of contents and each Mermaid block replaced by a line naming
-the tab that draws it. The HLD code adds about 65 KB to the hooks module.
+what draws it (the Diagram tab, its player); from the Requirements heading on
+it is a second `Markdown` in a Box keyed `hld-requirements`, what a failing
+verdict's Details scrolls to. The HLD code adds about 65 KB to the hooks
+module.
 
 ## D11. Pictures where the terminal shows them
 

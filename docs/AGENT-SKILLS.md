@@ -1,5 +1,5 @@
 ---
-updated: 2026-11-11
+updated: 2026-11-12
 ---
 
 # Agent skills
@@ -97,7 +97,7 @@ edge takes the colour of the node it feeds and its label the requests it
 carries and the latency they add, and the p99 path of the busiest use case is
 drawn heavy. The simulation's warnings sit above the drawing, and with
 `requirements` or `test` blocks one line under it says whether they pass;
-its **⛶ Details** opens them in the pane.
+its **⛶ Details** opens the pane's HLD at its requirements.
 
 Under the drawing, a use case picker opens a player like the editor's.
 Buttons copy the source or a share link, open the diagram in Proschi, or,
@@ -105,23 +105,20 @@ with **⛶ Focus**, move it into a pane you drive from the keyboard. The pane
 has tabs: **Diagram**, **Analysis** (cost, the busiest node, load, latency,
 availability and cost per node, percentiles per use case, queues, the cost
 breakdown, single points of failure and the document's
-[`whatif` blocks](TESTS.md#what-ifs) with their results), **Sequence**,
-**HLD** and **Tests** (each requirement and test, failing ones first with
-their hints, the passing ones folded under **N passing**). **↗ Open in
-Proschi** on the tab bar opens the same design in the editor, where you can
-also explore what-ifs live.
+[`whatif` blocks](TESTS.md#what-ifs) with their results) and **HLD**.
+**↗ Open in Proschi** on the tab bar opens the same design in the editor,
+where you can also explore what-ifs live.
 
-- **Sequence** draws the picked scenario as a sequence diagram, a still
-  with a scenario picker. While the Diagram tab's player plays that
-  scenario, its current step is lit here too.
 - **HLD** shows the [HLD document](EDITORS.md#hld-documents) with numbered
   sections, its tables and the architecture and sequence diagrams; its
   contents jump to a section, and **⧉ Copy HLD markdown** copies it with its
-  Mermaid diagrams.
+  Mermaid diagrams. Its Requirements section has each requirement and test,
+  measured, with a fix for those that fail, and the tab shows how many
+  fail.
 
 | Key | Does |
 |---|---|
-| `1`–`5` | Switch tabs |
+| `1`–`3` | Switch tabs |
 | `p` | Play or pause |
 | `n` / `b` | Next or previous step |
 | `r` / `e` | Restart, or jump to the end |
