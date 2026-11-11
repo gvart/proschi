@@ -95,7 +95,8 @@ function tabs(S: Surface, p: TabBarPanel): number {
   // The editor, at the row's right end: its label shortened, then the icon alone, where the tabs leave less room.
   if (p.open) {
     const fits = [p.open, { ...p.open, label: 'Proschi' }, { ...p.open, label: undefined }].find((c) => col + 1 + buttonColumns(c) <= S.columns - 1);
-    if (fits) placeButton(S, fits, S.columns - 1 - buttonColumns(fits), 0);
+    // A px up, on the tabs' own centre line (H / 2 - 1).
+    if (fits) placeButton(S, fits, S.columns - 1 - buttonColumns(fits), -1);
   }
   return H;
 }

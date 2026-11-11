@@ -9546,6 +9546,7 @@ function hldSection(doc, s) {
   switch (s.kind) {
     case "overview":
       if (s.summary) out.push({ type: "paragraph", text: s.summary });
+      if (s.teams.length > 1) out.push({ type: "paragraph", small: true, text: [{ text: "Teams  ", tone: "muted" }, { text: s.teams.join(", ") }] });
       out.push({
         type: "stats",
         items: [
@@ -9555,13 +9556,9 @@ function hldSection(doc, s) {
           ...doc.sections.flatMap((c) => c.kind === "capacity" && c.totalCostUsd !== void 0 ? [{ label: "Cost / month", value: formatUsd2(c.totalCostUsd) }] : [])
         ]
       });
-      if (s.teams.length > 1) out.push({ type: "paragraph", small: true, text: [{ text: "Teams  ", tone: "muted" }, { text: s.teams.join(", ") }] });
-      if (s.components) out.push({ type: "figure", of: { architecture: true }, maxRows: 26 });
+      if (s.components) out.push({ type: "figure", of: { architecture: true }, maxRows: 22 });
       break;
     case "requirements": {
-      const failing = [...s.nonFunctional, ...s.flowTests].filter((r) => r.status === "fail").length;
-      const checked = [...s.nonFunctional, ...s.flowTests].filter((r) => r.status !== "unchecked").length;
-      if (checked) out.push(failing ? { type: "callout", tone: "bad", text: [{ text: `${failing} of ${checked} checks fail`, bold: true }, { text: ": the measured values and their fixes are below." }] } : { type: "callout", tone: "good", text: [{ text: `All ${checked} checks pass`, bold: true }, { text: " against the simulation." }] });
       if (s.functional.length) {
         out.push(h3("Functional"));
         out.push({ type: "list", items: s.functional.map((f) => [{ text: f.name, bold: true }, ...f.description ? [{ text: ` \u2014 ${f.description}`, tone: "muted" }] : []]) });
@@ -9650,7 +9647,7 @@ function hldSection(doc, s) {
           }))
         });
         const first = u.scenarios.find((sc) => sc.steps > 0);
-        if (first) out.push({ type: "figure", of: { useCase: u.useCaseId, scenario: first.id }, caption: u.scenarios.length > 1 ? `${first.name}; the Sequence tab draws the others` : void 0, maxRows: 34 });
+        if (first) out.push({ type: "figure", of: { useCase: u.useCaseId, scenario: first.id }, caption: u.scenarios.length > 1 ? `The Sequence tab draws the other ${u.scenarios.length - 1 === 1 ? "scenario" : `${u.scenarios.length - 1} scenarios`}.` : void 0, maxRows: 24 });
       }
       break;
     case "decisions":
@@ -9668,6 +9665,10 @@ function hldSection(doc, s) {
 }
 function hldPage(doc, source) {
   const blocks = [{ type: "heading", level: 1, text: doc.title }, { type: "paragraph", small: true, text: "High-level design, generated from the model and its simulation" }];
+  const checks = doc.sections.flatMap((s) => s.kind === "requirements" ? [...s.nonFunctional, ...s.flowTests] : []);
+  const failing = checks.filter((r) => r.status === "fail").length;
+  const checked = checks.filter((r) => r.status !== "unchecked").length;
+  if (checked) blocks.push(failing ? { type: "callout", tone: "bad", text: [{ text: `${failing} of ${checked} checks fail`, bold: true }, { text: `: section ${doc.sections.findIndex((s) => s.kind === "requirements") + 1}, Requirements, has the measured values and their fixes.` }] } : { type: "callout", tone: "good", text: [{ text: `All ${checked} checks pass`, bold: true }, { text: " against the simulation." }] });
   if (!doc.checked && doc.sections.some((s) => s.kind === "requirements" && (s.nonFunctional.length || s.flowTests.length))) blocks.push({ type: "callout", tone: "warn", text: "The simulation did not run, so requirements and tests are listed but not checked." });
   blocks.push({ type: "controls", items: [{ control: { id: "hld-copy", icon: "copy", label: "Copy HLD markdown", hotkey: "c", variant: "primary" } }, { text: [{ text: "with Mermaid diagrams, for a README or a wiki", tone: "muted" }] }] });
   if (doc.sections.length === 0) return { kind: "page", blocks: [...blocks, { type: "paragraph", text: "Add components and use cases to generate a design document." }] };
