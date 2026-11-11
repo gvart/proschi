@@ -29,16 +29,26 @@ text cells** (today's drawing). Never a text preview followed by a picture.
 
 ## Work items
 
-- [ ] 1. **UI kit** in the raster helper (`tooling/src/terminal/rasterHost.ts`,
+- [x] 1. **UI kit** in the raster helper (`tooling/src/terminal/rasterHost.ts`,
   new `tooling/src/render/ui/*`): SVG components in the canvas's style
   (light/dark tokens, Inter / JetBrains Mono): button (rest/hover/pressed,
   primary), tab bar, panel frame, dropdown menu, table, bar chart, step card,
   Markdown→SVG, sequence (reuse `render/sequence.ts`). Output contract: per
   panel, tiles cut on a cell grid with their cell boxes and control ids.
   verify: PNGs reviewed against the web editor. depends on: —
-- [ ] 2. **Latency**: measure press→redraw with one `node raster.cjs` per
+  Done: types in `tooling/src/render/ui/contract.ts` (PanelsInput →
+  PanelsOutput: per panel `{ rows, tiles[{ col, row, columns, rows, file,
+  control?, hoverFile?, pressedFile? }] }`, strips row-major); builders for
+  the simulation's tabs in `render/ui/data.ts`. A cell is 8×16 CSS px drawn
+  at 16×32 PNG px; tiles reassemble pixel-identical to a whole render.
+- [x] 2. **Latency**: measure press→redraw with one `node raster.cjs` per
   request; if > ~250 ms, add a session-long worker (`$.process.spawn`, file
   request queue since stdin is one-shot). verify: ms numbers. depends on: 1
+  Done: one shot (M-series Mac, 120 columns, dark) a step panel 327 ms, the
+  tab bar 311 ms, Analysis 419 ms (≈145 ms of it Node start; a repeat
+  answered from the manifest 145 to 217 ms). So `raster.cjs --serve <dir>`:
+  ready in ≈145 ms, then `<id>.req.json` → a stdout line `{id, output}` in
+  ≈50 ms median for each of the three (`serve` in rasterHost.ts).
 - [ ] 3. **Mod wiring** (`plugin/src/**`): picture mode draws every view from
   tiles; Buttons wrap tiles; Select → rendered menu; loading placeholder with
   reserved rows + probe; no Raster in picture mode. verify: plugin tests for
