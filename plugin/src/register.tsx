@@ -13,12 +13,12 @@ import { idList, systemAt, viewError, type SystemsView } from '../../tooling/src
 import type { DiagramScenario, DiagramUseCase, FlowStep } from '../../frontend/src/dsl/types'
 import { groupByEndpoint } from '../../frontend/src/playground/useCaseGroups'
 import type { PaneSource, PaneTab, Player, WhatIfState } from '../types'
-import { graphicsMode, imageSize, maxWidthPx, probe, probeOf, rasterOf, sourceOf, themeOf, TMUX_HINT, type GraphicsMode, type RasterRequest } from './graphics'
+import { graphicsMode, imageSize, maxWidthPx, probe, probeKey, probeOf, probeSource, rasterOf, sourceOf, themeOf, TMUX_HINT, type GraphicsMode, type RasterRequest } from './graphics'
 import { hldTab } from './views/hld'
 import { legendLine, verdictLine } from './views/lines'
 import { lineView, type Ui } from './views/render'
 import { sequenceTab } from './views/sequenceTab'
-import { tabBar, tabBody, tabOf } from './views/tabs'
+import { tabBar, tabBody, tabOf, testsTab } from './views/tabs'
 import { liveOf, NO_WHATIF, optionsOf, whatIfOf } from './views/whatif'
 import { whatIfBanner, whatIfTab } from './views/whatifTab'
 
@@ -55,6 +55,7 @@ const paneSource = atom({ plugin: 'proschi', key: 'paneSource' } as const, NO_SO
 const players = atom({ plugin: 'proschi', key: 'player' } as const, IDLE)
 const paneTab = atom({ plugin: 'proschi', key: 'paneTab' } as const, 'diagram' as PaneTab)
 const paneWhatIf = atom({ plugin: 'proschi', key: 'paneWhatIf' } as const, NO_WHATIF as WhatIfState)
+const panePassing = atom({ plugin: 'proschi', key: 'panePassing' } as const, false)
 
 /** The pane's keys, as its Buttons' hotkeys name them; the system keys where the diagram has systems. */
 const PANE_KEYS = '1-6 tabs · p play · n/b step · r restart · e end · x explorer · d diagram · esc back to the prompt'
@@ -206,6 +207,7 @@ export function register(on: On, options: PluginOptions): void {
         tab === 'whatif' ? whatIfTab({ ui, base, key, now: doc, w: whatIf, set: setWhatIf, columns })
         : tab === 'sequence' ? sequenceTab({ ui, diagram: doc.diagram, player, columns, pick: value => void paneStep($, doc, p => ({ ...p, pick: value, step: 0, isPlaying: false })), go: (step, isPlaying) => void paneStep($, doc, p => ({ ...p, mode: 'play', step, isPlaying })), pause: () => void paneStep($, doc, p => ({ ...p, isPlaying: false })) })
         : tab === 'hld' ? hldTab(ui, base, key, (surface, text) => void copy($, surface, text, 'the HLD markdown'))
+        : tab === 'tests' ? testsTab(ui, doc, columns, (await read($, panePassing)) === true, () => void update($, panePassing, open => !open))
         : tabBody(ui, tab, doc, columns)
       return (
         <ui.Box flexDirection="column">
@@ -550,6 +552,7 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
         <ui.Button key={`lnk-${viewId}`} label={roomy ? '⧉ Copy share link' : '⧉ Link'} onPress={press => void copy($, press.surface, link, 'the share link')} />
         <ui.Button key={`open-${viewId}`} label={roomy ? '↗ Open in Proschi' : '↗ Open'} variant="primary" onPress={press => void openLink($, press.surface, link)} />
         {!view.inPane && <ui.Button key={`focus-${viewId}`} label="⛶ Focus" onPress={() => focus($, view, title, what)} />}
+        {picture.probe}
       </ui.Box>
     </ui.Box>
   ), systems: hasSystems }
@@ -561,28 +564,37 @@ const images = new Map<string, { key: string; frames?: string[][]; form?: 'file'
 /**
  * The diagram as an Image where the terminal shows pictures (src/graphics.ts,
  * D11), else none and the Raster stands: with graphics off, where the
- * terminal was found to show none (auto), while the PNGs are drawn, or when
- * the helper fails. Playing, the step's first frame while it animates from
- * the start, else its last. With `hint`, tmux holds pictures back.
+ * terminal was found to show none (auto) or until it is found to show them,
+ * while the PNGs are drawn, or when the helper fails. Playing, the step's
+ * first frame while it animates from the start, else its last. With `hint`,
+ * tmux holds pictures back. Until the terminal is asked, `probe` is the
+ * invisible Image the asking swaps.
  */
-async function pictureOf($: EngineInterface, view: View, request: RasterRequest, alt: string, step: number, fromStart: boolean): Promise<{ image?: RenderElement; hint?: boolean }> {
+async function pictureOf($: EngineInterface, view: View, request: RasterRequest, alt: string, step: number, fromStart: boolean): Promise<{ image?: RenderElement; hint?: boolean; probe?: RenderElement }> {
   const { ui } = view.d
   images.delete(view.viewId)
   if (graphics === 'off') return {}
   const probed = await probeOf($)
   const hint = probed.status === 'tmux'
   if (graphics === 'auto' && (probed.status === 'no' || probed.status === 'tmux')) return { hint }
+  // Drawn while the terminal is asked, so the picture is ready for a yes.
   const out = rasterOf($, request)
-  if (!out || 'error' in out) return { hint }
+  let asking: RenderElement | undefined
+  if (probed.status === 'unknown') {
+    const key = probeKey(view.viewId)
+    probe($, view.d.requestId, key)
+    asking = <ui.Image key={key} source={probeSource($)} columns={1} rows={1} alt=" " />
+    if (graphics === 'auto') return { probe: asking }
+  }
+  if (!out || 'error' in out) return { hint, ...(asking ? { probe: asking } : {}) }
   const frames = request.options.play ? out.frames : undefined
-  if (request.options.play && !frames?.length) return { hint }
+  if (request.options.play && !frames?.length) return { hint, ...(asking ? { probe: asking } : {}) }
   const shown = frames?.[step]
   const file = shown?.length ? shown[fromStart ? 0 : shown.length - 1]! : out.base
   const size = imageSize(out, view.d.columns, view.d.rows ?? INLINE_ROWS)
   const key = `img-${view.viewId}`
   images.set(view.viewId, { key, ...(frames ? { frames } : {}), ...(probed.form ? { form: probed.form } : {}) })
-  if (probed.status === 'unknown') probe($, view.d.requestId, key, file)
-  return { hint, image: <ui.Image key={key} source={await sourceOf($, file, probed.form)} columns={size.columns} rows={size.rows} alt={alt} /> }
+  return { hint, ...(asking ? { probe: asking } : {}), image: <ui.Image key={key} source={await sourceOf($, file, probed.form)} columns={size.columns} rows={size.rows} alt={alt} /> }
 }
 
 /** A system the keys can act on: a collapsed box or an expanded frame, by its id in the scene and its path from the root document. */

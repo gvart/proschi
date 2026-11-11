@@ -9,9 +9,10 @@ import type { GraphicsProbe } from '../types'
  * hooks/raster.cjs draws, shown with the terminal's `Image` where it can show
  * them, the text-cell Raster where it cannot. The `graphics` setting picks:
  * `off` always draws text, `on` always a picture (its alt where the terminal
- * has none), `auto` asks the terminal once a session by swapping the first
- * picture drawn (`$.ui.blit` refuses where the Image draws its alt) and
- * remembers the answer in `$.state`.
+ * has none), `auto` asks the terminal once a session and remembers the
+ * answer in `$.state`: it swaps a 1×1 transparent Image whose alt is a space
+ * (`$.ui.blit` refuses where an Image draws its alt), so nothing shows while
+ * it asks, and the text cells stand until the answer is yes.
  */
 
 export type GraphicsMode = 'auto' | 'on' | 'off'
@@ -28,6 +29,8 @@ export const TMUX_HINT = 'tmux: set allow-passthrough on and focus-events on for
 const PX_PER_COLUMN = 16
 /** The `{ png }` form's limit, decoded. */
 const MAX_PNG_BYTES = 2 * 1024 * 1024
+/** The probe's picture: a 1×1 transparent PNG, as hooks/probe.png holds it for the swap by file name. */
+const PROBE_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNgAAIAAAUAAen63NgAAAAASUVORK5CYII='
 /** Probe attempts, one every PROBE_MS: the Image may not be mounted at the first. */
 const PROBE_TRIES = 6
 const PROBE_MS = 150
@@ -62,6 +65,8 @@ const bytes = new Map<string, string>()
 let cache: string | undefined
 let theme: 'light' | 'dark' | undefined
 let probing = false
+/** Whether this session's first call asked the helper to prune the cache (once a session is enough). */
+let pruned = false
 
 /** Where the PNGs go: the system's temporary folder (the API names no plugin data folder). Kept once read, never a promise of another dispatch's. */
 async function cacheDir($: EngineInterface): Promise<string> {
@@ -88,7 +93,8 @@ export function rasterOf($: EngineInterface, request: RasterRequest): RasterOutp
   void (async () => {
     const outDir = await cacheDir($)
     const { source, path, imports, view } = request.source
-    const stdin = JSON.stringify({ source, path, imports, view, outDir, options: request.options })
+    const stdin = JSON.stringify({ source, path, imports, view, outDir, options: request.options, ...(pruned ? {} : { prune: true }) })
+    pruned = true
     const answer = await $.process.run(['node', `${$.plugin.root}/hooks/raster.cjs`], { stdin, timeoutMs: 60_000 }).then(
       ({ exitCode, stdout, stderr }) => {
         if (exitCode !== 0) return { error: stderr.trim() || `raster exited with ${exitCode}` }
@@ -147,13 +153,20 @@ export async function probeOf($: EngineInterface): Promise<GraphicsProbe> {
   return p && (p.status === 'yes' || p.status === 'no' || p.status === 'tmux') ? p : UNKNOWN
 }
 
+/** The probe's Image of a drawing: a transparent cell, its alt a space, so a terminal without pictures shows nothing either. */
+export const probeKey = (viewId: string) => `probe-${viewId}`
+export function probeSource($: EngineInterface): ImageSource {
+  return { file: `${$.plugin.root}/hooks/probe.png`, format: 'png' }
+}
+
 /**
- * Asks the terminal whether it shows pictures: swaps the Image just drawn to
- * the same PNG. Taken, it does (by name, else as bytes); refused for tmux's
+ * Asks the terminal whether it shows pictures: swaps the probe Image (a
+ * transparent cell drawn beside the drawing's buttons, `probeKey`) to the
+ * same picture. Taken, it does (by name, else as bytes); refused for tmux's
  * passthrough, tmux holds them back; refused every try, it draws the alt.
  * The answer is stored and every drawing drawn again by it.
  */
-export function probe($: EngineInterface, requestId: string, key: string, file: string): void {
+export function probe($: EngineInterface, requestId: string, key: string): void {
   if (probing) return
   probing = true
   let tries = 0
@@ -166,14 +179,12 @@ export function probe($: EngineInterface, requestId: string, key: string, file: 
   }
   const timer = $.clock.every(PROBE_MS, async () => {
     if (tries++ >= PROBE_TRIES) return settle({ status: 'no' })
-    const byName = await $.ui.blit({ requestId, key, source: { file, format: 'png' } }).catch((error: unknown) => ({ deny: String(error), fix: undefined }))
+    const byName = await $.ui.blit({ requestId, key, source: probeSource($) }).catch((error: unknown) => ({ deny: String(error), fix: undefined }))
     if (!byName.deny) return settle({ status: 'yes', form: 'file' })
     if (byName.fix === 'tmux-passthrough') return settle({ status: 'tmux' })
     // Nothing draws (a -p run): nothing to learn.
     if (/no-surface/.test(byName.deny)) return settle(undefined)
-    const png = await pngOf($, file)
-    if (!png) return
-    const asBytes = await $.ui.blit({ requestId, key, source: { png } }).catch((error: unknown) => ({ deny: String(error), fix: undefined }))
+    const asBytes = await $.ui.blit({ requestId, key, source: { png: PROBE_PNG } }).catch((error: unknown) => ({ deny: String(error), fix: undefined }))
     if (!asBytes.deny) return settle({ status: 'yes', form: 'png' })
     if (asBytes.fix === 'tmux-passthrough') return settle({ status: 'tmux' })
   })

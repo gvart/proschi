@@ -16,7 +16,8 @@ pixels: `plugin/hooks/raster.cjs`. How the hooks show them is D11 of
     tints and heat fills of that theme.
   - `overlay: { edges }` (with `nodes`): the editor's load overlay. Cards take
     the canvas heat scale (`utils/heat.ts`), edges are tinted by the load of
-    the node they feed, with a dark casing and an `rps · +latency` chip (label,
+    the node they feed (the text cells' edge load, `Document.edges`, so an
+    expanded or focused system's edges carry theirs too), with a dark casing and an `rps · +latency` chip (label,
     rps and latency one per line when the edge has a label), the p99 path is
     bold, and the bottleneck gets a dashed red ring and a `BOTTLENECK` tab.
   - `selected`: an accent ring around a node or expanded system.
@@ -57,6 +58,7 @@ stdin, JSON:
   source: string; path?: string; imports?: Record<string, string>;
   view?: { expanded?: string[]; focus?: string };   // as layout.cjs takes
   outDir: string;                                   // a cache dir, e.g. `${data or tmp}/proschi-raster/<doc hash>`
+  prune?: boolean;                                  // first delete what in outDir went unused for 7 days
   options?: {
     theme?: 'light' | 'dark';                       // default 'light'
     scale?: number;                                 // PNG px per diagram px, default 2
@@ -94,39 +96,45 @@ are written once and files that exist are not drawn again. A manifest named by
 a hash of the input and of the helper's own bundle answers a repeated call
 without parsing or laying out (≈170 ms, mostly Node start-up). Files are
 written under a temporary name and renamed, so a reader never sees half a
-PNG. The helper never deletes; pruning `outDir` is up to the caller.
+PNG. A file used again has its time set to now; with `prune: true` (the
+hooks send it on a session's first call) the helper first deletes the files
+in `outDir` no call used for 7 days (`PRUNE_AFTER_MS`).
 
 ## Performance
 
 Per step the helper renders one still without packets, then each frame lays
 just its packets (a tiny SVG, composited in premultiplied RGBA) over a copy and
 encodes the PNG itself (unfiltered, zlib level 3; about 3× faster than resvg's
-encoder for files about a third larger). Measured on an M-series Mac, scale 2,
-dark theme, 8 frames per step, including Node start-up, ELK layout and the
-still:
+encoder for files about a third larger). Compression is most of a frame's
+time, so it runs on libuv's thread pool, up to four PNGs at once, while the
+next frames are drawn (the bytes are the same). Measured on an M-series Mac,
+scale 2, dark theme, 8 frames per step, including Node start-up, ELK layout
+and the still:
 
 | Diagram | PNG | Frames | Total |
 | --- | --- | --- | --- |
-| `url-shortener` example | 1192×1164 | 32 | 0.83 s |
-| `ecommerce` example (7 nodes) | 1752×1666 | 32 | 1.5 s |
-| `styled` example (12 nodes, 2 groups, legend) | 2502×2258 | 32 | 2.5 s |
+| `url-shortener` example (first use case) | 1192×1164 | 24 | 0.58 s |
+| `ecommerce` example (7 nodes) | 1752×1666 | 32 | 1.0 s |
+| `styled` example (12 nodes, 2 groups, legend) | 2502×2258 | 32 | 1.4 s |
 
 A full resvg render of the 1752×1666 frame takes ≈85 ms and a frame from the
 still ≈25 ms. `maxWidthPx` (or a lower `scale`) cuts both roughly in proportion
-to the pixel count; a terminal rarely shows more than ≈1600 px across.
+to the pixel count; a terminal rarely shows more than ≈1600 px across. The
+four encodes in flight hold their rows: the `styled` example peaks at about
+700 MB resident (470 MB encoding one at a time).
 
 ## Sizes
 
-`raster.cjs` 3.3 MB (it carries ELK, the parser, the simulation, react-dom's
-server renderer and the icon sets), `resvg.wasm` 2.5 MB, fonts 400 KB.
+`raster.cjs` 2.1 MB: ELK (1.4 MB), the parser, the simulation, react-dom's
+server renderer (its production build) and the icons the canvas maps
+(lucide-react's ES module build, so only those). `resvg.wasm` 2.5 MB, fonts
+400 KB.
 
 ## Known limits
 
 - resvg 2.6 panics on layers (nested `<svg>`, group opacity) reaching out of
   a cropped viewBox, which is why frames composite packets instead of
   rendering a window of the full drawing.
-- In a focused system view the overlay colours cards but not edges: the
-  edges' load comes from the root document's analysis.
 - The editor's flowing dashes once a packet arrives are left out; a still
   dashed line would read as a failed call.
 - Labels are fitted with the renderer's width estimate, not Inter's metrics.

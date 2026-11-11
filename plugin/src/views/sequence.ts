@@ -124,7 +124,9 @@ export function sequenceLines(seq: Sequence, width: number, current: readonly Di
     const to = x.get(m.to)!
     const on = m.kind === 'request' && now.has(m.step)
     const color = on ? PINK : m.error ? RED : undefined
-    const line: Style = { ...(color ? { color } : {}), ...(on ? { bold: true } : {}), ...(m.kind === 'response' && !color ? { dim: true } : {}) }
+    // The arrow takes the colour alone: a bold line glyph is drawn from another font in some terminals and pages, wider than its cell.
+    const arrow: Style = { ...(color ? { color } : {}), ...(m.kind === 'response' && !color ? { dim: true } : {}) }
+    const line: Style = { ...arrow, ...(on ? { bold: true } : {}) }
     // The label over the arrow: a badge with the request's number, then what it carries.
     const y = body()
     let at = Math.min(from, to) + 2
@@ -137,7 +139,7 @@ export function sequenceLines(seq: Sequence, width: number, current: readonly Di
 
     const a = body()
     if (from === to) {
-      g.text(a, from, '├─↺', line)
+      g.text(a, from, '├─↺', arrow)
       return
     }
     const right = to > from
@@ -145,13 +147,13 @@ export function sequenceLines(seq: Sequence, width: number, current: readonly Di
     const head = m.kind === 'response' || m.async ? (right ? '▷' : '◁') : right ? '▶' : '◀'
     const lo = Math.min(from, to) + 1
     const hi = Math.max(from, to) - 1
-    for (let i = lo; i <= hi; i++) g.put(a, i, fill, line)
+    for (let i = lo; i <= hi; i++) g.put(a, i, fill, arrow)
     g.put(a, from, right ? '├' : '┤', { dim: true })
     if (m.failed) {
       // ✕: the request never arrives.
       g.put(a, right ? hi : lo, '✕', { color: RED, bold: true })
       g.put(a, right ? hi - 1 : lo + 1, ' ')
-    } else g.put(a, right ? hi : lo, head, line)
+    } else g.put(a, right ? hi : lo, head, arrow)
   }
 
   for (const item of seq.items) {

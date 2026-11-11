@@ -77,8 +77,18 @@ if (hooks.includes('import(') || hooks.includes('elkjs')) throw new Error('plugi
 if (hooks.length > 1024 * 1024) throw new Error(`plugin/hooks/register.js is ${hooks.length} bytes, over the 1 MiB a hooks module may be`);
 await build({ ...common, entryPoints: ['src/terminal/layoutHost.ts'], outfile: '../plugin/hooks/layout.cjs', alias: { ...renderAlias, 'lz-string': './node_modules/lz-string' }, minify: true, legalComments: 'none' });
 // The raster helper: the architecture SVG as PNGs for terminal image protocols, with resvg's
-// wasm beside it (the fonts it draws with are committed in plugin/hooks/fonts).
-await build({ ...common, entryPoints: ['src/terminal/rasterHost.ts'], outfile: '../plugin/hooks/raster.cjs', alias: { ...renderAlias, 'lz-string': './node_modules/lz-string' }, minify: true, legalComments: 'none' });
+// wasm beside it (the fonts it draws with are committed in plugin/hooks/fonts). lucide-react's ES
+// module build, so only the icons the canvas maps are bundled rather than all of them (its CommonJS
+// build is one file), and React's production build alone, as react-dom/server otherwise carries both.
+await build({
+  ...common,
+  entryPoints: ['src/terminal/rasterHost.ts'],
+  outfile: '../plugin/hooks/raster.cjs',
+  alias: { ...renderAlias, 'lucide-react': './node_modules/lucide-react/dist/esm/lucide-react.mjs', 'lz-string': './node_modules/lz-string' },
+  define: { ...common.define, 'process.env.NODE_ENV': '"production"' },
+  minify: true,
+  legalComments: 'none',
+});
 copyFileSync('node_modules/@resvg/resvg-wasm/index_bg.wasm', '../plugin/hooks/resvg.wasm');
 
 // VS Code extension: its own client bundle (minified, as the preview carries the renderer),

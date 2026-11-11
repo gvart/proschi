@@ -25,18 +25,29 @@ the fallback where a terminal draws no images.
 With `traffic`, the drawing shows what the canvas's overlay shows
 (`frontend/src/sim/overlay.ts`, `components/Canvas/RoutedEdge.tsx`):
 
-- a card fills with its heat from 40% of capacity (pale), then yellow at
-  70%, pink at 90% and red at 100%, with dark text on the fill;
+- from 40% of capacity a card's border and load bar turn yellow, the
+  terminal's form of the canvas's faint yellow (a solid pale fill shouts on
+  a dark terminal); from 70% it fills yellow, then pink at 90% and red at
+  100%, with dark text on the fill. The legend shows 40% as a yellow line,
+  the rest as swatches;
 - the bottleneck (`NodeOverlay.bottleneck`) carries a red **BOTTLENECK** chip
   on its top border, the terminal's stand-in for the canvas's ring;
 - an edge takes the heat of the node it feeds (`edgeOverlays`), and its
-  label gains `rps · +latency`; one without a label gets the numbers alone;
+  label gains `rps · +latency`; one without a label gets the numbers alone.
+  An edge drawn into an expanded system is carried by the flow into the
+  system, as the scope that declares it simulates it (`flowEnds`,
+  `terminal/document.ts`), and the picture takes the same edge load;
 - the p99 path of the busiest use case is drawn heavy, in the ink colour
   unless its heat colours it.
 
-A chip goes on a straight run of its own edge where it covers no other
-line, card, frame or arrowhead; where no run has room, the edge keeps its
-plain label and the numbers are left to the Analysis tab. Playback hides
+A chip goes on or beside a straight run of its own edge where it covers no
+other line, card, frame or arrowhead. Short of room on one row, the label
+and the numbers take two rows, then the label is shortened, then the numbers
+go where they fit and the label where it was. A short run hemmed in by the
+cards it joins (a focused system's few-cell gaps) has no such room, so the
+same tries go two to five rows up or down from its middle, the first row clear
+of the cards. Only where the numbers fit nowhere does the edge keep its plain
+label, the numbers left to the Analysis tab. Playback hides
 the overlay, as the canvas fades it. A one-row legend under the drawing
 names the scale and the p99 path.
 
@@ -59,7 +70,9 @@ numbers and words come from the same functions the editor uses
 (`frontend/src/sim`: `costBreakdown`, `busiestOf`, the formatters); nothing
 is recomputed. Tables fit the pane's width by dropping their least needed
 columns first (cost, availability, latency, the p95), then cutting the first
-column; paragraphs wrap.
+column; paragraphs wrap. The Tests tab reads as the editor's Results: the
+summary, what fails open with its hints, and what passes folded under a
+**▸ N passing** toggle (`a`, stored in `$.state` as `panePassing`).
 
 ## D5. The transcript stays compact
 
@@ -136,17 +149,21 @@ text. The code is `plugin/src/graphics.ts`.
   never runs the helper. `on` always draws the Image, its `alt` where the
   terminal has no pictures.
 - **Probe.** The API says nothing up front about images, but `$.ui.blit` of
-  a keyed Image is refused while it draws its alt. So the first Image of a
-  session is swapped to the same PNG, by file name and then as `{ png }`
-  bytes (what iTerm2 and tmux need), a try every 150 ms, six tries (it may
-  not be mounted yet). The answer goes in `$.state` (`graphics`): `yes`
-  with the form that worked, `tmux` for a refusal with
-  `fix: 'tmux-passthrough'`, else `no`; every drawing is drawn again by it,
-  and none asks again that session. Under `auto`, `no` and `tmux` draw the
-  Raster, `tmux` with a one-line hint to turn passthrough and focus events on.
-- **No flicker where avoidable.** Until the helper answers (0.2 to 2.5 s),
-  the Raster is drawn; the Image replaces it on the redraw that follows. A
-  terminal without pictures sees the alt for under a second, once.
+  a keyed Image is refused while it draws its alt. So until the session
+  knows, each drawing carries a probe: a 1×1 Image of a transparent PNG
+  whose alt is a space (`hooks/probe.png`, keyed `probe-<view>`, at the end
+  of the buttons row), and the first is swapped to the same PNG, by file
+  name and then as `{ png }` bytes (what iTerm2 and tmux need), a try every
+  150 ms, six tries (it may not be mounted yet). The answer goes in
+  `$.state` (`graphics`): `yes` with the form that worked, `tmux` for a
+  refusal with `fix: 'tmux-passthrough'`, else `no`; every drawing is drawn
+  again by it, and none asks again that session. Under `auto`, `no` and
+  `tmux` draw the Raster, `tmux` with a one-line hint to turn passthrough
+  and focus events on.
+- **No flicker.** Under `auto` the Raster is drawn until the probe says yes
+  and the helper has answered (0.2 to 2.5 s, drawn while the probe asks);
+  the Image replaces it on the redraw that follows. A terminal without
+  pictures never sees an alt: the probe's is a blank cell.
 - **Size.** The helper is asked for at most 16 px a column of the room
   (`maxWidthPx`), about twice a cell's width. The Image is as wide as the
   PNG's `cellHint` at most the room, and as tall as its aspect ratio over
@@ -162,5 +179,6 @@ text. The code is `plugin/src/graphics.ts`.
   by file on its 50 ms tick when it changes; until the frames exist it
   keeps blitting cells into the Raster.
 - **Cache.** `$TMPDIR/proschi-raster` (the API names no plugin data folder),
-  read once through `$.env`. Files are content-hashed; nothing prunes them,
-  so the system's temporary-folder cleanup does.
+  read once through `$.env`. Files are content-hashed. The session's first
+  call asks the helper to `prune`: it deletes what no call used for a week
+  (a use sets a file's time to now), cheap and at most once a session.

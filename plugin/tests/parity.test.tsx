@@ -73,8 +73,15 @@ test('a failing check reads in one line, and Details opens the pane on its Tests
   expect(((await p.find({ key: 'tab-tests' })) as unknown as { props: { label: string; variant?: string; hotkey?: string } }).props).toMatchObject({ label: 'Tests ✗2', variant: 'primary', hotkey: '6' })
   expect(await texts(p, /^2 of 3 failing$/)).toBeDefined()
   expect(await texts(p, /^→ /)).toBeDefined()
-  expect(await texts(p, /^1 passing$/)).toBeDefined()
-  expect(await texts(p, /Orders are stored/)).toBeDefined()
+  // What fails comes first, open; what passes is folded under a toggle, as the editor's Results.
+  expect(await texts(p, /^✗ availability of every use case/)).toBeDefined()
+  expect(((await p.find({ key: 'tests-passing' })) as unknown as { props: { label: string; hotkey?: string } }).props).toMatchObject({ label: '▸ 1 passing', hotkey: 'a' })
+  expect(await texts(p, /Orders are stored/)).toBeUndefined()
+  await p.press({ key: 'tests-passing' })
+  expect(((await p.find({ key: 'tests-passing' })) as unknown as { props: { label: string } }).props.label).toBe('▾ 1 passing')
+  expect(await texts(p, /^✓ Orders are stored/)).toBeDefined()
+  await p.press({ key: 'tests-passing' })
+  expect(await texts(p, /Orders are stored/)).toBeUndefined()
   // No drawing on the Tests tab; the keys say how to change tabs.
   expect(await p.find({ type: 'Raster' })).toBeUndefined()
   expect(await texts(p, /^1-6 tabs · ↑↓ scroll/)).toBeDefined()

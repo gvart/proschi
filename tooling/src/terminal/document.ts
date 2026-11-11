@@ -73,7 +73,7 @@ export function loadDocument(input: Source, options?: AnalyzeOptions): Document 
   if (sim && analysis && top) for (const c of diagram.capacity ?? []) if (c.size && sim.nodes[c.node]) sim.nodes[c.node].size = c.size;
   const overlay = sim && Object.keys(sim.nodes).length ? sim.nodes : undefined;
   const shown = errors.length ? diagram : applyView(diagram, view);
-  const edges = sim && overlay ? edgeOverlays(shown.edges.map((e) => ({ id: e.id, source: e.source, target: e.target })), { nodes: sim.nodes, flows: sim.flows, ...(sim.critical ? { critical: sim.critical } : {}) }) : {};
+  const edges = sim && overlay ? edgeOverlays(shown.edges.map((e) => ({ id: e.id, ...flowEnds(e.source, e.target) })), { nodes: sim.nodes, flows: sim.flows, ...(sim.critical ? { critical: sim.critical } : {}) }) : {};
   const noted = new Set(sim?.notes.map((n) => n.text));
   return {
     diagram: shown,
@@ -89,6 +89,22 @@ export function loadDocument(input: Source, options?: AnalyzeOptions): Document 
     tests: analysis ? runTests(diagram, analysis, options) : [],
     link: (playback) => EDITOR + encodeShareHash(input.source, playback, imports),
   };
+}
+
+/**
+ * The ends of a drawn edge as the flows that carry it name them. A flow is
+ * simulated in the scope that declares its edge, where a system is one node:
+ * an edge drawn into an expanded system (`frontend -> orders.gateway`, from
+ * `frontend -> orders.api`) is carried by the flow `frontend -> orders`. So
+ * each end is cut to one level below the path the two ends share; an edge
+ * inside a system (`orders.gateway -> orders.api`) keeps its ends.
+ */
+export function flowEnds(source: string, target: string): { source: string; target: string } {
+  const a = source.split('.');
+  const b = target.split('.');
+  let shared = 0;
+  while (shared < a.length - 1 && shared < b.length - 1 && a[shared] === b[shared]) shared++;
+  return { source: a.slice(0, shared + 1).join('.'), target: b.slice(0, shared + 1).join('.') };
 }
 
 /** Import paths a document names that `imports` does not hold yet, resolved against `path`. */

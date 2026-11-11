@@ -11,6 +11,7 @@
  *   stdin  RasterInput as JSON:
  *     { source, path?, imports?, view?,            as layout.cjs (terminal/document.ts Source)
  *       outDir,                                    where the PNGs go (created if missing)
+ *       prune?: boolean,                           first delete what in outDir went unused for PRUNE_AFTER_MS
  *       options?: {
  *         theme?: 'light' | 'dark',                default 'light'
  *         scale?: number,                          PNG px per diagram px, default 2
@@ -33,15 +34,17 @@
  * that exist are not drawn again. A manifest named by a hash of the input
  * and of this helper itself answers a repeated call without laying out
  * anything. Files are written to a temporary name and renamed into place,
- * so a reader never sees half a PNG.
+ * so a reader never sees half a PNG. A file used again has its time set to
+ * now, so `prune` (the hooks ask once a session) deletes only what no call
+ * used for a week.
  */
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { deflateSync } from 'node:zlib';
+import { availableParallelism, cpus } from 'node:os';
+import { promisify } from 'node:util';
+import { deflate as deflateCallback } from 'node:zlib';
 import { initWasm, Resvg } from '@resvg/resvg-wasm';
-import { edgeOverlays, analysisOverlay } from '../../../frontend/src/sim/overlay';
-import { analyze } from '../../../frontend/src/sim';
 import { CANVAS_TOKENS } from '../../../frontend/src/utils/canvasColors';
 import { drawArchitecture, layoutArchitecture, type ArchitectureOptions } from '../render/architecture';
 import type { Theme } from '../render/svg';
@@ -62,6 +65,8 @@ export interface RasterOptions {
 
 export interface RasterInput extends Source {
   outDir: string;
+  /** Deletes the files in `outDir` no call used for PRUNE_AFTER_MS first: the cache's only cleanup but the system's. */
+  prune?: boolean;
   options?: RasterOptions;
 }
 
@@ -99,6 +104,39 @@ function engine(assets: RasterAssets): Promise<Uint8Array[]> {
   return ready;
 }
 
+/** How long a file in the cache lives unused. */
+export const PRUNE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Deletes the files in `dir` older than PRUNE_AFTER_MS (by their time, which a use sets to now); one that goes meanwhile is skipped. */
+export function prune(dir: string, now = Date.now()): number {
+  let gone = 0;
+  for (const name of readdirSync(dir)) {
+    const file = join(dir, name);
+    try {
+      const stat = statSync(file);
+      if (stat.isFile() && now - stat.mtimeMs > PRUNE_AFTER_MS) {
+        unlinkSync(file);
+        gone++;
+      }
+    } catch {
+      // Gone already, or another call's: nothing to do.
+    }
+  }
+  return gone;
+}
+
+/** Marks files as used now, so a prune keeps them. */
+function touch(files: string[]): void {
+  const now = new Date();
+  for (const f of files) {
+    try {
+      utimesSync(f, now, now);
+    } catch {
+      // Pruned by another call meanwhile: it is drawn again next time.
+    }
+  }
+}
+
 const hash = (text: string) => createHash('sha256').update(text).digest('hex').slice(0, 20);
 
 /** Writes `bytes` to `file` unless it is there already, through a temporary name. */
@@ -112,11 +150,16 @@ function put(file: string, bytes: Uint8Array | string): void {
 export async function rasterize(input: RasterInput, assets: RasterAssets): Promise<RasterOutput> {
   const options = input.options ?? {};
   mkdirSync(input.outDir, { recursive: true });
+  if (input.prune) prune(input.outDir);
   const { source, path, imports, view } = input;
   const manifest = join(input.outDir, `${hash(JSON.stringify([assets.build ?? '', source, path, imports, view, options]))}.json`);
   if (existsSync(manifest)) {
     const done = JSON.parse(readFileSync(manifest, 'utf8')) as RasterOutput;
-    if ([done.base, ...(done.frames ?? []).flat()].every((f) => existsSync(f))) return done;
+    const files = [done.base, ...(done.frames ?? []).flat()];
+    if (files.every((f) => existsSync(f))) {
+      touch([manifest, ...files]);
+      return done;
+    }
   }
 
   // Under a what-if, the document is analysed as the pane's What-if tab analyses it (plugin/src/views/whatif.ts optionsOf).
@@ -128,9 +171,8 @@ export async function rasterize(input: RasterInput, assets: RasterAssets): Promi
   if (options.selected !== undefined) draw.selected = options.selected;
   if (options.overlay && doc.overlay) {
     draw.nodes = doc.overlay;
-    // The edges' load is the root document's; inside a focused system only the cards carry it.
-    const edges = view?.focus === undefined ? edgeOverlays(doc.diagram.edges, analysisOverlay(doc.root, analyze(doc.root, analyzeOptions))) : {};
-    draw.overlay = { edges };
+    // The edges' load as the text cells draw it: the flows of the scope drawn, inside an expanded or focused system too.
+    draw.overlay = { edges: doc.edges ?? {} };
   }
   let steps;
   if (options.play) {
@@ -165,34 +207,42 @@ export async function rasterize(input: RasterInput, assets: RasterAssets): Promi
     return out;
   };
   let size: { width: number; height: number } | undefined;
-  const still = (svg: string): string => {
+  const writer = new Writer();
+  const still = async (svg: string): Promise<string> => {
     const file = fileOf(svg);
-    if (existsSync(file)) size ??= pngSize(file);
-    else {
+    if (existsSync(file)) {
+      size ??= pngSize(file);
+      touch([file]);
+    } else {
       const pixels = render(svg);
       size ??= pixels;
-      put(file, encodePng(pixels));
+      await writer.add(file, pixels);
     }
     return file;
   };
 
-  const baseFile = still(base);
-  const frames = steps?.map((_, index) => {
+  const baseFile = await still(base);
+  let frames: string[][] | undefined;
+  for (let index = 0; steps && index < steps.length; index++) {
     const count = Math.max(1, Math.round(options.play!.frames ?? DEFAULT_FRAMES));
-    const svgs = Array.from({ length: count }, (_, k) => drawArchitecture(laid, { ...draw, play: { steps: steps!, index, progress: count === 1 ? 100 : (k * 100) / (count - 1) } }));
+    const svgs = Array.from({ length: count }, (_, k) => drawArchitecture(laid, { ...draw, play: { steps, index, progress: count === 1 ? 100 : (k * 100) / (count - 1) } }));
     const files = svgs.map(fileOf);
-    if (files.every((f) => existsSync(f))) return files;
+    (frames ??= []).push(files);
+    if (files.every((f) => existsSync(f))) {
+      touch(files);
+      continue;
+    }
     // Within a step only the packets move, and they are drawn last: the step is drawn once
     // without them, and each frame lays just its packets over a copy of that.
     const behind = render(svgs[0].replace(PACKET, ''));
-    svgs.forEach((svg, k) => {
-      if (existsSync(files[k])) return;
+    for (const [k, svg] of svgs.entries()) {
+      if (existsSync(files[k])) continue;
       const frame = { ...behind, data: behind.data.slice() };
       for (const [packet, x, y] of svg.matchAll(PACKET)) over(frame, packetPixels(packet, Number(x), Number(y), zoom, frame));
-      put(files[k], encodePng(frame));
-    });
-    return files;
-  });
+      await writer.add(files[k], frame);
+    }
+  }
+  await writer.done();
   const cell = options.cellPx ?? DEFAULT_CELL;
   const { width, height } = size!;
   const out: RasterOutput = { width, height, base: baseFile, ...(frames ? { frames } : {}), cellHint: { columns: Math.ceil(width / cell.width), rows: Math.ceil(height / cell.height) } };
@@ -274,12 +324,15 @@ function chunk(type: string, data: Uint8Array): Buffer {
   return out;
 }
 
+const deflate = promisify(deflateCallback);
+
 /**
  * An RGBA PNG, unfiltered at zlib level 3: three times as fast as resvg's
  * own encoder for files a third larger, which is the better trade for frames
- * that go to a terminal right away.
+ * that go to a terminal right away. The rows are copied out at once, so the
+ * pixels can go; the compression runs on libuv's thread pool.
  */
-function encodePng({ width, height, data }: Pixels): Buffer {
+async function encodePng({ width, height, data }: Pixels): Promise<Buffer> {
   const stride = width * 4;
   const raw = Buffer.alloc((stride + 1) * height);
   for (let y = 0; y < height; y++) raw.set(data.subarray(y * stride, (y + 1) * stride), y * (stride + 1) + 1);
@@ -287,7 +340,32 @@ function encodePng({ width, height, data }: Pixels): Buffer {
   header.writeUInt32BE(width, 0);
   header.writeUInt32BE(height, 4);
   header.set([8, 6, 0, 0, 0], 8);
-  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', header), chunk('IDAT', deflateSync(raw, { level: 3 })), chunk('IEND', new Uint8Array(0))]);
+  const idat = await deflate(raw, { level: 3 });
+  return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), chunk('IHDR', header), chunk('IDAT', idat), chunk('IEND', new Uint8Array(0))]);
+}
+
+/** PNGs encoded at once, at most: the thread pool's four, or the cores where there are fewer. Each holds a frame's rows. */
+const ENCODERS = Math.max(1, Math.min(4, typeof availableParallelism === 'function' ? availableParallelism() : cpus().length));
+
+/**
+ * Encodes and writes PNGs while the next frames are drawn: `add` waits only
+ * while ENCODERS are busy, `done` for the last of them. Compression is
+ * most of a frame's time (zlib on 20 MB of rows), drawing the rest.
+ */
+class Writer {
+  private busy = new Set<Promise<void>>();
+
+  async add(file: string, pixels: Pixels): Promise<void> {
+    while (this.busy.size >= ENCODERS) await Promise.race(this.busy);
+    const job: Promise<void> = encodePng(pixels)
+      .then((png) => put(file, png))
+      .finally(() => this.busy.delete(job));
+    this.busy.add(job);
+  }
+
+  async done(): Promise<void> {
+    await Promise.all(this.busy);
+  }
 }
 
 async function main(): Promise<void> {
