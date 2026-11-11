@@ -13,15 +13,20 @@ import { idList, systemAt, viewError, type SystemsView } from '../../tooling/src
 import type { DiagramScenario, DiagramUseCase, FlowStep } from '../../frontend/src/dsl/types'
 import { groupByEndpoint } from '../../frontend/src/playground/useCaseGroups'
 import type { PaneSource, PaneTab, Player, WhatIfState } from '../types'
+import { analysisPage, hldPage, stepPanelOf, tabBarPanel, testsPage, whatIfBannerLabel, whatIfPage } from '../../tooling/src/render/ui/data'
+import type { Control, Notice, NoticesPanel, Panel, PlayerHeaderPanel, SequencePanel, UseCaseBarPanel } from '../../tooling/src/render/ui/contract'
+import { components } from '../../frontend/src/sim/analyze'
+import { formatMs } from '../../frontend/src/sim/format'
+import { MULTIPLIERS, stopOf, toggleFailed } from '../../frontend/src/components/WhatIf/whatIf'
 import { graphicsMode, imageSize, maxWidthPx, probe, probeKey, probeOf, probeSource, rasterOf, sourceOf, themeOf, TMUX_HINT, type GraphicsMode, type RasterRequest } from './graphics'
-import { hldTab } from './views/hld'
+import { loading, pictureSite, registerPicture, type Action, type Picture, type Piece } from './picture'
+import { hldMarkdown, hldTab } from './views/hld'
 import { legendLine, verdictLine } from './views/lines'
 import { lineView, type Ui } from './views/render'
 import { sequenceTab } from './views/sequenceTab'
-import { tabBar, tabBody, tabOf, testsTab } from './views/tabs'
-import { openUiCheck, registerUiCheck } from './uiCheck'
+import { TABS, tabBar, tabBody, tabOf, testsTab } from './views/tabs'
 import { liveOf, NO_WHATIF, optionsOf, whatIfOf } from './views/whatif'
-import { whatIfBanner, whatIfTab } from './views/whatifTab'
+import { whatIfBanner, whatIfResults, whatIfTab } from './views/whatifTab'
 
 /**
  * Draws Proschi diagrams in Claude Code's terminal: ```proschi blocks in
@@ -99,7 +104,6 @@ export function register(on: On, options: PluginOptions): void {
 
   on('command.run', { command: 'proschi' }, async ($, e) => {
     const [verb, ...rest] = e.args.trim().split(/\s+/)
-    if (verb === 'ui-check') return openUiCheck($)
     const words: string[] = []
     const view: SystemsView = {}
     for (let i = 0; i < rest.length; i++) {
@@ -127,8 +131,6 @@ export function register(on: On, options: PluginOptions): void {
     return { text: `Showing ${file} in the Proschi pane.` }
   })
 
-  registerUiCheck(on)
-
   on('ui.close', { id: PANE }, async ($, e, next) => {
     stop(PANE_VIEW)
     stop(PANE)
@@ -144,7 +146,7 @@ export function register(on: On, options: PluginOptions): void {
     for (const match of e.props.text.matchAll(FENCE)) {
       const before = e.props.text.slice(last, match.index)
       if (before.trim()) parts.push(<ui.Markdown text={before} />)
-      const view = await diagramView($, { ui, requestId: e.requestId, columns: (e.viewport?.columns ?? 120) - 4 }, `${e.requestId}:${n++}`, { source: match[1] })
+      const view = await drawDiagram($, { ui, requestId: e.requestId, columns: (e.viewport?.columns ?? 120) - 4 }, `${e.requestId}:${n++}`, { source: match[1] })
       if ('error' in view) {
         parts.push(<ui.Markdown text={match[0]} />)
         parts.push(<ui.Text dimColor>{view.error}</ui.Text>)
@@ -164,7 +166,7 @@ export function register(on: On, options: PluginOptions): void {
     const ui = $.ui.resolve(e)
     const source = await readWithImports($, file).catch(() => undefined)
     if (!source) return row
-    const view = await diagramView($, { ui, requestId: e.requestId, columns: (e.viewport?.columns ?? 120) - 6 }, `${e.requestId}:0`, source, file)
+    const view = await drawDiagram($, { ui, requestId: e.requestId, columns: (e.viewport?.columns ?? 120) - 6 }, `${e.requestId}:0`, source, file)
     return (
       <ui.Box flexDirection="column">
         {row}
@@ -187,13 +189,47 @@ export function register(on: On, options: PluginOptions): void {
     if (!source) return <ui.Text color="red">Cannot read {file}.</ui.Text>
     const columns = 'bodyColumns' in e.props && typeof e.props.bodyColumns === 'number' ? e.props.bodyColumns : (e.viewport?.columns ?? 120) - 4
     const isFocused = 'isFocused' in e.props && e.props.isFocused === true
+    const bodyRows = 'scroll' in e.props && typeof (e.props.scroll as { bodyRows?: unknown } | undefined)?.bodyRows === 'number' ? (e.props.scroll as { bodyRows: number }).bodyRows : 0
     const tab = tabOf(await read($, paneTab))
     const whatIf = whatIfOf(await read($, paneWhatIf))
     const loaded = await documentOf($, PANE_VIEW, source, undefined, whatIf)
     const failing = 'error' in loaded ? 0 : loaded.doc.tests.filter(t => !t.passed).length
     const setWhatIf = (fn: (w: WhatIfState) => WhatIfState) => void update($, paneWhatIf, w => fn(whatIfOf(w)))
+    const resetWhatIf = () => setWhatIf(w => ({ ...NO_WHATIF, ...(w.node ? { node: w.node } : {}) }))
+    const draw: Draw = { ui, requestId: PANE, columns, rows: Math.max(INLINE_ROWS, bodyRows - 10) }
+    if (tab === 'sequence' && !('error' in loaded) && loaded.player.mode === 'play' && loaded.player.isPlaying && !timers.has(PANE_VIEW)) stepper($, loaded.doc)
+
+    // In pictures: the tab bar, the what-if banner and the tab's body, one drawing under one overlay.
+    const mode = await modeOf($, ui, PANE, PANE_VIEW)
+    if (mode.kind !== 'text' && !('error' in loaded)) {
+      const W = panelColumns(columns)
+      const { doc, base, key, player } = loaded
+      const pieces: Piece[] = [{ id: 'tabs', panel: tabBarPanel(tab, failing), columns: W }]
+      const actions: Record<string, Action> = {}
+      for (const t of TABS) actions[`tabs/${t.id}`] = () => void update($, paneTab, () => t.id)
+      if (doc !== base) {
+        pieces.push({ id: 'banner', panel: { kind: 'banner', label: whatIfBannerLabel(base, whatIf), note: 'the design as written is unchanged', reset: { id: 'reset', icon: 'reset', label: 'Reset', ...(tab !== 'diagram' ? { hotkey: 'r' } : {}) } }, columns: W })
+        actions['banner/reset'] = resetWhatIf
+      }
+      const page = { doc, base, key, player, source: loaded.source, whatIf, setWhatIf, passing: (await read($, panePassing)) === true, columns: W }
+      // Ahead: every other tab, its bar and its body.
+      const ahead = TABS.filter(t => t.id !== tab).flatMap(t => [{ panel: tabBarPanel(t.id, failing) as Panel, columns: W }, ...(t.id === 'diagram' ? [] : [{ panel: pagePart($, t.id, page).panel, columns: W }])])
+      if (tab === 'diagram') {
+        const view = await drawDiagram($, draw, PANE_VIEW, source, undefined, whatIf, { pieces, actions, ahead }, mode)
+        if ('error' in view) return <ui.Text color="red">{view.error}</ui.Text>
+        if (view.picture) return view.element
+      } else if (mode.kind === 'loading') return loading(ui, PANE_VIEW, Math.max(10, bodyRows - 2), mode.probe)
+      else {
+        const body = pagePart($, tab, page)
+        for (const [id, fn] of Object.entries(body.actions)) actions[`page/${id}`] = fn
+        const drawn = await pictureSite($, ui, { requestId: PANE, site: PANE_VIEW, theme: await themeOf($), pieces: [...pieces, { id: 'page', panel: body.panel, columns: W }], actions, hotkeys: true, ahead, rows: Math.max(10, bodyRows - 2), ...(mode.form ? { form: mode.form } : {}) })
+        if ('element' in drawn) return drawn.element
+        $.ui.log(`proschi: the ${tab} tab in text: ${drawn.error}`, { to: 'debug' })
+      }
+    }
+
     // While a what-if is on, every tab says so, with the way back to the design as written.
-    const banner = 'error' in loaded || loaded.doc === loaded.base ? undefined : whatIfBanner(ui, loaded.base, whatIf, columns, tab !== 'diagram', () => setWhatIf(w => ({ ...NO_WHATIF, ...(w.node ? { node: w.node } : {}) })))
+    const banner = 'error' in loaded || loaded.doc === loaded.base ? undefined : whatIfBanner(ui, loaded.base, whatIf, columns, tab !== 'diagram', resetWhatIf)
     const bar = tabBar(ui, tab, failing, to => void update($, paneTab, () => to))
     const keys = (systems: boolean) => (
       <ui.Box flexDirection="column">
@@ -206,7 +242,6 @@ export function register(on: On, options: PluginOptions): void {
     if (tab !== 'diagram') {
       if ('error' in loaded) return <ui.Text color="red">{loaded.error}</ui.Text>
       const { doc, base, key, player } = loaded
-      if (tab === 'sequence' && player.mode === 'play' && player.isPlaying && !timers.has(PANE_VIEW)) stepper($, doc)
       const body =
         tab === 'whatif' ? whatIfTab({ ui, base, key, now: doc, w: whatIf, set: setWhatIf, columns })
         : tab === 'sequence' ? sequenceTab({ ui, diagram: doc.diagram, player, columns, pick: value => void paneStep($, doc, p => ({ ...p, pick: value, step: 0, isPlaying: false })), go: (step, isPlaying) => void paneStep($, doc, p => ({ ...p, mode: 'play', step, isPlaying })), pause: () => void paneStep($, doc, p => ({ ...p, isPlaying: false })) })
@@ -222,8 +257,7 @@ export function register(on: On, options: PluginOptions): void {
         </ui.Box>
       )
     }
-    const bodyRows = 'scroll' in e.props && typeof (e.props.scroll as { bodyRows?: unknown } | undefined)?.bodyRows === 'number' ? (e.props.scroll as { bodyRows: number }).bodyRows : 0
-    const view = await diagramView($, { ui, requestId: PANE, columns, rows: Math.max(INLINE_ROWS, bodyRows - 10) }, PANE_VIEW, source, undefined, whatIf)
+    const view = await drawDiagram($, draw, PANE_VIEW, source, undefined, whatIf, undefined, { kind: 'text' })
     if ('error' in view) return <ui.Text color="red">{view.error}</ui.Text>
     return (
       <ui.Box flexDirection="column">
@@ -234,6 +268,140 @@ export function register(on: On, options: PluginOptions): void {
       </ui.Box>
     )
   })
+
+  registerPicture(on)
+}
+
+/** What the pane's other tabs draw from: the document under the what-if and as written, the player, the what-if and how to change it. */
+interface PageContext {
+  doc: Document
+  base: Document
+  key: string
+  player: Player
+  whatIf: WhatIfState
+  setWhatIf: (fn: (w: WhatIfState) => WhatIfState) => void
+  passing: boolean
+  source: Source
+  columns: number
+}
+
+/** A tab other than the diagram as a page panel (tooling/src/render/ui/data.ts), with what its controls do by control id. */
+function pagePart($: EngineInterface, tab: Exclude<PaneTab, 'diagram'>, c: PageContext): { panel: Panel; actions: Record<string, Action> } {
+  const actions: Record<string, Action> = {}
+  const open = menus.get(PANE_VIEW)
+  const { doc, base, key, whatIf: w, setWhatIf: set } = c
+  if (tab === 'analysis') return { panel: analysisPage(doc), actions }
+  if (tab === 'tests') {
+    actions.passing = () => void update($, panePassing, was => !was)
+    return { panel: testsPage(doc, c.passing), actions }
+  }
+  if (tab === 'hld') {
+    const markdown = hldMarkdown(base, key)
+    actions['hld-copy'] = surface => void copy($, surface, markdown, 'the HLD markdown')
+    return { panel: hldPage(markdown), actions }
+  }
+  if (tab === 'whatif') {
+    const r = whatIfResults(key, base, w)
+    const stop = stopOf(w.multiplier)
+    // A change to the traffic or the nodes ends a saved what-if's preview, as the editor's slider does.
+    const live = ({ saved, ...x }: WhatIfState): WhatIfState => (saved === undefined ? x : { ...x, multiplier: 1, failed: [] })
+    const multiply = (m: number) => set(x => ({ ...live(x), multiplier: m }))
+    const pick = (id: string, fn: () => void) => {
+      actions[id] = () => {
+        menus.delete(PANE_VIEW)
+        fn()
+      }
+    }
+    actions['wi-less'] = () => multiply(MULTIPLIERS[Math.max(0, stop - 1)])
+    actions['wi-more'] = () => multiply(MULTIPLIERS[Math.min(MULTIPLIERS.length - 1, stop + 1)])
+    for (const id of ['wi-mult', 'wi-node', 'wi-sweep-uc']) actions[id] = () => toggleMenu($, PANE_VIEW, id)
+    MULTIPLIERS.forEach((m, i) => pick(`wi-mult=${i}`, () => multiply(m)))
+    const nodes = components(base.root)
+    for (const n of nodes) pick(`wi-node=${n.id}`, () => set(x => ({ ...x, node: n.id })))
+    const node = nodes.find(n => n.id === w.node) ?? nodes[0]
+    if (node) actions['wi-down'] = () => set(x => ({ ...live(x), failed: [...toggleFailed(live(x), node.id).failed] }))
+    r.saved.forEach((s, i) => {
+      actions[`wi-saved-${i}`] = () => set(x => (w.saved === s.name ? { ...NO_WHATIF, ...(x.node ? { node: x.node } : {}) } : { ...NO_WHATIF, ...(x.node ? { node: x.node } : {}), saved: s.name, ...(x.sweep ? { sweep: x.sweep } : {}) }))
+    })
+    for (const u of r.loaded) pick(`wi-sweep-uc=${u.id}`, () => set(x => ({ ...x, sweep: u.id })))
+    if (r.swept) actions['wi-sweep'] = () => set(x => ({ ...x, sweep: r.swept!.id }))
+    const view = { ...w, ...(open === 'wi-mult' || open === 'wi-node' || open === 'wi-sweep-uc' ? { open: open as 'wi-mult' | 'wi-node' | 'wi-sweep-uc' } : {}) }
+    return { panel: whatIfPage(base, doc, view, { saved: r.saved, ...(r.sweep ? { sweep: r.sweep } : {}) }), actions }
+  }
+  // The Sequence tab: the scenario picker and the step keys over `proschi render`'s sequence, its current steps lit.
+  const picks = doc.diagram.useCases.flatMap(u => u.scenarios.map(s => ({ value: `${u.id}:${s.id}`, useCase: u, scenario: s })))
+  const player = c.player
+  const now = picks.find(p => p.value === player.pick) ?? picks[0]
+  if (!now) return { panel: { kind: 'page', blocks: [{ type: 'paragraph', text: 'No use cases yet: a usecase "Name" { a -> b : call } block draws as a sequence here.' }] }, actions }
+  const steps = now.scenario.steps
+  const total = steps.length
+  const playing = player.mode === 'play' && player.pick === now.value
+  const step = Math.max(0, Math.min(player.step, total - 1))
+  const go = (to: number, isPlaying: boolean) => void paneStep($, doc, p => ({ ...p, mode: 'play', step: to, isPlaying }))
+  actions['seq-pick'] = () => toggleMenu($, PANE_VIEW, 'seq-pick')
+  for (const p of picks) {
+    actions[`seq-pick=${p.value}`] = () => {
+      menus.delete(PANE_VIEW)
+      void paneStep($, doc, q => ({ ...q, pick: p.value, step: 0, isPlaying: false }))
+    }
+  }
+  actions['seq-first'] = () => go(0, false)
+  actions['seq-prev'] = () => go(playing ? step - 1 : 0, false)
+  actions['seq-play'] = () => (playing && player.isPlaying ? void paneStep($, doc, p => ({ ...p, isPlaying: false })) : go(playing && step < total - 1 ? step : 0, true))
+  actions['seq-next'] = () => go(playing ? step + 1 : 0, false)
+  actions['seq-last'] = () => go(total - 1, false)
+  const label = (p: (typeof picks)[number]) => `${p.useCase.name}${p.useCase.scenarios.length > 1 ? ` › ${p.scenario.name}` : ''}`
+  const isPlaying = playing && player.isPlaying
+  const panel: SequencePanel = {
+    kind: 'sequence',
+    source: { source: c.source.source, ...(c.source.path ? { path: c.source.path } : {}), ...(c.source.imports ? { imports: c.source.imports } : {}) },
+    useCase: now.useCase.id,
+    scenario: now.scenario.id,
+    current: playing ? currentStepsOf(steps, step).map(s => steps.indexOf(s) + 1) : [],
+    controls: [
+      { text: [{ text: 'Scenario', bold: true }] },
+      { select: { id: 'seq-pick', value: now.value, options: picks.map(p => ({ value: p.value, label: label(p), ...(p.scenario.outcome === 'error' ? { detail: '✗' } : {}) })), ...(open === 'seq-pick' ? { open: true } : {}) } },
+      { control: { id: 'seq-first', icon: 'first', hotkey: 'r', variant: 'quiet' } },
+      { control: { id: 'seq-prev', icon: 'prev', hotkey: 'b', variant: 'quiet' } },
+      { control: { id: 'seq-play', icon: isPlaying ? 'pause' : 'play', label: isPlaying ? 'Pause' : 'Play', hotkey: 'p', variant: 'primary', columns: 14 } },
+      { control: { id: 'seq-next', icon: 'next', hotkey: 'n', variant: 'quiet' } },
+      { control: { id: 'seq-last', icon: 'last', hotkey: 'e', variant: 'quiet' } },
+      { text: [{ text: playing ? `Step ${step + 1} of ${total}` : `${total} step${total === 1 ? '' : 's'}`, bold: true }] },
+    ],
+  }
+  return { panel, actions }
+}
+
+/** A diagram drawn at a site: in pictures where the terminal shows them (with `top`'s pieces over it, the pane's tabs), else in text cells. */
+async function drawDiagram(
+  $: EngineInterface,
+  d: Draw,
+  viewId: string,
+  source: Source,
+  file?: string,
+  whatIf?: WhatIfState,
+  top: { pieces: Piece[]; actions: Record<string, Action>; ahead: { panel: Panel; columns: number }[] } = { pieces: [], actions: {}, ahead: [] },
+  known?: Mode,
+): Promise<{ element: RenderElement; systems: boolean; picture: boolean } | { error: string }> {
+  const mode = known ?? (await modeOf($, d.ui, d.requestId, viewId))
+  const view = await diagramView($, d, viewId, source, file, whatIf, mode)
+  if ('error' in view) return view
+  if (view.kind === 'text') return { element: view.element, systems: view.systems, picture: false }
+  if (view.kind === 'loading') return { element: loading(d.ui, viewId, view.rows, mode.kind === 'loading' ? mode.probe : undefined), systems: false, picture: true }
+  const drawn = await pictureSite($, d.ui, {
+    requestId: d.requestId,
+    site: viewId,
+    theme: await themeOf($),
+    pieces: [...top.pieces, ...view.pieces],
+    actions: { ...top.actions, ...view.actions },
+    hotkeys: d.requestId === PANE,
+    ahead: [...top.ahead, ...view.ahead],
+    rows: view.rows,
+    ...(mode.kind === 'picture' && mode.form ? { form: mode.form } : {}),
+  })
+  if ('element' in drawn) return { element: drawn.element, systems: view.systems, picture: true }
+  $.ui.log(`proschi: the drawing in text: ${drawn.error}`, { to: 'debug' })
+  return drawDiagram($, d, viewId, source, file, whatIf, top, { kind: 'text' })
 }
 
 /** The `.proschi` file a Write or Edit call wrote. */
@@ -433,8 +601,35 @@ async function documentOf($: EngineInterface, viewId: string, written: Source, f
 /** Warnings a drawing in the transcript lists before it points at the pane's Analysis tab for the rest. */
 const INLINE_WARNINGS = 2
 
+/**
+ * How a site draws (docs/design/terminal-mod.md D11, D12): text cells with
+ * graphics off, where the terminal was found to show no pictures, or under
+ * tmux without passthrough (`hint`); the reserved blank area while the
+ * terminal is asked (`probe` is the invisible Image the asking swaps);
+ * pictures, every control included, where it shows them.
+ */
+type Mode = { kind: 'text'; hint?: boolean } | { kind: 'loading'; probe?: RenderElement } | { kind: 'picture'; form?: 'file' | 'png' }
+
+async function modeOf($: EngineInterface, ui: Ui, requestId: string, probeId: string): Promise<Mode> {
+  if (graphics === 'off') return { kind: 'text' }
+  const p = await probeOf($)
+  if (p.status === 'unknown') {
+    const key = probeKey(probeId)
+    probe($, requestId, key)
+    return { kind: 'loading', probe: <ui.Image key={key} source={probeSource($)} columns={1} rows={1} alt=" " /> }
+  }
+  if (graphics === 'auto' && (p.status === 'no' || p.status === 'tmux')) return { kind: 'text', ...(p.status === 'tmux' ? { hint: true } : {}) }
+  return { kind: 'picture', ...(p.form ? { form: p.form } : {}) }
+}
+
+/** A drawing as text cells, as the reserved area while its pictures are drawn, or as the pieces of its pictures. */
+type DrawnView =
+  | { kind: 'text'; element: RenderElement; systems: boolean }
+  | { kind: 'loading'; rows: number }
+  | { kind: 'picture'; pieces: Piece[]; actions: Record<string, Action>; ahead: { panel: Panel; columns: number }[]; rows: number; systems: boolean }
+
 /** The drawing of one document: the diagram with its use case picker or player and its links, or why it cannot be drawn. `file` is where the source was read from, if anywhere. */
-async function diagramView($: EngineInterface, d: Draw, viewId: string, written: Source, file?: string, whatIf?: WhatIfState): Promise<{ element: RenderElement; systems: boolean } | { error: string }> {
+async function diagramView($: EngineInterface, d: Draw, viewId: string, written: Source, file?: string, whatIf?: WhatIfState, mode: Mode = { kind: 'text' }): Promise<DrawnView | { error: string }> {
   const { ui } = d
   const loaded = await documentOf($, viewId, written, file, whatIf)
   if ('error' in loaded) return loaded
@@ -443,7 +638,8 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
   const layout = layouts.get(key)
   if (!layout) {
     requestLayout($, key, source)
-    return { element: <ui.Text dimColor>Laying out {doc.diagram.title ?? 'the diagram'}…</ui.Text>, systems: false }
+    if (mode.kind !== 'text') return { kind: 'loading', rows: Math.min(d.rows ?? INLINE_ROWS, 20) }
+    return { kind: 'text', element: <ui.Text dimColor>Laying out {doc.diagram.title ?? 'the diagram'}…</ui.Text>, systems: false }
   }
   if ('error' in layout) return { error: `Proschi could not lay ${file ?? 'this diagram'} out: ${layout.error}` }
 
@@ -468,32 +664,57 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
 
   // While a step animates, its frames are blitted in place; a drawing starts it from the beginning.
   const progress = timers.has(viewId) ? 0 : 100
-  const grid = paint(scene, { overlay: doc.overlay, edges: doc.edges, icons, systems: doc.systems, ...(view.selected ? { selected: view.selected } : {}), ...(steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {}) })
   // The link's step counts from 1, as the editor's player does (playground/share.ts PlaybackTarget).
   const link = doc.link(playing ? { useCase: playing.useCase.id, ...(playing.useCase.scenarios.length > 1 ? { scenario: playing.scenario.id } : {}), step: step + 1 } : undefined)
   const lost = lostImports(written, keyOf(written))
   const title = file ? basename(file) : (doc.diagram.title ?? 'diagram')
   const what = file ? { file } : { source }
-  // The verdict on one row, with room left for its Details button in the transcript.
-  const verdict = verdictLine(doc.tests, view.width - (view.inPane ? 0 : 13))
   const hasSystems = systems.length > 0 || player.focus !== undefined
   // Wide enough for the long labels, else the short ones.
   const roomy = view.width >= 79
   // The same drawing as a picture, where the terminal shows them: what the cells would show, playback's frames included.
-  const request: RasterRequest = {
-    source,
-    options: {
-      theme: graphics === 'off' ? 'dark' : await themeOf($),
-      maxWidthPx: maxWidthPx(d.columns),
-      ...(doc.overlay && !playing ? { overlay: true } : {}),
-      ...(view.selected ? { selected: view.selected } : {}),
-      ...(whatIf && doc !== base ? { whatIf: liveOf(whatIf) } : {}),
-      ...(playing ? { play: { useCase: playing.useCase.id, scenario: playing.scenario.id } } : {}),
-    },
-  }
-  const picture = await pictureOf($, view, request, `${doc.diagram.title ?? title}: the architecture diagram as a picture`, step, progress === 0)
+  const theme = graphics === 'off' ? 'dark' : await themeOf($)
+  const optionsFor = (play?: Pick): RasterRequest['options'] => ({
+    theme,
+    maxWidthPx: maxWidthPx(d.columns),
+    ...(doc.overlay && !play ? { overlay: true } : {}),
+    ...(view.selected ? { selected: view.selected } : {}),
+    ...(whatIf && doc !== base ? { whatIf: liveOf(whatIf) } : {}),
+    ...(play ? { play: { useCase: play.useCase.id, scenario: play.scenario.id } } : {}),
+  })
+  const request: RasterRequest = { source, options: optionsFor(playing) }
+  const alt = `${doc.diagram.title ?? title}: the architecture diagram as a picture`
 
-  return { element: (
+  if (mode.kind !== 'text') {
+    images.delete(viewId)
+    const out = rasterOf($, request)
+    const size = out && !('error' in out) ? imageSize(out, d.columns, d.rows ?? INLINE_ROWS) : undefined
+    const rows = (size?.rows ?? Math.min(scene.rows, d.rows ?? INLINE_ROWS)) + (playing ? 22 : 12)
+    if (mode.kind === 'loading') return { kind: 'loading', rows }
+    // No picture: the text drawing stands.
+    if (out && 'error' in out) return diagramView($, d, viewId, written, file, whatIf, { kind: 'text' })
+    let picture: Picture | undefined
+    if (out && size) {
+      const frames = request.options.play ? out.frames : undefined
+      const shownFrames = frames?.[step]
+      const file = shownFrames?.length ? shownFrames[progress === 0 ? 0 : shownFrames.length - 1]! : out.base
+      const imageKey = `img-${viewId}`
+      if (!request.options.play || frames?.length) {
+        images.set(viewId, { key: imageKey, ...(frames ? { frames } : {}), ...(mode.form ? { form: mode.form } : {}) })
+        picture = { key: imageKey, file, columns: size.columns, rows: size.rows, alt, anchorKey: view.anchorKey, ...(mode.form ? { form: mode.form } : {}) }
+      }
+    }
+    const built = pictureParts($, view, doc, { pick, playing, step, player, systems, selected, link, lost, title, what, roomy, sourceText: source.source, picture })
+    // Ahead: the scenario's frames before Play is pressed, and its header and first step panel.
+    if (!playing && pick) rasterOf($, { source, options: optionsFor(pick) }, 'later')
+    return { kind: 'picture', ...built, rows, systems: hasSystems }
+  }
+
+  const grid = paint(scene, { overlay: doc.overlay, edges: doc.edges, icons, systems: doc.systems, ...(view.selected ? { selected: view.selected } : {}), ...(steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {}) })
+  // The verdict on one row, with room left for its Details button in the transcript.
+  const verdict = verdictLine(doc.tests, view.width - (view.inPane ? 0 : 13))
+
+  return { kind: 'text', element: (
     <ui.Box flexDirection="column">
       {playing
         ? playerHeader($, view, playing, player)
@@ -504,12 +725,12 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
             </ui.Box>
           )}
       <ui.Box key={view.anchorKey} flexDirection="column">
-        {picture.hint && (
+        {mode.hint && (
           <ui.Text dimColor wrap="truncate-end">
             {TMUX_HINT}
           </ui.Text>
         )}
-        {!picture.image && grid.columns > d.columns && (
+        {grid.columns > d.columns && (
           <ui.Text dimColor wrap="truncate-end">
             ↔ {grid.columns} columns wide, wider than the {d.columns} here: {view.inPane ? 'widen the window' : 'use ⛶ Focus or a wider window'} to see it whole.
           </ui.Text>
@@ -540,7 +761,7 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
             … {doc.warnings.length - INLINE_WARNINGS} more: ⛶ Focus, then Analysis
           </ui.Text>
         )}
-        {picture.image ?? <ui.Raster key={view.rasterKey} columns={grid.columns} rows={grid.rows} cells={grid.toBase64()} />}
+        <ui.Raster key={view.rasterKey} columns={grid.columns} rows={grid.rows} cells={grid.toBase64()} />
         {doc.edges && !playing && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)}
       </ui.Box>
       {verdict && !playing && (
@@ -556,7 +777,6 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
         <ui.Button key={`lnk-${viewId}`} label={roomy ? '⧉ Copy share link' : '⧉ Link'} onPress={press => void copy($, press.surface, link, 'the share link')} />
         <ui.Button key={`open-${viewId}`} label={roomy ? '↗ Open in Proschi' : '↗ Open'} variant="primary" onPress={press => void openLink($, press.surface, link)} />
         {!view.inPane && <ui.Button key={`focus-${viewId}`} label="⛶ Focus" onPress={() => focus($, view, title, what)} />}
-        {picture.probe}
       </ui.Box>
     </ui.Box>
   ), systems: hasSystems }
@@ -565,40 +785,180 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
 /** The picture a drawing shows in place of its Raster, by view id: what the animation swaps frames into. */
 const images = new Map<string, { key: string; frames?: string[][]; form?: 'file' | 'png' }>()
 
-/**
- * The diagram as an Image where the terminal shows pictures (src/graphics.ts,
- * D11), else none and the Raster stands: with graphics off, where the
- * terminal was found to show none (auto) or until it is found to show them,
- * while the PNGs are drawn, or when the helper fails. Playing, the step's
- * first frame while it animates from the start, else its last. With `hint`,
- * tmux holds pictures back. Until the terminal is asked, `probe` is the
- * invisible Image the asking swaps.
- */
-async function pictureOf($: EngineInterface, view: View, request: RasterRequest, alt: string, step: number, fromStart: boolean): Promise<{ image?: RenderElement; hint?: boolean; probe?: RenderElement }> {
-  const { ui } = view.d
-  images.delete(view.viewId)
-  if (graphics === 'off') return {}
-  const probed = await probeOf($)
-  const hint = probed.status === 'tmux'
-  if (graphics === 'auto' && (probed.status === 'no' || probed.status === 'tmux')) return { hint }
-  // Drawn while the terminal is asked, so the picture is ready for a yes.
-  const out = rasterOf($, request)
-  let asking: RenderElement | undefined
-  if (probed.status === 'unknown') {
-    const key = probeKey(view.viewId)
-    probe($, view.d.requestId, key)
-    asking = <ui.Image key={key} source={probeSource($)} columns={1} rows={1} alt=" " />
-    if (graphics === 'auto') return { probe: asking }
+/** The select open in a drawing in pictures, by view id: its menu is drawn under it until an option or the select is pressed again. */
+const menus = new Map<string, string>()
+
+/** Opens a picture's select, or closes it when it is the one open; the drawing follows. */
+function toggleMenu($: EngineInterface, viewId: string, id: string): void {
+  if (menus.get(viewId) === id) menus.delete(viewId)
+  else menus.set(viewId, id)
+  $.ui.invalidate('ui.render')
+}
+
+/** A panel `columns` wide as the helper draws it: between 20 and 255 columns. */
+const panelColumns = (columns: number) => Math.max(20, Math.min(255, columns))
+
+/** What a drawing in pictures shows, as data, for src/picture.tsx. */
+interface Parts {
+  pick?: Pick
+  playing?: Pick
+  step: number
+  player: Player
+  systems: Selectable[]
+  selected?: Selectable
+  link: string
+  lost: string[]
+  title: string
+  what: { file: string } | { source: Source }
+  roomy: boolean
+  sourceText: string
+  picture?: Picture
+}
+
+/** The player's header as a panel. */
+function headerPanel(view: View, pick: Pick): PlayerHeaderPanel {
+  const { useCase } = pick
+  return {
+    kind: 'playerHeader',
+    back: { id: 'back', icon: 'back', label: 'Diagram', ...hotkey(view, 'd') },
+    title: useCase.name,
+    note: 'Playback mode · read only',
+    ...(useCase.scenarios.length > 1 ? { scenarios: useCase.scenarios.map(s => ({ id: `sc-${s.id}`, name: s.name, outcome: s.outcome === 'error' ? ('error' as const) : ('ok' as const), ...(s.outcome === 'error' && s.steps.find(isErrorStep)?.statusCode ? { status: s.steps.find(isErrorStep)!.statusCode } : {}), ...(s.id === pick.scenario.id ? { current: true } : {}) })) } : {}),
   }
-  if (!out || 'error' in out) return { hint, ...(asking ? { probe: asking } : {}) }
-  const frames = request.options.play ? out.frames : undefined
-  if (request.options.play && !frames?.length) return { hint, ...(asking ? { probe: asking } : {}) }
-  const shown = frames?.[step]
-  const file = shown?.length ? shown[fromStart ? 0 : shown.length - 1]! : out.base
-  const size = imageSize(out, view.d.columns, view.d.rows ?? INLINE_ROWS)
-  const key = `img-${view.viewId}`
-  images.set(view.viewId, { key, ...(frames ? { frames } : {}), ...(probed.form ? { form: probed.form } : {}) })
-  return { hint, ...(asking ? { probe: asking } : {}), image: <ui.Image key={key} source={await sourceOf($, file, probed.form)} columns={size.columns} rows={size.rows} alt={alt} /> }
+}
+
+const stepPanelAt = (view: View, pick: Pick, step: number, isPlaying: boolean) => stepPanelOf(pick.scenario, step, isPlaying, id => view.scene.nodes.get(id)?.node.name ?? id, view.inPane)
+
+/**
+ * A drawing as pictures: its pieces top to bottom (header, warnings, the
+ * diagram, legend and verdict, systems, the player or the use case bar, the
+ * links), what each control does, and the panels a press is likely to want
+ * next: every step of the scenario playing, or the player of the one picked.
+ */
+function pictureParts($: EngineInterface, view: View, doc: Document, c: Parts): { pieces: Piece[]; actions: Record<string, Action>; ahead: { panel: Panel; columns: number }[] } {
+  const W = panelColumns(view.width)
+  const pieces: Piece[] = []
+  const actions: Record<string, Action> = {}
+  const ahead: { panel: Panel; columns: number }[] = []
+  const on = (piece: string, id: string, fn: Action) => (actions[`${piece}/${id}`] = fn)
+  const { playing, player, pick } = c
+
+  if (playing) {
+    pieces.push({ id: 'head', panel: headerPanel(view, playing), columns: W })
+    on('head', 'back', () => void setPlayer($, view, p => ({ ...p, mode: 'diagram', isPlaying: false })))
+    for (const s of playing.useCase.scenarios) on('head', `sc-${s.id}`, () => start($, view, pickOf(playing.useCase, s), player.isPlaying))
+  } else if (doc.diagram.title) {
+    pieces.push({ id: 'title', panel: { kind: 'page', blocks: [{ type: 'heading', level: 3, text: doc.diagram.title }, ...(doc.diagram.summary ? [{ type: 'paragraph' as const, small: true, text: doc.diagram.summary }] : [])] }, columns: W })
+  }
+
+  const unknown = c.lost.filter(name => !importReasons.has(name))
+  const notices: Notice[] = [
+    ...(unknown.length ? [{ text: `Not found, so drawn as plain boxes: ${unknown.join(', ')}`, tone: 'muted' as const }] : []),
+    ...c.lost.filter(name => importReasons.has(name)).map(name => ({ text: importReasons.get(name)!, tone: 'muted' as const })),
+    ...doc.notes.map(n => ({ text: n.text, ...(n.hint ? { hint: n.hint } : {}) })),
+    ...(view.inPane ? doc.warnings : doc.warnings.slice(0, INLINE_WARNINGS)).map(text => ({ text })),
+    ...(!view.inPane && doc.warnings.length > INLINE_WARNINGS ? [{ text: `… ${doc.warnings.length - INLINE_WARNINGS} more: Focus, then Analysis`, tone: 'muted' as const }] : []),
+  ]
+  if (notices.length) pieces.push({ id: 'warn', panel: { kind: 'notices', notices }, columns: W })
+
+  pieces.push({ id: 'diagram', ...(c.picture ? { picture: c.picture } : {}) })
+
+  const failing = doc.tests.filter(t => !t.passed)
+  const below: NoticesPanel = {
+    kind: 'notices',
+    ...(doc.edges && !playing ? { legend: doc.critical ? { critical: { useCase: doc.critical.useCase, p99: formatMs(doc.critical.p99Ms) } } : {} } : {}),
+    ...(doc.tests.length && !playing ? { verdict: { passed: doc.tests.length - failing.length, total: doc.tests.length, ...(failing[0] ? { first: `${failing[0].name}: ${failing[0].message}` } : {}) } } : {}),
+    ...(doc.tests.length && !playing && !view.inPane ? { details: { id: 'details', icon: 'focus' as const, label: 'Details' } } : {}),
+  }
+  if (below.legend || below.verdict) pieces.push({ id: 'below', panel: below, columns: W })
+  on('below', 'details', () => focus($, view, c.title, c.what, 'tests'))
+
+  if ((c.systems.length > 0 || player.focus !== undefined) && !playing) {
+    const s = systemActions($, view, doc, c.systems, c.selected, player)
+    const controls: Control[] = [
+      ...(c.systems.length > 1 ? [{ id: 'next', icon: 'cycle' as const, label: 'Next', ...hotkey(view, 's') }] : []),
+      ...(c.selected && s.design ? [{ id: 'open', icon: s.open ? ('collapse' as const) : ('expand' as const), label: s.open ? 'Collapse' : 'Expand', ...hotkey(view, 'o') }, { id: 'focus', icon: 'enter' as const, label: 'Focus in', ...hotkey(view, 'f') }] : []),
+      ...(player.focus !== undefined ? [{ id: 'back', icon: 'leave' as const, label: 'Back out', ...hotkey(view, 'u') }] : []),
+    ]
+    pieces.push({
+      id: 'systems',
+      panel: { kind: 'systemBar', ...(player.focus !== undefined ? { inside: `${player.focus.split('.').join(' › ')} · ${doc.diagram.title ?? 'its design'}` } : {}), ...(c.selected ? { selected: { name: c.selected.name, path: c.selected.path } } : {}), controls },
+      columns: W,
+    })
+    on('systems', 'next', s.next)
+    on('systems', 'open', s.toggle)
+    on('systems', 'focus', s.enter)
+    on('systems', 'back', s.leave)
+  }
+
+  if (playing) {
+    const steps = playing.scenario.steps
+    const total = steps.length
+    const go = (to: number, isPlaying = false) => goTo($, view, steps, to, isPlaying)
+    pieces.push({ id: 'step', panel: stepPanelAt(view, playing, c.step, player.isPlaying), columns: W })
+    on('step', 'first', () => go(0))
+    on('step', 'prev', () => go(c.step - 1))
+    on('step', 'play', () => (player.isPlaying ? void setPlayer($, view, p => ({ ...p, isPlaying: false })) : go(c.step >= total - 1 ? 0 : c.step, true)))
+    on('step', 'next', () => go(c.step + 1))
+    on('step', 'last', () => go(total - 1))
+    on('step', 'exit', () => void setPlayer($, view, p => ({ ...p, mode: 'diagram', isPlaying: false })))
+    // Every step, playing on and paused: what a press or the animation shows next.
+    for (let i = 0; i < total; i++) for (const isPlaying of [true, false]) ahead.push({ panel: stepPanelAt(view, playing, i, isPlaying), columns: W })
+  } else if (pick) {
+    const groups = groupByEndpoint(doc.diagram.useCases)
+    const count = (u: DiagramUseCase) => `${u.scenarios.length} scenario${u.scenarios.length === 1 ? '' : 's'}`
+    const open = menus.get(view.viewId) === 'uc'
+    const panel: UseCaseBarPanel = {
+      kind: 'useCaseBar',
+      picker: { id: 'uc', value: pick.useCase.id, options: groups.flatMap(g => g.useCases.map(u => ({ value: u.id, label: u.name, ...(g.label ? { group: g.label } : {}), detail: count(u) }))), ...(open ? { open: true } : {}) },
+      play: { id: 'play', icon: 'play', label: 'Play', variant: 'primary', ...hotkey(view, 'p') },
+      explore: { id: 'explore', icon: 'explore', label: player.explorer ? 'Hide explorer' : c.roomy ? 'Explore use cases' : 'Explore', ...hotkey(view, 'x'), ...(player.explorer ? { active: true } : {}) },
+      ...(player.explorer
+        ? {
+            explorer: groups.map(g => ({
+              ...(g.label ? { label: g.label } : {}),
+              useCases: g.useCases.map(u => ({
+                name: u.name,
+                ...(u.id === pick.useCase.id ? { current: true } : {}),
+                scenarios: u.scenarios.map(s => ({ id: `x-${u.id}-${s.id}`, name: u.scenarios.length > 1 ? s.name : 'Play', outcome: s.outcome === 'error' ? ('error' as const) : ('ok' as const), ...(s.outcome === 'error' && s.steps.find(isErrorStep)?.statusCode ? { status: s.steps.find(isErrorStep)!.statusCode } : {}) })),
+              })),
+            })),
+          }
+        : {}),
+    }
+    pieces.push({ id: 'ucbar', panel, columns: W })
+    on('ucbar', 'uc', () => toggleMenu($, view.viewId, 'uc'))
+    for (const u of doc.diagram.useCases) {
+      on('ucbar', `uc=${u.id}`, () => {
+        menus.delete(view.viewId)
+        if (u.scenarios[0]) void setPlayer($, view, p => ({ ...p, pick: pickOf(u, u.scenarios[0]).value }))
+      })
+      for (const s of u.scenarios) on('ucbar', `x-${u.id}-${s.id}`, () => start($, view, pickOf(u, s)))
+    }
+    on('ucbar', 'play', () => start($, view, pick))
+    on('ucbar', 'explore', () => void setPlayer($, view, p => ({ ...p, explorer: !p.explorer })))
+    // Play: the player's header and its first step, playing.
+    ahead.push({ panel: headerPanel(view, pick), columns: W }, { panel: stepPanelAt(view, pick, 0, true), columns: W })
+  }
+
+  pieces.push({
+    id: 'links',
+    panel: {
+      kind: 'actionBar',
+      controls: [
+        { id: 'src', icon: 'copy', label: c.roomy ? 'Copy source' : 'Source' },
+        { id: 'lnk', icon: 'copy', label: c.roomy ? 'Copy share link' : 'Link' },
+        { id: 'open', icon: 'open', label: c.roomy ? 'Open in Proschi' : 'Open', variant: 'primary' },
+        ...(view.inPane ? [] : [{ id: 'focus', icon: 'focus' as const, label: 'Focus' }]),
+      ],
+    },
+    columns: W,
+  })
+  on('links', 'src', surface => void copy($, surface, c.sourceText, 'the Proschi source'))
+  on('links', 'lnk', surface => void copy($, surface, c.link, 'the share link'))
+  on('links', 'open', surface => void openLink($, surface, c.link))
+  on('links', 'focus', () => focus($, view, c.title, c.what))
+  return { pieces, actions, ahead }
 }
 
 /** A system the keys can act on: a collapsed box or an expanded frame, by its id in the scene and its path from the root document. */
@@ -623,6 +983,30 @@ function selectable(scene: Scene, focus: string | undefined): Selectable[] {
  */
 function systemBar($: EngineInterface, view: View, doc: Document, systems: Selectable[], selected: Selectable | undefined, player: Player): RenderElement {
   const { ui } = view.d
+  const { design, open, next, toggle, enter, leave } = systemActions($, view, doc, systems, selected, player)
+  return (
+    <ui.Box flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1} width={view.width}>
+      {player.focus !== undefined && (
+        <ui.Text dimColor wrap="truncate-end">
+          Inside {player.focus.split('.').join(' › ')} · {doc.diagram.title ?? 'its design'}
+        </ui.Text>
+      )}
+      <ui.Box flexDirection="row" gap={1} alignItems="center" flexWrap="wrap">
+        <ui.Text bold>System</ui.Text>
+        <ui.Text color={PINK} wrap="truncate-end">
+          {selected ? `${selected.name} (${selected.path})` : 'none here'}
+        </ui.Text>
+        {systems.length > 1 && <ui.Button key={`sys-next-${view.viewId}`} label="⇥ Next" {...hotkey(view, 's')} onPress={next} />}
+        {selected && design && <ui.Button key={`sys-open-${view.viewId}`} label={open ? '⊟ Collapse' : '⊞ Expand'} {...hotkey(view, 'o')} onPress={toggle} />}
+        {selected && design && <ui.Button key={`sys-focus-${view.viewId}`} label="⤢ Focus in" {...hotkey(view, 'f')} onPress={enter} />}
+        {player.focus !== undefined && <ui.Button key={`sys-back-${view.viewId}`} label="↑ Back out" {...hotkey(view, 'u')} onPress={leave} />}
+      </ui.Box>
+    </ui.Box>
+  )
+}
+
+/** What the systems row's controls do, in text and in pictures. */
+function systemActions($: EngineInterface, view: View, doc: Document, systems: Selectable[], selected: Selectable | undefined, player: Player) {
   const design = selected !== undefined && !!systemAt(doc.root, selected.path)?.diagram
   const next = () => {
     const at = systems.findIndex(s => s.path === selected?.path)
@@ -654,25 +1038,7 @@ function systemBar($: EngineInterface, view: View, doc: Document, systems: Selec
     })
   }
   const open = selected !== undefined && (selected.expanded || player.expanded.includes(selected.path))
-  return (
-    <ui.Box flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1} width={view.width}>
-      {player.focus !== undefined && (
-        <ui.Text dimColor wrap="truncate-end">
-          Inside {player.focus.split('.').join(' › ')} · {doc.diagram.title ?? 'its design'}
-        </ui.Text>
-      )}
-      <ui.Box flexDirection="row" gap={1} alignItems="center" flexWrap="wrap">
-        <ui.Text bold>System</ui.Text>
-        <ui.Text color={PINK} wrap="truncate-end">
-          {selected ? `${selected.name} (${selected.path})` : 'none here'}
-        </ui.Text>
-        {systems.length > 1 && <ui.Button key={`sys-next-${view.viewId}`} label="⇥ Next" {...hotkey(view, 's')} onPress={next} />}
-        {selected && design && <ui.Button key={`sys-open-${view.viewId}`} label={open ? '⊟ Collapse' : '⊞ Expand'} {...hotkey(view, 'o')} onPress={toggle} />}
-        {selected && design && <ui.Button key={`sys-focus-${view.viewId}`} label="⤢ Focus in" {...hotkey(view, 'f')} onPress={enter} />}
-        {player.focus !== undefined && <ui.Button key={`sys-back-${view.viewId}`} label="↑ Back out" {...hotkey(view, 'u')} onPress={leave} />}
-      </ui.Box>
-    </ui.Box>
-  )
+  return { design, open, next, toggle, enter, leave }
 }
 
 /** The imports a document names that were not found, which it draws as plain boxes: none were read for a block in a reply, and a file's were read as empty. */
@@ -913,10 +1279,7 @@ function stepPanel($: EngineInterface, view: View, pick: Pick, step: number, pla
   const { scenario } = pick
   const steps = scenario.steps
   const total = steps.length
-  const go = (to: number, isPlaying = false) => {
-    reveal($, view)
-    void setPlayer($, view, p => ({ ...p, step: Math.max(0, Math.min(total - 1, to)), isPlaying }), steps)
-  }
+  const go = (to: number, isPlaying = false) => goTo($, view, steps, to, isPlaying)
   const rows = stepRows(ui, view, steps, step)
   const tallest = steps.reduce((most, _, i) => Math.max(most, stepRows(ui, view, steps, i).height), rows.height)
   const counter = `Step ${String(Math.min(step + 1, total)).padStart(String(total).length)} of ${total}`
@@ -965,7 +1328,13 @@ function stepPanel($: EngineInterface, view: View, pick: Pick, step: number, pla
   )
 }
 
-/** A Button's hotkey, in the pane alone: the transcript's drawings share no keyboard. */
+/** Goes to a step of the scenario playing (clamped), playing on from there or not; the drawing brought into view first. */
+function goTo($: EngineInterface, view: View, steps: FlowStep[], to: number, isPlaying: boolean): void {
+  reveal($, view)
+  void setPlayer($, view, p => ({ ...p, step: Math.max(0, Math.min(steps.length - 1, to)), isPlaying }), steps)
+}
+
+/** A control's hotkey, in the pane alone: the transcript's drawings share no keyboard. */
 const hotkey = (view: View, key: string) => (view.inPane ? { hotkey: key } : {})
 
 /** Plays a scenario from its first step: the diagram brought into view first, while the press is still the person's. */

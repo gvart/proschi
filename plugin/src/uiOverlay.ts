@@ -1,28 +1,48 @@
 import type { ClientModule } from 'claude-code'
 
 /**
- * The `/proschi ui-check` experiment's surface module (src/uiCheck.tsx): a
- * region laid exactly over a panel's Image that draws nothing and maps the
- * pointer to the panel's controls, posting each hover change and press to
- * the hooks module. Bundled on its own to hooks/uiOverlay.js (tooling/build.mjs).
+ * The surface module laid over a drawing in pictures (src/picture.tsx): a
+ * region exactly over the drawing's Images that draws nothing and maps the
+ * pointer to the controls drawn in them, posting to the hooks module:
+ *
+ *   { type: 'hover', id }   the control under the pointer changed ('' none)
+ *   { type: 'down', id }    a button went down on a control
+ *   { type: 'press', id }   it came up on the control it went down on
+ *   { type: 'key', key }    a key, while a click has given the region the focus
+ *
+ * A post can replace one not yet delivered in the same frame, so the press
+ * carries everything a press needs (a lost `down` costs only its picture).
+ * Bundled on its own to hooks/uiOverlay.js (tooling/build.mjs).
  */
 
-type Control = { id: string; col: number; row: number; columns: number; rows: number }
-type Props = { controls: Control[] }
-type State = { hover: string }
+export type OverlayControl = { id: string; col: number; row: number; columns: number; rows: number }
+export type OverlayProps = { controls: OverlayControl[] }
+type State = { hover: string; down: string }
 
-const at = (controls: Control[], x: number, y: number) =>
+export const controlAt = (controls: OverlayControl[], x: number, y: number) =>
   controls.find(c => x >= c.col && x < c.col + c.columns && y >= c.row && y < c.row + c.rows)?.id ?? ''
 
-const UiOverlay: ClientModule<Props, State> = (props, surface) => {
+const UiOverlay: ClientModule<OverlayProps, State> = (props, surface) => {
   surface.onPointer(e => {
-    const id = e.type === 'leave' ? '' : at(props.controls ?? [], e.x, e.y)
-    const fine = { fx: e.fine?.x ?? null, fy: e.fine?.y ?? null }
-    if (e.type === 'down' && e.button === 'left') surface.post({ type: 'press', id, x: e.x, y: e.y, ...fine })
-    if ((e.type === 'move' || e.type === 'leave' || e.type === 'enter') && id !== (surface.state?.hover ?? '')) {
-      surface.setState({ hover: id })
-      surface.post({ type: 'hover', id, x: e.x, y: e.y, ...fine })
+    const state = surface.state ?? { hover: '', down: '' }
+    const id = e.type === 'leave' ? '' : controlAt(props.controls ?? [], e.x, e.y)
+    if (e.type === 'down' && e.button === 'left') {
+      surface.setState({ hover: id, down: id })
+      if (id) surface.post({ type: 'down', id })
+      return
     }
+    if (e.type === 'up') {
+      surface.setState({ hover: id, down: '' })
+      surface.post(state.down && state.down === id ? { type: 'press', id } : { type: 'hover', id })
+      return
+    }
+    if (id !== state.hover) {
+      surface.setState({ hover: id, down: state.down })
+      surface.post({ type: 'hover', id })
+    }
+  })
+  surface.onKey(e => {
+    if (!e.ctrl && !e.meta && e.key.length === 1) surface.post({ type: 'key', key: e.key.toLowerCase() })
   })
   return surface.elements.Box({ width: surface.columns || undefined, height: surface.rows || undefined })
 }

@@ -1,4 +1,6 @@
-import { expect, mock, test } from 'claude-code/testing'
+import { expect, mock } from 'claude-code/testing'
+
+import { test } from './textUi'
 
 import { LAYOUT } from './fixture'
 

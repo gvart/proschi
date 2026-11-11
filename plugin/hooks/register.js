@@ -813,27 +813,27 @@ function tokenizeLine(text, line2) {
       i += hex2[0].length;
       continue;
     }
-    const start2 = i;
+    const start3 = i;
     if (ch === ":") {
       const raw = stripTrailingComment(text.slice(i + 1));
-      tokens.push({ kind: "label", value: raw.trim(), col: start2 + 1, length: text.length - start2 });
+      tokens.push({ kind: "label", value: raw.trim(), col: start3 + 1, length: text.length - start3 });
       break;
     }
     if (ch === '"') {
       const { value, end, closed } = readString(text, i);
-      if (!closed) error("Unterminated string", start2 + 1, text.length - start2);
-      tokens.push({ kind: "string", value, col: start2 + 1, length: end - start2 });
+      if (!closed) error("Unterminated string", start3 + 1, text.length - start3);
+      tokens.push({ kind: "string", value, col: start3 + 1, length: end - start3 });
       i = end;
       continue;
     }
     if (ch === "[") {
       const close = text.indexOf("]", i + 1);
       if (close === -1) {
-        error("Missing ] after tech stack", start2 + 1, text.length - start2);
-        tokens.push({ kind: "tech", value: text.slice(i + 1).trim(), col: start2 + 1, length: text.length - start2 });
+        error("Missing ] after tech stack", start3 + 1, text.length - start3);
+        tokens.push({ kind: "tech", value: text.slice(i + 1).trim(), col: start3 + 1, length: text.length - start3 });
         break;
       }
-      tokens.push({ kind: "tech", value: text.slice(i + 1, close).trim(), col: start2 + 1, length: close + 1 - start2 });
+      tokens.push({ kind: "tech", value: text.slice(i + 1, close).trim(), col: start3 + 1, length: close + 1 - start3 });
       i = close + 1;
       continue;
     }
@@ -842,51 +842,51 @@ function tokenizeLine(text, line2) {
       const failed = text.startsWith("-x", i) && !IDENT_PART.test(text[i + 2] ?? "");
       if (arrow2 || failed) {
         const value = arrow2 ?? "-x";
-        tokens.push({ kind: "arrow", value, col: start2 + 1, length: value.length });
+        tokens.push({ kind: "arrow", value, col: start3 + 1, length: value.length });
         i += value.length;
         continue;
       }
       if (DIGIT.test(text[i + 1] ?? "")) {
         i++;
         while (i < text.length && DIGIT.test(text[i])) i++;
-        tokens.push({ kind: "number", value: text.slice(start2, i), col: start2 + 1, length: i - start2 });
+        tokens.push({ kind: "number", value: text.slice(start3, i), col: start3 + 1, length: i - start3 });
         continue;
       }
     }
     if (DIGIT.test(ch)) {
       i = readQuantity(text, i);
-      const value = text.slice(start2, i).replace(/[ \t]+/g, "");
+      const value = text.slice(start3, i).replace(/[ \t]+/g, "");
       const kind = /^\d+$/.test(value) ? "number" : "quantity";
-      tokens.push({ kind, value, col: start2 + 1, length: i - start2 });
+      tokens.push({ kind, value, col: start3 + 1, length: i - start3 });
       continue;
     }
     if (ch === "=") {
-      tokens.push({ kind: "op", value: "=", col: start2 + 1, length: 1 });
+      tokens.push({ kind: "op", value: "=", col: start3 + 1, length: 1 });
       i++;
       continue;
     }
     if (ch === "$" && IDENT_START.test(text[i + 1] ?? "")) {
       i++;
       while (i < text.length && IDENT_PART.test(text[i])) i++;
-      tokens.push({ kind: "const", value: text.slice(start2, i), col: start2 + 1, length: i - start2 });
+      tokens.push({ kind: "const", value: text.slice(start3, i), col: start3 + 1, length: i - start3 });
       continue;
     }
     if (ch === "<" || ch === ">") {
       const value = text[i + 1] === "=" ? ch + "=" : ch;
-      tokens.push({ kind: "op", value, col: start2 + 1, length: value.length });
+      tokens.push({ kind: "op", value, col: start3 + 1, length: value.length });
       i += value.length;
       continue;
     }
     if (ch === "@") {
       i++;
       while (i < text.length && TEAM_PART.test(text[i])) i++;
-      if (i === start2 + 1) error("Expected a team name after @", start2 + 1, 1);
-      tokens.push({ kind: "team", value: text.slice(start2 + 1, i), col: start2 + 1, length: i - start2 });
+      if (i === start3 + 1) error("Expected a team name after @", start3 + 1, 1);
+      tokens.push({ kind: "team", value: text.slice(start3 + 1, i), col: start3 + 1, length: i - start3 });
       continue;
     }
     if (ch === "/") {
       while (i < text.length && !/\s/.test(text[i])) i++;
-      tokens.push({ kind: "path", value: text.slice(start2, i), col: start2 + 1, length: i - start2 });
+      tokens.push({ kind: "path", value: text.slice(start3, i), col: start3 + 1, length: i - start3 });
       continue;
     }
     if (IDENT_START.test(ch)) {
@@ -894,42 +894,42 @@ function tokenizeLine(text, line2) {
       const headerName = prev?.kind === "ident" && prev.value === "header" ? /^[A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)+/.exec(text.slice(i)) : null;
       if (headerName) {
         i += headerName[0].length;
-        tokens.push({ kind: "ident", value: headerName[0], col: start2 + 1, length: i - start2 });
+        tokens.push({ kind: "ident", value: headerName[0], col: start3 + 1, length: i - start3 });
         continue;
       }
       while (i < text.length && IDENT_PART.test(text[i])) i++;
-      if (i === start2 + 1 && ch === "x" && text[i] === "$" && IDENT_START.test(text[i + 1] ?? "")) {
+      if (i === start3 + 1 && ch === "x" && text[i] === "$" && IDENT_START.test(text[i + 1] ?? "")) {
         i += 2;
         while (i < text.length && IDENT_PART.test(text[i])) i++;
-        tokens.push({ kind: "const", value: text.slice(start2, i), col: start2 + 1, length: i - start2 });
+        tokens.push({ kind: "const", value: text.slice(start3, i), col: start3 + 1, length: i - start3 });
         continue;
       }
-      if (/^x\d+$/.test(text.slice(start2, i)) && text[i] === "." && DIGIT.test(text[i + 1] ?? "")) {
+      if (/^x\d+$/.test(text.slice(start3, i)) && text[i] === "." && DIGIT.test(text[i + 1] ?? "")) {
         i++;
         while (i < text.length && DIGIT.test(text[i])) i++;
       }
-      tokens.push({ kind: "ident", value: text.slice(start2, i), col: start2 + 1, length: i - start2 });
+      tokens.push({ kind: "ident", value: text.slice(start3, i), col: start3 + 1, length: i - start3 });
       continue;
     }
     if (ch === "." && IDENT_START.test(text[i + 1] ?? "")) {
       i++;
       while (i < text.length && IDENT_PART.test(text[i])) i++;
-      tokens.push({ kind: "tag", value: text.slice(start2 + 1, i), col: start2 + 1, length: i - start2 });
+      tokens.push({ kind: "tag", value: text.slice(start3 + 1, i), col: start3 + 1, length: i - start3 });
       continue;
     }
     if (ch === "{" || ch === "}" || ch === ",") {
       const kind = ch === "{" ? "lbrace" : ch === "}" ? "rbrace" : "comma";
-      tokens.push({ kind, value: ch, col: start2 + 1, length: 1 });
+      tokens.push({ kind, value: ch, col: start3 + 1, length: 1 });
       i++;
       continue;
     }
-    error(`Unexpected character '${ch}'`, start2 + 1, 1);
+    error(`Unexpected character '${ch}'`, start3 + 1, 1);
     i++;
   }
   return { tokens, diagnostics };
 }
-function readQuantity(text, start2) {
-  let i = start2;
+function readQuantity(text, start3) {
+  let i = start3;
   while (i < text.length && DIGIT.test(text[i])) i++;
   if (text[i] === "." && DIGIT.test(text[i + 1] ?? "")) {
     i++;
@@ -948,9 +948,9 @@ function readQuantity(text, start2) {
   }
   return i;
 }
-function readString(text, start2) {
+function readString(text, start3) {
   let value = "";
-  let i = start2 + 1;
+  let i = start3 + 1;
   while (i < text.length) {
     const ch = text[i];
     if (ch === "\\" && i + 1 < text.length) {
@@ -1122,8 +1122,8 @@ function isDataStore(kind) {
 function isEdge(kind) {
   return EDGE_KINDS.includes(kind);
 }
-function kindMatches(actual, wanted) {
-  return actual === wanted || wanted === "edge" && isEdge(actual) || wanted === "queue" && actual === "broker";
+function kindMatches(actual, wanted3) {
+  return actual === wanted3 || wanted3 === "edge" && isEdge(actual) || wanted3 === "queue" && actual === "broker";
 }
 
 // ../frontend/src/dsl/quantity.ts
@@ -2867,15 +2867,15 @@ var Parser = class _Parser {
     if (!team) return;
     const name = fileName(system.resolved ?? "");
     for (const entry of system.entries) {
-      const wanted = entry.useCase;
-      if (wanted !== void 0) {
-        const u = findUseCaseIn(team, wanted);
+      const wanted3 = entry.useCase;
+      if (wanted3 !== void 0) {
+        const u = findUseCaseIn(team, wanted3);
         if (u) entry.useCaseId = u.id;
         else {
-          const near = team.useCases.find((x) => editDistance2(x.name.toLowerCase(), wanted.toLowerCase()) <= Math.max(1, Math.floor(wanted.length / 4)));
+          const near = team.useCases.find((x) => editDistance2(x.name.toLowerCase(), wanted3.toLowerCase()) <= Math.max(1, Math.floor(wanted3.length / 4)));
           const all = team.useCases.map((x) => `"${x.name}"`).join(", ");
           const help = near ? ` Did you mean "${near.name}"?` : all ? ` Its use cases are ${all}` : "";
-          this.error(`${name} has no use case "${wanted}".${help}`, frame2.useCaseLocs.get(entry) ?? entry.loc);
+          this.error(`${name} has no use case "${wanted3}".${help}`, frame2.useCaseLocs.get(entry) ?? entry.loc);
         }
       } else if (team.useCases.length === 1) {
         entry.useCaseId = team.useCases[0].id;
@@ -4878,13 +4878,13 @@ var Parser = class _Parser {
   /** `header Authorization, Content-Type`, read from the line's text. */
   parseHeaders(decl, text, line2) {
     const keyword = text.indexOf("header");
-    const start2 = keyword + "header".length;
-    const body = stripTrailingComment(text.slice(start2));
+    const start3 = keyword + "header".length;
+    const body = stripTrailingComment(text.slice(start3));
     if (!body.trim()) {
       this.error("Expected header names, e.g. header Authorization, Content-Type", { line: line2, col: keyword + 1, length: 6, ...this.fileField() });
       return;
     }
-    let col = start2 + 1;
+    let col = start3 + 1;
     for (const part of body.split(",")) {
       const raw = part.trim();
       const name = raw.length > 1 && raw.startsWith('"') && raw.endsWith('"') ? raw.slice(1, -1) : raw;
@@ -5073,10 +5073,10 @@ function splitPayload(input) {
   if (leading) return { text: "", format: formats[leading[1].toLowerCase()], body: leading[2].trim() };
   const keyed = text.match(/^([\s\S]*?)\s+(json|xml)\s+([{[<][\s\S]*)$/i);
   if (keyed) return { text: keyed[1].trim(), format: formats[keyed[2].toLowerCase()], body: keyed[3].trim() };
-  const bare = text.search(/(^|\s)[{[<]/);
-  if (bare !== -1) {
-    const body = text.slice(bare).trim();
-    return { text: text.slice(0, bare).trim(), format: body.startsWith("<") ? "XML" : "JSON", body };
+  const bare2 = text.search(/(^|\s)[{[<]/);
+  if (bare2 !== -1) {
+    const body = text.slice(bare2).trim();
+    return { text: text.slice(0, bare2).trim(), format: body.startsWith("<") ? "XML" : "JSON", body };
   }
   return { text: unquote(text), format: "JSON" };
 }
@@ -5560,8 +5560,8 @@ function findUseCase(diagram, name) {
 }
 function findScenario2(useCase, name) {
   const norm = (s) => s.replace(/\s*(›|>)\s*/g, " \u203A ").trim().toLowerCase();
-  const wanted = norm(name);
-  return useCase.scenarios.find((s) => s.name === name) ?? useCase.scenarios.find((s) => norm(s.name) === wanted || s.id === name);
+  const wanted3 = norm(name);
+  return useCase.scenarios.find((s) => s.name === name) ?? useCase.scenarios.find((s) => norm(s.name) === wanted3 || s.id === name);
 }
 function afterEntryResponse(entry, step) {
   const r = entry.responseLoc;
@@ -5650,8 +5650,8 @@ function matches(node, selector, diagram) {
   if (node.kind !== "component") return false;
   if ("node" in selector) return node.id === selector.node;
   if ("tech" in selector) {
-    const wanted = typeKey(selector.tech);
-    return [node.techStack, node.resolvedType?.name, ...node.resolvedType?.parents ?? []].some((t) => t !== void 0 && typeKey(t) === wanted);
+    const wanted3 = typeKey(selector.tech);
+    return [node.techStack, node.resolvedType?.name, ...node.resolvedType?.parents ?? []].some((t) => t !== void 0 && typeKey(t) === wanted3);
   }
   if ("anyOf" in selector) return selector.anyOf.some((s) => matches(node, s, diagram));
   if ("consistency" in selector) {
@@ -5727,8 +5727,8 @@ function formatCount(n) {
   if (n >= 1e3) return `${trim(n / 1e3, 1)}k`;
   return trim(n, 0);
 }
-function formatUsd(usd3) {
-  return `$${Math.round(usd3).toLocaleString("en-US")}/month`;
+function formatUsd(usd4) {
+  return `$${Math.round(usd4).toLocaleString("en-US")}/month`;
 }
 
 // ../frontend/src/sim/overlay.ts
@@ -5794,9 +5794,9 @@ function bottlenecksOf(analysis) {
   return analysis.nodes.filter((n) => works(n) && (n.saturated || n.utilization >= BOTTLENECK_FROM)).map((n) => n.id);
 }
 function criticalPathOf(diagram, analysis, useCase) {
-  const live = analysis.useCases.filter((u2) => u2.rps > 0);
-  const picked = useCase === void 0 ? void 0 : live.find((u2) => u2.id === useCase || u2.name === useCase);
-  const result = picked ?? live.reduce((best, u2) => !best || u2.rps > best.rps ? u2 : best, void 0);
+  const live3 = analysis.useCases.filter((u2) => u2.rps > 0);
+  const picked = useCase === void 0 ? void 0 : live3.find((u2) => u2.id === useCase || u2.name === useCase);
+  const result = picked ?? live3.reduce((best, u2) => !best || u2.rps > best.rps ? u2 : best, void 0);
   if (!result) return void 0;
   const u = diagram.useCases.find((d) => d.id === result.id) ?? findUseCase(diagram, result.name);
   const scenario = u?.scenarios[result.tailScenario.p99] ?? u?.scenarios[0];
@@ -6501,13 +6501,13 @@ function pathCdf(path, t) {
   return 1 - Math.exp(-lo);
 }
 function mixtureQuantile(paths, q) {
-  const live = paths.filter((s) => s.share > 0);
-  if (live.length === 0) return 0;
-  if (live.length === 1) return pathQuantile(live[0].path, q);
-  const total = live.reduce((sum, s) => sum + s.share, 0);
-  const cdf = (t) => live.reduce((sum, s) => sum + s.share * pathCdf(s.path, t), 0) / total;
-  let lo = Math.min(...live.map((s) => pathQuantile(s.path, 0)));
-  let hi = Math.max(...live.map((s) => pathQuantile(s.path, q)));
+  const live3 = paths.filter((s) => s.share > 0);
+  if (live3.length === 0) return 0;
+  if (live3.length === 1) return pathQuantile(live3[0].path, q);
+  const total = live3.reduce((sum, s) => sum + s.share, 0);
+  const cdf = (t) => live3.reduce((sum, s) => sum + s.share * pathCdf(s.path, t), 0) / total;
+  let lo = Math.min(...live3.map((s) => pathQuantile(s.path, 0)));
+  let hi = Math.max(...live3.map((s) => pathQuantile(s.path, q)));
   for (let i = 0; i < 60 && hi - lo > 1e-9 * Math.max(1, hi); i++) {
     const mid = (lo + hi) / 2;
     if (cdf(mid) >= q) hi = mid;
@@ -6633,11 +6633,11 @@ function analyze(diagram, options = {}) {
       percentiles: Object.fromEntries(PERCENTILES2.map((q) => [PERCENTILE_KEYS[q], pathQuantile(paths[i], q / 100)]))
     }));
     const weighted = paths.map((path, i) => ({ share: shares[i] ?? 0, path }));
-    const wanted = new Set(options.percentiles ?? PERCENTILES2);
-    const percentiles = Object.fromEntries(PERCENTILES2.map((q) => [PERCENTILE_KEYS[q], wanted.has(q) ? mixtureQuantile(weighted, q / 100) : NaN]));
+    const wanted3 = new Set(options.percentiles ?? PERCENTILES2);
+    const percentiles = Object.fromEntries(PERCENTILES2.map((q) => [PERCENTILE_KEYS[q], wanted3.has(q) ? mixtureQuantile(weighted, q / 100) : NaN]));
     const tailScenario = Object.fromEntries(
       PERCENTILES2.map((q) => {
-        if (!wanted.has(q)) return [PERCENTILE_KEYS[q], 0];
+        if (!wanted3.has(q)) return [PERCENTILE_KEYS[q], 0];
         const t = percentiles[PERCENTILE_KEYS[q]];
         const above = weighted.map((s) => s.share > 0 ? s.share * (1 - pathCdf(s.path, t * (1 - 1e-9))) : -1);
         return [PERCENTILE_KEYS[q], Math.max(0, above.indexOf(Math.max(...above)))];
@@ -6658,7 +6658,7 @@ function analyze(diagram, options = {}) {
     ...systems ? { systems: systems.systems } : {}
   };
 }
-function cachedLatency(u, shares, lookups, retries, pathOf, wanted) {
+function cachedLatency(u, shares, lookups, retries, pathOf, wanted3) {
   const variants = u.scenarios.map(
     (s, i) => cacheVariants(criticalPath(u, s), lookups[i] ?? []).flatMap(
       (v) => retries.size ? retryVariants(v.hops, retries).map((r) => ({ share: v.share * r.share, path: pathOf(r.hops) })) : [{ share: v.share, path: pathOf(v.hops) }]
@@ -6672,10 +6672,10 @@ function cachedLatency(u, shares, lookups, retries, pathOf, wanted) {
     percentiles: Object.fromEntries(PERCENTILES2.map((q) => [PERCENTILE_KEYS[q], mixtureQuantile(variants[i], q / 100)]))
   }));
   const weighted = variants.flatMap((vs, i) => vs.map((v) => ({ share: (shares[i] ?? 0) * v.share, path: v.path })));
-  const percentiles = Object.fromEntries(PERCENTILES2.map((q) => [PERCENTILE_KEYS[q], wanted.has(q) ? mixtureQuantile(weighted, q / 100) : NaN]));
+  const percentiles = Object.fromEntries(PERCENTILES2.map((q) => [PERCENTILE_KEYS[q], wanted3.has(q) ? mixtureQuantile(weighted, q / 100) : NaN]));
   const tailScenario = Object.fromEntries(
     PERCENTILES2.map((q) => {
-      if (!wanted.has(q)) return [PERCENTILE_KEYS[q], 0];
+      if (!wanted3.has(q)) return [PERCENTILE_KEYS[q], 0];
       const t = percentiles[PERCENTILE_KEYS[q]];
       const above = variants.map((vs, i) => (shares[i] ?? 0) > 0 ? vs.reduce((sum, v) => sum + (shares[i] ?? 0) * v.share * (1 - pathCdf(v.path, t * (1 - 1e-9))), 0) : -1);
       return [PERCENTILE_KEYS[q], Math.max(0, above.indexOf(Math.max(...above)))];
@@ -6988,17 +6988,17 @@ function writesCheck(run, u, scenarios, accept, what) {
     return pass(`${label} writes to ${what} before responding`);
   }
   const details = gaps.map((s) => ({ s, gap: writeGap(run, u, s, accept) }));
-  const where3 = (s) => u.scenarios.length > 1 ? `"${s.name}"` : `"${u.name}"`;
+  const where4 = (s) => u.scenarios.length > 1 ? `"${s.name}"` : `"${u.name}"`;
   const text = (s, gap) => {
     switch (gap.kind) {
       case "async":
-        return `${where3(s)} writes to ${what} only asynchronously: ${stepText(gap.step)}`;
+        return `${where4(s)} writes to ${what} only asynchronously: ${stepText(gap.step)}`;
       case "after":
-        return `${where3(s)} writes to ${what} only after responding: ${stepText(gap.step)}`;
+        return `${where4(s)} writes to ${what} only after responding: ${stepText(gap.step)}`;
       case "read":
-        return `${where3(s)} only reads from ${what} before responding: ${stepText(gap.step)} is a read`;
+        return `${where4(s)} only reads from ${what} before responding: ${stepText(gap.step)} is a read`;
       case "none":
-        return `${where3(s)} never writes to ${what} before responding`;
+        return `${where4(s)} never writes to ${what} before responding`;
     }
   };
   const message = details.map(({ s, gap }) => text(s, gap)).join("; ");
@@ -7075,9 +7075,9 @@ function cost(run, max) {
   const ofWhich = egress > 0 ? `, ${formatUsd(egress)} of it egress` : "";
   const message = `Total cost is ${formatUsd(total)}${ofWhich} (limit ${formatUsd(max)})`;
   if (total <= max) return pass(message);
-  const usd3 = (x) => formatUsd(x).replace("/month", "");
+  const usd4 = (x) => formatUsd(x).replace("/month", "");
   const top = [...run.analysis.nodes].filter((n) => n.costUsd > 0).sort((a, b) => b.costUsd - a.costUsd).slice(0, 3).map((n) => {
-    const notes = [n.replicas > 1 ? `${n.replicas} replicas` : "", n.shards > 1 ? `${n.shards} shards` : "", n.egressUsd > 0 ? `${usd3(n.egressUsd)} of it egress` : ""].filter(Boolean);
+    const notes = [n.replicas > 1 ? `${n.replicas} replicas` : "", n.shards > 1 ? `${n.shards} shards` : "", n.egressUsd > 0 ? `${usd4(n.egressUsd)} of it egress` : ""].filter(Boolean);
     return `${n.id} ${formatUsd(n.costUsd)}${notes.length ? ` (${notes.join(", ")})` : ""}`;
   });
   const egressHint = egress > total / 2 ? " Most of it is egress: serve repeated downloads from a CDN ($0.02/GB) instead of storage ($0.09/GB), or send fewer bytes." : "";
@@ -7305,9 +7305,9 @@ function before(run, a) {
     checked++;
     const ix = order.findIndex((m) => first.has(m.to) && stepMatches(m.step, a.match));
     if (ix < 0 || ix > iy) {
-      const where3 = sc.scenarios.length > 1 || a.scenario ? `In ${quote(s.name)}` : `In ${quote(sc.u.name)}`;
+      const where4 = sc.scenarios.length > 1 || a.scenario ? `In ${quote(s.name)}` : `In ${quote(sc.u.name)}`;
       return fail(
-        ix < 0 ? `${where3}, ${order[iy].to} is called (${stepText(order[iy].step)}) but ${x} never is` : `${where3}, ${order[iy].to} is called (${stepText(order[iy].step)}) before ${order[ix].to} (${stepText(order[ix].step)})`,
+        ix < 0 ? `${where4}, ${order[iy].to} is called (${stepText(order[iy].step)}) but ${x} never is` : `${where4}, ${order[iy].to} is called (${stepText(order[iy].step)}) before ${order[ix].to} (${stepText(order[ix].step)})`,
         `Call ${x} before the first call to ${y}`
       );
     }
@@ -7329,12 +7329,12 @@ function beforeResponding(run, a) {
   const isMatch = (step) => stepMatches(step, a.match);
   const gaps = success.filter((s) => !writesBeforeResponse(sc.u, s, accept, isMatch));
   if (gaps.length === 0) return pass(`${success.length === 1 ? sc.label : `Every success scenario of ${sc.label}`} ${phrase} before responding`);
-  const where3 = (s) => sc.u.scenarios.length > 1 ? quote(s.name) : quote(sc.u.name);
+  const where4 = (s) => sc.u.scenarios.length > 1 ? quote(s.name) : quote(sc.u.name);
   const text = (s) => {
     const g = writeGap(run, sc.u, s, accept, isMatch);
-    if (g.kind === "async") return `${where3(s)} ${phrase} only asynchronously: ${stepText(g.step)}`;
-    if (g.kind === "after") return `${where3(s)} ${phrase} only after responding: ${stepText(g.step)}`;
-    return `${where3(s)} never ${phrase} before responding${otherSteps([s], ids, a.match)}`;
+    if (g.kind === "async") return `${where4(s)} ${phrase} only asynchronously: ${stepText(g.step)}`;
+    if (g.kind === "after") return `${where4(s)} ${phrase} only after responding: ${stepText(g.step)}`;
+    return `${where4(s)} never ${phrase} before responding${otherSteps([s], ids, a.match)}`;
   };
   return fail(gaps.map(text).join("; "), `${matchHint(a.target, a.match)}, sent with -> before the line that answers the entry request`);
 }
@@ -7346,9 +7346,9 @@ function neverWaits(run, a) {
   for (const s of sc.scenarios) {
     const hop = criticalPath(sc.u, s).flat().find((h2) => !h2.async && ids.has(h2.target));
     if (hop) {
-      const where3 = sc.scenarios.length > 1 ? quote(s.name) : sc.label;
+      const where4 = sc.scenarios.length > 1 ? quote(s.name) : sc.label;
       return fail(
-        `${where3} waits for ${nodeLabel(run.diagram, hop.target)} before responding: ${stepText(hop.step)}${hop.failed ? " times out on the request path" : " is synchronous"}`,
+        `${where4} waits for ${nodeLabel(run.diagram, hop.target)} before responding: ${stepText(hop.step)}${hop.failed ? " times out on the request path" : " is synchronous"}`,
         `Send it with ->> (through a queue if it must not be lost), or move it after the line that answers the entry request`
       );
     }
@@ -7375,9 +7375,9 @@ function after(run, a) {
     if (ix < 0 || iy < 0) continue;
     checked++;
     if (iy < ix) {
-      const where3 = sc.scenarios.length > 1 || a.scenario ? `In ${quote(s.name)}` : `In ${quote(sc.u.name)}`;
+      const where4 = sc.scenarios.length > 1 || a.scenario ? `In ${quote(s.name)}` : `In ${quote(sc.u.name)}`;
       return fail(
-        `${where3}, the last call to ${y} (${stepText(order[iy].step)}) comes before the first call to ${x} (${stepText(order[ix].step)})`,
+        `${where4}, the last call to ${y} (${stepText(order[iy].step)}) comes before the first call to ${x} (${stepText(order[ix].step)})`,
         `Call ${y} after ${x}: move the step to ${order[iy].to} below the call to ${order[ix].to}`
       );
     }
@@ -7405,10 +7405,10 @@ function senderCalls(run, a) {
     for (const s of u.scenarios) {
       const step = s.steps.find((st) => from.has(st.fromServiceId) && to.has(st.toServiceId));
       if (!step) continue;
-      const where3 = u.scenarios.length > 1 ? `${quote(u.name)} scenario ${quote(s.name)}` : quote(u.name);
-      if (a.quantifier === "some") return pass(`${x} calls ${y}${within}: ${stepText(step)} in ${where3}`);
+      const where4 = u.scenarios.length > 1 ? `${quote(u.name)} scenario ${quote(s.name)}` : quote(u.name);
+      if (a.quantifier === "some") return pass(`${x} calls ${y}${within}: ${stepText(step)} in ${where4}`);
       return fail(
-        `${x} calls ${y}${within}: ${stepText(step)} in ${where3}`,
+        `${x} calls ${y}${within}: ${stepText(step)} in ${where4}`,
         `Let another node make this call (e.g. the client uploads to storage with a presigned URL), or remove the step`
       );
     }
@@ -7435,10 +7435,10 @@ function startsAt(run, a) {
   }
   return pass(`${quote(u.name)} starts at ${nodeLabel(run.diagram, entries2[0].fromServiceId)}`);
 }
-function statusMatches(status, wanted) {
+function statusMatches(status, wanted3) {
   if (status === void 0) return false;
-  const cls = /^([1-5])xx$/i.exec(wanted);
-  return cls ? Math.floor(status / 100) === Number(cls[1]) : String(status) === wanted;
+  const cls = /^([1-5])xx$/i.exec(wanted3);
+  return cls ? Math.floor(status / 100) === Number(cls[1]) : String(status) === wanted3;
 }
 function responds(run, a) {
   const sc = scope(run, a.useCase, a.scenario);
@@ -7459,8 +7459,8 @@ function noPath(run, from, to) {
     for (const s of u.scenarios) {
       const step = s.steps.find((st) => sources.has(st.fromServiceId) && targets.has(st.toServiceId));
       if (step) {
-        const where3 = u.scenarios.length > 1 ? `${quote(u.name)} scenario ${quote(s.name)}` : quote(u.name);
-        return fail(`The step ${step.fromServiceId} -> ${step.toServiceId} in ${where3} (${lineOf(step.loc)}) goes directly from ${x} to ${y}`, hint);
+        const where4 = u.scenarios.length > 1 ? `${quote(u.name)} scenario ${quote(s.name)}` : quote(u.name);
+        return fail(`The step ${step.fromServiceId} -> ${step.toServiceId} in ${where4} (${lineOf(step.loc)}) goes directly from ${x} to ${y}`, hint);
       }
     }
   }
@@ -8461,13 +8461,13 @@ function routePath(points, from, to) {
     if (last2 && last2.x === c.x && last2.y === c.y) continue;
     run.push(c);
   }
-  let start2 = 0;
-  while (start2 < run.length && contains(from, run[start2])) start2++;
+  let start3 = 0;
+  while (start3 < run.length && contains(from, run[start3])) start3++;
   let end = run.length - 1;
-  while (end >= start2 && contains(to, run[end])) end--;
-  const cells = run.slice(start2, end + 1);
+  while (end >= start3 && contains(to, run[end])) end--;
+  const cells = run.slice(start3, end + 1);
   if (cells.length === 0) return void 0;
-  const before2 = run[start2 - 1] ?? void 0;
+  const before2 = run[start3 - 1] ?? void 0;
   const after2 = run[end + 1] ?? void 0;
   const dirs = cells.map((c, i) => {
     let d = 0;
@@ -9104,8 +9104,698 @@ function groupByEndpoint(useCases) {
   return [...groups].map(([label, list]) => ({ label, useCases: list }));
 }
 
+// ../frontend/src/components/WhatIf/whatIf.ts
+var MULTIPLIERS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 5, 7.5, 10];
+var isActive = (w) => w.multiplier !== 1 || w.failed.length > 0 || w.saved !== void 0;
+function stopOf(multiplier) {
+  let best = 0;
+  MULTIPLIERS.forEach((m, i) => {
+    if (Math.abs(Math.log(m / multiplier)) < Math.abs(Math.log(MULTIPLIERS[best] / multiplier))) best = i;
+  });
+  return best;
+}
+function formatMultiplier(m) {
+  return `\xD7${Number.isInteger(m * 10) ? m.toFixed(1) : String(Number(m.toFixed(2)))}`;
+}
+var shortMultiplier = (m) => `\xD7${Number(m.toFixed(2))}`;
+function totalRps(diagram) {
+  let sum = 0;
+  for (const t of resolveTraffic(diagram).values()) sum += t.rps;
+  return sum;
+}
+function liveFailed(diagram, failed) {
+  const ids = new Set(components(diagram).map((n) => n.id));
+  return failed.filter((id) => ids.has(id));
+}
+function liveOptions(diagram, w) {
+  if (w.saved !== void 0) {
+    const block = findWhatIf(diagram, w.saved);
+    return block ? whatIfOptions(diagram, block).options : void 0;
+  }
+  const failed = liveFailed(diagram, w.failed);
+  const rates = /* @__PURE__ */ new Map();
+  if (w.multiplier !== 1) {
+    for (const [id, t] of resolveTraffic(diagram)) if (t.rps > 0) rates.set(id, t.rps * w.multiplier);
+  }
+  if (rates.size === 0 && failed.length === 0) return void 0;
+  return { ...rates.size ? { trafficRps: rates } : {}, ...failed.length ? { failed: new Set(failed) } : {} };
+}
+function whatIfLabel(diagram, w) {
+  if (w.saved !== void 0) return w.saved;
+  const failed = liveFailed(diagram, w.failed);
+  const parts = [
+    ...w.multiplier !== 1 ? [`Traffic ${shortMultiplier(w.multiplier)}`] : [],
+    ...failed.length ? [`${failed.length > 2 ? `${failed.length} nodes` : failed.join(" and ")} down`] : []
+  ];
+  return parts.join(", ") || "As written";
+}
+function toggleFailed(w, id) {
+  const failed = w.failed.includes(id) ? w.failed.filter((f) => f !== id) : [...w.failed, id];
+  return { multiplier: w.multiplier, failed };
+}
+
+// src/render/ui/markdown.ts
+var MARKS = {
+  "\u2705": { text: "\u2713", tone: "good", bold: true },
+  "\u274C": { text: "\u2717", tone: "bad", bold: true },
+  "\u{1F534}": { text: "\u25CF", tone: "bad" },
+  "\u{1F7E0}": { text: "\u25CF", tone: "warn" },
+  "\u26AA": { text: "\u25CF", tone: "muted" },
+  "\u26A0\uFE0F": { text: "\u26A0", tone: "warn" }
+};
+function inline2(text) {
+  const out = [];
+  const re = /\*\*(.+?)\*\*|`([^`]+)`|\[([^\]]+)\]\(([^)\s]+)\)|(?<![\w*])\*(?!\s)(.+?)\*(?!\w)|(?<!\w)_(?!\s)(.+?)_(?!\w)|(✅|❌|🔴|🟠|⚪|⚠️)/gu;
+  let last = 0;
+  for (const m of text.matchAll(re)) {
+    if (m.index > last) out.push({ text: text.slice(last, m.index) });
+    if (m[1] !== void 0) out.push({ text: m[1], bold: true });
+    else if (m[2] !== void 0) out.push({ text: m[2], mono: true });
+    else if (m[3] !== void 0) out.push({ text: m[3], tone: "info" });
+    else if (m[5] !== void 0 || m[6] !== void 0) out.push({ text: m[5] ?? m[6], tone: "muted" });
+    else out.push({ ...MARKS[m[7]] });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push({ text: text.slice(last) });
+  return out.length === 1 && Object.keys(out[0]).length === 1 ? out[0].text : out;
+}
+var cellsOf = (row) => row.trim().replace(/^\|/, "").replace(/(?<!\\)\|$/, "").split(/(?<!\\)\|/).map((c) => c.trim().replace(/\\\|/g, "|"));
+function markdownBlocks(markdown) {
+  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
+  const out = [];
+  let para = [];
+  const flush2 = () => {
+    if (para.length) out.push({ type: "paragraph", text: inline2(para.join(" ")) });
+    para = [];
+  };
+  for (let i = 0; i < lines.length; i++) {
+    const ln = lines[i];
+    const fence2 = /^```(\w*)/.exec(ln);
+    if (fence2) {
+      flush2();
+      const code2 = [];
+      while (++i < lines.length && !/^```/.test(lines[i])) code2.push(lines[i]);
+      if (fence2[1] === "mermaid") out.push({ type: "paragraph", small: true, text: code2[0]?.startsWith("sequenceDiagram") ? "The Sequence tab draws this scenario." : "The Diagram tab draws the architecture." });
+      else out.push({ type: "code", text: code2.join("\n"), ...fence2[1] ? { language: fence2[1] } : {} });
+      continue;
+    }
+    const heading2 = /^(#{1,6})\s+(.*)$/.exec(ln);
+    if (heading2) {
+      flush2();
+      out.push({ type: "heading", level: Math.min(3, heading2[1].length), text: inline2(heading2[2]) });
+      continue;
+    }
+    if (/^\s*([-*_])(\s*\1){2,}\s*$/.test(ln)) {
+      flush2();
+      out.push({ type: "rule" });
+      continue;
+    }
+    if (/^\s*\|/.test(ln) && i + 1 < lines.length && /^\s*\|?\s*:?-{3,}/.test(lines[i + 1])) {
+      flush2();
+      const head = cellsOf(ln);
+      const aligns = cellsOf(lines[i + 1]).map((c) => /^:?-+:$/.test(c) && c.endsWith(":") && !c.startsWith(":") ? "right" : "left");
+      const rows = [];
+      i += 1;
+      while (i + 1 < lines.length && /^\s*\|/.test(lines[i + 1])) rows.push(cellsOf(lines[++i]));
+      const columns = head.map((title, k) => ({ title, ...aligns[k] === "right" ? { align: "right" } : {} }));
+      out.push({ type: "table", columns, rows: rows.map((r) => ({ cells: head.map((_, k) => r[k] === void 0 || r[k] === "\u2014" ? [{ text: r[k] ?? "", tone: "muted" }] : inline2(r[k])) })) });
+      continue;
+    }
+    const item = /^(\s*)([-*+]|\d+\.)\s+(.*)$/.exec(ln);
+    if (item) {
+      flush2();
+      const ordered = /\d/.test(item[2]);
+      const indent = Math.floor(item[1].length / 2) * 2;
+      const items = [inline2(item[3])];
+      while (i + 1 < lines.length) {
+        const next = /^(\s*)([-*+]|\d+\.)\s+(.*)$/.exec(lines[i + 1]);
+        if (next && Math.floor(next[1].length / 2) * 2 === indent && /\d/.test(next[2]) === ordered) {
+          items.push(inline2(next[3]));
+          i++;
+        } else if (!next && /^\s{2,}\S/.test(lines[i + 1])) {
+          items[items.length - 1] = inline2(`${typeof items.at(-1) === "string" ? items.at(-1) : ""} ${lines[++i].trim()}`);
+        } else break;
+      }
+      out.push({ type: "list", items, ordered, ...indent ? { indent } : {} });
+      continue;
+    }
+    const quote2 = /^>\s?(.*)$/.exec(ln);
+    if (quote2) {
+      flush2();
+      const text = [quote2[1]];
+      while (i + 1 < lines.length && /^>/.test(lines[i + 1])) text.push(lines[++i].replace(/^>\s?/, ""));
+      out.push({ type: "quote", text: inline2(text.join(" ")) });
+      continue;
+    }
+    if (!ln.trim()) flush2();
+    else para.push(ln.trim());
+  }
+  flush2();
+  return out;
+}
+
+// src/render/ui/data.ts
+var usd2 = (x) => formatUsd(x).replace("/month", "");
+function tabBarPanel(active, failing) {
+  const tabs = [
+    ["diagram", "Diagram"],
+    ["analysis", "Analysis"],
+    ["whatif", "What-if"],
+    ["sequence", "Sequence"],
+    ["hld", "HLD"],
+    ["tests", "Tests"]
+  ];
+  return { kind: "tabs", active, tabs: tabs.map(([id, label], i) => ({ id, label, hotkey: String(i + 1), ...id === "tests" && failing > 0 ? { badge: { text: `\u2717 ${failing}`, tone: "bad" } } : {} })) };
+}
+var FORMAT = { JSON: "JSON", XML: "XML", FREE_TEXT: "Text" };
+function card(s, steps, name) {
+  const call = `${s.httpMethod} ${s.endpoint}`.trim();
+  const error = isErrorStep(s);
+  const exec = s.executionType === "ASYNC_FIRE_AND_FORGET" ? "fire" : s.executionType === "ASYNC_REQUEST_RESPONSE" ? "async" : "sync";
+  return {
+    number: steps.indexOf(s) + 1,
+    name: s.stepName,
+    from: name(s.fromServiceId),
+    to: name(s.toServiceId),
+    ...call && call !== s.stepName ? { call } : {},
+    ...s.description ? { description: s.description } : {},
+    exec,
+    ...s.failed ? { failed: true } : {},
+    ...(s.statusCode ?? 0) >= 400 ? { status: s.statusCode } : {},
+    ...error ? { error: true } : {},
+    ...s.requestBody ? { request: { format: FORMAT[s.requestFormat], text: s.requestBody } } : {},
+    ...s.responseBody && exec !== "fire" ? { response: { format: FORMAT[s.responseFormat], text: s.responseBody, ...s.statusCode !== void 0 ? { status: s.statusCode } : {}, ...error ? { error: true } : {} } } : {}
+  };
+}
+function stepPanelOf(scenario, at, playing, name, hotkeys = true) {
+  const steps = scenario.steps;
+  return {
+    kind: "step",
+    ...scenario.condition ? { condition: scenario.condition } : {},
+    steps: steps.map((_, i) => currentStepsOf(steps, i).map((s) => card(s, steps, name))),
+    at,
+    playing,
+    ...hotkeys ? { hotkeys: { first: "r", prev: "b", play: "p", next: "n", last: "e" } } : {}
+  };
+}
+var splits = (n) => n.writeLoadRps > 0 && (n.writeScaling === "shards" || n.readCapacityRps !== n.writeCapacityRps);
+var bare = (rps) => formatRps(rps).replace(" rps", "");
+function analysisPage(doc) {
+  const analysis = doc.analysis;
+  if (!analysis) {
+    return {
+      kind: "page",
+      blocks: [
+        { type: "paragraph", text: "No traffic yet: add a traffic { \u2026 } block and Proschi estimates load, latency, availability and cost for every node, e.g." },
+        { type: "code", text: 'traffic {\n  "Redirect" 10k rps  mix "Cache hit" 90%, "Cache miss" 10%\n}' }
+      ]
+    };
+  }
+  const blocks = [];
+  const nodes = analysis.nodes.filter((n) => n.kind !== "client" && n.kind !== "other");
+  const saturated = nodes.filter((n) => n.saturated || n.queue !== void 0 && n.queue.utilization >= 1).length;
+  const spofs = analysis.singlePointsOfFailure;
+  blocks.push({
+    type: "stats",
+    items: [
+      { label: analysis.totalEgressUsd > 0 ? `Total cost (incl. ${usd2(analysis.totalEgressUsd)} egress)` : "Total cost", value: formatUsd(analysis.totalCostUsd) },
+      { label: "Saturated nodes", value: String(saturated), tone: saturated ? "bad" : "good" },
+      { label: "Single points of failure", value: String(spofs.length), tone: spofs.length ? "warn" : "good" },
+      { label: "Use cases with traffic", value: String(analysis.useCases.filter((u) => u.rps > 0).length) }
+    ]
+  });
+  const busiest = busiestOf(analysis);
+  if (busiest) {
+    const u = busiest.utilization;
+    const bottleneck = busiest.saturated || u >= BOTTLENECK_FROM;
+    const headroom = u >= 1 ? "past its capacity: requests are dropped" : `${(Math.floor(1 / u * 10) / 10).toFixed(1)}\xD7 headroom before it saturates`;
+    blocks.push({ type: "callout", tone: bottleneck ? "bad" : "info", chip: bottleneck ? "BOTTLENECK" : "BUSIEST", text: [{ text: busiest.id, bold: true }, { text: ` at ${formatPercent(u)}: ${headroom}.` }] });
+  }
+  for (const w of analysis.warnings) blocks.push({ type: "callout", tone: "warn", text: w });
+  blocks.push({ type: "heading", text: "Nodes" });
+  const rows = [];
+  for (const n of nodes) {
+    const tone2 = n.saturated ? "bad" : n.utilization > HOT ? "warn" : void 0;
+    rows.push({
+      cells: [
+        [{ text: n.id, bold: true }, ...n.replicas > 1 ? [{ text: ` \xD7${n.replicas}`, tone: "muted" }] : []],
+        splits(n) ? [{ text: "R ", tone: "muted" }, { text: bare(n.readLoadRps) }, { text: ` / ${formatRps(n.readCapacityRps)}`, tone: "muted" }] : [{ text: bare(n.loadRps) }, { text: ` / ${formatRps(n.capacityRps)}`, tone: "muted" }],
+        { bar: n.utilization, text: formatPercent(n.utilization), ...tone2 ? { tone: tone2 } : {} },
+        formatMs(n.latencyMs),
+        formatAvailability(n.availability),
+        `${usd2(n.costUsd)}${n.egressUsd > 0 ? ` +${usd2(n.egressUsd)}` : ""}`
+      ]
+    });
+    if (splits(n)) {
+      rows.push({ sub: true, cells: [n.shards > 1 ? `${n.shards} shards` : "", [{ text: "W " }, { text: bare(n.writeLoadRps) }, { text: ` / ${formatRps(n.writeCapacityRps)}` }], `R ${formatPercent(n.readUtilization)} \xB7 W ${formatPercent(n.writeUtilization)}`] });
+    }
+  }
+  blocks.push({
+    type: "table",
+    columns: [{ title: "Node" }, { title: "Load / capacity" }, { title: "Utilisation", drop: 1 }, { title: "Latency", align: "right", drop: 2 }, { title: "Availability", align: "right", drop: 3 }, { title: "Cost", align: "right", drop: 4 }],
+    rows
+  });
+  const queues = analysis.nodes.filter((n) => n.queue);
+  if (queues.length) {
+    blocks.push({ type: "heading", text: "Queues" });
+    blocks.push({
+      type: "table",
+      columns: [{ title: "Queue" }, { title: "In / drain" }, { title: "Consumers", align: "right", drop: 1 }, { title: "Backlog or lag", align: "right" }],
+      rows: queues.map((n) => {
+        const q = n.queue;
+        return {
+          cells: [
+            [{ text: n.id, bold: true }],
+            `${bare(q.inflowRps)} / ${formatRps(q.drainRps)}`,
+            Number.isFinite(q.utilization) ? formatPercent(q.utilization) : "\u2014",
+            q.backlogPerHour > 0 ? [{ text: `+${formatCount(q.backlogPerHour)} msgs/h`, tone: "bad" }] : `lag ${formatDuration(q.lagMs)}`
+          ]
+        };
+      })
+    });
+  }
+  if (analysis.useCases.length) {
+    blocks.push({ type: "heading", text: "Use cases" });
+    const rows2 = [];
+    for (const u of analysis.useCases) {
+      rows2.push({ cells: [[{ text: u.name, bold: true }], u.rps > 0 ? formatTraffic(u.rps, u.avgRps) : [{ text: "no traffic", tone: "muted" }], ...["p50", "p95", "p99", "p999"].map((p) => formatMs(u.percentiles[p])), formatAvailability(u.availability)] });
+      if (u.scenarios.length > 1) {
+        for (const s of u.scenarios) rows2.push({ sub: true, dim: !(s.share > 0), cells: [s.name, `${formatPercent(s.share)} \xB7 mean ${formatMs(s.meanMs)}`, ...["p50", "p95", "p99", "p999"].map((p) => formatMs(s.percentiles[p])), ""] });
+      }
+    }
+    blocks.push({
+      type: "table",
+      columns: [{ title: "Use case" }, { title: "Traffic", drop: 1 }, { title: "p50", align: "right", drop: 4 }, { title: "p95", align: "right", drop: 5 }, { title: "p99", align: "right" }, { title: "p99.9", align: "right", drop: 3 }, { title: "Avail", align: "right", drop: 2 }],
+      rows: rows2
+    });
+  }
+  const b = costBreakdown(doc.root, analysis);
+  const sections = [
+    ["Team", b.unowned ? [...b.teams, b.unowned] : b.teams],
+    ["Group", b.groups],
+    ["Tag", b.tags]
+  ];
+  if (sections.some(([, r]) => r.length > 0)) {
+    const budgets = /* @__PURE__ */ new Map();
+    for (const r of doc.root.requirements ?? []) {
+      if (r.kind !== "cost" || !r.scope) continue;
+      budgets.set("team" in r.scope ? `@${r.scope.team}` : "tag" in r.scope ? `.${r.scope.tag}` : r.scope.group, r.maxUsdPerMonth);
+    }
+    blocks.push({ type: "heading", text: "Cost breakdown" });
+    blocks.push({
+      type: "table",
+      columns: [{ title: "By", drop: 2 }, { title: "Name" }, { title: "Cost", align: "right" }, { title: "Share", align: "right", drop: 3 }, { title: "Budget", align: "right", drop: 1 }, { title: "Nodes", drop: 4 }],
+      rows: sections.flatMap(
+        ([by, shares]) => shares.map((s, i) => {
+          const budget2 = budgets.get(s.id);
+          const over = budget2 !== void 0 && s.costUsd > budget2;
+          return {
+            cells: [
+              [{ text: i === 0 ? by : "", tone: "muted" }],
+              [{ text: s.label, bold: true }],
+              usd2(s.costUsd),
+              b.totalCostUsd > 0 ? formatPercent(s.costUsd / b.totalCostUsd) : "\u2014",
+              budget2 === void 0 ? [{ text: "\u2014", tone: "muted" }] : [{ text: `${usd2(budget2)}${over ? " over" : ""}`, tone: over ? "bad" : "good" }],
+              [{ text: s.nodes.join(", "), tone: "muted" }]
+            ]
+          };
+        })
+      )
+    });
+  }
+  if (spofs.length) {
+    blocks.push({ type: "heading", text: "Single points of failure" });
+    blocks.push({ type: "callout", tone: "warn", text: [{ text: spofs.join(", "), bold: true }, { text: ": one replica, and a use case cannot do without it. Add x2, or a fallback scenario that calls it with -x and still completes." }] });
+  }
+  blocks.push({ type: "paragraph", small: true, text: "Teaching numbers from default profiles per technology and a simple queueing model; override them with capacity { \u2026 }." });
+  return { kind: "page", blocks };
+}
+var where2 = (r) => r.loc ? `${r.loc.file ? `${r.loc.file}:` : "line "}${r.loc.line}` : void 0;
+function checkBlocks(r) {
+  const out = [{ type: "check", passed: r.passed, title: r.name, ...where2(r) ? { where: where2(r) } : {}, message: r.message, ...!r.passed && r.hint ? { hint: r.hint } : {} }];
+  if (r.assertions && r.assertions.length > 1) {
+    for (const a of r.assertions) out.push({ type: "check", passed: a.passed, title: [{ text: a.message, bold: false }], ...where2(a) ? { where: where2(a) } : {}, ...!a.passed && a.hint ? { hint: a.hint } : {}, indent: 3 });
+  }
+  return out;
+}
+function testsPage(doc, open) {
+  if (!doc.analysis) return { kind: "page", blocks: [{ type: "paragraph", text: "Requirements and tests run against the simulation: add a traffic { \u2026 } block first." }] };
+  const results = doc.tests;
+  if (results.length === 0) {
+    return {
+      kind: "page",
+      blocks: [
+        { type: "paragraph", text: "No requirements or tests yet. Requirements are checked against the analysis of the traffic; tests check how the flows work, e.g." },
+        { type: "code", text: 'requirements {\n  p99 "Redirect" < 100ms\n  availability >= 99.9%\n}\ntest "Redirect is served from the cache" {\n  "Redirect" calls any cache before any database\n}' }
+      ]
+    };
+  }
+  const failing = results.filter((r) => !r.passed);
+  const passing2 = results.filter((r) => r.passed);
+  const blocks = [
+    failing.length ? { type: "callout", tone: "bad", text: [{ text: `${failing.length} of ${results.length} failing`, bold: true }] } : { type: "callout", tone: "good", text: [{ text: `All ${results.length} passing`, bold: true }] }
+  ];
+  for (const r of failing) blocks.push(...checkBlocks(r));
+  if (passing2.length) {
+    blocks.push({ type: "controls", items: [{ control: { id: "passing", icon: open ? "chevron-down" : "next", label: `${passing2.length} passing`, hotkey: "a", variant: "quiet", active: open } }] });
+    if (open) for (const r of passing2) blocks.push({ type: "check", passed: true, title: r.name, ...where2(r) ? { where: where2(r) } : {}, message: r.message });
+  }
+  return { kind: "page", blocks };
+}
+var live = (w) => ({ multiplier: w.multiplier, failed: [...w.failed], ...w.saved !== void 0 ? { saved: w.saved } : {} });
+var whatIfBannerLabel = (doc, w) => `What-if: ${whatIfLabel(doc.root, live(w))}`;
+var deltaTone = (r) => r.tone === "better" ? "good" : r.tone === "worse" ? "bad" : void 0;
+var note = (change) => change === "same" ? "" : change.replace(/^[^,]*→[^,]*(, )?/, "");
+function deltaTable(rows, head = "What") {
+  return {
+    type: "table",
+    columns: [{ title: head }, { title: "As written", align: "right" }, { title: "What-if", align: "right" }, { title: "Change", drop: 1 }],
+    rows: rows.map((r) => {
+      const tone2 = deltaTone(r);
+      const changed = r.change !== "same" && r.before !== r.after;
+      return {
+        cells: [
+          [{ text: r.label, bold: true }],
+          [{ text: r.before, ...changed ? {} : { tone: "muted" } }],
+          [{ text: r.after, ...tone2 ? { tone: tone2, bold: true } : changed ? {} : { tone: "muted" } }],
+          changed ? [{ text: note(r.change) || (r.tone === "better" ? "better" : r.tone === "worse" ? "worse" : ""), ...tone2 ? { tone: tone2 } : {} }] : [{ text: "same", tone: "muted" }]
+        ]
+      };
+    })
+  };
+}
+var passCount = (results) => results.filter((t) => t.passed).length;
+function moved(base, now) {
+  const before2 = new Map(base.nodes.map((n) => [n.id, n.utilization]));
+  return now.nodes.map((n) => ({ node: n.id, before: before2.get(n.id), after: n.utilization })).filter((u) => (u.before ?? 0) >= 1 !== u.after >= 1 || Math.abs(u.after - (u.before ?? 0)) >= 0.1).sort((x, y) => Math.abs(y.after - (y.before ?? 0)) - Math.abs(x.after - (x.before ?? 0))).map(utilizationRow);
+}
+function flipped(base, now) {
+  const before2 = new Map(base.map((r) => [r.name, r.passed]));
+  return now.filter((r) => before2.get(r.name) !== r.passed).map((r) => checkRow({ name: r.name, category: r.category, before: before2.get(r.name), after: r.passed })).sort((a, b) => (a.tone === "worse" ? 0 : 1) - (b.tone === "worse" ? 0 : 1));
+}
+var SWEEP = { from: 0.5, to: 10, steps: 12 };
+function whatIfPage(base, now, w, cache2 = {}) {
+  const diagram = base.root;
+  if (!base.analysis) {
+    return {
+      kind: "page",
+      blocks: [
+        { type: "paragraph", text: "What-ifs run the simulation again with more or less traffic or nodes down: add a traffic { \u2026 } block first, then save a what-if as" },
+        { type: "code", text: 'whatif "Launch day" {\n  traffic "Redirect" x3\n}\nwhatif "Cache outage" {\n  fail cache\n}' }
+      ]
+    };
+  }
+  const blocks = [];
+  const stop2 = stopOf(w.multiplier);
+  const rate = (m) => `${formatMultiplier(m)} \xB7 ${formatRps(totalRps(diagram) * m)}`;
+  const nodes = components(diagram);
+  const node = nodes.find((n) => n.id === w.node) ?? nodes[0];
+  const down = node !== void 0 && w.saved === void 0 && w.failed.includes(node.id);
+  blocks.push({
+    type: "controls",
+    items: [
+      { text: [{ text: "Traffic", bold: true }] },
+      { control: { id: "wi-less", icon: "prev", label: "Less", hotkey: "l", disabled: stop2 === 0 } },
+      { select: { id: "wi-mult", value: String(stop2), options: MULTIPLIERS.map((m, i) => ({ value: String(i), label: rate(m) })), ...w.open === "wi-mult" ? { open: true } : {} } },
+      { control: { id: "wi-more", label: "More", icon: "next", hotkey: "m", disabled: stop2 === MULTIPLIERS.length - 1 } }
+    ]
+  });
+  if (node) {
+    blocks.push({
+      type: "controls",
+      items: [
+        { text: [{ text: "Node", bold: true }] },
+        { select: { id: "wi-node", value: node.id, options: nodes.map((n) => ({ value: n.id, label: n.id, ...n.name && n.name !== n.id ? { detail: n.name } : {} })), ...w.open === "wi-node" ? { open: true } : {} } },
+        { control: { id: "wi-down", icon: "power", label: down ? "Bring up" : "Take down", hotkey: "t", ...down ? { active: true } : {} } },
+        { text: [{ text: w.saved === void 0 && w.failed.length ? `Down: ${w.failed.join(", ")}` : "None down", tone: w.saved === void 0 && w.failed.length ? "bad" : "muted" }] }
+      ]
+    });
+  }
+  const a = headlineOf(base.analysis);
+  if (now !== base && now.analysis) {
+    const b = headlineOf(now.analysis);
+    blocks.push({ type: "heading", text: "Against the design as written" });
+    blocks.push(deltaTable([p99Row("Worst p99", a.p99Ms, b.p99Ms), availabilityRow("Availability", a.availability, b.availability), costRow(a.costUsd, b.costUsd)]));
+    if (base.tests.length) {
+      const worse = passCount(now.tests) < passCount(base.tests);
+      const changed = passCount(now.tests) !== passCount(base.tests);
+      blocks.push({ type: "paragraph", text: [{ text: "Checks  ", tone: "muted" }, { text: `${passCount(base.tests)} of ${base.tests.length} pass as written  \u2192  ` }, { text: `${passCount(now.tests)} of ${now.tests.length} pass`, bold: true, ...changed ? { tone: worse ? "bad" : "good" } : {} }] });
+    }
+    const old = new Map(base.analysis.useCases.map((u) => [u.id, u]));
+    const useCases = now.analysis.useCases.filter((u) => u.rps > 0 || (old.get(u.id)?.rps ?? 0) > 0).flatMap((u) => {
+      const was = old.get(u.id);
+      const rows = [p99Row(`p99 \xB7 ${u.name}`, was?.percentiles.p99, u.percentiles.p99), availabilityRow(`Availability \xB7 ${u.name}`, was?.availability, u.availability)];
+      if (was && was.rps !== u.rps) rows.unshift({ label: `Traffic \xB7 ${u.name}`, before: formatRps(was.rps), after: formatRps(u.rps), change: `${formatRps(was.rps)}\u2192${formatRps(u.rps)}`, tone: "same" });
+      return rows;
+    });
+    for (const [title, rows] of [
+      ["Per use case", useCases],
+      ["Checks that changed", flipped(base.tests, now.tests)],
+      ["Load that moved", moved(base.analysis, now.analysis)]
+    ]) {
+      if (rows.length) blocks.push(deltaTable(rows, title));
+    }
+  } else {
+    const items = [`worst p99 ${formatMs(a.p99Ms)}`, `availability ${formatAvailability(a.availability)}`, `cost ${formatUsd(a.costUsd)}`, ...base.tests.length ? [`${passCount(base.tests)} of ${base.tests.length} checks pass`] : []];
+    blocks.push({ type: "paragraph", text: [{ text: "As written  ", bold: true }, { text: items.join(" \xB7 ") }] });
+    blocks.push({ type: "paragraph", small: true, text: "Change the traffic or take nodes down: the diagram, the analysis and the checks follow." });
+  }
+  const results = cache2.saved ?? runWhatIfs(diagram);
+  if (results.length) {
+    blocks.push({ type: "heading", text: "Saved what-ifs" });
+    const arrow2 = (r, up, down2) => {
+      const tone2 = deltaTone(r);
+      const changed = r.change !== "same" && r.before !== r.after;
+      return [{ text: changed && r.tone !== "same" ? `${r.after} ${r.tone === "better" ? up : down2}` : r.after, ...tone2 ? { tone: tone2 } : changed ? {} : { tone: "muted" } }];
+    };
+    blocks.push({
+      type: "table",
+      columns: [{ title: "" }, { title: "What-if" }, { title: "Result" }, { title: "Worst p99", align: "right" }, { title: "Avail", align: "right", drop: 2 }, { title: "Cost", align: "right", drop: 1 }],
+      rows: results.map((r, i) => {
+        const on = w.saved === r.name;
+        const control = { id: `wi-saved-${i}`, label: on ? "Showing" : "Preview", variant: on ? "primary" : "default" };
+        const cells = [
+          { control },
+          [{ text: r.name, bold: true }],
+          [{ text: r.passed ? "pass" : "fail", chip: r.passed ? "good" : "bad" }],
+          arrow2(p99Row("", a.p99Ms, r.headline.p99Ms), "\u2193", "\u2191"),
+          arrow2(availabilityRow("", a.availability, r.headline.availability), "\u2191", "\u2193"),
+          arrow2(costRow(a.costUsd, r.headline.costUsd), "\u2193", "\u2191")
+        ];
+        return { cells };
+      })
+    });
+    for (const text of results.flatMap((r) => r.warnings)) blocks.push({ type: "callout", tone: "warn", text });
+  }
+  const loaded = base.analysis.useCases.filter((u) => u.rps > 0);
+  const busiest = loaded.reduce((b, u) => !b || u.rps > b.rps ? u : b, void 0);
+  const swept = loaded.find((u) => u.id === w.sweep) ?? busiest;
+  if (swept) {
+    const result = w.sweep !== void 0 ? cache2.sweep ?? sweep(diagram, swept.name, swept.rps * SWEEP.from, swept.rps * SWEEP.to, { steps: SWEEP.steps }) : void 0;
+    blocks.push({ type: "heading", text: "Sweep" });
+    blocks.push({
+      type: "controls",
+      items: [
+        ...loaded.length > 1 ? [{ select: { id: "wi-sweep-uc", value: swept.id, options: loaded.map((u) => ({ value: u.id, label: u.name })), ...w.open === "wi-sweep-uc" ? { open: true } : {} } }] : [],
+        { control: { id: "wi-sweep", icon: "bolt", label: `Sweep ${formatRps(swept.rps * SWEEP.from)} to ${formatRps(swept.rps * SWEEP.to)}`, hotkey: "s", variant: result ? "default" : "primary" } }
+      ]
+    });
+    if (!result) blocks.push({ type: "paragraph", small: true, text: "Where each node saturates and how far the requirements hold, from half to ten times today's traffic." });
+    else {
+      const today = swept.rps;
+      const verdict = result.maxPassingRps === void 0 ? `"${result.useCase}" fails already at ${formatRps(result.from)}.` : result.maxPassingRps >= result.to ? `"${result.useCase}" passes over the whole range, up to ${formatRps(result.to)}.` : `"${result.useCase}" passes up to ${formatRps(result.maxPassingRps)}, ${Number((result.maxPassingRps / today).toFixed(1))}\xD7 today's ${formatRps(today)}.`;
+      blocks.push({ type: "paragraph", text: [{ text: verdict, bold: true, ...result.maxPassingRps === void 0 ? { tone: "bad" } : {} }] });
+      if (result.saturation.length === 0) blocks.push({ type: "paragraph", small: true, text: "No node saturates in this range." });
+      else {
+        blocks.push({
+          type: "chart",
+          chart: {
+            from: result.from,
+            to: result.to,
+            today,
+            ...result.maxPassingRps !== void 0 ? { maxPassing: Math.min(result.maxPassingRps, result.to) } : {},
+            labels: { from: formatRps(result.from), to: formatRps(result.to), today: formatRps(today), ...result.maxPassingRps !== void 0 ? { maxPassing: formatRps(result.maxPassingRps) } : {} },
+            bars: result.saturation.map((n) => ({ node: n.node, rps: n.rps, value: n.atStart ? `below ${formatRps(n.rps)}` : formatRps(n.rps), ...n.atStart ? { atStart: true } : {} }))
+          }
+        });
+      }
+    }
+  }
+  return { kind: "page", blocks };
+}
+function hldPage(markdown) {
+  return {
+    kind: "page",
+    blocks: [
+      {
+        type: "controls",
+        items: [{ control: { id: "hld-copy", icon: "copy", label: "Copy HLD markdown", hotkey: "c", variant: "primary" } }, { text: [{ text: "with its Mermaid diagrams, for a README or a wiki", tone: "muted" }] }]
+      },
+      ...markdownBlocks(markdown)
+    ]
+  };
+}
+
 // ../plugin/src/graphics.ts
 import { atom, read, update } from "claude-code";
+
+// ../plugin/src/helper.ts
+var worker;
+var refused = false;
+var seq = 0;
+var cache;
+var pruned = false;
+var TIMEOUT_MS = 6e4;
+async function cacheDir($) {
+  if (cache) return cache;
+  const dir = await $.env.get("TMPDIR").catch(() => void 0);
+  cache = `${(dir || "/tmp").replace(/\/+$/, "")}/proschi-raster`;
+  return cache;
+}
+function withPrune(input) {
+  if (pruned) return input;
+  pruned = true;
+  return { ...input, prune: true };
+}
+function helper($) {
+  return `${$.plugin.root}/hooks/raster.cjs`;
+}
+async function oneShot($, input) {
+  const { exitCode, stdout, stderr } = await $.process.run(["node", helper($)], { stdin: JSON.stringify(input), timeoutMs: TIMEOUT_MS });
+  if (exitCode !== 0) throw new Error(stderr.trim() || `raster exited with ${exitCode}`);
+  return JSON.parse(stdout);
+}
+function start($, root) {
+  const w = { dir: `${root}/serve-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, waiting: /* @__PURE__ */ new Map() };
+  worker = w;
+  void (async () => {
+    let buffered = "";
+    let started = false;
+    try {
+      const stream = $.process.spawn({ argv: ["node", helper($), "--serve", w.dir] });
+      for await (const chunk of stream) {
+        started = true;
+        if (chunk.stream !== "stdout") continue;
+        buffered += chunk.text;
+        let at;
+        while ((at = buffered.indexOf("\n")) >= 0) {
+          const line2 = buffered.slice(0, at);
+          buffered = buffered.slice(at + 1);
+          settle(w, line2);
+        }
+      }
+    } catch (error) {
+      if (!started) refused = true;
+      $.ui.log(`proschi: the raster worker ${started ? "failed" : "did not start"}: ${String(error)}`, { to: "debug" });
+    }
+    if (worker === w) worker = void 0;
+    for (const [id, waiter] of w.waiting) {
+      w.waiting.delete(id);
+      oneShot($, waiter.input).then(waiter.resolve, (error) => waiter.reject(error instanceof Error ? error : new Error(String(error))));
+    }
+  })();
+  return w;
+}
+function settle(w, line2) {
+  let reply;
+  try {
+    reply = JSON.parse(line2);
+  } catch {
+    return;
+  }
+  if (typeof reply.id !== "string") return;
+  const waiter = w.waiting.get(reply.id);
+  if (!waiter) return;
+  w.waiting.delete(reply.id);
+  if (typeof reply.error === "string") waiter.reject(new Error(reply.error));
+  else waiter.resolve(reply.output);
+}
+async function ask($, input, priority = "now") {
+  if (refused) return oneShot($, input);
+  const root = await cacheDir($);
+  const w = worker ?? start($, root);
+  const id = `${priority === "now" ? "a" : "b"}${String(seq++).padStart(9, "0")}`;
+  return new Promise((resolve, reject) => {
+    const timer = $.clock.after(TIMEOUT_MS, () => {
+      if (!w.waiting.delete(id)) return;
+      reject(new Error(`the raster worker did not answer in ${TIMEOUT_MS / 1e3} s`));
+    });
+    w.waiting.set(id, {
+      input,
+      resolve: (v) => {
+        timer.cancel();
+        resolve(v);
+      },
+      reject: (e) => {
+        timer.cancel();
+        reject(e);
+      }
+    });
+    $.fs.write(`${w.dir}/${id}.req.json`, JSON.stringify(input)).catch((error) => {
+      if (!w.waiting.delete(id)) return;
+      timer.cancel();
+      oneShot($, input).then(resolve, reject);
+      $.ui.log(`proschi: could not hand the raster worker a request: ${String(error)}`, { to: "debug" });
+    });
+  });
+}
+var panels = /* @__PURE__ */ new Map();
+var drawing = /* @__PURE__ */ new Set();
+var wanted = /* @__PURE__ */ new Set();
+var batch;
+var panelKey = (p) => JSON.stringify([p.theme, p.columns, p.panel]);
+function panelOf($, p, priority = "now") {
+  const key = panelKey(p);
+  const done = panels.get(key);
+  if (done) return done;
+  if (drawing.has(key)) {
+    if (priority === "now") wanted.add(key);
+    return void 0;
+  }
+  drawing.add(key);
+  if (!batch) {
+    batch = { now: /* @__PURE__ */ new Map(), later: /* @__PURE__ */ new Map() };
+    void Promise.resolve().then(() => flush($));
+  }
+  batch[priority].set(key, p);
+  return void 0;
+}
+function prefetch($, asks) {
+  for (const p of asks) panelOf($, p, "later");
+}
+async function flush($) {
+  const b = batch;
+  batch = void 0;
+  const outDir = await cacheDir($);
+  for (const priority of ["now", "later"]) {
+    const asks = [...b[priority].entries()];
+    if (asks.length === 0) continue;
+    for (const theme2 of new Set(asks.map(([, p]) => p.theme))) {
+      const mine = asks.filter(([, p]) => p.theme === theme2);
+      const input = withPrune({ kind: "panels", outDir, theme: theme2, panels: mine.map(([key, p]) => ({ id: key, panel: p.panel, columns: p.columns, variants: ["hover", "pressed"] })) });
+      void ask($, input, priority).then(
+        (out) => {
+          const answers = out.panels ?? [];
+          for (const [key] of mine) panels.set(key, answers.find((a) => a.id === key) ?? { error: "the helper answered no panel" });
+        },
+        (error) => {
+          for (const [key] of mine) panels.set(key, { error: error instanceof Error ? error.message : String(error) });
+        }
+      ).finally(() => {
+        for (const [key] of mine) drawing.delete(key);
+        for (const [key] of mine) {
+          const a = panels.get(key);
+          if (a && "error" in a) $.ui.log(`proschi: a panel was not drawn: ${a.error}`, { to: "debug" });
+        }
+        const redraw = priority === "now" || mine.some(([key]) => wanted.has(key));
+        for (const [key] of mine) wanted.delete(key);
+        if (redraw) $.ui.invalidate("ui.render");
+      });
+    }
+  }
+}
+
+// ../plugin/src/graphics.ts
 var graphicsMode = (value) => value === "on" || value === "off" ? value : "auto";
 var UNKNOWN = { status: "unknown" };
 var probed = atom({ plugin: "proschi", key: "graphics" }, UNKNOWN);
@@ -9117,45 +9807,39 @@ var PROBE_TRIES = 6;
 var PROBE_MS = 150;
 var rasters = /* @__PURE__ */ new Map();
 var pending = /* @__PURE__ */ new Set();
+var wanted2 = /* @__PURE__ */ new Set();
 var bytes = /* @__PURE__ */ new Map();
-var cache;
 var theme;
 var probing = false;
-var pruned = false;
-async function cacheDir($) {
-  if (cache) return cache;
-  const dir = await $.env.get("TMPDIR").catch(() => void 0);
-  cache = `${(dir || "/tmp").replace(/\/+$/, "")}/proschi-raster`;
-  return cache;
-}
 async function themeOf($) {
   if (theme) return theme;
   const rows = await $.config.list().catch(() => []);
   theme = /light/i.test(String(rows.find((row) => row.key === "theme")?.value ?? "")) ? "light" : "dark";
   return theme;
 }
-function rasterOf($, request2) {
+function rasterOf($, request2, priority = "now") {
   const key = `${keyOf(request2.source)}\0${JSON.stringify(request2.options)}`;
   const done = rasters.get(key);
-  if (done || pending.has(key)) return done;
+  if (done) return done;
+  if (pending.has(key)) {
+    if (priority === "now") wanted2.add(key);
+    return void 0;
+  }
   pending.add(key);
   void (async () => {
-    const outDir = await cacheDir($);
     const { source, path, imports, view } = request2.source;
-    const stdin = JSON.stringify({ source, path, imports, view, outDir, options: request2.options, ...pruned ? {} : { prune: true } });
-    pruned = true;
-    const answer = await $.process.run(["node", `${$.plugin.root}/hooks/raster.cjs`], { stdin, timeoutMs: 6e4 }).then(
-      ({ exitCode, stdout, stderr }) => {
-        if (exitCode !== 0) return { error: stderr.trim() || `raster exited with ${exitCode}` };
-        const out = JSON.parse(stdout);
-        return typeof out.base === "string" && out.width > 0 && out.height > 0 ? out : { error: "raster answered no picture" };
+    const input = withPrune({ source, path, imports, view, outDir: await cacheDir($), options: request2.options });
+    const answer = await ask($, input, priority).then(
+      (out) => {
+        const o = out;
+        return typeof o.base === "string" && o.width > 0 && o.height > 0 ? o : { error: "raster answered no picture" };
       },
-      (error) => ({ error: String(error) })
-    ).catch((error) => ({ error: String(error) }));
-    if ("error" in answer) $.ui.log(`proschi: no picture, the text drawing stands: ${answer.error}`, { to: "debug" });
+      (error) => ({ error: error instanceof Error ? error.message : String(error) })
+    );
+    if ("error" in answer) $.ui.log(`proschi: no picture: ${answer.error}`, { to: "debug" });
     rasters.set(key, answer);
     pending.delete(key);
-    $.ui.invalidate("ui.render");
+    if (priority === "now" || wanted2.delete(key)) $.ui.invalidate("ui.render");
   })();
   return void 0;
 }
@@ -9184,7 +9868,9 @@ async function pngOf($, file) {
   bytes.set(file, read3.base64);
   return read3.base64;
 }
+var headless = false;
 async function probeOf($) {
+  if (headless) return { status: "no" };
   const p = await read($, probed);
   return p && (p.status === "yes" || p.status === "no" || p.status === "tmux") ? p : UNKNOWN;
 }
@@ -9196,22 +9882,154 @@ function probe($, requestId, key) {
   if (probing) return;
   probing = true;
   let tries = 0;
-  const settle = async (answer) => {
+  const settle2 = async (answer) => {
     timer.cancel();
     probing = false;
-    if (!answer) return;
+    if (!answer) {
+      $.ui.invalidate("ui.render");
+      return;
+    }
     await update($, probed, () => answer);
     $.ui.invalidate("ui.render");
   };
   const timer = $.clock.every(PROBE_MS, async () => {
-    if (tries++ >= PROBE_TRIES) return settle({ status: "no" });
+    if (tries++ >= PROBE_TRIES) return settle2({ status: "no" });
     const byName = await $.ui.blit({ requestId, key, source: probeSource($) }).catch((error) => ({ deny: String(error), fix: void 0 }));
-    if (!byName.deny) return settle({ status: "yes", form: "file" });
-    if (byName.fix === "tmux-passthrough") return settle({ status: "tmux" });
-    if (/no-surface/.test(byName.deny)) return settle(void 0);
+    if (!byName.deny) return settle2({ status: "yes", form: "file" });
+    if (byName.fix === "tmux-passthrough") return settle2({ status: "tmux" });
+    if (/no-surface/.test(byName.deny)) {
+      headless = true;
+      return settle2(void 0);
+    }
     const asBytes = await $.ui.blit({ requestId, key, source: { png: PROBE_PNG } }).catch((error) => ({ deny: String(error), fix: void 0 }));
-    if (!asBytes.deny) return settle({ status: "yes", form: "png" });
-    if (asBytes.fix === "tmux-passthrough") return settle({ status: "tmux" });
+    if (!asBytes.deny) return settle2({ status: "yes", form: "png" });
+    if (asBytes.fix === "tmux-passthrough") return settle2({ status: "tmux" });
+  });
+}
+
+// ../plugin/src/picture.tsx
+var shown = /* @__PURE__ */ new Map();
+var live2 = /* @__PURE__ */ new Map();
+var overlayKey = (site) => `ov-${site}`;
+var tileKey = (site, piece, i) => `t-${site}-${piece}-${i}`;
+var timings = {};
+function loading(ui, key, rows, probe2) {
+  return /* @__PURE__ */ h(ui.Box, { key: `load-${key}`, flexDirection: "column", height: Math.max(1, rows) }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row" }, /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Rendering diagram\u2026"), probe2));
+}
+async function pictureSite($, ui, s) {
+  const resolved = [];
+  let waiting = false;
+  for (const p of s.pieces) {
+    if (!("panel" in p)) {
+      if (p.picture) resolved.push({ id: p.id, picture: p.picture });
+      else waiting = true;
+      continue;
+    }
+    const out = panelOf($, { panel: p.panel, columns: p.columns, theme: s.theme });
+    if (out && "error" in out) return { error: out.error };
+    if (!out) waiting = true;
+    else resolved.push({ id: p.id, out });
+  }
+  if (s.ahead?.length) prefetch($, s.ahead.map((a) => ({ ...a, theme: s.theme })));
+  let now;
+  if (!waiting) {
+    now = { pieces: resolved, actions: s.actions };
+    const was = live2.get(s.site);
+    if (was?.pressedAt !== void 0) {
+      timings.press = await $.clock.now() - was.pressedAt;
+      $.ui.log(`proschi: a press drew in ${timings.press} ms`, { to: "debug" });
+      was.pressedAt = void 0;
+    }
+    shown.set(s.site, now);
+  } else now = shown.get(s.site);
+  if (!now) return { element: loading(ui, s.site, s.rows) };
+  return { element: await build($, ui, s, now) };
+}
+async function build($, ui, s, d) {
+  const source = (file) => sourceOf($, file, s.form);
+  const tiles = /* @__PURE__ */ new Map();
+  const controls = [];
+  const hotkeys = /* @__PURE__ */ new Map();
+  const parts = [];
+  let top = 0;
+  let width = 1;
+  for (const p of d.pieces) {
+    if ("picture" in p) {
+      const pic = p.picture;
+      parts.push(
+        /* @__PURE__ */ h(ui.Box, { key: pic.anchorKey ?? `pic-${s.site}-${p.id}`, flexDirection: "column", height: pic.rows }, /* @__PURE__ */ h(ui.Image, { key: pic.key, source: await source(pic.file), columns: pic.columns, rows: pic.rows, alt: pic.alt }))
+      );
+      top += pic.rows;
+      width = Math.max(width, pic.columns);
+      continue;
+    }
+    const { out } = p;
+    const strips = /* @__PURE__ */ new Map();
+    out.tiles.forEach((tile, i) => strips.set(tile.row, [...strips.get(tile.row) ?? [], { tile, i }]));
+    const rows = [];
+    for (const strip of strips.values()) {
+      const cells = [];
+      for (const { tile, i } of strip) {
+        const key = tileKey(s.site, p.id, i);
+        cells.push(/* @__PURE__ */ h(ui.Image, { key, source: await source(tile.file), columns: tile.columns, rows: tile.rows, alt: " " }));
+        const c = tile.control;
+        if (!c || c.disabled) continue;
+        const id = `${p.id}/${c.id}`;
+        tiles.set(id, { key, file: tile.file, ...tile.hoverFile ? { hoverFile: tile.hoverFile } : {}, ...tile.pressedFile ? { pressedFile: tile.pressedFile } : {} });
+        controls.push({ id, col: tile.col, row: top + tile.row, columns: tile.columns, rows: tile.rows });
+        if (c.hotkey && s.hotkeys && s.actions[id]) hotkeys.set(c.hotkey, id);
+      }
+      rows.push(
+        /* @__PURE__ */ h(ui.Box, { flexDirection: "row", height: strip[0].tile.rows }, cells)
+      );
+    }
+    parts.push(
+      /* @__PURE__ */ h(ui.Box, { key: `p-${s.site}-${p.id}`, flexDirection: "column", height: out.rows }, rows)
+    );
+    top += out.rows;
+    width = Math.max(width, out.columns);
+  }
+  const was = live2.get(s.site);
+  live2.set(s.site, { requestId: s.requestId, tiles, actions: d.actions, hotkeys, ...s.form ? { form: s.form } : {}, ...was?.pressedAt !== void 0 ? { pressedAt: was.pressedAt } : {} });
+  const overlay = overlayKey(s.site);
+  return /* @__PURE__ */ h(ui.Box, { key: `site-${s.site}`, flexDirection: "column", width, height: top }, parts, /* @__PURE__ */ h(ui.Box, { position: "absolute", top: 0, left: 0, width, height: top }, /* @__PURE__ */ h(ui.Client, { key: overlay, module: "./uiOverlay.js", props: { controls }, width, height: top })), hotkeys.size > 0 && /* @__PURE__ */ h(ui.Box, { key: `keys-${s.site}`, display: "none" }, [...hotkeys].map(([key, id]) => /* @__PURE__ */ h(ui.Button, { key: `hk-${s.site}-${key}`, label: key, hotkey: key, onPress: (press) => void act($, s.site, id, press.surface) }))));
+}
+async function blit($, l, ref, file) {
+  if (!ref || !file) return;
+  const r = await $.ui.blit({ requestId: l.requestId, key: ref.key, source: await sourceOf($, file, l.form) }).catch((error) => ({ deny: String(error) }));
+  if (r.deny) $.ui.log(`proschi: blit refused: ${r.deny}`, { to: "debug" });
+}
+async function act($, site, id, surface) {
+  const l = live2.get(site);
+  const action = l?.actions[id];
+  if (!l || !action) return;
+  l.pressedAt = await $.clock.now();
+  action(surface);
+}
+function registerPicture(on) {
+  on("ui.message", async ($, e, next) => {
+    const site = e.element.startsWith("ov-") ? e.element.slice(3) : void 0;
+    const l = site !== void 0 ? live2.get(site) : void 0;
+    if (!site || !l) return next(e);
+    const data = e.data ?? {};
+    const id = typeof data.id === "string" ? data.id : "";
+    const started = await $.clock.now();
+    if (data.type === "hover") {
+      if (l.hovered && l.hovered !== id) await blit($, l, l.tiles.get(l.hovered), l.tiles.get(l.hovered)?.file);
+      l.hovered = id || void 0;
+      if (id) await blit($, l, l.tiles.get(id), l.tiles.get(id)?.hoverFile);
+      timings.hover = await $.clock.now() - started;
+    } else if (data.type === "down") {
+      await blit($, l, l.tiles.get(id), l.tiles.get(id)?.pressedFile);
+    } else if (data.type === "press") {
+      const ref = l.tiles.get(id);
+      await blit($, l, ref, ref?.hoverFile ?? ref?.file);
+      await act($, site, id, e.surface);
+    } else if (data.type === "key" && typeof data.key === "string") {
+      const target = l.hotkeys.get(data.key);
+      if (target) await act($, site, target, e.surface);
+    }
+    return {};
   });
 }
 
@@ -9463,7 +10281,7 @@ function formatTraffic2(rps, avgRps) {
 }
 var formatMs2 = (ms) => `${ms >= 100 ? Math.round(ms) : formatNumber(Number(ms.toFixed(1)))} ms`;
 var formatPercent2 = (fraction) => `${formatNumber(Number((fraction * 100).toFixed(1)))}%`;
-var formatUsd2 = (usd3) => `$${Math.round(usd3).toLocaleString("en-US")}`;
+var formatUsd2 = (usd4) => `$${Math.round(usd4).toLocaleString("en-US")}`;
 function formatGb(gb) {
   const n = (x, digits) => Number(x.toFixed(digits)).toLocaleString("en-US");
   return gb >= 1e3 ? `${n(gb / 1e3, 1)} TB` : `${n(gb, gb < 10 ? 1 : 0)} GB`;
@@ -9834,7 +10652,7 @@ var HEAT = { warm: "#ffd23f", hot: "#ff7ab4", over: "#ff6b61" };
 var line = (...segs) => ({ segs: segs.map((s) => typeof s === "string" ? { text: s } : s) });
 var blank = () => line("");
 var heading = (text) => line({ text, bold: true });
-var usd2 = (x) => formatUsd(x).replace("/month", "");
+var usd3 = (x) => formatUsd(x).replace("/month", "");
 var cut = (text, room) => text.length <= room ? text : room <= 0 ? "" : `${text.slice(0, Math.max(0, room - 1))}\u2026`;
 function table2(cols, rows, width) {
   const seg = (c) => c === void 0 ? { text: "" } : typeof c === "string" ? { text: c } : c;
@@ -9876,7 +10694,7 @@ function stats(items, width) {
   if (current.length) out.push({ segs: current });
   return out;
 }
-var splits = (n) => n.writeLoadRps > 0 && (n.writeScaling === "shards" || n.readCapacityRps !== n.writeCapacityRps);
+var splits2 = (n) => n.writeLoadRps > 0 && (n.writeScaling === "shards" || n.readCapacityRps !== n.writeCapacityRps);
 var utilTone = (n) => n.saturated ? TONE.bad : n.utilization > HOT ? TONE.warn : void 0;
 function utilCell(u, tone2) {
   const filled = Math.max(u > 0 ? 1 : 0, Math.min(5, Math.round(u * 5)));
@@ -9906,7 +10724,7 @@ function analysisLines(diagram, analysis, width) {
   out.push(
     ...stats(
       [
-        { label: "Total cost", value: `${formatUsd(analysis.totalCostUsd)}${analysis.totalEgressUsd > 0 ? ` (incl. ${usd2(analysis.totalEgressUsd)} egress)` : ""}` },
+        { label: "Total cost", value: `${formatUsd(analysis.totalCostUsd)}${analysis.totalEgressUsd > 0 ? ` (incl. ${usd3(analysis.totalEgressUsd)} egress)` : ""}` },
         { label: "Saturated", value: String(saturated), tone: saturated ? TONE.bad : TONE.good },
         { label: "SPOFs", value: String(spofs.length), tone: spofs.length ? TONE.warn : TONE.good },
         { label: "Use cases with traffic", value: String(analysis.useCases.filter((u) => u.rps > 0).length) }
@@ -9924,14 +10742,14 @@ function analysisLines(diagram, analysis, width) {
     const name = `${n.id}${n.replicas > 1 ? ` \xD7${n.replicas}` : ""}`;
     const cells = [
       { text: name, bold: true },
-      splits(n) ? `R ${formatRps(n.readLoadRps).replace(" rps", "")} / ${formatRps(n.readCapacityRps)}` : `${formatRps(n.loadRps).replace(" rps", "")} / ${formatRps(n.capacityRps)}`,
+      splits2(n) ? `R ${formatRps(n.readLoadRps).replace(" rps", "")} / ${formatRps(n.readCapacityRps)}` : `${formatRps(n.loadRps).replace(" rps", "")} / ${formatRps(n.capacityRps)}`,
       utilCell(n.utilization, tone2),
       formatMs(n.latencyMs),
       formatAvailability(n.availability),
-      `${usd2(n.costUsd)}${n.egressUsd > 0 ? ` +${usd2(n.egressUsd)}` : ""}`
+      `${usd3(n.costUsd)}${n.egressUsd > 0 ? ` +${usd3(n.egressUsd)}` : ""}`
     ];
     rows.push(cells);
-    if (splits(n)) {
+    if (splits2(n)) {
       rows.push([
         { text: `  ${n.shards > 1 ? `${n.shards} shards` : ""}`, dim: true },
         `W ${formatRps(n.writeLoadRps).replace(" rps", "")} / ${formatRps(n.writeCapacityRps)}`,
@@ -10009,9 +10827,9 @@ function analysisLines(diagram, analysis, width) {
             return [
               { text: i === 0 ? by : "", dim: true },
               { text: s.label, bold: true },
-              usd2(s.costUsd),
+              usd3(s.costUsd),
               b.totalCostUsd > 0 ? formatPercent(s.costUsd / b.totalCostUsd) : "\u2014",
-              budget2 === void 0 ? { text: "\u2014", dim: true } : { text: `${usd2(budget2)}${over ? " over" : ""}`, color: over ? TONE.bad : TONE.good },
+              budget2 === void 0 ? { text: "\u2014", dim: true } : { text: `${usd3(budget2)}${over ? " over" : ""}`, color: over ? TONE.bad : TONE.good },
               { text: s.nodes.join(", "), dim: true }
             ];
           })
@@ -10047,12 +10865,12 @@ function testLines(results, width) {
   const out = [line(failing.length ? { text: `${failing.length} of ${results.length} failing`, color: TONE.bad, bold: true } : { text: `All ${results.length} passing`, color: TONE.good, bold: true })];
   const item = (r) => {
     const mark = r.passed ? { text: "\u2713 ", color: TONE.good } : { text: "\u2717 ", color: TONE.bad };
-    out.push(line(mark, { text: r.name, bold: !r.passed }, { text: where2(r), dim: true }));
+    out.push(line(mark, { text: r.name, bold: !r.passed }, { text: where3(r), dim: true }));
     out.push({ segs: [{ text: r.message, dim: r.passed }], wrap: true, indent: 2 });
     if (!r.passed && r.hint) out.push({ segs: [{ text: `\u2192 ${r.hint}`, color: TONE.warn }], wrap: true, indent: 2 });
     if (r.assertions && r.assertions.length > 1) {
       for (const a of r.assertions) {
-        out.push({ segs: [a.passed ? { text: "\u2713 ", color: TONE.good } : { text: "\u2717 ", color: TONE.bad }, { text: a.message, dim: a.passed }, { text: where2(a), dim: true }], wrap: true, indent: 4 });
+        out.push({ segs: [a.passed ? { text: "\u2713 ", color: TONE.good } : { text: "\u2717 ", color: TONE.bad }, { text: a.message, dim: a.passed }, { text: where3(a), dim: true }], wrap: true, indent: 4 });
         if (!a.passed && a.hint) out.push({ segs: [{ text: `\u2192 ${a.hint}`, color: TONE.warn }], wrap: true, indent: 6 });
       }
     }
@@ -10063,9 +10881,9 @@ function testLines(results, width) {
   }
   return out;
 }
-var where2 = (r) => r.loc ? ` ${r.loc.file ? `${r.loc.file}:` : "line "}${r.loc.line}` : "";
+var where3 = (r) => r.loc ? ` ${r.loc.file ? `${r.loc.file}:` : "line "}${r.loc.line}` : "";
 function passingLines(results, width) {
-  return results.filter((r) => r.passed).map((r) => line({ text: "\u2713 ", color: TONE.good }, { text: cut(`${r.name}: ${r.message}`, width - 2 - where2(r).length), dim: true }, { text: where2(r), dim: true }));
+  return results.filter((r) => r.passed).map((r) => line({ text: "\u2713 ", color: TONE.good }, { text: cut(`${r.name}: ${r.message}`, width - 2 - where3(r).length), dim: true }, { text: where3(r), dim: true }));
 }
 function legendLine(critical, width) {
   const swatch = (bg) => ({ text: "  ", bg });
@@ -10126,16 +10944,16 @@ var Grid2 = class {
     return x;
   }
 };
-function columnsOf(seq, width) {
-  const n = Math.max(1, seq.participants.length);
+function columnsOf(seq2, width) {
+  const n = Math.max(1, seq2.participants.length);
   const slot = Math.max(MIN_SLOT, Math.min(MAX_SLOT, Math.floor((width - 2 * MARGIN2) / n)));
-  const x = new Map(seq.participants.map((p, i) => [p.id, MARGIN2 + slot * i + Math.floor(slot / 2)]));
+  const x = new Map(seq2.participants.map((p, i) => [p.id, MARGIN2 + slot * i + Math.floor(slot / 2)]));
   return { slot, total: 2 * MARGIN2 + slot * n, x };
 }
-var sequenceWidth = (seq, width) => columnsOf(seq, width).total;
-function sequenceLines(seq, width, current = []) {
-  if (seq.participants.length === 0) return [{ segs: [{ text: "This scenario has no steps.", dim: true }] }];
-  const { slot, total, x } = columnsOf(seq, width);
+var sequenceWidth = (seq2, width) => columnsOf(seq2, width).total;
+function sequenceLines(seq2, width, current = []) {
+  if (seq2.participants.length === 0) return [{ segs: [{ text: "This scenario has no steps.", dim: true }] }];
+  const { slot, total, x } = columnsOf(seq2, width);
   const g = new Grid2(total);
   const lifelines = () => {
     const y = g.row();
@@ -10158,9 +10976,9 @@ function sequenceLines(seq, width, current = []) {
     g.put(y, total - 1 - at, right, { color: FRAME2 });
     if (title) g.text(y, at + 2, cut(` ${title} `, total - 2 * at - 4), { color: FRAME2, bold: true });
   };
-  const names = seq.participants.map((p) => nameRows(p.name, slot - 5));
+  const names = seq2.participants.map((p) => nameRows(p.name, slot - 5));
   const top = Array.from({ length: Math.max(...names.map((n) => n.length)) + 2 }, () => g.row());
-  seq.participants.forEach((p, i) => {
+  seq2.participants.forEach((p, i) => {
     const at = x.get(p.id);
     const w = Math.max(...names[i].map((n) => n.length)) + 4;
     const left = at - Math.floor(w / 2);
@@ -10173,10 +10991,10 @@ function sequenceLines(seq, width, current = []) {
     g.text(top[top.length - 1], left, `\u2570${"\u2500".repeat(w - 2)}\u256F`);
     g.put(top[top.length - 1], at, "\u252C");
   });
-  const multiple = seq.useCase.scenarios.length > 1 || !!seq.condition;
+  const multiple = seq2.useCase.scenarios.length > 1 || !!seq2.condition;
   if (multiple) {
-    const error = seq.scenario.outcome === "error";
-    rule(0, "\u250C", "\u2510", `alt ${error ? "\u2717" : "\u2713"} ${seq.scenario.name}${seq.condition ? ` \xB7 when ${seq.condition}` : ""}`);
+    const error = seq2.scenario.outcome === "error";
+    rule(0, "\u250C", "\u2510", `alt ${error ? "\u2717" : "\u2713"} ${seq2.scenario.name}${seq2.condition ? ` \xB7 when ${seq2.condition}` : ""}`);
     sides.push(0);
   }
   const now = new Set(current);
@@ -10212,7 +11030,7 @@ function sequenceLines(seq, width, current = []) {
       g.put(a, right ? hi - 1 : lo + 1, " ");
     } else g.put(a, right ? hi : lo, head, arrow2);
   };
-  for (const item of seq.items) {
+  for (const item of seq2.items) {
     if (item.kind === "message") {
       draw(item.message);
       continue;
@@ -10266,12 +11084,12 @@ function sequenceTab(t) {
   const steps = pick2.scenario.steps;
   const playing = player.mode === "play" && player.pick === pick2.value;
   const step = Math.max(0, Math.min(player.step, steps.length - 1));
-  const seq = buildSequence(pick2.useCase, pick2.scenario, diagram.nodes);
-  const wide = sequenceWidth(seq, columns);
+  const seq2 = buildSequence(pick2.useCase, pick2.scenario, diagram.nodes);
+  const wide = sequenceWidth(seq2, columns);
   const label = (u, s) => `${u.name}${u.scenarios.length > 1 ? ` \u203A ${s.outcome === "error" ? "\u2717" : "\u2713"} ${s.name}` : ""}`;
   const total = steps.length;
   const counter = playing ? `Step ${String(step + 1).padStart(String(total).length)} of ${total}` : `${total} step${total === 1 ? "" : "s"}`;
-  return /* @__PURE__ */ h(ui.Box, { key: "body-sequence", flexDirection: "column" }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "Scenario"), /* @__PURE__ */ h(ui.Select, { key: "seq-pick", value: pick2.value, options: picks.map((p) => ({ value: p.value, label: label(p.useCase, p.scenario) })), onSelect: t.pick })), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Button, { key: "seq-reset", label: "\u21E4", hotkey: "r", onPress: () => t.go(0, false) }), /* @__PURE__ */ h(ui.Button, { key: "seq-prev", label: "\u2039", hotkey: "b", onPress: () => t.go(playing ? step - 1 : 0, false) }), /* @__PURE__ */ h(ui.Button, { key: "seq-play", label: playing && player.isPlaying ? "\u275A\u275A Pause" : " \u25B6 Play ", variant: "primary", hotkey: "p", onPress: () => playing && player.isPlaying ? t.pause() : t.go(playing && step < total - 1 ? step : 0, true) }), /* @__PURE__ */ h(ui.Button, { key: "seq-next", label: "\u203A", hotkey: "n", onPress: () => t.go(playing ? step + 1 : 0, false) }), /* @__PURE__ */ h(ui.Button, { key: "seq-end", label: "\u21E5", hotkey: "e", onPress: () => t.go(total - 1, false) }), /* @__PURE__ */ h(ui.Text, null, counter)), wide > columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", seq.participants.length, " participants take ", wide, " columns, wider than the ", columns, " here: widen the window to see the right side."), linesView(ui, sequenceLines(seq, columns, playing ? currentStepsOf(steps, step) : []), "seq-lines"));
+  return /* @__PURE__ */ h(ui.Box, { key: "body-sequence", flexDirection: "column" }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "Scenario"), /* @__PURE__ */ h(ui.Select, { key: "seq-pick", value: pick2.value, options: picks.map((p) => ({ value: p.value, label: label(p.useCase, p.scenario) })), onSelect: t.pick })), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Button, { key: "seq-reset", label: "\u21E4", hotkey: "r", onPress: () => t.go(0, false) }), /* @__PURE__ */ h(ui.Button, { key: "seq-prev", label: "\u2039", hotkey: "b", onPress: () => t.go(playing ? step - 1 : 0, false) }), /* @__PURE__ */ h(ui.Button, { key: "seq-play", label: playing && player.isPlaying ? "\u275A\u275A Pause" : " \u25B6 Play ", variant: "primary", hotkey: "p", onPress: () => playing && player.isPlaying ? t.pause() : t.go(playing && step < total - 1 ? step : 0, true) }), /* @__PURE__ */ h(ui.Button, { key: "seq-next", label: "\u203A", hotkey: "n", onPress: () => t.go(playing ? step + 1 : 0, false) }), /* @__PURE__ */ h(ui.Button, { key: "seq-end", label: "\u21E5", hotkey: "e", onPress: () => t.go(total - 1, false) }), /* @__PURE__ */ h(ui.Text, null, counter)), wide > columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", seq2.participants.length, " participants take ", wide, " columns, wider than the ", columns, " here: widen the window to see the right side."), linesView(ui, sequenceLines(seq2, columns, playing ? currentStepsOf(steps, step) : []), "seq-lines"));
 }
 
 // ../plugin/src/views/tabs.tsx
@@ -10316,145 +11134,6 @@ function testsTab(ui, doc, columns, open, toggle2) {
   return /* @__PURE__ */ h(ui.Box, { key: "body-tests", flexDirection: "column" }, linesView(ui, bodyLines("tests", doc, columns), "tests-lines"), passing2 > 0 && /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, /* @__PURE__ */ h(ui.Button, { key: "tests-passing", label: `${open ? "\u25BE" : "\u25B8"} ${passing2} passing`, hotkey: "a", dimColor: !open, onPress: toggle2 }), open && linesView(ui, passingLines(doc.tests, columns), "tests-passing-lines")));
 }
 
-// ../plugin/src/uiCheck.tsx
-var UI_CHECK = "proschi-ui-check";
-var OVERLAY = "ui-check-overlay";
-var panels = /* @__PURE__ */ new Map();
-var drawing = /* @__PURE__ */ new Set();
-var hovered = -1;
-var shown;
-async function openUiCheck($) {
-  hovered = -1;
-  await $.ui.open({ id: UI_CHECK, title: "Proschi \xB7 ui-check" });
-  return {};
-}
-function panelOf($, columns) {
-  const done = panels.get(columns);
-  if (done || drawing.has(columns)) return done;
-  drawing.add(columns);
-  void (async () => {
-    const dir = await $.env.get("TMPDIR").catch(() => void 0) || "/tmp";
-    const input = {
-      kind: "panels",
-      outDir: `${dir.replace(/\/+$/, "")}/proschi-raster`,
-      theme: await themeOf($),
-      panels: [{ id: "tabs", columns, panel: { kind: "tabs", active: "diagram", tabs: TABS.map((t) => ({ id: t.id, label: t.label, hotkey: t.key })) } }]
-    };
-    const answer = await $.process.run(["node", `${$.plugin.root}/hooks/raster.cjs`], { stdin: JSON.stringify(input), timeoutMs: 6e4 }).then(
-      ({ exitCode, stdout, stderr }) => {
-        if (exitCode !== 0) return { error: stderr.trim() || `raster exited with ${exitCode}` };
-        return JSON.parse(stdout).panels[0] ?? { error: "no panel" };
-      },
-      (error) => ({ error: String(error) })
-    );
-    panels.set(columns, answer);
-    drawing.delete(columns);
-    $.ui.invalidate("ui.render");
-  })();
-  return void 0;
-}
-var tileKey = (section, i) => `${section}-${i}`;
-function registerUiCheck(on) {
-  on("ui.render", { component: "Pane", requestId: UI_CHECK }, async ($, e) => {
-    if (e.surface !== "terminal") {
-      const { Text } = $.ui.resolve(e);
-      return /* @__PURE__ */ h(Text, null, "ui-check draws in a terminal.");
-    }
-    const ui = $.ui.resolve(e);
-    const body = "bodyColumns" in e.props && typeof e.props.bodyColumns === "number" ? e.props.bodyColumns : (e.viewport?.columns ?? 120) - 4;
-    const panel = panelOf($, Math.max(20, Math.min(100, body - 2)));
-    if (!panel) return /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Drawing the tab bar\u2026");
-    if ("error" in panel) return /* @__PURE__ */ h(ui.Text, { color: "red" }, panel.error);
-    shown = panel;
-    const controls = panel.tiles.flatMap((t) => t.control ? [{ id: t.control.id, col: t.col, row: t.row, columns: t.columns, rows: t.rows }] : []);
-    const strips = (section) => {
-      const rows = /* @__PURE__ */ new Map();
-      panel.tiles.forEach((tile, i) => rows.set(tile.row, [...rows.get(tile.row) ?? [], { tile, i }]));
-      return [...rows.values()].map((strip) => /* @__PURE__ */ h(ui.Box, { flexDirection: "row", height: strip[0].tile.rows }, strip.map(({ tile, i }) => /* @__PURE__ */ h(ui.Image, { key: tileKey(section, i), source: { file: tile.file, format: "png" }, columns: tile.columns, rows: tile.rows, alt: tile.control?.id ?? " " }))));
-    };
-    const frame2 = (section, overlay) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column", width: panel.columns, height: panel.rows }, strips(section), overlay);
-    const first = panel.tiles.find((t) => t.control);
-    return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", gap: 1 }, /* @__PURE__ */ h(ui.Text, { dimColor: true }, "tab bar panel: ", panel.columns, "\xD7", panel.rows, " cells, ", panel.tiles.length, " tiles, ", controls.length, " controls"), /* @__PURE__ */ h(ui.Text, { bold: true }, "A) the Image alone"), frame2("a"), /* @__PURE__ */ h(ui.Text, { bold: true }, "B) the Image under an absolute empty Client (press: toast; hover: blits the hover picture)"), frame2(
-      "b",
-      /* @__PURE__ */ h(ui.Box, { position: "absolute", top: 0, left: 0, width: panel.columns, height: panel.rows }, /* @__PURE__ */ h(ui.Client, { key: OVERLAY, module: "./uiOverlay.js", props: { controls }, width: panel.columns, height: panel.rows }))
-    ), /* @__PURE__ */ h(ui.Text, { bold: true }, "C) the Image under an absolute Box holding a Button of spaces over ", first?.control?.id ?? "no control"), frame2(
-      "c",
-      first && /* @__PURE__ */ h(ui.Box, { position: "absolute", top: first.row, left: first.col }, /* @__PURE__ */ h(ui.Button, { key: "ui-check-c", label: " ".repeat(Math.max(1, first.columns - 4)), onPress: () => void $.ui.toast(`C: pressed ${first.control.id}`) }))
-    ));
-  });
-  on("ui.message", async ($, e, next) => {
-    if (e.element !== OVERLAY) return next(e);
-    const data = e.data;
-    const panel = shown;
-    if (!panel) return {};
-    const id = typeof data.id === "string" ? data.id : "";
-    if (data.type === "press") {
-      const fine = typeof data.fx === "number" && typeof data.fy === "number" ? ` (fine ${data.fx.toFixed(2)},${data.fy.toFixed(2)})` : "";
-      void $.ui.toast(`clicked ${id || "nothing"} at ${String(data.x)},${String(data.y)}${fine}`);
-    } else if (data.type === "hover") {
-      const blit = async (i, file) => {
-        if (i < 0 || !file) return;
-        const r = await $.ui.blit({ requestId: e.requestId, key: tileKey("b", i), source: { file, format: "png" } }).catch((error) => ({ deny: String(error) }));
-        if (r.deny) $.ui.log(`proschi ui-check: blit refused: ${r.deny}`, { to: "debug" });
-      };
-      if (hovered >= 0) await blit(hovered, panel.tiles[hovered]?.file);
-      hovered = panel.tiles.findIndex((t) => t.control?.id === id);
-      if (hovered >= 0) await blit(hovered, panel.tiles[hovered].hoverFile);
-    }
-    return {};
-  });
-}
-
-// ../frontend/src/components/WhatIf/whatIf.ts
-var MULTIPLIERS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 5, 7.5, 10];
-var isActive = (w) => w.multiplier !== 1 || w.failed.length > 0 || w.saved !== void 0;
-function stopOf(multiplier) {
-  let best = 0;
-  MULTIPLIERS.forEach((m, i) => {
-    if (Math.abs(Math.log(m / multiplier)) < Math.abs(Math.log(MULTIPLIERS[best] / multiplier))) best = i;
-  });
-  return best;
-}
-function formatMultiplier(m) {
-  return `\xD7${Number.isInteger(m * 10) ? m.toFixed(1) : String(Number(m.toFixed(2)))}`;
-}
-var shortMultiplier = (m) => `\xD7${Number(m.toFixed(2))}`;
-function totalRps(diagram) {
-  let sum = 0;
-  for (const t of resolveTraffic(diagram).values()) sum += t.rps;
-  return sum;
-}
-function liveFailed(diagram, failed) {
-  const ids = new Set(components(diagram).map((n) => n.id));
-  return failed.filter((id) => ids.has(id));
-}
-function liveOptions(diagram, w) {
-  if (w.saved !== void 0) {
-    const block = findWhatIf(diagram, w.saved);
-    return block ? whatIfOptions(diagram, block).options : void 0;
-  }
-  const failed = liveFailed(diagram, w.failed);
-  const rates = /* @__PURE__ */ new Map();
-  if (w.multiplier !== 1) {
-    for (const [id, t] of resolveTraffic(diagram)) if (t.rps > 0) rates.set(id, t.rps * w.multiplier);
-  }
-  if (rates.size === 0 && failed.length === 0) return void 0;
-  return { ...rates.size ? { trafficRps: rates } : {}, ...failed.length ? { failed: new Set(failed) } : {} };
-}
-function whatIfLabel(diagram, w) {
-  if (w.saved !== void 0) return w.saved;
-  const failed = liveFailed(diagram, w.failed);
-  const parts = [
-    ...w.multiplier !== 1 ? [`Traffic ${shortMultiplier(w.multiplier)}`] : [],
-    ...failed.length ? [`${failed.length > 2 ? `${failed.length} nodes` : failed.join(" and ")} down`] : []
-  ];
-  return parts.join(", ") || "As written";
-}
-function toggleFailed(w, id) {
-  const failed = w.failed.includes(id) ? w.failed.filter((f) => f !== id) : [...w.failed, id];
-  return { multiplier: w.multiplier, failed };
-}
-
 // ../plugin/src/views/whatif.ts
 var NO_WHATIF = { multiplier: 1, failed: [] };
 function whatIfOf(stored) {
@@ -10475,8 +11154,8 @@ function bannerLine(diagram, w, width) {
   return { segs: [{ text: cut(badge, width), bg: HEAT.warm, color: TONE.ink, bold: true }, ...badge.length + rest.length <= width ? [{ text: rest, dim: true }] : []] };
 }
 var toneColor = (r) => r.tone === "better" ? TONE.good : r.tone === "worse" ? TONE.bad : void 0;
-var note = (change) => change === "same" ? "" : change.replace(/^[^,]*→[^,]*(, )?/, "");
-function deltaTable(rows, width, head = "What") {
+var note2 = (change) => change === "same" ? "" : change.replace(/^[^,]*→[^,]*(, )?/, "");
+function deltaTable2(rows, width, head = "What") {
   return table2(
     [{ title: head }, { title: "As written", right: true }, { title: "What-if", right: true }, { title: "Change", drop: 1 }],
     rows.map((r) => {
@@ -10486,18 +11165,18 @@ function deltaTable(rows, width, head = "What") {
         { text: r.label, bold: true },
         { text: r.before, dim: !changed },
         { text: r.after, ...color ? { color, bold: true } : { dim: !changed } },
-        changed ? { text: note(r.change) || (r.tone === "better" ? "better" : r.tone === "worse" ? "worse" : ""), ...color ? { color } : {} } : { text: "same", dim: true }
+        changed ? { text: note2(r.change) || (r.tone === "better" ? "better" : r.tone === "worse" ? "worse" : ""), ...color ? { color } : {} } : { text: "same", dim: true }
       ];
     }),
     width
   );
 }
 var passing = (results) => results.filter((t) => t.passed).length;
-function moved(base, now) {
+function moved2(base, now) {
   const before2 = new Map(base.nodes.map((n) => [n.id, n.utilization]));
   return now.nodes.map((n) => ({ node: n.id, before: before2.get(n.id), after: n.utilization })).filter((u) => (u.before ?? 0) >= 1 !== u.after >= 1 || Math.abs(u.after - (u.before ?? 0)) >= 0.1).sort((x, y) => Math.abs(y.after - (y.before ?? 0)) - Math.abs(x.after - (x.before ?? 0))).map(utilizationRow);
 }
-function flipped(base, now) {
+function flipped2(base, now) {
   const before2 = new Map(base.map((r) => [r.name, r.passed]));
   return now.filter((r) => before2.get(r.name) !== r.passed).map((r) => checkRow({ name: r.name, category: r.category, before: before2.get(r.name), after: r.passed })).sort((a, b) => (a.tone === "worse" ? 0 : 1) - (b.tone === "worse" ? 0 : 1));
 }
@@ -10506,7 +11185,7 @@ function impactLines(base, now, width) {
   const b = headlineOf(now.analysis);
   const out = [
     { segs: [{ text: "Against the design as written", bold: true }] },
-    ...deltaTable([p99Row("Worst p99", a.p99Ms, b.p99Ms), availabilityRow("Availability", a.availability, b.availability), costRow(a.costUsd, b.costUsd)], width)
+    ...deltaTable2([p99Row("Worst p99", a.p99Ms, b.p99Ms), availabilityRow("Availability", a.availability, b.availability), costRow(a.costUsd, b.costUsd)], width)
   ];
   if (base.results.length > 0) {
     const worse = passing(now.results) < passing(base.results);
@@ -10527,10 +11206,10 @@ function impactLines(base, now, width) {
   });
   for (const [title, rows] of [
     ["Per use case", useCases],
-    ["Checks that changed", flipped(base.results, now.results)],
-    ["Load that moved", moved(base.analysis, now.analysis)]
+    ["Checks that changed", flipped2(base.results, now.results)],
+    ["Load that moved", moved2(base.analysis, now.analysis)]
   ]) {
-    if (rows.length) out.push({ segs: [] }, ...deltaTable(rows, width, title));
+    if (rows.length) out.push({ segs: [] }, ...deltaTable2(rows, width, title));
   }
   return out;
 }
@@ -10562,7 +11241,7 @@ function savedLines(base, results, width) {
     width
   );
 }
-var SWEEP = { from: 0.5, to: 10, steps: 12 };
+var SWEEP2 = { from: 0.5, to: 10, steps: 12 };
 var BLUE = "#3b82f6";
 function sweepLines(s, today, width) {
   const verdict = s.maxPassingRps === void 0 ? `"${s.useCase}" fails already at ${formatRps(s.from)}.` : s.maxPassingRps >= s.to ? `"${s.useCase}" passes over the whole range, up to ${formatRps(s.to)}.` : `"${s.useCase}" passes up to ${formatRps(s.maxPassingRps)}, ${Number((s.maxPassingRps / today).toFixed(1))}\xD7 today's ${formatRps(today)}.`;
@@ -10617,6 +11296,27 @@ var sweeps = /* @__PURE__ */ new Map();
 function whatIfBanner(ui, base, w, columns, hotkey2, reset) {
   return /* @__PURE__ */ h(ui.Box, { key: "wi-banner", flexDirection: "row", gap: 1 }, /* @__PURE__ */ h(ui.Button, { key: "wi-reset", label: "\u21BA Reset", ...hotkey2 ? { hotkey: "r" } : {}, onPress: reset }), lineView(ui, bannerLine(base.root, w, columns - 12)));
 }
+function whatIfResults(key, base, w) {
+  const diagram = base.root;
+  let results = saved.get(key);
+  if (!results) {
+    results = runWhatIfs(diagram);
+    saved.set(key, results);
+  }
+  const loaded = base.analysis?.useCases.filter((u) => u.rps > 0) ?? [];
+  const busiest = loaded.reduce((b, u) => !b || u.rps > b.rps ? u : b, void 0);
+  const swept = loaded.find((u) => u.id === w.sweep) ?? busiest;
+  let result;
+  if (swept && w.sweep !== void 0) {
+    const at = `${key}|${swept.id}`;
+    result = sweeps.get(at);
+    if (!result) {
+      result = sweep(diagram, swept.name, swept.rps * SWEEP2.from, swept.rps * SWEEP2.to, { steps: SWEEP2.steps });
+      sweeps.set(at, result);
+    }
+  }
+  return { saved: results, ...result ? { sweep: result } : {}, swept, loaded };
+}
 function whatIfTab(t) {
   const { ui, base, w, set, columns } = t;
   const diagram = base.root;
@@ -10633,33 +11333,17 @@ function whatIfTab(t) {
   const nodes = components(diagram);
   const node = nodes.find((n) => n.id === w.node) ?? nodes[0];
   const down = node !== void 0 && w.saved === void 0 && w.failed.includes(node.id);
-  const live = ({ saved: saved2, ...x }) => saved2 === void 0 ? x : { ...x, multiplier: 1, failed: [] };
-  const multiply = (m) => set((x) => ({ ...live(x), multiplier: m }));
+  const live3 = ({ saved: saved2, ...x }) => saved2 === void 0 ? x : { ...x, multiplier: 1, failed: [] };
+  const multiply = (m) => set((x) => ({ ...live3(x), multiplier: m }));
   const baseSide = { analysis: base.analysis, results: base.tests };
   const nowSide = t.now.analysis ? { analysis: t.now.analysis, results: t.now.tests } : baseSide;
   const active = t.now !== base;
-  let results = saved.get(t.key);
-  if (!results) {
-    results = runWhatIfs(diagram);
-    saved.set(t.key, results);
-  }
-  const loaded = base.analysis.useCases.filter((u) => u.rps > 0);
-  const busiest = loaded.reduce((b, u) => !b || u.rps > b.rps ? u : b, void 0);
-  const swept = loaded.find((u) => u.id === w.sweep) ?? busiest;
-  let result;
-  if (swept && w.sweep !== void 0) {
-    const at = `${t.key}|${swept.id}`;
-    result = sweeps.get(at);
-    if (!result) {
-      result = sweep(diagram, swept.name, swept.rps * SWEEP.from, swept.rps * SWEEP.to, { steps: SWEEP.steps });
-      sweeps.set(at, result);
-    }
-  }
+  const { saved: results, sweep: result, swept, loaded } = whatIfResults(t.key, base, w);
   const rows = savedLines(base.analysis, results, columns - 12);
-  return /* @__PURE__ */ h(ui.Box, { key: "body-whatif", flexDirection: "column" }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "Traffic"), /* @__PURE__ */ h(ui.Button, { key: "wi-less", label: "\u2039 Less", hotkey: "l", onPress: () => multiply(MULTIPLIERS[Math.max(0, stop2 - 1)]) }), /* @__PURE__ */ h(ui.Select, { key: "wi-mult", value: String(stop2), options: MULTIPLIERS.map((m, i) => ({ value: String(i), label: rate(m) })), onSelect: (i) => multiply(MULTIPLIERS[Number(i)]) }), /* @__PURE__ */ h(ui.Button, { key: "wi-more", label: "More \u203A", hotkey: "m", onPress: () => multiply(MULTIPLIERS[Math.min(MULTIPLIERS.length - 1, stop2 + 1)]) })), node && /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "Node"), /* @__PURE__ */ h(ui.Select, { key: "wi-node", value: node.id, options: nodes.map((n) => ({ value: n.id, label: n.name && n.name !== n.id ? `${n.id} \xB7 ${n.name}` : n.id })), onSelect: (id) => set((x) => ({ ...x, node: id })) }), /* @__PURE__ */ h(ui.Button, { key: "wi-down", label: down ? "\u23FB Bring up " : "\u23FB Take down", hotkey: "t", onPress: () => set((x) => ({ ...live(x), failed: [...toggleFailed(live(x), node.id).failed] })) }), /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, w.saved === void 0 && w.failed.length ? `Down: ${w.failed.join(", ")}` : "None down")), /* @__PURE__ */ h(ui.Text, null, " "), linesView(ui, active ? impactLines(baseSide, nowSide, columns) : asWrittenLines(baseSide, columns), "wi-impact"), results.length > 0 && /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, /* @__PURE__ */ h(ui.Text, { bold: true }, "Saved what-ifs"), /* @__PURE__ */ h(ui.Box, { paddingLeft: 12 }, lineView(ui, rows[0])), results.map((r, i) => {
+  return /* @__PURE__ */ h(ui.Box, { key: "body-whatif", flexDirection: "column" }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "Traffic"), /* @__PURE__ */ h(ui.Button, { key: "wi-less", label: "\u2039 Less", hotkey: "l", onPress: () => multiply(MULTIPLIERS[Math.max(0, stop2 - 1)]) }), /* @__PURE__ */ h(ui.Select, { key: "wi-mult", value: String(stop2), options: MULTIPLIERS.map((m, i) => ({ value: String(i), label: rate(m) })), onSelect: (i) => multiply(MULTIPLIERS[Number(i)]) }), /* @__PURE__ */ h(ui.Button, { key: "wi-more", label: "More \u203A", hotkey: "m", onPress: () => multiply(MULTIPLIERS[Math.min(MULTIPLIERS.length - 1, stop2 + 1)]) })), node && /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "Node"), /* @__PURE__ */ h(ui.Select, { key: "wi-node", value: node.id, options: nodes.map((n) => ({ value: n.id, label: n.name && n.name !== n.id ? `${n.id} \xB7 ${n.name}` : n.id })), onSelect: (id) => set((x) => ({ ...x, node: id })) }), /* @__PURE__ */ h(ui.Button, { key: "wi-down", label: down ? "\u23FB Bring up " : "\u23FB Take down", hotkey: "t", onPress: () => set((x) => ({ ...live3(x), failed: [...toggleFailed(live3(x), node.id).failed] })) }), /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, w.saved === void 0 && w.failed.length ? `Down: ${w.failed.join(", ")}` : "None down")), /* @__PURE__ */ h(ui.Text, null, " "), linesView(ui, active ? impactLines(baseSide, nowSide, columns) : asWrittenLines(baseSide, columns), "wi-impact"), results.length > 0 && /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, /* @__PURE__ */ h(ui.Text, { bold: true }, "Saved what-ifs"), /* @__PURE__ */ h(ui.Box, { paddingLeft: 12 }, lineView(ui, rows[0])), results.map((r, i) => {
     const on = w.saved === r.name;
     return /* @__PURE__ */ h(ui.Box, { key: `wi-row-${i}`, flexDirection: "row", gap: 1 }, /* @__PURE__ */ h(ui.Button, { key: `wi-saved-${i}`, label: on ? "Showing" : "Preview", ...on ? { variant: "primary" } : { dimColor: true }, onPress: () => set((x) => on ? { ...NO_WHATIF, ...x.node ? { node: x.node } : {} } : { ...NO_WHATIF, ...x.node ? { node: x.node } : {}, saved: r.name, ...x.sweep ? { sweep: x.sweep } : {} }) }), lineView(ui, rows[i + 1]));
-  }), results.some((r) => r.warnings.length) && results.flatMap((r) => r.warnings).map((text, i) => lineView(ui, { segs: [{ text: `\u26A0 ${text}`, color: TONE.warn }], wrap: true }, `wi-warn-${i}`))), swept && /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "Sweep"), loaded.length > 1 && /* @__PURE__ */ h(ui.Select, { key: "wi-sweep-uc", value: swept.id, options: loaded.map((u) => ({ value: u.id, label: u.name })), onSelect: (id) => set((x) => ({ ...x, sweep: id })) }), /* @__PURE__ */ h(ui.Button, { key: "wi-sweep", label: `Sweep ${formatRps(swept.rps * SWEEP.from)} to ${formatRps(swept.rps * SWEEP.to)}`, hotkey: "s", variant: result ? void 0 : "primary", onPress: () => set((x) => ({ ...x, sweep: swept.id })) })), result ? linesView(ui, sweepLines(result, swept.rps, columns), "wi-sweep-chart") : /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Where each node saturates and how far the requirements hold, from half to ten times today's traffic.")));
+  }), results.some((r) => r.warnings.length) && results.flatMap((r) => r.warnings).map((text, i) => lineView(ui, { segs: [{ text: `\u26A0 ${text}`, color: TONE.warn }], wrap: true }, `wi-warn-${i}`))), swept && /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "Sweep"), loaded.length > 1 && /* @__PURE__ */ h(ui.Select, { key: "wi-sweep-uc", value: swept.id, options: loaded.map((u) => ({ value: u.id, label: u.name })), onSelect: (id) => set((x) => ({ ...x, sweep: id })) }), /* @__PURE__ */ h(ui.Button, { key: "wi-sweep", label: `Sweep ${formatRps(swept.rps * SWEEP2.from)} to ${formatRps(swept.rps * SWEEP2.to)}`, hotkey: "s", variant: result ? void 0 : "primary", onPress: () => set((x) => ({ ...x, sweep: swept.id })) })), result ? linesView(ui, sweepLines(result, swept.rps, columns), "wi-sweep-chart") : /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Where each node saturates and how far the requirements hold, from half to ten times today's traffic.")));
 }
 
 // ../plugin/src/register.tsx
@@ -10706,7 +11390,6 @@ function register(on, options) {
   });
   on("command.run", { command: "proschi" }, async ($, e) => {
     const [verb, ...rest] = e.args.trim().split(/\s+/);
-    if (verb === "ui-check") return openUiCheck($);
     const words = [];
     const view = {};
     for (let i = 0; i < rest.length; i++) {
@@ -10722,8 +11405,8 @@ function register(on, options) {
     if (!await $.fs.exists(file)) return { text: `No such file: ${file}` };
     if (view.expanded || view.focus !== void 0) {
       const { diagram, errors } = parseSource(await readWithImports($, file));
-      const refused = errors.length ? void 0 : viewError(diagram, view);
-      if (refused) return { text: refused };
+      const refused2 = errors.length ? void 0 : viewError(diagram, view);
+      if (refused2) return { text: refused2 };
     }
     stop(PANE_VIEW);
     await update2($, memberOf(players, { requestId: PANE_VIEW }), () => ({ ...IDLE, expanded: view.expanded ?? [], ...view.focus !== void 0 ? { focus: view.focus } : {} }));
@@ -10733,7 +11416,6 @@ function register(on, options) {
     watch($, file);
     return { text: `Showing ${file} in the Proschi pane.` };
   });
-  registerUiCheck(on);
   on("ui.close", { id: PANE }, async ($, e, next) => {
     stop(PANE_VIEW);
     stop(PANE);
@@ -10748,7 +11430,7 @@ function register(on, options) {
     for (const match of e.props.text.matchAll(FENCE)) {
       const before2 = e.props.text.slice(last, match.index);
       if (before2.trim()) parts.push(/* @__PURE__ */ h(ui.Markdown, { text: before2 }));
-      const view = await diagramView($, { ui, requestId: e.requestId, columns: (e.viewport?.columns ?? 120) - 4 }, `${e.requestId}:${n++}`, { source: match[1] });
+      const view = await drawDiagram($, { ui, requestId: e.requestId, columns: (e.viewport?.columns ?? 120) - 4 }, `${e.requestId}:${n++}`, { source: match[1] });
       if ("error" in view) {
         parts.push(/* @__PURE__ */ h(ui.Markdown, { text: match[0] }));
         parts.push(/* @__PURE__ */ h(ui.Text, { dimColor: true }, view.error));
@@ -10767,7 +11449,7 @@ function register(on, options) {
     const ui = $.ui.resolve(e);
     const source = await readWithImports($, file).catch(() => void 0);
     if (!source) return row;
-    const view = await diagramView($, { ui, requestId: e.requestId, columns: (e.viewport?.columns ?? 120) - 6 }, `${e.requestId}:0`, source, file);
+    const view = await drawDiagram($, { ui, requestId: e.requestId, columns: (e.viewport?.columns ?? 120) - 6 }, `${e.requestId}:0`, source, file);
     return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, row, /* @__PURE__ */ h(ui.Box, { paddingLeft: 2 }, "error" in view ? /* @__PURE__ */ h(ui.Text, { dimColor: true }, view.error) : view.element));
   });
   on("ui.render", { component: "Pane", requestId: PANE }, async ($, e) => {
@@ -10783,26 +11465,159 @@ function register(on, options) {
     if (!source) return /* @__PURE__ */ h(ui.Text, { color: "red" }, "Cannot read ", file, ".");
     const columns = "bodyColumns" in e.props && typeof e.props.bodyColumns === "number" ? e.props.bodyColumns : (e.viewport?.columns ?? 120) - 4;
     const isFocused = "isFocused" in e.props && e.props.isFocused === true;
+    const bodyRows2 = "scroll" in e.props && typeof e.props.scroll?.bodyRows === "number" ? e.props.scroll.bodyRows : 0;
     const tab = tabOf(await read2($, paneTab));
     const whatIf = whatIfOf(await read2($, paneWhatIf));
     const loaded = await documentOf($, PANE_VIEW, source, void 0, whatIf);
     const failing = "error" in loaded ? 0 : loaded.doc.tests.filter((t) => !t.passed).length;
     const setWhatIf = (fn) => void update2($, paneWhatIf, (w) => fn(whatIfOf(w)));
-    const banner = "error" in loaded || loaded.doc === loaded.base ? void 0 : whatIfBanner(ui, loaded.base, whatIf, columns, tab !== "diagram", () => setWhatIf((w) => ({ ...NO_WHATIF, ...w.node ? { node: w.node } : {} })));
+    const resetWhatIf = () => setWhatIf((w) => ({ ...NO_WHATIF, ...w.node ? { node: w.node } : {} }));
+    const draw = { ui, requestId: PANE, columns, rows: Math.max(INLINE_ROWS, bodyRows2 - 10) };
+    if (tab === "sequence" && !("error" in loaded) && loaded.player.mode === "play" && loaded.player.isPlaying && !timers.has(PANE_VIEW)) stepper($, loaded.doc);
+    const mode = await modeOf($, ui, PANE, PANE_VIEW);
+    if (mode.kind !== "text" && !("error" in loaded)) {
+      const W2 = panelColumns(columns);
+      const { doc, base, key, player } = loaded;
+      const pieces = [{ id: "tabs", panel: tabBarPanel(tab, failing), columns: W2 }];
+      const actions = {};
+      for (const t of TABS) actions[`tabs/${t.id}`] = () => void update2($, paneTab, () => t.id);
+      if (doc !== base) {
+        pieces.push({ id: "banner", panel: { kind: "banner", label: whatIfBannerLabel(base, whatIf), note: "the design as written is unchanged", reset: { id: "reset", icon: "reset", label: "Reset", ...tab !== "diagram" ? { hotkey: "r" } : {} } }, columns: W2 });
+        actions["banner/reset"] = resetWhatIf;
+      }
+      const page = { doc, base, key, player, source: loaded.source, whatIf, setWhatIf, passing: await read2($, panePassing) === true, columns: W2 };
+      const ahead = TABS.filter((t) => t.id !== tab).flatMap((t) => [{ panel: tabBarPanel(t.id, failing), columns: W2 }, ...t.id === "diagram" ? [] : [{ panel: pagePart($, t.id, page).panel, columns: W2 }]]);
+      if (tab === "diagram") {
+        const view2 = await drawDiagram($, draw, PANE_VIEW, source, void 0, whatIf, { pieces, actions, ahead }, mode);
+        if ("error" in view2) return /* @__PURE__ */ h(ui.Text, { color: "red" }, view2.error);
+        if (view2.picture) return view2.element;
+      } else if (mode.kind === "loading") return loading(ui, PANE_VIEW, Math.max(10, bodyRows2 - 2), mode.probe);
+      else {
+        const body = pagePart($, tab, page);
+        for (const [id, fn] of Object.entries(body.actions)) actions[`page/${id}`] = fn;
+        const drawn = await pictureSite($, ui, { requestId: PANE, site: PANE_VIEW, theme: await themeOf($), pieces: [...pieces, { id: "page", panel: body.panel, columns: W2 }], actions, hotkeys: true, ahead, rows: Math.max(10, bodyRows2 - 2), ...mode.form ? { form: mode.form } : {} });
+        if ("element" in drawn) return drawn.element;
+        $.ui.log(`proschi: the ${tab} tab in text: ${drawn.error}`, { to: "debug" });
+      }
+    }
+    const banner = "error" in loaded || loaded.doc === loaded.base ? void 0 : whatIfBanner(ui, loaded.base, whatIf, columns, tab !== "diagram", resetWhatIf);
     const bar = tabBar(ui, tab, failing, (to) => void update2($, paneTab, () => to));
     const keys = (systems) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, isFocused ? tab === "diagram" ? PANE_KEYS : TAB_KEYS : "ctrl+x tab focuses the pane for its keys"), isFocused && systems && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, SYSTEM_KEYS));
     if (tab !== "diagram") {
       if ("error" in loaded) return /* @__PURE__ */ h(ui.Text, { color: "red" }, loaded.error);
       const { doc, base, key, player } = loaded;
-      if (tab === "sequence" && player.mode === "play" && player.isPlaying && !timers.has(PANE_VIEW)) stepper($, doc);
       const body = tab === "whatif" ? whatIfTab({ ui, base, key, now: doc, w: whatIf, set: setWhatIf, columns }) : tab === "sequence" ? sequenceTab({ ui, diagram: doc.diagram, player, columns, pick: (value) => void paneStep($, doc, (p) => ({ ...p, pick: value, step: 0, isPlaying: false })), go: (step, isPlaying) => void paneStep($, doc, (p) => ({ ...p, mode: "play", step, isPlaying })), pause: () => void paneStep($, doc, (p) => ({ ...p, isPlaying: false })) }) : tab === "hld" ? hldTab(ui, base, key, (surface, text) => void copy($, surface, text, "the HLD markdown")) : tab === "tests" ? testsTab(ui, doc, columns, await read2($, panePassing) === true, () => void update2($, panePassing, (open) => !open)) : tabBody(ui, tab, doc, columns);
       return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, bar, banner, body, keys(false));
     }
-    const bodyRows2 = "scroll" in e.props && typeof e.props.scroll?.bodyRows === "number" ? e.props.scroll.bodyRows : 0;
-    const view = await diagramView($, { ui, requestId: PANE, columns, rows: Math.max(INLINE_ROWS, bodyRows2 - 10) }, PANE_VIEW, source, void 0, whatIf);
+    const view = await drawDiagram($, draw, PANE_VIEW, source, void 0, whatIf, void 0, { kind: "text" });
     if ("error" in view) return /* @__PURE__ */ h(ui.Text, { color: "red" }, view.error);
     return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, bar, banner, view.element, keys(view.systems));
   });
+  registerPicture(on);
+}
+function pagePart($, tab, c) {
+  const actions = {};
+  const open = menus.get(PANE_VIEW);
+  const { doc, base, key, whatIf: w, setWhatIf: set } = c;
+  if (tab === "analysis") return { panel: analysisPage(doc), actions };
+  if (tab === "tests") {
+    actions.passing = () => void update2($, panePassing, (was) => !was);
+    return { panel: testsPage(doc, c.passing), actions };
+  }
+  if (tab === "hld") {
+    const markdown = hldMarkdown(base, key);
+    actions["hld-copy"] = (surface) => void copy($, surface, markdown, "the HLD markdown");
+    return { panel: hldPage(markdown), actions };
+  }
+  if (tab === "whatif") {
+    const r = whatIfResults(key, base, w);
+    const stop2 = stopOf(w.multiplier);
+    const live3 = ({ saved: saved2, ...x }) => saved2 === void 0 ? x : { ...x, multiplier: 1, failed: [] };
+    const multiply = (m) => set((x) => ({ ...live3(x), multiplier: m }));
+    const pick2 = (id, fn) => {
+      actions[id] = () => {
+        menus.delete(PANE_VIEW);
+        fn();
+      };
+    };
+    actions["wi-less"] = () => multiply(MULTIPLIERS[Math.max(0, stop2 - 1)]);
+    actions["wi-more"] = () => multiply(MULTIPLIERS[Math.min(MULTIPLIERS.length - 1, stop2 + 1)]);
+    for (const id of ["wi-mult", "wi-node", "wi-sweep-uc"]) actions[id] = () => toggleMenu($, PANE_VIEW, id);
+    MULTIPLIERS.forEach((m, i) => pick2(`wi-mult=${i}`, () => multiply(m)));
+    const nodes = components(base.root);
+    for (const n of nodes) pick2(`wi-node=${n.id}`, () => set((x) => ({ ...x, node: n.id })));
+    const node = nodes.find((n) => n.id === w.node) ?? nodes[0];
+    if (node) actions["wi-down"] = () => set((x) => ({ ...live3(x), failed: [...toggleFailed(live3(x), node.id).failed] }));
+    r.saved.forEach((s, i) => {
+      actions[`wi-saved-${i}`] = () => set((x) => w.saved === s.name ? { ...NO_WHATIF, ...x.node ? { node: x.node } : {} } : { ...NO_WHATIF, ...x.node ? { node: x.node } : {}, saved: s.name, ...x.sweep ? { sweep: x.sweep } : {} });
+    });
+    for (const u of r.loaded) pick2(`wi-sweep-uc=${u.id}`, () => set((x) => ({ ...x, sweep: u.id })));
+    if (r.swept) actions["wi-sweep"] = () => set((x) => ({ ...x, sweep: r.swept.id }));
+    const view = { ...w, ...open === "wi-mult" || open === "wi-node" || open === "wi-sweep-uc" ? { open } : {} };
+    return { panel: whatIfPage(base, doc, view, { saved: r.saved, ...r.sweep ? { sweep: r.sweep } : {} }), actions };
+  }
+  const picks = doc.diagram.useCases.flatMap((u) => u.scenarios.map((s) => ({ value: `${u.id}:${s.id}`, useCase: u, scenario: s })));
+  const player = c.player;
+  const now = picks.find((p) => p.value === player.pick) ?? picks[0];
+  if (!now) return { panel: { kind: "page", blocks: [{ type: "paragraph", text: 'No use cases yet: a usecase "Name" { a -> b : call } block draws as a sequence here.' }] }, actions };
+  const steps = now.scenario.steps;
+  const total = steps.length;
+  const playing = player.mode === "play" && player.pick === now.value;
+  const step = Math.max(0, Math.min(player.step, total - 1));
+  const go = (to, isPlaying2) => void paneStep($, doc, (p) => ({ ...p, mode: "play", step: to, isPlaying: isPlaying2 }));
+  actions["seq-pick"] = () => toggleMenu($, PANE_VIEW, "seq-pick");
+  for (const p of picks) {
+    actions[`seq-pick=${p.value}`] = () => {
+      menus.delete(PANE_VIEW);
+      void paneStep($, doc, (q) => ({ ...q, pick: p.value, step: 0, isPlaying: false }));
+    };
+  }
+  actions["seq-first"] = () => go(0, false);
+  actions["seq-prev"] = () => go(playing ? step - 1 : 0, false);
+  actions["seq-play"] = () => playing && player.isPlaying ? void paneStep($, doc, (p) => ({ ...p, isPlaying: false })) : go(playing && step < total - 1 ? step : 0, true);
+  actions["seq-next"] = () => go(playing ? step + 1 : 0, false);
+  actions["seq-last"] = () => go(total - 1, false);
+  const label = (p) => `${p.useCase.name}${p.useCase.scenarios.length > 1 ? ` \u203A ${p.scenario.name}` : ""}`;
+  const isPlaying = playing && player.isPlaying;
+  const panel = {
+    kind: "sequence",
+    source: { source: c.source.source, ...c.source.path ? { path: c.source.path } : {}, ...c.source.imports ? { imports: c.source.imports } : {} },
+    useCase: now.useCase.id,
+    scenario: now.scenario.id,
+    current: playing ? currentStepsOf(steps, step).map((s) => steps.indexOf(s) + 1) : [],
+    controls: [
+      { text: [{ text: "Scenario", bold: true }] },
+      { select: { id: "seq-pick", value: now.value, options: picks.map((p) => ({ value: p.value, label: label(p), ...p.scenario.outcome === "error" ? { detail: "\u2717" } : {} })), ...open === "seq-pick" ? { open: true } : {} } },
+      { control: { id: "seq-first", icon: "first", hotkey: "r", variant: "quiet" } },
+      { control: { id: "seq-prev", icon: "prev", hotkey: "b", variant: "quiet" } },
+      { control: { id: "seq-play", icon: isPlaying ? "pause" : "play", label: isPlaying ? "Pause" : "Play", hotkey: "p", variant: "primary", columns: 14 } },
+      { control: { id: "seq-next", icon: "next", hotkey: "n", variant: "quiet" } },
+      { control: { id: "seq-last", icon: "last", hotkey: "e", variant: "quiet" } },
+      { text: [{ text: playing ? `Step ${step + 1} of ${total}` : `${total} step${total === 1 ? "" : "s"}`, bold: true }] }
+    ]
+  };
+  return { panel, actions };
+}
+async function drawDiagram($, d, viewId, source, file, whatIf, top = { pieces: [], actions: {}, ahead: [] }, known) {
+  const mode = known ?? await modeOf($, d.ui, d.requestId, viewId);
+  const view = await diagramView($, d, viewId, source, file, whatIf, mode);
+  if ("error" in view) return view;
+  if (view.kind === "text") return { element: view.element, systems: view.systems, picture: false };
+  if (view.kind === "loading") return { element: loading(d.ui, viewId, view.rows, mode.kind === "loading" ? mode.probe : void 0), systems: false, picture: true };
+  const drawn = await pictureSite($, d.ui, {
+    requestId: d.requestId,
+    site: viewId,
+    theme: await themeOf($),
+    pieces: [...top.pieces, ...view.pieces],
+    actions: { ...top.actions, ...view.actions },
+    hotkeys: d.requestId === PANE,
+    ahead: [...top.ahead, ...view.ahead],
+    rows: view.rows,
+    ...mode.kind === "picture" && mode.form ? { form: mode.form } : {}
+  });
+  if ("element" in drawn) return { element: drawn.element, systems: view.systems, picture: true };
+  $.ui.log(`proschi: the drawing in text: ${drawn.error}`, { to: "debug" });
+  return drawDiagram($, d, viewId, source, file, whatIf, top, { kind: "text" });
 }
 function proschiFile(tool, input) {
   if (tool !== "Write" && tool !== "Edit") return void 0;
@@ -10918,12 +11733,12 @@ async function documentOf($, viewId, written, file, whatIf) {
     doc = loadDocument(source);
     documents.set(key, doc);
   }
-  const where3 = file ?? "The diagram";
+  const where4 = file ?? "The diagram";
   if (doc.errors.length > 0) {
     const [first] = doc.errors;
-    return { error: `${where3} has errors (line ${first.line}: ${first.message})${file ? `: run \`npx proschi check ${file}\`` : ""}.` };
+    return { error: `${where4} has errors (line ${first.line}: ${first.message})${file ? `: run \`npx proschi check ${file}\`` : ""}.` };
   }
-  if (doc.diagram.nodes.length === 0) return { error: `${where3} has no components to draw.` };
+  if (doc.diagram.nodes.length === 0) return { error: `${where4} has no components to draw.` };
   const options = whatIf && optionsOf(doc.root, whatIf);
   if (!options) return { doc, base: doc, source, key, player };
   const under = `${key}?${JSON.stringify(whatIf)}`;
@@ -10935,7 +11750,18 @@ async function documentOf($, viewId, written, file, whatIf) {
   return { doc: now, base: doc, source, key, player };
 }
 var INLINE_WARNINGS = 2;
-async function diagramView($, d, viewId, written, file, whatIf) {
+async function modeOf($, ui, requestId, probeId) {
+  if (graphics === "off") return { kind: "text" };
+  const p = await probeOf($);
+  if (p.status === "unknown") {
+    const key = probeKey(probeId);
+    probe($, requestId, key);
+    return { kind: "loading", probe: /* @__PURE__ */ h(ui.Image, { key, source: probeSource($), columns: 1, rows: 1, alt: " " }) };
+  }
+  if (graphics === "auto" && (p.status === "no" || p.status === "tmux")) return { kind: "text", ...p.status === "tmux" ? { hint: true } : {} };
+  return { kind: "picture", ...p.form ? { form: p.form } : {} };
+}
+async function diagramView($, d, viewId, written, file, whatIf, mode = { kind: "text" }) {
   const { ui } = d;
   const loaded = await documentOf($, viewId, written, file, whatIf);
   if ("error" in loaded) return loaded;
@@ -10943,7 +11769,8 @@ async function diagramView($, d, viewId, written, file, whatIf) {
   const layout = layouts.get(key);
   if (!layout) {
     requestLayout($, key, source);
-    return { element: /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Laying out ", doc.diagram.title ?? "the diagram", "\u2026"), systems: false };
+    if (mode.kind !== "text") return { kind: "loading", rows: Math.min(d.rows ?? INLINE_ROWS, 20) };
+    return { kind: "text", element: /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Laying out ", doc.diagram.title ?? "the diagram", "\u2026"), systems: false };
   }
   if ("error" in layout) return { error: `Proschi could not lay ${file ?? "this diagram"} out: ${layout.error}` };
   const columns = Math.max(40, Math.min(512, d.columns));
@@ -10964,59 +11791,191 @@ async function diagramView($, d, viewId, written, file, whatIf) {
   const view = { d, viewId, rasterKey: `d-${viewId}`, anchorKey: `at-${viewId}`, scene, width, overlay: doc.overlay, edges: doc.edges, systems: doc.systems, ...selected ? { selected: selected.id } : {}, inPane: d.requestId === PANE };
   if (playing && player.isPlaying && !timers.has(viewId)) animate($, view, steps);
   const progress = timers.has(viewId) ? 0 : 100;
-  const grid = paint(scene, { overlay: doc.overlay, edges: doc.edges, icons, systems: doc.systems, ...view.selected ? { selected: view.selected } : {}, ...steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {} });
   const link = doc.link(playing ? { useCase: playing.useCase.id, ...playing.useCase.scenarios.length > 1 ? { scenario: playing.scenario.id } : {}, step: step + 1 } : void 0);
   const lost = lostImports(written, keyOf(written));
   const title = file ? basename(file) : doc.diagram.title ?? "diagram";
   const what = file ? { file } : { source };
-  const verdict = verdictLine(doc.tests, view.width - (view.inPane ? 0 : 13));
   const hasSystems = systems.length > 0 || player.focus !== void 0;
   const roomy = view.width >= 79;
-  const request2 = {
-    source,
-    options: {
-      theme: graphics === "off" ? "dark" : await themeOf($),
-      maxWidthPx: maxWidthPx(d.columns),
-      ...doc.overlay && !playing ? { overlay: true } : {},
-      ...view.selected ? { selected: view.selected } : {},
-      ...whatIf && doc !== base ? { whatIf: liveOf(whatIf) } : {},
-      ...playing ? { play: { useCase: playing.useCase.id, scenario: playing.scenario.id } } : {}
+  const theme2 = graphics === "off" ? "dark" : await themeOf($);
+  const optionsFor = (play) => ({
+    theme: theme2,
+    maxWidthPx: maxWidthPx(d.columns),
+    ...doc.overlay && !play ? { overlay: true } : {},
+    ...view.selected ? { selected: view.selected } : {},
+    ...whatIf && doc !== base ? { whatIf: liveOf(whatIf) } : {},
+    ...play ? { play: { useCase: play.useCase.id, scenario: play.scenario.id } } : {}
+  });
+  const request2 = { source, options: optionsFor(playing) };
+  const alt = `${doc.diagram.title ?? title}: the architecture diagram as a picture`;
+  if (mode.kind !== "text") {
+    images.delete(viewId);
+    const out = rasterOf($, request2);
+    const size = out && !("error" in out) ? imageSize(out, d.columns, d.rows ?? INLINE_ROWS) : void 0;
+    const rows = (size?.rows ?? Math.min(scene.rows, d.rows ?? INLINE_ROWS)) + (playing ? 22 : 12);
+    if (mode.kind === "loading") return { kind: "loading", rows };
+    if (out && "error" in out) return diagramView($, d, viewId, written, file, whatIf, { kind: "text" });
+    let picture;
+    if (out && size) {
+      const frames = request2.options.play ? out.frames : void 0;
+      const shownFrames = frames?.[step];
+      const file2 = shownFrames?.length ? shownFrames[progress === 0 ? 0 : shownFrames.length - 1] : out.base;
+      const imageKey = `img-${viewId}`;
+      if (!request2.options.play || frames?.length) {
+        images.set(viewId, { key: imageKey, ...frames ? { frames } : {}, ...mode.form ? { form: mode.form } : {} });
+        picture = { key: imageKey, file: file2, columns: size.columns, rows: size.rows, alt, anchorKey: view.anchorKey, ...mode.form ? { form: mode.form } : {} };
+      }
     }
-  };
-  const picture = await pictureOf($, view, request2, `${doc.diagram.title ?? title}: the architecture diagram as a picture`, step, progress === 0);
-  return { element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, playing ? playerHeader($, view, playing, player) : doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, picture.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, TMUX_HINT), !picture.image && grid.columns > d.columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", grid.columns, " columns wide, wider than the ", d.columns, " here: ", view.inPane ? "widen the window" : "use \u26F6 Focus or a wider window", " to see it whole."), lost.some((name) => !importReasons.has(name)) && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u26A0 Not found, so drawn as plain boxes: ", lost.filter((name) => !importReasons.has(name)).join(", ")), lost.filter((name) => importReasons.has(name)).map((name) => /* @__PURE__ */ h(ui.Text, { key: `lost-${name}`, dimColor: true }, "\u26A0 ", importReasons.get(name))), doc.notes.map((note2) => /* @__PURE__ */ h(ui.Text, { color: "yellow" }, "\u26A0 ", note2.text, note2.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true }, " \u2192 ", note2.hint))), (view.inPane ? doc.warnings : doc.warnings.slice(0, INLINE_WARNINGS)).map((w) => /* @__PURE__ */ h(ui.Text, { key: `warn-${w}`, color: "yellow", wrap: "truncate-end" }, "\u26A0 ", w)), !view.inPane && doc.warnings.length > INLINE_WARNINGS && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2026 ", doc.warnings.length - INLINE_WARNINGS, " more: \u26F6 Focus, then Analysis"), picture.image ?? /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), doc.edges && !playing && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)), verdict && !playing && /* @__PURE__ */ h(ui.Box, { key: `verdict-${viewId}`, flexDirection: "row", gap: 1, width: view.width }, lineView(ui, verdict), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `tests-${viewId}`, label: "\u26F6 Details", dimColor: true, onPress: () => focus($, view, title, what, "tests") })), hasSystems && !playing && systemBar($, view, doc, systems, selected, player), playing ? stepPanel($, view, playing, step, player) : pick2 && useCaseBar($, view, doc, pick2, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: roomy ? "\u29C9 Copy source" : "\u29C9 Source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: roomy ? "\u29C9 Copy share link" : "\u29C9 Link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: roomy ? "\u2197 Open in Proschi" : "\u2197 Open", variant: "primary", onPress: (press) => void openLink($, press.surface, link) }), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `focus-${viewId}`, label: "\u26F6 Focus", onPress: () => focus($, view, title, what) }), picture.probe)), systems: hasSystems };
+    const built = pictureParts($, view, doc, { pick: pick2, playing, step, player, systems, selected, link, lost, title, what, roomy, sourceText: source.source, picture });
+    if (!playing && pick2) rasterOf($, { source, options: optionsFor(pick2) }, "later");
+    return { kind: "picture", ...built, rows, systems: hasSystems };
+  }
+  const grid = paint(scene, { overlay: doc.overlay, edges: doc.edges, icons, systems: doc.systems, ...view.selected ? { selected: view.selected } : {}, ...steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {} });
+  const verdict = verdictLine(doc.tests, view.width - (view.inPane ? 0 : 13));
+  return { kind: "text", element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, playing ? playerHeader($, view, playing, player) : doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, mode.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, TMUX_HINT), grid.columns > d.columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", grid.columns, " columns wide, wider than the ", d.columns, " here: ", view.inPane ? "widen the window" : "use \u26F6 Focus or a wider window", " to see it whole."), lost.some((name) => !importReasons.has(name)) && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u26A0 Not found, so drawn as plain boxes: ", lost.filter((name) => !importReasons.has(name)).join(", ")), lost.filter((name) => importReasons.has(name)).map((name) => /* @__PURE__ */ h(ui.Text, { key: `lost-${name}`, dimColor: true }, "\u26A0 ", importReasons.get(name))), doc.notes.map((note3) => /* @__PURE__ */ h(ui.Text, { color: "yellow" }, "\u26A0 ", note3.text, note3.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true }, " \u2192 ", note3.hint))), (view.inPane ? doc.warnings : doc.warnings.slice(0, INLINE_WARNINGS)).map((w) => /* @__PURE__ */ h(ui.Text, { key: `warn-${w}`, color: "yellow", wrap: "truncate-end" }, "\u26A0 ", w)), !view.inPane && doc.warnings.length > INLINE_WARNINGS && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2026 ", doc.warnings.length - INLINE_WARNINGS, " more: \u26F6 Focus, then Analysis"), /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), doc.edges && !playing && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)), verdict && !playing && /* @__PURE__ */ h(ui.Box, { key: `verdict-${viewId}`, flexDirection: "row", gap: 1, width: view.width }, lineView(ui, verdict), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `tests-${viewId}`, label: "\u26F6 Details", dimColor: true, onPress: () => focus($, view, title, what, "tests") })), hasSystems && !playing && systemBar($, view, doc, systems, selected, player), playing ? stepPanel($, view, playing, step, player) : pick2 && useCaseBar($, view, doc, pick2, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: roomy ? "\u29C9 Copy source" : "\u29C9 Source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: roomy ? "\u29C9 Copy share link" : "\u29C9 Link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: roomy ? "\u2197 Open in Proschi" : "\u2197 Open", variant: "primary", onPress: (press) => void openLink($, press.surface, link) }), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `focus-${viewId}`, label: "\u26F6 Focus", onPress: () => focus($, view, title, what) }))), systems: hasSystems };
 }
 var images = /* @__PURE__ */ new Map();
-async function pictureOf($, view, request2, alt, step, fromStart) {
-  const { ui } = view.d;
-  images.delete(view.viewId);
-  if (graphics === "off") return {};
-  const probed2 = await probeOf($);
-  const hint = probed2.status === "tmux";
-  if (graphics === "auto" && (probed2.status === "no" || probed2.status === "tmux")) return { hint };
-  const out = rasterOf($, request2);
-  let asking;
-  if (probed2.status === "unknown") {
-    const key2 = probeKey(view.viewId);
-    probe($, view.d.requestId, key2);
-    asking = /* @__PURE__ */ h(ui.Image, { key: key2, source: probeSource($), columns: 1, rows: 1, alt: " " });
-    if (graphics === "auto") return { probe: asking };
+var menus = /* @__PURE__ */ new Map();
+function toggleMenu($, viewId, id) {
+  if (menus.get(viewId) === id) menus.delete(viewId);
+  else menus.set(viewId, id);
+  $.ui.invalidate("ui.render");
+}
+var panelColumns = (columns) => Math.max(20, Math.min(255, columns));
+function headerPanel(view, pick2) {
+  const { useCase } = pick2;
+  return {
+    kind: "playerHeader",
+    back: { id: "back", icon: "back", label: "Diagram", ...hotkey(view, "d") },
+    title: useCase.name,
+    note: "Playback mode \xB7 read only",
+    ...useCase.scenarios.length > 1 ? { scenarios: useCase.scenarios.map((s) => ({ id: `sc-${s.id}`, name: s.name, outcome: s.outcome === "error" ? "error" : "ok", ...s.outcome === "error" && s.steps.find(isErrorStep)?.statusCode ? { status: s.steps.find(isErrorStep).statusCode } : {}, ...s.id === pick2.scenario.id ? { current: true } : {} })) } : {}
+  };
+}
+var stepPanelAt = (view, pick2, step, isPlaying) => stepPanelOf(pick2.scenario, step, isPlaying, (id) => view.scene.nodes.get(id)?.node.name ?? id, view.inPane);
+function pictureParts($, view, doc, c) {
+  const W2 = panelColumns(view.width);
+  const pieces = [];
+  const actions = {};
+  const ahead = [];
+  const on = (piece, id, fn) => actions[`${piece}/${id}`] = fn;
+  const { playing, player, pick: pick2 } = c;
+  if (playing) {
+    pieces.push({ id: "head", panel: headerPanel(view, playing), columns: W2 });
+    on("head", "back", () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })));
+    for (const s of playing.useCase.scenarios) on("head", `sc-${s.id}`, () => start2($, view, pickOf(playing.useCase, s), player.isPlaying));
+  } else if (doc.diagram.title) {
+    pieces.push({ id: "title", panel: { kind: "page", blocks: [{ type: "heading", level: 3, text: doc.diagram.title }, ...doc.diagram.summary ? [{ type: "paragraph", small: true, text: doc.diagram.summary }] : []] }, columns: W2 });
   }
-  if (!out || "error" in out) return { hint, ...asking ? { probe: asking } : {} };
-  const frames = request2.options.play ? out.frames : void 0;
-  if (request2.options.play && !frames?.length) return { hint, ...asking ? { probe: asking } : {} };
-  const shown2 = frames?.[step];
-  const file = shown2?.length ? shown2[fromStart ? 0 : shown2.length - 1] : out.base;
-  const size = imageSize(out, view.d.columns, view.d.rows ?? INLINE_ROWS);
-  const key = `img-${view.viewId}`;
-  images.set(view.viewId, { key, ...frames ? { frames } : {}, ...probed2.form ? { form: probed2.form } : {} });
-  return { hint, ...asking ? { probe: asking } : {}, image: /* @__PURE__ */ h(ui.Image, { key, source: await sourceOf($, file, probed2.form), columns: size.columns, rows: size.rows, alt }) };
+  const unknown = c.lost.filter((name) => !importReasons.has(name));
+  const notices = [
+    ...unknown.length ? [{ text: `Not found, so drawn as plain boxes: ${unknown.join(", ")}`, tone: "muted" }] : [],
+    ...c.lost.filter((name) => importReasons.has(name)).map((name) => ({ text: importReasons.get(name), tone: "muted" })),
+    ...doc.notes.map((n) => ({ text: n.text, ...n.hint ? { hint: n.hint } : {} })),
+    ...(view.inPane ? doc.warnings : doc.warnings.slice(0, INLINE_WARNINGS)).map((text) => ({ text })),
+    ...!view.inPane && doc.warnings.length > INLINE_WARNINGS ? [{ text: `\u2026 ${doc.warnings.length - INLINE_WARNINGS} more: Focus, then Analysis`, tone: "muted" }] : []
+  ];
+  if (notices.length) pieces.push({ id: "warn", panel: { kind: "notices", notices }, columns: W2 });
+  pieces.push({ id: "diagram", ...c.picture ? { picture: c.picture } : {} });
+  const failing = doc.tests.filter((t) => !t.passed);
+  const below = {
+    kind: "notices",
+    ...doc.edges && !playing ? { legend: doc.critical ? { critical: { useCase: doc.critical.useCase, p99: formatMs(doc.critical.p99Ms) } } : {} } : {},
+    ...doc.tests.length && !playing ? { verdict: { passed: doc.tests.length - failing.length, total: doc.tests.length, ...failing[0] ? { first: `${failing[0].name}: ${failing[0].message}` } : {} } } : {},
+    ...doc.tests.length && !playing && !view.inPane ? { details: { id: "details", icon: "focus", label: "Details" } } : {}
+  };
+  if (below.legend || below.verdict) pieces.push({ id: "below", panel: below, columns: W2 });
+  on("below", "details", () => focus($, view, c.title, c.what, "tests"));
+  if ((c.systems.length > 0 || player.focus !== void 0) && !playing) {
+    const s = systemActions($, view, doc, c.systems, c.selected, player);
+    const controls = [
+      ...c.systems.length > 1 ? [{ id: "next", icon: "cycle", label: "Next", ...hotkey(view, "s") }] : [],
+      ...c.selected && s.design ? [{ id: "open", icon: s.open ? "collapse" : "expand", label: s.open ? "Collapse" : "Expand", ...hotkey(view, "o") }, { id: "focus", icon: "enter", label: "Focus in", ...hotkey(view, "f") }] : [],
+      ...player.focus !== void 0 ? [{ id: "back", icon: "leave", label: "Back out", ...hotkey(view, "u") }] : []
+    ];
+    pieces.push({
+      id: "systems",
+      panel: { kind: "systemBar", ...player.focus !== void 0 ? { inside: `${player.focus.split(".").join(" \u203A ")} \xB7 ${doc.diagram.title ?? "its design"}` } : {}, ...c.selected ? { selected: { name: c.selected.name, path: c.selected.path } } : {}, controls },
+      columns: W2
+    });
+    on("systems", "next", s.next);
+    on("systems", "open", s.toggle);
+    on("systems", "focus", s.enter);
+    on("systems", "back", s.leave);
+  }
+  if (playing) {
+    const steps = playing.scenario.steps;
+    const total = steps.length;
+    const go = (to, isPlaying = false) => goTo($, view, steps, to, isPlaying);
+    pieces.push({ id: "step", panel: stepPanelAt(view, playing, c.step, player.isPlaying), columns: W2 });
+    on("step", "first", () => go(0));
+    on("step", "prev", () => go(c.step - 1));
+    on("step", "play", () => player.isPlaying ? void setPlayer($, view, (p) => ({ ...p, isPlaying: false })) : go(c.step >= total - 1 ? 0 : c.step, true));
+    on("step", "next", () => go(c.step + 1));
+    on("step", "last", () => go(total - 1));
+    on("step", "exit", () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })));
+    for (let i = 0; i < total; i++) for (const isPlaying of [true, false]) ahead.push({ panel: stepPanelAt(view, playing, i, isPlaying), columns: W2 });
+  } else if (pick2) {
+    const groups = groupByEndpoint(doc.diagram.useCases);
+    const count = (u) => `${u.scenarios.length} scenario${u.scenarios.length === 1 ? "" : "s"}`;
+    const open = menus.get(view.viewId) === "uc";
+    const panel = {
+      kind: "useCaseBar",
+      picker: { id: "uc", value: pick2.useCase.id, options: groups.flatMap((g) => g.useCases.map((u) => ({ value: u.id, label: u.name, ...g.label ? { group: g.label } : {}, detail: count(u) }))), ...open ? { open: true } : {} },
+      play: { id: "play", icon: "play", label: "Play", variant: "primary", ...hotkey(view, "p") },
+      explore: { id: "explore", icon: "explore", label: player.explorer ? "Hide explorer" : c.roomy ? "Explore use cases" : "Explore", ...hotkey(view, "x"), ...player.explorer ? { active: true } : {} },
+      ...player.explorer ? {
+        explorer: groups.map((g) => ({
+          ...g.label ? { label: g.label } : {},
+          useCases: g.useCases.map((u) => ({
+            name: u.name,
+            ...u.id === pick2.useCase.id ? { current: true } : {},
+            scenarios: u.scenarios.map((s) => ({ id: `x-${u.id}-${s.id}`, name: u.scenarios.length > 1 ? s.name : "Play", outcome: s.outcome === "error" ? "error" : "ok", ...s.outcome === "error" && s.steps.find(isErrorStep)?.statusCode ? { status: s.steps.find(isErrorStep).statusCode } : {} }))
+          }))
+        }))
+      } : {}
+    };
+    pieces.push({ id: "ucbar", panel, columns: W2 });
+    on("ucbar", "uc", () => toggleMenu($, view.viewId, "uc"));
+    for (const u of doc.diagram.useCases) {
+      on("ucbar", `uc=${u.id}`, () => {
+        menus.delete(view.viewId);
+        if (u.scenarios[0]) void setPlayer($, view, (p) => ({ ...p, pick: pickOf(u, u.scenarios[0]).value }));
+      });
+      for (const s of u.scenarios) on("ucbar", `x-${u.id}-${s.id}`, () => start2($, view, pickOf(u, s)));
+    }
+    on("ucbar", "play", () => start2($, view, pick2));
+    on("ucbar", "explore", () => void setPlayer($, view, (p) => ({ ...p, explorer: !p.explorer })));
+    ahead.push({ panel: headerPanel(view, pick2), columns: W2 }, { panel: stepPanelAt(view, pick2, 0, true), columns: W2 });
+  }
+  pieces.push({
+    id: "links",
+    panel: {
+      kind: "actionBar",
+      controls: [
+        { id: "src", icon: "copy", label: c.roomy ? "Copy source" : "Source" },
+        { id: "lnk", icon: "copy", label: c.roomy ? "Copy share link" : "Link" },
+        { id: "open", icon: "open", label: c.roomy ? "Open in Proschi" : "Open", variant: "primary" },
+        ...view.inPane ? [] : [{ id: "focus", icon: "focus", label: "Focus" }]
+      ]
+    },
+    columns: W2
+  });
+  on("links", "src", (surface) => void copy($, surface, c.sourceText, "the Proschi source"));
+  on("links", "lnk", (surface) => void copy($, surface, c.link, "the share link"));
+  on("links", "open", (surface) => void openLink($, surface, c.link));
+  on("links", "focus", () => focus($, view, c.title, c.what));
+  return { pieces, actions, ahead };
 }
 function selectable(scene, focus2) {
   return [...scene.nodes.values()].map((n) => n.node).filter((n) => n.kind === "system" || n.kind === "group" && n.system === n.id).map((n) => ({ id: n.id, path: focus2 !== void 0 ? `${focus2}.${n.id}` : n.id, name: n.name, expanded: n.kind === "group" }));
 }
 function systemBar($, view, doc, systems, selected, player) {
   const { ui } = view.d;
+  const { design, open, next, toggle: toggle2, enter, leave } = systemActions($, view, doc, systems, selected, player);
+  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, player.focus !== void 0 && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "Inside ", player.focus.split(".").join(" \u203A "), " \xB7 ", doc.diagram.title ?? "its design"), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "System"), /* @__PURE__ */ h(ui.Text, { color: PINK2, wrap: "truncate-end" }, selected ? `${selected.name} (${selected.path})` : "none here"), systems.length > 1 && /* @__PURE__ */ h(ui.Button, { key: `sys-next-${view.viewId}`, label: "\u21E5 Next", ...hotkey(view, "s"), onPress: next }), selected && design && /* @__PURE__ */ h(ui.Button, { key: `sys-open-${view.viewId}`, label: open ? "\u229F Collapse" : "\u229E Expand", ...hotkey(view, "o"), onPress: toggle2 }), selected && design && /* @__PURE__ */ h(ui.Button, { key: `sys-focus-${view.viewId}`, label: "\u2922 Focus in", ...hotkey(view, "f"), onPress: enter }), player.focus !== void 0 && /* @__PURE__ */ h(ui.Button, { key: `sys-back-${view.viewId}`, label: "\u2191 Back out", ...hotkey(view, "u"), onPress: leave })));
+}
+function systemActions($, view, doc, systems, selected, player) {
   const design = selected !== void 0 && !!systemAt2(doc.root, selected.path)?.diagram;
   const next = () => {
     const at = systems.findIndex((s) => s.path === selected?.path);
@@ -11048,7 +12007,7 @@ function systemBar($, view, doc, systems, selected, player) {
     });
   };
   const open = selected !== void 0 && (selected.expanded || player.expanded.includes(selected.path));
-  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, player.focus !== void 0 && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "Inside ", player.focus.split(".").join(" \u203A "), " \xB7 ", doc.diagram.title ?? "its design"), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "System"), /* @__PURE__ */ h(ui.Text, { color: PINK2, wrap: "truncate-end" }, selected ? `${selected.name} (${selected.path})` : "none here"), systems.length > 1 && /* @__PURE__ */ h(ui.Button, { key: `sys-next-${view.viewId}`, label: "\u21E5 Next", ...hotkey(view, "s"), onPress: next }), selected && design && /* @__PURE__ */ h(ui.Button, { key: `sys-open-${view.viewId}`, label: open ? "\u229F Collapse" : "\u229E Expand", ...hotkey(view, "o"), onPress: toggle2 }), selected && design && /* @__PURE__ */ h(ui.Button, { key: `sys-focus-${view.viewId}`, label: "\u2922 Focus in", ...hotkey(view, "f"), onPress: enter }), player.focus !== void 0 && /* @__PURE__ */ h(ui.Button, { key: `sys-back-${view.viewId}`, label: "\u2191 Back out", ...hotkey(view, "u"), onPress: leave })));
+  return { design, open, next, toggle: toggle2, enter, leave };
 }
 var lostByKey = /* @__PURE__ */ new Map();
 function lostImports(source, key) {
@@ -11086,8 +12045,8 @@ function useCaseBar($, view, doc, pick2, player) {
       }
     }
   ));
-  const buttons = /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Button, { key: `play-${view.viewId}`, label: "\u25B6 Play", variant: "primary", ...hotkey(view, "p"), onPress: () => start($, view, pick2) }), /* @__PURE__ */ h(ui.Button, { key: `explore-${view.viewId}`, label: explore, ...hotkey(view, "x"), onPress: () => void setPlayer($, view, (p) => ({ ...p, explorer: !p.explorer })) }));
-  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: PINK2, paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Box, { flexDirection: oneRow ? "row" : "column", gap: oneRow ? 1 : 0 }, select, buttons), player.explorer && groups.map((g) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, g.label && /* @__PURE__ */ h(ui.Text, { bold: true, color: "cyan" }, g.label), g.useCases.map((u) => /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap", paddingLeft: g.label ? 2 : 0 }, /* @__PURE__ */ h(ui.Text, { bold: u.id === pick2.useCase.id }, u.name), u.scenarios.map((s) => /* @__PURE__ */ h(ui.Button, { key: `x-${view.viewId}-${u.id}-${s.id}`, onPress: () => start($, view, pickOf(u, s)) }, scenarioLabel(ui, u, s))))))));
+  const buttons = /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Button, { key: `play-${view.viewId}`, label: "\u25B6 Play", variant: "primary", ...hotkey(view, "p"), onPress: () => start2($, view, pick2) }), /* @__PURE__ */ h(ui.Button, { key: `explore-${view.viewId}`, label: explore, ...hotkey(view, "x"), onPress: () => void setPlayer($, view, (p) => ({ ...p, explorer: !p.explorer })) }));
+  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: PINK2, paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Box, { flexDirection: oneRow ? "row" : "column", gap: oneRow ? 1 : 0 }, select, buttons), player.explorer && groups.map((g) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, g.label && /* @__PURE__ */ h(ui.Text, { bold: true, color: "cyan" }, g.label), g.useCases.map((u) => /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap", paddingLeft: g.label ? 2 : 0 }, /* @__PURE__ */ h(ui.Text, { bold: u.id === pick2.useCase.id }, u.name), u.scenarios.map((s) => /* @__PURE__ */ h(ui.Button, { key: `x-${view.viewId}-${u.id}-${s.id}`, onPress: () => start2($, view, pickOf(u, s)) }, scenarioLabel(ui, u, s))))))));
 }
 function scenarioLabel(ui, u, s, current) {
   const error = s.outcome === "error";
@@ -11100,10 +12059,10 @@ function playerHeader($, view, pick2, player) {
   const { useCase } = pick2;
   return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: PINK2, paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Button, { key: `back-${view.viewId}`, label: "\u2190 Diagram", ...hotkey(view, "d"), onPress: () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })) }), /* @__PURE__ */ h(ui.Text, { bold: true, wrap: "truncate-end" }, useCase.name), /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\xB7 Playback mode \xB7 read only")), useCase.scenarios.length > 1 && /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap" }, useCase.scenarios.map((s) => {
     const current = s.id === pick2.scenario.id;
-    return /* @__PURE__ */ h(ui.Button, { key: `sc-${view.viewId}-${s.id}`, variant: current ? "primary" : void 0, dimColor: !current, onPress: () => start($, view, pickOf(useCase, s), player.isPlaying) }, scenarioLabel(ui, useCase, s, current));
+    return /* @__PURE__ */ h(ui.Button, { key: `sc-${view.viewId}-${s.id}`, variant: current ? "primary" : void 0, dimColor: !current, onPress: () => start2($, view, pickOf(useCase, s), player.isPlaying) }, scenarioLabel(ui, useCase, s, current));
   })));
 }
-var FORMAT = { JSON: "JSON", XML: "XML", FREE_TEXT: "Text" };
+var FORMAT2 = { JSON: "JSON", XML: "XML", FREE_TEXT: "Text" };
 var LANGUAGE = { JSON: "json", XML: "xml", FREE_TEXT: void 0 };
 var chip = (ui, text, background) => /* @__PURE__ */ h(ui.Text, { backgroundColor: background, color: INK, bold: true }, ` ${text} `);
 var BODY_LINES = 8;
@@ -11151,9 +12110,9 @@ function stepRows(ui, view, steps, at) {
       /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, name(s.fromServiceId), " \u2192 ", name(s.toServiceId), call && call !== s.stepName ? `   ${call}` : "")
     );
     if (s.description) row(/* @__PURE__ */ h(ui.Text, { wrap: "truncate-end" }, s.description.replace(/\s*\n\s*/g, " ")));
-    if (s.requestBody) add(bodyRows(ui, /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Request (", FORMAT[s.requestFormat], ")"), s.requestBody, s.requestFormat));
+    if (s.requestBody) add(bodyRows(ui, /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Request (", FORMAT2[s.requestFormat], ")"), s.requestBody, s.requestFormat));
     if (s.responseBody && s.executionType !== "ASYNC_FIRE_AND_FORGET") {
-      const label = /* @__PURE__ */ h(ui.Text, { color: error ? "red" : void 0, dimColor: !error }, "Response (", FORMAT[s.responseFormat], ")", s.statusCode !== void 0 ? ` - ${s.statusCode}` : "");
+      const label = /* @__PURE__ */ h(ui.Text, { color: error ? "red" : void 0, dimColor: !error }, "Response (", FORMAT2[s.responseFormat], ")", s.statusCode !== void 0 ? ` - ${s.statusCode}` : "");
       add(bodyRows(ui, label, s.responseBody, s.responseFormat));
     }
     if (!s.responseBody && !s.failed && (s.statusCode ?? 0) >= 400) row(/* @__PURE__ */ h(ui.Text, { color: "red" }, "Answered with ", s.statusCode));
@@ -11170,10 +12129,7 @@ function stepPanel($, view, pick2, step, player) {
   const { scenario } = pick2;
   const steps = scenario.steps;
   const total = steps.length;
-  const go = (to, isPlaying = false) => {
-    reveal($, view);
-    void setPlayer($, view, (p) => ({ ...p, step: Math.max(0, Math.min(total - 1, to)), isPlaying }), steps);
-  };
+  const go = (to, isPlaying = false) => goTo($, view, steps, to, isPlaying);
   const rows = stepRows(ui, view, steps, step);
   const tallest = steps.reduce((most, _, i) => Math.max(most, stepRows(ui, view, steps, i).height), rows.height);
   const counter = `Step ${String(Math.min(step + 1, total)).padStart(String(total).length)} of ${total}`;
@@ -11193,8 +12149,12 @@ function stepPanel($, view, pick2, step, player) {
     }
   ), /* @__PURE__ */ h(ui.Button, { key: `next-${view.viewId}`, label: "\u203A", ...hotkey(view, "n"), onPress: () => go(step + 1) }), /* @__PURE__ */ h(ui.Button, { key: `end-${view.viewId}`, label: "\u21E5", ...hotkey(view, "e"), onPress: () => go(total - 1) }), /* @__PURE__ */ h(ui.Text, null, counter), bar > 0 && /* @__PURE__ */ h(ui.Text, null, /* @__PURE__ */ h(ui.Text, { color: YELLOW2 }, "\u2501".repeat(filled)), /* @__PURE__ */ h(ui.Text, { dimColor: true }, "\u2501".repeat(bar - filled))), /* @__PURE__ */ h(ui.Button, { key: `exit-${view.viewId}`, label: exit, dimColor: true, onPress: () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })) })));
 }
+function goTo($, view, steps, to, isPlaying) {
+  reveal($, view);
+  void setPlayer($, view, (p) => ({ ...p, step: Math.max(0, Math.min(steps.length - 1, to)), isPlaying }), steps);
+}
 var hotkey = (view, key) => view.inPane ? { hotkey: key } : {};
-function start($, view, pick2, isPlaying = true) {
+function start2($, view, pick2, isPlaying = true) {
   reveal($, view);
   void setPlayer($, view, (p) => ({ ...p, pick: pick2.value, step: 0, isPlaying, mode: "play" }), pick2.scenario.steps);
 }
@@ -11202,9 +12162,9 @@ function reveal($, view) {
   void scroll($, view.inPane ? { to: { key: view.anchorKey }, in: PANE, block: "start" } : { to: { requestId: view.d.requestId }, block: "start" });
 }
 async function scroll($, args) {
-  const moved2 = await $.ui.scroll(args).catch((error) => ({ deny: String(error) }));
-  if (moved2.deny) $.ui.log(`proschi: scroll to ${JSON.stringify(args.to)} refused: ${moved2.deny}`, { to: "debug" });
-  return moved2;
+  const moved3 = await $.ui.scroll(args).catch((error) => ({ deny: String(error) }));
+  if (moved3.deny) $.ui.log(`proschi: scroll to ${JSON.stringify(args.to)} refused: ${moved3.deny}`, { to: "debug" });
+  return moved3;
 }
 function focus($, view, title, what, tab = "diagram") {
   const opened = $.ui.open({ id: PANE, title: `Proschi \xB7 ${title}`, focus: true, closeOnEscape: true });

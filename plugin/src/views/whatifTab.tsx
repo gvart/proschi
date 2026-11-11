@@ -44,6 +44,33 @@ export function whatIfBanner(ui: Ui, base: Document, w: WhatIfState, columns: nu
   )
 }
 
+/**
+ * What the tab shows that takes a while, once per document: the saved
+ * blocks' results, and the sweep of the use case asked for (the busiest by
+ * default), if one was.
+ */
+export function whatIfResults(key: string, base: Document, w: WhatIfState) {
+  const diagram = base.root
+  let results = saved.get(key)
+  if (!results) {
+    results = runWhatIfs(diagram)
+    saved.set(key, results)
+  }
+  const loaded = base.analysis?.useCases.filter(u => u.rps > 0) ?? []
+  const busiest = loaded.reduce<(typeof loaded)[number] | undefined>((b, u) => (!b || u.rps > b.rps ? u : b), undefined)
+  const swept = loaded.find(u => u.id === w.sweep) ?? busiest
+  let result: SweepResult | undefined
+  if (swept && w.sweep !== undefined) {
+    const at = `${key}|${swept.id}`
+    result = sweeps.get(at)
+    if (!result) {
+      result = sweep(diagram, swept.name, swept.rps * SWEEP.from, swept.rps * SWEEP.to, { steps: SWEEP.steps })
+      sweeps.set(at, result)
+    }
+  }
+  return { saved: results, ...(result ? { sweep: result } : {}), swept, loaded }
+}
+
 export function whatIfTab(t: WhatIfTab): RenderElement {
   const { ui, base, w, set, columns } = t
   const diagram = base.root
@@ -67,23 +94,7 @@ export function whatIfTab(t: WhatIfTab): RenderElement {
   const nowSide: Side = t.now.analysis ? { analysis: t.now.analysis, results: t.now.tests } : baseSide
   const active = t.now !== base
 
-  let results = saved.get(t.key)
-  if (!results) {
-    results = runWhatIfs(diagram)
-    saved.set(t.key, results)
-  }
-  const loaded = base.analysis.useCases.filter(u => u.rps > 0)
-  const busiest = loaded.reduce<(typeof loaded)[number] | undefined>((b, u) => (!b || u.rps > b.rps ? u : b), undefined)
-  const swept = loaded.find(u => u.id === w.sweep) ?? busiest
-  let result: SweepResult | undefined
-  if (swept && w.sweep !== undefined) {
-    const at = `${t.key}|${swept.id}`
-    result = sweeps.get(at)
-    if (!result) {
-      result = sweep(diagram, swept.name, swept.rps * SWEEP.from, swept.rps * SWEEP.to, { steps: SWEEP.steps })
-      sweeps.set(at, result)
-    }
-  }
+  const { saved: results, sweep: result, swept, loaded } = whatIfResults(t.key, base, w)
   // A Preview button is `[ Preview ]` and a space: the table takes the rest of the row.
   const rows = savedLines(base.analysis, results, columns - 12)
 

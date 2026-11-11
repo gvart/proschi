@@ -3,6 +3,7 @@ import type { EngineInterface, ImageSource } from 'claude-code'
 
 import { keyOf, type Source } from '../../tooling/src/terminal/document'
 import type { GraphicsProbe } from '../types'
+import { ask, cacheDir, withPrune, type Priority } from './helper'
 
 /**
  * Diagrams as pictures (docs/design/terminal-mod.md D11): the PNGs
@@ -61,20 +62,11 @@ export interface RasterRequest {
 // Per module load: the helper's answers by request, those being drawn, and PNGs read as bytes.
 const rasters = new Map<string, RasterOutput | { error: string }>()
 const pending = new Set<string>()
+/** Prefetched pictures a drawing has since asked for: their answer redraws. */
+const wanted = new Set<string>()
 const bytes = new Map<string, string>()
-let cache: string | undefined
 let theme: 'light' | 'dark' | undefined
 let probing = false
-/** Whether this session's first call asked the helper to prune the cache (once a session is enough). */
-let pruned = false
-
-/** Where the PNGs go: the system's temporary folder (the API names no plugin data folder). Kept once read, never a promise of another dispatch's. */
-async function cacheDir($: EngineInterface): Promise<string> {
-  if (cache) return cache
-  const dir = await $.env.get('TMPDIR').catch(() => undefined)
-  cache = `${(dir || '/tmp').replace(/\/+$/, '')}/proschi-raster`
-  return cache
-}
 
 /** The picture's theme: Claude Code's own when it names a light one, else dark, as most terminals are. */
 export async function themeOf($: EngineInterface): Promise<'light' | 'dark'> {
@@ -84,29 +76,30 @@ export async function themeOf($: EngineInterface): Promise<'light' | 'dark'> {
   return theme
 }
 
-/** The PNGs of a request, or why the helper could not draw them; undefined while they are drawn (a redraw follows). */
-export function rasterOf($: EngineInterface, request: RasterRequest): RasterOutput | { error: string } | undefined {
+/** The PNGs of a request, or why the helper could not draw them; undefined while they are drawn (a redraw follows, for a prefetch once a drawing wants it). */
+export function rasterOf($: EngineInterface, request: RasterRequest, priority: Priority = 'now'): RasterOutput | { error: string } | undefined {
   const key = `${keyOf(request.source)}\u0000${JSON.stringify(request.options)}`
   const done = rasters.get(key)
-  if (done || pending.has(key)) return done
+  if (done) return done
+  if (pending.has(key)) {
+    if (priority === 'now') wanted.add(key)
+    return undefined
+  }
   pending.add(key)
   void (async () => {
-    const outDir = await cacheDir($)
     const { source, path, imports, view } = request.source
-    const stdin = JSON.stringify({ source, path, imports, view, outDir, options: request.options, ...(pruned ? {} : { prune: true }) })
-    pruned = true
-    const answer = await $.process.run(['node', `${$.plugin.root}/hooks/raster.cjs`], { stdin, timeoutMs: 60_000 }).then(
-      ({ exitCode, stdout, stderr }) => {
-        if (exitCode !== 0) return { error: stderr.trim() || `raster exited with ${exitCode}` }
-        const out = JSON.parse(stdout) as RasterOutput
-        return typeof out.base === 'string' && out.width > 0 && out.height > 0 ? out : { error: 'raster answered no picture' }
+    const input = withPrune({ source, path, imports, view, outDir: await cacheDir($), options: request.options })
+    const answer = await ask($, input, priority).then(
+      out => {
+        const o = out as RasterOutput
+        return typeof o.base === 'string' && o.width > 0 && o.height > 0 ? o : { error: 'raster answered no picture' }
       },
-      (error: unknown) => ({ error: String(error) }),
-    ).catch((error: unknown) => ({ error: String(error) }))
-    if ('error' in answer) $.ui.log(`proschi: no picture, the text drawing stands: ${answer.error}`, { to: 'debug' })
+      (error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }),
+    )
+    if ('error' in answer) $.ui.log(`proschi: no picture: ${answer.error}`, { to: 'debug' })
     rasters.set(key, answer)
     pending.delete(key)
-    $.ui.invalidate('ui.render')
+    if (priority === 'now' || wanted.delete(key)) $.ui.invalidate('ui.render')
   })()
   return undefined
 }
@@ -148,7 +141,11 @@ async function pngOf($: EngineInterface, file: string): Promise<string | undefin
   return read.base64
 }
 
+/** Set when a blit found no surface (a `-p` run, a test): nothing shows pictures, so the drawings are text, not remembered for the session. */
+let headless = false
+
 export async function probeOf($: EngineInterface): Promise<GraphicsProbe> {
+  if (headless) return { status: 'no' }
   const p = await read($, probed)
   return p && (p.status === 'yes' || p.status === 'no' || p.status === 'tmux') ? p : UNKNOWN
 }
@@ -173,7 +170,10 @@ export function probe($: EngineInterface, requestId: string, key: string): void 
   const settle = async (answer: GraphicsProbe | undefined) => {
     timer.cancel()
     probing = false
-    if (!answer) return
+    if (!answer) {
+      $.ui.invalidate('ui.render')
+      return
+    }
     await update($, probed, () => answer)
     $.ui.invalidate('ui.render')
   }
@@ -183,7 +183,10 @@ export function probe($: EngineInterface, requestId: string, key: string): void 
     if (!byName.deny) return settle({ status: 'yes', form: 'file' })
     if (byName.fix === 'tmux-passthrough') return settle({ status: 'tmux' })
     // Nothing draws (a -p run): nothing to learn.
-    if (/no-surface/.test(byName.deny)) return settle(undefined)
+    if (/no-surface/.test(byName.deny)) {
+      headless = true
+      return settle(undefined)
+    }
     const asBytes = await $.ui.blit({ requestId, key, source: { png: PROBE_PNG } }).catch((error: unknown) => ({ deny: String(error), fix: undefined }))
     if (!asBytes.deny) return settle({ status: 'yes', form: 'png' })
     if (asBytes.fix === 'tmux-passthrough') return settle({ status: 'tmux' })

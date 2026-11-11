@@ -75,7 +75,7 @@ await build({
 const hooks = readFileSync('../plugin/hooks/register.js', 'utf8');
 if (hooks.includes('import(') || hooks.includes('elkjs')) throw new Error('plugin/hooks/register.js must not load ELK or use import()');
 if (hooks.length > 1024 * 1024) throw new Error(`plugin/hooks/register.js is ${hooks.length} bytes, over the 1 MiB a hooks module may be`);
-// The `/proschi ui-check` overlay: a surface module the hooks module names as `./uiOverlay.js`, beside it.
+// The overlay laid over drawings in pictures (src/picture.tsx): a surface module the hooks module names as `./uiOverlay.js`, beside it.
 await build({ ...common, entryPoints: ['../plugin/src/uiOverlay.ts'], outfile: '../plugin/hooks/uiOverlay.js', platform: 'neutral', format: 'esm', external: ['claude-code'], legalComments: 'none' });
 await build({ ...common, entryPoints: ['src/terminal/layoutHost.ts'], outfile: '../plugin/hooks/layout.cjs', alias: { ...renderAlias, 'lz-string': './node_modules/lz-string' }, minify: true, legalComments: 'none' });
 // The raster helper: the architecture SVG as PNGs for terminal image protocols, with resvg's
