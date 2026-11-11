@@ -248,7 +248,8 @@ function explorer(S: Surface, p: ExplorerPanel): number {
           const nameCols = Math.ceil((width(u.name, name) + 14) / CELL.width);
           // The name on its own line when it and the scenarios do not fit one.
           const inline = nameCols + u.scenarios.reduce((s, c) => s + chipColumns(c) + 1, 0) <= right - indent;
-          if (u.current) S.add(rect(indent * CELL.width - 8, y + CONTROL_ROW / 2 - 8, 3, 16, { fill: P.accent, rx: 1.5 }));
+          // The current one marked beside its name, on the chips' row or its own line.
+          if (u.current) S.add(rect(indent * CELL.width - 8, inline ? y + CONTROL_ROW / 2 - 8 : y + 2, 3, 16, { fill: P.accent, rx: 1.5 }));
           S.add(txt(indent * CELL.width, inline ? y + CONTROL_ROW / 2 + 5 : y + 14, clip(u.name, (right - indent) * CELL.width, 14, name.weight), { ...name, color: P.ink }));
           let col = indent + (inline ? nameCols : 2);
           if (!inline) y += ROW + 2;

@@ -87,7 +87,7 @@ export function menu(S: Surface, sel: Select, col: number, top: number, minColum
       },
     });
   }
-  return up(h + 6);
+  return framed ? up(h + 6) : h;
 }
 
 /**
