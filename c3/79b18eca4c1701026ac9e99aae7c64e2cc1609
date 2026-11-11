@@ -1,0 +1,36 @@
+plugin/src/views/tabs.tsx
+  s_50cc5c1ed1a510::t_3c2e2dce1907a4 5,60-77
+  s_50cc5c1ed1a510::t_f225e9c402e99a 78
+plugin/src/register.tsx
+  s_50cc5c1ed1a510::t_3c2e2dce1907a4 21,58,210
+docs/AGENT-SKILLS.md
+  s_50cc5c1ed1a510::t_ff8a31ebb72602 109
+docs/design/terminal-mod.md
+  s_50cc5c1ed1a510::t_97560fc041387a 71-73
+plugin/src/views/lines.ts
+  s_50cc5c1ed1a510::t_f36f2979a885e2 273-277,307-312
+  s_50cc5c1ed1a510::t_3cec3111a856a7 313-314
+plugin/tests/parity.test.tsx
+  s_50cc5c1ed1a510::t_3c2e2dce1907a4 76,78,80-81,83
+  s_50cc5c1ed1a510::t_c0a0c83095badc 77,79,82,84
+plugin/types/index.d.ts
+  s_50cc5c1ed1a510::t_3c2e2dce1907a4 62-63
+plugin/hooks/register.js
+  s_50cc5c1ed1a510::t_f7b21527a08f2d 6991,6995,6997,6999,7001,7308,7310,7332,7335-7337,7349,7351,7378,7380,7408-7409,7411,7462-7463,10048-10051,10296-10299,10571,10689,10812,10815,10817
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c379b18eca4c1701026ac9e99aae7c64e2cc1609",
+  "prompts": {},
+  "sessions": {
+    "s_50cc5c1ed1a510": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7e5513ad-e496-40de-9a6e-d587aa393ce5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
