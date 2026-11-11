@@ -9287,16 +9287,9 @@ function card(s, steps, name) {
     ...s.responseBody && exec !== "fire" ? { response: { format: FORMAT[s.responseFormat], text: s.responseBody, ...s.statusCode !== void 0 ? { status: s.statusCode } : {}, ...error ? { error: true } : {} } } : {}
   };
 }
-function stepPanelOf(scenario, at, playing, name, hotkeys = true) {
+function stepCardsOf(scenario, name) {
   const steps = scenario.steps;
-  return {
-    kind: "step",
-    ...scenario.condition ? { condition: scenario.condition } : {},
-    steps: steps.map((_, i) => currentStepsOf(steps, i).map((s) => card(s, steps, name))),
-    at,
-    playing,
-    ...hotkeys ? { hotkeys: { first: "r", prev: "b", play: "p", next: "n", last: "e" } } : {}
-  };
+  return steps.map((_, i) => currentStepsOf(steps, i).map((s) => card(s, steps, name)));
 }
 var splits = (n) => n.writeLoadRps > 0 && (n.writeScaling === "shards" || n.readCapacityRps !== n.writeCapacityRps);
 var bare = (rps) => formatRps(rps).replace(" rps", "");
@@ -9962,11 +9955,18 @@ async function pictureSite($, ui, s) {
     if (out) pages.push({ id: page.id, out, shown: page.shown });
     else if (page.shown) waiting = true;
   }
-  const onTop = (a) => a.panel.kind === "tabs" || a.panel.kind === "playerHeader" && !s.pieces.some((p) => "panel" in p && p.panel.kind === "tabs");
-  if (s.ahead?.length) prefetch($, s.ahead.map((a) => ({ ...a, theme: s.theme, edges: onTop(a) ? { top: true } : {} })));
+  let float;
+  if (s.float) {
+    const out = panelOf($, { panel: s.float.panel, columns: s.float.columns, theme: s.theme, edges: { top: true, bottom: true } });
+    if (out && "error" in out) return { error: out.error };
+    if (!out) waiting = true;
+    else float = { def: s.float, out };
+  }
+  const onTop = (a) => a.panel.kind === "tabs" || a.panel.kind === "playerBar" && !s.pieces.some((p) => "panel" in p && p.panel.kind === "tabs");
+  if (s.ahead?.length) prefetch($, s.ahead.map((a) => ({ panel: a.panel, columns: a.columns, theme: s.theme, edges: a.edges ?? (onTop(a) ? { top: true } : {}) })));
   let now;
   if (!waiting) {
-    now = { pieces: resolved, pages, actions: s.actions };
+    now = { pieces: resolved, pages, actions: { ...s.actions, ...s.float?.actions ?? {} }, ...float ? { float } : {} };
     shown.set(s.site, now);
   } else now = shown.get(s.site);
   if (!now) return { element: loading(ui, s.site, s.rows) };
@@ -10025,7 +10025,13 @@ async function build($, ui, s, d) {
   const parts = [];
   let top = 0;
   let width = 1;
-  for (const p of d.pieces) {
+  const layerAt = s.layer ? d.pieces.findIndex((p) => p.id === s.layer) : -1;
+  const layered = [];
+  let layerTop = 0;
+  const anchors = /* @__PURE__ */ new Map();
+  for (const [i, p] of d.pieces.entries()) {
+    if (i === layerAt) layerTop = top;
+    const into_ = layerAt >= 0 && i >= layerAt ? layered : parts;
     if ("picture" in p) {
       const pic = p.picture;
       let body;
@@ -10041,7 +10047,7 @@ async function build($, ui, s, d) {
         }
         body = lines;
       } else body = /* @__PURE__ */ h(ui.Image, { key: pic.key, source: await source(pic.key, pic.file), columns: pic.columns, rows: pic.rows, alt: pic.alt });
-      parts.push(
+      into_.push(
         /* @__PURE__ */ h(ui.Box, { key: pic.anchorKey ?? `pic-${s.site}-${p.id}`, flexDirection: "column", height: pic.rows }, body)
       );
       top += pic.rows;
@@ -10049,11 +10055,43 @@ async function build($, ui, s, d) {
       continue;
     }
     const { out } = p;
-    parts.push(
+    anchors.set(p.id, { row: top - layerTop, out });
+    into_.push(
       /* @__PURE__ */ h(ui.Box, { key: `p-${s.site}-${p.id}`, flexDirection: "column", height: out.rows }, await strips(ui, s, p.id, out, source, into))
     );
     top += out.rows;
     width = Math.max(width, out.columns);
+  }
+  let floatTop;
+  if (layerAt >= 0) {
+    const rows = top - layerTop;
+    const over = [];
+    const f = d.float;
+    const anchor = f && anchors.get(f.def.anchor.piece);
+    if (f && anchor) {
+      const tile = f.def.anchor.control ? anchor.out.tiles.find((t) => t.controls?.some((a) => a.control.id === f.def.anchor.control)) : void 0;
+      const area = tile?.controls?.find((a) => a.control.id === f.def.anchor.control);
+      const below = anchor.row + (tile ? tile.row + tile.rows : anchor.out.rows);
+      const at = Math.max(0, Math.min(below, rows - f.out.rows));
+      const left = Math.max(0, Math.min((tile?.col ?? 0) + (area?.col ?? 0), width - f.out.columns));
+      if (f.out.rows > rows) $.ui.log(`proschi: the ${f.def.id} is ${f.out.rows} rows, over the ${rows} it floats over: its foot is cut`, { to: "debug" });
+      floatTop = layerTop + at;
+      const scrim = `ov-scrim-${s.site}`;
+      into.overlays.set(scrim, [`${f.def.id}/close`]);
+      overlaySites.set(scrim, s.site);
+      over.push(
+        /* @__PURE__ */ h(ui.Box, { key: `scrim-${s.site}`, position: "absolute", top: 0, left: 0, width, height: rows }, /* @__PURE__ */ h(ui.Client, { key: scrim, module: "./uiOverlay.js", props: { controls: [{ id: `${f.def.id}/close`, col: 0, row: 0, columns: width, rows }] }, width, height: rows }))
+      );
+      const floated = await strips(ui, s, f.def.id, f.out, source, into);
+      f.out.tiles.forEach(
+        (t, i) => over.push(
+          /* @__PURE__ */ h(ui.Box, { key: `fl-${s.site}-${i}`, position: "absolute", top: at + t.row, left, width: t.columns, height: t.rows }, floated[i])
+        )
+      );
+    }
+    parts.push(
+      /* @__PURE__ */ h(ui.Box, { key: `ly-${s.site}`, flexDirection: "column", height: rows, overflow: "hidden" }, layered, over)
+    );
   }
   if (d.pages.length) {
     const pages = [];
@@ -10079,6 +10117,7 @@ async function build($, ui, s, d) {
     actions: d.actions,
     hotkeys,
     sources,
+    ...floatTop !== void 0 && d.float ? { float: { top: floatTop, close: d.float.def.close } } : {},
     ...s.form ? { form: s.form } : {},
     ...was?.pressedAt !== void 0 ? { pressedAt: was.pressedAt, ...was.pressed ? { pressed: was.pressed } : {}, ...was.renderedAt !== void 0 ? { renderedAt: was.renderedAt } : {} } : {}
   });
@@ -10139,6 +10178,7 @@ function registerPicture(on) {
       return next({ ...e, offset });
     }
     if (windows.has(e.requestId)) windows.set(e.requestId, { offset: e.offset, bodyRows: e.bodyRows });
+    for (const l of live2.values()) if (l.requestId === e.requestId && l.float && e.offset > l.float.top) l.float.close();
     return next(e);
   });
 }
@@ -11255,9 +11295,9 @@ function bodyLines(tab, doc, columns) {
   const what = TABS.find((t) => t.id === tab).label;
   return [{ segs: [{ text: `${what} in the terminal is coming; \u2197 Open in Proschi shows it in the editor now.`, dim: true }], wrap: true }];
 }
-function testsTab(ui, doc, columns, open, toggle2) {
+function testsTab(ui, doc, columns, open, toggle) {
   const passing2 = doc.analysis ? doc.tests.filter((t) => t.passed).length : 0;
-  return /* @__PURE__ */ h(ui.Box, { key: "body-tests", flexDirection: "column" }, linesView(ui, bodyLines("tests", doc, columns), "tests-lines"), passing2 > 0 && /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, /* @__PURE__ */ h(ui.Button, { key: "tests-passing", label: `${open ? "\u25BE" : "\u25B8"} ${passing2} passing`, hotkey: "a", dimColor: !open, onPress: toggle2 }), open && linesView(ui, passingLines(doc.tests, columns), "tests-passing-lines")));
+  return /* @__PURE__ */ h(ui.Box, { key: "body-tests", flexDirection: "column" }, linesView(ui, bodyLines("tests", doc, columns), "tests-lines"), passing2 > 0 && /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, /* @__PURE__ */ h(ui.Button, { key: "tests-passing", label: `${open ? "\u25BE" : "\u25B8"} ${passing2} passing`, hotkey: "a", dimColor: !open, onPress: toggle }), open && linesView(ui, passingLines(doc.tests, columns), "tests-passing-lines")));
 }
 
 // ../plugin/src/views/whatif.ts
@@ -11486,7 +11526,7 @@ var players = atom2({ plugin: "proschi", key: "player" }, IDLE);
 var paneTab = atom2({ plugin: "proschi", key: "paneTab" }, "diagram");
 var paneWhatIf = atom2({ plugin: "proschi", key: "paneWhatIf" }, NO_WHATIF);
 var panePassing = atom2({ plugin: "proschi", key: "panePassing" }, false);
-var PANE_KEYS = "1-6 tabs \xB7 p play \xB7 n/b step \xB7 r restart \xB7 e end \xB7 x explorer \xB7 d diagram \xB7 esc back to the prompt";
+var PANE_KEYS = "1-6 tabs \xB7 p play \xB7 n/b step \xB7 r first \xB7 e last \xB7 d stop \xB7 esc back to the prompt";
 var TAB_KEYS = "1-6 tabs \xB7 \u2191\u2193 scroll \xB7 esc back to the prompt";
 var SYSTEM_KEYS = "s next system \xB7 o open/close \xB7 f focus in \xB7 u back out";
 var FRAME3 = 33;
@@ -11546,6 +11586,10 @@ function register(on, options) {
     return { text: `Showing ${file} in the Proschi pane.` };
   });
   on("ui.close", { id: PANE }, async ($, e, next) => {
+    if (e.origin.kind === "person" && menus.delete(PANE_VIEW)) {
+      $.ui.invalidate("ui.render");
+      return { value: void 0 };
+    }
     stop(PANE_VIEW);
     stop(PANE);
     return next(e);
@@ -11610,7 +11654,11 @@ function register(on, options) {
       const { doc, base, key, player } = loaded;
       const pieces = [{ id: "tabs", panel: tabBarPanel(tab, failing), columns: W2 }];
       const actions = {};
-      for (const t of TABS) actions[`tabs/${t.id}`] = () => void update2($, paneTab, () => t.id);
+      for (const t of TABS)
+        actions[`tabs/${t.id}`] = () => {
+          menus.delete(PANE_VIEW);
+          void update2($, paneTab, () => t.id);
+        };
       if (doc !== base) {
         pieces.push({ id: "banner", panel: { kind: "banner", label: whatIfBannerLabel(base, whatIf), note: "the design as written is unchanged", reset: { id: "reset", icon: "reset", label: "Reset", ...tab !== "diagram" ? { hotkey: "r" } : {} } }, columns: W2 });
         actions["banner/reset"] = resetWhatIf;
@@ -11735,6 +11783,8 @@ async function drawDiagram($, d, viewId, source, file, whatIf, top = { pieces: [
     actions: { ...top.actions, ...view.actions },
     hotkeys: d.requestId === PANE,
     ahead: [...top.ahead, ...view.ahead],
+    layer: "bar",
+    ...view.float ? { float: view.float } : {},
     ...top.pages ? { pages: top.pages } : {},
     rows: view.rows,
     ...mode.kind === "picture" && mode.form ? { form: mode.form } : {}
@@ -11850,8 +11900,6 @@ function normal(p) {
 var PINK2 = "#ff5da2";
 var INK = "#111111";
 var YELLOW2 = "#ffd23f";
-var PAUSE = "\u275A\u275A Pause";
-var PLAY = " \u25B6 Play ";
 var BARS_WIDTH = 80;
 async function documentOf($, viewId, written, file, whatIf) {
   const player = normal(await read2($, memberOf(players, { requestId: viewId })));
@@ -11940,7 +11988,7 @@ async function diagramView($, d, viewId, written, file, whatIf, mode = { kind: "
       room: d.columns,
       maxRows: d.rows ?? INLINE_ROWS,
       cellPx: cellPx(),
-      fill: { columns: panelColumns(d.columns), ...!play && !view.inPane && !doc.diagram.title && noticesOf(view, doc, lost).length === 0 ? { top: true } : {}, ...!play && doc.overlay && doc.edges ? { legend: true } : {} }
+      fill: { columns: panelColumns(d.columns), ...!pick2 && !view.inPane && !doc.diagram.title && noticesOf(view, doc, lost).length === 0 ? { top: true } : {}, ...!play && doc.overlay && doc.edges ? { legend: true } : {} }
     }
   });
   const request2 = { source, options: optionsFor(playing) };
@@ -11949,7 +11997,7 @@ async function diagramView($, d, viewId, written, file, whatIf, mode = { kind: "
     images.delete(viewId);
     const out = rasterOf($, request2);
     const size = out && !("error" in out) ? out.grid ? { columns: out.grid.columns, rows: out.grid.rows } : imageSize(out, d.columns, d.rows ?? INLINE_ROWS) : void 0;
-    const rows = (size?.rows ?? Math.min(scene.rows, d.rows ?? INLINE_ROWS)) + (playing ? 22 : 12);
+    const rows = (size?.rows ?? Math.min(scene.rows, d.rows ?? INLINE_ROWS)) + 16;
     if (mode.kind === "loading") return { kind: "loading", rows };
     if (out && "error" in out) return diagramView($, d, viewId, written, file, whatIf, { kind: "text" });
     let picture;
@@ -11978,7 +12026,8 @@ async function diagramView($, d, viewId, written, file, whatIf, mode = { kind: "
   }
   const grid = paint(scene, { overlay: doc.overlay, edges: doc.edges, icons, systems: doc.systems, ...view.selected ? { selected: view.selected } : {}, ...steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {} });
   const verdict = verdictLine(doc.tests, view.width - (view.inPane ? 0 : 13));
-  return { kind: "text", element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, playing ? playerHeader($, view, playing, player) : doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, mode.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, TMUX_HINT), grid.columns > d.columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", grid.columns, " columns wide, wider than the ", d.columns, " here: ", view.inPane ? "widen the window" : "use \u26F6 Focus or a wider window", " to see it whole."), lost.some((name) => !importReasons.has(name)) && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u26A0 Not found, so drawn as plain boxes: ", lost.filter((name) => !importReasons.has(name)).join(", ")), lost.filter((name) => importReasons.has(name)).map((name) => /* @__PURE__ */ h(ui.Text, { key: `lost-${name}`, dimColor: true }, "\u26A0 ", importReasons.get(name))), doc.notes.map((note3) => /* @__PURE__ */ h(ui.Text, { color: "yellow" }, "\u26A0 ", note3.text, note3.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true }, " \u2192 ", note3.hint))), (view.inPane ? doc.warnings : doc.warnings.slice(0, INLINE_WARNINGS)).map((w) => /* @__PURE__ */ h(ui.Text, { key: `warn-${w}`, color: "yellow", wrap: "truncate-end" }, "\u26A0 ", w)), !view.inPane && doc.warnings.length > INLINE_WARNINGS && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2026 ", doc.warnings.length - INLINE_WARNINGS, " more: \u26F6 Focus, then Analysis"), /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), doc.edges && !playing && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)), verdict && !playing && /* @__PURE__ */ h(ui.Box, { key: `verdict-${viewId}`, flexDirection: "row", gap: 1, width: view.width }, lineView(ui, verdict), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `tests-${viewId}`, label: "\u26F6 Details", dimColor: true, onPress: () => focus($, view, title, what, "tests") })), hasSystems && !playing && systemBar($, view, doc, systems, selected, player), playing ? stepPanel($, view, playing, step, player) : pick2 && useCaseBar($, view, doc, pick2, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: roomy ? "\u29C9 Copy source" : "\u29C9 Source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: roomy ? "\u29C9 Copy share link" : "\u29C9 Link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: roomy ? "\u2197 Open in Proschi" : "\u2197 Open", variant: "primary", onPress: (press) => void openLink($, press.surface, link) }), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `focus-${viewId}`, label: "\u26F6 Focus", onPress: () => focus($, view, title, what) }))), systems: hasSystems };
+  const m = pick2 && playerModel($, view, doc, pick2, playing, step, player);
+  return { kind: "text", element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, m && playerBarText(view, doc, m), doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, mode.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, TMUX_HINT), grid.columns > d.columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", grid.columns, " columns wide, wider than the ", d.columns, " here: ", view.inPane ? "widen the window" : "use \u26F6 Focus or a wider window", " to see it whole."), lost.some((name) => !importReasons.has(name)) && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u26A0 Not found, so drawn as plain boxes: ", lost.filter((name) => !importReasons.has(name)).join(", ")), lost.filter((name) => importReasons.has(name)).map((name) => /* @__PURE__ */ h(ui.Text, { key: `lost-${name}`, dimColor: true }, "\u26A0 ", importReasons.get(name))), doc.notes.map((note3) => /* @__PURE__ */ h(ui.Text, { color: "yellow" }, "\u26A0 ", note3.text, note3.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true }, " \u2192 ", note3.hint))), (view.inPane ? doc.warnings : doc.warnings.slice(0, INLINE_WARNINGS)).map((w) => /* @__PURE__ */ h(ui.Text, { key: `warn-${w}`, color: "yellow", wrap: "truncate-end" }, "\u26A0 ", w)), !view.inPane && doc.warnings.length > INLINE_WARNINGS && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2026 ", doc.warnings.length - INLINE_WARNINGS, " more: \u26F6 Focus, then Analysis"), /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), doc.edges && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)), verdict && /* @__PURE__ */ h(ui.Box, { key: `verdict-${viewId}`, flexDirection: "row", gap: 1, width: view.width }, lineView(ui, verdict), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `tests-${viewId}`, label: "\u26F6 Details", dimColor: true, onPress: () => focus($, view, title, what, "tests") })), hasSystems && systemBar($, view, doc, systems, selected, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: roomy ? "\u29C9 Copy source" : "\u29C9 Source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: roomy ? "\u29C9 Copy share link" : "\u29C9 Link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: roomy ? "\u2197 Open in Proschi" : "\u2197 Open", variant: "primary", onPress: (press) => void openLink($, press.surface, link) }), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `focus-${viewId}`, label: "\u26F6 Focus", onPress: () => focus($, view, title, what) }))), systems: hasSystems };
 }
 var images = /* @__PURE__ */ new Map();
 var menus = /* @__PURE__ */ new Map();
@@ -11988,17 +12037,7 @@ function toggleMenu($, viewId, id) {
   $.ui.invalidate("ui.render");
 }
 var panelColumns = (columns) => Math.max(20, Math.min(255, columns));
-function headerPanel(view, pick2) {
-  const { useCase } = pick2;
-  return {
-    kind: "playerHeader",
-    back: { id: "back", icon: "back", label: "Diagram", ...hotkey(view, "d") },
-    title: useCase.name,
-    note: "Playback mode \xB7 read only",
-    ...useCase.scenarios.length > 1 ? { scenarios: useCase.scenarios.map((s) => ({ id: `sc-${s.id}`, name: s.name, outcome: s.outcome === "error" ? "error" : "ok", ...s.outcome === "error" && s.steps.find(isErrorStep)?.statusCode ? { status: s.steps.find(isErrorStep).statusCode } : {}, ...s.id === pick2.scenario.id ? { current: true } : {} })) } : {}
-  };
-}
-var stepPanelAt = (view, pick2, step, isPlaying) => stepPanelOf(pick2.scenario, step, isPlaying, (id) => view.scene.nodes.get(id)?.node.name ?? id, view.inPane);
+var FLOAT_EDGES = { top: true, bottom: true };
 function noticesOf(view, doc, lost) {
   const unknown = lost.filter((name) => !importReasons.has(name));
   return [
@@ -12016,18 +12055,32 @@ function pictureParts($, view, doc, c) {
   const ahead = [];
   const on = (piece, id, fn) => actions[`${piece}/${id}`] = fn;
   const { playing, player, pick: pick2 } = c;
-  if (playing) {
-    pieces.push({ id: "head", panel: headerPanel(view, playing), columns: W2 });
-    on("head", "back", () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })));
-    for (const s of playing.useCase.scenarios) on("head", `sc-${s.id}`, () => start2($, view, pickOf(playing.useCase, s), player.isPlaying));
-  } else if (doc.diagram.title) {
+  let float;
+  if (pick2) {
+    const m = playerModel($, view, doc, pick2, playing, c.step, player);
+    const bar = barPanel(view, doc, m, playing ? c.step : void 0, player.isPlaying);
+    pieces.push({ id: "bar", panel: bar, columns: W2 });
+    for (const [id, fn] of Object.entries(m.actions)) on("bar", id, () => fn());
+    float = floatOf(view, doc, m, bar, W2);
+    if (float) Object.assign(actions, float.actions);
+    if (playing) {
+      for (let i = 0; i < m.total; i++) for (const isPlaying of [true, false]) ahead.push({ panel: barPanel(view, doc, m, i, isPlaying), columns: W2 });
+      const drawer = floatOf(view, doc, { ...m, open: "body" }, bar, W2);
+      if (drawer) ahead.push({ panel: drawer.panel, columns: drawer.columns, edges: FLOAT_EDGES });
+    } else ahead.push({ panel: barPanel(view, doc, m, 0, true), columns: W2 });
+    for (const open of ["uc", "sc"]) {
+      const f = floatOf(view, doc, { ...m, open }, bar, W2);
+      if (f) ahead.push({ panel: f.panel, columns: f.columns, edges: FLOAT_EDGES });
+    }
+  }
+  if (doc.diagram.title) {
     pieces.push({ id: "title", panel: { kind: "page", blocks: [{ type: "heading", level: 3, text: doc.diagram.title }, ...doc.diagram.summary ? [{ type: "paragraph", small: true, text: doc.diagram.summary }] : []] }, columns: W2 });
   }
   const notices = noticesOf(view, doc, c.lost);
   if (notices.length) pieces.push({ id: "warn", panel: { kind: "notices", notices }, columns: W2 });
   pieces.push({ id: "diagram", ...c.picture ? { picture: c.picture } : {} });
   const failing = doc.tests.filter((t) => !t.passed);
-  if (failing[0] && !playing) {
+  if (failing[0]) {
     const below = {
       kind: "notices",
       verdict: { passed: doc.tests.length - failing.length, total: doc.tests.length, first: `${failing[0].name}: ${failing[0].message}` },
@@ -12036,7 +12089,7 @@ function pictureParts($, view, doc, c) {
     pieces.push({ id: "below", panel: below, columns: W2 });
   }
   on("below", "details", () => focus($, view, c.title, c.what, "tests"));
-  if ((c.systems.length > 0 || player.focus !== void 0) && !playing) {
+  if (c.systems.length > 0 || player.focus !== void 0) {
     const s = systemActions($, view, doc, c.systems, c.selected, player);
     const controls = [
       ...c.systems.length > 1 ? [{ id: "next", icon: "cycle", label: "Next", ...hotkey(view, "s") }] : [],
@@ -12052,51 +12105,6 @@ function pictureParts($, view, doc, c) {
     on("systems", "open", s.toggle);
     on("systems", "focus", s.enter);
     on("systems", "back", s.leave);
-  }
-  if (playing) {
-    const steps = playing.scenario.steps;
-    const total = steps.length;
-    const go = (to, isPlaying = false) => goTo($, view, steps, to, isPlaying);
-    pieces.push({ id: "step", panel: stepPanelAt(view, playing, c.step, player.isPlaying), columns: W2 });
-    on("step", "first", () => go(0));
-    on("step", "prev", () => go(c.step - 1));
-    on("step", "play", () => player.isPlaying ? void setPlayer($, view, (p) => ({ ...p, isPlaying: false })) : go(c.step >= total - 1 ? 0 : c.step, true));
-    on("step", "next", () => go(c.step + 1));
-    on("step", "last", () => go(total - 1));
-    on("step", "exit", () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })));
-    for (let i = 0; i < total; i++) for (const isPlaying of [true, false]) ahead.push({ panel: stepPanelAt(view, playing, i, isPlaying), columns: W2 });
-  } else if (pick2) {
-    const groups = groupByEndpoint(doc.diagram.useCases);
-    const count = (u) => `${u.scenarios.length} scenario${u.scenarios.length === 1 ? "" : "s"}`;
-    const open = menus.get(view.viewId) === "uc";
-    const panel = {
-      kind: "useCaseBar",
-      picker: { id: "uc", value: pick2.useCase.id, options: groups.flatMap((g) => g.useCases.map((u) => ({ value: u.id, label: u.name, ...g.label ? { group: g.label } : {}, detail: count(u) }))), ...open ? { open: true } : {} },
-      play: { id: "play", icon: "play", label: "Play", variant: "primary", ...hotkey(view, "p") },
-      explore: { id: "explore", icon: "explore", label: player.explorer ? "Hide explorer" : c.roomy ? "Explore use cases" : "Explore", ...hotkey(view, "x"), ...player.explorer ? { active: true } : {} },
-      ...player.explorer ? {
-        explorer: groups.map((g) => ({
-          ...g.label ? { label: g.label } : {},
-          useCases: g.useCases.map((u) => ({
-            name: u.name,
-            ...u.id === pick2.useCase.id ? { current: true } : {},
-            scenarios: u.scenarios.map((s) => ({ id: `x-${u.id}-${s.id}`, name: u.scenarios.length > 1 ? s.name : "Play", outcome: s.outcome === "error" ? "error" : "ok", ...s.outcome === "error" && s.steps.find(isErrorStep)?.statusCode ? { status: s.steps.find(isErrorStep).statusCode } : {} }))
-          }))
-        }))
-      } : {}
-    };
-    pieces.push({ id: "ucbar", panel, columns: W2 });
-    on("ucbar", "uc", () => toggleMenu($, view.viewId, "uc"));
-    for (const u of doc.diagram.useCases) {
-      on("ucbar", `uc=${u.id}`, () => {
-        menus.delete(view.viewId);
-        if (u.scenarios[0]) void setPlayer($, view, (p) => ({ ...p, pick: pickOf(u, u.scenarios[0]).value }));
-      });
-      for (const s of u.scenarios) on("ucbar", `x-${u.id}-${s.id}`, () => start2($, view, pickOf(u, s)));
-    }
-    on("ucbar", "play", () => start2($, view, pick2));
-    on("ucbar", "explore", () => void setPlayer($, view, (p) => ({ ...p, explorer: !p.explorer })));
-    ahead.push({ panel: headerPanel(view, pick2), columns: W2 }, { panel: stepPanelAt(view, pick2, 0, true), columns: W2 });
   }
   pieces.push({
     id: "links",
@@ -12115,15 +12123,15 @@ function pictureParts($, view, doc, c) {
   on("links", "lnk", (surface) => void copy($, surface, c.link, "the share link"));
   on("links", "open", (surface) => void openLink($, surface, c.link));
   on("links", "focus", () => focus($, view, c.title, c.what));
-  return { pieces, actions, ahead };
+  return { pieces, actions, ahead, ...float ? { float } : {} };
 }
 function selectable(scene, focus2) {
   return [...scene.nodes.values()].map((n) => n.node).filter((n) => n.kind === "system" || n.kind === "group" && n.system === n.id).map((n) => ({ id: n.id, path: focus2 !== void 0 ? `${focus2}.${n.id}` : n.id, name: n.name, expanded: n.kind === "group" }));
 }
 function systemBar($, view, doc, systems, selected, player) {
   const { ui } = view.d;
-  const { design, open, next, toggle: toggle2, enter, leave } = systemActions($, view, doc, systems, selected, player);
-  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, player.focus !== void 0 && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "Inside ", player.focus.split(".").join(" \u203A "), " \xB7 ", doc.diagram.title ?? "its design"), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "System"), /* @__PURE__ */ h(ui.Text, { color: PINK2, wrap: "truncate-end" }, selected ? `${selected.name} (${selected.path})` : "none here"), systems.length > 1 && /* @__PURE__ */ h(ui.Button, { key: `sys-next-${view.viewId}`, label: "\u21E5 Next", ...hotkey(view, "s"), onPress: next }), selected && design && /* @__PURE__ */ h(ui.Button, { key: `sys-open-${view.viewId}`, label: open ? "\u229F Collapse" : "\u229E Expand", ...hotkey(view, "o"), onPress: toggle2 }), selected && design && /* @__PURE__ */ h(ui.Button, { key: `sys-focus-${view.viewId}`, label: "\u2922 Focus in", ...hotkey(view, "f"), onPress: enter }), player.focus !== void 0 && /* @__PURE__ */ h(ui.Button, { key: `sys-back-${view.viewId}`, label: "\u2191 Back out", ...hotkey(view, "u"), onPress: leave })));
+  const { design, open, next, toggle, enter, leave } = systemActions($, view, doc, systems, selected, player);
+  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, player.focus !== void 0 && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "Inside ", player.focus.split(".").join(" \u203A "), " \xB7 ", doc.diagram.title ?? "its design"), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "System"), /* @__PURE__ */ h(ui.Text, { color: PINK2, wrap: "truncate-end" }, selected ? `${selected.name} (${selected.path})` : "none here"), systems.length > 1 && /* @__PURE__ */ h(ui.Button, { key: `sys-next-${view.viewId}`, label: "\u21E5 Next", ...hotkey(view, "s"), onPress: next }), selected && design && /* @__PURE__ */ h(ui.Button, { key: `sys-open-${view.viewId}`, label: open ? "\u229F Collapse" : "\u229E Expand", ...hotkey(view, "o"), onPress: toggle }), selected && design && /* @__PURE__ */ h(ui.Button, { key: `sys-focus-${view.viewId}`, label: "\u2922 Focus in", ...hotkey(view, "f"), onPress: enter }), player.focus !== void 0 && /* @__PURE__ */ h(ui.Button, { key: `sys-back-${view.viewId}`, label: "\u2191 Back out", ...hotkey(view, "u"), onPress: leave })));
 }
 function systemActions($, view, doc, systems, selected, player) {
   const design = selected !== void 0 && !!systemAt2(doc.root, selected.path)?.diagram;
@@ -12132,7 +12140,7 @@ function systemActions($, view, doc, systems, selected, player) {
     const to = systems[(at + 1) % systems.length];
     if (to) void setPlayer($, view, (p) => ({ ...p, selected: to.path }));
   };
-  const toggle2 = () => {
+  const toggle = () => {
     if (!selected || !design) return;
     const open2 = player.expanded.includes(selected.path) || selected.expanded;
     void setPlayer($, view, (p) => ({
@@ -12157,7 +12165,7 @@ function systemActions($, view, doc, systems, selected, player) {
     });
   };
   const open = selected !== void 0 && (selected.expanded || player.expanded.includes(selected.path));
-  return { design, open, next, toggle: toggle2, enter, leave };
+  return { design, open, next, toggle, enter, leave };
 }
 var lostByKey = /* @__PURE__ */ new Map();
 function lostImports(source, key) {
@@ -12169,48 +12177,154 @@ function lostImports(source, key) {
   }
   return names;
 }
-var EXPLORE = { long: ["\u2261 Explore use cases", "\u2261 Hide explorer"], short: ["\u2261 Explore", "\u2261 Hide"] };
-var toggle = (labels, open) => labels[open ? 1 : 0].padEnd(Math.max(...labels.map((l) => l.length)));
-var cut2 = (text, room) => text.length <= room ? text : `${text.slice(0, Math.max(0, room - 1))}\u2026`;
-function useCaseBar($, view, doc, pick2, player) {
-  const { ui } = view.d;
-  const groups = groupByEndpoint(doc.diagram.useCases);
-  const count = (u) => `${u.scenarios.length} scenario${u.scenarios.length === 1 ? "" : "s"}`;
-  const labels = groups.flatMap((g) => g.useCases.map((u) => ({ value: u.id, label: `${g.label ? `${g.label} \u203A ` : ""}${u.name} \xB7 ${count(u)}` })));
-  const inner = view.width - 4;
-  const longToggle = toggle(EXPLORE.long, false).length + 4;
-  const picker = 9 + Math.max(...labels.map((o) => o.label.length)) + 2;
-  const oneRow = picker + 1 + 10 + 1 + longToggle <= inner;
-  const explore = toggle(10 + 1 + longToggle <= inner ? EXPLORE.long : EXPLORE.short, player.explorer);
-  const options = oneRow ? labels : labels.map((o) => ({ ...o, label: cut2(o.label, inner - 9 - 2) }));
-  const select = /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Text, { bold: true, color: PINK2 }, "Use case"), /* @__PURE__ */ h(
-    ui.Select,
-    {
-      key: `uc-${view.viewId}`,
-      value: pick2.useCase.id,
-      options,
-      onSelect: (id) => {
-        const u = doc.diagram.useCases.find((c) => c.id === id);
-        if (u?.scenarios[0]) void setPlayer($, view, (p) => ({ ...p, pick: pickOf(u, u.scenarios[0]).value }));
-      }
+var EXPLORE_ALL = "__explore";
+var scenarioName = (u, s) => {
+  const status = s.outcome === "error" ? s.steps.find(isErrorStep)?.statusCode : void 0;
+  return `${u.scenarios.length > 1 ? s.name : "Main flow"}${status ? ` \xB7 ${status}` : ""}`;
+};
+function playerModel($, view, doc, pick2, playing, step, player) {
+  const steps = pick2.scenario.steps;
+  const total = steps.length;
+  const go = (to, isPlaying = false) => goTo($, view, steps, to, isPlaying);
+  const close = () => {
+    if (menus.delete(view.viewId)) $.ui.invalidate("ui.render");
+  };
+  const actions = {
+    uc: () => toggleMenu($, view.viewId, "uc"),
+    sc: () => toggleMenu($, view.viewId, "sc"),
+    body: () => playing ? toggleMenu($, view.viewId, "body") : void 0,
+    explore: () => toggleMenu($, view.viewId, "explore"),
+    close,
+    play: () => {
+      close();
+      if (!playing) start2($, view, pick2);
+      else if (player.isPlaying) void setPlayer($, view, (p) => ({ ...p, isPlaying: false }));
+      else go(step >= total - 1 ? 0 : step, true);
+    },
+    stop: () => {
+      if (!playing) return;
+      close();
+      void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false }));
     }
-  ));
-  const buttons = /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Button, { key: `play-${view.viewId}`, label: "\u25B6 Play", variant: "primary", ...hotkey(view, "p"), onPress: () => start2($, view, pick2) }), /* @__PURE__ */ h(ui.Button, { key: `explore-${view.viewId}`, label: explore, ...hotkey(view, "x"), onPress: () => void setPlayer($, view, (p) => ({ ...p, explorer: !p.explorer })) }));
-  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: PINK2, paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Box, { flexDirection: oneRow ? "row" : "column", gap: oneRow ? 1 : 0 }, select, buttons), player.explorer && groups.map((g) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, g.label && /* @__PURE__ */ h(ui.Text, { bold: true, color: "cyan" }, g.label), g.useCases.map((u) => /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap", paddingLeft: g.label ? 2 : 0 }, /* @__PURE__ */ h(ui.Text, { bold: u.id === pick2.useCase.id }, u.name), u.scenarios.map((s) => /* @__PURE__ */ h(ui.Button, { key: `x-${view.viewId}-${u.id}-${s.id}`, onPress: () => start2($, view, pickOf(u, s)) }, scenarioLabel(ui, u, s))))))));
+  };
+  for (const [id, to] of [["first", () => 0], ["prev", () => step - 1], ["next", () => step + 1], ["last", () => total - 1]]) actions[id] = () => playing ? go(to()) : void 0;
+  const choose = (next) => {
+    menus.delete(view.viewId);
+    if (playing) start2($, view, next, player.isPlaying);
+    else void setPlayer($, view, (p) => ({ ...p, pick: next.value }));
+  };
+  for (const u of doc.diagram.useCases) {
+    if (u.scenarios[0]) actions[`uc=${u.id}`] = () => choose(pickOf(u, u.scenarios[0]));
+    for (const s of u.scenarios) {
+      actions[`x-${u.id}-${s.id}`] = () => {
+        menus.delete(view.viewId);
+        start2($, view, pickOf(u, s));
+      };
+    }
+  }
+  actions[`uc=${EXPLORE_ALL}`] = () => {
+    menus.set(view.viewId, "explore");
+    $.ui.invalidate("ui.render");
+  };
+  for (const s of pick2.useCase.scenarios) actions[`sc=${s.id}`] = () => choose(pickOf(pick2.useCase, s));
+  const open = menus.get(view.viewId);
+  return { pick: pick2, ...playing ? { playing } : {}, step, total, isPlaying: player.isPlaying, ...open && (open !== "body" || playing) ? { open } : {}, actions, line: stepLine(view, pick2, playing ? step : void 0) };
 }
-function scenarioLabel(ui, u, s, current) {
-  const error = s.outcome === "error";
-  const status = error ? s.steps.find(isErrorStep)?.statusCode : void 0;
-  const name = u.scenarios.length > 1 ? s.name : "Play";
-  return /* @__PURE__ */ h(ui.Text, { color: error ? "red" : "green", bold: current === true }, current === void 0 ? "" : current ? "\u25B8 " : "  ", error ? "\u2717" : "\u2713", " ", name, status ? ` \xB7 ${status}` : "");
+function stepLine(view, pick2, at) {
+  const steps = pick2.scenario.steps;
+  if (at === void 0 || !steps[at]) {
+    const about = pick2.useCase.description?.replace(/\s*\n\s*/g, " ");
+    return { spans: [{ text: about ? `${about} \xB7 ` : "", tone: "muted" }, { text: "Press \u25B6 to play", tone: "muted" }].filter((s2) => s2.text) };
+  }
+  const current = currentStepsOf(steps, at);
+  const s = current[0];
+  const name = (id) => view.scene.nodes.get(id)?.node.name ?? id;
+  const call = `${s.httpMethod} ${s.endpoint}`.trim();
+  const exec = s.executionType === "ASYNC_FIRE_AND_FORGET" ? { text: "Fire & Forget", tone: "warn" } : s.executionType === "ASYNC_REQUEST_RESPONSE" ? { text: "Async", tone: "info" } : { text: "Sync", tone: "good" };
+  const spans = [
+    call ? { text: call, mono: true } : { text: s.stepName, bold: true },
+    { text: ` \xB7 ${name(s.fromServiceId)} \u2192 ${name(s.toServiceId)} \xB7 `, tone: "muted" },
+    exec,
+    ...s.failed ? [{ text: " \xB7 ", tone: "muted" }, { text: "Failed", tone: "bad", bold: true }] : (s.statusCode ?? 0) >= 400 ? [{ text: " \xB7 ", tone: "muted" }, { text: String(s.statusCode), tone: "bad", bold: true }] : [],
+    ...current.length > 1 ? [{ text: ` \xB7 +${current.length - 1} in parallel`, tone: "muted" }] : []
+  ];
+  return { number: steps.indexOf(s) + 1, ...isErrorStep(s) || s.failed ? { error: true } : {}, spans };
 }
-function playerHeader($, view, pick2, player) {
+var useCaseOptions = (doc) => [
+  ...groupByEndpoint(doc.diagram.useCases).flatMap((g) => g.useCases.map((u) => ({ value: u.id, label: u.name, ...g.label ? { group: g.label } : {} }))),
+  { value: EXPLORE_ALL, label: "Explore all\u2026", icon: "explore", divider: true }
+];
+var scenarioOptions = (u) => u.scenarios.map((s) => ({ value: s.id, label: scenarioName(u, s), icon: s.outcome === "error" ? "cross" : "check", tone: s.outcome === "error" ? "bad" : "good" }));
+function barPanel(view, doc, m, at, isPlaying) {
+  const on = at !== void 0;
+  const key = (k) => view.inPane ? { hotkey: k, keycap: false } : {};
+  const ctl = (id, icon, k, enabled) => ({ id, icon, variant: "quiet", ...key(k), ...enabled ? {} : { disabled: true } });
+  const total = m.total;
+  const line2 = on ? stepLine(view, m.pick, at) : m.line;
+  return {
+    kind: "playerBar",
+    useCase: { id: "uc", value: m.pick.useCase.id, options: useCaseOptions(doc), ...m.open === "uc" || m.open === "explore" ? { open: true } : {} },
+    scenario: { id: "sc", value: m.pick.scenario.id, options: scenarioOptions(m.pick.useCase), ...m.open === "sc" ? { open: true } : {} },
+    controls: [
+      ctl("first", "first", "r", on && at > 0),
+      ctl("prev", "prev", "b", on && at > 0),
+      { id: "play", icon: isPlaying ? "pause" : "play", variant: "primary", ...key("p") },
+      ctl("next", "next", "n", on && at < total - 1),
+      ctl("last", "last", "e", on && at < total - 1),
+      ctl("stop", "exit", "d", on)
+    ],
+    step: { ...on ? { at: at + 1 } : {}, total },
+    line: { ...line2.number !== void 0 ? { number: line2.number } : {}, ...line2.error ? { error: true } : {}, text: line2.spans },
+    body: { id: "body", label: "Body", ...on ? {} : { disabled: true }, ...m.open === "body" ? { active: true } : {} }
+  };
+}
+var drawerPanel = (view, pick2, at) => ({
+  kind: "drawer",
+  ...pick2.scenario.condition ? { condition: pick2.scenario.condition } : {},
+  cards: stepCardsOf(pick2.scenario, (id) => view.scene.nodes.get(id)?.node.name ?? id)[at] ?? [],
+  close: { id: "close", icon: "exit", variant: "quiet" }
+});
+var explorerPanel = (doc, pick2) => ({
+  kind: "explorer",
+  groups: groupByEndpoint(doc.diagram.useCases).map((g) => ({
+    ...g.label ? { label: g.label } : {},
+    useCases: g.useCases.map((u) => ({
+      name: u.name,
+      ...u.id === pick2.useCase.id ? { current: true } : {},
+      scenarios: u.scenarios.map((s) => ({ id: `x-${u.id}-${s.id}`, name: u.scenarios.length > 1 ? s.name : "Play", outcome: s.outcome === "error" ? "error" : "ok", ...s.outcome === "error" && s.steps.find(isErrorStep)?.statusCode ? { status: s.steps.find(isErrorStep).statusCode } : {} }))
+    }))
+  })),
+  close: { id: "close", icon: "exit", variant: "quiet" }
+});
+function floatColumns(W2, panel) {
+  if (panel.kind === "menu") return Math.min(W2, Math.max(28, ...panel.select.options.map((o) => Math.ceil(o.label.length * 1.05) + 14)));
+  if (panel.kind === "explorer") return Math.min(W2, 76);
+  return W2;
+}
+function floatOf(view, doc, m, bar, W2) {
+  const panel = m.open === "uc" ? { kind: "menu", select: { ...bar.useCase, open: false } } : m.open === "sc" ? { kind: "menu", select: { ...bar.scenario, open: false } } : m.open === "explore" ? explorerPanel(doc, m.pick) : m.open === "body" && m.playing ? drawerPanel(view, m.playing, m.step) : void 0;
+  if (!panel || !m.open) return void 0;
+  const id = m.open === "body" ? "drawer" : m.open === "explore" ? "explorer" : "menu";
+  const actions = {};
+  for (const [k, fn] of Object.entries(m.actions)) actions[`${id}/${k}`] = () => fn();
+  return { id, panel, columns: floatColumns(W2, panel), anchor: { piece: "bar", ...m.open === "body" ? {} : { control: m.open === "explore" ? "uc" : m.open } }, close: () => m.actions.close(), actions };
+}
+function playerBarText(view, doc, m) {
   const { ui } = view.d;
-  const { useCase } = pick2;
-  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: PINK2, paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Button, { key: `back-${view.viewId}`, label: "\u2190 Diagram", ...hotkey(view, "d"), onPress: () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })) }), /* @__PURE__ */ h(ui.Text, { bold: true, wrap: "truncate-end" }, useCase.name), /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\xB7 Playback mode \xB7 read only")), useCase.scenarios.length > 1 && /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap" }, useCase.scenarios.map((s) => {
-    const current = s.id === pick2.scenario.id;
-    return /* @__PURE__ */ h(ui.Button, { key: `sc-${view.viewId}-${s.id}`, variant: current ? "primary" : void 0, dimColor: !current, onPress: () => start2($, view, pickOf(useCase, s), player.isPlaying) }, scenarioLabel(ui, useCase, s, current));
-  })));
+  const id = view.viewId;
+  const on = m.playing !== void 0;
+  const at = m.step;
+  const total = m.total;
+  const counter = `Step ${(on ? String(at + 1) : "\u2013").padStart(String(total).length)}/${total}`;
+  const key = (k) => hotkey(view, k);
+  const step = (k, label, name, enabled) => /* @__PURE__ */ h(ui.Button, { key: `${name}-${id}`, label, ...key(k), dimColor: !enabled, onPress: () => m.actions[name]() });
+  const ucWidth = Math.max(...doc.diagram.useCases.map((u) => u.name.length), 14) + 4;
+  const scWidth = Math.max(...m.pick.useCase.scenarios.map((s) => scenarioName(m.pick.useCase, s).length + 2)) + 4;
+  const used = 9 + ucWidth + 1 + scWidth + 1 + 6 * 6 + counter.length + 1;
+  const bar = Math.max(0, Math.min(30, view.width - 4 - used));
+  const filled = on && total ? Math.round(bar * (at + 1) / total) : 0;
+  const line2 = m.line;
+  return /* @__PURE__ */ h(ui.Box, { key: `bar-${id}`, flexDirection: "column", borderStyle: "round", borderColor: PINK2, paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true, color: PINK2 }, "Use case"), /* @__PURE__ */ h(ui.Select, { key: `uc-${id}`, value: m.pick.useCase.id, options: useCaseOptions(doc).map((o) => ({ value: o.value, label: o.value === EXPLORE_ALL ? "\u2261 Explore all\u2026" : o.label })), onSelect: (v) => m.actions[`uc=${v}`]?.() }), /* @__PURE__ */ h(ui.Select, { key: `sc-${id}`, value: m.pick.scenario.id, options: m.pick.useCase.scenarios.map((s) => ({ value: s.id, label: `${s.outcome === "error" ? "\u2717" : "\u2713"} ${scenarioName(m.pick.useCase, s)}` })), onSelect: (v) => m.actions[`sc=${v}`]?.() }), step("r", "\u21E4", "first", on && at > 0), step("b", "\u2039", "prev", on && at > 0), /* @__PURE__ */ h(ui.Button, { key: `play-${id}`, label: m.isPlaying ? "\u275A\u275A" : " \u25B6", variant: "primary", ...key("p"), onPress: () => m.actions.play() }), step("n", "\u203A", "next", on && at < total - 1), step("e", "\u21E5", "last", on && at < total - 1), step("d", "\u2715", "stop", on), /* @__PURE__ */ h(ui.Text, { bold: on, dimColor: !on }, counter), bar > 0 && /* @__PURE__ */ h(ui.Text, null, /* @__PURE__ */ h(ui.Text, { color: YELLOW2 }, "\u2501".repeat(filled)), /* @__PURE__ */ h(ui.Text, { dimColor: true }, "\u2501".repeat(bar - filled)))), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1 }, /* @__PURE__ */ h(ui.Box, { flexGrow: 1 }, /* @__PURE__ */ h(ui.Text, { wrap: "truncate-end" }, line2.number !== void 0 && chip(ui, String(line2.number), line2.error ? "#ff3b30" : PINK2), line2.number !== void 0 ? " " : "", line2.spans.map((s) => /* @__PURE__ */ h(ui.Text, { bold: s.bold === true, dimColor: s.tone === "muted", color: s.tone === "bad" ? "red" : s.tone === "good" ? "green" : s.tone === "warn" ? "yellow" : s.tone === "info" ? "magenta" : void 0 }, s.text)))), /* @__PURE__ */ h(ui.Button, { key: `body-${id}`, label: m.open === "body" ? "Body \u25B4" : "Body \u25BE", dimColor: !on, onPress: () => m.actions.body() })), m.open === "body" && m.playing && stepRows(ui, view, m.playing.scenario.steps, at).nodes, m.open === "explore" && groupByEndpoint(doc.diagram.useCases).map((g) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, g.label && /* @__PURE__ */ h(ui.Text, { bold: true, color: "cyan" }, g.label), g.useCases.map((u) => /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap", paddingLeft: g.label ? 2 : 0 }, /* @__PURE__ */ h(ui.Text, { bold: u.id === m.pick.useCase.id }, u.name), u.scenarios.map((s) => /* @__PURE__ */ h(ui.Button, { key: `x-${id}-${u.id}-${s.id}`, onPress: () => m.actions[`x-${u.id}-${s.id}`]() }, /* @__PURE__ */ h(ui.Text, { color: s.outcome === "error" ? "red" : "green" }, s.outcome === "error" ? "\u2717" : "\u2713", " ", u.scenarios.length > 1 ? scenarioName(u, s) : "Play"))))))));
 }
 var FORMAT2 = { JSON: "JSON", XML: "XML", FREE_TEXT: "Text" };
 var LANGUAGE = { JSON: "json", XML: "xml", FREE_TEXT: void 0 };
@@ -12273,31 +12387,6 @@ function stepRows(ui, view, steps, at) {
     }
   });
   return { nodes, height };
-}
-function stepPanel($, view, pick2, step, player) {
-  const { ui } = view.d;
-  const { scenario } = pick2;
-  const steps = scenario.steps;
-  const total = steps.length;
-  const go = (to, isPlaying = false) => goTo($, view, steps, to, isPlaying);
-  const rows = stepRows(ui, view, steps, step);
-  const tallest = steps.reduce((most, _, i) => Math.max(most, stepRows(ui, view, steps, i).height), rows.height);
-  const counter = `Step ${String(Math.min(step + 1, total)).padStart(String(total).length)} of ${total}`;
-  const room = view.width - 4 - (5 + 5 + 12 + 5 + 5 + counter.length + 7);
-  const exit = room - 19 >= 10 ? "\u2715 Exit playback" : "\u2715 Exit";
-  const left = room - (exit.length + 4);
-  const bar = left >= 6 ? Math.min(60, left) : 0;
-  const filled = total === 0 ? 0 : Math.round(bar * (step + 1) / total);
-  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, scenario.condition && /* @__PURE__ */ h(ui.Text, { wrap: "truncate-end" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "When:"), " ", scenario.condition), /* @__PURE__ */ h(ui.Box, { key: `rows-${view.viewId}`, flexDirection: "column" }, rows.nodes, Array.from({ length: tallest - rows.height }, () => /* @__PURE__ */ h(ui.Text, null, " "))), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", marginTop: 1, flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Button, { key: `reset-${view.viewId}`, label: "\u21E4", ...hotkey(view, "r"), onPress: () => go(0) }), /* @__PURE__ */ h(ui.Button, { key: `prev-${view.viewId}`, label: "\u2039", ...hotkey(view, "b"), onPress: () => go(step - 1) }), /* @__PURE__ */ h(
-    ui.Button,
-    {
-      key: `play-${view.viewId}`,
-      label: player.isPlaying ? PAUSE : PLAY,
-      variant: "primary",
-      ...hotkey(view, "p"),
-      onPress: () => player.isPlaying ? void setPlayer($, view, (p) => ({ ...p, isPlaying: false })) : go(step >= total - 1 ? 0 : step, true)
-    }
-  ), /* @__PURE__ */ h(ui.Button, { key: `next-${view.viewId}`, label: "\u203A", ...hotkey(view, "n"), onPress: () => go(step + 1) }), /* @__PURE__ */ h(ui.Button, { key: `end-${view.viewId}`, label: "\u21E5", ...hotkey(view, "e"), onPress: () => go(total - 1) }), /* @__PURE__ */ h(ui.Text, null, counter), bar > 0 && /* @__PURE__ */ h(ui.Text, null, /* @__PURE__ */ h(ui.Text, { color: YELLOW2 }, "\u2501".repeat(filled)), /* @__PURE__ */ h(ui.Text, { dimColor: true }, "\u2501".repeat(bar - filled))), /* @__PURE__ */ h(ui.Button, { key: `exit-${view.viewId}`, label: exit, dimColor: true, onPress: () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })) })));
 }
 function goTo($, view, steps, to, isPlaying) {
   reveal($, view);

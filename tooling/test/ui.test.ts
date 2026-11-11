@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { examples } from '../src/proschi';
 import { renderSequenceSvg } from '../src/render/sequence';
 import type { Panel, PanelOutput, PanelsOutput } from '../src/render/ui/contract';
-import { analysisPage, hldPage, stepPanelOf, tabBarPanel, testsPage, whatIfPage } from '../src/render/ui/data';
+import { analysisPage, hldPage, stepCardsOf, tabBarPanel, testsPage, whatIfPage } from '../src/render/ui/data';
 import { CELL } from '../src/render/ui/kit';
 import { markdownBlocks } from '../src/render/ui/markdown';
 import { loadFonts, measure } from '../src/render/ui/metrics';
@@ -29,17 +29,28 @@ const now = loadDocument(source, liveOptions(doc.root, { multiplier: 3, failed: 
 const name = (id: string) => doc.diagram.nodes.find((n) => n.id === id)?.name ?? id;
 const redirect = doc.diagram.useCases[0];
 
+/** The player bar at step `at` (1-based), or before Play. */
+function playerBar(at: number | undefined): Panel {
+  const playing = at !== undefined;
+  const ctl = (id: string, icon: 'first' | 'prev' | 'next' | 'last' | 'exit', hotkey: string) => ({ id, icon, hotkey, keycap: false, variant: 'quiet' as const, ...(playing ? {} : { disabled: true }) });
+  return {
+    kind: 'playerBar',
+    useCase: { id: 'uc', value: redirect.id, options: [...doc.diagram.useCases.map((u) => ({ value: u.id, label: u.name })), { value: '__explore', label: 'Explore all…', icon: 'explore', divider: true }] },
+    scenario: { id: 'sc', value: redirect.scenarios[0].id, options: redirect.scenarios.map((s) => ({ value: s.id, label: s.name, icon: s.outcome === 'error' ? ('cross' as const) : ('check' as const), tone: s.outcome === 'error' ? ('bad' as const) : ('good' as const) })) },
+    controls: [ctl('first', 'first', 'r'), ctl('prev', 'prev', 'b'), { id: 'play', icon: playing ? 'pause' : 'play', hotkey: 'p', keycap: false, variant: 'primary' }, ctl('next', 'next', 'n'), ctl('last', 'last', 'e'), ctl('stop', 'exit', 'd')],
+    step: { ...(playing ? { at } : {}), total: 3 },
+    line: playing ? { number: at, text: [{ text: 'GET /abc123', mono: true }, { text: ' · Load Balancer → Shortener API · ', tone: 'muted' }, { text: 'Sync', tone: 'good' }] } : { text: [{ text: 'Press ▶ to play', tone: 'muted' }] },
+    body: { id: 'body', label: 'Body', ...(playing ? {} : { disabled: true }) },
+  };
+}
+
 const PANELS: Record<string, Panel> = {
   tabs: tabBarPanel('tests', 2),
-  useCaseBar: {
-    kind: 'useCaseBar',
-    picker: { id: 'uc', value: redirect.id, open: true, options: doc.diagram.useCases.map((u) => ({ value: u.id, label: u.name })) },
-    play: { id: 'play', icon: 'play', label: 'Play', variant: 'primary', hotkey: 'p' },
-    explore: { id: 'explore', icon: 'explore', label: 'Hide explorer', active: true },
-    explorer: [{ label: 'GET /abc123', useCases: [{ name: 'Redirect', current: true, scenarios: redirect.scenarios.map((s) => ({ id: `sc-${s.id}`, name: s.name, outcome: s.outcome === 'error' ? 'error' : 'ok' })) }] }],
-  },
-  playerHeader: { kind: 'playerHeader', back: { id: 'back', icon: 'back', label: 'Diagram', hotkey: 'd' }, title: 'Redirect', scenarios: redirect.scenarios.map((s, i) => ({ id: `sc-${s.id}`, name: s.name, outcome: 'ok', current: i === 0 })) },
-  step: stepPanelOf(redirect.scenarios[1], 2, true, name),
+  playerBar: playerBar(2),
+  playerBarIdle: playerBar(undefined),
+  menu: { kind: 'menu', select: { id: 'sc', value: redirect.scenarios[0].id, options: [...redirect.scenarios.map((s) => ({ value: s.id, label: s.name, icon: s.outcome === 'error' ? ('cross' as const) : ('check' as const), tone: s.outcome === 'error' ? ('bad' as const) : ('good' as const) })), { value: '__explore', label: 'Explore all…', icon: 'explore', divider: true }] } },
+  drawer: { kind: 'drawer', cards: stepCardsOf(redirect.scenarios[1], name)[1]!, close: { id: 'close', icon: 'exit', variant: 'quiet' } },
+  explorer: { kind: 'explorer', groups: [{ label: 'GET /abc123', useCases: [{ name: 'Redirect', current: true, scenarios: redirect.scenarios.map((s) => ({ id: `x-${s.id}`, name: s.name, outcome: s.outcome === 'error' ? 'error' : 'ok' })) }] }], close: { id: 'close', icon: 'exit', variant: 'quiet' } },
   systemBar: { kind: 'systemBar', inside: 'a › b', selected: { name: 'Ledger', path: 'a.b' }, controls: [{ id: 'next', icon: 'cycle', label: 'Next', hotkey: 's' }] },
   actionBar: { kind: 'actionBar', controls: [{ id: 'src', icon: 'copy', label: 'Copy source' }, { id: 'open', icon: 'open', label: 'Open in Proschi', variant: 'primary' }] },
   notices: { kind: 'notices', notices: [{ text: 'A warning', hint: 'a hint' }], legend: {}, verdict: { passed: 1, total: 3, first: 'p99: too slow' }, details: { id: 'details', label: 'Details' } },
@@ -109,17 +120,23 @@ describe('UI panels: the cell grid', () => {
     }
   }, 30_000);
 
-  it('fits a row of controls by shortening them, as the text UI does, rather than wrapping', () => {
-    for (const columns of [60, 80, 100]) {
-      const { surface } = drawPanel(PANELS.step, columns, 'dark');
-      const rowsOf = new Set(surface.controls.map((c) => c.box.y));
+  it('keeps the player bar to one size, its first row never wrapping, before Play and while it plays', () => {
+    for (const columns of [40, 60, 80, 100, 140]) {
+      const playing = drawPanel(PANELS.playerBar, columns, 'dark');
+      const idle = drawPanel(PANELS.playerBarIdle, columns, 'dark');
+      expect(playing.height, `${columns} columns`).toBe(5 * CELL.height);
+      expect(idle.height).toBe(playing.height);
+      const rowsOf = new Set(playing.surface.controls.filter((c) => c.control.id !== 'body').map((c) => c.box.y));
       expect(rowsOf.size, `${columns} columns`).toBe(1);
+      // The same controls at the same places, whichever mode.
+      expect(idle.surface.controls.map((c) => [c.control.id, c.box.x])).toEqual(playing.surface.controls.map((c) => [c.control.id, c.box.x]));
+      expect(idle.surface.controls.filter((c) => c.control.disabled).map((c) => c.control.id)).toEqual(expect.arrayContaining(['stop', 'body']));
     }
   });
 
   it('draws each panel as a piece of one surface: rounded only at its outer edges, a divider above unless on top', () => {
     const svgOf = (edges: { top?: boolean; bottom?: boolean }) => {
-      const { surface, height } = drawPanel(PANELS.step, 80, 'dark', edges);
+      const { surface, height } = drawPanel(PANELS.drawer, 80, 'dark', edges);
       return surface.svg(height);
     };
     const middle = svgOf({});
@@ -149,10 +166,10 @@ describe('UI panels: the cell grid', () => {
   it('keeps hotkeys and control ids on the tiles', () => {
     const { surface } = drawPanel(PANELS.tabs, 120, 'dark');
     expect(surface.controls.map((c) => [c.control.id, c.control.hotkey, c.control.kind])).toEqual(['diagram', 'analysis', 'whatif', 'sequence', 'hld', 'tests'].map((id, i) => [id, String(i + 1), 'tab']));
-    const step = drawPanel(PANELS.step, 120, 'dark').surface.controls.map((c) => c.control.id);
-    expect(step).toEqual(['first', 'prev', 'play', 'next', 'last', 'exit']);
-    const menu = drawPanel(PANELS.useCaseBar, 120, 'dark').surface.controls.filter((c) => c.control.kind === 'option');
-    expect(menu.map((c) => c.control.id)).toEqual(doc.diagram.useCases.map((u) => `uc=${u.id}`));
+    const bar = drawPanel(PANELS.playerBar, 120, 'dark').surface.controls.map((c) => [c.control.id, c.control.hotkey]);
+    expect(bar).toEqual([['uc', undefined], ['sc', undefined], ['first', 'r'], ['prev', 'b'], ['play', 'p'], ['next', 'n'], ['last', 'e'], ['stop', 'd'], ['body', undefined]]);
+    const menu = drawPanel(PANELS.menu, 40, 'dark').surface.controls.filter((c) => c.control.kind === 'option');
+    expect(menu.map((c) => c.control.id)).toEqual([...redirect.scenarios.map((s) => `sc=${s.id}`), 'sc=__explore']);
   });
 });
 

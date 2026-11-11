@@ -29,8 +29,8 @@ export function placeButton(S: Surface, c: Control, col: number, top: number, ki
 
 const OPTION_ROW = (dense: boolean) => (dense ? ROW : 2 * ROW);
 
-/** A select's menu under it from `top`: a card with an option per row, each a control `${id}=${value}`. */
-function menu(S: Surface, sel: Select, col: number, top: number, minColumns: number): number {
+/** A select's menu under it from `top`: a card with an option per row, each a control `${id}=${value}`; `framed` false where the panel is the card (a MenuPanel). */
+export function menu(S: Surface, sel: Select, col: number, top: number, minColumns: number, framed = true): number {
   const P = S.P;
   const dense = sel.options.length > 8;
   const rowH = OPTION_ROW(dense);
@@ -45,7 +45,12 @@ function menu(S: Surface, sel: Select, col: number, top: number, minColumns: num
   const headers: { y: number; label: string }[] = [];
   const opts: { y: number; i: number }[] = [];
   let group: string | undefined;
+  const dividers: number[] = [];
   sel.options.forEach((o, i) => {
+    if (o.divider && i > 0) {
+      dividers.push(y + 4);
+      y += 8;
+    }
     if (groups && o.group !== group) {
       group = o.group;
       if (group) {
@@ -57,7 +62,10 @@ function menu(S: Surface, sel: Select, col: number, top: number, minColumns: num
     y += rowH;
   });
   const h = y - top + 6;
-  parts.push(rect(x + 1.5, top + 0.5, w - 3, h - 1, { fill: alpha(P.ink, 0.06), stroke: alpha(P.ink, 0.24), sw: 1, rx: 8 }));
+  if (framed) parts.push(rect(x + 1.5, top + 0.5, w - 3, h - 1, { fill: alpha(P.ink, 0.06), stroke: alpha(P.ink, 0.24), sw: 1, rx: 8 }));
+  for (const dy of dividers) parts.push(line(x + 10, dy + 0.5, x + w - 10, dy + 0.5, P.line, 1));
+  // Marked options (a scenario's ✓ or ✗) show the selected one by its fill alone.
+  const marked = sel.options.some((o) => o.icon);
   for (const hd of headers) parts.push(txt(x + 12, hd.y + 12, hd.label.toUpperCase(), { size: 11, weight: 600, color: P.muted, spacing: 0.6 }));
   S.add(...parts);
   for (const { y: oy, i } of opts) {
@@ -72,7 +80,7 @@ function menu(S: Surface, sel: Select, col: number, top: number, minColumns: num
         const base = box.y + box.h / 2 + size * 0.36;
         return [
           rect(box.x, box.y, box.w, box.h, { fill, rx: 4 }),
-          selected ? icon('check', box.x + 7, box.y + box.h / 2 - 7, 14, P.yellow, 2.2) : '',
+          o.icon ? icon(o.icon, box.x + 7, box.y + box.h / 2 - 7, 14, o.tone ? P.tone[o.tone] : P.muted, 2.2) : selected && !marked ? icon('check', box.x + 7, box.y + box.h / 2 - 7, 14, P.yellow, 2.2) : '',
           txt(box.x + 28 + (groups ? 6 : 0), base, clip(o.label, box.w - 36 - (o.detail ? width(o.detail, { size: 12.5 }) + 10 : 0), size, selected ? 600 : 500), { size, weight: selected ? 600 : 500, color: P.ink }),
           o.detail ? txt(box.x + box.w - 8, base, o.detail, { size: 12.5, color: P.muted, anchor: 'end' }) : '',
         ].join('');
@@ -118,8 +126,8 @@ export function itemsRow(S: Surface, given: Item[], col0: number, top: number, m
   top = up(top);
   const need = (it: Item): number => {
     if ('control' in it) return buttonColumns(it.control);
-    if ('select' in it) return selectColumns(it.select.options.find((o) => o.value === it.select.value)?.label ?? it.select.value, it.select.hotkey);
-    if ('text' in it) return cols(measureRich(it.text, BODY) + 2);
+    if ('select' in it) return it.select.columns ?? selectColumns(it.select.options.find((o) => o.value === it.select.value)?.label ?? it.select.value, it.select.hotkey);
+    if ('text' in it) return it.columns ?? cols(measureRich(it.text, BODY) + 2);
     if ('progress' in it) return it.columns ?? 8;
     return 0;
   };
@@ -153,10 +161,10 @@ export function itemsRow(S: Surface, given: Item[], col0: number, top: number, m
         if ('control' in it) placeButton(S, it.control, col, y);
         else if ('select' in it) {
           const sel = it.select;
-          const label = sel.options.find((o) => o.value === sel.value)?.label ?? sel.value;
+          const shown = sel.options.find((o) => o.value === sel.value);
           const box = { x: col * CELL.width, y: y + (CONTROL_ROW - CONTROL.height) / 2, w: n * CELL.width, h: CONTROL.height };
-          S.place({ control: { id: sel.id, kind: 'select', ...(sel.hotkey ? { hotkey: sel.hotkey } : {}) }, box, draw: (state) => drawSelect(P, label, box, state, sel.open === true, sel.hotkey) });
-          if (sel.open) menus.push({ sel, col, columns: n });
+          S.place({ control: { id: sel.id, kind: 'select', ...(sel.hotkey ? { hotkey: sel.hotkey } : {}), ...(sel.disabled ? { disabled: true } : {}) }, box, draw: (state) => drawSelect(P, shown?.label ?? sel.value, box, state, sel.open === true, sel.hotkey, shown?.icon ? { icon: shown.icon, color: shown.tone ? P.tone[shown.tone] : P.muted } : undefined, sel.disabled === true) });
+          if (sel.open && !sel.floats) menus.push({ sel, col, columns: n });
         } else if ('text' in it) {
           const laid = layoutRich(it.text, n * CELL.width, BODY, false)[0];
           S.add(drawLaid(P, laid, col * CELL.width, y + CONTROL_ROW / 2 + 5, BODY, P.ink));

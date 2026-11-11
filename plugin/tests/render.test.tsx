@@ -29,25 +29,40 @@ test('a proschi block in a reply draws as a diagram with its player', async ($, 
   expect(await ui.find({ type: 'Text', text: /Laying out/ })).toBeDefined()
   await ui.unmount()
 
-  const drawn = await $.ui.mount(reply(FENCED))
+  let drawn = await $.ui.mount(reply(FENCED))
+  // What only a picker's menu or the bodies change is drawn on the next render (the engine's invalidate, a remount here).
+  const again = async () => {
+    await drawn.unmount()
+    drawn = await $.ui.mount(reply(FENCED))
+  }
   expect(await drawn.find({ type: 'Raster' })).toBeDefined()
   expect(await drawn.find({ type: 'Markdown', text: /Here is the design/ })).toBeDefined()
 
-  // The diagram first, with a picker; Play opens the player on the scenario's first step.
+  // The player bar on top, its pickers Selects; the explorer is the use case picker's last entry.
   expect(await drawn.find({ type: 'Select', key: 'uc-m1:0' })).toBeDefined()
-  await drawn.press({ key: 'explore-m1:0' })
-  expect(await drawn.find({ type: 'Text', text: /POST \/orders/ })).toBeDefined()
+  expect(await drawn.find({ type: 'Select', key: 'sc-m1:0' })).toBeDefined()
+  expect(await drawn.find({ type: 'Text', text: /^Step –\/\d+$/ })).toBeDefined()
+  expect(await drawn.find({ type: 'Text', text: /Press ▶ to play/ })).toBeDefined()
+  const explorer = async () => (await drawn.findAll({ type: 'Button' })).filter(b => String((b as { key?: string }).key).startsWith('x-m1:0-')).length
+  await drawn.select({ key: 'uc-m1:0', value: '__explore' })
+  await again()
+  expect(await explorer()).toBeGreaterThan(0)
+  // Play: the same bar, its counter and second line the step's.
   await drawn.press({ key: 'play-m1:0' })
-  expect(await drawn.find({ type: 'Text', text: /^Step 1 of \d+$/ })).toBeDefined()
-  expect(await drawn.find({ type: 'Text', text: /Playback mode/ })).toBeDefined()
-  expect(await drawn.find({ type: 'Text', text: /^Web App → Checkout API/ })).toBeDefined()
+  await again()
+  expect(await explorer()).toBe(0)
+  expect(await drawn.find({ type: 'Text', text: /^Step 1\/\d+$/ })).toBeDefined()
+  expect(await drawn.find({ type: 'Text', text: / · Web App → Checkout API · / })).toBeDefined()
   await drawn.press({ key: 'play-m1:0' })
   await drawn.press({ key: 'next-m1:0' })
-  expect(await drawn.find({ type: 'Text', text: /^Step 2 of \d+$/ })).toBeDefined()
-  await drawn.press({ key: 'reset-m1:0' })
-  expect(await drawn.find({ type: 'Text', text: /^Step 1 of \d+$/ })).toBeDefined()
-  await drawn.press({ key: 'exit-m1:0' })
-  expect(await drawn.find({ type: 'Text', text: /^Step \d+ of/ })).toBeUndefined()
+  expect(await drawn.find({ type: 'Text', text: /^Step 2\/\d+$/ })).toBeDefined()
+  await drawn.press({ key: 'body-m1:0' })
+  await again()
+  expect(await drawn.find({ type: 'Text', text: /^Response/ })).toBeDefined()
+  await drawn.press({ key: 'first-m1:0' })
+  expect(await drawn.find({ type: 'Text', text: /^Step 1\/\d+$/ })).toBeDefined()
+  await drawn.press({ key: 'stop-m1:0' })
+  expect(await drawn.find({ type: 'Text', text: /^Step \d+\// })).toBeUndefined()
   expect(await drawn.find({ type: 'Select', key: 'uc-m1:0' })).toBeDefined()
   await drawn.unmount()
 })
@@ -86,13 +101,13 @@ test('Play moves the packet along its edge in place, then on to the next step', 
   const ui = await $.ui.mount(reply(FENCED))
 
   await ui.press({ key: 'play-m1:0' })
-  expect(await ui.find({ type: 'Text', text: /^Step 1 of \d+$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^Step 1\/\d+$/ })).toBeDefined()
   // Out to the callee and part way back: the edge is only a few cells long, a frame per cell.
   await clock.advance(1000)
   expect(new Set(blits).size).toBeGreaterThan(2)
   await clock.advance(1100)
-  expect(await ui.find({ type: 'Text', text: /^Step 2 of \d+$/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /^Checkout API → Cart Cache/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^Step 2\/\d+$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: / · Checkout API → Cart Cache · / })).toBeDefined()
 
   await ui.press({ key: 'play-m1:0' })
   const paused = blits.length
@@ -101,35 +116,30 @@ test('Play moves the packet along its edge in place, then on to the next step', 
   await ui.unmount()
 })
 
-/** The terminal rows a step panel's body takes: a row per element, a Code's a row per line of its source. */
-function height(box: { children: unknown[] } | undefined): number {
-  return (box?.children ?? []).reduce<number>((n, child) => {
-    const element = child as { type?: string; props?: { source?: string } }
-    return n + (element.type === 'Code' ? String(element.props?.source).split('\n').length : 1)
-  }, 0)
-}
+/** The rows of the player bar: its controls' row and its step line, nothing else. */
+const rowsOf = async (ui: { find(q: { key: string }): Promise<unknown> }) => ((await ui.find({ key: 'bar-m1:0' })) as { children: unknown[] } | undefined)?.children.length
 
-test('the player keeps one size from step to step, and no requirement is drawn', async ($, on) => {
+test('the player bar keeps one size before Play and from step to step, the verdict where it was', async ($, on) => {
   on('process.run', () => ({ value: { exitCode: 0, stdout: LAYOUT, stderr: '' } }))
   on('ui.invalidate', () => ({ value: undefined }))
   on('ui.blit', () => ({ value: {} }))
   await (await $.ui.mount(reply(FENCED))).unmount()
   const ui = await $.ui.mount(reply(FENCED))
 
+  const heights = [await rowsOf(ui)]
   await ui.press({ key: 'play-m1:0' })
   await ui.press({ key: 'play-m1:0' })
-  const total = Number((await ui.find({ type: 'Text', text: /^Step +1 of \d+$/ }))?.text.match(/of (\d+)/)?.[1])
+  const total = Number((await ui.find({ type: 'Text', text: /^Step +1\/\d+$/ }))?.text.match(/\/(\d+)/)?.[1])
   expect(total).toBeGreaterThan(2)
-  const heights: number[] = []
   for (let step = 1; step <= total; step++) {
-    expect(await ui.find({ type: 'Text', text: new RegExp(`^Step +${step} of ${total}$`) })).toBeDefined()
-    heights.push(height(await ui.find({ key: 'rows-m1:0' })))
+    expect(await ui.find({ type: 'Text', text: new RegExp(`^Step +${step}/${total}$`) })).toBeDefined()
+    heights.push(await rowsOf(ui))
     await ui.press({ key: 'next-m1:0' })
   }
-  expect(new Set(heights).size).toBe(1)
-  expect(heights[0]).toBeGreaterThan(2)
+  expect(heights).toEqual(heights.map(() => 2))
 
-  for (const text of [/requirements met/, /^✗/, /p99/, /availability/]) expect(await ui.find({ type: 'Text', text })).toBeUndefined()
+  // The verdict stays where it was: nothing under the bar moves as a scenario plays.
+  expect(await ui.find({ type: 'Text', text: /checks fail/ })).toBeDefined()
   await ui.unmount()
 })
 
@@ -165,8 +175,8 @@ test('Play and Pause are as wide as each other', async ($, on) => {
   const pause = (await ui.find({ key: 'play-m1:0' })) as unknown as { props: { label: string } }
   await ui.press({ key: 'play-m1:0' })
   const play = (await ui.find({ key: 'play-m1:0' })) as unknown as { props: { label: string } }
-  expect(pause.props.label).toMatch(/Pause/)
-  expect(play.props.label).toMatch(/Play/)
+  expect(pause.props.label).toMatch(/❚❚/)
+  expect(play.props.label).toMatch(/▶/)
   expect([...play.props.label].length).toBe([...pause.props.label].length)
   await ui.unmount()
 })
@@ -227,17 +237,16 @@ test('Focus opens the block in a focused pane that Esc closes, with its player a
   // The pane draws the block (it has no file) where the inline player stood.
   const p = await $.ui.mount(pane(true))
   expect(await p.find({ type: 'Raster', key: 'd-proschi-view:0' })).toBeDefined()
-  expect(await p.find({ type: 'Text', text: /^Step 2 of \d+$/ })).toBeDefined()
+  expect(await p.find({ type: 'Text', text: /^Step 2\/\d+$/ })).toBeDefined()
   expect(await p.find({ key: 'focus-proschi-view:0' })).toBeUndefined()
-  for (const [key, hotkey] of [['play', 'p'], ['next', 'n'], ['prev', 'b'], ['reset', 'r'], ['end', 'e'], ['back', 'd']] as const) {
+  for (const [key, hotkey] of [['play', 'p'], ['next', 'n'], ['prev', 'b'], ['first', 'r'], ['last', 'e'], ['stop', 'd']] as const) {
     expect(await hotkeyOf(p, `${key}-proschi-view:0`)).toBe(hotkey)
   }
-  expect(await hotkeyOf(p, 'exit-proschi-view:0')).toBeUndefined()
   expect(await p.find({ type: 'Text', text: /p play · n\/b step/ })).toBeDefined()
 
-  await p.press({ key: 'back-proschi-view:0' })
+  await p.press({ key: 'stop-proschi-view:0' })
+  expect(await p.find({ type: 'Text', text: /^Step –\/\d+$/ })).toBeDefined()
   expect(await hotkeyOf(p, 'play-proschi-view:0')).toBe('p')
-  expect(await hotkeyOf(p, 'explore-proschi-view:0')).toBe('x')
   await p.unmount()
 })
 
@@ -262,7 +271,7 @@ test('Play and a step bring the diagram into view, in the transcript and in the 
   await ui.press({ key: 'play-m1:0' })
   expect(scrolledTo()).toEqual(['{"requestId":"m1"}'])
   // Playback goes on all the same.
-  expect(await ui.find({ type: 'Text', text: /^Step 1 of \d+$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^Step 1\/\d+$/ })).toBeDefined()
   await ui.press({ key: 'play-m1:0' })
   logs.length = 0
   await ui.press({ key: 'next-m1:0' })
@@ -272,7 +281,7 @@ test('Play and a step bring the diagram into view, in the transcript and in the 
 
   const p = await $.ui.mount(pane(true))
   logs.length = 0
-  await p.press({ key: 'reset-proschi-view:0' })
+  await p.press({ key: 'first-proschi-view:0' })
   expect(scrolledTo()).toEqual(['{"key":"at-proschi-view:0"}'])
   await p.unmount()
 })
@@ -288,18 +297,14 @@ test('a layout that fails shows why under the block, and in the pane', async ($,
   await ui.unmount()
 })
 
-test('the use case bar keeps to its width: one row where it fits, else the picker above the buttons, and the explorer toggle keeps its width', async ($, on) => {
+test('the player bar keeps to its width: its pickers and keys on one row, the action bar short where it is narrow', async ($, on) => {
   on('process.run', () => ({ value: { exitCode: 0, stdout: LAYOUT, stderr: '' } }))
   on('ui.invalidate', () => ({ value: undefined }))
   const narrow = { ...reply(FENCED), viewport: { columns: 64, rows: 40 } } as const
   await (await $.ui.mount(narrow)).unmount()
   const ui = await $.ui.mount(narrow)
-  const label = async () => ((await ui.find({ key: 'explore-m1:0' })) as unknown as { props: { label: string } }).props.label
-  const closed = await label()
-  await ui.press({ key: 'explore-m1:0' })
-  const open = await label()
-  expect(open).toMatch(/Hide/)
-  expect([...open].length).toBe([...closed].length)
+  expect(await ui.find({ key: 'uc-m1:0' })).toBeDefined()
+  expect(await ui.find({ key: 'stop-m1:0' })).toBeDefined()
   // Short labels on the action bar where the long ones would wrap.
   expect(((await ui.find({ key: 'src-m1:0' })) as unknown as { props: { label: string } }).props.label).toBe('⧉ Source')
   await ui.unmount()

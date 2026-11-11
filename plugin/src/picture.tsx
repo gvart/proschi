@@ -45,6 +45,30 @@ export interface Picture {
   tiles?: { key: string; col: number; row: number; columns: number; rows: number; file: string }[]
 }
 
+/** A panel likely next, drawn ahead of need; `edges` where it is not where the drawing's pieces would put it (a float). */
+export type Ahead = { panel: Panel; columns: number; edges?: { top?: boolean; bottom?: boolean } }
+
+/**
+ * A picture laid over the drawing (a picker's menu, the bodies drawer, the
+ * explorer), so nothing under it moves as it opens and closes: absolute,
+ * under its anchor (a control of a piece, else the piece's foot), inside the
+ * Box that holds the pieces from `Site.layer` down, so its top is never
+ * above that Box's. Each of its strips is an absolute Box of its own, with
+ * its overlay: the engine pins an absolute Box whose top is above the
+ * screen to the screen's first row, so a strip on screen is always where it
+ * is drawn. Under it, over the whole Box, one more overlay closes it on a
+ * press anywhere else.
+ */
+export interface Float {
+  id: string
+  panel: Panel
+  columns: number
+  anchor: { piece: string; control?: string }
+  close: () => void
+  /** By `<float id>/<control id>`. */
+  actions: Record<string, Action>
+}
+
 /** One piece of a drawing, top to bottom: a panel the helper draws `columns` wide, or the diagram's picture (none while it is drawn). */
 export type Piece = { id: string; panel: Panel; columns: number } | { id: string; picture?: Picture }
 
@@ -59,7 +83,11 @@ export interface Site {
   /** Hotkeys as Buttons drawn as nothing: the pane's alone. */
   hotkeys: boolean
   /** Panels likely next: drawn after anything a press asks for. */
-  ahead?: { panel: Panel; columns: number }[]
+  ahead?: Ahead[]
+  /** The piece from which the pieces are held in one Box a float is laid over (the player bar). */
+  layer?: string
+  /** What floats over the drawing now. */
+  float?: Float
   /** The rows the drawing is expected to take, reserved while its first pictures are drawn. */
   rows: number
   form?: 'file' | 'png'
@@ -75,6 +103,7 @@ export interface Site {
 type Resolved = { id: string; out: PanelOutput } | { id: string; picture: Picture }
 
 interface Shown {
+  float?: { def: Float; out: PanelOutput }
   pieces: Resolved[]
   pages: { id: string; out: PanelOutput; shown: boolean }[]
   actions: Record<string, Action>
@@ -104,6 +133,8 @@ interface Live {
   renderedAt?: number
   /** The source of every Image last drawn, by key: what a redraw sends anew. */
   sources: Map<string, string>
+  /** What floats over the drawing: the drawing's row its top is on, and what closes it. */
+  float?: { top: number; close: () => void }
 }
 
 // Per module load: the drawing shown last per site, what its overlays map, and each overlay's site.
@@ -188,12 +219,20 @@ export async function pictureSite($: EngineInterface, ui: Ui, s: Site): Promise<
     if (out) pages.push({ id: page.id, out, shown: page.shown })
     else if (page.shown) waiting = true
   }
-  // Ahead, where each will sit: the tab bar on top, the player's header on top where no tab bar is, the rest between.
-  const onTop = (a: { panel: Panel }) => a.panel.kind === 'tabs' || (a.panel.kind === 'playerHeader' && !s.pieces.some(p => 'panel' in p && p.panel.kind === 'tabs'))
-  if (s.ahead?.length) prefetch($, s.ahead.map(a => ({ ...a, theme: s.theme, edges: onTop(a) ? { top: true } : {} })))
+  // What floats: a card of its own, waited for as a press's drawing is.
+  let float: Shown['float']
+  if (s.float) {
+    const out = panelOf($, { panel: s.float.panel, columns: s.float.columns, theme: s.theme, edges: { top: true, bottom: true } })
+    if (out && 'error' in out) return { error: out.error }
+    if (!out) waiting = true
+    else float = { def: s.float, out }
+  }
+  // Ahead, where each will sit: the tab bar on top, the player bar on top where no tab bar is, a float as a card, the rest between.
+  const onTop = (a: { panel: Panel }) => a.panel.kind === 'tabs' || (a.panel.kind === 'playerBar' && !s.pieces.some(p => 'panel' in p && p.panel.kind === 'tabs'))
+  if (s.ahead?.length) prefetch($, s.ahead.map(a => ({ panel: a.panel, columns: a.columns, theme: s.theme, edges: a.edges ?? (onTop(a) ? { top: true } : {}) })))
   let now: Shown | undefined
   if (!waiting) {
-    now = { pieces: resolved, pages, actions: s.actions }
+    now = { pieces: resolved, pages, actions: { ...s.actions, ...(s.float?.actions ?? {}) }, ...(float ? { float } : {}) }
     shown.set(s.site, now)
   } else now = shown.get(s.site)
   if (!now) return { element: loading(ui, s.site, s.rows) }
@@ -269,7 +308,14 @@ async function build($: EngineInterface, ui: Ui, s: Site, d: Shown): Promise<{ e
   const parts: RenderElement[] = []
   let top = 0
   let width = 1
-  for (const p of d.pieces) {
+  // From the layer's piece down, the pieces go in one Box (whether a float is open or not, so opening one moves no Image).
+  const layerAt = s.layer ? d.pieces.findIndex(p => p.id === s.layer) : -1
+  const layered: RenderElement[] = []
+  let layerTop = 0
+  const anchors = new Map<string, { row: number; out: PanelOutput }>()
+  for (const [i, p] of d.pieces.entries()) {
+    if (i === layerAt) layerTop = top
+    const into_ = layerAt >= 0 && i >= layerAt ? layered : parts
     if ('picture' in p) {
       const pic = p.picture
       let body: RenderElement | RenderElement[]
@@ -288,7 +334,7 @@ async function build($: EngineInterface, ui: Ui, s: Site, d: Shown): Promise<{ e
         }
         body = lines
       } else body = <ui.Image key={pic.key} source={await source(pic.key, pic.file)} columns={pic.columns} rows={pic.rows} alt={pic.alt} />
-      parts.push(
+      into_.push(
         <ui.Box key={pic.anchorKey ?? `pic-${s.site}-${p.id}`} flexDirection="column" height={pic.rows}>
           {body}
         </ui.Box>,
@@ -298,13 +344,54 @@ async function build($: EngineInterface, ui: Ui, s: Site, d: Shown): Promise<{ e
       continue
     }
     const { out } = p
-    parts.push(
+    anchors.set(p.id, { row: top - layerTop, out })
+    into_.push(
       <ui.Box key={`p-${s.site}-${p.id}`} flexDirection="column" height={out.rows}>
         {await strips(ui, s, p.id, out, source, into)}
       </ui.Box>,
     )
     top += out.rows
     width = Math.max(width, out.columns)
+  }
+  let floatTop: number | undefined
+  if (layerAt >= 0) {
+    const rows = top - layerTop
+    const over: RenderElement[] = []
+    const f = d.float
+    const anchor = f && anchors.get(f.def.anchor.piece)
+    if (f && anchor) {
+      // Under the anchor control's strip, at its column; else under the anchor piece, at the left.
+      const tile = f.def.anchor.control ? anchor.out.tiles.find(t => t.controls?.some(a => a.control.id === f.def.anchor.control)) : undefined
+      const area = tile?.controls?.find(a => a.control.id === f.def.anchor.control)
+      const below = anchor.row + (tile ? tile.row + tile.rows : anchor.out.rows)
+      // Kept inside the Box: shifted up (never above its top) where it would run past the foot, clipped only where it is taller than the Box.
+      const at = Math.max(0, Math.min(below, rows - f.out.rows))
+      const left = Math.max(0, Math.min((tile?.col ?? 0) + (area?.col ?? 0), width - f.out.columns))
+      if (f.out.rows > rows) $.ui.log(`proschi: the ${f.def.id} is ${f.out.rows} rows, over the ${rows} it floats over: its foot is cut`, { to: 'debug' })
+      floatTop = layerTop + at
+      const scrim = `ov-scrim-${s.site}`
+      into.overlays.set(scrim, [`${f.def.id}/close`])
+      overlaySites.set(scrim, s.site)
+      over.push(
+        <ui.Box key={`scrim-${s.site}`} position="absolute" top={0} left={0} width={width} height={rows}>
+          <ui.Client key={scrim} module="./uiOverlay.js" props={{ controls: [{ id: `${f.def.id}/close`, col: 0, row: 0, columns: width, rows }] }} width={width} height={rows} />
+        </ui.Box>,
+      )
+      const floated = await strips(ui, s, f.def.id, f.out, source, into)
+      f.out.tiles.forEach((t, i) =>
+        over.push(
+          <ui.Box key={`fl-${s.site}-${i}`} position="absolute" top={at + t.row} left={left} width={t.columns} height={t.rows}>
+            {floated[i]}
+          </ui.Box>,
+        ),
+      )
+    }
+    parts.push(
+      <ui.Box key={`ly-${s.site}`} flexDirection="column" height={rows} overflow="hidden">
+        {layered}
+        {over}
+      </ui.Box>,
+    )
   }
   // Every page drawn, in the order given whichever is shown, so a switch only shows one and hides another.
   if (d.pages.length) {
@@ -335,6 +422,7 @@ async function build($: EngineInterface, ui: Ui, s: Site, d: Shown): Promise<{ e
     actions: d.actions,
     hotkeys,
     sources,
+    ...(floatTop !== undefined && d.float ? { float: { top: floatTop, close: d.float.def.close } } : {}),
     ...(s.form ? { form: s.form } : {}),
     ...(was?.pressedAt !== undefined ? { pressedAt: was.pressedAt, ...(was.pressed ? { pressed: was.pressed } : {}), ...(was.renderedAt !== undefined ? { renderedAt: was.renderedAt } : {}) } : {}),
   })
@@ -414,6 +502,8 @@ export function registerPicture(on: On): void {
       return next({ ...e, offset })
     }
     if (windows.has(e.requestId)) windows.set(e.requestId, { offset: e.offset, bodyRows: e.bodyRows })
+    // A float whose top would go above the window is closed: the engine would pin it to the window's first row.
+    for (const l of live.values()) if (l.requestId === e.requestId && l.float && e.offset > l.float.top) l.float.close()
     return next(e)
   })
 }

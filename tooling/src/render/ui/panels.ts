@@ -1,9 +1,9 @@
 import { renderSequenceSvg } from '../sequence';
 import { withTheme } from '../svg';
 import { loadDocument } from '../../terminal/document';
-import type { ActionBarPanel, BannerPanel, Block, Control, NoticesPanel, Panel, PlayerHeaderPanel, ScenarioChip, SequencePanel, StepCard, StepPanel, SystemBarPanel, TabBarPanel, UiTheme, UseCaseBarPanel } from './contract';
-import { BODY, CODE, CONTROL_ROW, blocks, codeBox, itemsRow, placeButton, upToRow } from './blocks';
-import { CELL, CONTROL, Surface, buttonColumns, chip, drawLaid, icon, layoutRich, line, paragraph, rect, surfaceFrame, tint, txt, width, type Box, type ControlState, type Edges } from './kit';
+import type { ActionBarPanel, BannerPanel, Block, Control, DrawerPanel, ExplorerPanel, Item, MenuPanel, NoticesPanel, Panel, PlayerBarPanel, Rich, ScenarioChip, Select, SequencePanel, StepCard, SystemBarPanel, TabBarPanel, UiTheme } from './contract';
+import { BODY, CODE, CONTROL_ROW, blocks, codeBox, itemsRow, menu, placeButton, upToRow } from './blocks';
+import { CELL, CONTROL, Surface, buttonColumns, chip, drawLaid, drawSelect, icon, layoutRich, line, paragraph, rect, selectColumns, surfaceFrame, tint, txt, width, type Box, type ControlState, type Edges } from './kit';
 import { clip } from './metrics';
 import { alpha, mix, paletteOf, type Palette } from './theme';
 
@@ -125,73 +125,152 @@ function scenarioControl(S: Surface, s: ScenarioChip, col: number, top: number, 
   return columns;
 }
 
-function useCaseBar(S: Surface, p: UseCaseBarPanel): number {
+// ---------- the player bar and what floats over the drawing ----------
+
+/** The player bar's second line: two rows. */
+const BAR_LINE = 2 * ROW;
+/** The player bar: a row of controls and its second line, whether a scenario plays or not. */
+export const PLAYER_BAR_ROWS = (CONTROL_ROW + BAR_LINE) / ROW;
+
+const LINE = { size: 13.5 };
+
+/**
+ * The player bar (PlayerBarPanel): `Use case [▾] [▾]  ⏮ ‹ ▶ › ⏭ ✕  Step 2/5
+ * ━━──` over `② GET /x · A → B · Sync  [Body ▾]`. Always the same rows; too
+ * narrow, it drops the label, then the first and last keys, then narrows the
+ * pickers and the count, then the progress bar, so the row never wraps.
+ */
+function playerBar(S: Surface, p: PlayerBarPanel): number {
   const P = S.P;
-  return framed(S, (S, top) => {
-    const label = { text: [{ text: 'Use case', tone: 'accent' as const, bold: true }] };
-    const right = S.columns - 3;
-    let y = top;
-    y += itemsRow(S, [label, { select: p.picker }, { control: p.play }, { control: p.explore }], 2, y, right);
-    for (const g of p.explorer ?? []) {
-      y = upToRow(y);
-      if (g.label) {
-        S.add(txt(GUTTER, y + 13, g.label, { size: 13, weight: 700, color: P.blue, mono: true }));
-        y += ROW + 4;
-      }
-      for (const u of g.useCases) {
-        y = upToRow(y);
-        const indent = g.label ? 4 : 2;
-        const name = { size: 14, weight: u.current ? 600 : 500 };
-        const nameCols = Math.ceil((width(u.name, name) + 14) / CELL.width);
-        // The name on its own line when it and the scenarios do not fit one.
-        const inline = nameCols + u.scenarios.reduce((s, c) => s + chipColumns(c) + 1, 0) <= right - indent;
-        if (u.current) S.add(rect(indent * CELL.width - 8, y + CONTROL_ROW / 2 - 8, 3, 16, { fill: P.accent, rx: 1.5 }));
-        S.add(txt(indent * CELL.width, inline ? y + CONTROL_ROW / 2 + 5 : y + 14, u.name, { ...name, color: P.ink }));
-        let col = indent + (inline ? nameCols : 2);
-        if (!inline) y += ROW + 2;
-        y = upToRow(y);
-        for (const c of u.scenarios) {
-          if (col + chipColumns(c) > right) {
-            col = indent + 2;
-            y += CONTROL_ROW;
-          }
-          col += scenarioControl(S, c, col, y) + 1;
-        }
-        y += CONTROL_ROW;
-      }
-    }
-    return y - top;
-  });
+  const H = CONTROL_ROW + BAR_LINE;
+  section(S, 0, H);
+  const at = p.step.at;
+  const total = p.step.total;
+  const byId = new Map(p.controls.map((c) => [c.id, c]));
+  const control = (id: string): Item[] => (byId.has(id) ? [{ control: byId.get(id)! }] : []);
+  const widest = (s: Select) => Math.max(...s.options.map((o) => selectColumns(o.label, undefined, !!o.icon)), selectColumns('Main flow'));
+  const counter = (short: boolean): Item => {
+    const text = (n: string) => (short ? `${n}/${total}` : `Step ${n}/${total}`);
+    return { text: [{ text: text(at === undefined ? '–' : String(at)), bold: at !== undefined, ...(at === undefined ? { tone: 'muted' as const } : {}) }], columns: Math.ceil((width(text(String(total)), { ...BODY, weight: 600 }) + 2) / CELL.width) };
+  };
+  const variants = [
+    { label: true, ends: true, cap: 28, short: false, progress: true },
+    { label: false, ends: true, cap: 28, short: false, progress: true },
+    { label: false, ends: false, cap: 22, short: false, progress: true },
+    { label: false, ends: false, cap: 16, short: true, progress: true },
+    { label: false, ends: false, cap: 13, short: true, progress: false },
+    { label: false, ends: false, cap: 10, short: true, progress: false },
+    { label: false, ends: false, cap: 8, short: true, progress: false, steps: false },
+  ];
+  const itemsOf = (v: { label: boolean; ends: boolean; cap: number; short: boolean; progress: boolean; steps?: boolean }): Item[] => [
+    ...(v.label ? [{ text: [{ text: 'Use case', bold: true, tone: 'accent' as const }] }] : []),
+    { select: { ...p.useCase, floats: true, columns: Math.min(v.cap, widest(p.useCase)) } },
+    { select: { ...p.scenario, floats: true, columns: Math.min(v.cap, widest(p.scenario)) } },
+    ...(v.ends ? control('first') : []),
+    ...(v.steps !== false ? control('prev') : []),
+    ...control('play'),
+    ...(v.steps !== false ? control('next') : []),
+    ...(v.ends ? control('last') : []),
+    ...control('stop'),
+    counter(v.short),
+    ...(v.progress ? [{ progress: total && at !== undefined ? at / total : 0 }] : []),
+  ];
+  const need = (it: Item) => ('control' in it ? buttonColumns(it.control) : 'select' in it ? it.select.columns! : 'text' in it ? it.columns! : 'progress' in it ? 8 : 0);
+  const room = S.columns - 2;
+  const items = variants.map(itemsOf).find((list) => list.reduce((s, it) => s + need(it) + 1, -1) <= room) ?? itemsOf(variants.at(-1)!);
+  itemsRow(S, items, 1, 0, S.columns - 1);
+  // The second line: the step, or a note before Play; Body ▾ at its end.
+  const cy = CONTROL_ROW + BAR_LINE / 2;
+  let x = GUTTER;
+  let right = S.width - GUTTER;
+  if (p.body) {
+    const b = p.body;
+    const columns = selectColumns(b.label ?? 'Body');
+    const box: Box = { x: (S.columns - 1 - columns) * CELL.width, y: cy - 13, w: columns * CELL.width, h: 26 };
+    S.place({ control: { id: b.id, kind: 'toggle', ...(b.hotkey ? { hotkey: b.hotkey } : {}), ...(b.disabled ? { disabled: true } : {}) }, box, draw: (state) => (b.disabled ? drawSelect(P, b.label ?? 'Body', box, 'rest', false, undefined, undefined, true) : drawSelect(P, b.label ?? 'Body', box, state, b.active === true)) });
+    right = box.x - 12;
+  }
+  if (p.line.number !== undefined) {
+    const color = p.line.error ? P.tone.bad : P.blue;
+    S.add(`<circle cx="${x + 10}" cy="${cy}" r="10" fill="${alpha(color, 0.2)}"/>`, txt(x + 10, cy + 4.5, String(p.line.number), { size: 12.5, weight: 600, color, anchor: 'middle' }));
+    x += 28;
+  }
+  const laid = layoutRich(p.line.text, right - x, LINE, false)[0];
+  S.add(drawLaid(P, laid, x, cy + 5, LINE, P.ink));
+  return H;
 }
 
-function playerHeader(S: Surface, p: PlayerHeaderPanel): number {
+/** A select's menu as a card of its own, floated over the drawing under its select. */
+function menuPanel(S: Surface, p: MenuPanel): number {
+  return menu(S, p.select, 0, 0, S.columns, false);
+}
+
+/** A float's header: its title and ✕. */
+function floatHead(S: Surface, title: Rich, close: Control | undefined, top: number): number {
+  return itemsRow(S, [{ text: title }, { spacer: true }, ...(close ? [{ control: close }] : [])], 2, top, S.columns - 2);
+}
+
+/** The current step's card, its bodies whole (to a point), floated under the player bar. */
+function drawer(S: Surface, p: DrawerPanel): number {
+  const x = GUTTER;
+  const w = S.width - 2 * GUTTER;
+  return framed(
+    S,
+    (S, top) => {
+      let y = top + floatHead(S, [{ text: p.cards.length > 1 ? `Steps ${p.cards.map((c) => c.number).join(', ')}` : `Step ${p.cards[0]?.number ?? ''}`, bold: true }, { text: '  request and response', tone: 'muted' }], p.close, top);
+      y = upToRow(y + 4);
+      y += stepCards(S, p.condition, p.cards, x, y, w, DRAWER_BODY_LINES);
+      return y - top;
+    },
+    0,
+    ROW / 2,
+  );
+}
+
+/** Every use case by endpoint, each scenario a button that plays it, floated under the use case picker. */
+function explorer(S: Surface, p: ExplorerPanel): number {
   const P = S.P;
-  return framed(S, (S, top) => {
-    let y = top;
-    const back = buttonColumns(p.back);
-    placeButton(S, p.back, 2, y);
-    const x = (2 + back + 2) * CELL.width;
-    const title = { size: 16, weight: 600 };
-    const titleW = Math.min(width(p.title, title), S.width - x - 3 * CELL.width);
-    S.add(txt(x, y + CONTROL_ROW / 2 + 5.5, clip(p.title, S.width - x - 3 * CELL.width, 16, 600), { ...title, color: P.ink }));
-    if (p.note && x + titleW + 60 < S.width - 3 * CELL.width) S.add(txt(x + titleW + 12, y + CONTROL_ROW / 2 + 5, clip(p.note, S.width - x - titleW - 12 - 3 * CELL.width, 13.5), { size: 13.5, color: P.muted }));
-    y += CONTROL_ROW;
-    if (p.scenarios?.length) {
-      let col = 2;
-      for (const s of p.scenarios) {
-        if (col + chipColumns(s) > S.columns - 3) {
-          col = 2;
+  return framed(
+    S,
+    (S, top) => {
+      const right = S.columns - 3;
+      let y = top + floatHead(S, [{ text: 'All use cases', bold: true }, { text: '  pick a scenario to play it', tone: 'muted' }], p.close, top);
+      for (const g of p.groups) {
+        y = upToRow(y);
+        if (g.label) {
+          S.add(txt(GUTTER, y + 13, clip(g.label, S.width - 2 * GUTTER, 13, 700, true), { size: 13, weight: 700, color: P.blue, mono: true }));
+          y += ROW + 4;
+        }
+        for (const u of g.useCases) {
+          y = upToRow(y);
+          const indent = g.label ? 4 : 2;
+          const name = { size: 14, weight: u.current ? 600 : 500 };
+          const nameCols = Math.ceil((width(u.name, name) + 14) / CELL.width);
+          // The name on its own line when it and the scenarios do not fit one.
+          const inline = nameCols + u.scenarios.reduce((s, c) => s + chipColumns(c) + 1, 0) <= right - indent;
+          if (u.current) S.add(rect(indent * CELL.width - 8, y + CONTROL_ROW / 2 - 8, 3, 16, { fill: P.accent, rx: 1.5 }));
+          S.add(txt(indent * CELL.width, inline ? y + CONTROL_ROW / 2 + 5 : y + 14, clip(u.name, (right - indent) * CELL.width, 14, name.weight), { ...name, color: P.ink }));
+          let col = indent + (inline ? nameCols : 2);
+          if (!inline) y += ROW + 2;
+          y = upToRow(y);
+          for (const c of u.scenarios) {
+            if (col + chipColumns(c) > right) {
+              col = indent + 2;
+              y += CONTROL_ROW;
+            }
+            col += scenarioControl(S, c, col, y) + 1;
+          }
           y += CONTROL_ROW;
         }
-        col += scenarioControl(S, s, col, y, s.current) + 1;
       }
-      y += CONTROL_ROW;
-    }
-    return y - top;
-  });
+      return y - top;
+    },
+    0,
+    ROW / 2,
+  );
 }
 
-// ---------- the step panel ----------
+// ---------- step cards ----------
 
 const EXEC: Record<StepCard['exec'], { label: string; color: 'green' | 'purple' | 'orange' }> = {
   sync: { label: 'Sync', color: 'green' },
@@ -199,11 +278,14 @@ const EXEC: Record<StepCard['exec'], { label: string; color: 'green' | 'purple' 
   fire: { label: 'Fire & Forget', color: 'orange' },
 };
 
-/** Lines of a body the player shows; the rest is counted (BODY_LINES in register.tsx). */
-const BODY_LINES = 8;
+/** Lines of a body the drawer shows; the rest is counted. */
+const DRAWER_BODY_LINES = 24;
+
+/** The kind of call a step is, as its chip names it. */
+export const execLabel = (exec: StepCard['exec']) => EXEC[exec].label;
 
 /** One step card from `top`, `x` to `x + w`; the px it took. */
-function stepCard(S: Surface, s: StepCard, x: number, top: number, w: number): number {
+function stepCard(S: Surface, s: StepCard, x: number, top: number, w: number, bodyLines: number): number {
   const P = S.P;
   const parts: string[] = [];
   let y = top;
@@ -247,7 +329,7 @@ function stepCard(S: Surface, s: StepCard, x: number, top: number, w: number): n
       const bx = side ? tx + i * (bw + 14) : tx;
       const at = side ? y : by;
       S.add(txt(bx, at + 12, b.label, { size: 12.5, weight: 600, color: b.error ? P.tone.bad : P.muted }));
-      const h = 18 + codeBox(S, b.body.text, bx, at + 18, bw, { language: b.body.format === 'JSON' ? 'json' : b.body.format === 'XML' ? 'xml' : undefined, maxLines: BODY_LINES, error: b.error });
+      const h = 18 + codeBox(S, b.body.text, bx, at + 18, bw, { language: b.body.format === 'JSON' ? 'json' : b.body.format === 'XML' ? 'xml' : undefined, maxLines: bodyLines, error: b.error });
       tallest = Math.max(tallest, h);
       by = at + h + 8;
     });
@@ -263,12 +345,12 @@ function stepCard(S: Surface, s: StepCard, x: number, top: number, w: number): n
   return y - top;
 }
 
-/** The step at `at` with its parallel siblings; the px it took. */
-function stepCards(S: Surface, p: StepPanel, cards: StepCard[], x: number, top: number, w: number): number {
+/** A step with its parallel siblings; the px it took. */
+function stepCards(S: Surface, condition: string | undefined, cards: StepCard[], x: number, top: number, w: number, bodyLines: number): number {
   const P = S.P;
   let y = top;
-  if (p.condition) {
-    const laid = layoutRich([{ text: 'When: ', bold: true }, { text: p.condition }], w, { size: 13.5 }, false)[0];
+  if (condition) {
+    const laid = layoutRich([{ text: 'When: ', bold: true }, { text: condition }], w, { size: 13.5 }, false)[0];
     S.add(drawLaid(P, laid, x, y + 14, { size: 13.5 }, mix(P.ink, P.surface, 0.82)));
     y += 26;
   }
@@ -285,47 +367,9 @@ function stepCards(S: Surface, p: StepPanel, cards: StepCard[], x: number, top: 
       S.add(line(x, y + 7, x + w, y + 7, P.line, 1));
       y += 16;
     }
-    y += stepCard(S, c, x, y, w);
+    y += stepCard(S, c, x, y, w, bodyLines);
   });
   return y - top;
-}
-
-function stepPanel(S: Surface, p: StepPanel): number {
-  const P = S.P;
-  const total = p.steps.length;
-  const at = Math.max(0, Math.min(p.at, total - 1));
-  const x = GUTTER;
-  const w = S.width - 2 * GUTTER;
-  // As tall as the tallest step, so stepping moves nothing.
-  const scratch = new Surface(P, S.columns);
-  const tallest = Math.max(0, ...p.steps.map((cards) => stepCards(scratch, p, cards, x, 0, w)), stepCards(scratch, p, p.steps[at] ?? [], x, 0, w));
-  return framed(S, (S, top) => {
-    stepCards(S, p, p.steps[at] ?? [], x, top - 2, w);
-    let y = upToRow(top - 2 + tallest + 6);
-    S.add(line(1, y + 0.5, S.width - 1, y + 0.5, P.line, 1));
-    const k = p.hotkeys ?? {};
-    const hk = (id: keyof NonNullable<StepPanel['hotkeys']>) => (k[id] ? { hotkey: k[id] } : {});
-    const ctl = (c: Control): { control: Control } => ({ control: c });
-    const counter = `Step ${Math.min(at + 1, total)} of ${total}`;
-    const playW = Math.max(buttonColumns({ id: 'x', icon: 'pause', label: 'Pause', ...hk('play') }), buttonColumns({ id: 'x', icon: 'play', label: 'Play', ...hk('play') }));
-    y += itemsRow(
-      S,
-      [
-        ctl({ id: 'first', icon: 'first', ...hk('first'), variant: 'quiet', disabled: at === 0 }),
-        ctl({ id: 'prev', icon: 'prev', ...hk('prev'), variant: 'quiet', disabled: at === 0 }),
-        ctl({ id: 'play', icon: p.playing ? 'pause' : 'play', label: p.playing ? 'Pause' : 'Play', variant: 'primary', columns: playW, ...hk('play') }),
-        ctl({ id: 'next', icon: 'next', ...hk('next'), variant: 'quiet', disabled: at >= total - 1 }),
-        ctl({ id: 'last', icon: 'last', ...hk('last'), variant: 'quiet', disabled: at >= total - 1 }),
-        { text: [{ text: counter, bold: true }] },
-        { progress: total ? (at + 1) / total : 0 },
-        ctl({ id: 'exit', icon: 'exit', label: S.columns >= 96 ? 'Exit playback' : 'Exit', ...hk('exit'), variant: 'quiet' }),
-      ],
-      2,
-      y,
-      S.columns - 2,
-    );
-    return y - top;
-  });
 }
 
 function systemBar(S: Surface, p: SystemBarPanel): number {
@@ -508,14 +552,17 @@ export function drawPanel(panel: Panel, columns: number, theme: UiTheme, edges: 
     case 'tabs':
       h = tabs(S, panel);
       break;
-    case 'useCaseBar':
-      h = useCaseBar(S, panel);
+    case 'playerBar':
+      h = playerBar(S, panel);
       break;
-    case 'playerHeader':
-      h = playerHeader(S, panel);
+    case 'menu':
+      h = menuPanel(S, panel);
       break;
-    case 'step':
-      h = stepPanel(S, panel);
+    case 'drawer':
+      h = drawer(S, panel);
+      break;
+    case 'explorer':
+      h = explorer(S, panel);
       break;
     case 'systemBar':
       h = systemBar(S, panel);

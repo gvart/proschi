@@ -131,7 +131,7 @@ test('the share link opens the editor at the step shown, counted from 1', async 
   expect(copied[0]).not.toMatch(/&step=/)
   await ui.press({ key: 'play-m1:0' })
   await ui.press({ key: 'play-m1:0' })
-  expect(await texts(ui, /^Step 1 of \d+$/)).toBeDefined()
+  expect(await texts(ui, /^Step 1\/\d+$/)).toBeDefined()
   await ui.press({ key: 'lnk-m1:0' })
   expect(copied[1]).toMatch(/&uc=place-order&step=1$/)
   await ui.press({ key: 'next-m1:0' })

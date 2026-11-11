@@ -229,6 +229,39 @@ text cells** (today's drawing). Never a text preview followed by a picture.
   (tests/screen.ts) and checks the page's strips run on from the tab bar with
   no gap to the drawing's last row, none wider than the pane, and that the
   scroll keys an overlay hears move the pane.
+- [x] T2. **One fixed player bar.** The use case bar, the player's header,
+  its scenario tabs and the step panel under the diagram are gone; one
+  `playerBar` panel (5 rows at every width) sits on top, under the tab bar:
+  the use case picker, the scenario picker (✓/✗ and status in its options),
+  ⏮ ‹ ▶/⏸ › ⏭ ✕, the counter and progress; its second line the current step
+  (number, call, from → to, how) or, before Play, the description and "Press
+  ▶ to play", with Body ▾ at its end. Before Play the step keys, ✕ and Body are
+  drawn dimmed and have no overlay; ✕ goes back to the diagram in the bar. The
+  row narrows in steps (label, ⏮/⏭, pickers capped, short counter, no bar,
+  no ‹/›) so it never wraps. Title, verdict, legend and systems stay put
+  while a scenario plays.
+- [x] T3. **What opens floats over the drawing.** The pickers' menus (the
+  use case picker's last entry "≡ Explore all…"), the Body drawer (request and
+  response with JSON highlight, status) and the explorer are a picture of
+  their own (`menu`, `drawer`, `explorer` panels), laid as absolute Boxes, one
+  per strip with its overlay, inside a Box that holds the pieces from the bar
+  down: under the anchor control's strip at its column, shifted up only to stay
+  inside that Box, so its top is never negative (Round 3). Under them, over the
+  whole Box, one more overlay closes it on a press elsewhere; Esc (the pane's
+  `ui.close`, kept open while something floats) and a pick close it too; the
+  pane scrolling past its top closes it. Opening and closing changes no piece's
+  Box: tests check the drawing's rows and every strip's top are the same before
+  Play, playing, and with each float open, in the transcript and the pane, and
+  the tours press every bar control, menu option, explorer entry, the drawer's
+  close and the links.
+- [x] T4. **Text fallback.** The same bar on top: `Select`s for the pickers
+  (the explorer as the use case picker's last option), the step Buttons dimmed
+  before Play, `Step n/N` and a progress bar, the step line with Body ▾. The
+  drawer and the explorer open under the bar in flow (text has no layers).
+- Transcript: a float is laid out the same way over a transcript drawing. The
+  transcript's scroll is not seen by the plugin, so a float whose top is
+  scrolled above the screen is pinned to its first row by the engine until it
+  closes (a pick, a press outside); unverified against the live engine.
 
 ## Risks
 

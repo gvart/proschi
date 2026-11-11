@@ -6,7 +6,7 @@ import { formatAvailability, formatCount, formatDuration, formatMs, formatPercen
 import { BOTTLENECK_FROM, busiestOf } from '../../../../frontend/src/sim/overlay';
 import { currentStepsOf, isErrorStep } from '../../terminal/playback';
 import type { Document } from '../../terminal/document';
-import type { Block, Body, Cell, Control, PagePanel, Row, Span, StepCard, StepPanel, TabBarPanel, Tone } from './contract';
+import type { Block, Body, Cell, Control, PagePanel, Row, Span, StepCard, TabBarPanel, Tone } from './contract';
 import { markdownBlocks } from './markdown';
 
 /**
@@ -55,17 +55,10 @@ function card(s: FlowStep, steps: FlowStep[], name: (id: string) => string): Ste
   };
 }
 
-/** The player's step panel for `scenario` at step `at` (register.tsx stepPanel), hotkeys as the pane binds them. */
-export function stepPanelOf(scenario: DiagramScenario, at: number, playing: boolean, name: (id: string) => string, hotkeys = true): StepPanel {
+/** Each step of `scenario` as cards: the step with its parallel siblings, as the player's drawer shows them (DrawerPanel). */
+export function stepCardsOf(scenario: DiagramScenario, name: (id: string) => string): StepCard[][] {
   const steps = scenario.steps;
-  return {
-    kind: 'step',
-    ...(scenario.condition ? { condition: scenario.condition } : {}),
-    steps: steps.map((_, i) => currentStepsOf(steps, i).map((s) => card(s, steps, name))),
-    at,
-    playing,
-    ...(hotkeys ? { hotkeys: { first: 'r', prev: 'b', play: 'p', next: 'n', last: 'e' } } : {}),
-  };
+  return steps.map((_, i) => currentStepsOf(steps, i).map((s) => card(s, steps, name)));
 }
 
 // ---------- Analysis ----------

@@ -212,7 +212,9 @@ test('pictures: a reserved area with one line while the terminal is asked, then 
   const overlays = await overlaysOf(ui, 'm1:0')
   expect(overlays.length).toBeGreaterThan(1)
   for (const o of overlays) expect(String(o.props.module)).toMatch(/uiOverlay\.js$/)
-  expect(await ids(ui)).toEqual(expect.arrayContaining(['ucbar/uc', 'ucbar/play', 'ucbar/explore', 'links/src', 'links/lnk', 'links/open', 'links/focus']))
+  expect(await ids(ui)).toEqual(expect.arrayContaining(['bar/uc', 'bar/sc', 'bar/play', 'links/src', 'links/lnk', 'links/open', 'links/focus']))
+  // Before Play the step keys and Body are drawn dimmed, with no overlay.
+  expect(await ids(ui)).not.toEqual(expect.arrayContaining(['bar/next']))
   await ui.unmount()
 })
 
@@ -228,27 +230,30 @@ test('a picture keeps its aspect ratio and takes at most 40 rows in the transcri
   await ui.unmount()
 })
 
-test('an overlay press runs the control under it: the use case bar, its picker, the player and the links', SLOW, async ($, on) => {
+test('an overlay press runs the control under it: the player bar, its menus, and the links', SLOW, async ($, on) => {
   const clock = mock.clock(on)
   const h = host(on, clock)
   let ui = await settle($, clock)
   await click(ui, 'm1:0', 'links/src')
   expect(h.copied).toEqual([SOURCE])
-  // The picker opens as a rendered menu, an option per use case.
-  await click(ui, 'm1:0', 'ucbar/uc')
+  // The use case picker's menu floats over the drawing, an option per use case and the explorer last.
+  await click(ui, 'm1:0', 'bar/uc')
   await ui.unmount()
-  ui = await settle($, clock, reply, 'm1:0', c => c.some(x => x.id.startsWith('ucbar/uc=')))
-  // Play: the player's header and its step panel.
-  await click(ui, 'm1:0', 'ucbar/play')
+  ui = await settle($, clock, reply, 'm1:0', c => c.some(x => x.id.startsWith('menu/uc=')))
+  expect((await ids(ui)).filter(id => id.startsWith('menu/'))).toEqual(['menu/uc=place-order', 'menu/uc=__explore'])
+  await click(ui, 'm1:0', 'menu/uc=place-order')
   await ui.unmount()
-  ui = await settle($, clock, reply, 'm1:0', c => c.some(x => x.id === 'step/next'))
-  expect(await ids(ui)).toEqual(expect.arrayContaining(['step/first', 'step/prev', 'step/play', 'step/next', 'step/last', 'step/exit']))
-  expect(await ids(ui)).not.toContain('ucbar/play')
-  await click(ui, 'm1:0', 'step/next')
+  // Play: the same bar, its step keys live.
+  ui = await settle($, clock, reply, 'm1:0', c => !c.some(x => x.id.startsWith('menu/')))
+  await click(ui, 'm1:0', 'bar/play')
+  await ui.unmount()
+  ui = await settle($, clock, reply, 'm1:0', c => c.some(x => x.id === 'bar/next'))
+  expect(await ids(ui)).toEqual(expect.arrayContaining(['bar/play', 'bar/next', 'bar/last', 'bar/stop', 'bar/body']))
+  await click(ui, 'm1:0', 'bar/next')
   expect(h.stored.some(e => e.includes('"step":1'))).toBe(true)
-  await click(ui, 'm1:0', 'step/exit')
+  await click(ui, 'm1:0', 'bar/stop')
   await ui.unmount()
-  ui = await settle($, clock, reply, 'm1:0', c => c.some(x => x.id === 'ucbar/play'))
+  ui = await settle($, clock, reply, 'm1:0', c => !c.some(x => x.id === 'bar/stop'))
   await ui.unmount()
 })
 
@@ -361,8 +366,8 @@ test('the worker: one per session, a press asked before prefetching, the first r
   // The diagram and the panels shown are `a…`; the panels likely next (Play's header and step) `b…`.
   const panels = h.requests.filter(r => r.input.kind === 'panels')
   const kinds = (r: { input: Record<string, unknown> }) => (r.input.panels as { panel: { kind: string } }[]).map(p => p.panel.kind)
-  expect(panels.filter(r => r.id.startsWith('a')).flatMap(kinds)).toEqual(expect.arrayContaining(['useCaseBar', 'actionBar']))
-  expect(panels.filter(r => r.id.startsWith('b')).flatMap(kinds)).toEqual(expect.arrayContaining(['playerHeader', 'step']))
+  expect(panels.filter(r => r.id.startsWith('a')).flatMap(kinds)).toEqual(expect.arrayContaining(['playerBar', 'actionBar']))
+  expect(panels.filter(r => r.id.startsWith('b')).flatMap(kinds)).toEqual(expect.arrayContaining(['playerBar', 'menu']))
   expect(h.requests.map(r => r.input.prune)).toEqual([true, ...h.requests.slice(1).map(() => undefined)])
   // Hover and pressed variants with every panel.
   expect(panels.every(r => (r.input.panels as { variants?: string[] }[]).every(p => p.variants?.join() === 'hover,pressed'))).toBe(true)
@@ -374,9 +379,9 @@ test('a worker that dies: what it held runs one shot, and the next request start
   const h = host(on, clock, { worker: 'dies' })
   let ui = await settle($, clock)
   expect(h.runs.some(r => r.argv[1]?.endsWith('raster.cjs'))).toBe(true)
-  await click(ui, 'm1:0', 'ucbar/play')
+  await click(ui, 'm1:0', 'bar/play')
   await ui.unmount()
-  ui = await settle($, clock, reply, 'm1:0', c => c.some(x => x.id === 'step/next'))
+  ui = await settle($, clock, reply, 'm1:0', c => c.some(x => x.id === 'bar/next'))
   expect(h.spawns).toBe(2)
   await ui.unmount()
 })
@@ -401,9 +406,9 @@ test('pictures shown: Play blits only the tiles a frame changes, asked for once 
   expect(plays()).toHaveLength(1)
   expect(plays()[0]!.id).toMatch(/^b/)
   expect((plays()[0]!.input.options as Record<string, unknown>).overlay).toBeUndefined()
-  await click(ui, 'm1:0', 'ucbar/play')
+  await click(ui, 'm1:0', 'bar/play')
   await ui.unmount()
-  ui = await settle($, clock, reply, 'm1:0', c => c.some(x => x.id === 'step/next'))
+  ui = await settle($, clock, reply, 'm1:0', c => c.some(x => x.id === 'bar/next'))
   expect(plays()).toHaveLength(1)
   h.blits.length = 0
   await clock.advance(2600)
@@ -420,6 +425,22 @@ test('pictures shown: Play blits only the tiles a frame changes, asked for once 
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
+/** What a control opens: the floats' controls behind it, by the prefix of their ids. */
+const OPENS: Record<string, string[]> = { 'bar/uc': ['menu/uc=', 'explorer/'], 'bar/sc': ['menu/sc='], 'bar/body': ['drawer/'], 'menu/uc=__explore': ['explorer/'] }
+
+/** The overlays of what floats over a drawing. */
+const FLOATS = /^ov-t-[^]*-(menu|drawer|explorer)-\d+$/
+
+/** A press outside what floats: on the diagram's first cell, under the layer's overlay that closes it. */
+async function clickOutside(ui: Mounted, site: string): Promise<void> {
+  const root = layout((await ui.drawn()) as never)
+  const tile = [...nodes(root)].find(n => n.el.type === 'Image' && String(n.key).startsWith(`img-${site}-`))!
+  const heard = pointerAt(root, 1 - tile.y, tile.x, 1)
+  if (heard?.in !== `ov-scrim-${site}`) throw new Error(`a press outside lands on ${heard?.in}`)
+  await ui.pointer({ type: 'down', ...heard, button: 'left' })
+  await ui.pointer({ type: 'up', ...heard, button: 'left' })
+}
+
 /**
  * Presses every control a drawing shows, one at a time, until none is left: each with a real pointer on its
  * own cell on screen (`aim`: the drawing laid out as the engine lays it and scrolled so the cell is on the
@@ -429,9 +450,24 @@ const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
  */
 async function tour($: T, clock: Clock, h: ReturnType<typeof host>, props: typeof reply | typeof pane, site: string): Promise<string[]> {
   const pressed: string[] = []
+  // What a float showed that is not pressed yet: an option picked closes its menu, so its opener is pressed again for the rest.
+  const seen = new Set<string>()
   const ui = await settle($, clock, props, site)
-  for (let round = 0; round < 80; round++) {
-    const next = (await ids(ui, site)).filter(id => !pressed.includes(id)).sort((a, b) => Number(a.startsWith('tabs/')) - Number(b.startsWith('tabs/')))[0]
+  for (let round = 0; round < 160; round++) {
+    // While something floats over the drawing, only its own controls are pressable (a press elsewhere closes it): pressed, then closed.
+    const floating = (await ui.find({ key: `ov-scrim-${site}` })) !== undefined
+    const all = (await controlsOf(ui, site)).filter(c => !floating || FLOATS.test(c.in)).map(c => c.id)
+    if (floating) for (const id of all) if (!pressed.includes(id)) seen.add(id)
+    const left = [...seen].filter(id => !pressed.includes(id))
+    const reopens = (id: string) => (OPENS[id] ?? []).some(prefix => left.some(l => l.startsWith(prefix)))
+    // Stop late, then the systems (focusing one stops the player), the tabs last: Body and the step keys are live only while a scenario plays.
+    const rank = (id: string) => (id.startsWith('tabs/') ? 3 : id.startsWith('systems/') ? 2 : id === 'bar/stop' ? 1 : 0)
+    const next = all.filter(id => !pressed.includes(id) || reopens(id)).sort((a, b) => rank(a) - rank(b))[0]
+    if (!next && floating) {
+      await clickOutside(ui, site)
+      for (let i = 0; i < 3; i++) await clock.advance(100)
+      continue
+    }
     if (!next) {
       await ui.unmount()
       return pressed
@@ -440,16 +476,20 @@ async function tour($: T, clock: Clock, h: ReturnType<typeof host>, props: typeo
     h.blits.length = 0
     h.logs.length = 0
     await ui.pointer({ type: 'move', ...at })
-    expect([next, h.blits.at(-1)?.file]).toEqual([next, expect.stringMatching(new RegExp(`-${escape(next.slice(next.indexOf('/') + 1))}-hover\\.png$`))])
+    // An opener pressed again is hovered still: no new hover picture.
+    if (!pressed.includes(next)) expect([next, h.blits.at(-1)?.file]).toEqual([next, expect.stringMatching(new RegExp(`-${escape(next.slice(next.indexOf('/') + 1))}-hover\\.png$`))])
     await ui.pointer({ type: 'down', ...at, button: 'left' })
     await ui.pointer({ type: 'up', ...at, button: 'left' })
     expect(h.logs.filter(l => l.startsWith('proschi: press '))).toEqual([`proschi: press ${next}`])
-    pressed.push(next)
+    if (!pressed.includes(next)) pressed.push(next)
     // What the press asked for drawn: the helper's answers come on the clock.
     for (let i = 0; i < 3; i++) await clock.advance(100)
   }
   throw new Error(`the tour never ended: ${pressed.join(', ')}`)
 }
+
+/** Every control of the player bar. */
+const BAR = ['bar/uc', 'bar/sc', 'bar/first', 'bar/prev', 'bar/play', 'bar/next', 'bar/last', 'bar/stop', 'bar/body']
 
 /** The panels a tour pressed a control of: the piece or page before the control's id. */
 const panelsOf = (pressed: string[]) => [...new Set(pressed.map(id => id.slice(0, id.indexOf('/'))))].sort()
@@ -460,14 +500,15 @@ test('one surface: every piece as wide as the room, the drawing\'s corners on it
   const passing = { ...reply, props: { ...reply.props, text: `\`\`\`proschi\n${SOURCE.replace('< 150ms', '< 5000ms').replace('>= 99.9%', '>= 90%')}\n\`\`\`` } } as unknown as typeof reply
   const ui = await settle($, clock, passing)
   expect((await ids(ui)).some(id => id.startsWith('below/'))).toBe(false)
-  const panels = h.requests.flatMap(r => (r.input.panels ?? []) as { panel: { kind: string; verdict?: unknown }; columns: number; edges?: { top?: boolean; bottom?: boolean } }[])
+  // What floats over the drawing is a card of its own, as wide as it wants; every piece is the room's width.
+  const panels = h.requests.flatMap(r => (r.input.panels ?? []) as { panel: { kind: string; verdict?: unknown }; columns: number; edges?: { top?: boolean; bottom?: boolean } }[]).filter(p => !['menu', 'drawer', 'explorer'].includes(p.panel.kind))
   expect(panels.some(p => p.panel.kind === 'notices')).toBe(false)
   // 124 columns less the transcript's gutter: every piece the same width.
   expect(new Set(panels.map(p => p.columns)).size).toBe(1)
-  // The title is the drawing's first piece, the links its last; the diagram's strip neither, with the legend.
-  expect(panels.find(p => p.panel.kind === 'page')?.edges).toEqual({ top: true })
+  // The player bar is the drawing's first piece, the links its last; the title and the diagram's strip neither, the legend in the strip.
+  expect(panels.find(p => p.panel.kind === 'playerBar')?.edges).toEqual({ top: true })
   expect(panels.find(p => p.panel.kind === 'actionBar')?.edges).toEqual({ bottom: true })
-  expect(panels.find(p => p.panel.kind === 'useCaseBar')?.edges).toBeUndefined()
+  expect(panels.find(p => p.panel.kind === 'page')?.edges).toBeUndefined()
   const fill = h.requests.map(r => (r.input.options as { grid?: { fill?: unknown }; play?: unknown } | undefined)).find(o => o?.grid && !o.play)?.grid?.fill
   expect(fill).toEqual({ columns: panels[0]!.columns, legend: true })
   await ui.unmount()
@@ -480,10 +521,10 @@ test('every control in the transcript runs its own action when pressed on its ce
   const clock = mock.clock(on)
   const h = host(on, clock, { worker: 'refused' })
   const pressed = await tour($, clock, h, reply, 'm1:0')
-  expect(panelsOf(pressed)).toEqual(['below', 'head', 'links', 'step', 'ucbar'])
-  expect(pressed).toEqual(expect.arrayContaining(['below/details', 'links/src', 'links/lnk', 'links/open', 'links/focus', 'ucbar/uc', 'ucbar/play', 'ucbar/explore', 'head/back', 'step/next', 'step/exit']))
-  expect(pressed.some(id => id.startsWith('ucbar/uc='))).toBe(true)
-  expect(pressed.some(id => id.startsWith('ucbar/x-'))).toBe(true)
+  expect(panelsOf(pressed)).toEqual(['bar', 'below', 'drawer', 'explorer', 'links', 'menu'])
+  expect(pressed).toEqual(expect.arrayContaining(['below/details', 'links/src', 'links/lnk', 'links/open', 'links/focus', ...BAR, 'menu/uc=place-order', 'menu/uc=__explore', 'drawer/close']))
+  expect(pressed.some(id => id.startsWith('menu/sc='))).toBe(true)
+  expect(pressed.some(id => id.startsWith('explorer/x-'))).toBe(true)
   expect(h.copied).toEqual(expect.arrayContaining([SOURCE]))
 })
 
@@ -495,9 +536,80 @@ test('every control in the pane runs its own action when pressed on its cell, th
   on('command.register', () => ({ value: { command: 'proschi' } }))
   await $.command.run({ command: 'proschi', args: `view ${root}/org-busy.proschi` })
   const pressed = await tour($, clock, h, pane, 'proschi-view:0')
-  expect(panelsOf(pressed)).toEqual(['banner', 'head', 'links', 'page-hld', 'page-sequence', 'page-tests', 'page-whatif', 'step', 'systems', 'tabs', 'ucbar'])
-  expect(pressed).toEqual(expect.arrayContaining(['systems/next', 'systems/open', 'systems/focus', 'systems/back', 'tabs/diagram', 'tabs/analysis', 'tabs/whatif', 'tabs/sequence', 'tabs/hld', 'tabs/tests', 'links/src', 'links/lnk', 'links/open', 'ucbar/play', 'ucbar/explore', 'banner/reset']))
+  expect(panelsOf(pressed)).toEqual(['banner', 'bar', 'drawer', 'explorer', 'links', 'menu', 'page-hld', 'page-sequence', 'page-tests', 'page-whatif', 'systems', 'tabs'])
+  expect(pressed).toEqual(expect.arrayContaining(['systems/next', 'systems/open', 'systems/focus', 'systems/back', 'tabs/diagram', 'tabs/analysis', 'tabs/whatif', 'tabs/sequence', 'tabs/hld', 'tabs/tests', 'links/src', 'links/lnk', 'links/open', ...BAR, 'menu/uc=__explore', 'drawer/close', 'banner/reset']))
+  expect(pressed.some(id => id.startsWith('menu/sc='))).toBe(true)
+  expect(pressed.some(id => id.startsWith('explorer/x-'))).toBe(true)
 })
+
+/** Where every piece and strip of a drawing is, but what floats: its rows, and each one's top by key. */
+async function shapeOf(ui: Mounted, site: string): Promise<{ rows: number; tops: Record<string, number> }> {
+  const root = layout((await ui.drawn()) as never)
+  const tops: Record<string, number> = {}
+  const mine = new RegExp(`^(t|p|pic|at|ly|pg)-${escape(site)}-(?!(menu|drawer|explorer)-)`)
+  // A strip's clipping Box (`-s`) comes and goes with its controls (Body before Play has none): its strip's top is what counts.
+  for (const n of nodes(root)) if ((mine.test(String(n.key)) || n.key === `at-${site}`) && !String(n.key).endsWith('-s')) tops[String(n.key)] = n.y
+  const drawing = [...nodes(root)].find(n => n.key === `site-${site}`)!
+  return { rows: drawing.h, tops }
+}
+
+/** Presses a control and draws again until `ready`. */
+async function step($: T, clock: Clock, ui: Mounted, props: typeof reply | typeof pane, site: string, id: string, ready: (c: Control[]) => boolean): Promise<Mounted> {
+  await click(ui, site, id)
+  await ui.unmount()
+  return settle($, clock, props, site, ready)
+}
+
+const has = (id: string) => (c: Control[]) => c.some(x => x.id === id)
+const hasNo = (prefix: string) => (c: Control[]) => c.length > 0 && !c.some(x => x.id.startsWith(prefix))
+
+for (const where of ['transcript', 'pane'] as const) {
+  test(`one layout in the ${where}: the drawing's rows and every strip's top the same before Play, playing, and with each picker, the bodies and the explorer open`, TOUR, async ($, on) => {
+    const clock = mock.clock(on)
+    host(on, clock, { worker: 'refused' })
+    let props: typeof reply | typeof pane = reply
+    let site = 'm1:0'
+    let ui = await settle($, clock)
+    if (where === 'pane') {
+      await click(ui, site, 'links/focus')
+      await ui.unmount()
+      props = pane
+      site = 'proschi-view:0'
+      ui = await settle($, clock, props, site, has('bar/play'))
+    }
+    const shapes: [string, Awaited<ReturnType<typeof shapeOf>>][] = []
+    const snap = async (name: string) => shapes.push([name, await shapeOf(ui, site)])
+    await snap('diagram')
+    for (const [opener, prefix] of [['bar/uc', 'menu/uc='], ['bar/sc', 'menu/sc=']] as const) {
+      ui = await step($, clock, ui, props, site, opener, c => c.some(x => x.id.startsWith(prefix)))
+      await snap(opener)
+      // Every option floats over the drawing, under its picker; a press outside closes it.
+      expect((await controlsOf(ui, site)).filter(c => c.id.startsWith(prefix)).every(c => FLOATS.test(c.in))).toBe(true)
+      await clickOutside(ui, site)
+      await ui.unmount()
+      ui = await settle($, clock, props, site, hasNo('menu/'))
+    }
+    ui = await step($, clock, ui, props, site, 'bar/uc', has('menu/uc=__explore'))
+    ui = await step($, clock, ui, props, site, 'menu/uc=__explore', c => c.some(x => x.id.startsWith('explorer/x-')))
+    await snap('explorer')
+    await clickOutside(ui, site)
+    await ui.unmount()
+    ui = await settle($, clock, props, site, hasNo('explorer/'))
+    await snap('explorer closed')
+    ui = await step($, clock, ui, props, site, 'bar/play', has('bar/next'))
+    ui = await step($, clock, ui, props, site, 'bar/play', has('bar/next'))
+    ui = await step($, clock, ui, props, site, 'bar/next', has('bar/prev'))
+    await snap('step 2')
+    ui = await step($, clock, ui, props, site, 'bar/body', has('drawer/close'))
+    await snap('bodies')
+    ui = await step($, clock, ui, props, site, 'drawer/close', hasNo('drawer/'))
+    ui = await step($, clock, ui, props, site, 'bar/stop', hasNo('bar/next'))
+    await snap('stopped')
+    await ui.unmount()
+    const [first] = shapes
+    for (const [name, shape] of shapes) expect([name, shape]).toEqual([name, first![1]])
+  })
+}
 
 test('the HLD tab: every strip of the page lies within the pane\'s rows and columns, and a scroll key an overlay hears moves the pane', SLOW, async ($, on) => {
   const clock = mock.clock(on)

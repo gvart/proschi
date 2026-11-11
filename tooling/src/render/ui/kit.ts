@@ -418,11 +418,11 @@ function keycap(x: number, cy: number, key: string, color: string): string {
 }
 
 /** The px a button's contents take. */
-export function buttonContent(c: Pick<Control, 'label' | 'icon' | 'hotkey'>): number {
+export function buttonContent(c: Pick<Control, 'label' | 'icon' | 'hotkey' | 'keycap'>): number {
   let w = 0;
   if (c.icon) w += CONTROL.icon;
   if (c.label) w += (w ? CONTROL.gap : 0) + width(c.label, { size: CONTROL.size, weight: 600 });
-  if (c.hotkey) w += (w ? 9 : 0) + Math.max(CONTROL.keycap, width(c.hotkey, KEY) + 8);
+  if (c.hotkey && c.keycap !== false) w += (w ? 9 : 0) + Math.max(CONTROL.keycap, width(c.hotkey, KEY) + 8);
   return w;
 }
 
@@ -474,28 +474,33 @@ export function drawButton(P: Palette, c: Control, box: Box, state: ControlState
     out.push(txt(cx, cy + CONTROL.size * 0.36, c.label, { size: CONTROL.size, weight: 600, color: text }));
     cx += width(c.label, { size: CONTROL.size, weight: 600 }) + 9;
   }
-  if (c.hotkey && !disabled) out.push(keycap(c.label || c.icon ? cx : x + (w - CONTROL.keycap) / 2, cy, c.hotkey, variant === 'primary' ? P.onAccent : variant === 'quiet' && !hover && !pressed ? P.muted : P.ink));
+  if (c.hotkey && c.keycap !== false && !disabled) out.push(keycap(c.label || c.icon ? cx : x + (w - CONTROL.keycap) / 2, cy, c.hotkey, variant === 'primary' ? P.onAccent : variant === 'quiet' && !hover && !pressed ? P.muted : P.ink));
   return out.join('');
 }
 
-/** A closed dropdown: the value, a chevron; drawn as a default button. */
-export function selectColumns(value: string, hotkey?: string): number {
-  return Math.ceil((width(value, { size: CONTROL.size, weight: 500 }) + 2 * CONTROL.pad + 8 + 16 + (hotkey ? 27 : 0) + 2) / CELL.width);
+/** A closed dropdown: the value (a mark before it), a chevron; drawn as a default button. */
+export function selectColumns(value: string, hotkey?: string, marked = false): number {
+  return Math.ceil((width(value, { size: CONTROL.size, weight: 500 }) + 2 * CONTROL.pad + 8 + 16 + (hotkey ? 27 : 0) + (marked ? 22 : 0) + 2) / CELL.width);
 }
 
-export function drawSelect(P: Palette, value: string, box: Box, state: ControlState, open: boolean, hotkey?: string): string {
-  const hover = state === 'hover';
-  const pressed = state === 'pressed' || open;
+export function drawSelect(P: Palette, value: string, box: Box, state: ControlState, open: boolean, hotkey?: string, mark?: { icon: Icon; color: string }, disabled = false): string {
+  const hover = state === 'hover' && !disabled;
+  const pressed = (state === 'pressed' || open) && !disabled;
   const x = box.x + 1;
   const y = box.y;
   const w = box.w - 2;
   const h = box.h;
   const cy = y + h / 2;
-  const room = w - 2 * CONTROL.pad - 24 - (hotkey ? 27 : 0);
+  // A compact one (the player bar's Body) in smaller type.
+  const size = h < 30 ? 13 : CONTROL.size;
+  const pad = h < 30 ? 10 : CONTROL.pad;
+  const room = w - 2 * pad - 24 - (hotkey ? 27 : 0) - (mark ? 22 : 0);
+  const tx = x + pad + (mark ? 22 : 0);
   return [
-    rect(x + 0.5, y + 0.5, w - 1, h - 1, { fill: pressed ? P.button.pressed : hover ? P.button.hover : P.button.fill, stroke: open ? P.accent : pressed || hover ? P.button.lineHover : P.button.line, sw: open ? 1.5 : 1, rx: 7 }),
-    txt(x + CONTROL.pad, cy + CONTROL.size * 0.36, clip(value, room, CONTROL.size, 500), { size: CONTROL.size, weight: 500, color: P.ink }),
-    hotkey ? keycap(x + w - CONTROL.pad - 16 - 9 - CONTROL.keycap, cy, hotkey, P.ink) : '',
-    icon('chevron-down', x + w - CONTROL.pad - 16, cy - 8, 16, P.muted, 2),
+    rect(x + 0.5, y + 0.5, w - 1, h - 1, { fill: disabled ? 'none' : pressed ? P.button.pressed : hover ? P.button.hover : P.button.fill, stroke: open && !disabled ? P.accent : pressed || hover ? P.button.lineHover : P.button.line, sw: open && !disabled ? 1.5 : 1, rx: 7 }),
+    mark ? icon(mark.icon, x + pad, cy - 7, 14, disabled ? mix(mark.color, P.surface, 0.5) : mark.color, 2.2) : '',
+    txt(tx, cy + size * 0.36, clip(value, room, size, 500), { size, weight: 500, color: disabled ? mix(P.muted, P.surface, 0.6) : P.ink }),
+    hotkey && !disabled ? keycap(x + w - pad - 16 - 9 - CONTROL.keycap, cy, hotkey, P.ink) : '',
+    icon('chevron-down', x + w - pad - 16, cy - 8, 16, disabled ? mix(P.muted, P.surface, 0.5) : P.muted, 2),
   ].join('');
 }

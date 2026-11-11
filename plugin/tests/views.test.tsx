@@ -226,7 +226,7 @@ test('the Sequence tab is a still of the picked scenario: a picker and no step k
   await p.press({ key: 'play-proschi-view:0' })
   await p.press({ key: 'play-proschi-view:0' })
   await p.press({ key: 'next-proschi-view:0' })
-  expect(await has(p, /^Step 2 of 2$/)).toBe(true)
+  expect(await has(p, /^Step 2\/2$/)).toBe(true)
   await p.press({ key: 'tab-sequence' })
   expect(await has(p, /^Step 2 of 2$/)).toBe(true)
   await p.unmount()

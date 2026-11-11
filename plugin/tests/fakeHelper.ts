@@ -3,10 +3,16 @@
 /** Every control a panel's data names, as the UI kit would place it (the step panel's keys are the kit's own). */
 function controlsOf(panel: Record<string, unknown>): { id: string; hotkey?: string; disabled?: boolean }[] {
   const out: { id: string; hotkey?: string; disabled?: boolean }[] = []
-  if (panel.kind === 'step') {
-    const keys = (panel.hotkeys ?? {}) as Record<string, string>
-    for (const id of ['first', 'prev', 'play', 'next', 'last', 'exit']) out.push({ id, ...(keys[id] ? { hotkey: keys[id] } : {}) })
+  if (panel.kind === 'playerBar') {
+    for (const id of ['useCase', 'scenario']) out.push({ id: (panel[id] as { id: string }).id })
+    for (const c of panel.controls as { id: string; hotkey?: string; disabled?: boolean }[]) out.push({ id: c.id, ...(c.hotkey ? { hotkey: c.hotkey } : {}), ...(c.disabled ? { disabled: true } : {}) })
+    const body = panel.body as { id: string; disabled?: boolean } | undefined
+    if (body) out.push({ id: body.id, ...(body.disabled ? { disabled: true } : {}) })
     return out
+  }
+  if (panel.kind === 'menu') {
+    const sel = panel.select as { id: string; options: { value: string }[] }
+    return sel.options.map(o => ({ id: `${sel.id}=${o.value}` }))
   }
   if (panel.kind === 'tabs') {
     for (const t of panel.tabs as { id: string; hotkey?: string }[]) out.push({ id: t.id, ...(t.hotkey ? { hotkey: t.hotkey } : {}) })
@@ -32,6 +38,24 @@ export function answer(input: Record<string, unknown>, size = { width: 1600, hei
     const panels = (input.panels as { id: string; panel: Record<string, unknown>; columns: number }[]).map(req => {
       const controls = controlsOf(req.panel)
       const name = `/tmp/proschi-raster/${req.panel.kind}`
+      const area = (c: { id: string; hotkey?: string; disabled?: boolean }, col: number, columns: number) => ({
+        col,
+        columns,
+        hoverFile: `${name}-${c.id}-hover.png`,
+        pressedFile: `${name}-${c.id}-pressed.png`,
+        control: { id: c.id, kind: 'button', ...(c.hotkey ? { hotkey: c.hotkey } : {}), ...(c.disabled ? { disabled: true } : {}) },
+      })
+      // The player bar as the kit lays it: its controls side by side on a row three cells tall, Body at the right end of the two rows under it.
+      if (req.panel.kind === 'playerBar') {
+        const row = controls.filter(c => c.id !== 'body')
+        const w = Math.floor(req.columns / (row.length + 1))
+        const body = controls.find(c => c.id === 'body')
+        const tiles = [
+          { col: 0, row: 0, columns: req.columns, rows: 3, file: `${name}-row.png`, controls: row.map((c, i) => area(c, 1 + i * w, w)) },
+          { col: 0, row: 3, columns: req.columns, rows: 2, file: `${name}-line.png`, ...(body ? { controls: [area(body, req.columns - 8, 7)] } : {}) },
+        ]
+        return { id: req.id, kind: req.panel.kind, columns: req.columns, rows: 5, cellPx: { width: 16, height: 34 }, tiles }
+      }
       const tiles = [
         { col: 0, row: 0, columns: req.columns, rows: 1, file: `${name}-top.png` },
         ...controls.map((c, i) => ({

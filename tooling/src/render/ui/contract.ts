@@ -82,19 +82,42 @@ export interface Control {
   active?: boolean;
   /** Fixed width in columns, so swapping labels (Play/Pause) moves nothing. */
   columns?: number;
+  /** False: the hotkey presses it but no keycap is drawn (a compact bar). */
+  keycap?: boolean;
 }
 
-/** A closed dropdown: the value shown and a chevron; `open` draws its menu under it, each option a control `${id}=${value}`. */
+/** One option of a select: its label, a group heading over it, a detail at its right end, a mark before it in a tone (a scenario's ✓ or ✗). */
+export interface Option {
+  value: string;
+  label: string;
+  group?: string;
+  detail?: string;
+  icon?: Icon;
+  tone?: Tone;
+  /** A hairline above it: an entry apart from the options (Explore all…). */
+  divider?: boolean;
+}
+
+/**
+ * A closed dropdown: the value shown and a chevron; `open` draws its menu
+ * under it (or, in the player bar, the plugin floats a MenuPanel over the
+ * drawing), each option a control `${id}=${value}`.
+ */
 export interface Select {
   id: string;
   value: string;
-  options: { value: string; label: string; group?: string; detail?: string }[];
+  options: Option[];
   open?: boolean;
   hotkey?: string;
+  /** Fixed width in columns: as wide whichever option is shown. */
+  columns?: number;
+  disabled?: boolean;
+  /** With `open`, drawn open but its menu not under the row: the plugin floats it (MenuPanel). */
+  floats?: boolean;
 }
 
 /** A label, a control or a select in a row of controls. */
-export type Item = { text: Rich } | { control: Control } | { select: Select } | { spacer: true } | { progress: number; columns?: number };
+export type Item = { text: Rich; columns?: number } | { control: Control } | { select: Select } | { spacer: true } | { progress: number; columns?: number };
 
 // ---------- the chrome panels around the diagram ----------
 
@@ -105,7 +128,7 @@ export interface TabBarPanel {
   active: string;
 }
 
-/** The scenario buttons of the explorer and the player header. */
+/** The scenario buttons of the explorer. */
 export interface ScenarioChip {
   /** The control id: a press plays it. */
   id: string;
@@ -116,22 +139,47 @@ export interface ScenarioChip {
   current?: boolean;
 }
 
-/** Picking a use case (useCaseBar): the picker, Play, the explorer toggle, and the explorer listing every scenario by endpoint. */
-export interface UseCaseBarPanel {
-  kind: 'useCaseBar';
-  picker: Select;
-  play: Control;
-  explore: Control;
-  explorer?: { label?: string; useCases: { name: string; current?: boolean; scenarios: ScenarioChip[] }[] }[];
+/**
+ * The player on top of a drawing (playerBar), one size whether a scenario
+ * plays or not: a row with the use case and scenario pickers, the step
+ * controls (dimmed until Play), the step count and a progress bar; under it
+ * one line, the current step (or a note before Play) and the bodies toggle.
+ * The pickers' menus, the bodies and the explorer float over the drawing
+ * (MenuPanel, DrawerPanel, ExplorerPanel), so nothing under the bar moves.
+ */
+export interface PlayerBarPanel {
+  kind: 'playerBar';
+  useCase: Select;
+  scenario: Select;
+  /** Control ids: `first`, `prev`, `play` (Play or Pause), `next`, `last`, `stop`. */
+  controls: Control[];
+  /** The step shown (1-based; absent before Play) of `total`. */
+  step: { at?: number; total: number };
+  /** The second line: the step's number in a disc (red where it errs) and what it is, or a dim note. */
+  line: { number?: number; error?: boolean; text: Rich };
+  /** Body ▾ at the second line's end: the request and response drawer. */
+  body?: Control;
 }
 
-/** Over the diagram while it plays (playerHeader): back to the diagram, the use case, a tab per scenario. */
-export interface PlayerHeaderPanel {
-  kind: 'playerHeader';
-  back: Control;
-  title: string;
-  note?: string;
-  scenarios?: ScenarioChip[];
+/** A select's menu floating over the drawing under its select: an option per row, each a control `${id}=${value}`. */
+export interface MenuPanel {
+  kind: 'menu';
+  select: Select;
+}
+
+/** The current step's card floating over the drawing under the player bar: what it sends and gets back, bodies highlighted. */
+export interface DrawerPanel {
+  kind: 'drawer';
+  condition?: string;
+  cards: StepCard[];
+  close?: Control;
+}
+
+/** Every use case by endpoint, each scenario a control that plays it: floating over the drawing. */
+export interface ExplorerPanel {
+  kind: 'explorer';
+  groups: { label?: string; useCases: { name: string; current?: boolean; scenarios: ScenarioChip[] }[] }[];
+  close?: Control;
 }
 
 /** A request or response body. */
@@ -159,21 +207,6 @@ export interface StepCard {
   error?: boolean;
   request?: Body;
   response?: Body;
-}
-
-/**
- * The player's step panel (stepPanel): the step at `at` (with its parallel
- * siblings, `steps[at]` holds them all) over the controls. Every step's cards
- * are given so the panel is as tall as the tallest, and stepping moves nothing.
- */
-export interface StepPanel {
-  kind: 'step';
-  condition?: string;
-  steps: StepCard[][];
-  at: number;
-  playing: boolean;
-  /** Control ids: `first`, `prev`, `play` (Play or Pause), `next`, `last`, `exit`; their hotkeys. */
-  hotkeys?: Partial<Record<'first' | 'prev' | 'play' | 'next' | 'last' | 'exit', string>>;
 }
 
 /** The systems row (systemBar): where the view is, which system the keys act on, and what they can do with it. */
@@ -280,7 +313,7 @@ export interface SequencePanel {
   controls?: Item[];
 }
 
-export type Panel = TabBarPanel | UseCaseBarPanel | PlayerHeaderPanel | StepPanel | SystemBarPanel | ActionBarPanel | NoticesPanel | BannerPanel | PagePanel | SequencePanel;
+export type Panel = TabBarPanel | PlayerBarPanel | MenuPanel | DrawerPanel | ExplorerPanel | SystemBarPanel | ActionBarPanel | NoticesPanel | BannerPanel | PagePanel | SequencePanel;
 
 // ---------- the request and the answer ----------
 
