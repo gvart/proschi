@@ -158,7 +158,7 @@ usecase "Order" {
 }
 `
 
-type Found = { text: string; props: { backgroundColor?: string; color?: string } }
+type Found = { text: string; props: { backgroundColor?: string; color?: string; bold?: boolean } }
 
 test('a scenario draws as a sequence: async dashed and hollow, a failed call ✕, an error reply red, the current step pink', async ($, on) => {
   engine(on)
@@ -174,7 +174,9 @@ test('a scenario draws as a sequence: async dashed and hollow, a failed call ✕
   const texts = (await p.findAll({ type: 'Text' })) as unknown as Found[]
   expect(texts.find(t => t.text === ' 2 ')?.props.backgroundColor).toBe('#ffd23f')
   expect(texts.find(t => t.text === ' 1 ')?.props.backgroundColor).toBe('#ff5da2')
-  expect(texts.some(t => t.props.color === '#ff5da2' && /^─+▶$/.test(t.text))).toBe(true)
+  // The arrow in the colour alone: a bold line glyph comes from another font in some terminals, wider than its cell.
+  expect(texts.some(t => t.props.color === '#ff5da2' && /^─+▶$/.test(t.text) && t.props.bold !== true)).toBe(true)
+  expect(texts.some(t => t.props.color === '#ff5da2' && t.props.bold === true && /INSERT order/.test(t.text))).toBe(true)
 
   await p.select({ key: 'seq-pick', value: 'order:down' })
   expect(await has(p, /^┌─ alt ✗ Down ─+┐$/)).toBe(true)
