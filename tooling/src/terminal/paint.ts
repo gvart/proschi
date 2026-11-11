@@ -114,26 +114,33 @@ export function paint(scene: Scene, options: PaintOptions = {}): Grid {
   }
   // A label that would land on one drawn before it moves a row or two up or down, where there is room.
   // Under the load overlay the label carries the edge's requests and the latency they add (an edge with no label gets them alone),
-  // on a straight run of its own line where it covers no other line nor a card: longer than a label, it would hide whose it is.
+  // on a straight run of its own line where it covers no other line, card or frame: longer than a label, it would hide whose it
+  // is. Where no run has room, the label goes back to its own words and the numbers are left to the Analysis tab.
   const taken = new Set<string>();
   const owner = new Map<string, number>();
   scene.edges.forEach(({ path }, i) => path.cells.forEach(({ x, y }) => owner.set(`${x},${y}`, (owner.get(`${x},${y}`) ?? i) === i ? i : -1)));
+  // An arrowhead stays: it says which way the edge goes.
+  for (const { path } of scene.edges) owner.set(`${path.cells[path.cells.length - 1].x},${path.cells[path.cells.length - 1].y}`, -1);
+  const frames = all.filter((n) => n.node.kind === 'group').map((n) => n.rect);
+  const onFrame = (x: number, y: number) => frames.some((r) => (y === r.y || y === r.y + r.h - 1 ? x >= r.x && x < r.x + r.w : (x === r.x || x === r.x + r.w - 1) && y > r.y && y < r.y + r.h));
   scene.edges.forEach(({ edge, path, label }, index) => {
     const load = loadOf(edge.id);
     const chip = loadChip(load);
-    const words = [edge.label ?? '', chip].filter(Boolean).join(' · ');
-    if (!words || (!label && !chip)) return;
-    const text = ` ${words} `;
-    const spot = (at: { x: number; y: number }, dy: number) => ({ x: Math.max(0, Math.min(grid.columns - text.length, at.x - Math.floor(text.length / 2))), y: at.y + dy });
-    const fits = ({ x, y }: { x: number; y: number }, alone: boolean) =>
-      y >= 0 && y < grid.rows && Array.from(text, (_, i) => `${x + i},${y}`).every((k, i) => !taken.has(k) && (!alone || ((owner.get(k) ?? index) === index && !onCard(scene, x + i, y))));
-    const plain = [0, -1, 1, -2, 2].map((d) => spot(label ?? runsOf(path)[0], d));
-    const spots = chip ? [...(label ? plain : []), ...runsOf(path).flatMap((at) => [0, -1, 1].map((d) => spot(at, d)))] : [];
-    const { x, y } = spots.find((p) => fits(p, true)) ?? plain.find((p) => fits(p, false)) ?? plain[0];
+    const place = (words: string, alone: boolean) => {
+      const text = ` ${words} `;
+      const spot = (at: { x: number; y: number }, dy: number) => ({ text, x: Math.max(0, Math.min(grid.columns - text.length, at.x - Math.floor(text.length / 2))), y: at.y + dy });
+      const fits = ({ x, y }: { x: number; y: number }) =>
+        y >= 0 && y < grid.rows && Array.from(text, (_, i) => `${x + i},${y}`).every((k, i) => !taken.has(k) && (!alone || ((owner.get(k) ?? index) === index && !onCard(scene, x + i, y) && !onFrame(x + i, y))));
+      if (alone) return [...(label ? [0, -1, 1].map((d) => spot(label, d)) : []), ...runsOf(path).flatMap((at) => [0, -1, 1].map((d) => spot(at, d)))].find(fits);
+      const plain = [0, -1, 1, -2, 2].map((d) => spot(label!, d));
+      return plain.find(fits) ?? plain[0];
+    };
+    const at = (chip ? place([edge.label ?? '', chip].filter(Boolean).join(' · '), true) : undefined) ?? (label && edge.label ? place(edge.label, false) : undefined);
+    if (!at) return;
     const color = play && !play.pathEdges.has(edge.id) ? COLOR.fadedMore : load?.critical ? DEFAULT : COLOR.muted;
-    for (let i = 0; i < text.length; i++) {
-      taken.add(`${x + i},${y}`);
-      if (!onCard(scene, x + i, y)) grid.set(x + i, y, text[i], color);
+    for (let i = 0; i < at.text.length; i++) {
+      taken.add(`${at.x + i},${at.y}`);
+      if (!onCard(scene, at.x + i, at.y)) grid.set(at.x + i, at.y, at.text[i], color);
     }
   });
 
