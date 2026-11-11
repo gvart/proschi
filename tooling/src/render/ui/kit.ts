@@ -297,7 +297,7 @@ export function buttonContent(c: Pick<Control, 'label' | 'icon' | 'hotkey'>): nu
 }
 
 /** Columns a button takes: its contents, padding and shadow, rounded up to whole cells; `columns` when fixed. */
-export const buttonColumns = (c: Control) => c.columns ?? Math.ceil((buttonContent(c) + 2 * CONTROL.pad + 4) / CELL.width);
+export const buttonColumns = (c: Control) => c.columns ?? Math.ceil((buttonContent(c) + 2 * (c.variant === 'quiet' ? 6 : CONTROL.pad) + 4) / CELL.width);
 
 /**
  * A button as the editor draws one (border-bw-1, shadow-brutal-sm, rounded):
@@ -349,8 +349,8 @@ export function drawButton(P: Palette, c: Control, box: Box, state: ControlState
     cx += width(c.label, { size: CONTROL.size, weight: 600 }) + 8;
   }
   if (c.hotkey) {
-    const capBorder = variant === 'primary' ? mix(P.onAccent, fill, 0.55) : mix(text, fill === 'none' ? P.paper : fill, 0.55);
-    out.push(keycap(c.label || c.icon ? cx : x + (w - CONTROL.keycap) / 2, cy, c.hotkey, variant === 'primary' ? mix('#ffffff', fill, 0.35) : fill === 'none' ? P.paper : fill, capBorder));
+    const capBorder = variant === 'primary' ? mix(P.onAccent, fill, 0.55) : mix(text, fill === 'none' ? P.surface : fill, 0.55);
+    out.push(keycap(c.label || c.icon ? cx : x + (w - CONTROL.keycap) / 2, cy, c.hotkey, variant === 'primary' ? mix('#ffffff', fill, 0.35) : fill, capBorder));
   }
   return out.join('');
 }
