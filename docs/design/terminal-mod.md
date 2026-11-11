@@ -8,7 +8,7 @@ The Claude Code plugin draws Proschi diagrams in the terminal: a
 ```` ```proschi ```` block in a reply, a `.proschi` file Claude writes or
 edits, and `/proschi view <file>` in a pane. It should give what the web
 editor gives someone reading a design, without leaving the terminal. This
-page records the decisions behind that (D1 to D7).
+page records the decisions behind that (D1 to D10).
 
 ---
 
@@ -47,7 +47,7 @@ Tests, picked with `1` to `6` while the pane holds the keys (hotkeys stay in
 the pane, as every other key does: the transcript's drawings share no
 keyboard). The tab is stored in `$.state` (`paneTab`) and read through
 `tabOf`, so a stored value from an older version, or none, is the Diagram.
-What-if, Sequence and HLD are stubs in round 1. View code lives in
+What-if, Sequence and HLD came second (D8 to D10). View code lives in
 `plugin/src/views/` so `register.tsx` does not keep growing.
 
 ## D4. Views as rows of styled text
@@ -81,3 +81,44 @@ in the pane.
 `PlaybackTarget.step` is 1-based, as the editor's player is
 (`frontend/src/playground/share.ts`); the player stores a 0-based step, so
 the link passes `step + 1`.
+
+## D8. The live what-if belongs to the pane
+
+The What-if tab holds the editor's live what-if
+(`components/WhatIf/whatIf.ts`): a traffic multiplier from its stops
+(`MULTIPLIERS`, ×0.5 to ×10, `l`/`m` or a Select), nodes taken down (a node
+Select, `t`), or a saved `whatif` block previewed. It is stored in `$.state`
+(`paneWhatIf`, read through `whatIfOf`) and reset when the pane opens another
+document. `loadDocument(source, options)` (`tooling/src/terminal/document.ts`)
+analyses the document under `liveOptions`, so the Diagram (heat, edge chips,
+a node drawn down), Analysis and Tests tabs and the tab bar's failing count
+all follow it, under a yellow `What-if: …` banner with **↺ Reset** (`r`
+except on the Diagram tab, where `r` restarts the player). Transcript
+drawings never take a what-if. The tab shows the impact against the design
+as written with the rows of `sim/delta.ts` (headline, checks, use cases, the
+checks that flipped, the load that moved), the saved blocks
+(`runWhatIfs`, a Preview each), and a sweep of a use case from half to ten
+times its traffic (`sweep`, as the editor's Results) as a text bar chart.
+
+## D9. A sequence diagram in text cells
+
+The Sequence tab draws `buildSequence` of the player's scenario
+(`plugin/src/views/sequence.ts`): a box and lifeline per participant, a
+numbered badge per request, synchronous calls solid `─▶`, async dashed
+`╌▷`, replies dotted `┄◁` and dim, failed calls `✕` and error replies red,
+`par` frames with `and` rules, and an `alt` frame naming the scenario when
+its use case has several or a condition. Columns share the pane's width up to
+28 cells each; a long name takes two rows; at least 9 cells a column, so a
+pane too narrow says so and the right side is cut. The tab's keys move the
+pane's player, so the Diagram tab and the Sequence tab show the same step,
+the current request in pink with a yellow badge; Play on this tab runs its
+own stepper (`STEP_MS`), which stops on another tab, where the drawing's
+animation takes over.
+
+## D10. The HLD through the terminal's Markdown
+
+The HLD tab draws `toMarkdown(hld(…))` of the document as written with the
+`Markdown` element; its Mermaid blocks, which the terminal cannot draw, are
+each replaced by a line naming the tab that draws them. **⧉ Copy HLD
+markdown** (`c`) copies the whole document, Mermaid included. The HLD code
+adds about 65 KB to the hooks module (565 KB of its 1 MiB).
