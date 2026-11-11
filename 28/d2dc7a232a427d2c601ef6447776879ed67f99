@@ -1,0 +1,86 @@
+plugin/hooks/raster.cjs
+  s_50cc5c1ed1a510::t_25a1abcd5fa4a9 1-3,5-7,9,18,20-22,24,31-32,34,39,49,51,63-64,68-69,71-72,74,79,90,92,96,100,103-116,118,1451-1454,1465-1473
+  s_50cc5c1ed1a510::t_7695d78cf8aa5e 8,10-17,19,26,28,30,33,35,41,43-44,65-67,73,75,80,82,84-85
+plugin/src/graphics.ts
+  s_50cc5c1ed1a510::t_f4c011363bb7cb 6,114,119,123
+plugin/src/helper.ts
+  s_50cc5c1ed1a510::t_7ced87544fec2c 32-45
+  s_50cc5c1ed1a510::t_dc9e9d4ef4546d 3
+  s_50cc5c1ed1a510::t_566c63daba9912 213
+tooling/src/render/ui/metrics.ts
+  s_50cc5c1ed1a510::t_c5b77d505a9639 100,110
+tooling/src/terminal/rasterHost.ts
+  s_50cc5c1ed1a510::t_1e760e47a28bc5 230-242
+  s_50cc5c1ed1a510::t_d4104588fa5767 171,205
+plugin/tests/picture.test.tsx
+  s_50cc5c1ed1a510::t_5aff746f832baa 172,185-186
+tooling/src/render/ui/contract.ts
+  s_50cc5c1ed1a510::t_2a46b7b57d0ee7 13-17
+  s_50cc5c1ed1a510::t_88f7ea17106ad7 305-310,313-314
+  s_50cc5c1ed1a510::t_b60b0ed233a372 324-332,334-336,343-346
+  s_50cc5c1ed1a510::t_19b31824d342e1 315
+plugin/src/register.tsx
+  s_50cc5c1ed1a510::t_84fa4fe373ed6f 23
+  s_50cc5c1ed1a510::t_f4c011363bb7cb 95
+tooling/src/render/ui/kit.ts
+  s_50cc5c1ed1a510::t_debfb71bea2514 398,400-401,404-406,408-410
+  s_50cc5c1ed1a510::t_d26990e015faa6 444
+  s_50cc5c1ed1a510::t_c5b77d505a9639 180
+  s_50cc5c1ed1a510::t_54ccd77fbf026e 110-123,125-128,131-138,147
+  s_50cc5c1ed1a510::t_7b622d82f2d7a0 73
+  s_50cc5c1ed1a510::t_bf0cc1ffab6e46 171
+docs/AGENT-SKILLS.md
+  s_50cc5c1ed1a510::t_e2695a42d5bcac 2,154-157
+tooling/src/render/ui/theme.ts
+  s_50cc5c1ed1a510::t_86f5e70024eb41 8-14,30,36,38-39,70-74,78-80,88-94,96-97
+  s_50cc5c1ed1a510::t_36744e89a5f30d 115-118
+plugin/hooks/register.js
+  s_50cc5c1ed1a510::t_7695d78cf8aa5e 9642-9644,9650-9655,9784,9858,9862,9977-9983,9985-9986,11387
+plugin/tests/fakeHelper.ts
+  s_50cc5c1ed1a510::t_e6836e46f81783 43-51,54
+plugin/.claude-plugin/plugin.json
+  s_50cc5c1ed1a510::t_a9d9eab366c820 43-48
+tooling/src/render/ui/blocks.ts
+  s_50cc5c1ed1a510::t_64c462e1f1b174 21,211-212
+  s_50cc5c1ed1a510::t_1ebe9368d71d0d 478
+  s_50cc5c1ed1a510::t_c5b77d505a9639 76
+  s_50cc5c1ed1a510::t_bf562c65665acb 61,184,380,415,459
+tooling/test/ui.test.ts
+  s_50cc5c1ed1a510::t_7695d78cf8aa5e 56,61,65-66,68-70,72,76,78-84,99,122,169,172,174,176-180
+tooling/src/render/ui/tiles.ts
+  s_50cc5c1ed1a510::t_f236eb4d4463d9 5-16,26-29,35,38,43-45,55,73-81,85,92,95-96,99
+tooling/src/terminal/panelHost.ts
+  s_50cc5c1ed1a510::t_12f23a71f7a57f 3-10,16-17,19,22,24-29,37-39,47-51,59-65,68-69,72,86-90,93-103,105,108,116
+docs/impl/terminal-rendered-ui.md
+  s_50cc5c1ed1a510::t_37f90e9c3675e1 101-114,117-129
+tooling/src/render/ui/panels.ts
+  s_50cc5c1ed1a510::t_bf562c65665acb 63-64,85
+  s_50cc5c1ed1a510::t_82fa283d1741a9 8,47
+  s_50cc5c1ed1a510::t_dd49768b29fca2 58-60,66,89
+  s_50cc5c1ed1a510::t_23de6a5ecb8c01 348-349
+  s_50cc5c1ed1a510::t_c5b77d505a9639 82-83,121,144,176,217,361
+  s_50cc5c1ed1a510::t_12de7e5573ef30 4,405-408,410-412,434,437,440-444,446-459,478-483,499-502
+  s_50cc5c1ed1a510::t_29792b28b01e20 31-37,41-43,45,48-49
+  s_50cc5c1ed1a510::t_3da597a1e12329 355-357,359
+  s_50cc5c1ed1a510::t_1ebe9368d71d0d 305
+  s_50cc5c1ed1a510::t_5a74b72a5e26a3 87,100,174,213,218-219,358
+plugin/src/picture.tsx
+  s_50cc5c1ed1a510::t_068fc6659f9f81 165-171,173-174
+  s_50cc5c1ed1a510::t_a7dc2ba71bbb15 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "28d2dc7a232a427d2c601ef6447776879ed67f99",
+  "prompts": {},
+  "sessions": {
+    "s_50cc5c1ed1a510": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7e5513ad-e496-40de-9a6e-d587aa393ce5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
