@@ -83,11 +83,36 @@ function menu(S: Surface, sel: Select, col: number, top: number, minColumns: num
 }
 
 /**
- * Items in rows three cells tall from `top`, starting at column `col` and
- * wrapping at `maxCol`: labels, buttons, selects (an open one's menu under its
- * row), a progress bar, and a spacer that pushes what follows to the right.
+ * Ways to make a row of items narrower, tried in turn until it fits, as the
+ * text UI shortens its buttons: the keycaps of quiet controls, their labels
+ * (icon only), every keycap, then the labels of all but the primary.
  */
-export function itemsRow(S: Surface, items: Item[], col0: number, top: number, maxCol = S.columns - 2): number {
+const SHRINK: ((c: Control) => Control)[] = [
+  (c) => (c.variant === 'quiet' ? { ...c, hotkey: undefined } : c),
+  (c) => (c.variant === 'quiet' && c.icon ? { ...c, label: undefined } : c),
+  (c) => ({ ...c, hotkey: undefined, columns: undefined }),
+  (c) => (c.variant !== 'primary' && c.icon ? { ...c, label: undefined } : c),
+  (c) => (c.icon ? { ...c, label: undefined } : c),
+];
+
+/** `items` made narrow enough for `room` columns where shortening their controls can; else as narrow as it gets (and they wrap). */
+function fitted(items: Item[], room: number, need: (it: Item) => number): Item[] {
+  const total = (list: Item[]) => list.reduce((sum, it) => sum + ('spacer' in it ? 0 : ('progress' in it && it.columns === undefined ? 8 : need(it)) + 1), 0) - 1;
+  let list = items;
+  for (const shrink of SHRINK) {
+    if (total(list) <= room) return list;
+    list = list.map((it) => ('control' in it ? { control: shrink(it.control) } : it));
+  }
+  return list;
+}
+
+/**
+ * Items in rows three cells tall from `top`, starting at column `col` and
+ * up to `maxCol`: labels, buttons, selects (an open one's menu under its
+ * row), a progress bar, and a spacer that pushes what follows to the right.
+ * Too wide, the controls shorten (SHRINK); only what still does not fit wraps.
+ */
+export function itemsRow(S: Surface, given: Item[], col0: number, top: number, maxCol = S.columns - 2): number {
   const P = S.P;
   const start = top;
   top = up(top);
@@ -98,6 +123,7 @@ export function itemsRow(S: Surface, items: Item[], col0: number, top: number, m
     if ('progress' in it) return it.columns ?? 8;
     return 0;
   };
+  const items = fitted(given, maxCol - col0, need);
   // Lines of items, wrapped.
   const lines: Item[][] = [[]];
   let used = 0;
@@ -179,8 +205,9 @@ const heatOf = (u: number) => (u >= 1 ? '#EF4444' : u > 0.7 ? '#F59E0B' : '#22C5
 export function table(S: Surface, columns: Column[], rows: { cells: Cell[]; sub?: boolean; dim?: boolean }[], x0: number, top: number, maxW: number): number {
   const P = S.P;
   const controls = rows.some((row) => row.cells.some((c) => typeof c === 'object' && !Array.isArray(c) && 'control' in c));
-  const rowH = controls ? CONTROL_ROW : 28;
-  const subH = controls ? CONTROL_ROW : 22;
+  // Every row whole cells, so a strip can end under any of them.
+  const rowH = controls ? CONTROL_ROW : 2 * ROW;
+  const subH = controls ? CONTROL_ROW : ROW;
   const base: TextStyle = { size: 13.5 };
   const sub: TextStyle = { size: 12.5 };
   const widths = columns.map((c, i) =>
@@ -216,13 +243,13 @@ export function table(S: Surface, columns: Column[], rows: { cells: Cell[]; sub?
     xs.set(i, x);
     x += w(i) + gap;
   }
-  let y = controls ? up(top) : top;
+  // On the cell grid: the header a row, each row whole rows under it.
+  let y = up(top);
   const parts: string[] = [];
-  parts.push(...shown.map((i) => txt(columns[i].align === 'right' ? xs.get(i)! + w(i) : xs.get(i)!, y + 13, columns[i].title.toUpperCase(), { ...HEAD, color: P.muted, anchor: columns[i].align === 'right' ? 'end' : 'start' })));
-  y += 22;
+  parts.push(...shown.map((i) => txt(columns[i].align === 'right' ? xs.get(i)! + w(i) : xs.get(i)!, y + ROW / 2 + 4, columns[i].title.toUpperCase(), { ...HEAD, color: P.muted, anchor: columns[i].align === 'right' ? 'end' : 'start' })));
+  y += ROW;
   const right = Math.max(...shown.map((i) => xs.get(i)! + w(i)));
   parts.push(line(x0, y - 0.5, right, y - 0.5, P.line, 1));
-  y = controls ? up(y) : y;
   rows.forEach((row, k) => {
     const h = row.sub ? subH : rowH;
     const style = row.sub ? sub : base;
@@ -343,7 +370,7 @@ function stats(S: Surface, items: { label: string; value: string; tone?: Tone }[
   const P = S.P;
   const per = Math.max(1, Math.min(items.length, Math.floor((w + 10) / 170)));
   const cw = (w - 10 * (per - 1)) / per;
-  const h = 58;
+  const h = 3 * ROW;
   items.forEach((it, i) => {
     const cx = x + (i % per) * (cw + 10);
     const cy = top + Math.floor(i / per) * (h + 10);
@@ -434,11 +461,11 @@ const HEADING = { 1: { size: 20, weight: 700, before: 8 }, 2: { size: 16.5, weig
 /** The space before a block, after the one before it. */
 function gapBefore(b: Block, prev: Block | undefined): number {
   if (!prev) return 0;
-  if (b.type === 'heading') return 14 + HEADING[b.level ?? 2].before;
-  if (prev.type === 'heading') return 6;
-  if (b.type === 'check' && prev.type === 'check') return 8;
+  if (b.type === 'heading') return ROW;
+  if (prev.type === 'heading') return 2;
+  if (b.type === 'check' && prev.type === 'check') return 2;
   if (b.type === 'space') return 0;
-  return 10;
+  return 8;
 }
 
 /** Blocks one under another from `top`, `x` to `x + w`; returns the px used. */
@@ -447,7 +474,9 @@ export function blocks(S: Surface, list_: Block[], x: number, top: number, w: nu
   let y = top;
   let prev: Block | undefined;
   for (const b of list_) {
-    y += gapBefore(b, prev);
+    // Each block starts on a row, so a strip can end before it.
+    y = b.type === 'space' ? y : up(y + gapBefore(b, prev));
+    const at = y;
     prev = b;
     switch (b.type) {
       case 'heading': {
@@ -505,6 +534,8 @@ export function blocks(S: Surface, list_: Block[], x: number, top: number, w: nu
         y += (b.rows ?? 1) * ROW;
         break;
     }
+    // Boxes read as one: never cut across.
+    if (b.type === 'stats' || b.type === 'callout' || b.type === 'chart' || (b.type === 'code' && y - at <= 16 * ROW)) S.keep(at, y);
   }
   return y - top;
 }

@@ -17,10 +17,10 @@ import { drawPanel } from '../render/ui/panels';
 import { cellsOf, cut, type Strip } from '../render/ui/tiles';
 import { Writer, hash, put, touch, type Pixels } from './png';
 
-/** PNG px per CSS px: a cell of 8×16 is 16×32 px, about twice what a terminal shows it at. */
+/** PNG px per CSS px: a cell of 8×17 is 16×34 px, a Retina screen's pixels for a terminal cell of 8×17 points (Ghostty's at its default font). */
 export const PANEL_SCALE = 2;
 /** Rows drawn at once at most: a tall page (the HLD) is drawn a window at a time. */
-const PIECE_ROWS = 64;
+const PIECE_ROWS = 96;
 
 export interface PanelEnv {
   fonts: Uint8Array[];
@@ -78,6 +78,7 @@ async function panel(req: PanelRequest, input: PanelsInput, env: PanelEnv, write
     req.columns,
     rows,
     surface.controls.map((c) => ({ control: c.control, cells: cellsOf(c.box, req.columns, rows) })),
+    surface.cuttable(rows),
   );
   const variants = req.variants ?? ['hover'];
   const px = { width: CELL.width * zoom, height: CELL.height * zoom };

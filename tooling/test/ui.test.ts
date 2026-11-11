@@ -12,7 +12,7 @@ import { CELL } from '../src/render/ui/kit';
 import { markdownBlocks } from '../src/render/ui/markdown';
 import { loadFonts } from '../src/render/ui/metrics';
 import { drawPanel } from '../src/render/ui/panels';
-import { MAX_STRIP_ROWS, cellsOf, cut } from '../src/render/ui/tiles';
+import { cellsOf, cut } from '../src/render/ui/tiles';
 import { loadDocument } from '../src/terminal/document';
 import { answer } from '../src/terminal/rasterHost';
 import { liveOptions } from '../../frontend/src/components/WhatIf/whatIf';
@@ -58,7 +58,7 @@ describe('UI panels: the cell grid', () => {
         const { surface, height } = drawPanel(panel, columns, 'dark');
         expect(height % CELL.height).toBe(0);
         const rows = height / CELL.height;
-        const strips = cut(columns, rows, surface.controls.map((c) => ({ control: c.control, cells: cellsOf(c.box, columns, rows) })));
+        const strips = cut(columns, rows, surface.controls.map((c) => ({ control: c.control, cells: cellsOf(c.box, columns, rows) })), surface.cuttable(rows));
         const seen = new Uint8Array(columns * rows);
         let row = 0;
         for (const s of strips) {
@@ -70,7 +70,7 @@ describe('UI panels: the cell grid', () => {
             col += t.columns;
           }
           expect(col).toBe(columns);
-          if (s.tiles.every((t) => !t.control)) expect(s.rows).toBeLessThanOrEqual(MAX_STRIP_ROWS);
+          if (s.tiles.every((t) => !t.control)) expect(s.rows).toBeLessThanOrEqual(255);
           row += s.rows;
         }
         expect(row).toBe(rows);
@@ -88,6 +88,36 @@ describe('UI panels: the cell grid', () => {
       }
     });
   }
+
+  it('ends strips only between lines: no glyph crosses a strip boundary', async () => {
+    // The text alone, drawn by resvg with the helper's fonts: a glyph crosses a boundary when a column has ink on both sides of it.
+    await answer({ kind: 'panels', outDir: mkdtempSync(join(tmpdir(), 'proschi-ui-')), panels: [] }, { dir: HOOKS });
+    const { Resvg } = await import('@resvg/resvg-wasm');
+    const fonts = ['Inter-Regular', 'Inter-Medium', 'Inter-SemiBold', 'Inter-Bold', 'JetBrainsMono-Medium'].map((f) => new Uint8Array(readFileSync(join(HOOKS, 'fonts', `${f}.ttf`))));
+    for (const [kind, panel] of Object.entries(PANELS)) {
+      for (const columns of [80, 120]) {
+        const { surface, height } = drawPanel(panel, columns, 'dark');
+        const rows = height / CELL.height;
+        const strips = cut(columns, rows, surface.controls.map((c) => ({ control: c.control, cells: cellsOf(c.box, columns, rows) })), surface.cuttable(rows));
+        const textOnly = surface.svg(height).replace(/<(rect|line|circle|path)\b[^>]*\/>/g, '');
+        const image = new Resvg(textOnly, { font: { fontBuffers: fonts, defaultFontFamily: 'Inter', sansSerifFamily: 'Inter', monospaceFamily: 'JetBrains Mono' } }).render();
+        const ink = (x: number, y: number) => image.pixels[(y * image.width + x) * 4 + 3] > 24;
+        for (const s of strips.slice(1)) {
+          const y = s.row * CELL.height;
+          const crossing = Array.from({ length: image.width }, (_, x) => x).filter((x) => ink(x, y - 1) && ink(x, y));
+          expect(crossing, `${kind} at ${columns} columns: a glyph crosses row ${s.row}`).toEqual([]);
+        }
+      }
+    }
+  }, 30_000);
+
+  it('fits a row of controls by shortening them, as the text UI does, rather than wrapping', () => {
+    for (const columns of [60, 80, 100]) {
+      const { surface } = drawPanel(PANELS.step, columns, 'dark');
+      const rowsOf = new Set(surface.controls.map((c) => c.box.y));
+      expect(rowsOf.size, `${columns} columns`).toBe(1);
+    }
+  });
 
   it('refuses controls that share cells', () => {
     const control = (id: string) => ({ id, kind: 'button' as const });
@@ -137,11 +167,11 @@ describe('UI panels: the raster helper', () => {
     const out = (await answer(input, { dir: HOOKS })) as PanelsOutput;
     const tabs = out.panels[0] as PanelOutput;
     expect(tabs.id).toBe('tabs');
-    expect(tabs.cellPx).toEqual({ width: 16, height: 32 });
+    expect(tabs.cellPx).toEqual({ width: 16, height: 34 });
     expect(out.panels[1]).toEqual({ id: 'bad', error: "Unknown panel kind 'nope'" });
     for (const t of tabs.tiles) {
       const head = readFileSync(t.file).subarray(16, 24);
-      expect([head.readUInt32BE(0), head.readUInt32BE(4)]).toEqual([t.columns * 16, t.rows * 32]);
+      expect([head.readUInt32BE(0), head.readUInt32BE(4)]).toEqual([t.columns * 16, t.rows * 34]);
       if (t.control) expect(existsSync(t.hoverFile!)).toBe(true);
     }
     expect(((await answer(input, { dir: HOOKS })) as PanelsOutput).panels[0]).toEqual(tabs);

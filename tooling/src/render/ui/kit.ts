@@ -5,14 +5,15 @@ import { alpha, mix, type Palette } from './theme';
 
 /**
  * The UI kit's drawing: a Surface collects SVG for a panel `columns` cells
- * wide, in CSS px where a cell is CELL (8×16, the terminal's 1:2), and the
+ * wide, in CSS px where a cell is CELL (8×17, as a terminal's cell is about
+ * 1:2.1: Ghostty's, kitty's and iTerm2's with their default fonts), and the
  * controls placed on it, each snapped to whole columns so its tile is its
  * own. Controls are drawn by state, so a panel can be drawn again with one
  * of them under the pointer or pressed, for its hover and pressed tiles.
  * Nothing uses nested <svg> or group opacity, which resvg cannot crop.
  */
 
-export const CELL = { width: 8, height: 16 };
+export const CELL = { width: 8, height: 17 };
 
 export const SANS = 'Inter';
 export const MONO_FAMILY = 'JetBrains Mono';
@@ -33,9 +34,42 @@ export interface Placed {
   draw: (state: ControlState) => string;
 }
 
+/**
+ * What a strip boundary must not cross, as [top, bottom] px: every line of
+ * text, chip, icon, bar and control, and whatever a layout keeps whole. A
+ * terminal fits each picture into its cells keeping its aspect ratio, so two
+ * strips can meet a pixel or two apart; cut between lines, that never shows
+ * in a glyph.
+ */
+export type Reach = [number, number];
+
+/** A glyph's reach around its baseline, as a share of the type size: Inter's ascender (accents included) and descender. */
+const ASCENT = 0.98;
+const DESCENT = 0.26;
+/** Shapes at most this tall are kept whole (chips, keycaps, bars, buttons); taller ones are cards, cut between their lines. */
+const SMALL_SHAPE = 40;
+
+/** The spans of an SVG fragment: its <text> lines, small rects and circles, and the icons (their 16 px box, scaled). */
+export function reachOf(svg: string): Reach[] {
+  const out: Reach[] = [];
+  for (const m of svg.matchAll(/<text [^>]*?y="([-\d.]+)" font-size="([\d.]+)"/g)) {
+    const y = Number(m[1]);
+    const size = Number(m[2]);
+    out.push([y - ASCENT * size, y + DESCENT * size]);
+  }
+  for (const m of svg.matchAll(/<rect [^>]*?y="([-\d.]+)" width="[\d.]+" height="([\d.]+)"/g)) {
+    const h = Number(m[2]);
+    if (h <= SMALL_SHAPE) out.push([Number(m[1]), Number(m[1]) + h]);
+  }
+  for (const m of svg.matchAll(/<circle [^>]*?cy="([-\d.]+)" r="([\d.]+)"/g)) out.push([Number(m[1]) - Number(m[2]), Number(m[1]) + Number(m[2])]);
+  for (const m of svg.matchAll(/<g transform="translate\(([-\d.]+) ([-\d.]+)\) scale\(([\d.]+)\)">/g)) out.push([Number(m[2]), Number(m[2]) + 16 * Number(m[3])]);
+  return out;
+}
+
 export class Surface {
   private parts: (string | { control: string } | { svg: string; box: Box })[] = [];
   readonly controls: Placed[] = [];
+  readonly spans: Reach[] = [];
 
   constructor(
     readonly P: Palette,
@@ -47,18 +81,41 @@ export class Surface {
   }
 
   add(...svg: string[]): void {
-    for (const s of svg) if (s) this.parts.push(s);
+    for (const s of svg) {
+      if (!s) continue;
+      this.parts.push(s);
+      this.spans.push(...reachOf(s));
+    }
   }
 
-  /** SVG within `box`, left out of a cropped drawing it does not reach: a part resvg cannot crop (nested <svg>) stays out of the crops of controls elsewhere. */
+  /** Keeps `top` to `bottom` (px) in one strip: a drawing that must not be cut (a stat card, a code box, a chart). */
+  keep(top: number, bottom: number): void {
+    if (bottom > top) this.spans.push([top, bottom]);
+  }
+
+  /** SVG within `box`, left out of a cropped drawing it does not reach: a part resvg cannot crop (nested <svg>) stays out of the crops of controls elsewhere. Kept whole. */
   addWithin(box: Box, svg: string): void {
     this.parts.push({ svg, box });
+    this.keep(box.y, box.y + box.h);
   }
 
   place(p: Placed): void {
     if (this.controls.some((c) => c.control.id === p.control.id)) throw new Error(`Two controls with the id '${p.control.id}'`);
     this.controls.push(p);
     this.parts.push({ control: p.control.id });
+    this.keep(p.box.y, p.box.y + p.box.h);
+  }
+
+  /** Whether a strip may end at row boundary `row` (0 and `rows` always): no span crosses it. */
+  cuttable(rows: number): (row: number) => boolean {
+    const blocked = new Uint8Array(rows + 1);
+    for (const [top, bottom] of this.spans) {
+      for (let b = Math.max(1, Math.floor(top / CELL.height) + 1); b <= Math.min(rows - 1, Math.ceil(bottom / CELL.height) - 1); b++) {
+        const y = b * CELL.height;
+        if (top < y - 0.25 && bottom > y + 0.25) blocked[b] = 1;
+      }
+    }
+    return (row) => row <= 0 || row >= rows || blocked[row] === 0;
   }
 
   /** The panel as SVG `height` px tall, controls in their states (rest unless named); `crop` draws only that window, at its size. No background: the terminal's shows through. */

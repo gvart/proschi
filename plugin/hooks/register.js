@@ -9801,6 +9801,7 @@ var UNKNOWN = { status: "unknown" };
 var probed = atom({ plugin: "proschi", key: "graphics" }, UNKNOWN);
 var TMUX_HINT = "tmux: set allow-passthrough on and focus-events on for pixel diagrams";
 var PX_PER_COLUMN = 16;
+var CELL_ASPECT = 17 / 8;
 var MAX_PNG_BYTES = 2 * 1024 * 1024;
 var PROBE_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNgAAIAAAUAAen63NgAAAAASUVORK5CYII=";
 var PROBE_TRIES = 6;
@@ -9846,11 +9847,11 @@ function rasterOf($, request2, priority = "now") {
 var maxWidthPx = (columns) => Math.max(1, Math.min(255, columns)) * PX_PER_COLUMN;
 function imageSize(out, room, maxRows) {
   let columns = Math.max(1, Math.min(255, room, out.cellHint.columns));
-  let rows = Math.max(1, Math.round(columns * out.height / out.width / 2));
+  let rows = Math.max(1, Math.round(columns * out.height / out.width / CELL_ASPECT));
   const cap = Math.max(1, Math.min(255, maxRows));
   if (rows > cap) {
     rows = cap;
-    columns = Math.max(1, Math.min(columns, Math.round(rows * 2 * out.width / out.height)));
+    columns = Math.max(1, Math.min(columns, Math.round(rows * CELL_ASPECT * out.width / out.height)));
   }
   return { columns, rows };
 }

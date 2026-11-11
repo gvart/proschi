@@ -87,6 +87,23 @@ text cells** (today's drawing). Never a text preview followed by a picture.
   docs in `docs/AGENT-SKILLS.md`, the CLAUDE.md check suite, delete this
   file. depends on: 4
 
+## Round 2 fixes (first real test, Ghostty on macOS)
+
+- [x] R1. **Text cut across strips.** Cause: a terminal fits each picture
+  into its cells keeping its aspect ratio (kitty's Unicode placeholders), and
+  Ghostty's cell is 8×17 pt, not 8×16: every 16-row strip was letterboxed by
+  ≈8 px top and bottom, so a table row cut at a strip edge came apart. Fix:
+  the cell is 8×17 CSS px (16×34 PNG px, a Retina cell's device pixels);
+  every text line, chip, icon and control is a span a boundary may not cross
+  (`Surface.cuttable`), strips end only between them; tables and blocks sit on
+  whole rows; a controls row shortens its controls (keycaps, then labels) to
+  fit instead of wrapping. Test: no glyph's ink crosses a strip boundary.
+- [ ] R2. Tab switching lag.
+- [ ] R3. Playback at ≈5 fps.
+- [ ] R4. Panels blend into the terminal background.
+- [ ] R5. Thin, faded type.
+- [ ] R6. The Sequence tab is a static picture: no Play or step keys.
+
 ## Risks
 
 - Cell aspect is assumed 1:2; tiles must stay seamless under the terminal's

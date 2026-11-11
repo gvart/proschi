@@ -105,7 +105,7 @@ describe('raster helper', () => {
     }
     const head = readFileSync(out.base);
     expect([head.readUInt32BE(16), head.readUInt32BE(20)]).toEqual([out.width, out.height]);
-    expect(out.cellHint).toEqual({ columns: Math.ceil(out.width / 16), rows: Math.ceil(out.height / 32) });
+    expect(out.cellHint).toEqual({ columns: Math.ceil(out.width / 16), rows: Math.ceil(out.height / 34) });
     expect(await rasterize(input, { dir: HOOKS })).toEqual(out);
   });
 

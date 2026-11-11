@@ -20,7 +20,7 @@
  *         selected?: string,                       a node or expanded system id, ringed in the accent
  *         play?: { useCase, scenario?, frames? },  id or name; scenario defaults to the first; frames per step, default 8
  *         whatIf?: { multiplier, failed, saved? }, the pane's live what-if: the load drawn is the what-if's
- *         cellPx?: { width, height } } }           the terminal's cell in screen px, for cellHint; default 16×32
+ *         cellPx?: { width, height } } }           the terminal's cell in screen px, for cellHint; default 16×34
  *   stdout RasterOutput as JSON:
  *     { width, height,                             PNG size in px, the same for every file
  *       base,                                      absolute path of the still image
@@ -87,7 +87,7 @@ export interface RasterAssets {
 
 const DEFAULT_SCALE = 2;
 const DEFAULT_FRAMES = 8;
-const DEFAULT_CELL = { width: 16, height: 32 };
+const DEFAULT_CELL = { width: 16, height: 34 };
 
 let ready: Promise<Uint8Array[]> | undefined;
 
