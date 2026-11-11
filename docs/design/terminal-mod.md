@@ -25,8 +25,11 @@ the fallback where a terminal draws no images.
 With `traffic`, the drawing shows what the canvas's overlay shows
 (`frontend/src/sim/overlay.ts`, `components/Canvas/RoutedEdge.tsx`):
 
-- a card fills with its heat from 40% of capacity (pale), then yellow at
-  70%, pink at 90% and red at 100%, with dark text on the fill;
+- from 40% of capacity a card's border and load bar turn yellow, the
+  terminal's form of the canvas's faint yellow (a solid pale fill shouts on
+  a dark terminal); from 70% it fills yellow, then pink at 90% and red at
+  100%, with dark text on the fill. The legend shows 40% as a yellow line,
+  the rest as swatches;
 - the bottleneck (`NodeOverlay.bottleneck`) carries a red **BOTTLENECK** chip
   on its top border, the terminal's stand-in for the canvas's ring;
 - an edge takes the heat of the node it feeds (`edgeOverlays`), and its

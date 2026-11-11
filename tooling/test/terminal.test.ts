@@ -5,7 +5,7 @@ import { examples } from '../../frontend/src/dsl/examples';
 import { flowEnds, importFilePath, keyOf, loadDocument, missingImports, parseSource, viewSource, type Source } from '../src/terminal/document';
 import { viewError, viewOptions, type SystemsView } from '../src/terminal/systems';
 import { DEFAULT, Grid, base64 } from '../src/terminal/grid';
-import { COLOR, heatOf, loadChip, paint } from '../src/terminal/paint';
+import { COLOR, heatOf, loadChip, paint, tintOf } from '../src/terminal/paint';
 import { currentStepsOf, playAt, stepPath } from '../src/terminal/playback';
 import { buildScene, routePath, type Rect, type Scene } from '../src/terminal/scene';
 
@@ -98,7 +98,11 @@ describe('terminal scene', () => {
     expect(grid.glyph(api.x, api.y + 1)).toBe('┇');
     expect(grid.toText()).toContain('down');
     expect(heatOf({ utilization: 0.3 })).toBeUndefined();
-    expect(heatOf({ utilization: 0.5 })).toBe(COLOR.heatPale);
+    // 40% to 70%: no fill, a yellow border and bar.
+    expect(heatOf({ utilization: 0.5 })).toBeUndefined();
+    expect(tintOf({ utilization: 0.5 })).toBe(COLOR.heatWarm);
+    expect(tintOf({ utilization: 0.75 })).toBeUndefined();
+    expect(heatOf({ utilization: 0.75 })).toBe(COLOR.heatWarm);
     expect(heatOf({ utilization: 0.95 })).toBe(COLOR.heatHot);
     expect(heatOf({ utilization: 2, down: true })).toBeUndefined();
   });

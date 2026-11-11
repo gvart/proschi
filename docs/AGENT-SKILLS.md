@@ -91,8 +91,8 @@ terminal, with the same layout as the browser. It draws:
   the file changes.
 
 A drawing shows the cards, groups and legend. With `traffic` it also shows
-the load as the editor's overlay does: each card fills with its heat from
-40% of capacity, the first to give way carries a **BOTTLENECK** chip, each
+the load as the editor's overlay does: a card's border and bar turn yellow
+from 40% of capacity and it fills with its heat from 70%, the first to give way carries a **BOTTLENECK** chip, each
 edge takes the colour of the node it feeds and its label the requests it
 carries and the latency they add, and the p99 path of the busiest use case is
 drawn heavy. The simulation's warnings sit above the drawing, and with

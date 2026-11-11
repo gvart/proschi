@@ -8591,8 +8591,7 @@ var COLOR = {
   good: 2278750,
   warn: 15381256,
   bad: 15680580,
-  /** The canvas's load overlay (utils/heat.ts): a busy card's fill, from pale yellow through yellow and pink to red. */
-  heatPale: 16509350,
+  /** The canvas's load overlay (utils/heat.ts): a busy card's border and bar in yellow, then its fill in yellow, pink and red. */
   heatWarm: 16765503,
   heatHot: 16743092,
   heatOver: 16739169
@@ -8849,7 +8848,9 @@ function drawSystem(grid, { node, rect }, badge, look, selected) {
   const accent = look === "failing" ? COLOR.fail : look === "lit" || selected ? COLOR.pink : void 0;
   const status = badge?.status;
   const color = accent ?? fade(look, statusColor(status, baseColor(node, COLOR.line)));
-  const heat = look || !badge || badge.utilization === void 0 ? void 0 : heatOf({ utilization: badge.utilization, saturated: status === "saturated" });
+  const busy = look || !badge || badge.utilization === void 0 ? void 0 : { utilization: badge.utilization, saturated: status === "saturated" };
+  const heat = heatOf(busy);
+  const tint2 = tintOf(busy);
   const ink = heat !== void 0 ? COLOR.onColor : look === "off" ? COLOR.fadedMore : DEFAULT;
   const muted = heat !== void 0 ? COLOR.onColor : look === "off" ? COLOR.fadedMore : COLOR.muted;
   fill(grid, rect, DEFAULT, DEFAULT);
@@ -8875,7 +8876,7 @@ function drawSystem(grid, { node, rect }, badge, look, selected) {
   const filled = Math.max(share2 > 0 ? 1 : 0, Math.min(bar, Math.round(share2 * bar)));
   for (let i = 0; i < bar; i++) {
     const full = i < filled;
-    grid.set(left + text.length + 1 + i, rect.y + 4, full ? "\u2501" : "\u2500", heat !== void 0 ? COLOR.onColor : full ? ink : COLOR.muted, heat);
+    grid.set(left + text.length + 1 + i, rect.y + 4, full ? "\u2501" : "\u2500", heat !== void 0 ? COLOR.onColor : full ? tint2 ?? ink : COLOR.muted, heat);
   }
 }
 var TILE = { w: 5, h: 3 };
@@ -8884,8 +8885,12 @@ function heatOf(overlay) {
   if (!overlay || overlay.down || u === void 0) return void 0;
   if (overlay.saturated || u >= 1) return COLOR.heatOver;
   if (u >= 0.9) return COLOR.heatHot;
-  if (u >= 0.7) return COLOR.heatWarm;
-  return u >= 0.4 ? COLOR.heatPale : void 0;
+  return u >= 0.7 ? COLOR.heatWarm : void 0;
+}
+function tintOf(overlay) {
+  const u = overlay?.utilization;
+  if (!overlay || overlay.down || overlay.saturated || u === void 0) return void 0;
+  return u >= 0.4 && u < 0.7 ? COLOR.heatWarm : void 0;
 }
 var replicasOf2 = (node, overlay) => overlay?.replicas ?? node.replicas ?? 1;
 function stackRoom(grid, scene, { node, rect }) {
@@ -8926,6 +8931,7 @@ function drawCard(grid, scene, n, overlay, look, icons2) {
   const down = !!overlay?.down;
   const over = !down && !!overlay && (!!overlay.saturated || (overlay.utilization ?? 0) >= 1);
   const heat = look ? void 0 : heatOf(overlay);
+  const tint2 = look ? void 0 : tintOf(overlay);
   const accent = look === "failing" ? COLOR.fail : look === "lit" ? COLOR.pink : void 0;
   const color = accent ?? (down && !look ? COLOR.muted : over && !look ? COLOR.fail : fade(look, baseColor(node, COLOR.line)));
   const faded = look === "path" || look === "off" || down;
@@ -8933,7 +8939,7 @@ function drawCard(grid, scene, n, overlay, look, icons2) {
   const muted = heat !== void 0 ? COLOR.onColor : look === "off" ? COLOR.fadedMore : COLOR.muted;
   fill(grid, rect, DEFAULT, DEFAULT);
   if (heat !== void 0) fill(grid, { x: rect.x + 1, y: rect.y + 1, w: rect.w - 2, h: rect.h - 2 }, COLOR.onColor, heat);
-  frame(grid, rect, color, look === "off" || down ? "dotted" : accent ? "solid" : node.style?.dash ?? "solid", true);
+  frame(grid, rect, accent ?? tint2 ?? color, look === "off" || down ? "dotted" : accent ? "solid" : node.style?.dash ?? "solid", true);
   const icon = iconOf(node, icons2);
   const tiled = icon !== void 0 && rect.w >= 22;
   if (tiled) {
@@ -8948,12 +8954,12 @@ function drawCard(grid, scene, n, overlay, look, icons2) {
   const room = rect.x + rect.w - 2 - left;
   grid.text(left, rect.y + 1, fit(node.name, room), ink, Infinity, heat);
   grid.text(left, rect.y + 2, fit(node.techStack, room), muted, Infinity, heat);
-  const load = overlay ? loadRow(grid, { x: left, y: rect.y + 3, room }, node, overlay, look, heat, stackShown(grid, scene, n, overlay)) : false;
+  const load = overlay ? loadRow(grid, { x: left, y: rect.y + 3, room }, node, overlay, look, heat, tint2, stackShown(grid, scene, n, overlay)) : false;
   if (!load && node.ownerTeam) grid.text(left, rect.y + 3, fit(`Team: ${node.ownerTeam}`, room), muted, Infinity, heat);
   if (node.critical) grid.text(rect.x + rect.w - 4, rect.y, " ! ", look === "off" ? muted : COLOR.critical);
   if (overlay?.bottleneck && !look && !down && rect.w >= 10) grid.text(rect.x + 2, rect.y, fit(" BOTTLENECK ", rect.w - (node.critical ? 8 : 4)), COLOR.onColor, Infinity, COLOR.heatOver);
 }
-function loadRow(grid, at, node, o, look, heat, stack) {
+function loadRow(grid, at, node, o, look, heat, tint2, stack) {
   const u = o.utilization;
   const replicas = replicasOf2(node, o);
   const parts = [
@@ -8972,7 +8978,7 @@ function loadRow(grid, at, node, o, look, heat, stack) {
   const filled = Math.max(u > 0 ? 1 : 0, Math.min(bar, Math.round(u * bar)));
   for (let i = 0; i < bar; i++) {
     const full = i < filled;
-    grid.set(at.x + text.length + 1 + i, at.y, full ? "\u2501" : "\u2500", on ? COLOR.onColor : full ? ink : COLOR.muted, heat);
+    grid.set(at.x + text.length + 1 + i, at.y, full ? "\u2501" : "\u2500", on ? COLOR.onColor : full ? tint2 ?? ink : COLOR.muted, heat);
   }
   return true;
 }
@@ -9806,7 +9812,7 @@ function hldTab(ui, doc, key, copy2) {
 
 // ../plugin/src/views/lines.ts
 var TONE = { good: "#22c55e", warn: "#eab308", bad: "#ef4444", ink: "#111111", pink: "#ff5da2" };
-var HEAT = { pale: "#fbe9a6", warm: "#ffd23f", hot: "#ff7ab4", over: "#ff6b61" };
+var HEAT = { warm: "#ffd23f", hot: "#ff7ab4", over: "#ff6b61" };
 var line = (...segs) => ({ segs: segs.map((s) => typeof s === "string" ? { text: s } : s) });
 var blank = () => line("");
 var heading = (text) => line({ text, bold: true });
@@ -10049,7 +10055,8 @@ function legendLine(critical, width) {
   const swatch = (bg) => ({ text: "  ", bg });
   const segs = [
     { text: "Load ", dim: true },
-    swatch(HEAT.pale),
+    // From 40% a card's border and bar turn yellow; from 70% it fills.
+    { text: "\u2501\u2501", color: HEAT.warm },
     { text: " 40 ", dim: true },
     swatch(HEAT.warm),
     { text: " 70 ", dim: true },

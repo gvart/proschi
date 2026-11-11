@@ -42,8 +42,7 @@ export const COLOR = {
   good: 0x22c55e,
   warn: 0xeab308,
   bad: 0xef4444,
-  /** The canvas's load overlay (utils/heat.ts): a busy card's fill, from pale yellow through yellow and pink to red. */
-  heatPale: 0xfbe9a6,
+  /** The canvas's load overlay (utils/heat.ts): a busy card's border and bar in yellow, then its fill in yellow, pink and red. */
   heatWarm: 0xffd23f,
   heatHot: 0xff7ab4,
   heatOver: 0xff6b61,
@@ -417,7 +416,9 @@ function drawSystem(grid: Grid, { node, rect }: SceneNode, badge: SystemBadge | 
   const accent = look === 'failing' ? COLOR.fail : look === 'lit' || selected ? COLOR.pink : undefined;
   const status = badge?.status;
   const color = accent ?? fade(look, statusColor(status, baseColor(node, COLOR.line)));
-  const heat = look || !badge || badge.utilization === undefined ? undefined : heatOf({ utilization: badge.utilization, saturated: status === 'saturated' });
+  const busy = look || !badge || badge.utilization === undefined ? undefined : { utilization: badge.utilization, saturated: status === 'saturated' };
+  const heat = heatOf(busy);
+  const tint = tintOf(busy);
   const ink = heat !== undefined ? COLOR.onColor : look === 'off' ? COLOR.fadedMore : DEFAULT;
   const muted = heat !== undefined ? COLOR.onColor : look === 'off' ? COLOR.fadedMore : COLOR.muted;
   fill(grid, rect, DEFAULT, DEFAULT);
@@ -444,21 +445,32 @@ function drawSystem(grid: Grid, { node, rect }: SceneNode, badge: SystemBadge | 
   const filled = Math.max(share > 0 ? 1 : 0, Math.min(bar, Math.round(share * bar)));
   for (let i = 0; i < bar; i++) {
     const full = i < filled;
-    grid.set(left + text.length + 1 + i, rect.y + 4, full ? '━' : '─', heat !== undefined ? COLOR.onColor : full ? ink : COLOR.muted, heat);
+    grid.set(left + text.length + 1 + i, rect.y + 4, full ? '━' : '─', heat !== undefined ? COLOR.onColor : full ? (tint ?? ink) : COLOR.muted, heat);
   }
 }
 
 /** The canvas's icon tile: a square of the card's color left of the name, the icon dark on it. */
 const TILE = { w: 5, h: 3 };
 
-/** The fill of a busy card (utils/heat.ts): pale from 40%, then yellow, pink and red; none below 40%, where the bar alone tells. */
+/**
+ * The fill of a busy card (utils/heat.ts): yellow from 70%, then pink and red.
+ * Below 70% none: the canvas's faint yellow has no faint form in a terminal,
+ * where a solid one shouts on a dark background, so `tintOf` colours the
+ * border and bar instead.
+ */
 export function heatOf(overlay: NodeOverlay | undefined): number | undefined {
   const u = overlay?.utilization;
   if (!overlay || overlay.down || u === undefined) return undefined;
   if (overlay.saturated || u >= 1) return COLOR.heatOver;
   if (u >= 0.9) return COLOR.heatHot;
-  if (u >= 0.7) return COLOR.heatWarm;
-  return u >= 0.4 ? COLOR.heatPale : undefined;
+  return u >= 0.7 ? COLOR.heatWarm : undefined;
+}
+
+/** The border and bar of a card from 40% to 70% of capacity: yellow, the card unfilled (the canvas's pale fill). */
+export function tintOf(overlay: NodeOverlay | undefined): number | undefined {
+  const u = overlay?.utilization;
+  if (!overlay || overlay.down || overlay.saturated || u === undefined) return undefined;
+  return u >= 0.4 && u < 0.7 ? COLOR.heatWarm : undefined;
 }
 
 const replicasOf = (node: DiagramNode, overlay: NodeOverlay | undefined) => overlay?.replicas ?? node.replicas ?? 1;
@@ -507,7 +519,8 @@ function drawStackCount(grid: Grid, scene: Scene, n: SceneNode, overlay: NodeOve
  * A card: a heavy border and a solid icon tile, both in the node's
  * color, or the accent while it is lit. On the scenario's path it turns grey
  * and keeps its ink; off it, it all turns grey and dotted. Under the load
- * overlay (ComponentNode.tsx) a busy card fills with its heat, one past
+ * overlay (ComponentNode.tsx) a card from 40% of capacity takes a yellow
+ * border and bar, from 70% it fills with its heat, one past
  * capacity turns its border red, one that is down turns grey and dotted, and
  * the team line gives way to the numbers and a bar of how busy it is.
  */
@@ -516,6 +529,7 @@ function drawCard(grid: Grid, scene: Scene, n: SceneNode, overlay: NodeOverlay |
   const down = !!overlay?.down;
   const over = !down && !!overlay && (!!overlay.saturated || (overlay.utilization ?? 0) >= 1);
   const heat = look ? undefined : heatOf(overlay);
+  const tint = look ? undefined : tintOf(overlay);
   const accent = look === 'failing' ? COLOR.fail : look === 'lit' ? COLOR.pink : undefined;
   const color = accent ?? (down && !look ? COLOR.muted : over && !look ? COLOR.fail : fade(look, baseColor(node, COLOR.line)));
   const faded = look === 'path' || look === 'off' || down;
@@ -523,7 +537,7 @@ function drawCard(grid: Grid, scene: Scene, n: SceneNode, overlay: NodeOverlay |
   const muted = heat !== undefined ? COLOR.onColor : look === 'off' ? COLOR.fadedMore : COLOR.muted;
   fill(grid, rect, DEFAULT, DEFAULT);
   if (heat !== undefined) fill(grid, { x: rect.x + 1, y: rect.y + 1, w: rect.w - 2, h: rect.h - 2 }, COLOR.onColor, heat);
-  frame(grid, rect, color, look === 'off' || down ? 'dotted' : accent ? 'solid' : (node.style?.dash ?? 'solid'), true);
+  frame(grid, rect, accent ?? tint ?? color, look === 'off' || down ? 'dotted' : accent ? 'solid' : (node.style?.dash ?? 'solid'), true);
 
   const icon = iconOf(node, icons);
   const tiled = icon !== undefined && rect.w >= 22;
@@ -539,7 +553,7 @@ function drawCard(grid: Grid, scene: Scene, n: SceneNode, overlay: NodeOverlay |
   const room = rect.x + rect.w - 2 - left;
   grid.text(left, rect.y + 1, fit(node.name, room), ink, Infinity, heat);
   grid.text(left, rect.y + 2, fit(node.techStack, room), muted, Infinity, heat);
-  const load = overlay ? loadRow(grid, { x: left, y: rect.y + 3, room }, node, overlay, look, heat, stackShown(grid, scene, n, overlay)) : false;
+  const load = overlay ? loadRow(grid, { x: left, y: rect.y + 3, room }, node, overlay, look, heat, tint, stackShown(grid, scene, n, overlay)) : false;
   if (!load && node.ownerTeam) grid.text(left, rect.y + 3, fit(`Team: ${node.ownerTeam}`, room), muted, Infinity, heat);
   if (node.critical) grid.text(rect.x + rect.w - 4, rect.y, ' ! ', look === 'off' ? muted : COLOR.critical);
   // The canvas's bottleneck ring: a red chip on the top border, the first card to give way as traffic grows.
@@ -551,7 +565,7 @@ function drawCard(grid: Grid, scene: Scene, n: SceneNode, overlay: NodeOverlay |
  * card shows them), size, shards and how busy, or "down", then a bar of the
  * utilisation. False when there is nothing to show.
  */
-function loadRow(grid: Grid, at: { x: number; y: number; room: number }, node: DiagramNode, o: NodeOverlay, look: Look, heat: number | undefined, stack: boolean): boolean {
+function loadRow(grid: Grid, at: { x: number; y: number; room: number }, node: DiagramNode, o: NodeOverlay, look: Look, heat: number | undefined, tint: number | undefined, stack: boolean): boolean {
   const u = o.utilization;
   const replicas = replicasOf(node, o);
   const parts = [
@@ -570,7 +584,7 @@ function loadRow(grid: Grid, at: { x: number; y: number; room: number }, node: D
   const filled = Math.max(u > 0 ? 1 : 0, Math.min(bar, Math.round(u * bar)));
   for (let i = 0; i < bar; i++) {
     const full = i < filled;
-    grid.set(at.x + text.length + 1 + i, at.y, full ? '━' : '─', on ? COLOR.onColor : full ? ink : COLOR.muted, heat);
+    grid.set(at.x + text.length + 1 + i, at.y, full ? '━' : '─', on ? COLOR.onColor : full ? (tint ?? ink) : COLOR.muted, heat);
   }
   return true;
 }

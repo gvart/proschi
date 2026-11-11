@@ -29,7 +29,7 @@ export interface Line {
 
 export const TONE = { good: '#22c55e', warn: '#eab308', bad: '#ef4444', ink: '#111111', pink: '#ff5da2' }
 /** The load scale of the canvas (utils/heat.ts), as paint.ts draws a busy card. */
-export const HEAT = { pale: '#fbe9a6', warm: '#ffd23f', hot: '#ff7ab4', over: '#ff6b61' }
+export const HEAT = { warm: '#ffd23f', hot: '#ff7ab4', over: '#ff6b61' }
 
 const line = (...segs: (Seg | string)[]): Line => ({ segs: segs.map(s => (typeof s === 'string' ? { text: s } : s)) })
 const blank = (): Line => line('')
@@ -311,7 +311,8 @@ export function legendLine(critical: CriticalPathOverlay | undefined, width: num
   const swatch = (bg: string): Seg => ({ text: '  ', bg })
   const segs: Seg[] = [
     { text: 'Load ', dim: true },
-    swatch(HEAT.pale),
+    // From 40% a card's border and bar turn yellow; from 70% it fills.
+    { text: '━━', color: HEAT.warm },
     { text: ' 40 ', dim: true },
     swatch(HEAT.warm),
     { text: ' 70 ', dim: true },
