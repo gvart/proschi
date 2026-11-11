@@ -12,10 +12,14 @@ import { buildScene, type Scene } from '../../tooling/src/terminal/scene'
 import { idList, systemAt, viewError, type SystemsView } from '../../tooling/src/terminal/systems'
 import type { DiagramScenario, DiagramUseCase, FlowStep } from '../../frontend/src/dsl/types'
 import { groupByEndpoint } from '../../frontend/src/playground/useCaseGroups'
-import type { PaneSource, PaneTab, Player } from '../types'
+import type { PaneSource, PaneTab, Player, WhatIfState } from '../types'
+import { hldTab } from './views/hld'
 import { legendLine, verdictLine } from './views/lines'
 import { lineView, type Ui } from './views/render'
+import { sequenceTab } from './views/sequenceTab'
 import { tabBar, tabBody, tabOf } from './views/tabs'
+import { NO_WHATIF, optionsOf, whatIfOf } from './views/whatif'
+import { whatIfBanner, whatIfTab } from './views/whatifTab'
 
 /**
  * Draws Proschi diagrams in Claude Code's terminal: ```proschi blocks in
@@ -43,6 +47,7 @@ const paneFile = atom({ plugin: 'proschi', key: 'paneFile' } as const, '')
 const paneSource = atom({ plugin: 'proschi', key: 'paneSource' } as const, NO_SOURCE)
 const players = atom({ plugin: 'proschi', key: 'player' } as const, IDLE)
 const paneTab = atom({ plugin: 'proschi', key: 'paneTab' } as const, 'diagram' as PaneTab)
+const paneWhatIf = atom({ plugin: 'proschi', key: 'paneWhatIf' } as const, NO_WHATIF as WhatIfState)
 
 /** The pane's keys, as its Buttons' hotkeys name them; the system keys where the diagram has systems. */
 const PANE_KEYS = '1-6 tabs · p play · n/b step · r restart · e end · x explorer · d diagram · esc back to the prompt'
@@ -105,6 +110,7 @@ export function register(on: On, options: PluginOptions): void {
     stop(PANE_VIEW)
     await update($, memberOf(players, { requestId: PANE_VIEW }), () => ({ ...IDLE, expanded: view.expanded ?? [], ...(view.focus !== undefined ? { focus: view.focus } : {}) }))
     await update($, paneFile, () => file)
+    await update($, paneWhatIf, () => NO_WHATIF)
     await $.ui.open({ id: PANE, title: `Proschi · ${basename(file)}` })
     watch($, file)
     return { text: `Showing ${file} in the Proschi pane.` }
@@ -169,8 +175,12 @@ export function register(on: On, options: PluginOptions): void {
     const columns = 'bodyColumns' in e.props && typeof e.props.bodyColumns === 'number' ? e.props.bodyColumns : (e.viewport?.columns ?? 120) - 4
     const isFocused = 'isFocused' in e.props && e.props.isFocused === true
     const tab = tabOf(await read($, paneTab))
-    const loaded = await documentOf($, PANE_VIEW, source)
+    const whatIf = whatIfOf(await read($, paneWhatIf))
+    const loaded = await documentOf($, PANE_VIEW, source, undefined, whatIf)
     const failing = 'error' in loaded ? 0 : loaded.doc.tests.filter(t => !t.passed).length
+    const setWhatIf = (fn: (w: WhatIfState) => WhatIfState) => void update($, paneWhatIf, w => fn(whatIfOf(w)))
+    // While a what-if is on, every tab says so, with the way back to the design as written.
+    const banner = 'error' in loaded || loaded.doc === loaded.base ? undefined : whatIfBanner(ui, loaded.base, whatIf, columns, tab !== 'diagram', () => setWhatIf(w => ({ ...NO_WHATIF, ...(w.node ? { node: w.node } : {}) })))
     const bar = tabBar(ui, tab, failing, to => void update($, paneTab, () => to))
     const keys = (systems: boolean) => (
       <ui.Box flexDirection="column">
@@ -182,19 +192,28 @@ export function register(on: On, options: PluginOptions): void {
     )
     if (tab !== 'diagram') {
       if ('error' in loaded) return <ui.Text color="red">{loaded.error}</ui.Text>
+      const { doc, base, key, player } = loaded
+      if (tab === 'sequence' && player.mode === 'play' && player.isPlaying && !timers.has(PANE_VIEW)) stepper($, doc)
+      const body =
+        tab === 'whatif' ? whatIfTab({ ui, base, key, now: doc, w: whatIf, set: setWhatIf, columns })
+        : tab === 'sequence' ? sequenceTab({ ui, diagram: doc.diagram, player, columns, pick: value => void paneStep($, doc, p => ({ ...p, pick: value, step: 0, isPlaying: false })), go: (step, isPlaying) => void paneStep($, doc, p => ({ ...p, mode: 'play', step, isPlaying })), pause: () => void paneStep($, doc, p => ({ ...p, isPlaying: false })) })
+        : tab === 'hld' ? hldTab(ui, base, key, (surface, text) => void copy($, surface, text, 'the HLD markdown'))
+        : tabBody(ui, tab, doc, columns)
       return (
         <ui.Box flexDirection="column">
           {bar}
-          {tabBody(ui, tab, loaded.doc, columns)}
+          {banner}
+          {body}
           {keys(false)}
         </ui.Box>
       )
     }
-    const view = await diagramView($, { ui, requestId: PANE, columns }, PANE_VIEW, source)
+    const view = await diagramView($, { ui, requestId: PANE, columns }, PANE_VIEW, source, undefined, whatIf)
     if ('error' in view) return <ui.Text color="red">{view.error}</ui.Text>
     return (
       <ui.Box flexDirection="column">
         {bar}
+        {banner}
         {view.element}
         {keys(view.systems)}
       </ui.Box>
@@ -367,7 +386,8 @@ const PLAY = ' ▶ Play '
 const BARS_WIDTH = 80
 
 /** A document as a drawing's player shows it (its systems opened or focused into), or why it cannot be drawn. */
-async function documentOf($: EngineInterface, viewId: string, written: Source, file?: string): Promise<{ doc: Document; source: Source; key: string; player: Player } | { error: string }> {
+/** With `whatIf` (the pane's), `doc` is analysed under it and `base` is the document as written; else the two are one. */
+async function documentOf($: EngineInterface, viewId: string, written: Source, file?: string, whatIf?: WhatIfState): Promise<{ doc: Document; base: Document; source: Source; key: string; player: Player } | { error: string }> {
   // The systems the player opened or focused into are part of what is laid out.
   const player = normal(await read($, memberOf(players, { requestId: viewId })))
   const shown: SystemsView = { ...(player.expanded.length ? { expanded: player.expanded } : {}), ...(player.focus !== undefined ? { focus: player.focus } : {}) }
@@ -384,16 +404,24 @@ async function documentOf($: EngineInterface, viewId: string, written: Source, f
     return { error: `${where} has errors (line ${first.line}: ${first.message})${file ? `: run \`npx proschi check ${file}\`` : ''}.` }
   }
   if (doc.diagram.nodes.length === 0) return { error: `${where} has no components to draw.` }
-  return { doc, source, key, player }
+  const options = whatIf && optionsOf(doc.root, whatIf)
+  if (!options) return { doc, base: doc, source, key, player }
+  const under = `${key}?${JSON.stringify(whatIf)}`
+  let now = documents.get(under)
+  if (!now) {
+    now = loadDocument(source, options)
+    documents.set(under, now)
+  }
+  return { doc: now, base: doc, source, key, player }
 }
 
 /** Warnings a drawing in the transcript lists before it points at the pane's Analysis tab for the rest. */
 const INLINE_WARNINGS = 2
 
 /** The drawing of one document: the diagram with its use case picker or player and its links, or why it cannot be drawn. `file` is where the source was read from, if anywhere. */
-async function diagramView($: EngineInterface, d: Draw, viewId: string, written: Source, file?: string): Promise<{ element: RenderElement; systems: boolean } | { error: string }> {
+async function diagramView($: EngineInterface, d: Draw, viewId: string, written: Source, file?: string, whatIf?: WhatIfState): Promise<{ element: RenderElement; systems: boolean } | { error: string }> {
   const { ui } = d
-  const loaded = await documentOf($, viewId, written, file)
+  const loaded = await documentOf($, viewId, written, file, whatIf)
   if ('error' in loaded) return loaded
   const { doc, source, key, player } = loaded
 
@@ -907,6 +935,7 @@ function focus($: EngineInterface, view: View, title: string, what: { file: stri
     if (player.isPlaying) await setPlayer($, view, p => ({ ...p, isPlaying: false }))
     stop(PANE_VIEW)
     await update($, memberOf(players, { requestId: PANE_VIEW }), () => player)
+    await update($, paneWhatIf, () => NO_WHATIF)
     if ('file' in what) {
       await update($, paneFile, () => what.file)
       watch($, what.file)
@@ -927,6 +956,40 @@ async function setPlayer($: EngineInterface, view: View, fn: (p: Player) => Play
   // Started before the redraw, so the redraw draws the step's first frame rather than its last.
   if (steps && steps.length > 0) animate($, view, steps)
   await update($, memberOf(players, { requestId: view.viewId }), p => fn(normal(p)))
+}
+
+/** Changes the pane's player from a tab without the drawing: the Sequence tab's keys; playing, a stepper moves it on. */
+async function paneStep($: EngineInterface, doc: Document, fn: (p: Player) => Player): Promise<void> {
+  stop(PANE_VIEW)
+  await update($, memberOf(players, { requestId: PANE_VIEW }), p => {
+    const next = fn(normal(p))
+    const picks = doc.diagram.useCases.flatMap(u => u.scenarios.map(s => ({ value: `${u.id}:${s.id}`, steps: s.steps.length })))
+    const pick = picks.find(x => x.value === next.pick) ?? picks[0]
+    return { ...next, pick: pick?.value ?? '', step: Math.max(0, Math.min(next.step, (pick?.steps ?? 1) - 1)) }
+  })
+}
+
+/**
+ * Plays the pane's scenario on the Sequence tab, a step every STEP_MS as the
+ * drawing does; it stops on another tab, where the drawing's animation (or
+ * nothing) takes over.
+ */
+function stepper($: EngineInterface, doc: Document): void {
+  timers.set(
+    PANE_VIEW,
+    $.clock.every(STEP_MS, async () => {
+      const p = normal(await read($, memberOf(players, { requestId: PANE_VIEW })))
+      const steps = doc.diagram.useCases.flatMap(u => u.scenarios.map(s => ({ value: `${u.id}:${s.id}`, steps: s.steps }))).find(x => x.value === p.pick)?.steps ?? []
+      if (tabOf(await read($, paneTab)) !== 'sequence' || p.mode !== 'play' || !p.isPlaying || steps.length === 0) {
+        stop(PANE_VIEW)
+        $.ui.invalidate('ui.render')
+        return
+      }
+      const last = p.step >= steps.length - 1
+      if (last) stop(PANE_VIEW)
+      await update($, memberOf(players, { requestId: PANE_VIEW }), q => ({ ...normal(q), step: last ? p.step : p.step + 1, isPlaying: !last }))
+    }),
+  )
 }
 
 function stop(viewId: string): void {

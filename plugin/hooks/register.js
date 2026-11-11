@@ -838,10 +838,10 @@ function tokenizeLine(text, line2) {
       continue;
     }
     if (ch === "-") {
-      const arrow = ["->>", "-->", "->"].find((a) => text.startsWith(a, i));
+      const arrow2 = ["->>", "-->", "->"].find((a) => text.startsWith(a, i));
       const failed = text.startsWith("-x", i) && !IDENT_PART.test(text[i + 2] ?? "");
-      if (arrow || failed) {
-        const value = arrow ?? "-x";
+      if (arrow2 || failed) {
+        const value = arrow2 ?? "-x";
         tokens.push({ kind: "arrow", value, col: start2 + 1, length: value.length });
         i += value.length;
         continue;
@@ -1216,6 +1216,12 @@ function accessOf(httpMethod, label) {
   return word && WRITE_VERBS.includes(word.toUpperCase()) ? "write" : "read";
 }
 
+// ../frontend/src/utils/canvasColors.ts
+var CANVAS_TOKENS = {
+  light: { paper: "#FFF8E7", surface: "#FFFFFF", ink: "#111111", muted: "#5B5B5B", shadow: "#111111", accent: "#FF5DA2", fail: "#FF3B30" },
+  dark: { paper: "#141318", surface: "#1E1D24", ink: "#F4EFE3", muted: "#A9A5B4", shadow: "#605496", accent: "#FF7AB4", fail: "#FF6B61" }
+};
+
 // ../frontend/src/dsl/palette.ts
 var PALETTE = {
   gray: "#6b7280",
@@ -1272,6 +1278,25 @@ function nodeBaseColor(node) {
   const category = categoryOf(kindOf(node));
   return category ? PALETTE[CATEGORY_COLOR[category]] : void 0;
 }
+var MIX = { fill: 0.12, groupFill: 0.06, line: 0.72 };
+function tint(base, theme) {
+  const { surface, ink } = CANVAS_TOKENS[theme];
+  return {
+    fill: mix(base, surface, MIX.fill),
+    groupFill: mix(base, surface, MIX.groupFill),
+    line: mix(base, ink, MIX.line),
+    text: ink
+  };
+}
+var DASH_ARRAY = { dashed: "7 5", dotted: "2 4" };
+function mix(a, b, share2) {
+  const [x, y] = [rgb(a), rgb(b)];
+  return "#" + x.map((c, i) => Math.round(c * share2 + y[i] * (1 - share2)).toString(16).padStart(2, "0")).join("");
+}
+function rgb(hex2) {
+  const full = resolveColor(hex2) ?? "#000000";
+  return [1, 3, 5].map((i) => parseInt(full.slice(i, i + 2), 16));
+}
 function suggestColor(text) {
   const word = text.toLowerCase();
   let best;
@@ -1300,11 +1325,11 @@ var ROOT_TYPE = "Component";
 
 // ../frontend/src/dsl/typesys/resolve.ts
 var typeKey = techKey;
-function lookupType(table2, name) {
-  const own = table2.get(typeKey(name));
+function lookupType(table3, name) {
+  const own = table3.get(typeKey(name));
   if (own && !own.builtin) return own;
   const tech = findTech(name);
-  return tech ? table2.get(typeKey(tech.techStack)) : own;
+  return tech ? table3.get(typeKey(tech.techStack)) : own;
 }
 function techNamed(name) {
   const tech = findTech(name);
@@ -1327,12 +1352,12 @@ function resolveTypes(decls, base = /* @__PURE__ */ new Map()) {
       order.push(decl);
     }
   }
-  const table2 = new Map(base);
+  const table3 = new Map(base);
   const resolving = [];
   const broken = /* @__PURE__ */ new Set();
   const resolve = (decl) => {
     const key = typeKey(decl.name);
-    const done = table2.get(key);
+    const done = table3.get(key);
     if (done) return done;
     let parent;
     const parentName = decl.parent ?? (typeKey(decl.name) === typeKey(ROOT_TYPE) ? void 0 : ROOT_TYPE);
@@ -1343,7 +1368,7 @@ function resolveTypes(decls, base = /* @__PURE__ */ new Map()) {
       if (cycleStart !== -1) {
         const names = [...resolving.slice(cycleStart), decl, parentDecl].map((d) => d.name);
         error(`Type cycle: ${names.join(" \u2192 ")}`, decl.parentLoc ?? decl.loc);
-        parent = table2.get(typeKey(ROOT_TYPE));
+        parent = table3.get(typeKey(ROOT_TYPE));
         broken.add(key);
       } else if (parentDecl) {
         resolving.push(decl);
@@ -1351,12 +1376,12 @@ function resolveTypes(decls, base = /* @__PURE__ */ new Map()) {
         resolving.pop();
         if (broken.has(parentKey)) broken.add(key);
       } else {
-        parent = base.get(parentKey) ?? lookupType(base, parentName) ?? catalogType(parentName, table2);
+        parent = base.get(parentKey) ?? lookupType(base, parentName) ?? catalogType(parentName, table3);
         if (!parent) {
           broken.add(key);
-          const suggestion = suggestType(parentName, [...table2.values()].map((t) => t.name).concat([...byKey2.values()].map((d) => d.name)));
+          const suggestion = suggestType(parentName, [...table3.values()].map((t) => t.name).concat([...byKey2.values()].map((d) => d.name)));
           error(`Unknown parent type '${parentName}'${suggestion ? `. Did you mean '${suggestion}'?` : ""}`, decl.parentLoc ?? decl.loc);
-          parent = table2.get(typeKey(ROOT_TYPE));
+          parent = table3.get(typeKey(ROOT_TYPE));
         }
       }
     }
@@ -1391,16 +1416,16 @@ function resolveTypes(decls, base = /* @__PURE__ */ new Map()) {
       ...pick("doc", decl.doc ?? parent?.doc),
       loc: decl.loc
     };
-    table2.set(key, resolved);
+    table3.set(key, resolved);
     return resolved;
   };
   const types = order.map(resolve);
-  return { table: table2, types, diagnostics };
+  return { table: table3, types, diagnostics };
 }
-function catalogType(name, table2) {
+function catalogType(name, table3) {
   const tech = findTech(name);
   if (!tech) return void 0;
-  const root = table2.get(typeKey(ROOT_TYPE));
+  const root = table3.get(typeKey(ROOT_TYPE));
   return {
     name: tech.techStack,
     abstract: false,
@@ -2065,8 +2090,8 @@ function loadStdlib(read2) {
 }
 
 // ../frontend/src/dsl/typesys/ops.ts
-function opNamesMostSpecificFirst(type, table2) {
-  const chain = [type, ...type.parents.flatMap((p) => table2.get(typeKey(p)) ?? [])];
+function opNamesMostSpecificFirst(type, table3) {
+  const chain = [type, ...type.parents.flatMap((p) => table3.get(typeKey(p)) ?? [])];
   const seen = /* @__PURE__ */ new Set();
   const names = [];
   chain.forEach((t, i) => {
@@ -3135,7 +3160,7 @@ var Parser = class _Parser {
     };
     const from = fromToken.value;
     const to = toToken.value;
-    const arrow = arrowToken.value;
+    const arrow2 = arrowToken.value;
     const toRef = { id: to, loc: this.locOf(toToken, line2) };
     this.references.push({ id: from, loc: this.locOf(fromToken, line2) }, toRef);
     const top = this.top();
@@ -3147,13 +3172,13 @@ var Parser = class _Parser {
     if (inUseCase) {
       const body = this.currentBody();
       body.openAlt = void 0;
-      const prefixes = arrow === "-->" ? { rest: label, col: labelToken && this.labelStart(labelToken, line2) } : this.readLabelPrefixes(label, labelToken, line2);
+      const prefixes = arrow2 === "-->" ? { rest: label, col: labelToken && this.labelStart(labelToken, line2) } : this.readLabelPrefixes(label, labelToken, line2);
       body.items.push({
         kind: "step",
         step: {
           from,
           to,
-          arrow,
+          arrow: arrow2,
           label: prefixes.rest,
           parallelGroup: top.kind === "par" ? top.group : void 0,
           ...prefixes.multiplier !== void 0 ? { multiplier: prefixes.multiplier } : {},
@@ -3162,7 +3187,7 @@ var Parser = class _Parser {
           loc
         }
       });
-    } else if (arrow === "-x") {
+    } else if (arrow2 === "-x") {
       this.error("'-x' marks a failed call and is only allowed in use case steps", this.locOf(arrowToken, line2));
     } else {
       const base = `${from}->${to}`;
@@ -3408,9 +3433,9 @@ var Parser = class _Parser {
     }
     const shares = [];
     if (tokens[i]) {
-      const mix = tokens[i++];
-      if (!isWord(mix, "mix")) {
-        this.error(`Unexpected ${describe(mix)}; expected mix "Scenario" 90%, "Other" 10%`, this.locOf(mix, line2));
+      const mix2 = tokens[i++];
+      if (!isWord(mix2, "mix")) {
+        this.error(`Unexpected ${describe(mix2)}; expected mix "Scenario" 90%, "Other" 10%`, this.locOf(mix2, line2));
         return;
       }
       for (; ; ) {
@@ -3437,11 +3462,11 @@ var Parser = class _Parser {
       }
       const total = shares.reduce((sum, s) => sum + s.share, 0);
       if (total <= 0) {
-        this.error("Mix shares must add up to more than 0%", this.locOf(mix, line2));
+        this.error("Mix shares must add up to more than 0%", this.locOf(mix2, line2));
         return;
       }
       if (Math.abs(total - 100) > 1e-9) {
-        this.warning(`Mix shares add up to ${Number(total.toFixed(3))}%, not 100%; they are scaled to fit`, this.locOf(mix, line2));
+        this.warning(`Mix shares add up to ${Number(total.toFixed(3))}%, not 100%; they are scaled to fit`, this.locOf(mix2, line2));
       }
       entry.mix = shares.map((s) => ({ scenario: s.scenario, share: s.share / total }));
     }
@@ -4558,10 +4583,10 @@ var Parser = class _Parser {
     return { access };
   }
   /** `200` on a response: one of the responder's type's statuses, when it lists any. */
-  checkStatus(type, code, loc) {
-    if (!type || type.statuses.length === 0 || type.statuses.includes(code)) return;
+  checkStatus(type, code2, loc) {
+    if (!type || type.statuses.length === 0 || type.statuses.includes(code2)) return;
     const listed = type.statuses.length > 12 ? `${type.statuses.slice(0, 12).join(", ")}, \u2026` : type.statuses.join(", ");
-    this.typeProblem(`${type.name} has no status ${code}; it answers ${listed}`, loc);
+    this.typeProblem(`${type.name} has no status ${code2}; it answers ${listed}`, loc);
   }
   /** `header A, B` in a label: each one of the target's type's headers, when it lists any. */
   checkHeaders(type, headers, step) {
@@ -4768,9 +4793,9 @@ var Parser = class _Parser {
         return;
       case "status": {
         const codes = this.readList(tokens, 1, line2, ["number"], "status codes, e.g. status 200, 201, 404");
-        for (const code of codes ?? []) {
-          const n = Number(code.value);
-          if (n < 100 || n > 599) this.error(`'${code.value}' is not an HTTP status code (100 to 599)`, loc(code));
+        for (const code2 of codes ?? []) {
+          const n = Number(code2.value);
+          if (n < 100 || n > 599) this.error(`'${code2.value}' is not an HTTP status code (100 to 599)`, loc(code2));
           else if (!decl.statuses.includes(n)) decl.statuses.push(n);
         }
         return;
@@ -5320,11 +5345,11 @@ var VALUE = new Map([...ALPHABET].map((c, i) => [c, i]));
 // ../frontend/src/playground/share.ts
 var PREFIX = "#code=";
 function encodeShareHash(source, playback, imports) {
-  let code = PREFIX + (0, import_lz_string.compressToEncodedURIComponent)(source);
-  if (imports && Object.keys(imports).length) code += `&imports=${(0, import_lz_string.compressToEncodedURIComponent)(JSON.stringify(imports))}`;
-  if (!playback) return code;
+  let code2 = PREFIX + (0, import_lz_string.compressToEncodedURIComponent)(source);
+  if (imports && Object.keys(imports).length) code2 += `&imports=${(0, import_lz_string.compressToEncodedURIComponent)(JSON.stringify(imports))}`;
+  if (!playback) return code2;
   const scenario = playback.scenario ? `&alt=${encodeURIComponent(playback.scenario)}` : "";
-  return `${code}&uc=${encodeURIComponent(playback.useCase)}${scenario}&step=${playback.step}`;
+  return `${code2}&uc=${encodeURIComponent(playback.useCase)}${scenario}&step=${playback.step}`;
 }
 
 // ../frontend/src/sim/access.ts
@@ -5418,6 +5443,11 @@ function buildSequence(useCase, scenario, nodes = []) {
     add(step.toServiceId);
   }
   return { useCase, scenario, participants, items, condition: scenario.condition || void 0 };
+}
+function findScenario(diagram, useCaseId, scenarioId) {
+  const useCase = diagram.useCases.find((u) => u.id === useCaseId);
+  const scenario = scenarioId ? useCase?.scenarios.find((s) => s.id === scenarioId) : useCase?.scenarios[0];
+  return useCase && scenario ? { useCase, scenario } : void 0;
 }
 function sequenceMessages(items) {
   return items.flatMap((item) => item.kind === "message" ? [item.message] : item.branches.flat());
@@ -5528,7 +5558,7 @@ function findUseCase(diagram, name) {
   const lower = name.toLowerCase();
   return diagram.useCases.find((u) => u.name === name) ?? diagram.useCases.find((u) => u.name.toLowerCase() === lower) ?? diagram.useCases.find((u) => u.id === name);
 }
-function findScenario(useCase, name) {
+function findScenario2(useCase, name) {
   const norm = (s) => s.replace(/\s*(›|>)\s*/g, " \u203A ").trim().toLowerCase();
   const wanted = norm(name);
   return useCase.scenarios.find((s) => s.name === name) ?? useCase.scenarios.find((s) => norm(s.name) === wanted || s.id === name);
@@ -5697,8 +5727,8 @@ function formatCount(n) {
   if (n >= 1e3) return `${trim(n / 1e3, 1)}k`;
   return trim(n, 0);
 }
-function formatUsd(usd2) {
-  return `$${Math.round(usd2).toLocaleString("en-US")}/month`;
+function formatUsd(usd3) {
+  return `$${Math.round(usd3).toLocaleString("en-US")}/month`;
 }
 
 // ../frontend/src/sim/overlay.ts
@@ -6088,7 +6118,7 @@ function breachesOf(team, sent, analysis) {
         continue;
       }
       const key = PERCENTILE_KEYS[r.percentile];
-      const scenario = r.scenario !== void 0 ? findScenario(u, r.scenario) : void 0;
+      const scenario = r.scenario !== void 0 ? findScenario2(u, r.scenario) : void 0;
       if (r.scenario !== void 0 && !scenario) continue;
       const what = `${key} of "${u.name}"${scenario ? ` scenario "${scenario.name}"` : ""}`;
       const name = `${what} < ${formatMs(r.maxMs)}`;
@@ -6139,7 +6169,7 @@ function resolveTraffic(diagram, warnings = []) {
     seen.add(useCase.id);
     const shares = useCase.scenarios.map(() => 0);
     for (const { scenario, share: share2 } of entry.mix ?? []) {
-      const found = findScenario(useCase, scenario);
+      const found = findScenario2(useCase, scenario);
       if (found) shares[useCase.scenarios.indexOf(found)] += share2;
       else warnings.push(`"${useCase.name}" has no scenario "${scenario}"; its traffic share is ignored`);
     }
@@ -6796,9 +6826,9 @@ var CATEGORY = {
 var percentileName = (q) => PERCENTILE_KEYS[q];
 var lineOf = (loc) => `${loc.file ? `${loc.file}:` : "line "}${loc.line}`;
 function stepText(step) {
-  const arrow = step.failed ? "-x" : step.executionType === "SYNC_REQUEST_RESPONSE" ? "->" : "->>";
+  const arrow2 = step.failed ? "-x" : step.executionType === "SYNC_REQUEST_RESPONSE" ? "->" : "->>";
   const label = requestLabel(step);
-  return `${step.fromServiceId} ${arrow} ${step.toServiceId}${label ? ` : ${label}` : ""} at ${lineOf(step.loc)}`;
+  return `${step.fromServiceId} ${arrow2} ${step.toServiceId}${label ? ` : ${label}` : ""} at ${lineOf(step.loc)}`;
 }
 function requirementName(r) {
   switch (r.kind) {
@@ -7045,9 +7075,9 @@ function cost(run, max) {
   const ofWhich = egress > 0 ? `, ${formatUsd(egress)} of it egress` : "";
   const message = `Total cost is ${formatUsd(total)}${ofWhich} (limit ${formatUsd(max)})`;
   if (total <= max) return pass(message);
-  const usd2 = (x) => formatUsd(x).replace("/month", "");
+  const usd3 = (x) => formatUsd(x).replace("/month", "");
   const top = [...run.analysis.nodes].filter((n) => n.costUsd > 0).sort((a, b) => b.costUsd - a.costUsd).slice(0, 3).map((n) => {
-    const notes = [n.replicas > 1 ? `${n.replicas} replicas` : "", n.shards > 1 ? `${n.shards} shards` : "", n.egressUsd > 0 ? `${usd2(n.egressUsd)} of it egress` : ""].filter(Boolean);
+    const notes = [n.replicas > 1 ? `${n.replicas} replicas` : "", n.shards > 1 ? `${n.shards} shards` : "", n.egressUsd > 0 ? `${usd3(n.egressUsd)} of it egress` : ""].filter(Boolean);
     return `${n.id} ${formatUsd(n.costUsd)}${notes.length ? ` (${notes.join(", ")})` : ""}`;
   });
   const egressHint = egress > total / 2 ? " Most of it is egress: serve repeated downloads from a CDN ($0.02/GB) instead of storage ($0.09/GB), or send fewer bytes." : "";
@@ -7110,7 +7140,7 @@ function scope(run, useCase, scenario) {
   const u = findUseCase(run.diagram, useCase);
   if (!u) return unknownUseCase(run, useCase);
   if (scenario === void 0) return { u, scenarios: u.scenarios, label: quote(u.name) };
-  const s = findScenario(u, scenario);
+  const s = findScenario2(u, scenario);
   if (!s) return missingScenario(u, scenario);
   return { u, scenarios: [s], label: `${quote(u.name)} scenario ${quote(s.name)}` };
 }
@@ -7143,7 +7173,7 @@ function assertion(run, a) {
     case "hasScenario": {
       const u = findUseCase(run.diagram, a.useCase);
       if (!u) return unknownUseCase(run, a.useCase);
-      const s = findScenario(u, a.scenario);
+      const s = findScenario2(u, a.scenario);
       return s ? pass(`${quote(u.name)} has scenario ${quote(s.name)}`) : missingScenario(u, a.scenario);
     }
     case "handlesFailure": {
@@ -7163,10 +7193,10 @@ function assertion(run, a) {
     case "replicas": {
       const nodes = selectNodes(run.diagram, a.target);
       if (nodes.length === 0) return noMatch(a.target);
-      const short = nodes.filter((n) => replicasOf(n) < a.min);
+      const short2 = nodes.filter((n) => replicasOf(n) < a.min);
       const has = (n) => `${n.id} has ${replicasOf(n)} replica${replicasOf(n) === 1 ? "" : "s"}`;
-      if (short.length === 0) return pass(`${nodes.map(has).join(", ")} (minimum ${a.min})`);
-      return fail(`${short.map(has).join(", ")} (minimum ${a.min})`, `Declare ${short[0].id} with x${a.min}`);
+      if (short2.length === 0) return pass(`${nodes.map(has).join(", ")} (minimum ${a.min})`);
+      return fail(`${short2.map(has).join(", ")} (minimum ${a.min})`, `Declare ${short2[0].id} with x${a.min}`);
     }
     case "neverWaits":
       return neverWaits(run, a);
@@ -7437,6 +7467,189 @@ function noPath(run, from, to) {
   return pass(`No connection or step goes directly from ${x} to ${y}`);
 }
 
+// ../frontend/src/sim/whatif.ts
+function headlineOf(analysis) {
+  const loaded = analysis.useCases.filter((u) => u.rps > 0);
+  const p99s = (loaded.length ? loaded : analysis.useCases).map((u) => u.percentiles.p99).filter((x) => Number.isFinite(x));
+  return {
+    p99Ms: p99s.length ? Math.max(...p99s) : 0,
+    availability: loaded.length ? Math.min(...loaded.map((u) => u.availability)) : 1,
+    costUsd: analysis.totalCostUsd
+  };
+}
+var requirementsPass = (results) => results.every((r) => r.passed || r.id.startsWith("test:"));
+function findWhatIf(diagram, name) {
+  return diagram.whatifs?.find((w) => w.name === name);
+}
+function whatIfOptions(diagram, whatif, base = {}) {
+  const warnings = [];
+  const traffic = resolveTraffic(diagram);
+  const ids = new Set(components(diagram).map((n) => n.id));
+  const rps = new Map(base.trafficRps ?? []);
+  const replicas = new Map(base.replicas ?? []);
+  const failed = new Set(base.failed ?? []);
+  const hitRates = new Map(base.hitRates ?? []);
+  const errorRates = new Map(base.errorRates ?? []);
+  for (const change of whatif.changes) {
+    if (change.kind === "traffic") {
+      const u = findUseCase(diagram, change.useCase);
+      if (!u) {
+        warnings.push(`What-if "${whatif.name}": no use case named "${change.useCase}"; its traffic change is ignored`);
+        continue;
+      }
+      const current = rps.get(u.id) ?? traffic.get(u.id)?.rps ?? 0;
+      rps.set(u.id, change.rps ?? current * (change.multiply ?? 1));
+      continue;
+    }
+    if (!ids.has(change.node)) {
+      warnings.push(`What-if "${whatif.name}": no node '${change.node}'; ${change.kind === "fail" ? "fail" : change.kind === "hit" ? "its hit rate" : change.kind === "errors" ? "its error rate" : "its replicas"} ignored`);
+      continue;
+    }
+    if (change.kind === "fail") failed.add(change.node);
+    else if (change.kind === "hit") hitRates.set(change.node, change.percent);
+    else if (change.kind === "errors") errorRates.set(change.node, change.percent);
+    else replicas.set(change.node, change.replicas);
+  }
+  return {
+    options: {
+      ...base,
+      ...rps.size ? { trafficRps: rps } : {},
+      ...replicas.size ? { replicas } : {},
+      ...failed.size ? { failed } : {},
+      ...hitRates.size ? { hitRates } : {},
+      ...errorRates.size ? { errorRates } : {}
+    },
+    warnings
+  };
+}
+function runWhatIf(diagram, whatif, base = {}) {
+  const { options, warnings } = whatIfOptions(diagram, whatif, base);
+  const analysis = analyze(diagram, options);
+  const results = runTests(diagram, analysis, options);
+  return { name: whatif.name, loc: whatif.loc, options, analysis, results, passed: requirementsPass(results), headline: headlineOf(analysis), warnings };
+}
+function runWhatIfs(diagram, base = {}) {
+  return (diagram.whatifs ?? []).map((w) => runWhatIf(diagram, w, base));
+}
+function sweep(diagram, useCase, from, to, opts = {}) {
+  const u = findUseCase(diagram, useCase);
+  if (!u) throw new Error(`No use case named "${useCase}"`);
+  if (!(from >= 0) || !(to > from)) throw new Error("The sweep range must go up, e.g. 10k..500k");
+  const base = opts.base ?? {};
+  const count = Math.max(2, Math.round(opts.steps ?? 10));
+  const at = (rps, cheap = false) => ({
+    ...base,
+    trafficRps: new Map([...base.trafficRps ?? [], [u.id, rps]]),
+    ...cheap ? { percentiles: [] } : {}
+  });
+  const passesAt = (rps) => {
+    const options = at(rps);
+    return requirementsPass(runTests(diagram, analyze(diagram, options), options));
+  };
+  const tolerance = Math.max(1, (to - from) / 1e3);
+  const bisect = (lo, hi, ok) => {
+    while (hi - lo > tolerance) {
+      const mid = (lo + hi) / 2;
+      if (ok(mid)) lo = mid;
+      else hi = mid;
+    }
+    return lo;
+  };
+  const steps = [];
+  for (let i = 0; i < count; i++) {
+    const rps = from + (to - from) * i / (count - 1);
+    const options = at(rps);
+    const analysis = analyze(diagram, options);
+    const results = runTests(diagram, analysis, options);
+    steps.push({
+      rps,
+      passed: requirementsPass(results),
+      headline: headlineOf(analysis),
+      saturated: analysis.nodes.filter((n) => n.saturated).map((n) => n.id),
+      failing: results.filter((r) => !r.passed && !r.id.startsWith("test:")).map((r) => r.name)
+    });
+  }
+  const saturation = [];
+  for (const id of new Set(steps.flatMap((s) => s.saturated))) {
+    const first = steps.findIndex((s) => s.saturated.includes(id));
+    if (first === 0) {
+      saturation.push({ node: id, rps: from, atStart: true });
+      continue;
+    }
+    const free = (rps) => !analyze(diagram, at(rps, true)).nodes.find((n) => n.id === id)?.saturated;
+    saturation.push({ node: id, rps: bisect(steps[first - 1].rps, steps[first].rps, free), atStart: false });
+  }
+  saturation.sort((a, b) => a.rps - b.rps || a.node.localeCompare(b.node));
+  let maxPassingRps;
+  const firstFail = steps.findIndex((s) => !s.passed);
+  if (firstFail === -1) maxPassingRps = to;
+  else if (firstFail > 0) maxPassingRps = bisect(steps[firstFail - 1].rps, steps[firstFail].rps, passesAt);
+  return { useCase: u.name, from, to, steps, saturation, ...maxPassingRps !== void 0 ? { maxPassingRps } : {} };
+}
+
+// ../frontend/src/sim/delta.ts
+var MINUS = "\u2212";
+var usd = (n) => `$${Math.round(Math.abs(n)).toLocaleString("en-US")}`;
+var short = (ms) => formatMs(ms).replace(/ ms$/, "");
+var none = "\u2014";
+function tone(before2, after2, lowerIsBetter, epsilon) {
+  if (before2 === void 0 || after2 === void 0 || Math.abs(after2 - before2) < epsilon) return "same";
+  return after2 < before2 === lowerIsBetter ? "better" : "worse";
+}
+function costRow(before2, after2) {
+  const d = Math.round(after2) - Math.round(before2);
+  return {
+    label: "Cost",
+    before: `${usd(before2)}/mo`,
+    after: `${usd(after2)}/mo`,
+    change: d === 0 ? "same" : `${d > 0 ? "+" : MINUS}${usd(d)}/mo`,
+    tone: tone(Math.round(before2), Math.round(after2), true, 1)
+  };
+}
+function p99Row(label, before2, after2) {
+  const same = before2 !== void 0 && after2 !== void 0 && formatMs(before2) === formatMs(after2);
+  return {
+    label,
+    before: before2 === void 0 ? none : formatMs(before2),
+    after: after2 === void 0 ? none : formatMs(after2),
+    change: before2 === void 0 || after2 === void 0 ? after2 === void 0 ? "removed" : "new" : same ? "same" : `p99 ${short(before2)}\u2192${short(after2)} ms`,
+    tone: same ? "same" : tone(before2, after2, true, 0.05)
+  };
+}
+function availabilityRow(label, before2, after2) {
+  const same = before2 !== void 0 && after2 !== void 0 && formatAvailability(before2) === formatAvailability(after2);
+  return {
+    label,
+    before: before2 === void 0 ? none : formatAvailability(before2),
+    after: after2 === void 0 ? none : formatAvailability(after2),
+    change: before2 === void 0 || after2 === void 0 ? after2 === void 0 ? "removed" : "new" : same ? "same" : `${formatAvailability(before2)}\u2192${formatAvailability(after2)}`,
+    tone: same ? "same" : tone(before2, after2, false, 1e-12)
+  };
+}
+function checkRow(c) {
+  const state = (p) => p === void 0 ? none : p ? "pass" : "fail";
+  const change = c.before === void 0 ? c.after ? "\u2713 new, passes" : "\u2717 new, fails" : c.after === void 0 ? "removed" : c.after ? "\u2713 now passes" : "\u2717 now fails";
+  return {
+    label: c.name,
+    before: state(c.before),
+    after: state(c.after),
+    change,
+    tone: c.after === void 0 ? "same" : c.after ? c.before === true ? "same" : "better" : "worse"
+  };
+}
+function utilizationRow(u) {
+  const pct = (x) => x === void 0 ? none : formatPercent(x);
+  const saturates = (u.after ?? 0) >= 1 && (u.before ?? 0) < 1;
+  const frees = (u.before ?? 0) >= 1 && (u.after ?? 0) < 1;
+  return {
+    label: `Utilisation \xB7 ${u.node}`,
+    before: pct(u.before),
+    after: pct(u.after),
+    change: `${pct(u.before)}\u2192${pct(u.after)}${saturates ? ", saturated" : frees ? ", no longer saturated" : ""}`,
+    tone: tone(u.before ?? 0, u.after ?? 0, true, 1e-9)
+  };
+}
+
 // ../frontend/src/dsl/view.ts
 var FRAME_TECH = "Service Group";
 function viewDiagram(diagram, options = {}) {
@@ -7647,10 +7860,10 @@ function parseSource({ source, path = "diagram.proschi", imports = {} }) {
   const result = parse(source, { path, resolve: mapResolver(imports) });
   return { diagram: result.diagram, errors: result.diagnostics.filter((d) => d.severity === "error") };
 }
-function loadDocument(input) {
+function loadDocument(input, options) {
   const { diagram, errors } = parseSource(input);
   const simulated = errors.length === 0 && (diagram.traffic?.length ?? 0) > 0;
-  const analysis = simulated ? analyze(diagram) : void 0;
+  const analysis = simulated ? analyze(diagram, options) : void 0;
   const imports = input.imports && Object.keys(input.imports).length ? input.imports : void 0;
   const view = errors.length ? {} : input.view ?? {};
   const sim = errors.length ? void 0 : viewOverlay(diagram, analysis, view);
@@ -7673,7 +7886,7 @@ function loadDocument(input) {
     warnings: (analysis?.warnings ?? []).filter((w) => !noted.has(w)),
     systems: sim?.systems ?? {},
     notes: sim?.notes ?? [],
-    tests: analysis ? runTests(diagram, analysis) : [],
+    tests: analysis ? runTests(diagram, analysis, options) : [],
     link: (playback) => EDITOR + encodeShareHash(input.source, playback, imports)
   };
 }
@@ -8814,15 +9027,628 @@ function groupByEndpoint(useCases) {
   return [...groups].map(([label, list]) => ({ label, useCases: list }));
 }
 
+// ../frontend/src/hld/hld.ts
+var HOT_UTILIZATION = 0.7;
+function selectorLabel(s) {
+  if ("node" in s) return s.node;
+  if ("tech" in s) return `[${s.tech}]`;
+  if ("anyOf" in s) return s.anyOf.map(selectorLabel).join(" or ");
+  if ("consistency" in s) return `any ${s.consistency} store`;
+  return `any ${s.kind}`;
+}
+var formatNumber = (n) => Number.isInteger(n) ? String(n) : String(Number(n.toFixed(3)));
+var requirementLabel = requirementName;
+var REQUIREMENT_CATEGORY = {
+  latency: "latency",
+  availability: "availability",
+  durable: "durability",
+  survive: "resilience",
+  cost: "cost",
+  lag: "latency"
+};
+function callLabel(target, match) {
+  if (match?.op !== void 0) return `uses ${match.op} on ${selectorLabel(target)}`;
+  if (match?.header !== void 0) return `sends header ${match.header} to ${selectorLabel(target)}`;
+  if (match?.method !== void 0) return `calls ${selectorLabel(target)} with ${match.method} ${match.path ?? ""}`.trimEnd();
+  return `calls ${selectorLabel(target)}`;
+}
+function assertionLabel(a) {
+  const uc = "useCase" in a ? `"${a.useCase}"${"scenario" in a && a.scenario && a.kind !== "hasScenario" ? ` scenario "${a.scenario}"` : ""}` : "";
+  switch (a.kind) {
+    case "calls":
+      return `${uc} ${a.quantifier === "every" ? "every scenario " : a.quantifier === "never" ? "never " : ""}${callLabel(a.target, a.match)}`;
+    case "before":
+      return `${uc} ${callLabel(a.first, a.match)} before ${selectorLabel(a.then)}`;
+    case "beforeResponding":
+      return `${uc} ${callLabel(a.target, a.match)} before responding`;
+    case "writesBeforeResponding":
+      return `${uc} writes ${selectorLabel(a.target)} before responding`;
+    case "responds":
+      return `${uc} responds ${a.status}`;
+    case "hasScenario":
+      return `${uc} has scenario "${a.scenario}"`;
+    case "handlesFailure":
+      return `${uc} handles failure of ${selectorLabel(a.target)}`;
+    case "noPath":
+      return `no path from ${selectorLabel(a.from)} to ${selectorLabel(a.to)}`;
+    case "replicas":
+      return `${selectorLabel(a.target)} has replicas >= ${a.min}`;
+    case "neverWaits":
+      return `${uc} never waits for ${selectorLabel(a.target)}`;
+    case "after":
+      return `${uc} ${callLabel(a.target, a.match)} after ${selectorLabel(a.after)}`;
+    case "senderCalls":
+      return `${a.useCase ? `in "${a.useCase}" ` : ""}${selectorLabel(a.from)} ${a.quantifier === "never" ? "never calls" : "calls"} ${selectorLabel(a.to)}`;
+    case "startsAt":
+      return `${uc} starts at ${selectorLabel(a.target)}`;
+  }
+}
+var sameLoc = (a, b) => !!a && a.line === b.line && a.file === b.file;
+function resultFor(tests, loc, name) {
+  return tests.find((t) => sameLoc(t.loc, loc)) ?? tests.find((t) => t.name === name);
+}
+var statusOf = (result) => result ? result.passed ? "pass" : "fail" : "unchecked";
+var components2 = (d) => d.nodes.filter((n) => n.kind === "component");
+function scenarioShares(useCase, diagram) {
+  const entry = diagram.traffic?.find((t) => t.useCase === useCase.name);
+  if (!entry) return void 0;
+  const shares = /* @__PURE__ */ new Map();
+  const mix2 = (entry.mix ?? []).filter((m) => useCase.scenarios.some((s) => s.name === m.scenario));
+  const total = mix2.reduce((sum, m) => sum + m.share, 0);
+  if (total > 0) for (const m of mix2) shares.set(m.scenario, m.share / total);
+  else if (useCase.scenarios[0]) shares.set(useCase.scenarios[0].name, 1);
+  return shares;
+}
+function entryResponse(scenario) {
+  const first = scenario.steps[0];
+  if (!first) return {};
+  if (first.failed) return { status: "failed" };
+  return { status: first.statusCode !== void 0 ? String(first.statusCode) : void 0, body: first.responseBody || void 0 };
+}
+function buildApis(diagram, name) {
+  const groups = /* @__PURE__ */ new Map();
+  for (const useCase of diagram.useCases) {
+    if (!useCase.endpoint) continue;
+    const key = useCase.endpointGroup ?? useCase.endpoint;
+    let group = groups.get(key);
+    if (!group) {
+      const [method, ...path] = key.split(" ");
+      const first = useCase.steps[0];
+      group = { endpoint: key, method, path: path.join(" "), service: first ? name(first.toServiceId) : void 0, operations: [] };
+      groups.set(key, group);
+    }
+    group.operations.push({
+      useCaseId: useCase.id,
+      useCase: useCase.name,
+      endpoint: useCase.endpoint,
+      request: useCase.steps[0]?.requestBody || void 0,
+      responses: useCase.scenarios.map((s) => ({ scenario: s.name, outcome: s.outcome, ...entryResponse(s) }))
+    });
+  }
+  return [...groups.values()];
+}
+function lacksErrorHandling(useCase) {
+  return useCase.scenarios.length > 0 && useCase.scenarios.every((s) => s.outcome === "success" && !s.steps.some((st) => st.failed));
+}
+function hld(diagram, analysis, tests = []) {
+  const byId = new Map(diagram.nodes.map((n) => [n.id, n]));
+  const name = (id) => byId.get(id)?.name ?? id;
+  const nodes = components2(diagram);
+  const nodeAnalysis = new Map(analysis?.nodes.map((n) => [n.id, n]));
+  const sections = [];
+  const teams = [...new Set(nodes.map((n) => n.ownerTeam).filter((t) => !!t))];
+  if (nodes.length > 0 || diagram.summary) {
+    sections.push({ kind: "overview", title: "Overview", summary: diagram.summary, components: nodes.length, useCases: diagram.useCases.length, teams });
+  }
+  const functional = diagram.useCases.map((u) => ({
+    useCaseId: u.id,
+    name: u.name,
+    description: u.description,
+    scenarios: u.scenarios.map((s) => ({ id: s.id, name: s.name, outcome: s.outcome, condition: s.condition }))
+  }));
+  const nonFunctional = (diagram.requirements ?? []).map((r) => {
+    const label = requirementLabel(r);
+    const result = resultFor(tests, r.loc, label);
+    return { label, category: REQUIREMENT_CATEGORY[r.kind], status: statusOf(result), measured: result?.message, hint: result?.passed ? void 0 : result?.hint, loc: r.loc };
+  });
+  const flowTests = (diagram.tests ?? []).map((t) => {
+    const result = resultFor(tests, t.loc, t.name);
+    return { name: t.name, assertions: t.assertions.map(assertionLabel), status: statusOf(result), measured: result?.message, hint: result?.passed ? void 0 : result?.hint, loc: t.loc };
+  });
+  if (functional.length || nonFunctional.length || flowTests.length) {
+    sections.push({ kind: "requirements", title: "Requirements", functional, nonFunctional, flowTests });
+  }
+  const traffic = (diagram.traffic ?? []).map((t) => ({ useCase: t.useCase, rps: t.rps, ...t.avgRps !== void 0 ? { avgRps: t.avgRps } : {}, mix: t.mix ?? [] }));
+  const load = (analysis?.nodes ?? []).filter((n) => n.kind !== "client").map((n) => ({
+    id: n.id,
+    name: name(n.id),
+    loadRps: n.loadRps,
+    capacityRps: n.capacityRps,
+    utilization: n.utilization,
+    saturated: n.saturated,
+    replicas: n.replicas,
+    shards: n.shards,
+    readLoadRps: n.readLoadRps,
+    readCapacityRps: n.readCapacityRps,
+    readUtilization: n.readUtilization,
+    writeLoadRps: n.writeLoadRps,
+    writeCapacityRps: n.writeCapacityRps,
+    writeUtilization: n.writeUtilization,
+    writeScaling: n.writeScaling,
+    bandwidthLoadMBps: n.bandwidthLoadMBps,
+    bandwidthCapacityMBps: n.bandwidthCapacityMBps,
+    bandwidthUtilization: n.bandwidthUtilization,
+    egressGbPerMonth: n.egressGbPerMonth,
+    egressUsd: n.egressUsd,
+    costUsd: n.costUsd
+  }));
+  if (traffic.length || load.length) {
+    sections.push({ kind: "capacity", title: "Capacity estimates", traffic, load, totalCostUsd: analysis?.totalCostUsd, totalEgressUsd: analysis?.totalEgressUsd });
+  }
+  const entities = diagram.entities ?? [];
+  const group = (n) => n.parent ? byId.get(n.parent)?.name : void 0;
+  const componentRows = nodes.map((n) => ({
+    id: n.id,
+    name: n.name,
+    tech: n.implicit ? void 0 : n.techStack,
+    kind: nodeAnalysis.get(n.id)?.kind ?? kindOf(n),
+    team: n.ownerTeam,
+    replicas: nodeAnalysis.get(n.id)?.replicas ?? n.replicas ?? 1,
+    responsibility: n.description,
+    group: group(n),
+    entities: entities.filter((e) => e.store === n.id).map((e) => e.name)
+  }));
+  if (componentRows.length) sections.push({ kind: "components", title: "Components", components: componentRows });
+  if (entities.length) {
+    sections.push({ kind: "dataModel", title: "Data model", entities: entities.map((e) => ({ ...e, storeName: e.store ? name(e.store) : void 0 })) });
+  }
+  const endpoints = buildApis(diagram, name);
+  if (endpoints.length) sections.push({ kind: "apis", title: "APIs", endpoints });
+  const useCaseAnalysis = new Map(analysis?.useCases.map((u) => [u.id, u]));
+  const scenarioUseCases = diagram.useCases.map((u) => {
+    const ua = useCaseAnalysis.get(u.id);
+    const shares = scenarioShares(u, diagram);
+    return {
+      useCaseId: u.id,
+      name: u.name,
+      description: u.description,
+      endpoint: u.endpoint,
+      rps: ua?.rps ?? diagram.traffic?.find((t) => t.useCase === u.name)?.rps,
+      scenarios: u.scenarios.map((s) => {
+        const sa = ua?.scenarios.find((x) => x.id === s.id);
+        return {
+          id: s.id,
+          name: s.name,
+          outcome: s.outcome,
+          condition: s.condition,
+          share: sa?.share ?? (shares ? shares.get(s.name) ?? 0 : void 0),
+          latency: sa?.percentiles,
+          meanMs: sa?.meanMs,
+          steps: s.steps.length
+        };
+      })
+    };
+  });
+  if (scenarioUseCases.length) sections.push({ kind: "scenarios", title: "Scenarios", useCases: scenarioUseCases });
+  if (diagram.decisions?.length) sections.push({ kind: "decisions", title: "Decisions", decisions: diagram.decisions });
+  const risks = [];
+  for (const r of nonFunctional.filter((r2) => r2.status === "fail")) {
+    risks.push({ severity: "high", kind: "requirement", title: `Requirement not met: ${r.label}`, detail: r.measured, hint: r.hint });
+  }
+  for (const t of flowTests.filter((t2) => t2.status === "fail")) {
+    risks.push({ severity: "high", kind: "test", title: `Test failing: ${t.name}`, detail: t.measured, hint: t.hint });
+  }
+  for (const n of load) {
+    const pct = `${Math.round(n.utilization * 100)}%`;
+    if (n.saturated) {
+      const bandwidth = n.bandwidthUtilization >= n.utilization && n.bandwidthUtilization > 0;
+      risks.push({
+        severity: "high",
+        kind: "saturated",
+        title: `${n.name} is saturated`,
+        detail: bandwidth ? `${Math.round(n.bandwidthLoadMBps).toLocaleString("en-US")} MB/s of payloads against ${Math.round(n.bandwidthCapacityMBps).toLocaleString("en-US")} MB/s of bandwidth (${pct})` : `${formatRps2(n.loadRps)} against a capacity of ${formatRps2(n.capacityRps)} (${pct})`,
+        hint: bandwidth ? "Send the bytes around it (presigned URLs to storage, a CDN), or add replicas." : "Add replicas, cache in front of it, or move work async."
+      });
+    } else if (n.utilization > HOT_UTILIZATION) {
+      risks.push({ severity: "medium", kind: "hot", title: `${n.name} runs hot`, detail: `${pct} utilisation; latency climbs steeply near saturation`, hint: "Add headroom with another replica." });
+    }
+  }
+  for (const id of analysis?.singlePointsOfFailure ?? []) {
+    const node = byId.get(id);
+    risks.push({ severity: "medium", kind: "spof", title: `Single point of failure: ${name(id)}${node && !node.implicit ? ` (${node.techStack})` : ""}`, hint: "Add a replica or a fallback scenario." });
+  }
+  for (const u of diagram.useCases.filter(lacksErrorHandling)) {
+    risks.push({ severity: "low", kind: "no-error-handling", title: `${u.name} has no error scenario`, detail: "Nothing describes what happens when a call fails or is rejected.", hint: "Add an alt branch with a -x call or a 4xx/5xx response." });
+  }
+  for (const w of analysis?.warnings ?? []) risks.push({ severity: "low", kind: "warning", title: w });
+  if (risks.length) sections.push({ kind: "risks", title: "Risks", risks });
+  return { title: diagram.title ?? "Architecture", summary: diagram.summary, checked: !!analysis || tests.length > 0, sections, diagram };
+}
+function formatRps2(rps) {
+  if (rps >= 1e6) return `${formatNumber(Number((rps / 1e6).toFixed(2)))}M rps`;
+  if (rps >= 1e3) return `${formatNumber(Number((rps / 1e3).toFixed(2)))}k rps`;
+  return `${formatNumber(Number(rps.toFixed(2)))} rps`;
+}
+function formatTraffic2(rps, avgRps) {
+  if (avgRps === void 0 || avgRps === rps) return formatRps2(rps);
+  return `avg ${formatRps2(avgRps).replace(/ rps$/, "")} \xB7 peak ${formatRps2(rps)}`;
+}
+var formatMs2 = (ms) => `${ms >= 100 ? Math.round(ms) : formatNumber(Number(ms.toFixed(1)))} ms`;
+var formatPercent2 = (fraction) => `${formatNumber(Number((fraction * 100).toFixed(1)))}%`;
+var formatUsd2 = (usd3) => `$${Math.round(usd3).toLocaleString("en-US")}`;
+function formatGb(gb) {
+  const n = (x, digits) => Number(x.toFixed(digits)).toLocaleString("en-US");
+  return gb >= 1e3 ? `${n(gb / 1e3, 1)} TB` : `${n(gb, gb < 10 ? 1 : 0)} GB`;
+}
+function accessText(n, access) {
+  const [load, capacity, utilization] = access === "read" ? [n.readLoadRps, n.readCapacityRps, n.readUtilization] : [n.writeLoadRps, n.writeCapacityRps, n.writeUtilization];
+  return load > 0 ? `${formatRps2(load)} of ${formatRps2(capacity)} (${formatPercent2(utilization)})` : "\u2014";
+}
+var replicasText = (n) => n.shards > 1 ? `${n.replicas} \xD7 ${n.shards} shards` : String(n.replicas);
+var egressText = (n) => n.egressGbPerMonth > 0 ? `${formatGb(n.egressGbPerMonth)}, ${formatUsd2(n.egressUsd)}` : "\u2014";
+var LOAD_HEADINGS = ["Component", "Reads", "Writes", "Utilisation", "Replicas", "Egress / month", "Cost / month"];
+var totalCostText = (totalUsd, egressUsd = 0) => `${formatUsd2(totalUsd)} / month${egressUsd > 0 ? ` (${formatUsd2(egressUsd)} of it egress)` : ""}`;
+var plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+function overviewFacts(s) {
+  return [plural(s.components, "component"), plural(s.useCases, "use case"), s.teams.length ? `teams: ${s.teams.join(", ")}` : ""].filter(Boolean).join(" \xB7 ");
+}
+function responseText(r) {
+  return [r.status, r.body].filter(Boolean).join(" ") || "\u2014";
+}
+
+// ../frontend/src/dsl/mermaid.ts
+var RESERVED = new Set(
+  [
+    "end",
+    "graph",
+    "flowchart",
+    "subgraph",
+    "style",
+    "class",
+    "classdef",
+    "click",
+    "linkstyle",
+    "direction",
+    "default",
+    "participant",
+    "actor",
+    "as",
+    "note",
+    "over",
+    "left",
+    "right",
+    "of",
+    "loop",
+    "alt",
+    "else",
+    "opt",
+    "par",
+    "and",
+    "rect",
+    "critical",
+    "break",
+    "option",
+    "activate",
+    "deactivate",
+    "autonumber",
+    "title",
+    "box",
+    "create",
+    "destroy",
+    "link",
+    "links",
+    "properties",
+    "details",
+    "sequencediagram",
+    "accTitle",
+    "accDescr"
+  ].map((w) => w.toLowerCase())
+);
+function escapeMermaid(text, quoted = false) {
+  return text.replace(/\s*\r?\n\s*/g, " ").replace(quoted ? /[#;%<>"]/g : /[#;%<>]/g, (c) => `#${c.charCodeAt(0)};`).trim();
+}
+function idMapper() {
+  const ids = /* @__PURE__ */ new Map();
+  const taken = /* @__PURE__ */ new Set();
+  return (id) => {
+    let safe = ids.get(id);
+    if (safe) return safe;
+    safe = /^[A-Za-z_][A-Za-z0-9_]*$/.test(id) && !RESERVED.has(id.toLowerCase()) ? id : `${id.replace(/\W/g, "_")}_`;
+    while (taken.has(safe)) safe += "_";
+    ids.set(id, safe);
+    taken.add(safe);
+    return safe;
+  };
+}
+function arrow(message) {
+  if (message.kind === "response") return "-->>";
+  if (message.failed) return "-x";
+  return message.async ? "-)" : "->>";
+}
+function toMermaidSequence(diagram, useCaseId, scenarioId) {
+  const found = findScenario(diagram, useCaseId, scenarioId);
+  if (!found) return "";
+  const sequence = buildSequence(found.useCase, found.scenario, diagram.nodes);
+  const id = idMapper();
+  const lines = ["sequenceDiagram", `  title ${escapeMermaid(found.useCase.name)}`];
+  for (const p of sequence.participants) {
+    const keyword = diagram.nodes.find((n) => n.id === p.id)?.techStack === "Actor" ? "actor" : "participant";
+    lines.push(`  ${keyword} ${id(p.id)} as ${escapeMermaid(p.name) || id(p.id)}`);
+  }
+  const first = sequence.participants[0];
+  const last = sequence.participants.at(-1);
+  if (first && last && (found.useCase.scenarios.length > 1 || sequence.condition)) {
+    const over = first === last ? id(first.id) : `${id(first.id)},${id(last.id)}`;
+    const outcome = found.scenario.outcome === "error" ? " (error)" : "";
+    const when = sequence.condition ? ` when ${sequence.condition}` : "";
+    lines.push(`  Note over ${over}: ${escapeMermaid(`${found.scenario.name}${outcome}${when}`)}`);
+  }
+  const message = (m, indent) => `${indent}${id(m.from)}${arrow(m)}${id(m.to)}: ${escapeMermaid(m.label) || "#32;"}`;
+  for (const item of sequence.items) {
+    if (item.kind === "message") {
+      lines.push(message(item.message, "  "));
+      continue;
+    }
+    item.branches.forEach((branch, i) => {
+      lines.push(i === 0 ? "  par" : "  and");
+      branch.forEach((m) => lines.push(message(m, "    ")));
+    });
+    lines.push("  end");
+  }
+  return lines.join("\n") + "\n";
+}
+function nodeLabel2(node) {
+  if (node.kind === "text") return escapeMermaid(node.description ?? node.name, true);
+  const techName = node.resolvedType && !node.resolvedType.builtin ? node.resolvedType.name : node.techStack;
+  const tech = node.implicit ? "" : `<br/>[${escapeMermaid(techName, true)}]`;
+  return `${escapeMermaid(node.name, true)}${tech}`;
+}
+function nodeShape(node, label) {
+  if (node.kind === "text") return `>"${label}"]`;
+  switch (node.type) {
+    case "database":
+      return `[("${label}")]`;
+    case "queue":
+    case "broker":
+      return `[["${label}"]]`;
+    default:
+      return `["${label}"]`;
+  }
+}
+function toMermaidArchitecture(diagram) {
+  const id = idMapper();
+  const lines = ["flowchart LR"];
+  if (diagram.title) lines.splice(0, 0, "---", `title: ${JSON.stringify(diagram.title)}`, "---");
+  const children = /* @__PURE__ */ new Map();
+  const known = new Set(diagram.nodes.map((n) => n.id));
+  for (const node of diagram.nodes) {
+    const parent = node.parent && known.has(node.parent) ? node.parent : void 0;
+    children.set(parent, [...children.get(parent) ?? [], node]);
+  }
+  const write = (parent, indent) => {
+    for (const node of children.get(parent) ?? []) {
+      if (node.kind === "group") {
+        lines.push(`${indent}subgraph ${id(node.id)}["${escapeMermaid(node.name, true)}"]`);
+        write(node.id, `${indent}  `);
+        lines.push(`${indent}end`);
+      } else {
+        lines.push(`${indent}${id(node.id)}${nodeShape(node, nodeLabel2(node))}`);
+      }
+    }
+  };
+  write(void 0, "  ");
+  for (const edge of diagram.edges) {
+    const label = edge.label ? `|"${escapeMermaid(edge.label, true)}"|` : "";
+    lines.push(`  ${id(edge.source)} -->${label} ${id(edge.target)}`);
+  }
+  lines.push(...colorLines(diagram, id));
+  return lines.join("\n") + "\n";
+}
+function className(base, dash) {
+  const name = COLOR_NAMES.find((n) => PALETTE[n] === base) ?? `c${base.slice(1)}`;
+  return dash ? `${name}_${dash}` : name;
+}
+function dashArray(dash) {
+  return dash ? `,stroke-dasharray:${DASH_ARRAY[dash]}` : "";
+}
+function colorLines(diagram, id) {
+  const classes = /* @__PURE__ */ new Map();
+  const groups = [];
+  for (const node of diagram.nodes) {
+    const base = nodeBaseColor(node);
+    if (!base) continue;
+    const t = tint(base, "light");
+    const dash = node.style?.dash;
+    if (node.kind === "group") {
+      groups.push(`  style ${id(node.id)} fill:${t.groupFill},stroke:${t.line},color:${t.text}${dashArray(dash)}`);
+      continue;
+    }
+    const name = className(base, dash);
+    const entry = classes.get(name) ?? { def: `fill:${t.fill},stroke:${t.line},color:${t.text}${dashArray(dash)}`, members: [] };
+    entry.members.push(id(node.id));
+    classes.set(name, entry);
+  }
+  const links = /* @__PURE__ */ new Map();
+  diagram.edges.forEach((edge, i) => {
+    const { color, dash } = edge.style ?? {};
+    if (!color && !dash) return;
+    const key = [color && `stroke:${tint(color, "light").line}`, dash && `stroke-dasharray:${DASH_ARRAY[dash]}`].filter(Boolean).join(",");
+    links.set(key, [...links.get(key) ?? [], i]);
+  });
+  return [
+    ...[...classes].map(([name, { def }]) => `  classDef ${name} ${def}`),
+    ...[...classes].map(([name, { members }]) => `  class ${members.join(",")} ${name}`),
+    ...groups,
+    ...[...links].map(([key, indexes]) => `  linkStyle ${indexes.join(",")} ${key}`)
+  ];
+}
+
+// ../frontend/src/hld/markdown.ts
+var STATUS2 = { pass: "\u2705", fail: "\u274C", unchecked: "\u2014" };
+var SEVERITY = { high: "\u{1F534}", medium: "\u{1F7E0}", low: "\u26AA" };
+function cell(text) {
+  return text === void 0 || text === "" ? "\u2014" : String(text).replace(/\|/g, "\\|").replace(/\s*\r?\n\s*/g, " ");
+}
+function table(head, rows) {
+  return [`| ${head.join(" | ")} |`, `| ${head.map(() => "---").join(" | ")} |`, ...rows.map((r) => `| ${r.map(cell).join(" | ")} |`), ""];
+}
+var fence = (lang, code2) => ["```" + lang, code2.trimEnd(), "```", ""];
+var code = (text) => `\`${text.replace(/`/g, "'")}\``;
+function renderSection(doc, s) {
+  const out = [`## ${s.title}`, ""];
+  switch (s.kind) {
+    case "overview": {
+      if (s.summary) out.push(s.summary, "");
+      out.push(overviewFacts(s), "");
+      if (s.components) out.push(...fence("mermaid", toMermaidArchitecture(doc.diagram)));
+      break;
+    }
+    case "requirements": {
+      if (s.functional.length) {
+        out.push("### Functional", "");
+        for (const f of s.functional) {
+          out.push(`- **${f.name}**${f.description ? ` \u2014 ${f.description}` : ""}`);
+          if (f.scenarios.length > 1 || f.scenarios[0]?.condition) {
+            for (const sc of f.scenarios) out.push(`  - ${sc.name}${sc.outcome === "error" ? " (error)" : ""}${sc.condition ? ` \u2014 when ${sc.condition}` : ""}`);
+          }
+        }
+        out.push("");
+      }
+      if (s.nonFunctional.length) {
+        out.push("### Non-functional", "", ...table(["Requirement", "Status", "Measured"], s.nonFunctional.map((r) => [r.label, STATUS2[r.status], r.measured])));
+      }
+      if (s.flowTests.length) {
+        out.push("### Flow tests", "", ...table(["Test", "Status", "Asserts", "Result"], s.flowTests.map((t) => [t.name, STATUS2[t.status], t.assertions.map(code).join("<br>"), t.measured])));
+      }
+      break;
+    }
+    case "capacity": {
+      if (s.traffic.length) {
+        out.push("### Traffic", "", ...table(["Use case", "Rate", "Mix"], s.traffic.map((t) => [t.useCase, formatTraffic2(t.rps, t.avgRps), t.mix.map((m) => `${m.scenario} ${formatPercent2(m.share)}`).join(", ")])));
+      }
+      if (s.load.length) {
+        out.push(
+          "### Load per component",
+          "",
+          ...table(
+            LOAD_HEADINGS,
+            s.load.map((n) => [
+              n.name,
+              accessText(n, "read"),
+              accessText(n, "write"),
+              `${formatPercent2(n.utilization)}${n.saturated ? " \u26A0\uFE0F saturated" : ""}`,
+              replicasText(n),
+              egressText(n),
+              formatUsd2(n.costUsd)
+            ])
+          )
+        );
+      }
+      if (s.totalCostUsd !== void 0) out.push(`**Total cost:** ${totalCostText(s.totalCostUsd, s.totalEgressUsd)}`, "");
+      break;
+    }
+    case "components":
+      out.push(
+        ...table(
+          ["Component", "Tech", "Kind", "Team", "Replicas", "Responsibility", "Stores"],
+          s.components.map((c) => [`**${c.name}** (${code(c.id)})`, c.tech, c.kind, c.team, c.replicas, c.responsibility, c.entities.join(", ")])
+        )
+      );
+      break;
+    case "dataModel":
+      for (const e of s.entities) {
+        out.push(`### ${e.name}${e.storeName ? ` (in ${e.storeName})` : ""}`, "");
+        if (e.description) out.push(e.description, "");
+        out.push(...table(["Field", "Type", "Flags"], e.fields.map((f) => [code(f.name), f.type, f.flags.join(", ")])));
+      }
+      break;
+    case "apis":
+      for (const ep of s.endpoints) {
+        out.push(`### ${code(ep.endpoint)}`, "");
+        if (ep.service) out.push(`Served by ${ep.service}.`, "");
+        for (const op of ep.operations) {
+          out.push(`**${op.useCase}**${op.endpoint !== ep.endpoint ? ` \u2014 ${code(op.endpoint)}` : ""}`, "");
+          if (op.request) out.push(...fence("json", op.request));
+          out.push(...table(["Scenario", "Response"], op.responses.map((r) => [`${r.scenario}${r.outcome === "error" ? " (error)" : ""}`, code(responseText(r))])));
+        }
+      }
+      break;
+    case "scenarios":
+      for (const u of s.useCases) {
+        out.push(`### ${u.name}`, "");
+        const about = [u.endpoint && code(u.endpoint), u.rps !== void 0 && formatRps2(u.rps), u.description].filter(Boolean).join(" \xB7 ");
+        if (about) out.push(about, "");
+        for (const sc of u.scenarios) {
+          if (u.scenarios.length > 1) out.push(`#### ${sc.name}${sc.outcome === "error" ? " (error)" : ""}`, "");
+          const facts = [
+            sc.condition && `When ${sc.condition}`,
+            sc.share !== void 0 && `${formatPercent2(sc.share)} of traffic`,
+            sc.latency && `p50 ${formatMs2(sc.latency.p50)}, p99 ${formatMs2(sc.latency.p99)}`
+          ].filter(Boolean);
+          if (facts.length) out.push(facts.join(" \xB7 "), "");
+          if (sc.steps) out.push(...fence("mermaid", toMermaidSequence(doc.diagram, u.useCaseId, sc.id)));
+        }
+      }
+      break;
+    case "decisions":
+      for (const d of s.decisions) {
+        out.push(`### ${d.title}`, "");
+        if (d.because) out.push(`**Because** ${d.because}`, "");
+        if (d.rejected.length) {
+          out.push("Rejected:", "");
+          for (const r of d.rejected) out.push(`- **${r.option}** \u2014 ${r.reason}`);
+          out.push("");
+        }
+      }
+      break;
+    case "risks":
+      for (const r of s.risks) {
+        out.push(`- ${SEVERITY[r.severity]} **${r.title}**${r.detail ? ` \u2014 ${r.detail}` : ""}${r.hint ? ` _Fix:_ ${r.hint}` : ""}`);
+      }
+      out.push("");
+      break;
+  }
+  return out;
+}
+function toMarkdown(doc) {
+  const out = [`# ${doc.title}`, ""];
+  if (!doc.checked && doc.sections.some((s) => s.kind === "requirements" && (s.nonFunctional.length || s.flowTests.length))) {
+    out.push("> Requirements and tests were not checked: the simulation did not run.", "");
+  }
+  for (const s of doc.sections) out.push(...renderSection(doc, s));
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
+}
+
+// ../plugin/src/views/hld.tsx
+var markdowns = /* @__PURE__ */ new Map();
+function hldMarkdown(doc, key) {
+  let text = markdowns.get(key);
+  if (!text) {
+    text = toMarkdown(hld(doc.root, doc.analysis, doc.tests));
+    markdowns.set(key, text);
+  }
+  return text;
+}
+function shownMarkdown(markdown) {
+  return markdown.replace(
+    /```mermaid\n([\s\S]*?)```\n?/g,
+    (_, code2) => code2.startsWith("sequenceDiagram") ? "_The Sequence tab draws this scenario._\n" : "_The Diagram tab draws the architecture._\n"
+  );
+}
+function hldTab(ui, doc, key, copy2) {
+  const markdown = hldMarkdown(doc, key);
+  return /* @__PURE__ */ h(ui.Box, { key: "body-hld", flexDirection: "column" }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Button, { key: "hld-copy", label: "\u29C9 Copy HLD markdown", hotkey: "c", variant: "primary", onPress: (press) => copy2(press.surface, markdown) }), /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "with its Mermaid diagrams, for a README or a wiki")), /* @__PURE__ */ h(ui.Markdown, { key: "hld-md", text: shownMarkdown(markdown) }));
+}
+
 // ../plugin/src/views/lines.ts
 var TONE = { good: "#22c55e", warn: "#eab308", bad: "#ef4444", ink: "#111111", pink: "#ff5da2" };
 var HEAT = { pale: "#fbe9a6", warm: "#ffd23f", hot: "#ff7ab4", over: "#ff6b61" };
 var line = (...segs) => ({ segs: segs.map((s) => typeof s === "string" ? { text: s } : s) });
 var blank = () => line("");
 var heading = (text) => line({ text, bold: true });
-var usd = (x) => formatUsd(x).replace("/month", "");
+var usd2 = (x) => formatUsd(x).replace("/month", "");
 var cut = (text, room) => text.length <= room ? text : room <= 0 ? "" : `${text.slice(0, Math.max(0, room - 1))}\u2026`;
-function table(cols, rows, width) {
+function table2(cols, rows, width) {
   const seg = (c) => c === void 0 ? { text: "" } : typeof c === "string" ? { text: c } : c;
   let shown = cols.map((_, i) => i);
   const widths = cols.map((c, i) => Math.max(c.title.length, ...rows.map((r) => seg(r[i]).text.length)));
@@ -8864,9 +9690,9 @@ function stats(items, width) {
 }
 var splits = (n) => n.writeLoadRps > 0 && (n.writeScaling === "shards" || n.readCapacityRps !== n.writeCapacityRps);
 var utilTone = (n) => n.saturated ? TONE.bad : n.utilization > HOT ? TONE.warn : void 0;
-function utilCell(u, tone) {
+function utilCell(u, tone2) {
   const filled = Math.max(u > 0 ? 1 : 0, Math.min(5, Math.round(u * 5)));
-  return { text: `${"\u2501".repeat(filled)}${"\u2500".repeat(5 - filled)} ${formatPercent(u)}`, ...tone ? { color: tone } : {} };
+  return { text: `${"\u2501".repeat(filled)}${"\u2500".repeat(5 - filled)} ${formatPercent(u)}`, ...tone2 ? { color: tone2 } : {} };
 }
 function busiestLine(analysis) {
   const node = busiestOf(analysis);
@@ -8892,7 +9718,7 @@ function analysisLines(diagram, analysis, width) {
   out.push(
     ...stats(
       [
-        { label: "Total cost", value: `${formatUsd(analysis.totalCostUsd)}${analysis.totalEgressUsd > 0 ? ` (incl. ${usd(analysis.totalEgressUsd)} egress)` : ""}` },
+        { label: "Total cost", value: `${formatUsd(analysis.totalCostUsd)}${analysis.totalEgressUsd > 0 ? ` (incl. ${usd2(analysis.totalEgressUsd)} egress)` : ""}` },
         { label: "Saturated", value: String(saturated), tone: saturated ? TONE.bad : TONE.good },
         { label: "SPOFs", value: String(spofs.length), tone: spofs.length ? TONE.warn : TONE.good },
         { label: "Use cases with traffic", value: String(analysis.useCases.filter((u) => u.rps > 0).length) }
@@ -8906,15 +9732,15 @@ function analysisLines(diagram, analysis, width) {
   out.push(blank(), heading("Nodes"));
   const rows = [];
   for (const n of nodes) {
-    const tone = utilTone(n);
+    const tone2 = utilTone(n);
     const name = `${n.id}${n.replicas > 1 ? ` \xD7${n.replicas}` : ""}`;
     const cells = [
       { text: name, bold: true },
       splits(n) ? `R ${formatRps(n.readLoadRps).replace(" rps", "")} / ${formatRps(n.readCapacityRps)}` : `${formatRps(n.loadRps).replace(" rps", "")} / ${formatRps(n.capacityRps)}`,
-      utilCell(n.utilization, tone),
+      utilCell(n.utilization, tone2),
       formatMs(n.latencyMs),
       formatAvailability(n.availability),
-      `${usd(n.costUsd)}${n.egressUsd > 0 ? ` +${usd(n.egressUsd)}` : ""}`
+      `${usd2(n.costUsd)}${n.egressUsd > 0 ? ` +${usd2(n.egressUsd)}` : ""}`
     ];
     rows.push(cells);
     if (splits(n)) {
@@ -8926,7 +9752,7 @@ function analysisLines(diagram, analysis, width) {
     }
   }
   out.push(
-    ...table(
+    ...table2(
       [{ title: "Node" }, { title: "Load / capacity" }, { title: "Util", drop: 1 }, { title: "Latency", right: true, drop: 2 }, { title: "Avail", right: true, drop: 3 }, { title: "Cost", right: true, drop: 4 }],
       rows,
       width
@@ -8936,7 +9762,7 @@ function analysisLines(diagram, analysis, width) {
   if (queues.length) {
     out.push(blank(), heading("Queues"));
     out.push(
-      ...table(
+      ...table2(
         [{ title: "Queue" }, { title: "In / drain" }, { title: "Consumers", right: true, drop: 1 }, { title: "Backlog or lag", right: true }],
         queues.map((n) => {
           const q = n.queue;
@@ -8965,7 +9791,7 @@ function analysisLines(diagram, analysis, width) {
       }
     }
     out.push(
-      ...table(
+      ...table2(
         [{ title: "Use case" }, { title: "Traffic", drop: 1 }, { title: "p50", right: true, drop: 4 }, { title: "p95", right: true, drop: 5 }, { title: "p99", right: true }, { title: "p99.9", right: true, drop: 3 }, { title: "Avail", right: true, drop: 2 }],
         rows2,
         width
@@ -8986,7 +9812,7 @@ function analysisLines(diagram, analysis, width) {
     }
     out.push(blank(), heading("Cost breakdown"));
     out.push(
-      ...table(
+      ...table2(
         [{ title: "By", drop: 2 }, { title: "Name" }, { title: "Cost", right: true }, { title: "Share", right: true, drop: 3 }, { title: "Budget", right: true, drop: 1 }, { title: "Nodes", drop: 4 }],
         sections.flatMap(
           ([by, shares]) => shares.map((s, i) => {
@@ -8995,9 +9821,9 @@ function analysisLines(diagram, analysis, width) {
             return [
               { text: i === 0 ? by : "", dim: true },
               { text: s.label, bold: true },
-              usd(s.costUsd),
+              usd2(s.costUsd),
               b.totalCostUsd > 0 ? formatPercent(s.costUsd / b.totalCostUsd) : "\u2014",
-              budget2 === void 0 ? { text: "\u2014", dim: true } : { text: `${usd(budget2)}${over ? " over" : ""}`, color: over ? TONE.bad : TONE.good },
+              budget2 === void 0 ? { text: "\u2014", dim: true } : { text: `${usd2(budget2)}${over ? " over" : ""}`, color: over ? TONE.bad : TONE.good },
               { text: s.nodes.join(", "), dim: true }
             ];
           })
@@ -9030,7 +9856,7 @@ function testLines(results, width) {
     ];
   }
   const failing = results.filter((r) => !r.passed);
-  const passing = results.filter((r) => r.passed);
+  const passing2 = results.filter((r) => r.passed);
   const where2 = (r) => r.loc ? ` ${r.loc.file ? `${r.loc.file}:` : "line "}${r.loc.line}` : "";
   const out = [line(failing.length ? { text: `${failing.length} of ${results.length} failing`, color: TONE.bad, bold: true } : { text: `All ${results.length} passing`, color: TONE.good, bold: true })];
   const item = (r) => {
@@ -9049,9 +9875,9 @@ function testLines(results, width) {
     out.push(blank());
     failing.forEach(item);
   }
-  if (passing.length) {
-    out.push(blank(), ...failing.length ? [heading(`${passing.length} passing`)] : []);
-    for (const r of passing) out.push(line({ text: "\u2713 ", color: TONE.good }, { text: cut(`${r.name}: ${r.message}`, width - 2), dim: true }));
+  if (passing2.length) {
+    out.push(blank(), ...failing.length ? [heading(`${passing2.length} passing`)] : []);
+    for (const r of passing2) out.push(line({ text: "\u2713 ", color: TONE.good }, { text: cut(`${r.name}: ${r.message}`, width - 2), dim: true }));
   }
   return out;
 }
@@ -9084,6 +9910,180 @@ function lineView(ui, l, key) {
 }
 function linesView(ui, lines, key) {
   return /* @__PURE__ */ h(ui.Box, { key, flexDirection: "column" }, lines.map((l, i) => lineView(ui, l, `${key}-${i}`)));
+}
+
+// ../plugin/src/views/sequence.ts
+var PINK = "#ff5da2";
+var YELLOW = "#ffd23f";
+var RED = "#ef4444";
+var FRAME2 = "#8b5cf6";
+var MIN_SLOT = 9;
+var MAX_SLOT = 28;
+var MARGIN2 = 2;
+var Grid2 = class {
+  constructor(width) {
+    this.width = width;
+  }
+  width;
+  rows = [];
+  row() {
+    this.rows.push(Array.from({ length: this.width }, () => ({ ch: " " })));
+    return this.rows.length - 1;
+  }
+  put(y, x, ch, style = {}) {
+    if (x < 0 || x >= this.width) return;
+    this.rows[y][x] = { ch, ...style };
+  }
+  text(y, x, text, style = {}) {
+    for (const ch of text) this.put(y, x++, ch, style);
+    return x;
+  }
+};
+function columnsOf(seq, width) {
+  const n = Math.max(1, seq.participants.length);
+  const slot = Math.max(MIN_SLOT, Math.min(MAX_SLOT, Math.floor((width - 2 * MARGIN2) / n)));
+  const x = new Map(seq.participants.map((p, i) => [p.id, MARGIN2 + slot * i + Math.floor(slot / 2)]));
+  return { slot, total: 2 * MARGIN2 + slot * n, x };
+}
+var sequenceWidth = (seq, width) => columnsOf(seq, width).total;
+function sequenceLines(seq, width, current = []) {
+  if (seq.participants.length === 0) return [{ segs: [{ text: "This scenario has no steps.", dim: true }] }];
+  const { slot, total, x } = columnsOf(seq, width);
+  const g = new Grid2(total);
+  const lifelines = () => {
+    const y = g.row();
+    for (const at of x.values()) g.put(y, at, "\u2502", { dim: true });
+    return y;
+  };
+  const sides = [];
+  const body = () => {
+    const y = lifelines();
+    for (const at of sides) {
+      g.put(y, at, "\u2502", { color: FRAME2 });
+      g.put(y, total - 1 - at, "\u2502", { color: FRAME2 });
+    }
+    return y;
+  };
+  const rule = (at, left, right, title, fill2 = "\u2500") => {
+    const y = body();
+    for (let i = at; i < total - at; i++) g.put(y, i, fill2, { color: FRAME2 });
+    g.put(y, at, left, { color: FRAME2 });
+    g.put(y, total - 1 - at, right, { color: FRAME2 });
+    if (title) g.text(y, at + 2, cut(` ${title} `, total - 2 * at - 4), { color: FRAME2, bold: true });
+  };
+  const names = seq.participants.map((p) => nameRows(p.name, slot - 5));
+  const top = Array.from({ length: Math.max(...names.map((n) => n.length)) + 2 }, () => g.row());
+  seq.participants.forEach((p, i) => {
+    const at = x.get(p.id);
+    const w = Math.max(...names[i].map((n) => n.length)) + 4;
+    const left = at - Math.floor(w / 2);
+    g.text(top[0], left, `\u256D${"\u2500".repeat(w - 2)}\u256E`);
+    for (let r = 1; r < top.length - 1; r++) {
+      const name = names[i][r - 1] ?? "";
+      g.text(top[r], left, `\u2502${" ".repeat(w - 2)}\u2502`);
+      g.text(top[r], left + 2, name, { bold: true });
+    }
+    g.text(top[top.length - 1], left, `\u2570${"\u2500".repeat(w - 2)}\u256F`);
+    g.put(top[top.length - 1], at, "\u252C");
+  });
+  const multiple = seq.useCase.scenarios.length > 1 || !!seq.condition;
+  if (multiple) {
+    const error = seq.scenario.outcome === "error";
+    rule(0, "\u250C", "\u2510", `alt ${error ? "\u2717" : "\u2713"} ${seq.scenario.name}${seq.condition ? ` \xB7 when ${seq.condition}` : ""}`);
+    sides.push(0);
+  }
+  const now = new Set(current);
+  const draw = (m) => {
+    const from = x.get(m.from);
+    const to = x.get(m.to);
+    const on = m.kind === "request" && now.has(m.step);
+    const color = on ? PINK : m.error ? RED : void 0;
+    const line2 = { ...color ? { color } : {}, ...on ? { bold: true } : {}, ...m.kind === "response" && !color ? { dim: true } : {} };
+    const y = body();
+    let at = Math.min(from, to) + 2;
+    if (m.kind === "request") at = g.text(y, at, ` ${m.number} `, { bg: on ? YELLOW : m.error ? RED : PINK, color: TONE.ink, bold: true }) + 1;
+    const room = total - MARGIN2 - at;
+    if (m.kind === "response" && m.status !== void 0 && m.label.startsWith(String(m.status))) {
+      const status = cut(String(m.status), room);
+      g.text(y, g.text(y, at, status, { ...line2, bold: true, dim: false }), cut(m.label.slice(status.length), room - status.length), line2);
+    } else g.text(y, at, cut(m.label, room), m.kind === "response" ? line2 : { ...line2, dim: false });
+    const a = body();
+    if (from === to) {
+      g.text(a, from, "\u251C\u2500\u21BA", line2);
+      return;
+    }
+    const right = to > from;
+    const fill2 = m.kind === "response" ? "\u2504" : m.async ? "\u254C" : "\u2500";
+    const head = m.kind === "response" || m.async ? right ? "\u25B7" : "\u25C1" : right ? "\u25B6" : "\u25C0";
+    const lo = Math.min(from, to) + 1;
+    const hi = Math.max(from, to) - 1;
+    for (let i = lo; i <= hi; i++) g.put(a, i, fill2, line2);
+    g.put(a, from, right ? "\u251C" : "\u2524", { dim: true });
+    if (m.failed) {
+      g.put(a, right ? hi : lo, "\u2715", { color: RED, bold: true });
+      g.put(a, right ? hi - 1 : lo + 1, " ");
+    } else g.put(a, right ? hi : lo, head, line2);
+  };
+  for (const item of seq.items) {
+    if (item.kind === "message") {
+      draw(item.message);
+      continue;
+    }
+    const inset = multiple ? 1 : 0;
+    rule(inset, "\u250C", "\u2510", "par");
+    sides.push(inset);
+    item.branches.forEach((branch, i) => {
+      if (i > 0) {
+        sides.pop();
+        rule(inset, "\u251C", "\u2524", "and", "\u254C");
+        sides.push(inset);
+      }
+      branch.forEach(draw);
+    });
+    sides.pop();
+    rule(inset, "\u2514", "\u2518", "");
+  }
+  if (multiple) {
+    sides.pop();
+    rule(0, "\u2514", "\u2518", "");
+  }
+  lifelines();
+  return g.rows.map((row) => ({ segs: segsOf(row) }));
+}
+function nameRows(name, room) {
+  if (name.length <= room) return [name];
+  const space = name.lastIndexOf(" ", room);
+  if (space <= 0) return [cut(name, room)];
+  return [name.slice(0, space), cut(name.slice(space + 1), room)];
+}
+function segsOf(row) {
+  const segs = [];
+  const same = (a, c) => a.color === c.color && a.bg === c.bg && !!a.bold === !!c.bold && !!a.dim === !!c.dim;
+  for (const c of row) {
+    const last = segs[segs.length - 1];
+    if (last && same(last, c)) last.text += c.ch;
+    else segs.push({ text: c.ch, ...c.color ? { color: c.color } : {}, ...c.bg ? { bg: c.bg } : {}, ...c.bold ? { bold: true } : {}, ...c.dim ? { dim: true } : {} });
+  }
+  const end = segs[segs.length - 1];
+  if (end && !end.bg) end.text = end.text.trimEnd();
+  return segs;
+}
+
+// ../plugin/src/views/sequenceTab.tsx
+function sequenceTab(t) {
+  const { ui, diagram, player, columns } = t;
+  const picks = diagram.useCases.flatMap((u) => u.scenarios.map((s) => ({ value: `${u.id}:${s.id}`, useCase: u, scenario: s })));
+  const pick2 = picks.find((p) => p.value === player.pick) ?? picks[0];
+  if (!pick2) return linesView(ui, [{ segs: [{ text: 'No use cases yet: a usecase "Name" { a -> b : call } block draws as a sequence here.' }], wrap: true }], "body-sequence");
+  const steps = pick2.scenario.steps;
+  const playing = player.mode === "play" && player.pick === pick2.value;
+  const step = Math.max(0, Math.min(player.step, steps.length - 1));
+  const seq = buildSequence(pick2.useCase, pick2.scenario, diagram.nodes);
+  const wide = sequenceWidth(seq, columns);
+  const label = (u, s) => `${u.name}${u.scenarios.length > 1 ? ` \u203A ${s.outcome === "error" ? "\u2717" : "\u2713"} ${s.name}` : ""}`;
+  const total = steps.length;
+  const counter = playing ? `Step ${String(step + 1).padStart(String(total).length)} of ${total}` : `${total} step${total === 1 ? "" : "s"}`;
+  return /* @__PURE__ */ h(ui.Box, { key: "body-sequence", flexDirection: "column" }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "Scenario"), /* @__PURE__ */ h(ui.Select, { key: "seq-pick", value: pick2.value, options: picks.map((p) => ({ value: p.value, label: label(p.useCase, p.scenario) })), onSelect: t.pick })), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Button, { key: "seq-reset", label: "\u21E4", hotkey: "r", onPress: () => t.go(0, false) }), /* @__PURE__ */ h(ui.Button, { key: "seq-prev", label: "\u2039", hotkey: "b", onPress: () => t.go(playing ? step - 1 : 0, false) }), /* @__PURE__ */ h(ui.Button, { key: "seq-play", label: playing && player.isPlaying ? "\u275A\u275A Pause" : " \u25B6 Play ", variant: "primary", hotkey: "p", onPress: () => playing && player.isPlaying ? t.pause() : t.go(playing && step < total - 1 ? step : 0, true) }), /* @__PURE__ */ h(ui.Button, { key: "seq-next", label: "\u203A", hotkey: "n", onPress: () => t.go(playing ? step + 1 : 0, false) }), /* @__PURE__ */ h(ui.Button, { key: "seq-end", label: "\u21E5", hotkey: "e", onPress: () => t.go(total - 1, false) }), /* @__PURE__ */ h(ui.Text, null, counter)), wide > columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", seq.participants.length, " participants take ", wide, " columns, wider than the ", columns, " here: widen the window to see the right side."), linesView(ui, sequenceLines(seq, columns, playing ? currentStepsOf(steps, step) : []), "seq-lines"));
 }
 
 // ../plugin/src/views/tabs.tsx
@@ -9124,6 +10124,250 @@ function bodyLines(tab, doc, columns) {
   return [{ segs: [{ text: `${what} in the terminal is coming; \u2197 Open in Proschi shows it in the editor now.`, dim: true }], wrap: true }];
 }
 
+// ../frontend/src/components/WhatIf/whatIf.ts
+var MULTIPLIERS = [0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4, 5, 7.5, 10];
+var isActive = (w) => w.multiplier !== 1 || w.failed.length > 0 || w.saved !== void 0;
+function stopOf(multiplier) {
+  let best = 0;
+  MULTIPLIERS.forEach((m, i) => {
+    if (Math.abs(Math.log(m / multiplier)) < Math.abs(Math.log(MULTIPLIERS[best] / multiplier))) best = i;
+  });
+  return best;
+}
+function formatMultiplier(m) {
+  return `\xD7${Number.isInteger(m * 10) ? m.toFixed(1) : String(Number(m.toFixed(2)))}`;
+}
+var shortMultiplier = (m) => `\xD7${Number(m.toFixed(2))}`;
+function totalRps(diagram) {
+  let sum = 0;
+  for (const t of resolveTraffic(diagram).values()) sum += t.rps;
+  return sum;
+}
+function liveFailed(diagram, failed) {
+  const ids = new Set(components(diagram).map((n) => n.id));
+  return failed.filter((id) => ids.has(id));
+}
+function liveOptions(diagram, w) {
+  if (w.saved !== void 0) {
+    const block = findWhatIf(diagram, w.saved);
+    return block ? whatIfOptions(diagram, block).options : void 0;
+  }
+  const failed = liveFailed(diagram, w.failed);
+  const rates = /* @__PURE__ */ new Map();
+  if (w.multiplier !== 1) {
+    for (const [id, t] of resolveTraffic(diagram)) if (t.rps > 0) rates.set(id, t.rps * w.multiplier);
+  }
+  if (rates.size === 0 && failed.length === 0) return void 0;
+  return { ...rates.size ? { trafficRps: rates } : {}, ...failed.length ? { failed: new Set(failed) } : {} };
+}
+function whatIfLabel(diagram, w) {
+  if (w.saved !== void 0) return w.saved;
+  const failed = liveFailed(diagram, w.failed);
+  const parts = [
+    ...w.multiplier !== 1 ? [`Traffic ${shortMultiplier(w.multiplier)}`] : [],
+    ...failed.length ? [`${failed.length > 2 ? `${failed.length} nodes` : failed.join(" and ")} down`] : []
+  ];
+  return parts.join(", ") || "As written";
+}
+function toggleFailed(w, id) {
+  const failed = w.failed.includes(id) ? w.failed.filter((f) => f !== id) : [...w.failed, id];
+  return { multiplier: w.multiplier, failed };
+}
+
+// ../plugin/src/views/whatif.ts
+var NO_WHATIF = { multiplier: 1, failed: [] };
+function whatIfOf(stored) {
+  const w = stored && typeof stored === "object" ? stored : {};
+  return {
+    multiplier: typeof w.multiplier === "number" && w.multiplier > 0 ? w.multiplier : 1,
+    failed: Array.isArray(w.failed) ? w.failed.filter((id) => typeof id === "string") : [],
+    ...typeof w.saved === "string" ? { saved: w.saved } : {},
+    ...typeof w.node === "string" ? { node: w.node } : {},
+    ...typeof w.sweep === "string" ? { sweep: w.sweep } : {}
+  };
+}
+var liveOf = (w) => ({ multiplier: w.multiplier, failed: w.failed, ...w.saved !== void 0 ? { saved: w.saved } : {} });
+var optionsOf = (diagram, w) => isActive(liveOf(w)) ? liveOptions(diagram, liveOf(w)) : void 0;
+function bannerLine(diagram, w, width) {
+  const badge = ` What-if: ${whatIfLabel(diagram, liveOf(w))} `;
+  const rest = " The numbers are for this what-if, not the design as written.";
+  return { segs: [{ text: cut(badge, width), bg: HEAT.warm, color: TONE.ink, bold: true }, ...badge.length + rest.length <= width ? [{ text: rest, dim: true }] : []] };
+}
+var toneColor = (r) => r.tone === "better" ? TONE.good : r.tone === "worse" ? TONE.bad : void 0;
+var note = (change) => change === "same" ? "" : change.replace(/^[^,]*→[^,]*(, )?/, "");
+function deltaTable(rows, width, head = "What") {
+  return table2(
+    [{ title: head }, { title: "As written", right: true }, { title: "What-if", right: true }, { title: "Change", drop: 1 }],
+    rows.map((r) => {
+      const color = toneColor(r);
+      const changed = r.change !== "same" && r.before !== r.after;
+      return [
+        { text: r.label, bold: true },
+        { text: r.before, dim: !changed },
+        { text: r.after, ...color ? { color, bold: true } : { dim: !changed } },
+        changed ? { text: note(r.change) || (r.tone === "better" ? "better" : r.tone === "worse" ? "worse" : ""), ...color ? { color } : {} } : { text: "same", dim: true }
+      ];
+    }),
+    width
+  );
+}
+var passing = (results) => results.filter((t) => t.passed).length;
+function moved(base, now) {
+  const before2 = new Map(base.nodes.map((n) => [n.id, n.utilization]));
+  return now.nodes.map((n) => ({ node: n.id, before: before2.get(n.id), after: n.utilization })).filter((u) => (u.before ?? 0) >= 1 !== u.after >= 1 || Math.abs(u.after - (u.before ?? 0)) >= 0.1).sort((x, y) => Math.abs(y.after - (y.before ?? 0)) - Math.abs(x.after - (x.before ?? 0))).map(utilizationRow);
+}
+function flipped(base, now) {
+  const before2 = new Map(base.map((r) => [r.name, r.passed]));
+  return now.filter((r) => before2.get(r.name) !== r.passed).map((r) => checkRow({ name: r.name, category: r.category, before: before2.get(r.name), after: r.passed })).sort((a, b) => (a.tone === "worse" ? 0 : 1) - (b.tone === "worse" ? 0 : 1));
+}
+function impactLines(base, now, width) {
+  const a = headlineOf(base.analysis);
+  const b = headlineOf(now.analysis);
+  const out = [
+    { segs: [{ text: "Against the design as written", bold: true }] },
+    ...deltaTable([p99Row("Worst p99", a.p99Ms, b.p99Ms), availabilityRow("Availability", a.availability, b.availability), costRow(a.costUsd, b.costUsd)], width)
+  ];
+  if (base.results.length > 0) {
+    const worse = passing(now.results) < passing(base.results);
+    out.push({
+      segs: [
+        { text: "Checks ", dim: true },
+        { text: `${passing(base.results)} of ${base.results.length} pass as written \u2192 ` },
+        { text: `${passing(now.results)} of ${now.results.length} pass`, bold: true, ...passing(now.results) !== passing(base.results) ? { color: worse ? TONE.bad : TONE.good } : {} }
+      ]
+    });
+  }
+  const old = new Map(base.analysis.useCases.map((u) => [u.id, u]));
+  const useCases = now.analysis.useCases.filter((u) => u.rps > 0 || (old.get(u.id)?.rps ?? 0) > 0).flatMap((u) => {
+    const was = old.get(u.id);
+    const rows = [p99Row(`p99 \xB7 ${u.name}`, was?.percentiles.p99, u.percentiles.p99), availabilityRow(`Availability \xB7 ${u.name}`, was?.availability, u.availability)];
+    if (was && was.rps !== u.rps) rows.unshift({ label: `Traffic \xB7 ${u.name}`, before: formatRps(was.rps), after: formatRps(u.rps), change: `${formatRps(was.rps)}\u2192${formatRps(u.rps)}`, tone: "same" });
+    return rows;
+  });
+  for (const [title, rows] of [
+    ["Per use case", useCases],
+    ["Checks that changed", flipped(base.results, now.results)],
+    ["Load that moved", moved(base.analysis, now.analysis)]
+  ]) {
+    if (rows.length) out.push({ segs: [] }, ...deltaTable(rows, width, title));
+  }
+  return out;
+}
+function asWrittenLines(base, width) {
+  const h2 = headlineOf(base.analysis);
+  const items = [`worst p99 ${formatMs(h2.p99Ms)}`, `availability ${formatAvailability(h2.availability)}`, `cost ${formatUsd(h2.costUsd)}`, ...base.results.length ? [`${passing(base.results)} of ${base.results.length} checks pass`] : []];
+  return [
+    { segs: [{ text: "As written ", bold: true }, { text: items.join(" \xB7 ") }], wrap: true },
+    { segs: [{ text: cut("Change the traffic or take nodes down: the diagram, the analysis and the checks follow.", width), dim: true }] }
+  ];
+}
+var versus = (r) => {
+  const color = toneColor(r);
+  const changed = r.change !== "same" && r.before !== r.after;
+  return { text: changed && r.tone !== "same" ? `${r.after} ${r.tone === "better" ? "\u2193" : "\u2191"}` : `${r.after}  `, ...color ? { color } : { dim: !changed } };
+};
+function savedLines(base, results, width) {
+  const a = headlineOf(base);
+  const availability2 = (r) => ({ ...versus(r), text: r.change !== "same" && r.before !== r.after ? `${r.after} ${r.tone === "better" ? "\u2191" : "\u2193"}` : `${r.after}  ` });
+  return table2(
+    [{ title: "What-if" }, { title: "Result" }, { title: "Worst p99", right: true }, { title: "Avail", right: true, drop: 2 }, { title: "Cost", right: true, drop: 1 }],
+    results.map((w) => [
+      { text: w.name, bold: true },
+      w.passed ? { text: "\u2713 pass", color: TONE.good, bold: true } : { text: "\u2717 fail", color: TONE.bad, bold: true },
+      versus(p99Row("", a.p99Ms, w.headline.p99Ms)),
+      availability2(availabilityRow("", a.availability, w.headline.availability)),
+      versus(costRow(a.costUsd, w.headline.costUsd))
+    ]),
+    width
+  );
+}
+var SWEEP = { from: 0.5, to: 10, steps: 12 };
+var BLUE = "#3b82f6";
+function sweepLines(s, today, width) {
+  const verdict = s.maxPassingRps === void 0 ? `"${s.useCase}" fails already at ${formatRps(s.from)}.` : s.maxPassingRps >= s.to ? `"${s.useCase}" passes over the whole range, up to ${formatRps(s.to)}.` : `"${s.useCase}" passes up to ${formatRps(s.maxPassingRps)}, ${Number((s.maxPassingRps / today).toFixed(1))}\xD7 today's ${formatRps(today)}.`;
+  const out = [{ segs: [{ text: verdict, bold: true, ...s.maxPassingRps === void 0 ? { color: TONE.bad } : {} }], wrap: true }];
+  const legend = [
+    { text: `Range ${formatRps(s.from)} to ${formatRps(s.to)} \xB7 `, dim: true },
+    { text: "\u250A", dim: true },
+    { text: ` today ${formatRps(today)}`, dim: true },
+    ...s.maxPassingRps !== void 0 ? [{ text: " \xB7 ", dim: true }, { text: "\u2503", color: TONE.good }, { text: ` passes up to ${formatRps(s.maxPassingRps)}`, dim: true }] : []
+  ];
+  if (s.saturation.length === 0) return [...out, { segs: [{ text: "No node saturates in this range.", dim: true }] }, { segs: legend, wrap: true }];
+  const values = s.saturation.map((n) => n.atStart ? `below ${formatRps(n.rps)}` : formatRps(n.rps));
+  const name = Math.min(16, Math.max(4, ...s.saturation.map((n) => n.node.length)));
+  const value = Math.max(12, ...values.map((v) => v.length));
+  const bar = Math.max(10, width - name - value - 4);
+  const at = (rps) => Math.max(0, Math.min(bar - 1, Math.round((rps - s.from) / (s.to - s.from) * (bar - 1))));
+  const pass2 = s.maxPassingRps !== void 0 ? at(s.maxPassingRps) : -1;
+  out.push({ segs: [{ text: `${"NODE".padEnd(name)}  ${"".padEnd(bar)}  ${"SATURATES AT".padStart(value)}`, dim: true }] });
+  s.saturation.forEach((n, i) => {
+    const filled = n.atStart ? 0 : at(n.rps) + 1;
+    const cells = [];
+    for (let x = 0; x < bar; x++) {
+      const on = x < filled;
+      const seg = x === pass2 ? { text: "\u2503", color: TONE.good, bold: true, ...on ? { bg: BLUE } : {} } : x === at(today) ? on ? { text: "\u250A", color: "#ffffff", bg: BLUE } : { text: "\u250A" } : on ? { text: "\u2588", color: BLUE } : { text: "\xB7", dim: true };
+      const last = cells[cells.length - 1];
+      const plain = (c) => c.text[0] === "\u2588" || c.text[0] === "\xB7";
+      if (last && plain(last) && plain(seg) && last.text[0] === seg.text) last.text += seg.text;
+      else cells.push(seg);
+    }
+    out.push({ segs: [{ text: cut(n.node, name).padEnd(name), bold: true }, { text: "  " }, ...cells, { text: "  " }, { text: values[i].padStart(value) }] });
+  });
+  out.push({ segs: legend, wrap: true });
+  return out;
+}
+
+// ../plugin/src/views/whatifTab.tsx
+var saved = /* @__PURE__ */ new Map();
+var sweeps = /* @__PURE__ */ new Map();
+function whatIfBanner(ui, base, w, columns, hotkey2, reset) {
+  return /* @__PURE__ */ h(ui.Box, { key: "wi-banner", flexDirection: "row", gap: 1 }, /* @__PURE__ */ h(ui.Button, { key: "wi-reset", label: "\u21BA Reset", ...hotkey2 ? { hotkey: "r" } : {}, onPress: reset }), lineView(ui, bannerLine(base.root, w, columns - 12)));
+}
+function whatIfTab(t) {
+  const { ui, base, w, set, columns } = t;
+  const diagram = base.root;
+  if (!base.analysis) {
+    const hint = [
+      { segs: [{ text: "What-ifs run the simulation again with more or less traffic or nodes down: add a traffic { \u2026 } block first, then save a what-if as" }], wrap: true },
+      { segs: [] },
+      ...['whatif "Launch day" {', '  traffic "Redirect" x3', "}", 'whatif "Cache outage" {', "  fail cache", "}"].map((text) => ({ segs: [{ text, dim: true }] }))
+    ];
+    return linesView(ui, hint, "body-whatif");
+  }
+  const stop2 = stopOf(w.multiplier);
+  const rate = (m) => `${formatMultiplier(m)} \xB7 ${formatRps(totalRps(diagram) * m)}`;
+  const nodes = components(diagram);
+  const node = nodes.find((n) => n.id === w.node) ?? nodes[0];
+  const down = node !== void 0 && w.saved === void 0 && w.failed.includes(node.id);
+  const live = ({ saved: saved2, ...x }) => saved2 === void 0 ? x : { ...x, multiplier: 1, failed: [] };
+  const multiply = (m) => set((x) => ({ ...live(x), multiplier: m }));
+  const baseSide = { analysis: base.analysis, results: base.tests };
+  const nowSide = t.now.analysis ? { analysis: t.now.analysis, results: t.now.tests } : baseSide;
+  const active = t.now !== base;
+  let results = saved.get(t.key);
+  if (!results) {
+    results = runWhatIfs(diagram);
+    saved.set(t.key, results);
+  }
+  const loaded = base.analysis.useCases.filter((u) => u.rps > 0);
+  const busiest = loaded.reduce((b, u) => !b || u.rps > b.rps ? u : b, void 0);
+  const swept = loaded.find((u) => u.id === w.sweep) ?? busiest;
+  let result;
+  if (swept && w.sweep !== void 0) {
+    const at = `${t.key}|${swept.id}`;
+    result = sweeps.get(at);
+    if (!result) {
+      result = sweep(diagram, swept.name, swept.rps * SWEEP.from, swept.rps * SWEEP.to, { steps: SWEEP.steps });
+      sweeps.set(at, result);
+    }
+  }
+  const rows = savedLines(base.analysis, results, columns - 12);
+  return /* @__PURE__ */ h(ui.Box, { key: "body-whatif", flexDirection: "column" }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "Traffic"), /* @__PURE__ */ h(ui.Button, { key: "wi-less", label: "\u2039 Less", hotkey: "l", onPress: () => multiply(MULTIPLIERS[Math.max(0, stop2 - 1)]) }), /* @__PURE__ */ h(ui.Select, { key: "wi-mult", value: String(stop2), options: MULTIPLIERS.map((m, i) => ({ value: String(i), label: rate(m) })), onSelect: (i) => multiply(MULTIPLIERS[Number(i)]) }), /* @__PURE__ */ h(ui.Button, { key: "wi-more", label: "More \u203A", hotkey: "m", onPress: () => multiply(MULTIPLIERS[Math.min(MULTIPLIERS.length - 1, stop2 + 1)]) })), node && /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "Node"), /* @__PURE__ */ h(ui.Select, { key: "wi-node", value: node.id, options: nodes.map((n) => ({ value: n.id, label: n.name && n.name !== n.id ? `${n.id} \xB7 ${n.name}` : n.id })), onSelect: (id) => set((x) => ({ ...x, node: id })) }), /* @__PURE__ */ h(ui.Button, { key: "wi-down", label: down ? "\u23FB Bring up " : "\u23FB Take down", hotkey: "t", onPress: () => set((x) => ({ ...live(x), failed: [...toggleFailed(live(x), node.id).failed] })) }), /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, w.saved === void 0 && w.failed.length ? `Down: ${w.failed.join(", ")}` : "None down")), /* @__PURE__ */ h(ui.Text, null, " "), linesView(ui, active ? impactLines(baseSide, nowSide, columns) : asWrittenLines(baseSide, columns), "wi-impact"), results.length > 0 && /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, /* @__PURE__ */ h(ui.Text, { bold: true }, "Saved what-ifs"), /* @__PURE__ */ h(ui.Box, { paddingLeft: 12 }, lineView(ui, rows[0])), results.map((r, i) => {
+    const on = w.saved === r.name;
+    return /* @__PURE__ */ h(ui.Box, { key: `wi-row-${i}`, flexDirection: "row", gap: 1 }, /* @__PURE__ */ h(ui.Button, { key: `wi-saved-${i}`, label: on ? "Showing" : "Preview", ...on ? { variant: "primary" } : { dimColor: true }, onPress: () => set((x) => on ? { ...NO_WHATIF, ...x.node ? { node: x.node } : {} } : { ...NO_WHATIF, ...x.node ? { node: x.node } : {}, saved: r.name, ...x.sweep ? { sweep: x.sweep } : {} }) }), lineView(ui, rows[i + 1]));
+  }), results.some((r) => r.warnings.length) && results.flatMap((r) => r.warnings).map((text, i) => lineView(ui, { segs: [{ text: `\u26A0 ${text}`, color: TONE.warn }], wrap: true }, `wi-warn-${i}`))), swept && /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "Sweep"), loaded.length > 1 && /* @__PURE__ */ h(ui.Select, { key: "wi-sweep-uc", value: swept.id, options: loaded.map((u) => ({ value: u.id, label: u.name })), onSelect: (id) => set((x) => ({ ...x, sweep: id })) }), /* @__PURE__ */ h(ui.Button, { key: "wi-sweep", label: `Sweep ${formatRps(swept.rps * SWEEP.from)} to ${formatRps(swept.rps * SWEEP.to)}`, hotkey: "s", variant: result ? void 0 : "primary", onPress: () => set((x) => ({ ...x, sweep: swept.id })) })), result ? linesView(ui, sweepLines(result, swept.rps, columns), "wi-sweep-chart") : /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Where each node saturates and how far the requirements hold, from half to ten times today's traffic.")));
+}
+
 // ../plugin/src/register.tsx
 var icons = "nerd-font";
 var PANE = "proschi-view";
@@ -9134,10 +10378,11 @@ var paneFile = atom({ plugin: "proschi", key: "paneFile" }, "");
 var paneSource = atom({ plugin: "proschi", key: "paneSource" }, NO_SOURCE);
 var players = atom({ plugin: "proschi", key: "player" }, IDLE);
 var paneTab = atom({ plugin: "proschi", key: "paneTab" }, "diagram");
+var paneWhatIf = atom({ plugin: "proschi", key: "paneWhatIf" }, NO_WHATIF);
 var PANE_KEYS = "1-6 tabs \xB7 p play \xB7 n/b step \xB7 r restart \xB7 e end \xB7 x explorer \xB7 d diagram \xB7 esc back to the prompt";
 var TAB_KEYS = "1-6 tabs \xB7 \u2191\u2193 scroll \xB7 esc back to the prompt";
 var SYSTEM_KEYS = "s next system \xB7 o open/close \xB7 f focus in \xB7 u back out";
-var FRAME2 = 50;
+var FRAME3 = 50;
 var HINT = [
   "Proschi diagrams render in this terminal: put a Proschi document in a ```proschi fenced block",
   "(or write a .proschi file) and Claude Code draws it as the architecture, with a player for its",
@@ -9184,6 +10429,7 @@ function register(on, options) {
     stop(PANE_VIEW);
     await update($, memberOf(players, { requestId: PANE_VIEW }), () => ({ ...IDLE, expanded: view.expanded ?? [], ...view.focus !== void 0 ? { focus: view.focus } : {} }));
     await update($, paneFile, () => file);
+    await update($, paneWhatIf, () => NO_WHATIF);
     await $.ui.open({ id: PANE, title: `Proschi \xB7 ${basename(file)}` });
     watch($, file);
     return { text: `Showing ${file} in the Proschi pane.` };
@@ -9238,17 +10484,23 @@ function register(on, options) {
     const columns = "bodyColumns" in e.props && typeof e.props.bodyColumns === "number" ? e.props.bodyColumns : (e.viewport?.columns ?? 120) - 4;
     const isFocused = "isFocused" in e.props && e.props.isFocused === true;
     const tab = tabOf(await read($, paneTab));
-    const loaded = await documentOf($, PANE_VIEW, source);
+    const whatIf = whatIfOf(await read($, paneWhatIf));
+    const loaded = await documentOf($, PANE_VIEW, source, void 0, whatIf);
     const failing = "error" in loaded ? 0 : loaded.doc.tests.filter((t) => !t.passed).length;
+    const setWhatIf = (fn) => void update($, paneWhatIf, (w) => fn(whatIfOf(w)));
+    const banner = "error" in loaded || loaded.doc === loaded.base ? void 0 : whatIfBanner(ui, loaded.base, whatIf, columns, tab !== "diagram", () => setWhatIf((w) => ({ ...NO_WHATIF, ...w.node ? { node: w.node } : {} })));
     const bar = tabBar(ui, tab, failing, (to) => void update($, paneTab, () => to));
     const keys = (systems) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, isFocused ? tab === "diagram" ? PANE_KEYS : TAB_KEYS : "ctrl+x tab focuses the pane for its keys"), isFocused && systems && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, SYSTEM_KEYS));
     if (tab !== "diagram") {
       if ("error" in loaded) return /* @__PURE__ */ h(ui.Text, { color: "red" }, loaded.error);
-      return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, bar, tabBody(ui, tab, loaded.doc, columns), keys(false));
+      const { doc, base, key, player } = loaded;
+      if (tab === "sequence" && player.mode === "play" && player.isPlaying && !timers.has(PANE_VIEW)) stepper($, doc);
+      const body = tab === "whatif" ? whatIfTab({ ui, base, key, now: doc, w: whatIf, set: setWhatIf, columns }) : tab === "sequence" ? sequenceTab({ ui, diagram: doc.diagram, player, columns, pick: (value) => void paneStep($, doc, (p) => ({ ...p, pick: value, step: 0, isPlaying: false })), go: (step, isPlaying) => void paneStep($, doc, (p) => ({ ...p, mode: "play", step, isPlaying })), pause: () => void paneStep($, doc, (p) => ({ ...p, isPlaying: false })) }) : tab === "hld" ? hldTab(ui, base, key, (surface, text) => void copy($, surface, text, "the HLD markdown")) : tabBody(ui, tab, doc, columns);
+      return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, bar, banner, body, keys(false));
     }
-    const view = await diagramView($, { ui, requestId: PANE, columns }, PANE_VIEW, source);
+    const view = await diagramView($, { ui, requestId: PANE, columns }, PANE_VIEW, source, void 0, whatIf);
     if ("error" in view) return /* @__PURE__ */ h(ui.Text, { color: "red" }, view.error);
-    return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, bar, view.element, keys(view.systems));
+    return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, bar, banner, view.element, keys(view.systems));
   });
 }
 function proschiFile(tool, input) {
@@ -9349,13 +10601,13 @@ function normal(p) {
     ...typeof p?.selected === "string" ? { selected: p.selected } : {}
   };
 }
-var PINK = "#ff5da2";
+var PINK2 = "#ff5da2";
 var INK = "#111111";
-var YELLOW = "#ffd23f";
+var YELLOW2 = "#ffd23f";
 var PAUSE = "\u275A\u275A Pause";
 var PLAY = " \u25B6 Play ";
 var BARS_WIDTH = 80;
-async function documentOf($, viewId, written, file) {
+async function documentOf($, viewId, written, file, whatIf) {
   const player = normal(await read($, memberOf(players, { requestId: viewId })));
   const shown = { ...player.expanded.length ? { expanded: player.expanded } : {}, ...player.focus !== void 0 ? { focus: player.focus } : {} };
   const source = shown.expanded || shown.focus !== void 0 ? { ...written, view: shown } : written;
@@ -9371,12 +10623,20 @@ async function documentOf($, viewId, written, file) {
     return { error: `${where2} has errors (line ${first.line}: ${first.message})${file ? `: run \`npx proschi check ${file}\`` : ""}.` };
   }
   if (doc.diagram.nodes.length === 0) return { error: `${where2} has no components to draw.` };
-  return { doc, source, key, player };
+  const options = whatIf && optionsOf(doc.root, whatIf);
+  if (!options) return { doc, base: doc, source, key, player };
+  const under = `${key}?${JSON.stringify(whatIf)}`;
+  let now = documents.get(under);
+  if (!now) {
+    now = loadDocument(source, options);
+    documents.set(under, now);
+  }
+  return { doc: now, base: doc, source, key, player };
 }
 var INLINE_WARNINGS = 2;
-async function diagramView($, d, viewId, written, file) {
+async function diagramView($, d, viewId, written, file, whatIf) {
   const { ui } = d;
-  const loaded = await documentOf($, viewId, written, file);
+  const loaded = await documentOf($, viewId, written, file, whatIf);
   if ("error" in loaded) return loaded;
   const { doc, source, key, player } = loaded;
   const layout = layouts.get(key);
@@ -9411,7 +10671,7 @@ async function diagramView($, d, viewId, written, file) {
   const verdict = verdictLine(doc.tests, view.width - (view.inPane ? 0 : 13));
   const hasSystems = systems.length > 0 || player.focus !== void 0;
   const roomy = view.width >= 79;
-  return { element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, playing ? playerHeader($, view, playing, player) : doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, grid.columns > d.columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", grid.columns, " columns wide, wider than the ", d.columns, " here: ", view.inPane ? "widen the window" : "use \u26F6 Focus or a wider window", " to see it whole."), lost.some((name) => !importReasons.has(name)) && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u26A0 Not found, so drawn as plain boxes: ", lost.filter((name) => !importReasons.has(name)).join(", ")), lost.filter((name) => importReasons.has(name)).map((name) => /* @__PURE__ */ h(ui.Text, { key: `lost-${name}`, dimColor: true }, "\u26A0 ", importReasons.get(name))), doc.notes.map((note) => /* @__PURE__ */ h(ui.Text, { color: "yellow" }, "\u26A0 ", note.text, note.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true }, " \u2192 ", note.hint))), (view.inPane ? doc.warnings : doc.warnings.slice(0, INLINE_WARNINGS)).map((w) => /* @__PURE__ */ h(ui.Text, { key: `warn-${w}`, color: "yellow", wrap: "truncate-end" }, "\u26A0 ", w)), !view.inPane && doc.warnings.length > INLINE_WARNINGS && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2026 ", doc.warnings.length - INLINE_WARNINGS, " more: \u26F6 Focus, then Analysis"), /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), doc.edges && !playing && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)), verdict && !playing && /* @__PURE__ */ h(ui.Box, { key: `verdict-${viewId}`, flexDirection: "row", gap: 1, width: view.width }, lineView(ui, verdict), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `tests-${viewId}`, label: "\u26F6 Details", dimColor: true, onPress: () => focus($, view, title, what, "tests") })), hasSystems && !playing && systemBar($, view, doc, systems, selected, player), playing ? stepPanel($, view, playing, step, player) : pick2 && useCaseBar($, view, doc, pick2, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: roomy ? "\u29C9 Copy source" : "\u29C9 Source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: roomy ? "\u29C9 Copy share link" : "\u29C9 Link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: roomy ? "\u2197 Open in Proschi" : "\u2197 Open", variant: "primary", onPress: (press) => void openLink($, press.surface, link) }), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `focus-${viewId}`, label: "\u26F6 Focus", onPress: () => focus($, view, title, what) }))), systems: hasSystems };
+  return { element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, playing ? playerHeader($, view, playing, player) : doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, grid.columns > d.columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", grid.columns, " columns wide, wider than the ", d.columns, " here: ", view.inPane ? "widen the window" : "use \u26F6 Focus or a wider window", " to see it whole."), lost.some((name) => !importReasons.has(name)) && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u26A0 Not found, so drawn as plain boxes: ", lost.filter((name) => !importReasons.has(name)).join(", ")), lost.filter((name) => importReasons.has(name)).map((name) => /* @__PURE__ */ h(ui.Text, { key: `lost-${name}`, dimColor: true }, "\u26A0 ", importReasons.get(name))), doc.notes.map((note2) => /* @__PURE__ */ h(ui.Text, { color: "yellow" }, "\u26A0 ", note2.text, note2.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true }, " \u2192 ", note2.hint))), (view.inPane ? doc.warnings : doc.warnings.slice(0, INLINE_WARNINGS)).map((w) => /* @__PURE__ */ h(ui.Text, { key: `warn-${w}`, color: "yellow", wrap: "truncate-end" }, "\u26A0 ", w)), !view.inPane && doc.warnings.length > INLINE_WARNINGS && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2026 ", doc.warnings.length - INLINE_WARNINGS, " more: \u26F6 Focus, then Analysis"), /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), doc.edges && !playing && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)), verdict && !playing && /* @__PURE__ */ h(ui.Box, { key: `verdict-${viewId}`, flexDirection: "row", gap: 1, width: view.width }, lineView(ui, verdict), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `tests-${viewId}`, label: "\u26F6 Details", dimColor: true, onPress: () => focus($, view, title, what, "tests") })), hasSystems && !playing && systemBar($, view, doc, systems, selected, player), playing ? stepPanel($, view, playing, step, player) : pick2 && useCaseBar($, view, doc, pick2, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: roomy ? "\u29C9 Copy source" : "\u29C9 Source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: roomy ? "\u29C9 Copy share link" : "\u29C9 Link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: roomy ? "\u2197 Open in Proschi" : "\u2197 Open", variant: "primary", onPress: (press) => void openLink($, press.surface, link) }), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `focus-${viewId}`, label: "\u26F6 Focus", onPress: () => focus($, view, title, what) }))), systems: hasSystems };
 }
 function selectable(scene, focus2) {
   return [...scene.nodes.values()].map((n) => n.node).filter((n) => n.kind === "system" || n.kind === "group" && n.system === n.id).map((n) => ({ id: n.id, path: focus2 !== void 0 ? `${focus2}.${n.id}` : n.id, name: n.name, expanded: n.kind === "group" }));
@@ -9449,7 +10709,7 @@ function systemBar($, view, doc, systems, selected, player) {
     });
   };
   const open = selected !== void 0 && (selected.expanded || player.expanded.includes(selected.path));
-  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, player.focus !== void 0 && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "Inside ", player.focus.split(".").join(" \u203A "), " \xB7 ", doc.diagram.title ?? "its design"), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "System"), /* @__PURE__ */ h(ui.Text, { color: PINK, wrap: "truncate-end" }, selected ? `${selected.name} (${selected.path})` : "none here"), systems.length > 1 && /* @__PURE__ */ h(ui.Button, { key: `sys-next-${view.viewId}`, label: "\u21E5 Next", ...hotkey(view, "s"), onPress: next }), selected && design && /* @__PURE__ */ h(ui.Button, { key: `sys-open-${view.viewId}`, label: open ? "\u229F Collapse" : "\u229E Expand", ...hotkey(view, "o"), onPress: toggle2 }), selected && design && /* @__PURE__ */ h(ui.Button, { key: `sys-focus-${view.viewId}`, label: "\u2922 Focus in", ...hotkey(view, "f"), onPress: enter }), player.focus !== void 0 && /* @__PURE__ */ h(ui.Button, { key: `sys-back-${view.viewId}`, label: "\u2191 Back out", ...hotkey(view, "u"), onPress: leave })));
+  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, player.focus !== void 0 && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "Inside ", player.focus.split(".").join(" \u203A "), " \xB7 ", doc.diagram.title ?? "its design"), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "System"), /* @__PURE__ */ h(ui.Text, { color: PINK2, wrap: "truncate-end" }, selected ? `${selected.name} (${selected.path})` : "none here"), systems.length > 1 && /* @__PURE__ */ h(ui.Button, { key: `sys-next-${view.viewId}`, label: "\u21E5 Next", ...hotkey(view, "s"), onPress: next }), selected && design && /* @__PURE__ */ h(ui.Button, { key: `sys-open-${view.viewId}`, label: open ? "\u229F Collapse" : "\u229E Expand", ...hotkey(view, "o"), onPress: toggle2 }), selected && design && /* @__PURE__ */ h(ui.Button, { key: `sys-focus-${view.viewId}`, label: "\u2922 Focus in", ...hotkey(view, "f"), onPress: enter }), player.focus !== void 0 && /* @__PURE__ */ h(ui.Button, { key: `sys-back-${view.viewId}`, label: "\u2191 Back out", ...hotkey(view, "u"), onPress: leave })));
 }
 var lostByKey = /* @__PURE__ */ new Map();
 function lostImports(source, key) {
@@ -9475,7 +10735,7 @@ function useCaseBar($, view, doc, pick2, player) {
   const oneRow = picker + 1 + 10 + 1 + longToggle <= inner;
   const explore = toggle(10 + 1 + longToggle <= inner ? EXPLORE.long : EXPLORE.short, player.explorer);
   const options = oneRow ? labels : labels.map((o) => ({ ...o, label: cut2(o.label, inner - 9 - 2) }));
-  const select = /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Text, { bold: true, color: PINK }, "Use case"), /* @__PURE__ */ h(
+  const select = /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Text, { bold: true, color: PINK2 }, "Use case"), /* @__PURE__ */ h(
     ui.Select,
     {
       key: `uc-${view.viewId}`,
@@ -9488,7 +10748,7 @@ function useCaseBar($, view, doc, pick2, player) {
     }
   ));
   const buttons = /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Button, { key: `play-${view.viewId}`, label: "\u25B6 Play", variant: "primary", ...hotkey(view, "p"), onPress: () => start($, view, pick2) }), /* @__PURE__ */ h(ui.Button, { key: `explore-${view.viewId}`, label: explore, ...hotkey(view, "x"), onPress: () => void setPlayer($, view, (p) => ({ ...p, explorer: !p.explorer })) }));
-  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: PINK, paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Box, { flexDirection: oneRow ? "row" : "column", gap: oneRow ? 1 : 0 }, select, buttons), player.explorer && groups.map((g) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, g.label && /* @__PURE__ */ h(ui.Text, { bold: true, color: "cyan" }, g.label), g.useCases.map((u) => /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap", paddingLeft: g.label ? 2 : 0 }, /* @__PURE__ */ h(ui.Text, { bold: u.id === pick2.useCase.id }, u.name), u.scenarios.map((s) => /* @__PURE__ */ h(ui.Button, { key: `x-${view.viewId}-${u.id}-${s.id}`, onPress: () => start($, view, pickOf(u, s)) }, scenarioLabel(ui, u, s))))))));
+  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: PINK2, paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Box, { flexDirection: oneRow ? "row" : "column", gap: oneRow ? 1 : 0 }, select, buttons), player.explorer && groups.map((g) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, g.label && /* @__PURE__ */ h(ui.Text, { bold: true, color: "cyan" }, g.label), g.useCases.map((u) => /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap", paddingLeft: g.label ? 2 : 0 }, /* @__PURE__ */ h(ui.Text, { bold: u.id === pick2.useCase.id }, u.name), u.scenarios.map((s) => /* @__PURE__ */ h(ui.Button, { key: `x-${view.viewId}-${u.id}-${s.id}`, onPress: () => start($, view, pickOf(u, s)) }, scenarioLabel(ui, u, s))))))));
 }
 function scenarioLabel(ui, u, s, current) {
   const error = s.outcome === "error";
@@ -9499,7 +10759,7 @@ function scenarioLabel(ui, u, s, current) {
 function playerHeader($, view, pick2, player) {
   const { ui } = view.d;
   const { useCase } = pick2;
-  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: PINK, paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Button, { key: `back-${view.viewId}`, label: "\u2190 Diagram", ...hotkey(view, "d"), onPress: () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })) }), /* @__PURE__ */ h(ui.Text, { bold: true, wrap: "truncate-end" }, useCase.name), /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\xB7 Playback mode \xB7 read only")), useCase.scenarios.length > 1 && /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap" }, useCase.scenarios.map((s) => {
+  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: PINK2, paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Button, { key: `back-${view.viewId}`, label: "\u2190 Diagram", ...hotkey(view, "d"), onPress: () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })) }), /* @__PURE__ */ h(ui.Text, { bold: true, wrap: "truncate-end" }, useCase.name), /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\xB7 Playback mode \xB7 read only")), useCase.scenarios.length > 1 && /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap" }, useCase.scenarios.map((s) => {
     const current = s.id === pick2.scenario.id;
     return /* @__PURE__ */ h(ui.Button, { key: `sc-${view.viewId}-${s.id}`, variant: current ? "primary" : void 0, dimColor: !current, onPress: () => start($, view, pickOf(useCase, s), player.isPlaying) }, scenarioLabel(ui, useCase, s, current));
   })));
@@ -9546,7 +10806,7 @@ function stepRows(ui, view, steps, at) {
     const call = `${s.httpMethod} ${s.endpoint}`.trim();
     if (i > 0) row(/* @__PURE__ */ h(ui.Text, null, " "));
     row(
-      /* @__PURE__ */ h(ui.Text, { wrap: "truncate-end" }, chip(ui, String(steps.indexOf(s) + 1), error ? "#ff3b30" : PINK), " ", /* @__PURE__ */ h(ui.Text, { bold: true }, s.stepName), s.failed && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Failed", "#fca5a5")), !s.failed && (s.statusCode ?? 0) >= 400 && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, String(s.statusCode), "#fca5a5")), s.executionType === "SYNC_REQUEST_RESPONSE" && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Sync", "#86efac")), s.executionType === "ASYNC_FIRE_AND_FORGET" && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Fire & Forget", "#fdba74")), s.executionType === "ASYNC_REQUEST_RESPONSE" && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Async", "#d8b4fe")))
+      /* @__PURE__ */ h(ui.Text, { wrap: "truncate-end" }, chip(ui, String(steps.indexOf(s) + 1), error ? "#ff3b30" : PINK2), " ", /* @__PURE__ */ h(ui.Text, { bold: true }, s.stepName), s.failed && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Failed", "#fca5a5")), !s.failed && (s.statusCode ?? 0) >= 400 && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, String(s.statusCode), "#fca5a5")), s.executionType === "SYNC_REQUEST_RESPONSE" && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Sync", "#86efac")), s.executionType === "ASYNC_FIRE_AND_FORGET" && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Fire & Forget", "#fdba74")), s.executionType === "ASYNC_REQUEST_RESPONSE" && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Async", "#d8b4fe")))
     );
     row(
       /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, name(s.fromServiceId), " \u2192 ", name(s.toServiceId), call && call !== s.stepName ? `   ${call}` : "")
@@ -9592,7 +10852,7 @@ function stepPanel($, view, pick2, step, player) {
       ...hotkey(view, "p"),
       onPress: () => player.isPlaying ? void setPlayer($, view, (p) => ({ ...p, isPlaying: false })) : go(step >= total - 1 ? 0 : step, true)
     }
-  ), /* @__PURE__ */ h(ui.Button, { key: `next-${view.viewId}`, label: "\u203A", ...hotkey(view, "n"), onPress: () => go(step + 1) }), /* @__PURE__ */ h(ui.Button, { key: `end-${view.viewId}`, label: "\u21E5", ...hotkey(view, "e"), onPress: () => go(total - 1) }), /* @__PURE__ */ h(ui.Text, null, counter), bar > 0 && /* @__PURE__ */ h(ui.Text, null, /* @__PURE__ */ h(ui.Text, { color: YELLOW }, "\u2501".repeat(filled)), /* @__PURE__ */ h(ui.Text, { dimColor: true }, "\u2501".repeat(bar - filled))), /* @__PURE__ */ h(ui.Button, { key: `exit-${view.viewId}`, label: exit, dimColor: true, onPress: () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })) })));
+  ), /* @__PURE__ */ h(ui.Button, { key: `next-${view.viewId}`, label: "\u203A", ...hotkey(view, "n"), onPress: () => go(step + 1) }), /* @__PURE__ */ h(ui.Button, { key: `end-${view.viewId}`, label: "\u21E5", ...hotkey(view, "e"), onPress: () => go(total - 1) }), /* @__PURE__ */ h(ui.Text, null, counter), bar > 0 && /* @__PURE__ */ h(ui.Text, null, /* @__PURE__ */ h(ui.Text, { color: YELLOW2 }, "\u2501".repeat(filled)), /* @__PURE__ */ h(ui.Text, { dimColor: true }, "\u2501".repeat(bar - filled))), /* @__PURE__ */ h(ui.Button, { key: `exit-${view.viewId}`, label: exit, dimColor: true, onPress: () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })) })));
 }
 var hotkey = (view, key) => view.inPane ? { hotkey: key } : {};
 function start($, view, pick2, isPlaying = true) {
@@ -9603,9 +10863,9 @@ function reveal($, view) {
   void scroll($, view.inPane ? { to: { key: view.anchorKey }, in: PANE, block: "start" } : { to: { requestId: view.d.requestId }, block: "start" });
 }
 async function scroll($, args) {
-  const moved = await $.ui.scroll(args).catch((error) => ({ deny: String(error) }));
-  if (moved.deny) $.ui.log(`proschi: scroll to ${JSON.stringify(args.to)} refused: ${moved.deny}`, { to: "debug" });
-  return moved;
+  const moved2 = await $.ui.scroll(args).catch((error) => ({ deny: String(error) }));
+  if (moved2.deny) $.ui.log(`proschi: scroll to ${JSON.stringify(args.to)} refused: ${moved2.deny}`, { to: "debug" });
+  return moved2;
 }
 function focus($, view, title, what, tab = "diagram") {
   const opened = $.ui.open({ id: PANE, title: `Proschi \xB7 ${title}`, focus: true, closeOnEscape: true });
@@ -9615,6 +10875,7 @@ function focus($, view, title, what, tab = "diagram") {
     if (player.isPlaying) await setPlayer($, view, (p) => ({ ...p, isPlaying: false }));
     stop(PANE_VIEW);
     await update($, memberOf(players, { requestId: PANE_VIEW }), () => player);
+    await update($, paneWhatIf, () => NO_WHATIF);
     if ("file" in what) {
       await update($, paneFile, () => what.file);
       watch($, what.file);
@@ -9633,6 +10894,32 @@ async function setPlayer($, view, fn, steps) {
   if (steps && steps.length > 0) animate($, view, steps);
   await update($, memberOf(players, { requestId: view.viewId }), (p) => fn(normal(p)));
 }
+async function paneStep($, doc, fn) {
+  stop(PANE_VIEW);
+  await update($, memberOf(players, { requestId: PANE_VIEW }), (p) => {
+    const next = fn(normal(p));
+    const picks = doc.diagram.useCases.flatMap((u) => u.scenarios.map((s) => ({ value: `${u.id}:${s.id}`, steps: s.steps.length })));
+    const pick2 = picks.find((x) => x.value === next.pick) ?? picks[0];
+    return { ...next, pick: pick2?.value ?? "", step: Math.max(0, Math.min(next.step, (pick2?.steps ?? 1) - 1)) };
+  });
+}
+function stepper($, doc) {
+  timers.set(
+    PANE_VIEW,
+    $.clock.every(STEP_MS, async () => {
+      const p = normal(await read($, memberOf(players, { requestId: PANE_VIEW })));
+      const steps = doc.diagram.useCases.flatMap((u) => u.scenarios.map((s) => ({ value: `${u.id}:${s.id}`, steps: s.steps }))).find((x) => x.value === p.pick)?.steps ?? [];
+      if (tabOf(await read($, paneTab)) !== "sequence" || p.mode !== "play" || !p.isPlaying || steps.length === 0) {
+        stop(PANE_VIEW);
+        $.ui.invalidate("ui.render");
+        return;
+      }
+      const last = p.step >= steps.length - 1;
+      if (last) stop(PANE_VIEW);
+      await update($, memberOf(players, { requestId: PANE_VIEW }), (q) => ({ ...normal(q), step: last ? p.step : p.step + 1, isPlaying: !last }));
+    })
+  );
+}
 function stop(viewId) {
   timers.get(viewId)?.cancel();
   timers.delete(viewId);
@@ -9641,7 +10928,7 @@ function animate($, view, steps) {
   stop(view.viewId);
   let started = -1;
   let tick = 0;
-  const timer = $.clock.every(FRAME2, async () => {
+  const timer = $.clock.every(FRAME3, async () => {
     const player = normal(await read($, memberOf(players, { requestId: view.viewId })));
     if (player.mode !== "play") return stop(view.viewId);
     const step = Math.max(0, Math.min(player.step, steps.length - 1));
