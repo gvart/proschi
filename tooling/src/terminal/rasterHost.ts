@@ -11,6 +11,7 @@
  *   stdin  RasterInput as JSON:
  *     { source, path?, imports?, view?,            as layout.cjs (terminal/document.ts Source)
  *       outDir,                                    where the PNGs go (created if missing)
+ *       prune?: boolean,                           first delete what in outDir went unused for PRUNE_AFTER_MS
  *       options?: {
  *         theme?: 'light' | 'dark',                default 'light'
  *         scale?: number,                          PNG px per diagram px, default 2
@@ -33,10 +34,12 @@
  * that exist are not drawn again. A manifest named by a hash of the input
  * and of this helper itself answers a repeated call without laying out
  * anything. Files are written to a temporary name and renamed into place,
- * so a reader never sees half a PNG.
+ * so a reader never sees half a PNG. A file used again has its time set to
+ * now, so `prune` (the hooks ask once a session) deletes only what no call
+ * used for a week.
  */
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { deflateSync } from 'node:zlib';
 import { initWasm, Resvg } from '@resvg/resvg-wasm';
@@ -60,6 +63,8 @@ export interface RasterOptions {
 
 export interface RasterInput extends Source {
   outDir: string;
+  /** Deletes the files in `outDir` no call used for PRUNE_AFTER_MS first: the cache's only cleanup but the system's. */
+  prune?: boolean;
   options?: RasterOptions;
 }
 
@@ -97,6 +102,39 @@ function engine(assets: RasterAssets): Promise<Uint8Array[]> {
   return ready;
 }
 
+/** How long a file in the cache lives unused. */
+export const PRUNE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Deletes the files in `dir` older than PRUNE_AFTER_MS (by their time, which a use sets to now); one that goes meanwhile is skipped. */
+export function prune(dir: string, now = Date.now()): number {
+  let gone = 0;
+  for (const name of readdirSync(dir)) {
+    const file = join(dir, name);
+    try {
+      const stat = statSync(file);
+      if (stat.isFile() && now - stat.mtimeMs > PRUNE_AFTER_MS) {
+        unlinkSync(file);
+        gone++;
+      }
+    } catch {
+      // Gone already, or another call's: nothing to do.
+    }
+  }
+  return gone;
+}
+
+/** Marks files as used now, so a prune keeps them. */
+function touch(files: string[]): void {
+  const now = new Date();
+  for (const f of files) {
+    try {
+      utimesSync(f, now, now);
+    } catch {
+      // Pruned by another call meanwhile: it is drawn again next time.
+    }
+  }
+}
+
 const hash = (text: string) => createHash('sha256').update(text).digest('hex').slice(0, 20);
 
 /** Writes `bytes` to `file` unless it is there already, through a temporary name. */
@@ -110,11 +148,16 @@ function put(file: string, bytes: Uint8Array | string): void {
 export async function rasterize(input: RasterInput, assets: RasterAssets): Promise<RasterOutput> {
   const options = input.options ?? {};
   mkdirSync(input.outDir, { recursive: true });
+  if (input.prune) prune(input.outDir);
   const { source, path, imports, view } = input;
   const manifest = join(input.outDir, `${hash(JSON.stringify([assets.build ?? '', source, path, imports, view, options]))}.json`);
   if (existsSync(manifest)) {
     const done = JSON.parse(readFileSync(manifest, 'utf8')) as RasterOutput;
-    if ([done.base, ...(done.frames ?? []).flat()].every((f) => existsSync(f))) return done;
+    const files = [done.base, ...(done.frames ?? []).flat()];
+    if (files.every((f) => existsSync(f))) {
+      touch([manifest, ...files]);
+      return done;
+    }
   }
 
   // Under a what-if, the document is analysed as the pane's What-if tab analyses it (plugin/src/views/whatif.ts optionsOf).
@@ -164,7 +207,10 @@ export async function rasterize(input: RasterInput, assets: RasterAssets): Promi
   let size: { width: number; height: number } | undefined;
   const still = (svg: string): string => {
     const file = fileOf(svg);
-    if (existsSync(file)) size ??= pngSize(file);
+    if (existsSync(file)) {
+      size ??= pngSize(file);
+      touch([file]);
+    }
     else {
       const pixels = render(svg);
       size ??= pixels;
@@ -178,7 +224,10 @@ export async function rasterize(input: RasterInput, assets: RasterAssets): Promi
     const count = Math.max(1, Math.round(options.play!.frames ?? DEFAULT_FRAMES));
     const svgs = Array.from({ length: count }, (_, k) => drawArchitecture(laid, { ...draw, play: { steps: steps!, index, progress: count === 1 ? 100 : (k * 100) / (count - 1) } }));
     const files = svgs.map(fileOf);
-    if (files.every((f) => existsSync(f))) return files;
+    if (files.every((f) => existsSync(f))) {
+      touch(files);
+      return files;
+    }
     // Within a step only the packets move, and they are drawn last: the step is drawn once
     // without them, and each frame lays just its packets over a copy of that.
     const behind = render(svgs[0].replace(PACKET, ''));

@@ -9108,6 +9108,7 @@ var bytes = /* @__PURE__ */ new Map();
 var cache;
 var theme;
 var probing = false;
+var pruned = false;
 async function cacheDir($) {
   if (cache) return cache;
   const dir = await $.env.get("TMPDIR").catch(() => void 0);
@@ -9128,7 +9129,8 @@ function rasterOf($, request2) {
   void (async () => {
     const outDir = await cacheDir($);
     const { source, path, imports, view } = request2.source;
-    const stdin = JSON.stringify({ source, path, imports, view, outDir, options: request2.options });
+    const stdin = JSON.stringify({ source, path, imports, view, outDir, options: request2.options, ...pruned ? {} : { prune: true } });
+    pruned = true;
     const answer = await $.process.run(["node", `${$.plugin.root}/hooks/raster.cjs`], { stdin, timeoutMs: 6e4 }).then(
       ({ exitCode, stdout, stderr }) => {
         if (exitCode !== 0) return { error: stderr.trim() || `raster exited with ${exitCode}` };

@@ -58,6 +58,7 @@ stdin, JSON:
   source: string; path?: string; imports?: Record<string, string>;
   view?: { expanded?: string[]; focus?: string };   // as layout.cjs takes
   outDir: string;                                   // a cache dir, e.g. `${data or tmp}/proschi-raster/<doc hash>`
+  prune?: boolean;                                  // first delete what in outDir went unused for 7 days
   options?: {
     theme?: 'light' | 'dark';                       // default 'light'
     scale?: number;                                 // PNG px per diagram px, default 2
@@ -95,7 +96,9 @@ are written once and files that exist are not drawn again. A manifest named by
 a hash of the input and of the helper's own bundle answers a repeated call
 without parsing or laying out (≈170 ms, mostly Node start-up). Files are
 written under a temporary name and renamed, so a reader never sees half a
-PNG. The helper never deletes; pruning `outDir` is up to the caller.
+PNG. A file used again has its time set to now; with `prune: true` (the
+hooks send it on a session's first call) the helper first deletes the files
+in `outDir` no call used for 7 days (`PRUNE_AFTER_MS`).
 
 ## Performance
 

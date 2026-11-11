@@ -151,6 +151,10 @@ test('auto, pictures shown: Play swaps in the helper\'s frames by file', async (
   const playing = await draw($, 2)
   const asked = runs.filter(r => r.argv[1]?.endsWith('raster.cjs')).map(r => JSON.parse(r.init!.stdin!) as { options: { play?: unknown; overlay?: boolean } })
   expect(asked.filter(a => a.options.play)).toHaveLength(1)
+  // The session's first call asks the helper to prune the cache; no other does.
+  const prunes = runs.filter(r => r.argv[1]?.endsWith('raster.cjs')).map(r => (JSON.parse(r.init!.stdin!) as { prune?: boolean }).prune)
+  expect(prunes[0]).toBe(true)
+  expect(prunes.slice(1).every(p => p === undefined)).toBe(true)
   expect(asked.find(a => a.options.play)?.options).toMatchObject({ play: { useCase: expect.any(String) } })
   expect(asked.find(a => a.options.play)?.options.overlay).toBeUndefined()
   expect(await playing.find({ type: 'Image', key: 'img-m1:0' })).toBeDefined()

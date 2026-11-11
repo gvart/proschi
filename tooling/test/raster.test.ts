@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,7 +7,7 @@ import { examples } from '../src/proschi';
 import { drawArchitecture, layoutArchitecture, renderArchitectureSvg } from '../src/render/architecture';
 import { COLORS } from '../src/render/svg';
 import { loadDocument } from '../src/terminal/document';
-import { rasterize } from '../src/terminal/rasterHost';
+import { PRUNE_AFTER_MS, prune, rasterize } from '../src/terminal/rasterHost';
 import { analysisOverlay, edgeOverlays } from '../../frontend/src/sim/overlay';
 import { analyze } from '../../frontend/src/sim';
 import { CANVAS_TOKENS } from '../../frontend/src/utils/canvasColors';
@@ -124,5 +124,25 @@ describe('raster helper', () => {
     const out = await rasterize({ source: source('hello'), outDir, options: { maxWidthPx: 300 } }, { dir: HOOKS });
     expect(out.width).toBeLessThanOrEqual(300);
     await expect(rasterize({ source: source('hello'), outDir, options: { play: { useCase: 'nope' } } }, { dir: HOOKS })).rejects.toThrow(/No use case 'nope'/);
+  });
+
+  it('prunes what no call used for a week, and a use keeps a file', async () => {
+    const outDir = mkdtempSync(join(tmpdir(), 'proschi-raster-'));
+    const options = { scale: 0.5 };
+    const old = new Date(Date.now() - PRUNE_AFTER_MS - 60_000);
+    const stale = join(outDir, 'stale.png');
+    writeFileSync(stale, 'x');
+    utimesSync(stale, old, old);
+    const out = await rasterize({ source: source('hello'), outDir, options }, { dir: HOOKS });
+    // Drawn a week ago and used again now: kept.
+    utimesSync(out.base, old, old);
+    await rasterize({ source: source('hello'), outDir, options }, { dir: HOOKS });
+    expect(Date.now() - statSync(out.base).mtimeMs).toBeLessThan(60_000);
+    // Without prune nothing goes; with it the stale file does.
+    expect(existsSync(stale)).toBe(true);
+    await rasterize({ source: source('hello'), outDir, options, prune: true }, { dir: HOOKS });
+    expect(existsSync(stale)).toBe(false);
+    expect(existsSync(out.base)).toBe(true);
+    expect(prune(outDir)).toBe(0);
   });
 });

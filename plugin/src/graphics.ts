@@ -65,6 +65,8 @@ const bytes = new Map<string, string>()
 let cache: string | undefined
 let theme: 'light' | 'dark' | undefined
 let probing = false
+/** Whether this session's first call asked the helper to prune the cache (once a session is enough). */
+let pruned = false
 
 /** Where the PNGs go: the system's temporary folder (the API names no plugin data folder). Kept once read, never a promise of another dispatch's. */
 async function cacheDir($: EngineInterface): Promise<string> {
@@ -91,7 +93,8 @@ export function rasterOf($: EngineInterface, request: RasterRequest): RasterOutp
   void (async () => {
     const outDir = await cacheDir($)
     const { source, path, imports, view } = request.source
-    const stdin = JSON.stringify({ source, path, imports, view, outDir, options: request.options })
+    const stdin = JSON.stringify({ source, path, imports, view, outDir, options: request.options, ...(pruned ? {} : { prune: true }) })
+    pruned = true
     const answer = await $.process.run(['node', `${$.plugin.root}/hooks/raster.cjs`], { stdin, timeoutMs: 60_000 }).then(
       ({ exitCode, stdout, stderr }) => {
         if (exitCode !== 0) return { error: stderr.trim() || `raster exited with ${exitCode}` }

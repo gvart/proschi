@@ -177,5 +177,6 @@ text. The code is `plugin/src/graphics.ts`.
   by file on its 50 ms tick when it changes; until the frames exist it
   keeps blitting cells into the Raster.
 - **Cache.** `$TMPDIR/proschi-raster` (the API names no plugin data folder),
-  read once through `$.env`. Files are content-hashed; nothing prunes them,
-  so the system's temporary-folder cleanup does.
+  read once through `$.env`. Files are content-hashed. The session's first
+  call asks the helper to `prune`: it deletes what no call used for a week
+  (a use sets a file's time to now), cheap and at most once a session.
