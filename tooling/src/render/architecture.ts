@@ -302,7 +302,8 @@ function drawCard(p: Placed, dx: number, dy: number, load?: NodeOverlay, live: {
   const replicas = terminal ? (load?.replicas ?? node.replicas ?? 1) : 1;
   // For a terminal, the canvas's load line (LoadBadge): replicas, size, shards, then how busy.
   const busy = terminal && load ? [replicas > 1 ? `×${replicas}` : '', load.size ?? '', load.shards && load.shards > 1 ? `⧉${load.shards}` : '', percent].filter(Boolean).join(' · ') : percent;
-  const stack = node.kind === 'component' ? Math.min(2, replicas - 1) : 0;
+  // Lit by playback, the accent shadow takes the stack's place, as on the canvas (`.pc-active` wins over `[data-stack]`).
+  const stack = node.kind === 'component' && !mark ? Math.min(2, replicas - 1) : 0;
   // Under the load overlay, the canvas's heat scale (utils/heat.ts) and, on its solid fills, the dark text drawn on accents.
   const scale = overlay ? canvasHeat(load) : undefined;
   const heat = scale ? scale.fill : heatOf(load);
