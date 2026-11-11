@@ -1,0 +1,27 @@
+plugin/hooks/register.js
+  s_50cc5c1ed1a510::t_88ce68896f8fe5 8655-8656,8663-8664,8672,8747-8755
+  s_50cc5c1ed1a510::t_abc4e7cdc538ef 8756
+docs/design/terminal-mod.md
+  s_50cc5c1ed1a510::t_046883a842a2db 46-50
+tooling/src/terminal/paint.ts
+  s_50cc5c1ed1a510::t_4b71f23a3b93e2 118-120,144-145,152-154,156,161,272-281
+  s_50cc5c1ed1a510::t_ffd3be934ca381 282-283
+tooling/test/terminal.test.ts
+  s_50cc5c1ed1a510::t_b8db5bc45fc724 430-438
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8fb6d9d33f0caa96d7789a22ec42c6b3979d8f3a",
+  "prompts": {},
+  "sessions": {
+    "s_50cc5c1ed1a510": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7e5513ad-e496-40de-9a6e-d587aa393ce5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
