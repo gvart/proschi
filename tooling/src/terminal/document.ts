@@ -2,7 +2,7 @@ import { isRemoteSpec, joinImportPath, mapResolver } from '../../../frontend/src
 import { parse } from '../../../frontend/src/dsl/parser';
 import type { Diagram, Diagnostic } from '../../../frontend/src/dsl/types';
 import { encodeShareHash, type PlaybackTarget } from '../../../frontend/src/playground/share';
-import { analyze, runTests, type Analysis, type TestResult } from '../../../frontend/src/sim';
+import { analyze, runTests, type Analysis, type AnalyzeOptions, type TestResult } from '../../../frontend/src/sim';
 import { edgeOverlays, type CriticalPathOverlay, type EdgeOverlay, type NodeOverlay } from '../../../frontend/src/sim/overlay';
 import { applyView, viewOverlay, type SystemBadge, type SystemNote, type SystemsView } from './systems';
 
@@ -61,10 +61,11 @@ export function viewSource(input: Source): { diagram: Diagram; errors: Diagnosti
   return { diagram: errors.length ? diagram : applyView(diagram, input.view), errors };
 }
 
-export function loadDocument(input: Source): Document {
+/** `options` analyse it under a what-if (frontend/src/sim/whatif.ts): other rates, nodes down; the overlay, warnings and results follow. */
+export function loadDocument(input: Source, options?: AnalyzeOptions): Document {
   const { diagram, errors } = parseSource(input);
   const simulated = errors.length === 0 && (diagram.traffic?.length ?? 0) > 0;
-  const analysis = simulated ? analyze(diagram) : undefined;
+  const analysis = simulated ? analyze(diagram, options) : undefined;
   const imports = input.imports && Object.keys(input.imports).length ? input.imports : undefined;
   const view = errors.length ? {} : (input.view ?? {});
   const sim = errors.length ? undefined : viewOverlay(diagram, analysis, view);
@@ -85,7 +86,7 @@ export function loadDocument(input: Source): Document {
     warnings: (analysis?.warnings ?? []).filter((w) => !noted.has(w)),
     systems: sim?.systems ?? {},
     notes: sim?.notes ?? [],
-    tests: analysis ? runTests(diagram, analysis) : [],
+    tests: analysis ? runTests(diagram, analysis, options) : [],
     link: (playback) => EDITOR + encodeShareHash(input.source, playback, imports),
   };
 }

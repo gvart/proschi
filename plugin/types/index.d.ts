@@ -23,6 +23,21 @@ export type PaneSource = { source: string; path?: string; imports?: Record<strin
 /** The pane's tabs (src/views/tabs.tsx), as the editor's views. */
 export type PaneTab = 'diagram' | 'analysis' | 'whatif' | 'sequence' | 'hld' | 'tests'
 
+/**
+ * The pane's live what-if (src/views/whatif.tsx), as the editor's
+ * (components/WhatIf/whatIf.ts LiveWhatIf): every use case's traffic times
+ * `multiplier`, the `failed` nodes down, or a saved `whatif` block previewed
+ * (`saved`); and the node its toggle acts on (`node`) and the use case swept
+ * (`sweep`). View state only: the file never changes.
+ */
+export type WhatIfState = {
+  multiplier: number
+  failed: string[]
+  saved?: string
+  node?: string
+  sweep?: string
+}
+
 declare module 'claude-code' {
   interface PluginState {
     proschi: {
@@ -34,6 +49,8 @@ declare module 'claude-code' {
       paneSource: PaneSource
       /** The pane's tab; read through `tabOf`, as a version before tabs stored none. */
       paneTab: PaneTab
+      /** The pane's what-if; read through `whatIfOf`, as a version before what-ifs stored none. */
+      paneWhatIf: WhatIfState
     }
   }
 }
