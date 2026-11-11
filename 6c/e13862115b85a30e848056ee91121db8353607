@@ -1,0 +1,19 @@
+plugin/hooks/raster.cjs
+  s_50cc5c1ed1a510::t_a56476bd4983f0 1-3,5-9,18,20-22,24,36,40,42,47-51,55,57,60,65,67,79-84,87-91,95-96,98,101,106,108,116,119,122,185,188-189,193,247-248,253,255,260-261,263-265,268-271,274,1607-1610,1621-1622
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6ce13862115b85a30e848056ee91121db8353607",
+  "prompts": {},
+  "sessions": {
+    "s_50cc5c1ed1a510": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7e5513ad-e496-40de-9a6e-d587aa393ce5",
+        "model": "unknown"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
