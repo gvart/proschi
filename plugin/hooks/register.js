@@ -1009,8 +1009,8 @@ function qualify(tokens) {
   let out;
   for (let i = 0; i < tokens.length; i++) {
     const [t, next] = [tokens[i], tokens[i + 1]];
-    const joined = t.kind === "ident" && next?.kind === "tag" && next.col === t.col + t.length;
-    if (joined && (tokens[i + 2]?.kind === "arrow" || tokens[i - 1]?.kind === "arrow")) {
+    const joined2 = t.kind === "ident" && next?.kind === "tag" && next.col === t.col + t.length;
+    if (joined2 && (tokens[i + 2]?.kind === "arrow" || tokens[i - 1]?.kind === "arrow")) {
       out ??= tokens.slice(0, i);
       out.push({ ...t, value: `${t.value}.${next.value}`, length: t.length + next.length });
       i++;
@@ -10104,7 +10104,8 @@ function sequenceLines(seq, width, current = []) {
     const to = x.get(m.to);
     const on = m.kind === "request" && now.has(m.step);
     const color = on ? PINK : m.error ? RED : void 0;
-    const line2 = { ...color ? { color } : {}, ...on ? { bold: true } : {}, ...m.kind === "response" && !color ? { dim: true } : {} };
+    const arrow2 = { ...color ? { color } : {}, ...m.kind === "response" && !color ? { dim: true } : {} };
+    const line2 = { ...arrow2, ...on ? { bold: true } : {} };
     const y = body();
     let at = Math.min(from, to) + 2;
     if (m.kind === "request") at = g.text(y, at, ` ${m.number} `, { bg: on ? YELLOW : m.error ? RED : PINK, color: TONE.ink, bold: true }) + 1;
@@ -10115,7 +10116,7 @@ function sequenceLines(seq, width, current = []) {
     } else g.text(y, at, cut(m.label, room), m.kind === "response" ? line2 : { ...line2, dim: false });
     const a = body();
     if (from === to) {
-      g.text(a, from, "\u251C\u2500\u21BA", line2);
+      g.text(a, from, "\u251C\u2500\u21BA", arrow2);
       return;
     }
     const right = to > from;
@@ -10123,12 +10124,12 @@ function sequenceLines(seq, width, current = []) {
     const head = m.kind === "response" || m.async ? right ? "\u25B7" : "\u25C1" : right ? "\u25B6" : "\u25C0";
     const lo = Math.min(from, to) + 1;
     const hi = Math.max(from, to) - 1;
-    for (let i = lo; i <= hi; i++) g.put(a, i, fill2, line2);
+    for (let i = lo; i <= hi; i++) g.put(a, i, fill2, arrow2);
     g.put(a, from, right ? "\u251C" : "\u2524", { dim: true });
     if (m.failed) {
       g.put(a, right ? hi : lo, "\u2715", { color: RED, bold: true });
       g.put(a, right ? hi - 1 : lo + 1, " ");
-    } else g.put(a, right ? hi : lo, head, line2);
+    } else g.put(a, right ? hi : lo, head, arrow2);
   };
   for (const item of seq.items) {
     if (item.kind === "message") {
@@ -10394,9 +10395,9 @@ function sweepLines(s, today, width) {
   const out = [{ segs: [{ text: verdict, bold: true, ...s.maxPassingRps === void 0 ? { color: TONE.bad } : {} }], wrap: true }];
   const legend = [
     { text: `Range ${formatRps(s.from)} to ${formatRps(s.to)} \xB7 `, dim: true },
-    { text: "\u250A", dim: true },
+    { text: TODAY },
     { text: ` today ${formatRps(today)}`, dim: true },
-    ...s.maxPassingRps !== void 0 ? [{ text: " \xB7 ", dim: true }, { text: "\u2503", color: TONE.good }, { text: ` passes up to ${formatRps(s.maxPassingRps)}`, dim: true }] : []
+    ...s.maxPassingRps !== void 0 ? [{ text: " \xB7 ", dim: true }, { text: PASSES, color: TONE.good, bold: true }, { text: ` passes up to ${formatRps(s.maxPassingRps)}`, dim: true }] : []
   ];
   if (s.saturation.length === 0) return [...out, { segs: [{ text: "No node saturates in this range.", dim: true }] }, { segs: legend, wrap: true }];
   const values = s.saturation.map((n) => n.atStart ? `below ${formatRps(n.rps)}` : formatRps(n.rps));
@@ -10404,22 +10405,35 @@ function sweepLines(s, today, width) {
   const value = Math.max(12, ...values.map((v) => v.length));
   const bar = Math.max(10, width - name - value - 4);
   const at = (rps) => Math.max(0, Math.min(bar - 1, Math.round((rps - s.from) / (s.to - s.from) * (bar - 1))));
-  const pass2 = s.maxPassingRps !== void 0 ? at(s.maxPassingRps) : -1;
-  out.push({ segs: [{ text: `${"NODE".padEnd(name)}  ${"".padEnd(bar)}  ${"SATURATES AT".padStart(value)}`, dim: true }] });
+  const marks = Array.from({ length: bar }, () => ({ text: " " }));
+  marks[at(today)] = { text: TODAY };
+  if (s.maxPassingRps !== void 0) marks[at(s.maxPassingRps)] = { text: PASSES, color: TONE.good, bold: true };
+  out.push({ segs: [{ text: `${"NODE".padEnd(name)}  `, dim: true }, ...joined(marks), { text: `  ${"SATURATES AT".padStart(value)}`, dim: true }] });
   s.saturation.forEach((n, i) => {
     const filled = n.atStart ? 0 : at(n.rps) + 1;
-    const cells = [];
-    for (let x = 0; x < bar; x++) {
-      const on = x < filled;
-      const seg = x === pass2 ? { text: "\u2503", color: TONE.good, bold: true, ...on ? { bg: BLUE } : {} } : x === at(today) ? on ? { text: "\u250A", color: "#ffffff", bg: BLUE } : { text: "\u250A" } : on ? { text: "\u2588", color: BLUE } : { text: "\xB7", dim: true };
-      const last = cells[cells.length - 1];
-      const plain = (c) => c.text[0] === "\u2588" || c.text[0] === "\xB7";
-      if (last && plain(last) && plain(seg) && last.text[0] === seg.text) last.text += seg.text;
-      else cells.push(seg);
-    }
-    out.push({ segs: [{ text: cut(n.node, name).padEnd(name), bold: true }, { text: "  " }, ...cells, { text: "  " }, { text: values[i].padStart(value) }] });
+    out.push({
+      segs: [
+        { text: cut(n.node, name).padEnd(name), bold: true },
+        { text: "  " },
+        ...filled > 0 ? [{ text: "\u2588".repeat(filled), color: BLUE }] : [],
+        ...filled < bar ? [{ text: "\xB7".repeat(bar - filled), dim: true }] : [],
+        { text: "  " },
+        { text: values[i].padStart(value) }
+      ]
+    });
   });
   out.push({ segs: legend, wrap: true });
+  return out;
+}
+var TODAY = "\u25BD";
+var PASSES = "\u25BC";
+function joined(cells) {
+  const out = [];
+  for (const c of cells) {
+    const last = out[out.length - 1];
+    if (last && c.text === " " && /^ +$/.test(last.text)) last.text += " ";
+    else out.push({ ...c });
+  }
   return out;
 }
 

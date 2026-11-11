@@ -178,8 +178,9 @@ const BLUE = '#3b82f6'
 
 /**
  * A sweep as the editor's chart (WhatIfResults.tsx SweepChart): the verdict,
- * then a bar per node from the range's start to where it saturates, with
- * today's rate (┊) and the highest that passes (┃) marked on every bar.
+ * then a bar per node from the range's start to where it saturates. Today's
+ * rate (▽) and the highest that passes (▼, green) are marked above the bars,
+ * in the header row, so the bars stay whole.
  */
 export function sweepLines(s: SweepResult, today: number, width: number): Line[] {
   const verdict =
@@ -191,9 +192,9 @@ export function sweepLines(s: SweepResult, today: number, width: number): Line[]
   const out: Line[] = [{ segs: [{ text: verdict, bold: true, ...(s.maxPassingRps === undefined ? { color: TONE.bad } : {}) }], wrap: true }]
   const legend: Seg[] = [
     { text: `Range ${formatRps(s.from)} to ${formatRps(s.to)} · `, dim: true },
-    { text: '┊', dim: true },
+    { text: TODAY },
     { text: ` today ${formatRps(today)}`, dim: true },
-    ...(s.maxPassingRps !== undefined ? [{ text: ' · ', dim: true }, { text: '┃', color: TONE.good }, { text: ` passes up to ${formatRps(s.maxPassingRps)}`, dim: true }] : []),
+    ...(s.maxPassingRps !== undefined ? [{ text: ' · ', dim: true }, { text: PASSES, color: TONE.good, bold: true }, { text: ` passes up to ${formatRps(s.maxPassingRps)}`, dim: true }] : []),
   ]
   if (s.saturation.length === 0) return [...out, { segs: [{ text: 'No node saturates in this range.', dim: true }] }, { segs: legend, wrap: true }]
   const values = s.saturation.map(n => (n.atStart ? `below ${formatRps(n.rps)}` : formatRps(n.rps)))
@@ -201,25 +202,39 @@ export function sweepLines(s: SweepResult, today: number, width: number): Line[]
   const value = Math.max(12, ...values.map(v => v.length))
   const bar = Math.max(10, width - name - value - 4)
   const at = (rps: number) => Math.max(0, Math.min(bar - 1, Math.round(((rps - s.from) / (s.to - s.from)) * (bar - 1))))
-  const pass = s.maxPassingRps !== undefined ? at(s.maxPassingRps) : -1
-  out.push({ segs: [{ text: `${'NODE'.padEnd(name)}  ${''.padEnd(bar)}  ${'SATURATES AT'.padStart(value)}`, dim: true }] })
+  // The markers over the bars: where both fall on one cell, what passes wins (the legend names both).
+  const marks: Seg[] = Array.from({ length: bar }, () => ({ text: ' ' }))
+  marks[at(today)] = { text: TODAY }
+  if (s.maxPassingRps !== undefined) marks[at(s.maxPassingRps)] = { text: PASSES, color: TONE.good, bold: true }
+  out.push({ segs: [{ text: `${'NODE'.padEnd(name)}  `, dim: true }, ...joined(marks), { text: `  ${'SATURATES AT'.padStart(value)}`, dim: true }] })
   s.saturation.forEach((n, i) => {
     const filled = n.atStart ? 0 : at(n.rps) + 1
-    const cells: Seg[] = []
-    for (let x = 0; x < bar; x++) {
-      const on = x < filled
-      const seg: Seg =
-        x === pass ? { text: '┃', color: TONE.good, bold: true, ...(on ? { bg: BLUE } : {}) }
-        : x === at(today) ? (on ? { text: '┊', color: '#ffffff', bg: BLUE } : { text: '┊' })
-        : on ? { text: '█', color: BLUE }
-        : { text: '·', dim: true }
-      const last = cells[cells.length - 1]
-      const plain = (c: Seg) => c.text[0] === '█' || c.text[0] === '·'
-      if (last && plain(last) && plain(seg) && last.text[0] === seg.text) last.text += seg.text
-      else cells.push(seg)
-    }
-    out.push({ segs: [{ text: cut(n.node, name).padEnd(name), bold: true }, { text: '  ' }, ...cells, { text: '  ' }, { text: values[i].padStart(value) }] })
+    out.push({
+      segs: [
+        { text: cut(n.node, name).padEnd(name), bold: true },
+        { text: '  ' },
+        ...(filled > 0 ? [{ text: '█'.repeat(filled), color: BLUE }] : []),
+        ...(filled < bar ? [{ text: '·'.repeat(bar - filled), dim: true }] : []),
+        { text: '  ' },
+        { text: values[i].padStart(value) },
+      ],
+    })
   })
   out.push({ segs: legend, wrap: true })
+  return out
+}
+
+/** The sweep's markers: today's rate, and the highest that passes. */
+const TODAY = '▽'
+const PASSES = '▼'
+
+/** Blank cells run together into one segment. */
+function joined(cells: Seg[]): Seg[] {
+  const out: Seg[] = []
+  for (const c of cells) {
+    const last = out[out.length - 1]
+    if (last && c.text === ' ' && /^ +$/.test(last.text)) last.text += ' '
+    else out.push({ ...c })
+  }
   return out
 }

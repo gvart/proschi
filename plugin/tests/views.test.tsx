@@ -133,7 +133,22 @@ test('the saved what-ifs are listed with their results, and Preview draws one', 
   // The sweep: where each node saturates, today and the highest rate that passes marked.
   await p.press({ key: 'wi-sweep' })
   expect(await has(p, /^"Place order" passes up to [\d.]+k? rps|^"Place order" (fails already|passes over)/)).toBe(true)
-  expect(await has(p, /^Range 150 rps to 3k rps · ┊ today 300 rps/)).toBe(true)
+  expect(await has(p, /^Range 150 rps to 3k rps · ▽ today 300 rps/)).toBe(true)
+  await p.unmount()
+})
+
+test('the sweep marks today and what passes over the bars, which stay whole', async ($, on) => {
+  engine(on)
+  const p = await focused($, SOURCE.replace('"Place order" 300 rps', '"Place order" 3000 rps'))
+  await p.press({ key: 'tab-whatif' })
+  await p.press({ key: 'wi-sweep' })
+  const texts = ((await p.findAll({ type: 'Text' })) as unknown as Found[]).map(t => t.text)
+  // The header row carries the markers where the bars run.
+  expect(texts.some(t => /^NODE +[ ▽▼]*[▽▼][ ▽▼]* +SATURATES AT$/.test(t))).toBe(true)
+  // Each bar row: its blocks, then dots, no marker among them.
+  const rows = texts.filter(t => /█/.test(t) && /rps$/.test(t))
+  expect(rows.length).toBeGreaterThan(0)
+  expect(rows.every(t => /^\S+ +█+·* +[\d.]+k? rps$/.test(t))).toBe(true)
   await p.unmount()
 })
 
