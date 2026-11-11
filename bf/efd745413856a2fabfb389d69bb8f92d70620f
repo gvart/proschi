@@ -1,0 +1,23 @@
+plugin/src/graphics.ts
+  s_50cc5c1ed1a510::t_873d27df1e9b10 16-17
+docs/impl/terminal-rendered-ui.md
+  s_50cc5c1ed1a510::t_09953156b5e162 19-26,56-73,76-85
+tooling/src/render/ui/contract.ts
+  s_50cc5c1ed1a510::t_873d27df1e9b10 14-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bfefd745413856a2fabfb389d69bb8f92d70620f",
+  "prompts": {},
+  "sessions": {
+    "s_50cc5c1ed1a510": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7e5513ad-e496-40de-9a6e-d587aa393ce5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
