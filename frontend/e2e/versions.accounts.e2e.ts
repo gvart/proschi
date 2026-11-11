@@ -118,7 +118,7 @@ test('a cloud: reference draws the saved version in a system box, read-only, and
   await page.goto('app/');
   const box = page.locator('.react-flow__node-systemNode', { hasText: 'Order Processing' });
   await expect(box).toBeVisible();
-  expect(account.resolves).toEqual(['orders.proschi:v1']);
+  await expect.poll(() => account.resolves).toEqual(['orders.proschi:v1']);
   await expect(page.getByTestId('diagnostics').filter({ hasText: 'cloud:' })).toHaveCount(0);
 
   // Opened, the version shows read-only.
