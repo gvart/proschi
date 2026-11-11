@@ -113,35 +113,55 @@ export function paint(scene: Scene, options: PaintOptions = {}): Grid {
     grid.set(last.x, last.y, HEAD[head], color);
   }
   // A label that would land on one drawn before it moves a row or two up or down, where there is room.
-  // Under the load overlay the label carries the edge's requests and the latency they add (an edge with no label gets them alone),
-  // on a straight run of its own line where it covers no other line, card or frame: longer than a label, it would hide whose it
-  // is. Where no run has room, the label goes back to its own words and the numbers are left to the Analysis tab.
+  // Under the load overlay the label carries the edge's requests and the latency they add (an edge with no label gets them
+  // alone), on or beside a straight run of its own line where it covers no other line, card or frame: further off, it would
+  // not read as the edge's. Short of room on one row, the label and the numbers go on two, then the label is shortened, then
+  // the numbers go where they fit and the label where it was; only where the numbers fit nowhere does the label stand alone,
+  // the numbers left to the Analysis tab.
   const taken = new Set<string>();
   const owner = new Map<string, number>();
   scene.edges.forEach(({ path }, i) => path.cells.forEach(({ x, y }) => owner.set(`${x},${y}`, (owner.get(`${x},${y}`) ?? i) === i ? i : -1)));
   // An arrowhead stays: it says which way the edge goes.
   for (const { path } of scene.edges) owner.set(`${path.cells[path.cells.length - 1].x},${path.cells[path.cells.length - 1].y}`, -1);
-  const frames = all.filter((n) => n.node.kind === 'group').map((n) => n.rect);
-  const onFrame = (x: number, y: number) => frames.some((r) => (y === r.y || y === r.y + r.h - 1 ? x >= r.x && x < r.x + r.w : (x === r.x || x === r.x + r.w - 1) && y > r.y && y < r.y + r.h));
+  const blocked = blockedCells(grid, scene);
+  const take = (spots: Spot[]) => spots.forEach(({ text, x, y }) => Array.from(text).forEach((_, i) => taken.add(`${x + i},${y}`)));
   scene.edges.forEach(({ edge, path, label }, index) => {
     const load = loadOf(edge.id);
     const chip = loadChip(load);
-    const place = (words: string, alone: boolean) => {
-      const text = ` ${words} `;
-      const spot = (at: { x: number; y: number }, dy: number) => ({ text, x: Math.max(0, Math.min(grid.columns - text.length, at.x - Math.floor(text.length / 2))), y: at.y + dy });
-      const fits = ({ x, y }: { x: number; y: number }) =>
-        y >= 0 && y < grid.rows && Array.from(text, (_, i) => `${x + i},${y}`).every((k, i) => !taken.has(k) && (!alone || ((owner.get(k) ?? index) === index && !onCard(scene, x + i, y) && !onFrame(x + i, y))));
-      if (alone) return [...(label ? [0, -1, 1].map((d) => spot(label, d)) : []), ...runsOf(path).flatMap((at) => [0, -1, 1].map((d) => spot(at, d)))].find(fits);
-      const plain = [0, -1, 1, -2, 2].map((d) => spot(label!, d));
-      return plain.find(fits) ?? plain[0];
+    const free = (x: number, y: number, alone: boolean) =>
+      x >= 0 && x < grid.columns && y >= 0 && y < grid.rows && !taken.has(`${x},${y}`) && (!alone || ((owner.get(`${x},${y}`) ?? index) === index && !blocked[y * grid.columns + x]));
+    const fits = (spots: Spot[], alone: boolean) => spots.every(({ text, x, y }) => Array.from(text).every((_, i) => free(x + i, y, alone)));
+    /** Words one row each, padded, centred on the anchor's column (inside the grid) or set beside it. */
+    const stack = (words: string[], at: Anchor): Spot[] => {
+      const texts = words.map((w) => ` ${w} `);
+      const wide = Math.max(...texts.map((t) => t.length));
+      return texts.map((text, i) => ({
+        text,
+        x: at.side === 'right' ? at.x + 1 : at.side === 'left' ? at.x - text.length : Math.max(0, Math.min(grid.columns - wide, at.x - Math.floor(text.length / 2))),
+        y: at.y + i,
+      }));
     };
-    const at = (chip ? place([edge.label ?? '', chip].filter(Boolean).join(' · '), true) : undefined) ?? (label && edge.label ? place(edge.label, false) : undefined);
-    if (!at) return;
-    const color = play && !play.pathEdges.has(edge.id) ? COLOR.fadedMore : load?.critical ? DEFAULT : COLOR.muted;
-    for (let i = 0; i < at.text.length; i++) {
-      taken.add(`${at.x + i},${at.y}`);
-      if (!onCard(scene, at.x + i, at.y)) grid.set(at.x + i, at.y, at.text[i], color);
+    const first = (words: string[]) => anchorsOf(path, label).map((at) => stack(words, at)).find((s) => fits(s, true));
+    const plain = (words: string, at: Cell): Spot => {
+      const tries = [0, -1, 1, -2, 2].map((dy) => stack([words], { x: at.x, y: at.y + dy })[0]);
+      return tries.find((s) => fits([s], false)) ?? tries[0];
+    };
+    const name = edge.label ?? '';
+    let spots: Spot[] | undefined;
+    if (chip) {
+      spots = first([[name, chip].filter(Boolean).join(' · ')]) ?? (name ? first([name, chip]) : undefined);
+      for (let room = name.length - 1; !spots && room >= 4; room--) spots = first([`${fit(name, room)} · ${chip}`]);
+      const numbers = spots ? undefined : first([chip]);
+      if (numbers) {
+        take(numbers);
+        spots = label && name ? [...numbers, plain(name, label)] : numbers;
+      }
     }
+    spots ??= label && name ? [plain(name, label)] : undefined;
+    if (!spots) return;
+    take(spots);
+    const color = play && !play.pathEdges.has(edge.id) ? COLOR.fadedMore : load?.critical ? DEFAULT : COLOR.muted;
+    for (const at of spots) for (let i = 0; i < at.text.length; i++) if (!onCard(scene, at.x + i, at.y)) grid.set(at.x + i, at.y, at.text[i], color);
   });
 
   // Over the edges, so a line crossing them leaves them whole: group names and descriptions, the replica counts.
@@ -198,18 +218,75 @@ export function loadChip(load: EdgeOverlay | undefined): string {
   return load.latencyMs !== undefined ? `${formatRps(load.rps)} · +${formatMs(load.latencyMs)}` : formatRps(load.rps);
 }
 
-/** The middle of each straight run of an edge, the longest first: where a chip reads as the edge's. */
-function runsOf(path: Path): { x: number; y: number }[] {
+interface Cell {
+  x: number;
+  y: number;
+}
+
+/** Text at a cell: a row of an edge's label or chip. */
+interface Spot extends Cell {
+  text: string;
+}
+
+/** Where words go: centred on a column, or beside a line, right or left of it. */
+interface Anchor extends Cell {
+  side?: 'left' | 'right';
+}
+
+/**
+ * Where an edge's label and chip may go, the likeliest first: the label's own
+ * place and a row either side; the middle of each straight run, the longest
+ * first, on it and a row either side; then every other cell of those runs,
+ * nearest the middle first, a horizontal run's on it and a row either side, a
+ * vertical run's on it, then beside it, right and left.
+ */
+function anchorsOf(path: Path, label: Cell | undefined): Anchor[] {
   const { cells, dirs } = path;
-  const runs: { from: number; length: number }[] = [];
+  const runs: { from: number; length: number; vertical: boolean }[] = [];
   for (let i = 0; i < cells.length - 1; ) {
     let j = i;
     while (j + 1 < cells.length - 1 && dirs[j + 1] === dirs[i]) j++;
-    runs.push({ from: i, length: j - i + 1 });
+    runs.push({ from: i, length: j - i + 1, vertical: dirs[i] === (N | S) });
     i = j + 1;
   }
-  const mids = runs.sort((a, b) => b.length - a.length).map((r) => cells[r.from + Math.floor(r.length / 2)]);
-  return mids.length ? mids : [cells[0]];
+  runs.sort((a, b) => b.length - a.length);
+  const rows = (at: Cell): Anchor[] => [0, -1, 1].map((dy) => ({ x: at.x, y: at.y + dy }));
+  const out: Anchor[] = label ? rows(label) : [];
+  for (const r of runs) out.push(...rows(cells[r.from + Math.floor(r.length / 2)]));
+  if (runs.length === 0) out.push(...rows(cells[0]));
+  for (const r of runs) {
+    const mid = Math.floor(r.length / 2);
+    const order = Array.from({ length: r.length }, (_, k) => k).sort((a, b) => Math.abs(a - mid) - Math.abs(b - mid));
+    for (const k of order) {
+      const at = cells[r.from + k];
+      if (r.vertical) out.push(at, { ...at, y: at.y - 1 }, { ...at, side: 'right' }, { ...at, side: 'left' });
+      else if (k !== mid) out.push(...rows(at));
+    }
+  }
+  return out;
+}
+
+/** Cells a chip never covers: the cards, and the frames of groups. */
+function blockedCells(grid: Grid, scene: Scene): Uint8Array {
+  const out = new Uint8Array(grid.columns * grid.rows);
+  const mark = (x: number, y: number) => {
+    if (grid.inside(x, y)) out[y * grid.columns + x] = 1;
+  };
+  for (const { node, rect } of scene.nodes.values()) {
+    if (node.kind !== 'group') {
+      for (let y = rect.y; y < rect.y + rect.h; y++) for (let x = rect.x; x < rect.x + rect.w; x++) mark(x, y);
+      continue;
+    }
+    for (let x = rect.x; x < rect.x + rect.w; x++) {
+      mark(x, rect.y);
+      mark(x, rect.y + rect.h - 1);
+    }
+    for (let y = rect.y; y < rect.y + rect.h; y++) {
+      mark(rect.x, y);
+      mark(rect.x + rect.w - 1, y);
+    }
+  }
+  return out;
 }
 
 function baseColor(node: DiagramNode, fallback: number): number {

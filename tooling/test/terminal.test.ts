@@ -5,7 +5,7 @@ import { examples } from '../../frontend/src/dsl/examples';
 import { flowEnds, importFilePath, keyOf, loadDocument, missingImports, parseSource, viewSource, type Source } from '../src/terminal/document';
 import { viewError, viewOptions, type SystemsView } from '../src/terminal/systems';
 import { DEFAULT, Grid, base64 } from '../src/terminal/grid';
-import { COLOR, heatOf, paint } from '../src/terminal/paint';
+import { COLOR, heatOf, loadChip, paint } from '../src/terminal/paint';
 import { currentStepsOf, playAt, stepPath } from '../src/terminal/playback';
 import { buildScene, routePath, type Rect, type Scene } from '../src/terminal/scene';
 
@@ -119,6 +119,28 @@ describe('terminal scene', () => {
     expect('┃━┏┓┗┛┣┫'.includes(grid.glyph(into.x, into.y))).toBe(true);
     // Playback fades the load away: no chips.
     expect(paint(scene, { overlay: doc.overlay, edges: doc.edges, play: playAt(scene, doc.diagram.useCases[0].scenarios[0].steps, 0, 0) }).toText()).not.toMatch(/50k rps/);
+  });
+
+  it('keeps every edge\'s numbers where its line is short of room: on two rows, beside the line, or apart from the label', async () => {
+    // Every example at 80 and 140 columns: each edge that carries load shows its chip.
+    for (const e of examples) {
+      const doc = loadDocument({ source: e.source });
+      if (!doc.edges) continue;
+      const layout = await layoutGraph(doc.diagram);
+      for (const columns of [80, 140]) {
+        const text = paint(buildScene(doc.diagram, layout, columns), { overlay: doc.overlay, edges: doc.edges }).toText();
+        for (const edge of doc.diagram.edges) {
+          const chip = loadChip(doc.edges[edge.id]);
+          if (chip) expect(text, `${e.id} ${edge.id} at ${columns}`).toContain(chip);
+        }
+      }
+    }
+    // url-shortener at 80: two lines run close, so "code lookups" takes its numbers on the row under it.
+    const doc = loadDocument({ source: example('url-shortener') });
+    const text = paint(buildScene(doc.diagram, await layoutGraph(doc.diagram), 80), { overlay: doc.overlay, edges: doc.edges }).toText();
+    const rows = text.split('\n');
+    const at = rows.findIndex((r) => r.includes('code lookups'));
+    expect(rows[at + 1]).toContain(loadChip(doc.edges?.[doc.diagram.edges.find((e) => e.label === 'code lookups')!.id]));
   });
 
   it('keeps the simulation\'s warnings that are not about a system', () => {

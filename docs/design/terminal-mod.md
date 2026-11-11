@@ -37,9 +37,12 @@ With `traffic`, the drawing shows what the canvas's overlay shows
 - the p99 path of the busiest use case is drawn heavy, in the ink colour
   unless its heat colours it.
 
-A chip goes on a straight run of its own edge where it covers no other
-line, card, frame or arrowhead; where no run has room, the edge keeps its
-plain label and the numbers are left to the Analysis tab. Playback hides
+A chip goes on or beside a straight run of its own edge where it covers no
+other line, card, frame or arrowhead. Short of room on one row, the label
+and the numbers take two rows, then the label is shortened, then the numbers
+go where they fit and the label where it was; only where the numbers fit
+nowhere near the edge does it keep its plain label, the numbers left to the
+Analysis tab. Playback hides
 the overlay, as the canvas fades it. A one-row legend under the drawing
 names the scale and the p99 path.
 

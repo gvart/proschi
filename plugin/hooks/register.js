@@ -8637,26 +8637,43 @@ function paint(scene, options = {}) {
   const owner = /* @__PURE__ */ new Map();
   scene.edges.forEach(({ path }, i) => path.cells.forEach(({ x, y }) => owner.set(`${x},${y}`, (owner.get(`${x},${y}`) ?? i) === i ? i : -1)));
   for (const { path } of scene.edges) owner.set(`${path.cells[path.cells.length - 1].x},${path.cells[path.cells.length - 1].y}`, -1);
-  const frames = all.filter((n) => n.node.kind === "group").map((n) => n.rect);
-  const onFrame = (x, y) => frames.some((r) => y === r.y || y === r.y + r.h - 1 ? x >= r.x && x < r.x + r.w : (x === r.x || x === r.x + r.w - 1) && y > r.y && y < r.y + r.h);
+  const blocked = blockedCells(grid, scene);
+  const take = (spots) => spots.forEach(({ text, x, y }) => Array.from(text).forEach((_, i) => taken.add(`${x + i},${y}`)));
   scene.edges.forEach(({ edge, path, label }, index) => {
     const load = loadOf(edge.id);
     const chip2 = loadChip(load);
-    const place = (words, alone) => {
-      const text = ` ${words} `;
-      const spot = (at2, dy) => ({ text, x: Math.max(0, Math.min(grid.columns - text.length, at2.x - Math.floor(text.length / 2))), y: at2.y + dy });
-      const fits = ({ x, y }) => y >= 0 && y < grid.rows && Array.from(text, (_, i) => `${x + i},${y}`).every((k, i) => !taken.has(k) && (!alone || (owner.get(k) ?? index) === index && !onCard(scene, x + i, y) && !onFrame(x + i, y)));
-      if (alone) return [...label ? [0, -1, 1].map((d) => spot(label, d)) : [], ...runsOf(path).flatMap((at2) => [0, -1, 1].map((d) => spot(at2, d)))].find(fits);
-      const plain = [0, -1, 1, -2, 2].map((d) => spot(label, d));
-      return plain.find(fits) ?? plain[0];
+    const free = (x, y, alone) => x >= 0 && x < grid.columns && y >= 0 && y < grid.rows && !taken.has(`${x},${y}`) && (!alone || (owner.get(`${x},${y}`) ?? index) === index && !blocked[y * grid.columns + x]);
+    const fits = (spots2, alone) => spots2.every(({ text, x, y }) => Array.from(text).every((_, i) => free(x + i, y, alone)));
+    const stack = (words, at) => {
+      const texts = words.map((w) => ` ${w} `);
+      const wide = Math.max(...texts.map((t) => t.length));
+      return texts.map((text, i) => ({
+        text,
+        x: at.side === "right" ? at.x + 1 : at.side === "left" ? at.x - text.length : Math.max(0, Math.min(grid.columns - wide, at.x - Math.floor(text.length / 2))),
+        y: at.y + i
+      }));
     };
-    const at = (chip2 ? place([edge.label ?? "", chip2].filter(Boolean).join(" \xB7 "), true) : void 0) ?? (label && edge.label ? place(edge.label, false) : void 0);
-    if (!at) return;
-    const color = play && !play.pathEdges.has(edge.id) ? COLOR.fadedMore : load?.critical ? DEFAULT : COLOR.muted;
-    for (let i = 0; i < at.text.length; i++) {
-      taken.add(`${at.x + i},${at.y}`);
-      if (!onCard(scene, at.x + i, at.y)) grid.set(at.x + i, at.y, at.text[i], color);
+    const first = (words) => anchorsOf(path, label).map((at) => stack(words, at)).find((s) => fits(s, true));
+    const plain = (words, at) => {
+      const tries = [0, -1, 1, -2, 2].map((dy) => stack([words], { x: at.x, y: at.y + dy })[0]);
+      return tries.find((s) => fits([s], false)) ?? tries[0];
+    };
+    const name = edge.label ?? "";
+    let spots;
+    if (chip2) {
+      spots = first([[name, chip2].filter(Boolean).join(" \xB7 ")]) ?? (name ? first([name, chip2]) : void 0);
+      for (let room = name.length - 1; !spots && room >= 4; room--) spots = first([`${fit(name, room)} \xB7 ${chip2}`]);
+      const numbers = spots ? void 0 : first([chip2]);
+      if (numbers) {
+        take(numbers);
+        spots = label && name ? [...numbers, plain(name, label)] : numbers;
+      }
     }
+    spots ??= label && name ? [plain(name, label)] : void 0;
+    if (!spots) return;
+    take(spots);
+    const color = play && !play.pathEdges.has(edge.id) ? COLOR.fadedMore : load?.critical ? DEFAULT : COLOR.muted;
+    for (const at of spots) for (let i = 0; i < at.text.length; i++) if (!onCard(scene, at.x + i, at.y)) grid.set(at.x + i, at.y, at.text[i], color);
   });
   for (const g of all) if (g.node.kind === "group") drawGroupHeading(grid, g, play ? "path" : void 0, frameOf2(g));
   for (const n of all) drawStackCount(grid, scene, n, options.overlay?.[n.node.id], lookOf(play, n.node.id));
@@ -8700,17 +8717,51 @@ function loadChip(load) {
   if (!load || !(load.rps > 0)) return "";
   return load.latencyMs !== void 0 ? `${formatRps(load.rps)} \xB7 +${formatMs(load.latencyMs)}` : formatRps(load.rps);
 }
-function runsOf(path) {
+function anchorsOf(path, label) {
   const { cells, dirs } = path;
   const runs = [];
   for (let i = 0; i < cells.length - 1; ) {
     let j = i;
     while (j + 1 < cells.length - 1 && dirs[j + 1] === dirs[i]) j++;
-    runs.push({ from: i, length: j - i + 1 });
+    runs.push({ from: i, length: j - i + 1, vertical: dirs[i] === (N | S) });
     i = j + 1;
   }
-  const mids = runs.sort((a, b) => b.length - a.length).map((r) => cells[r.from + Math.floor(r.length / 2)]);
-  return mids.length ? mids : [cells[0]];
+  runs.sort((a, b) => b.length - a.length);
+  const rows = (at) => [0, -1, 1].map((dy) => ({ x: at.x, y: at.y + dy }));
+  const out = label ? rows(label) : [];
+  for (const r of runs) out.push(...rows(cells[r.from + Math.floor(r.length / 2)]));
+  if (runs.length === 0) out.push(...rows(cells[0]));
+  for (const r of runs) {
+    const mid = Math.floor(r.length / 2);
+    const order = Array.from({ length: r.length }, (_, k) => k).sort((a, b) => Math.abs(a - mid) - Math.abs(b - mid));
+    for (const k of order) {
+      const at = cells[r.from + k];
+      if (r.vertical) out.push(at, { ...at, y: at.y - 1 }, { ...at, side: "right" }, { ...at, side: "left" });
+      else if (k !== mid) out.push(...rows(at));
+    }
+  }
+  return out;
+}
+function blockedCells(grid, scene) {
+  const out = new Uint8Array(grid.columns * grid.rows);
+  const mark = (x, y) => {
+    if (grid.inside(x, y)) out[y * grid.columns + x] = 1;
+  };
+  for (const { node, rect } of scene.nodes.values()) {
+    if (node.kind !== "group") {
+      for (let y = rect.y; y < rect.y + rect.h; y++) for (let x = rect.x; x < rect.x + rect.w; x++) mark(x, y);
+      continue;
+    }
+    for (let x = rect.x; x < rect.x + rect.w; x++) {
+      mark(x, rect.y);
+      mark(x, rect.y + rect.h - 1);
+    }
+    for (let y = rect.y; y < rect.y + rect.h; y++) {
+      mark(rect.x, y);
+      mark(rect.x + rect.w - 1, y);
+    }
+  }
+  return out;
 }
 function baseColor(node, fallback) {
   const base = nodeBaseColor(node);
