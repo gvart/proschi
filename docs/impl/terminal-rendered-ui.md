@@ -161,6 +161,31 @@ text cells** (today's drawing). Never a text preview followed by a picture.
   step is lit. Tests: the text tab has no `seq-*` Button and lights the step
   the Diagram tab moved to.
 
+## Round 3 fixes (second test, Ghostty, the pane scrolled)
+
+- [x] S1. **No bottom button pressable.** Cause: the engine draws an
+  absolute Box whose top would be above the screen's first row at that row
+  (`if (top < 0 && position === 'absolute') top = 0` in its painter), and the
+  pointer's cell in a `Client` is counted from where the Box is drawn. The one
+  overlay over the whole drawing was such a Box: with the pane scrolled so the
+  drawing's top is off screen, it was pinned to row 0 and every press was
+  mapped to the rows above the one pressed (the diagram's, where there is no
+  control). Tabs worked only while the drawing's top was on screen. Fix: an
+  overlay per strip of controls, in a Box of the strip's size that clips the
+  pointer to it; a strip's controls take all its rows, so a strip half
+  scrolled away still maps its columns right. Hover leaving one strip's
+  overlay takes back only its own control's hover. Test: `tests/screen.ts`
+  lays a drawn tree out and routes a press as the engine does (that quirk
+  included); a tour presses every control of the transcript drawing and of
+  the pane (every tab and page, the banner, the system bar, the use case bar
+  and its menu and explorer, the player, the links) with a real pointer move,
+  down and up on its own cell, the drawing scrolled so that cell is on the
+  body's first row, and checks the move blitted its hover picture and the
+  press ran its own action. The old single overlay fails it.
+- [ ] S2. **The passing verdict is gone.**
+- [ ] S3. **One continuous surface.**
+- [ ] S4. **A compact legend.**
+
 ## Risks
 
 - Cell aspect is assumed 1:2; tiles must stay seamless under the terminal's

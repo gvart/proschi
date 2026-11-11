@@ -1,9 +1,10 @@
 import type { ClientModule } from 'claude-code'
 
 /**
- * The surface module laid over a drawing in pictures (src/picture.tsx): a
- * region exactly over the drawing's Images that draws nothing and maps the
- * pointer to the controls drawn in them, posting to the hooks module:
+ * The surface module laid over each strip of controls in a drawing in
+ * pictures (src/picture.tsx): a region exactly over the strip's Image that
+ * draws nothing and maps the pointer to the controls drawn in it, posting to
+ * the hooks module:
  *
  *   { type: 'hover', id }   the control under the pointer changed ('' none)
  *   { type: 'down', id }    a button went down on a control

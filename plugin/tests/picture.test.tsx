@@ -2,6 +2,8 @@ import { expect, mock, test } from 'claude-code/testing'
 
 import { answer } from './fakeHelper'
 import { LAYOUT, SOURCE } from './fixture'
+import { layout, nodes, pointerAt } from './screen'
+import { DRONE, DRONE_LAYOUTS } from './systems'
 
 // Drawings in pictures (docs/design/terminal-mod.md D12): every piece an Image, one overlay mapping the pointer.
 
@@ -40,6 +42,8 @@ interface Options {
   /** What the terminal answers the probe. */
   probe?: 'yes' | 'no' | 'tmux'
   size?: { width: number; height: number }
+  /** A project on disk (path → text) and its layouts by view, for `/proschi view`. */
+  project?: { files: Record<string, string>; layout: (view: { expanded?: string[]; focus?: string } | undefined) => string }
 }
 
 /** The engine and Node under the plugin: ELK's layout, the raster helper one shot and as a worker fed by files, the terminal. */
@@ -51,6 +55,7 @@ function host(on: On, clock: Clock, o: Options = {}) {
     requests: [] as { id: string; input: Record<string, unknown> }[],
     blits: [] as { key: string; file?: string; png?: boolean }[],
     copied: [] as string[],
+    logs: [] as string[],
     spawns: 0,
   }
   const inbox = new Map<string, { id: string; input: Record<string, unknown> }[]>()
@@ -58,7 +63,10 @@ function host(on: On, clock: Clock, o: Options = {}) {
     h.stored.push(JSON.stringify(e))
     return next(e)
   })
-  on('ui.log', () => ({ value: undefined }))
+  on('ui.log', (_, e) => {
+    h.logs.push(e.text)
+    return { value: undefined }
+  })
   on('ui.open', () => ({ value: { isPlaced: true } }))
   on('ui.scroll', () => ({ value: {} }))
   on('ui.toast', () => ({ value: undefined }))
@@ -70,8 +78,15 @@ function host(on: On, clock: Clock, o: Options = {}) {
     const run = e as unknown as Run
     h.runs.push(run)
     const raster = run.argv[1]?.endsWith('raster.cjs')
-    return { value: { exitCode: 0, stdout: raster ? JSON.stringify(answer(JSON.parse(run.init?.stdin ?? '{}'), o.size)) : LAYOUT, stderr: '' } }
+    const input = JSON.parse(run.init?.stdin ?? '{}') as Record<string, unknown> & { view?: { expanded?: string[]; focus?: string } }
+    return { value: { exitCode: 0, stdout: raster ? JSON.stringify(answer(input, o.size)) : o.project ? o.project.layout(input.view) : LAYOUT, stderr: '' } }
   })
+  if (o.project) {
+    const files = o.project.files
+    on('fs.exists', (_, e) => ({ value: e.path in files }))
+    on('fs.read', (_, e) => (e.path in files ? { value: files[e.path] } : { error: { name: 'Error', message: `ENOENT: ${e.path}` } }))
+    on('fs.stat', () => ({ value: { mtimeMs: 1 } }))
+  }
   on('fs.write', (_, e) => {
     const name = e.path.split('/').pop() ?? ''
     if (!name.endsWith('.req.json')) return { value: undefined }
@@ -113,8 +128,10 @@ function host(on: On, clock: Clock, o: Options = {}) {
   return h
 }
 
-const overlayOf = async (ui: Mounted, site: string) => (await ui.find({ type: 'Client', key: `ov-${site}` })) as Found
-const controlsOf = async (ui: Mounted, site: string) => (((await overlayOf(ui, site))?.props.props as { controls?: Control[] } | undefined)?.controls ?? [])
+/** The overlays of a drawing: one over each strip of controls. */
+const overlaysOf = async (ui: Mounted, site: string) => ((await ui.findAll({ type: 'Client' })) as unknown as NonNullable<Found>[]).filter(x => String(x.key).startsWith(`ov-t-${site}-`))
+/** Every control the overlays map, with the overlay that maps it. */
+const controlsOf = async (ui: Mounted, site: string) => (await overlaysOf(ui, site)).flatMap(o => ((o.props.props as { controls?: Control[] }).controls ?? []).map(c => ({ ...c, in: String(o.key) })))
 
 /** Draws until the drawing is in pictures: laid out, the terminal asked, its panels drawn. */
 async function settle($: T, clock: Clock, props: typeof reply | typeof pane = reply, site = 'm1:0', ready: (c: Control[]) => boolean = c => c.length > 0): Promise<Mounted> {
@@ -127,12 +144,29 @@ async function settle($: T, clock: Clock, props: typeof reply | typeof pane = re
   throw new Error(`${site} never drew in pictures`)
 }
 
-/** Presses a control the overlay maps, as the pointer does: down and up on its first cell. */
-async function click(ui: Mounted, site: string, id: string): Promise<void> {
+/**
+ * Where a control is on screen, and what the overlay under that cell hears: the drawing laid out as the
+ * engine lays it (tests/screen.ts) and scrolled so the control's first cell is on the body's first row
+ * (row 1, under the pane's title), with the drawing's top above the screen whenever the control is not at it.
+ */
+async function aim(ui: Mounted, site: string, id: string): Promise<{ in: string; x: number; y: number }> {
   const c = (await controlsOf(ui, site)).find(x => x.id === id)
   if (!c) throw new Error(`no control ${id} in ${(await controlsOf(ui, site)).map(x => x.id).join(', ')}`)
-  await ui.pointer({ type: 'down', x: c.col, y: c.row, button: 'left', in: `ov-${site}` })
-  await ui.pointer({ type: 'up', x: c.col, y: c.row, button: 'left', in: `ov-${site}` })
+  const root = layout((await ui.drawn()) as never)
+  const region = [...nodes(root)].find(n => n.key === c.in)
+  if (!region) throw new Error(`overlay ${c.in} is not laid out`)
+  const x = region.x + c.col
+  const y = region.y + c.row
+  const heard = pointerAt(root, 1 - y, x, 1)
+  if (!heard) throw new Error(`a press on ${id} lands on no overlay`)
+  return heard
+}
+
+/** Presses a control as the pointer does: down and up on its first cell on screen. */
+async function click(ui: Mounted, site: string, id: string): Promise<void> {
+  const at = await aim(ui, site, id)
+  await ui.pointer({ type: 'down', ...at, button: 'left' })
+  await ui.pointer({ type: 'up', ...at, button: 'left' })
 }
 
 const ids = async (ui: Mounted, site = 'm1:0') => (await controlsOf(ui, site)).map(c => c.id)
@@ -174,9 +208,10 @@ test('pictures: a reserved area with one line while the terminal is asked, then 
   expect(tiles[0]?.props).toMatchObject({ source: { file: '/tmp/proschi-raster/base-0.png' }, columns: 16, rows: 8 })
   expect(tiles[27]?.props).toMatchObject({ source: { file: '/tmp/proschi-raster/base-27.png' }, columns: 4, rows: 3 })
   expect(String(tiles[0]?.props.alt)).toMatch(/Checkout.*picture/)
-  // The overlay covers the drawing and maps its controls.
-  const overlay = await overlayOf(ui, 'm1:0')
-  expect(String(overlay?.props.module)).toMatch(/uiOverlay\.js$/)
+  // An overlay over each strip of controls maps them.
+  const overlays = await overlaysOf(ui, 'm1:0')
+  expect(overlays.length).toBeGreaterThan(1)
+  for (const o of overlays) expect(String(o.props.module)).toMatch(/uiOverlay\.js$/)
   expect(await ids(ui)).toEqual(expect.arrayContaining(['ucbar/uc', 'ucbar/play', 'ucbar/explore', 'links/src', 'links/lnk', 'links/open', 'links/focus']))
   await ui.unmount()
 })
@@ -266,18 +301,20 @@ test('hover blits the control\'s hover tile and back, a button going down its pr
   const clock = mock.clock(on)
   const h = host(on, clock)
   const ui = await settle($, clock)
-  const controls = await controlsOf(ui, 'm1:0')
-  const src = controls.find(c => c.id === 'links/src')!
-  const lnk = controls.find(c => c.id === 'links/lnk')!
+  const src = await aim(ui, 'm1:0', 'links/src')
+  const lnk = await aim(ui, 'm1:0', 'links/lnk')
   h.blits.length = 0
-  await ui.pointer({ type: 'move', x: src.col, y: src.row, in: 'ov-m1:0' })
+  await ui.pointer({ type: 'move', ...src })
   expect(h.blits.at(-1)?.file).toBe('/tmp/proschi-raster/actionBar-src-hover.png')
   const key = h.blits.at(-1)!.key
   expect(key).toMatch(/^t-m1:0-links-\d+$/)
   expect(await ui.find({ type: 'Image', key })).toBeDefined()
-  await ui.pointer({ type: 'move', x: lnk.col, y: lnk.row, in: 'ov-m1:0' })
+  // Into the next strip's overlay, then out of the first one's: the second's hover stays.
+  await ui.pointer({ type: 'move', ...lnk })
   expect(h.blits.slice(-2).map(b => b.file)).toEqual(['/tmp/proschi-raster/actionBar-src.png', '/tmp/proschi-raster/actionBar-lnk-hover.png'])
-  await ui.pointer({ type: 'down', x: lnk.col, y: lnk.row, button: 'left', in: 'ov-m1:0' })
+  await ui.pointer({ type: 'leave', ...src })
+  expect(h.blits.at(-1)?.file).toBe('/tmp/proschi-raster/actionBar-lnk-hover.png')
+  await ui.pointer({ type: 'down', ...lnk, button: 'left' })
   expect(h.blits.at(-1)?.file).toBe('/tmp/proschi-raster/actionBar-lnk-pressed.png')
   await ui.unmount()
 })
@@ -379,4 +416,66 @@ test('pictures shown: Play blits only the tiles a frame changes, asked for once 
   const plays2 = (plays()[0]!.input.options as { play: { frames: number } }).play.frames
   expect(plays2).toBe(46)
   await ui.unmount()
+})
+
+const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+/**
+ * Presses every control a drawing shows, one at a time, until none is left: each with a real pointer on its
+ * own cell on screen (`aim`: the drawing laid out as the engine lays it and scrolled so the cell is on the
+ * body's first row, the drawing's top above the screen), a move first. Each press must run that control's
+ * action, and the move must blit that control's hover picture. Tabs go last, so a page's controls are all
+ * pressed before another page shows. Returns the controls pressed, in order.
+ */
+async function tour($: T, clock: Clock, h: ReturnType<typeof host>, props: typeof reply | typeof pane, site: string): Promise<string[]> {
+  const pressed: string[] = []
+  const ui = await settle($, clock, props, site)
+  for (let round = 0; round < 80; round++) {
+    const next = (await ids(ui, site)).filter(id => !pressed.includes(id)).sort((a, b) => Number(a.startsWith('tabs/')) - Number(b.startsWith('tabs/')))[0]
+    if (!next) {
+      await ui.unmount()
+      return pressed
+    }
+    const at = await aim(ui, site, next)
+    h.blits.length = 0
+    h.logs.length = 0
+    await ui.pointer({ type: 'move', ...at })
+    expect([next, h.blits.at(-1)?.file]).toEqual([next, expect.stringMatching(new RegExp(`-${escape(next.slice(next.indexOf('/') + 1))}-hover\\.png$`))])
+    await ui.pointer({ type: 'down', ...at, button: 'left' })
+    await ui.pointer({ type: 'up', ...at, button: 'left' })
+    expect(h.logs.filter(l => l.startsWith('proschi: press '))).toEqual([`proschi: press ${next}`])
+    pressed.push(next)
+    // What the press asked for drawn: the helper's answers come on the clock.
+    for (let i = 0; i < 3; i++) await clock.advance(100)
+  }
+  throw new Error(`the tour never ended: ${pressed.join(', ')}`)
+}
+
+/** The panels a tour pressed a control of: the piece or page before the control's id. */
+const panelsOf = (pressed: string[]) => [...new Set(pressed.map(id => id.slice(0, id.indexOf('/'))))].sort()
+
+// The tours run every request one shot: a worker hook lives 10 s in the kit, and a tour takes longer.
+const TOUR = { timeoutMs: 120_000 }
+
+test('every control in the transcript runs its own action when pressed on its cell, the drawing scrolled up: verdict, use case bar, picker, explorer, player, links', TOUR, async ($, on) => {
+  const clock = mock.clock(on)
+  const h = host(on, clock, { worker: 'refused' })
+  const pressed = await tour($, clock, h, reply, 'm1:0')
+  expect(panelsOf(pressed)).toEqual(['below', 'head', 'links', 'step', 'ucbar'])
+  expect(pressed).toEqual(expect.arrayContaining(['below/details', 'links/src', 'links/lnk', 'links/open', 'links/focus', 'ucbar/uc', 'ucbar/play', 'ucbar/explore', 'head/back', 'step/next', 'step/exit']))
+  expect(pressed.some(id => id.startsWith('ucbar/uc='))).toBe(true)
+  expect(pressed.some(id => id.startsWith('ucbar/x-'))).toBe(true)
+  expect(h.copied).toEqual(expect.arrayContaining([SOURCE]))
+})
+
+test('every control in the pane runs its own action when pressed on its cell, the pane scrolled: tabs, systems, use case bar, player, links, banner, every page', TOUR, async ($, on) => {
+  const clock = mock.clock(on)
+  const root = '/proj'
+  const files = Object.fromEntries([[`${root}/proschi.json`, '{}'], ...Object.entries(DRONE).map(([path, text]) => [`${root}/${path}`, text])])
+  const h = host(on, clock, { worker: 'refused', project: { files, layout: view => (view?.focus ? DRONE_LAYOUTS.focused : view?.expanded ? DRONE_LAYOUTS.expanded : DRONE_LAYOUTS.collapsed) } })
+  on('command.register', () => ({ value: { command: 'proschi' } }))
+  await $.command.run({ command: 'proschi', args: `view ${root}/org-busy.proschi` })
+  const pressed = await tour($, clock, h, pane, 'proschi-view:0')
+  expect(panelsOf(pressed)).toEqual(['banner', 'head', 'links', 'page-hld', 'page-sequence', 'page-tests', 'page-whatif', 'step', 'systems', 'tabs', 'ucbar'])
+  expect(pressed).toEqual(expect.arrayContaining(['systems/next', 'systems/open', 'systems/focus', 'systems/back', 'tabs/diagram', 'tabs/analysis', 'tabs/whatif', 'tabs/sequence', 'tabs/hld', 'tabs/tests', 'links/src', 'links/lnk', 'links/open', 'ucbar/play', 'ucbar/explore', 'banner/reset']))
 })

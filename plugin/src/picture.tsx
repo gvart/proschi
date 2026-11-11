@@ -9,8 +9,14 @@ import type { Ui } from './views/render'
 /**
  * A drawing in pictures (docs/design/terminal-mod.md D12): every piece of it,
  * the diagram and each panel of controls (tooling/src/render/ui), an Image or
- * a column of tiles, and over the whole of it one empty `Client`
- * (hooks/uiOverlay.js) that maps the pointer to the controls drawn there.
+ * a column of tiles, and over each strip that has controls one empty `Client`
+ * (hooks/uiOverlay.js) that maps the pointer to the controls drawn in it.
+ * One per strip, not one over the drawing: the engine pins an absolute Box
+ * whose top is above the screen's first row to that row (its paint and its
+ * pointer), so one overlay over a drawing scrolled up mapped every press to
+ * rows above the one pressed. A strip's overlay sits in a Box that clips the
+ * pointer to the strip, and its controls take all the strip's rows, so a
+ * strip half scrolled away still maps its columns right.
  * A hover blits the control's hover tile, a button going down its pressed
  * tile, and a press runs the control's action. In the pane, each control's
  * hotkey is a Button in a Box drawn as nothing (`display: none`): a Button
@@ -85,6 +91,8 @@ interface TileRef {
 interface Live {
   requestId: string
   tiles: Map<string, TileRef>
+  /** The controls of each strip's overlay, by the overlay's key. */
+  overlays: Map<string, string[]>
   actions: Record<string, Action>
   hotkeys: Map<string, string>
   hovered?: string
@@ -98,12 +106,14 @@ interface Live {
   sources: Map<string, string>
 }
 
-// Per module load: the drawing shown last per site, and what its overlay maps.
+// Per module load: the drawing shown last per site, what its overlays map, and each overlay's site.
 const shown = new Map<string, Shown>()
 const live = new Map<string, Live>()
+const overlaySites = new Map<string, string>()
 
-export const overlayKey = (site: string) => `ov-${site}`
 const tileKey = (site: string, piece: string, i: number) => `t-${site}-${piece}-${i}`
+/** The overlay over a strip, by the strip's key. */
+const overlayKey = (strip: string) => `ov-${strip}`
 
 /** How long the last press took to show its drawing, in ms (src/picture.tsx's measure, for the debug log and tests). */
 export const timings: { press?: number; hover?: number } = {}
@@ -198,22 +208,47 @@ export async function pictureSite($: EngineInterface, ui: Ui, s: Site): Promise<
   return { element: built.element }
 }
 
-/** The strips of a panel output, keyed for `site` and `piece`; their controls into `into` (from row `top`), unless `inert`. */
-async function strips(ui: Ui, s: Site, piece: string, out: PanelOutput, source: (key: string, file: string) => Promise<ImageSource>, top: number, into?: { tiles: Map<string, TileRef>; controls: OverlayControl[]; hotkeys: Map<string, string> }): Promise<RenderElement[]> {
+type Into = { tiles: Map<string, TileRef>; overlays: Map<string, string[]>; hotkeys: Map<string, string> }
+
+/**
+ * The strips of a panel output, keyed for `site` and `piece`. A strip with
+ * controls is in a Box of its own that clips the pointer to it, whether the
+ * strip is shown or not (so showing a page moves no Image), with its overlay
+ * when its controls go `into` the drawing's (the page shown).
+ */
+async function strips(ui: Ui, s: Site, piece: string, out: PanelOutput, source: (key: string, file: string) => Promise<ImageSource>, into?: Into): Promise<RenderElement[]> {
   const rows: RenderElement[] = []
   for (const [i, tile] of out.tiles.entries()) {
     const key = tileKey(s.site, piece, i)
     const file = tile.file
-    rows.push(file ? <ui.Image key={key} source={await source(key, file)} columns={tile.columns} rows={tile.rows} alt=" " /> : <ui.Box key={key} width={tile.columns} height={tile.rows} />)
-    if (!into) continue
-    for (const a of tile.controls ?? []) {
-      const c = a.control
-      if (c.disabled || !file) continue
-      const id = `${piece}/${c.id}`
-      into.tiles.set(id, { key, file, ...(a.hoverFile ? { hoverFile: a.hoverFile } : {}), ...(a.pressedFile ? { pressedFile: a.pressedFile } : {}) })
-      into.controls.push({ id, col: tile.col + a.col, row: top + tile.row, columns: a.columns, rows: tile.rows })
-      if (c.hotkey && s.hotkeys && s.actions[id]) into.hotkeys.set(c.hotkey, id)
+    const image = file ? <ui.Image key={key} source={await source(key, file)} columns={tile.columns} rows={tile.rows} alt=" " /> : <ui.Box key={key} width={tile.columns} height={tile.rows} />
+    const areas = file ? (tile.controls ?? []).filter(a => !a.control.disabled) : []
+    if (!file || areas.length === 0) {
+      rows.push(image)
+      continue
     }
+    const overlay = overlayKey(key)
+    const controls: OverlayControl[] = []
+    if (into) {
+      for (const a of areas) {
+        const id = `${piece}/${a.control.id}`
+        into.tiles.set(id, { key, file, ...(a.hoverFile ? { hoverFile: a.hoverFile } : {}), ...(a.pressedFile ? { pressedFile: a.pressedFile } : {}) })
+        controls.push({ id, col: tile.col + a.col, row: 0, columns: a.columns, rows: tile.rows })
+        if (a.control.hotkey && s.hotkeys && s.actions[id]) into.hotkeys.set(a.control.hotkey, id)
+      }
+      into.overlays.set(overlay, controls.map(c => c.id))
+      overlaySites.set(overlay, s.site)
+    }
+    rows.push(
+      <ui.Box key={`${key}-s`} flexDirection="column" width={tile.columns} height={tile.rows} overflow="hidden">
+        {image}
+        {into && (
+          <ui.Box position="absolute" top={0} left={0} width={tile.columns} height={tile.rows}>
+            <ui.Client key={overlay} module="./uiOverlay.js" props={{ controls }} width={tile.columns} height={tile.rows} />
+          </ui.Box>
+        )}
+      </ui.Box>,
+    )
   }
   return rows
 }
@@ -226,7 +261,7 @@ async function build($: EngineInterface, ui: Ui, s: Site, d: Shown): Promise<{ e
     sources.set(key, file)
     return sourceOf($, file, s.form)
   }
-  const into = { tiles: new Map<string, TileRef>(), controls: [] as OverlayControl[], hotkeys: new Map<string, string>() }
+  const into: Into = { tiles: new Map(), overlays: new Map(), hotkeys: new Map() }
   const parts: RenderElement[] = []
   let top = 0
   let width = 1
@@ -261,7 +296,7 @@ async function build($: EngineInterface, ui: Ui, s: Site, d: Shown): Promise<{ e
     const { out } = p
     parts.push(
       <ui.Box key={`p-${s.site}-${p.id}`} flexDirection="column" height={out.rows}>
-        {await strips(ui, s, p.id, out, source, top, into)}
+        {await strips(ui, s, p.id, out, source, into)}
       </ui.Box>,
     )
     top += out.rows
@@ -271,7 +306,7 @@ async function build($: EngineInterface, ui: Ui, s: Site, d: Shown): Promise<{ e
   if (d.pages.length) {
     const pages: RenderElement[] = []
     for (const page of d.pages) {
-      const rows = await strips(ui, s, page.id, page.out, source, top, page.shown ? into : undefined)
+      const rows = await strips(ui, s, page.id, page.out, source, page.shown ? into : undefined)
       pages.push(
         <ui.Box key={`pg-${s.site}-${page.id}`} flexDirection="column" height={page.out.rows} display={page.shown ? 'flex' : 'none'}>
           {rows}
@@ -288,10 +323,11 @@ async function build($: EngineInterface, ui: Ui, s: Site, d: Shown): Promise<{ e
       </ui.Box>,
     )
   }
-  const { tiles, controls, hotkeys } = into
+  const { tiles, overlays, hotkeys } = into
   live.set(s.site, {
     requestId: s.requestId,
     tiles,
+    overlays,
     actions: d.actions,
     hotkeys,
     sources,
@@ -300,13 +336,9 @@ async function build($: EngineInterface, ui: Ui, s: Site, d: Shown): Promise<{ e
   })
   let sent = 0
   for (const [key, file] of sources) if (before.get(key) !== file) sent++
-  const overlay = overlayKey(s.site)
   const element = (
     <ui.Box key={`site-${s.site}`} flexDirection="column" width={width} height={top}>
       {parts}
-      <ui.Box position="absolute" top={0} left={0} width={width} height={top}>
-        <ui.Client key={overlay} module="./uiOverlay.js" props={{ controls }} width={width} height={top} />
-      </ui.Box>
       {hotkeys.size > 0 && (
         <ui.Box key={`keys-${s.site}`} display="none">
           {[...hotkeys].map(([key, id]) => (
@@ -330,6 +362,7 @@ async function act($: EngineInterface, site: string, id: string, surface: Render
   const l = live.get(site)
   const action = l?.actions[id]
   if (!l || !action) return
+  $.ui.log(`proschi: press ${id}`, { to: 'debug' })
   l.pressedAt = await $.clock.now()
   l.pressed = id
   l.renderedAt = undefined
@@ -339,13 +372,15 @@ async function act($: EngineInterface, site: string, id: string, surface: Render
 /** The overlays' posts: hover and pressed pictures blitted in place, a press or a key runs the control's action. */
 export function registerPicture(on: On): void {
   on('ui.message', async ($, e, next) => {
-    const site = e.element.startsWith('ov-') ? e.element.slice(3) : undefined
+    const site = overlaySites.get(e.element)
     const l = site !== undefined ? live.get(site) : undefined
     if (!site || !l) return next(e)
     const data = (e.data ?? {}) as { type?: unknown; id?: unknown; key?: unknown }
     const id = typeof data.id === 'string' ? data.id : ''
     const started = await $.clock.now()
     if (data.type === 'hover') {
+      // Leaving one strip's overlay may come after entering the next one's: it takes back only its own control's hover.
+      if (!id && l.hovered && !l.overlays.get(e.element)?.includes(l.hovered)) return {}
       if (l.hovered && l.hovered !== id) await blit($, l, l.tiles.get(l.hovered), l.tiles.get(l.hovered)?.file)
       l.hovered = id || undefined
       if (id) await blit($, l, l.tiles.get(id), l.tiles.get(id)?.hoverFile)
@@ -368,4 +403,5 @@ export function registerPicture(on: On): void {
 export function resetPictures(): void {
   shown.clear()
   live.clear()
+  overlaySites.clear()
 }

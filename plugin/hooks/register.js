@@ -9924,8 +9924,9 @@ function probe($, requestId, key) {
 // ../plugin/src/picture.tsx
 var shown = /* @__PURE__ */ new Map();
 var live2 = /* @__PURE__ */ new Map();
-var overlayKey = (site) => `ov-${site}`;
+var overlaySites = /* @__PURE__ */ new Map();
 var tileKey = (site, piece, i) => `t-${site}-${piece}-${i}`;
+var overlayKey = (strip) => `ov-${strip}`;
 var timings = {};
 var PERF_KEEP = 40;
 var perf = [];
@@ -9981,21 +9982,32 @@ async function pictureSite($, ui, s) {
   }
   return { element: built.element };
 }
-async function strips(ui, s, piece, out, source, top, into) {
+async function strips(ui, s, piece, out, source, into) {
   const rows = [];
   for (const [i, tile] of out.tiles.entries()) {
     const key = tileKey(s.site, piece, i);
     const file = tile.file;
-    rows.push(file ? /* @__PURE__ */ h(ui.Image, { key, source: await source(key, file), columns: tile.columns, rows: tile.rows, alt: " " }) : /* @__PURE__ */ h(ui.Box, { key, width: tile.columns, height: tile.rows }));
-    if (!into) continue;
-    for (const a of tile.controls ?? []) {
-      const c = a.control;
-      if (c.disabled || !file) continue;
-      const id = `${piece}/${c.id}`;
-      into.tiles.set(id, { key, file, ...a.hoverFile ? { hoverFile: a.hoverFile } : {}, ...a.pressedFile ? { pressedFile: a.pressedFile } : {} });
-      into.controls.push({ id, col: tile.col + a.col, row: top + tile.row, columns: a.columns, rows: tile.rows });
-      if (c.hotkey && s.hotkeys && s.actions[id]) into.hotkeys.set(c.hotkey, id);
+    const image = file ? /* @__PURE__ */ h(ui.Image, { key, source: await source(key, file), columns: tile.columns, rows: tile.rows, alt: " " }) : /* @__PURE__ */ h(ui.Box, { key, width: tile.columns, height: tile.rows });
+    const areas = file ? (tile.controls ?? []).filter((a) => !a.control.disabled) : [];
+    if (!file || areas.length === 0) {
+      rows.push(image);
+      continue;
     }
+    const overlay = overlayKey(key);
+    const controls = [];
+    if (into) {
+      for (const a of areas) {
+        const id = `${piece}/${a.control.id}`;
+        into.tiles.set(id, { key, file, ...a.hoverFile ? { hoverFile: a.hoverFile } : {}, ...a.pressedFile ? { pressedFile: a.pressedFile } : {} });
+        controls.push({ id, col: tile.col + a.col, row: 0, columns: a.columns, rows: tile.rows });
+        if (a.control.hotkey && s.hotkeys && s.actions[id]) into.hotkeys.set(a.control.hotkey, id);
+      }
+      into.overlays.set(overlay, controls.map((c) => c.id));
+      overlaySites.set(overlay, s.site);
+    }
+    rows.push(
+      /* @__PURE__ */ h(ui.Box, { key: `${key}-s`, flexDirection: "column", width: tile.columns, height: tile.rows, overflow: "hidden" }, image, into && /* @__PURE__ */ h(ui.Box, { position: "absolute", top: 0, left: 0, width: tile.columns, height: tile.rows }, /* @__PURE__ */ h(ui.Client, { key: overlay, module: "./uiOverlay.js", props: { controls }, width: tile.columns, height: tile.rows })))
+    );
   }
   return rows;
 }
@@ -10007,7 +10019,7 @@ async function build($, ui, s, d) {
     sources.set(key, file);
     return sourceOf($, file, s.form);
   };
-  const into = { tiles: /* @__PURE__ */ new Map(), controls: [], hotkeys: /* @__PURE__ */ new Map() };
+  const into = { tiles: /* @__PURE__ */ new Map(), overlays: /* @__PURE__ */ new Map(), hotkeys: /* @__PURE__ */ new Map() };
   const parts = [];
   let top = 0;
   let width = 1;
@@ -10036,7 +10048,7 @@ async function build($, ui, s, d) {
     }
     const { out } = p;
     parts.push(
-      /* @__PURE__ */ h(ui.Box, { key: `p-${s.site}-${p.id}`, flexDirection: "column", height: out.rows }, await strips(ui, s, p.id, out, source, top, into))
+      /* @__PURE__ */ h(ui.Box, { key: `p-${s.site}-${p.id}`, flexDirection: "column", height: out.rows }, await strips(ui, s, p.id, out, source, into))
     );
     top += out.rows;
     width = Math.max(width, out.columns);
@@ -10044,7 +10056,7 @@ async function build($, ui, s, d) {
   if (d.pages.length) {
     const pages = [];
     for (const page of d.pages) {
-      const rows = await strips(ui, s, page.id, page.out, source, top, page.shown ? into : void 0);
+      const rows = await strips(ui, s, page.id, page.out, source, page.shown ? into : void 0);
       pages.push(
         /* @__PURE__ */ h(ui.Box, { key: `pg-${s.site}-${page.id}`, flexDirection: "column", height: page.out.rows, display: page.shown ? "flex" : "none" }, rows)
       );
@@ -10057,10 +10069,11 @@ async function build($, ui, s, d) {
       /* @__PURE__ */ h(ui.Box, { key: `pages-${s.site}`, flexDirection: "column" }, pages)
     );
   }
-  const { tiles, controls, hotkeys } = into;
+  const { tiles, overlays, hotkeys } = into;
   live2.set(s.site, {
     requestId: s.requestId,
     tiles,
+    overlays,
     actions: d.actions,
     hotkeys,
     sources,
@@ -10069,8 +10082,7 @@ async function build($, ui, s, d) {
   });
   let sent = 0;
   for (const [key, file] of sources) if (before2.get(key) !== file) sent++;
-  const overlay = overlayKey(s.site);
-  const element = /* @__PURE__ */ h(ui.Box, { key: `site-${s.site}`, flexDirection: "column", width, height: top }, parts, /* @__PURE__ */ h(ui.Box, { position: "absolute", top: 0, left: 0, width, height: top }, /* @__PURE__ */ h(ui.Client, { key: overlay, module: "./uiOverlay.js", props: { controls }, width, height: top })), hotkeys.size > 0 && /* @__PURE__ */ h(ui.Box, { key: `keys-${s.site}`, display: "none" }, [...hotkeys].map(([key, id]) => /* @__PURE__ */ h(ui.Button, { key: `hk-${s.site}-${key}`, label: key, hotkey: key, onPress: (press) => void act($, s.site, id, press.surface) }))));
+  const element = /* @__PURE__ */ h(ui.Box, { key: `site-${s.site}`, flexDirection: "column", width, height: top }, parts, hotkeys.size > 0 && /* @__PURE__ */ h(ui.Box, { key: `keys-${s.site}`, display: "none" }, [...hotkeys].map(([key, id]) => /* @__PURE__ */ h(ui.Button, { key: `hk-${s.site}-${key}`, label: key, hotkey: key, onPress: (press) => void act($, s.site, id, press.surface) }))));
   return { element, images: sources.size, sent };
 }
 async function blit($, l, ref, file) {
@@ -10082,6 +10094,7 @@ async function act($, site, id, surface) {
   const l = live2.get(site);
   const action = l?.actions[id];
   if (!l || !action) return;
+  $.ui.log(`proschi: press ${id}`, { to: "debug" });
   l.pressedAt = await $.clock.now();
   l.pressed = id;
   l.renderedAt = void 0;
@@ -10089,13 +10102,14 @@ async function act($, site, id, surface) {
 }
 function registerPicture(on) {
   on("ui.message", async ($, e, next) => {
-    const site = e.element.startsWith("ov-") ? e.element.slice(3) : void 0;
+    const site = overlaySites.get(e.element);
     const l = site !== void 0 ? live2.get(site) : void 0;
     if (!site || !l) return next(e);
     const data = e.data ?? {};
     const id = typeof data.id === "string" ? data.id : "";
     const started = await $.clock.now();
     if (data.type === "hover") {
+      if (!id && l.hovered && !l.overlays.get(e.element)?.includes(l.hovered)) return {};
       if (l.hovered && l.hovered !== id) await blit($, l, l.tiles.get(l.hovered), l.tiles.get(l.hovered)?.file);
       l.hovered = id || void 0;
       if (id) await blit($, l, l.tiles.get(id), l.tiles.get(id)?.hoverFile);
