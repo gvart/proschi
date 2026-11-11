@@ -97,7 +97,7 @@ function faceOf(weight: number): Face | undefined {
 }
 
 /** The advance width of `text` at `size` px, in Inter of `weight` or, with `isMono`, JetBrains Mono. */
-export function measure(text: string, size: number, weight = 400, isMono = false): number {
+export function measure(text: string, size: number, weight = 500, isMono = false): number {
   if (isMono) return text.length > 0 ? [...text].length * size * (mono ? (mono.advances.get(0x30) ?? mono.fallback) / mono.upem : 0.6) : 0;
   const face = faceOf(weight);
   if (!face) return textWidth(text, size, weight >= 600);
@@ -107,7 +107,7 @@ export function measure(text: string, size: number, weight = 400, isMono = false
 }
 
 /** `text` cut to `max` px with an ellipsis. */
-export function clip(text: string, max: number, size: number, weight = 400, isMono = false): string {
+export function clip(text: string, max: number, size: number, weight = 500, isMono = false): string {
   if (measure(text, size, weight, isMono) <= max) return text;
   const chars = [...text];
   let lo = 0;

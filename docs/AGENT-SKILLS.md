@@ -1,5 +1,5 @@
 ---
-updated: 2026-11-01
+updated: 2026-11-11
 ---
 
 # Agent skills
@@ -151,7 +151,10 @@ picks: `auto` (the default) asks the terminal once a session, `on` always
 draws pictures, `off` always draws text. Inside tmux, pictures need
 `set -g allow-passthrough on` and `set -g focus-events on`; until both are
 on, the plugin draws text and says so under the drawing. The pictures are
-written to `$TMPDIR/proschi-raster`.
+written to `$TMPDIR/proschi-raster`. If the pictures show thin gaps
+between their strips, set the `cellAspect` option to your terminal cell's
+height over its width (the default, 2.125, fits Ghostty, kitty and iTerm2
+at their default fonts).
 
 Limits:
 

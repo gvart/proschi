@@ -98,10 +98,35 @@ text cells** (today's drawing). Never a text preview followed by a picture.
   (`Surface.cuttable`), strips end only between them; tables and blocks sit on
   whole rows; a controls row shortens its controls (keycaps, then labels) to
   fit instead of wrapping. Test: no glyph's ink crosses a strip boundary.
+  **The cell's shape** (desk follow-up): nothing in the mod API names the
+  terminal's cell in pixels (no surface field; the pointer's `fine` is in
+  fractions of a cell), so it is a setting, `cellAspect` (height over width,
+  default 2.125, measured from the user's Ghostty screenshot: a 16-row strip
+  letterboxed by 8 px a side at 0.99 px per CSS px). The layout stays on the
+  8×17 grid; the pictures are drawn 16 by round(16 × aspect) px a cell
+  (`cellPxOf`), stretched a few per cent where the setting differs. And a
+  small mismatch degrades gracefully: every strip is a full-width picture
+  (controls are areas of their strip, hover and pressed are the strip again
+  with that control's columns redrawn), so strips all scale alike and never
+  meet side by side; they end only between lines, best between cards (a row
+  of the terminal's background), so a letterbox of a pixel or two falls where
+  nothing is drawn. Contact sheets at a 9×19 px cell (2.11, not 2.125): no
+  seam, no misalignment.
 - [ ] R2. Tab switching lag.
 - [ ] R3. Playback at ≈5 fps.
-- [ ] R4. Panels blend into the terminal background.
-- [ ] R5. Thin, faded type.
+- [x] R4. **Panels blend into the terminal background.** Every panel is an
+  opaque card (#1C1C21 dark, #FFFFFF light, border rgba(255,255,255,.14) /
+  ink .12, radius 8, 2 px transparent margin); a page is a card per section
+  (heading to heading) plus the stats and callout cards; table rows have
+  separators; buttons have solid fills and visible borders (yellow primary
+  with a darker edge); the diagram is a paper card with the same border and
+  rounded corners.
+- [x] R5. **Thin, faded type.** Text is always over an opaque fill (R4); ink
+  #ECECEF and muted #A8A8B3 on dark (#18181B / #52525B on light); Inter
+  Medium for body (the default weight), SemiBold for headings, labels and
+  bold runs; body 14.5 px, tables 14 px, on the 8×17 cell, drawn at 2×,
+  which is a Retina screen's own pixels for that cell (3× would be scaled
+  back down by the terminal: no sharper, 2.25× the pixels to draw and send).
 - [ ] R6. The Sequence tab is a static picture: no Play or step keys.
 
 ## Risks

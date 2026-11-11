@@ -20,6 +20,7 @@ import { formatMs } from '../../frontend/src/sim/format'
 import { MULTIPLIERS, stopOf, toggleFailed } from '../../frontend/src/components/WhatIf/whatIf'
 import { graphicsMode, imageSize, maxWidthPx, probe, probeKey, probeOf, probeSource, rasterOf, sourceOf, themeOf, TMUX_HINT, type GraphicsMode, type RasterRequest } from './graphics'
 import { loading, pictureSite, registerPicture, type Action, type Picture, type Piece } from './picture'
+import { setCellAspect } from './helper'
 import { hldMarkdown, hldTab } from './views/hld'
 import { legendLine, verdictLine } from './views/lines'
 import { lineView, type Ui } from './views/render'
@@ -91,6 +92,7 @@ export function register(on: On, options: PluginOptions): void {
   const chosen = (options as { icons?: unknown }).icons
   icons = chosen === 'symbols' || chosen === 'none' ? chosen : 'nerd-font'
   graphics = graphicsMode((options as { graphics?: unknown }).graphics)
+  setCellAspect((options as { cellAspect?: unknown }).cellAspect)
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'proschi', description: 'Proschi diagrams: /proschi view <file.proschi> shows one in a pane', argumentHint: 'view [--expand <id>,…] [--focus <id>] <file>' })

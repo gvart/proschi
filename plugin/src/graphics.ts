@@ -3,7 +3,7 @@ import type { EngineInterface, ImageSource } from 'claude-code'
 
 import { keyOf, type Source } from '../../tooling/src/terminal/document'
 import type { GraphicsProbe } from '../types'
-import { ask, cacheDir, withPrune, type Priority } from './helper'
+import { ask, cacheDir, cellAspectOf, withPrune, type Priority } from './helper'
 
 /**
  * Diagrams as pictures (docs/design/terminal-mod.md D11): the PNGs
@@ -29,8 +29,6 @@ export const TMUX_HINT = 'tmux: set allow-passthrough on and focus-events on for
 
 /** Screen px a PNG gives each column: about twice a cell's width, crisp without huge files. */
 const PX_PER_COLUMN = 16
-/** A cell's height over its width, as the pictures are drawn (tooling/src/render/ui/kit.ts CELL, 8×17). */
-const CELL_ASPECT = 17 / 8
 /** The `{ png }` form's limit, decoded. */
 const MAX_PNG_BYTES = 2 * 1024 * 1024
 /** The probe's picture: a 1×1 transparent PNG, as hooks/probe.png holds it for the swap by file name. */
@@ -113,16 +111,16 @@ export const maxWidthPx = (columns: number) => Math.max(1, Math.min(255, columns
 /**
  * The Image's box: as wide as the PNG wants at one PNG px per screen px (its
  * cellHint), at most the room there is; as tall as its aspect ratio makes it
- * over cells CELL_ASPECT times as tall as wide, at most `maxRows`, narrower
+ * over cells the `cellAspect` setting times as tall as wide, at most `maxRows`, narrower
  * to keep the ratio when that caps it.
  */
 export function imageSize(out: Pick<RasterOutput, 'width' | 'height' | 'cellHint'>, room: number, maxRows: number): { columns: number; rows: number } {
   let columns = Math.max(1, Math.min(255, room, out.cellHint.columns))
-  let rows = Math.max(1, Math.round((columns * out.height) / out.width / CELL_ASPECT))
+  let rows = Math.max(1, Math.round((columns * out.height) / out.width / cellAspectOf()))
   const cap = Math.max(1, Math.min(255, maxRows))
   if (rows > cap) {
     rows = cap
-    columns = Math.max(1, Math.min(columns, Math.round((rows * CELL_ASPECT * out.width) / out.height)))
+    columns = Math.max(1, Math.min(columns, Math.round((rows * cellAspectOf() * out.width) / out.height)))
   }
   return { columns, rows }
 }

@@ -1,6 +1,6 @@
 import type { EngineInterface } from 'claude-code'
 
-import type { PanelOutput, PanelRequest, PanelsInput, PanelsOutput, UiTheme } from '../../tooling/src/render/ui/contract'
+import { CELL_ASPECT, type PanelOutput, type PanelRequest, type PanelsInput, type PanelsOutput, type UiTheme } from '../../tooling/src/render/ui/contract'
 
 /**
  * The raster helper (hooks/raster.cjs, tooling/src/terminal/rasterHost.ts) as
@@ -29,6 +29,20 @@ let worker: Worker | undefined
 let refused = false
 let seq = 0
 let cache: string | undefined
+/** The terminal's cell, height over width: the `cellAspect` setting (tooling/src/render/ui/contract.ts PanelsInput). */
+let cellAspect = CELL_ASPECT
+
+/**
+ * The `cellAspect` setting as a number: no API names the terminal's cell in
+ * pixels, and a terminal fits each picture into its cells keeping the
+ * picture's aspect ratio, so the pictures are drawn for this one.
+ */
+export function setCellAspect(value: unknown): void {
+  const n = typeof value === 'number' ? value : Number.parseFloat(String(value ?? ''))
+  cellAspect = Number.isFinite(n) && n >= 1.5 && n <= 3 ? n : CELL_ASPECT
+}
+
+export const cellAspectOf = () => cellAspect
 /** Whether this session's first request asked the helper to prune the cache (once a session is enough). */
 let pruned = false
 
@@ -196,7 +210,7 @@ async function flush($: EngineInterface): Promise<void> {
     // By theme: one request each.
     for (const theme of new Set(asks.map(([, p]) => p.theme))) {
       const mine = asks.filter(([, p]) => p.theme === theme)
-      const input: PanelsInput = withPrune({ kind: 'panels', outDir, theme, panels: mine.map(([key, p]) => ({ id: key, panel: p.panel, columns: p.columns, variants: ['hover', 'pressed'] })) })
+      const input: PanelsInput = withPrune({ kind: 'panels', outDir, theme, cellAspect, panels: mine.map(([key, p]) => ({ id: key, panel: p.panel, columns: p.columns, variants: ['hover', 'pressed'] })) })
       void ask($, input, priority).then(
         out => {
           const answers = (out as PanelsOutput).panels ?? []

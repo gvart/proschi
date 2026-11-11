@@ -1,6 +1,6 @@
 import type { EngineInterface, ImageSource, On, RenderElement, RenderSurface } from 'claude-code'
 
-import type { Panel, PanelOutput, Tile, UiTheme } from '../../tooling/src/render/ui/contract'
+import type { Panel, PanelOutput, UiTheme } from '../../tooling/src/render/ui/contract'
 import { sourceOf } from './graphics'
 import { panelOf, prefetch } from './helper'
 import type { OverlayControl } from './uiOverlay'
@@ -161,26 +161,19 @@ async function build($: EngineInterface, ui: Ui, s: Site, d: Shown): Promise<Ren
       continue
     }
     const { out } = p
-    const strips = new Map<number, { tile: Tile; i: number }[]>()
-    out.tiles.forEach((tile, i) => strips.set(tile.row, [...(strips.get(tile.row) ?? []), { tile, i }]))
     const rows: RenderElement[] = []
-    for (const strip of strips.values()) {
-      const cells: RenderElement[] = []
-      for (const { tile, i } of strip) {
-        const key = tileKey(s.site, p.id, i)
-        cells.push(<ui.Image key={key} source={await source(tile.file)} columns={tile.columns} rows={tile.rows} alt=" " />)
-        const c = tile.control
-        if (!c || c.disabled) continue
+    for (const [i, tile] of out.tiles.entries()) {
+      const key = tileKey(s.site, p.id, i)
+      const file = tile.file
+      rows.push(file ? <ui.Image key={key} source={await source(file)} columns={tile.columns} rows={tile.rows} alt=" " /> : <ui.Box key={key} width={tile.columns} height={tile.rows} />)
+      for (const a of tile.controls ?? []) {
+        const c = a.control
+        if (c.disabled || !file) continue
         const id = `${p.id}/${c.id}`
-        tiles.set(id, { key, file: tile.file, ...(tile.hoverFile ? { hoverFile: tile.hoverFile } : {}), ...(tile.pressedFile ? { pressedFile: tile.pressedFile } : {}) })
-        controls.push({ id, col: tile.col, row: top + tile.row, columns: tile.columns, rows: tile.rows })
+        tiles.set(id, { key, file, ...(a.hoverFile ? { hoverFile: a.hoverFile } : {}), ...(a.pressedFile ? { pressedFile: a.pressedFile } : {}) })
+        controls.push({ id, col: tile.col + a.col, row: top + tile.row, columns: a.columns, rows: tile.rows })
         if (c.hotkey && s.hotkeys && s.actions[id]) hotkeys.set(c.hotkey, id)
       }
-      rows.push(
-        <ui.Box flexDirection="row" height={strip[0].tile.rows}>
-          {cells}
-        </ui.Box>,
-      )
     }
     parts.push(
       <ui.Box key={`p-${s.site}-${p.id}`} flexDirection="column" height={out.rows}>

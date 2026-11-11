@@ -169,7 +169,7 @@ test('pictures: a reserved area with one line while the terminal is asked, then 
   expect(await ui.find({ type: 'Text' })).toBeUndefined()
   expect(await ui.find({ type: 'Button' })).toBeUndefined()
   const diagram = (await ui.find({ type: 'Image', key: 'img-m1:0' })) as Found
-  expect(diagram?.props).toMatchObject({ source: { file: '/tmp/proschi-raster/base.png' }, columns: 100, rows: 28 })
+  expect(diagram?.props).toMatchObject({ source: { file: '/tmp/proschi-raster/base.png' }, columns: 100, rows: 26 })
   expect(String(diagram?.props.alt)).toMatch(/Checkout.*picture/)
   // The overlay covers the drawing and maps its controls.
   const overlay = await overlayOf(ui, 'm1:0')
@@ -182,8 +182,8 @@ test('a picture keeps its aspect ratio and takes at most 40 rows in the transcri
   const clock = mock.clock(on)
   host(on, clock, { size: { width: 800, height: 3200 } })
   const ui = await settle($, clock)
-  // 50 columns would want 100 rows: capped at 40, and 20 columns keep the ratio (cells twice as tall as wide).
-  expect(((await ui.find({ type: 'Image', key: 'img-m1:0' })) as Found)?.props).toMatchObject({ columns: 20, rows: 40 })
+  // 50 columns would want 94 rows: capped at 40, and 21 columns keep the ratio (cells 17/8 as tall as wide).
+  expect(((await ui.find({ type: 'Image', key: 'img-m1:0' })) as Found)?.props).toMatchObject({ columns: 21, rows: 40 })
   await ui.unmount()
 })
 

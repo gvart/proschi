@@ -10,12 +10,11 @@
  * plugin builds the data (render/ui/data.ts has builders for the tabs whose
  * content comes from the simulation) and lays the answer's tiles out:
  *
- *   for each strip (tiles of one `row`, left to right, `columns` adding up to
- *   the panel's): a row Box of `rows` height, each tile a keyed Image. One
- *   overlay Client over the drawing maps the pointer to the tiles with a
- *   `control` (plugin/src/picture.tsx); `hoverFile` and `pressedFile`, when
- *   asked for, are blitted into the control's tile under the pointer and
- *   while its button is down.
+ *   each tile a full-width strip, top to bottom: a keyed Image `rows` tall
+ *   (an empty Box where it has no file). One overlay Client over the drawing
+ *   maps the pointer to the strips' control areas (plugin/src/picture.tsx);
+ *   an area's `hoverFile` and `pressedFile`, when asked for, are blitted into
+ *   its strip under the pointer and while its button is down.
  */
 
 /** The theme a panel is drawn in: the canvas's tokens (frontend/src/utils/canvasColors.ts CANVAS_TOKENS). */
@@ -303,7 +302,16 @@ export interface PanelsInput {
   theme?: UiTheme;
   panels: PanelRequest[];
   diagram?: Record<string, unknown>;
+  /**
+   * The terminal's cell, height over width (default CELL_ASPECT, 17 / 8). The
+   * layout is on an 8×17 grid whatever it is; the pictures are drawn 16 px a
+   * column and round(16 × aspect) px a row, so they fill the terminal's cells.
+   */
+  cellAspect?: number;
 }
+
+/** A cell's height over its width as the panels are laid out (render/ui/kit.ts CELL). */
+export const CELL_ASPECT = 17 / 8;
 
 /** What a control tile presses. */
 export interface TileControl {
@@ -313,22 +321,29 @@ export interface TileControl {
   disabled?: boolean;
 }
 
+/** A control's place in its strip: its columns, the strip's rows; the strip drawn with it under the pointer, and pressed. */
+export interface TileArea {
+  control: TileControl;
+  col: number;
+  columns: number;
+  hoverFile?: string;
+  pressedFile?: string;
+}
+
 /**
- * A picture covering whole cells of the panel: `columns` × `rows` from (`col`,
- * `row`), 0-based. The tiles of a panel cover it exactly, no gaps or overlaps,
- * in strips: every tile of a strip has the same `row` and `rows`, and they are
- * listed left to right, strips top to bottom.
+ * A strip: a full-width picture of whole rows of the panel, `columns` ×
+ * `rows` from (`col`, `row`), 0-based. The strips of a panel cover it top to
+ * bottom with no gap or overlap.
  */
 export interface Tile {
   col: number;
   row: number;
   columns: number;
   rows: number;
-  /** Absolute path of the PNG (`{ file, format: 'png' }`). */
-  file: string;
-  control?: TileControl;
-  hoverFile?: string;
-  pressedFile?: string;
+  /** Absolute path of the PNG (`{ file, format: 'png' }`); absent when the strip draws nothing (an empty Box stands in). */
+  file?: string;
+  /** The controls drawn in it, left to right. */
+  controls?: TileArea[];
 }
 
 export interface PanelOutput {

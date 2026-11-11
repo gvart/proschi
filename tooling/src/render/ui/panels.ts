@@ -1,11 +1,11 @@
 import { renderSequenceSvg } from '../sequence';
 import { withTheme } from '../svg';
 import { loadDocument } from '../../terminal/document';
-import type { ActionBarPanel, BannerPanel, Control, NoticesPanel, Panel, PlayerHeaderPanel, ScenarioChip, SequencePanel, StepCard, StepPanel, SystemBarPanel, TabBarPanel, UiTheme, UseCaseBarPanel } from './contract';
+import type { ActionBarPanel, BannerPanel, Block, Control, NoticesPanel, Panel, PlayerHeaderPanel, ScenarioChip, SequencePanel, StepCard, StepPanel, SystemBarPanel, TabBarPanel, UiTheme, UseCaseBarPanel } from './contract';
 import { BODY, CODE, CONTROL_ROW, blocks, codeBox, itemsRow, placeButton, upToRow } from './blocks';
 import { CELL, CONTROL, Surface, buttonColumns, chip, drawLaid, icon, layoutRich, line, paragraph, rect, tint, txt, width, type Box, type ControlState } from './kit';
 import { clip } from './metrics';
-import { alpha, mix, paletteOf, type Palette } from './theme';
+import { alpha, mix, paletteOf } from './theme';
 
 /**
  * Each panel kind laid out on a Surface `columns` cells wide, in the
@@ -28,21 +28,25 @@ const ROW = CELL.height;
 /** A page's or a card's inner margin: two columns. */
 const GUTTER = 2 * CELL.width;
 
-/** A card: a faint rounded surface with a hairline (`border` for a coloured one), the terminal's background showing through. */
-function card(P: Palette, x: number, y: number, w: number, h: number, border = P.card.line): string {
-  return rect(x + 0.5, y + 0.5, w - 1, h - 1, { fill: P.card.fill, stroke: border, sw: 1, rx: 10 });
+/** The transparent margin around a card, px: two cards one under another stand apart, and a strip cut between them cuts no card. */
+const MARGIN = 2;
+
+/** A card filling rows `top` to `bottom` (px, on row boundaries) less its margin: opaque, rounded, a clear border (`border` for a coloured one). */
+function card(S: Surface, top: number, bottom: number, border = S.P.card.line): void {
+  S.card(top, bottom);
+  S.add(rect(MARGIN + 0.5, top + MARGIN + 0.5, S.width - 2 * MARGIN - 1, bottom - top - 2 * MARGIN - 1, { fill: S.P.card.fill, stroke: border, sw: 1, rx: 8 }));
 }
 
 /**
- * A card around rows drawn by `inner`, from the panel's top: the card's
- * frame is drawn first (behind), so `inner` runs on a scratch surface to
- * learn its height, then again on the real one.
+ * A card around rows drawn by `inner` from `top` (the panel's top): the
+ * card is drawn first (behind), so `inner` runs on a scratch surface to learn
+ * its height, then again on the real one; `pad` px inside above and below.
  */
-function framed(S: Surface, border: string, inner: (S: Surface, top: number) => number): number {
+function framed(S: Surface, border: string, inner: (S: Surface, top: number) => number, top = 0, pad = ROW): number {
   const scratch = new Surface(S.P, S.columns);
-  const h = upToRow(inner(scratch, ROW) + ROW);
-  S.add(card(S.P, 0, 0, S.width, h, border));
-  inner(S, ROW);
+  const h = upToRow(inner(scratch, top + pad) + pad + 4);
+  card(S, top, top + h, border);
+  inner(S, top + pad);
   return h;
 }
 
@@ -51,15 +55,15 @@ const TAB_LABEL = { size: 14, weight: 600 };
 function tabs(S: Surface, p: TabBarPanel): number {
   const P = S.P;
   const H = CONTROL_ROW;
-  // A hairline under the tabs, the current one's slim accent underline over it.
-  S.add(rect(0, H - 1, S.width, 1, { fill: P.line }));
-  let col = 0;
+  // A card, the current tab's slim accent underline at its foot.
+  card(S, 0, H);
+  let col = 1;
   for (const t of p.tabs) {
     const capW = t.hotkey ? CONTROL.keycap + 8 : 0;
-    const badgeW = t.badge ? width(t.badge.text, { size: 12, weight: 700 }) + 14 + 7 : 0;
-    const contentW = capW + width(t.label, { ...TAB_LABEL, weight: 700 }) + badgeW;
+    const badgeW = t.badge ? width(t.badge.text, { size: 12, weight: 600 }) + 14 + 7 : 0;
+    const contentW = capW + width(t.label, { ...TAB_LABEL, weight: 600 }) + badgeW;
     const columns = Math.ceil((contentW + 28) / CELL.width);
-    if (col + columns > S.columns) break;
+    if (col + columns > S.columns - 1) break;
     const box: Box = { x: col * CELL.width, y: 0, w: columns * CELL.width, h: H };
     const active = t.id === p.active;
     S.place({
@@ -75,14 +79,14 @@ function tabs(S: Surface, p: TabBarPanel): number {
           out.push(rect(x + 0.5, cy - 8.5, CONTROL.keycap - 1, 17, { stroke: alpha(color, 0.42), sw: 1, rx: 4 }), txt(x + CONTROL.keycap / 2, cy + 3.8, t.hotkey, { size: 10.5, mono: true, weight: 700, color: alpha(color, 0.85), anchor: 'middle' }));
           x += CONTROL.keycap + 8;
         }
-        out.push(txt(x, cy + 5, t.label, { ...TAB_LABEL, weight: active ? 700 : 600, color }));
-        x += width(t.label, { ...TAB_LABEL, weight: active ? 700 : 600 }) + 7;
+        out.push(txt(x, cy + 5, t.label, { ...TAB_LABEL, weight: active ? 600 : 600, color }));
+        x += width(t.label, { ...TAB_LABEL, weight: active ? 600 : 600 }) + 7;
         if (t.badge) {
-          const bw = width(t.badge.text, { size: 12, weight: 700 }) + 14;
+          const bw = width(t.badge.text, { size: 12, weight: 600 }) + 14;
           const tone = P.tone[t.badge.tone];
-          out.push(rect(x, cy - 9, bw, 18, { fill: alpha(tone, 0.16), rx: 9 }), txt(x + bw / 2, cy + 4.2, t.badge.text, { size: 12, weight: 700, color: tone, anchor: 'middle' }));
+          out.push(rect(x, cy - 9, bw, 18, { fill: alpha(tone, 0.16), rx: 9 }), txt(x + bw / 2, cy + 4.2, t.badge.text, { size: 12, weight: 600, color: tone, anchor: 'middle' }));
         }
-        if (active) out.push(rect(box.x + 10, H - 3, box.w - 20, 3, { fill: P.accent, rx: 1.5 }));
+        if (active) out.push(rect(box.x + 10, H - 6, box.w - 20, 3, { fill: P.accent, rx: 1.5 }));
         return out.join('');
       },
     });
@@ -93,7 +97,7 @@ function tabs(S: Surface, p: TabBarPanel): number {
 
 const CHIP_LABEL = { size: 14, weight: 600 };
 const chipText = (s: ScenarioChip) => `${s.name}${s.status ? ` · ${s.status}` : ''}`;
-const chipColumns = (s: ScenarioChip) => Math.ceil((width(chipText(s), { ...CHIP_LABEL, weight: 700 }) + 14 + 8 + 2 * CONTROL.pad + 2) / CELL.width);
+const chipColumns = (s: ScenarioChip) => Math.ceil((width(chipText(s), { ...CHIP_LABEL, weight: 600 }) + 14 + 8 + 2 * CONTROL.pad + 2) / CELL.width);
 
 /** A scenario as the editor's scenario tabs name it: ✓ or ✗, the name, the status an error ends with; the current one filled. */
 function scenarioControl(S: Surface, s: ScenarioChip, col: number, top: number, current?: boolean): number {
@@ -114,7 +118,7 @@ function scenarioControl(S: Surface, s: ScenarioChip, col: number, top: number, 
       return [
         rect(x + 0.5, box.y + 0.5, w - 1, box.h - 1, { fill, rx: 7, ...(current || state !== 'rest' ? { stroke: alpha(tone, current ? 0.85 : 0.5), sw: current ? 1.5 : 1 } : {}) }),
         icon(error ? 'cross' : 'check', x + CONTROL.pad, box.y + box.h / 2 - 7 + dy, 14, tone, 2.4),
-        txt(x + CONTROL.pad + 22, box.y + box.h / 2 + 5 + dy, text, { ...CHIP_LABEL, weight: current ? 700 : 600, color: current || state !== 'rest' ? P.ink : tone }),
+        txt(x + CONTROL.pad + 22, box.y + box.h / 2 + 5 + dy, text, { ...CHIP_LABEL, weight: current ? 600 : 600, color: current || state !== 'rest' ? P.ink : tone }),
       ].join('');
     },
   });
@@ -137,7 +141,7 @@ function useCaseBar(S: Surface, p: UseCaseBarPanel): number {
       for (const u of g.useCases) {
         y = upToRow(y);
         const indent = g.label ? 4 : 2;
-        const name = { size: 14, weight: u.current ? 700 : 500 };
+        const name = { size: 14, weight: u.current ? 600 : 500 };
         const nameCols = Math.ceil((width(u.name, name) + 14) / CELL.width);
         // The name on its own line when it and the scenarios do not fit one.
         const inline = nameCols + u.scenarios.reduce((s, c) => s + chipColumns(c) + 1, 0) <= right - indent;
@@ -167,9 +171,9 @@ function playerHeader(S: Surface, p: PlayerHeaderPanel): number {
     const back = buttonColumns(p.back);
     placeButton(S, p.back, 2, y);
     const x = (2 + back + 2) * CELL.width;
-    const title = { size: 16, weight: 700 };
+    const title = { size: 16, weight: 600 };
     const titleW = Math.min(width(p.title, title), S.width - x - 3 * CELL.width);
-    S.add(txt(x, y + CONTROL_ROW / 2 + 5.5, clip(p.title, S.width - x - 3 * CELL.width, 16, 700), { ...title, color: P.ink }));
+    S.add(txt(x, y + CONTROL_ROW / 2 + 5.5, clip(p.title, S.width - x - 3 * CELL.width, 16, 600), { ...title, color: P.ink }));
     if (p.note && x + titleW + 60 < S.width - 3 * CELL.width) S.add(txt(x + titleW + 12, y + CONTROL_ROW / 2 + 5, clip(p.note, S.width - x - titleW - 12 - 3 * CELL.width, 13.5), { size: 13.5, color: P.muted }));
     y += CONTROL_ROW;
     if (p.scenarios?.length) {
@@ -206,13 +210,13 @@ function stepCard(S: Surface, s: StepCard, x: number, top: number, w: number): n
   // The number: a disc, blue, or red once the call errs.
   const err = s.error === true || s.failed === true;
   const disc = err ? P.tone.bad : P.blue;
-  parts.push(`<circle cx="${x + 15}" cy="${y + 15}" r="15" fill="${alpha(disc, 0.18)}"/>`, txt(x + 15, y + 20, String(s.number), { size: 14, weight: 700, color: disc, anchor: 'middle' }));
+  parts.push(`<circle cx="${x + 15}" cy="${y + 15}" r="15" fill="${alpha(disc, 0.18)}"/>`, txt(x + 15, y + 20, String(s.number), { size: 14, weight: 600, color: disc, anchor: 'middle' }));
   const tx = x + 44;
   let cx = tx;
   const right = s.call ? width(s.call, { size: 13, mono: true }) + 16 : 0;
-  const name = clip(s.name, w - 44 - right - 170, 15.5, 700);
-  parts.push(txt(cx, y + 13, name, { size: 15.5, weight: 700, color: P.ink }));
-  cx += width(name, { size: 15.5, weight: 700 }) + 10;
+  const name = clip(s.name, w - 44 - right - 170, 15.5, 600);
+  parts.push(txt(cx, y + 13, name, { size: 15.5, weight: 600, color: P.ink }));
+  cx += width(name, { size: 15.5, weight: 600 }) + 10;
   const chips: { svg: string; width: number }[] = [];
   if (s.failed) chips.push(tint(P, cx, y + 13, 'Failed', 'red'));
   else if (s.status !== undefined && s.status >= 400) chips.push(tint(P, cx, y + 13, String(s.status), 'red'));
@@ -298,7 +302,7 @@ function stepPanel(S: Surface, p: StepPanel): number {
   return framed(S, P.card.line, (S, top) => {
     stepCards(S, p, p.steps[at] ?? [], x, top - 2, w);
     let y = upToRow(top - 2 + tallest + 6);
-    S.add(line(1, y + 0.5, S.width - 1, y + 0.5, P.line, 1));
+    S.add(line(MARGIN + 1, y + 0.5, S.width - MARGIN - 1, y + 0.5, P.line, 1));
     const k = p.hotkeys ?? {};
     const hk = (id: keyof NonNullable<StepPanel['hotkeys']>) => (k[id] ? { hotkey: k[id] } : {});
     const ctl = (c: Control): { control: Control } => ({ control: c });
@@ -341,18 +345,20 @@ function systemBar(S: Surface, p: SystemBarPanel): number {
 }
 
 function actionBar(S: Surface, p: ActionBarPanel): number {
-  return itemsRow(S, p.controls.map((c) => ({ control: c })), 0, 0, S.columns);
+  card(S, 0, CONTROL_ROW);
+  return itemsRow(S, p.controls.map((c) => ({ control: c })), 1, 0, S.columns - 1);
 }
 
 function banner(S: Surface, p: BannerPanel): number {
   const P = S.P;
   const resetCols = buttonColumns(p.reset);
-  placeButton(S, p.reset, 0, 0);
-  const x = (resetCols + 1) * CELL.width;
-  const label = { size: 13.5, weight: 700 };
-  const lw = Math.min(S.width - x - 8, width(p.label, label) + 24);
+  card(S, 0, CONTROL_ROW, alpha(P.yellow, 0.6));
+  placeButton(S, p.reset, 1, 0);
+  const x = (resetCols + 2) * CELL.width;
+  const label = { size: 13.5, weight: 600 };
+  const lw = Math.min(S.width - x - 16, width(p.label, label) + 24);
   const cy = CONTROL_ROW / 2;
-  S.add(rect(x, cy - 12, lw, 24, { fill: P.yellow, rx: 12 }), txt(x + 12, cy + 5, clip(p.label, lw - 24, 13.5, 700), { ...label, color: P.onAccent }));
+  S.add(rect(x, cy - 12, lw, 24, { fill: P.yellow, rx: 12 }), txt(x + 12, cy + 5, clip(p.label, lw - 24, 13.5, 600), { ...label, color: P.onAccent }));
   if (p.note && x + lw + 12 < S.width - 60) S.add(txt(x + lw + 12, cy + 5, clip(p.note, S.width - x - lw - 20, 13.5), { size: 13.5, color: P.muted }));
   return CONTROL_ROW;
 }
@@ -396,10 +402,14 @@ function legend(S: Surface, critical: { useCase: string; p99: string } | undefin
 }
 
 function notices(S: Surface, p: NoticesPanel): number {
+  return framed(S, S.P.card.line, (S, top) => noticeRows(S, p, top), 0, ROW / 2);
+}
+
+function noticeRows(S: Surface, p: NoticesPanel, top: number): number {
   const P = S.P;
-  let y = 4;
-  const x = CELL.width;
-  const w = S.width - 2 * CELL.width;
+  let y = top;
+  const x = GUTTER;
+  const w = S.width - 2 * GUTTER;
   for (const n of p.notices ?? []) {
     const tone = n.tone ?? 'warn';
     const color = tone === 'muted' ? P.muted : tone === 'bad' ? P.tone.bad : P.tone.warn;
@@ -421,14 +431,32 @@ function notices(S: Surface, p: NoticesPanel): number {
     const head = failing === 0 ? `All ${total} ${checks} pass` : `${failing} of ${total} ${checks} fail`;
     const laid = layoutRich([{ text: head, bold: true, tone: failing ? 'bad' : 'good' }, ...(failing && first ? [{ text: `: ${first}` }] : [])], room, BODY, false)[0];
     S.add(icon(failing ? 'cross' : 'check', x, y + CONTROL_ROW / 2 - 8, 16, failing ? P.tone.bad : P.tone.good, 2.4), drawLaid(P, laid, x + 23, y + CONTROL_ROW / 2 + 5, BODY, P.ink));
-    if (p.details) placeButton(S, p.details, S.columns - detailsCols, y);
+    if (p.details) placeButton(S, p.details, S.columns - 1 - detailsCols, y);
     y += CONTROL_ROW;
   }
-  return y + 2;
+  return y - top;
 }
 
+/**
+ * A page: its blocks in cards, a card from each heading to the next, the
+ * stats and callouts cards of their own; a row of the terminal's background
+ * between cards, where its strips are best cut.
+ */
 function page(S: Surface, b: Extract<Panel, { kind: 'page' }>): number {
-  return blocks(S, b.blocks, GUTTER, ROW / 2, S.width - 2 * GUTTER) + ROW;
+  const sections: { blocks: Block[]; bare: boolean }[] = [];
+  for (const block of b.blocks) {
+    const bare = block.type === 'stats' || block.type === 'callout';
+    const last = sections.at(-1);
+    if (bare || !last || last.bare || (block.type === 'heading' && (block.level ?? 2) <= 2)) sections.push({ blocks: [block], bare });
+    else last.blocks.push(block);
+  }
+  let y = 0;
+  for (const [i, section] of sections.entries()) {
+    if (i > 0) y += sections[i - 1].bare && section.bare ? 0 : ROW;
+    if (section.bare) y += upToRow(blocks(S, section.blocks, MARGIN, y + MARGIN, S.width - 2 * MARGIN) + 2 * MARGIN);
+    else y += framed(S, S.P.card.line, (S, top) => blocks(S, section.blocks, GUTTER, top, S.width - 2 * GUTTER), y);
+  }
+  return y;
 }
 
 /**
@@ -447,8 +475,12 @@ function flatten(attrs: string, body: string): string {
 
 /** The sequence SVG of `proschi render`, its outer <svg> taken off so it draws inside the panel. */
 function sequence(S: Surface, p: SequencePanel, theme: UiTheme): number {
-  let y = 0;
-  if (p.controls?.length) y += itemsRow(S, p.controls, 2, ROW / 2, S.columns - 3) + ROW / 2;
+  return framed(S, S.P.card.line, (S, top) => sequenceDrawing(S, p, theme, top), 0, ROW / 2);
+}
+
+function sequenceDrawing(S: Surface, p: SequencePanel, theme: UiTheme, top: number): number {
+  let y = top;
+  if (p.controls?.length) y += itemsRow(S, p.controls, 2, y, S.columns - 3);
   const doc = loadDocument(p.source);
   if (doc.errors.length) throw new Error(doc.errors.map((e) => `${e.line}:${e.col} ${e.message}`).join('\n'));
   const u = doc.diagram.useCases.find((c) => c.id === p.useCase || c.name === p.useCase);
@@ -464,10 +496,10 @@ function sequence(S: Surface, p: SequencePanel, theme: UiTheme): number {
     .replace(/<title>[\s\S]*?<\/title>\n?/, '')
     .replace(/<rect width="100%" height="100%"[^>]*\/>\n?/, '')
     .replace(/<svg\b([^>]*)>([\s\S]*?)<\/svg>/g, (_, attrs: string, body: string) => flatten(attrs, body));
-  // Narrower than the panel: drawn at its size; wider: scaled to fit.
-  const k = Math.min(1, (S.width - 8) / w);
-  S.addWithin({ x: 0, y, w: S.width, h: h * k + 8 }, `<g transform="translate(4 ${y + 4})${k < 1 ? ` scale(${Math.round(k * 1000) / 1000})` : ''}">${inner}</g>`);
-  return y + h * k + 8;
+  // Narrower than the card: drawn at its size; wider: scaled to fit.
+  const k = Math.min(1, (S.width - 2 * CELL.width) / w);
+  S.addWithin({ x: 0, y, w: S.width, h: h * k }, `<g transform="translate(${CELL.width} ${y})${k < 1 ? ` scale(${Math.round(k * 1000) / 1000})` : ''}">${inner}</g>`);
+  return y + h * k - top;
 }
 
 /** Lays `panel` out `columns` wide in `theme`. */

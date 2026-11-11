@@ -40,6 +40,12 @@
         "off"
       ],
       "default": "auto"
+    },
+    "cellAspect": {
+      "type": "string",
+      "title": "Terminal cell shape",
+      "description": "How many times taller than wide a terminal cell is, so pictures fill their cells exactly: 2.125 fits Ghostty, kitty and iTerm2 at their default fonts. If pictures show thin gaps between their strips, set it to your cell's height over its width (e.g. 17/8 = 2.125, 16/8 = 2).",
+      "default": "2.125"
     }
   }
 }

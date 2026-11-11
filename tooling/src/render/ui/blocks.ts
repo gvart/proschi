@@ -18,7 +18,7 @@ export const CONTROL_ROW = 3 * ROW;
 const up = (y: number) => Math.ceil(y / ROW) * ROW;
 const cols = (px: number) => Math.ceil(px / CELL.width);
 
-export const BODY: TextStyle = { size: 14 };
+export const BODY: TextStyle = { size: 14.5 };
 
 /** Places a button `columns` wide at column `col`, its row from `top`. */
 export function placeButton(S: Surface, c: Control, col: number, top: number, kind: 'button' | 'tab' | 'toggle' | 'option' = 'button', columns = buttonColumns(c)): Box {
@@ -58,7 +58,7 @@ function menu(S: Surface, sel: Select, col: number, top: number, minColumns: num
   });
   const h = y - top + 6;
   parts.push(rect(x + 1.5, top + 0.5, w - 3, h - 1, { fill: alpha(P.ink, 0.06), stroke: alpha(P.ink, 0.24), sw: 1, rx: 8 }));
-  for (const hd of headers) parts.push(txt(x + 12, hd.y + 12, hd.label.toUpperCase(), { size: 11, weight: 700, color: P.muted, spacing: 0.6 }));
+  for (const hd of headers) parts.push(txt(x + 12, hd.y + 12, hd.label.toUpperCase(), { size: 11, weight: 600, color: P.muted, spacing: 0.6 }));
   S.add(...parts);
   for (const { y: oy, i } of opts) {
     const o = sel.options[i];
@@ -73,7 +73,7 @@ function menu(S: Surface, sel: Select, col: number, top: number, minColumns: num
         return [
           rect(box.x, box.y, box.w, box.h, { fill, rx: 4 }),
           selected ? icon('check', box.x + 7, box.y + box.h / 2 - 7, 14, P.yellow, 2.2) : '',
-          txt(box.x + 28 + (groups ? 6 : 0), base, clip(o.label, box.w - 36 - (o.detail ? width(o.detail, { size: 12.5 }) + 10 : 0), size, selected ? 700 : 500), { size, weight: selected ? 700 : 500, color: P.ink }),
+          txt(box.x + 28 + (groups ? 6 : 0), base, clip(o.label, box.w - 36 - (o.detail ? width(o.detail, { size: 12.5 }) + 10 : 0), size, selected ? 600 : 500), { size, weight: selected ? 600 : 500, color: P.ink }),
           o.detail ? txt(box.x + box.w - 8, base, o.detail, { size: 12.5, color: P.muted, anchor: 'end' }) : '',
         ].join('');
       },
@@ -181,7 +181,7 @@ export const measureRich = (rich: Rich, base: TextStyle) => layoutRich(rich, 1e6
 
 // ---------- tables ----------
 
-const HEAD = { size: 11.5, weight: 700, spacing: 0.5 };
+const HEAD = { size: 11.5, weight: 600, spacing: 0.5 };
 const CELL_PAD = 18;
 
 function cellText(c: Cell): Rich | undefined {
@@ -208,8 +208,8 @@ export function table(S: Surface, columns: Column[], rows: { cells: Cell[]; sub?
   // Every row whole cells, so a strip can end under any of them.
   const rowH = controls ? CONTROL_ROW : 2 * ROW;
   const subH = controls ? CONTROL_ROW : ROW;
-  const base: TextStyle = { size: 13.5 };
-  const sub: TextStyle = { size: 12.5 };
+  const base: TextStyle = { size: 14 };
+  const sub: TextStyle = { size: 13 };
   const widths = columns.map((c, i) =>
     Math.max(width(c.title.toUpperCase(), HEAD), ...rows.map((row) => cellWidth(row.cells[i], row.sub ? sub : base) + (i === 0 && row.sub ? 12 : 0))),
   );
@@ -377,7 +377,7 @@ function stats(S: Surface, items: { label: string; value: string; tone?: Tone }[
     S.add(
       rect(cx + 0.5, cy + 0.5, cw - 1, h - 1, { fill: P.card.fill, stroke: P.card.line, sw: 1, rx: 8 }),
       txt(cx + 12, cy + 20, clip(it.label, cw - 24, 12.5, 500), { size: 12.5, weight: 500, color: P.muted }),
-      txt(cx + 12, cy + 44, clip(it.value, cw - 24, 18, 700), { size: 18, weight: 700, color: it.tone ? P.tone[it.tone] : P.ink }),
+      txt(cx + 12, cy + 44, clip(it.value, cw - 24, 18, 600), { size: 18, weight: 600, color: it.tone ? P.tone[it.tone] : P.ink }),
     );
   });
   return Math.ceil(items.length / per) * (h + 10) - 10;
@@ -412,7 +412,7 @@ function list(S: Surface, items: Rich[], ordered: boolean, x: number, top: numbe
   let y = top;
   items.forEach((it, i) => {
     const mark = ordered ? `${i + 1}.` : '•';
-    S.add(txt(x + (ordered ? 14 : 4), y + 15, mark, { size: 14, weight: ordered ? 600 : 700, color: P.muted, anchor: ordered ? 'end' : 'start' }));
+    S.add(txt(x + (ordered ? 14 : 4), y + 15, mark, { size: 14, weight: ordered ? 600 : 600, color: P.muted, anchor: ordered ? 'end' : 'start' }));
     const p = paragraph(P, it, x + 20, y, w - 20, BODY, P.ink, 21);
     S.add(p.svg);
     y += p.height + 2;
@@ -456,7 +456,7 @@ function chart(S: Surface, c: SweepChart, x: number, top: number, w: number): nu
   return bottom + 20 + rows * 15 - top;
 }
 
-const HEADING = { 1: { size: 20, weight: 700, before: 8 }, 2: { size: 16.5, weight: 700, before: 8 }, 3: { size: 14.5, weight: 700, before: 4 } } as const;
+const HEADING = { 1: { size: 20, weight: 600, before: 8 }, 2: { size: 16.5, weight: 600, before: 8 }, 3: { size: 14.5, weight: 600, before: 4 } } as const;
 
 /** The space before a block, after the one before it. */
 function gapBefore(b: Block, prev: Block | undefined): number {
@@ -475,7 +475,7 @@ export function blocks(S: Surface, list_: Block[], x: number, top: number, w: nu
   let prev: Block | undefined;
   for (const b of list_) {
     // Each block starts on a row, so a strip can end before it.
-    y = b.type === 'space' ? y : up(y + gapBefore(b, prev));
+    y = b.type === 'space' || !prev ? y : up(y + gapBefore(b, prev));
     const at = y;
     prev = b;
     switch (b.type) {

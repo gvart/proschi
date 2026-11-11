@@ -40,12 +40,18 @@ export function answer(input: Record<string, unknown>, size = { width: 1600, hei
           columns: req.columns,
           rows: 1,
           file: `${name}-${c.id}.png`,
-          hoverFile: `${name}-${c.id}-hover.png`,
-          pressedFile: `${name}-${c.id}-pressed.png`,
-          control: { id: c.id, kind: 'button', ...(c.hotkey ? { hotkey: c.hotkey } : {}), ...(c.disabled ? { disabled: true } : {}) },
+          controls: [
+            {
+              col: 0,
+              columns: req.columns,
+              hoverFile: `${name}-${c.id}-hover.png`,
+              pressedFile: `${name}-${c.id}-pressed.png`,
+              control: { id: c.id, kind: 'button', ...(c.hotkey ? { hotkey: c.hotkey } : {}), ...(c.disabled ? { disabled: true } : {}) },
+            },
+          ],
         })),
       ]
-      return { id: req.id, kind: req.panel.kind, columns: req.columns, rows: tiles.length, cellPx: { width: 16, height: 32 }, tiles }
+      return { id: req.id, kind: req.panel.kind, columns: req.columns, rows: tiles.length, cellPx: { width: 16, height: 34 }, tiles }
     })
     return { panels }
   }

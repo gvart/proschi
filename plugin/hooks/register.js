@@ -9639,11 +9639,20 @@ function hldPage(markdown) {
 // ../plugin/src/graphics.ts
 import { atom, read, update } from "claude-code";
 
+// src/render/ui/contract.ts
+var CELL_ASPECT = 17 / 8;
+
 // ../plugin/src/helper.ts
 var worker;
 var refused = false;
 var seq = 0;
 var cache;
+var cellAspect = CELL_ASPECT;
+function setCellAspect(value) {
+  const n = typeof value === "number" ? value : Number.parseFloat(String(value ?? ""));
+  cellAspect = Number.isFinite(n) && n >= 1.5 && n <= 3 ? n : CELL_ASPECT;
+}
+var cellAspectOf = () => cellAspect;
 var pruned = false;
 var TIMEOUT_MS = 6e4;
 async function cacheDir($) {
@@ -9772,7 +9781,7 @@ async function flush($) {
     if (asks.length === 0) continue;
     for (const theme2 of new Set(asks.map(([, p]) => p.theme))) {
       const mine = asks.filter(([, p]) => p.theme === theme2);
-      const input = withPrune({ kind: "panels", outDir, theme: theme2, panels: mine.map(([key, p]) => ({ id: key, panel: p.panel, columns: p.columns, variants: ["hover", "pressed"] })) });
+      const input = withPrune({ kind: "panels", outDir, theme: theme2, cellAspect, panels: mine.map(([key, p]) => ({ id: key, panel: p.panel, columns: p.columns, variants: ["hover", "pressed"] })) });
       void ask($, input, priority).then(
         (out) => {
           const answers = out.panels ?? [];
@@ -9801,7 +9810,6 @@ var UNKNOWN = { status: "unknown" };
 var probed = atom({ plugin: "proschi", key: "graphics" }, UNKNOWN);
 var TMUX_HINT = "tmux: set allow-passthrough on and focus-events on for pixel diagrams";
 var PX_PER_COLUMN = 16;
-var CELL_ASPECT = 17 / 8;
 var MAX_PNG_BYTES = 2 * 1024 * 1024;
 var PROBE_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNgAAIAAAUAAen63NgAAAAASUVORK5CYII=";
 var PROBE_TRIES = 6;
@@ -9847,11 +9855,11 @@ function rasterOf($, request2, priority = "now") {
 var maxWidthPx = (columns) => Math.max(1, Math.min(255, columns)) * PX_PER_COLUMN;
 function imageSize(out, room, maxRows) {
   let columns = Math.max(1, Math.min(255, room, out.cellHint.columns));
-  let rows = Math.max(1, Math.round(columns * out.height / out.width / CELL_ASPECT));
+  let rows = Math.max(1, Math.round(columns * out.height / out.width / cellAspectOf()));
   const cap = Math.max(1, Math.min(255, maxRows));
   if (rows > cap) {
     rows = cap;
-    columns = Math.max(1, Math.min(columns, Math.round(rows * CELL_ASPECT * out.width / out.height)));
+    columns = Math.max(1, Math.min(columns, Math.round(rows * cellAspectOf() * out.width / out.height)));
   }
   return { columns, rows };
 }
@@ -9965,24 +9973,19 @@ async function build($, ui, s, d) {
       continue;
     }
     const { out } = p;
-    const strips = /* @__PURE__ */ new Map();
-    out.tiles.forEach((tile, i) => strips.set(tile.row, [...strips.get(tile.row) ?? [], { tile, i }]));
     const rows = [];
-    for (const strip of strips.values()) {
-      const cells = [];
-      for (const { tile, i } of strip) {
-        const key = tileKey(s.site, p.id, i);
-        cells.push(/* @__PURE__ */ h(ui.Image, { key, source: await source(tile.file), columns: tile.columns, rows: tile.rows, alt: " " }));
-        const c = tile.control;
-        if (!c || c.disabled) continue;
+    for (const [i, tile] of out.tiles.entries()) {
+      const key = tileKey(s.site, p.id, i);
+      const file = tile.file;
+      rows.push(file ? /* @__PURE__ */ h(ui.Image, { key, source: await source(file), columns: tile.columns, rows: tile.rows, alt: " " }) : /* @__PURE__ */ h(ui.Box, { key, width: tile.columns, height: tile.rows }));
+      for (const a of tile.controls ?? []) {
+        const c = a.control;
+        if (c.disabled || !file) continue;
         const id = `${p.id}/${c.id}`;
-        tiles.set(id, { key, file: tile.file, ...tile.hoverFile ? { hoverFile: tile.hoverFile } : {}, ...tile.pressedFile ? { pressedFile: tile.pressedFile } : {} });
-        controls.push({ id, col: tile.col, row: top + tile.row, columns: tile.columns, rows: tile.rows });
+        tiles.set(id, { key, file, ...a.hoverFile ? { hoverFile: a.hoverFile } : {}, ...a.pressedFile ? { pressedFile: a.pressedFile } : {} });
+        controls.push({ id, col: tile.col + a.col, row: top + tile.row, columns: a.columns, rows: tile.rows });
         if (c.hotkey && s.hotkeys && s.actions[id]) hotkeys.set(c.hotkey, id);
       }
-      rows.push(
-        /* @__PURE__ */ h(ui.Box, { flexDirection: "row", height: strip[0].tile.rows }, cells)
-      );
     }
     parts.push(
       /* @__PURE__ */ h(ui.Box, { key: `p-${s.site}-${p.id}`, flexDirection: "column", height: out.rows }, rows)
@@ -11381,6 +11384,7 @@ function register(on, options) {
   const chosen = options.icons;
   icons = chosen === "symbols" || chosen === "none" ? chosen : "nerd-font";
   graphics = graphicsMode(options.graphics);
+  setCellAspect(options.cellAspect);
   on("session.start", async ($, e, next) => {
     await $.command.register({ name: "proschi", description: "Proschi diagrams: /proschi view <file.proschi> shows one in a pane", argumentHint: "view [--expand <id>,\u2026] [--focus <id>] <file>" });
     return next(e);

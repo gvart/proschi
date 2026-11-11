@@ -70,6 +70,7 @@ export class Surface {
   private parts: (string | { control: string } | { svg: string; box: Box })[] = [];
   readonly controls: Placed[] = [];
   readonly spans: Reach[] = [];
+  private cards: Reach[] = [];
 
   constructor(
     readonly P: Palette,
@@ -106,20 +107,35 @@ export class Surface {
     this.keep(p.box.y, p.box.y + p.box.h);
   }
 
-  /** Whether a strip may end at row boundary `row` (0 and `rows` always): no span crosses it. */
-  cuttable(rows: number): (row: number) => boolean {
-    const blocked = new Uint8Array(rows + 1);
-    for (const [top, bottom] of this.spans) {
-      for (let b = Math.max(1, Math.floor(top / CELL.height) + 1); b <= Math.min(rows - 1, Math.ceil(bottom / CELL.height) - 1); b++) {
-        const y = b * CELL.height;
-        if (top < y - 0.25 && bottom > y + 0.25) blocked[b] = 1;
-      }
-    }
-    return (row) => row <= 0 || row >= rows || blocked[row] === 0;
+  /** Marks `top` to `bottom` (px) as a card: a strip may end inside it, but better between cards, where the terminal's background is. */
+  card(top: number, bottom: number): void {
+    this.cards.push([top, bottom]);
   }
 
-  /** The panel as SVG `height` px tall, controls in their states (rest unless named); `crop` draws only that window, at its size. No background: the terminal's shows through. */
-  svg(height: number, states: Map<string, ControlState> = new Map(), crop?: Box): string {
+  /** Where a strip may end, by row boundary: 0 where a span crosses it, 1 inside a card, 2 between cards (0 and `rows` always 2). */
+  cuttable(rows: number): (row: number) => 0 | 1 | 2 {
+    const level = new Uint8Array(rows + 1).fill(2);
+    const mark = (spans: Reach[], to: 0 | 1) => {
+      for (const [top, bottom] of spans) {
+        for (let b = Math.max(1, Math.floor(top / CELL.height) + 1); b <= Math.min(rows - 1, Math.ceil(bottom / CELL.height) - 1); b++) {
+          const y = b * CELL.height;
+          if (top < y - 0.25 && bottom > y + 0.25) level[b] = Math.min(level[b], to);
+        }
+      }
+    };
+    mark(this.cards, 1);
+    mark(this.spans, 0);
+    return (row) => (row <= 0 || row >= rows ? 2 : (level[row] as 0 | 1 | 2));
+  }
+
+  /**
+   * The panel as SVG `height` px tall, controls in their states (rest unless
+   * named); `crop` draws only that window. `px`, the picture's size, may
+   * stretch it unevenly (a cell drawn taller or shorter than 8×17 for the
+   * terminal's own); absent, it is the window's size. No background: the
+   * terminal's shows through around the cards.
+   */
+  svg(height: number, states: Map<string, ControlState> = new Map(), crop?: Box, px?: { width: number; height: number }): string {
     const byId = new Map(this.controls.map((c) => [c.control.id, c]));
     const view = crop ?? { x: 0, y: 0, w: this.width, h: height };
     const meets = (b: Box) => b.x < view.x + view.w && b.x + b.w > view.x && b.y < view.y + view.h && b.y + b.h > view.y;
@@ -128,7 +144,7 @@ export class Surface {
       .filter(Boolean)
       .join('\n');
     return [
-      `<svg xmlns="http://www.w3.org/2000/svg" width="${view.w}" height="${view.h}" viewBox="${view.x} ${view.y} ${view.w} ${view.h}" font-family="${SANS}">`,
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${px?.width ?? view.w}" height="${px?.height ?? view.h}" viewBox="${view.x} ${view.y} ${view.w} ${view.h}"${px ? ' preserveAspectRatio="none"' : ''} font-family="${SANS}">`,
       body,
       '</svg>',
     ].join('\n');
@@ -152,7 +168,7 @@ export function txt(x: number, y: number, content: string, s: TextStyle = {}): s
     `x="${r(x)}"`,
     `y="${r(y)}"`,
     `font-size="${s.size ?? 13}"`,
-    s.weight && s.weight !== 400 ? `font-weight="${s.mono && s.weight < 700 ? 500 : s.weight}"` : s.mono ? 'font-weight="500"' : '',
+    `font-weight="${s.mono && (s.weight ?? 500) < 700 ? 500 : (s.weight ?? 500)}"`,
     `fill="${s.color ?? '#000'}"`,
     s.mono ? `font-family="${MONO_FAMILY}"` : '',
     s.anchor && s.anchor !== 'start' ? `text-anchor="${s.anchor}"` : '',
@@ -161,7 +177,7 @@ export function txt(x: number, y: number, content: string, s: TextStyle = {}): s
   return `<text ${attrs.join(' ')} xml:space="preserve">${esc(content)}</text>`;
 }
 
-export const width = (content: string, s: TextStyle = {}) => measure(content, s.size ?? 13, s.weight ?? 400, s.mono) + (s.spacing ?? 0) * [...content].length;
+export const width = (content: string, s: TextStyle = {}) => measure(content, s.size ?? 13, s.weight ?? 500, s.mono) + (s.spacing ?? 0) * [...content].length;
 
 export function rect(x: number, y: number, w: number, h: number, o: { fill?: string; stroke?: string; sw?: number; rx?: number; dash?: string } = {}): string {
   const sw = o.sw ?? 0;
@@ -379,16 +395,19 @@ export function drawButton(P: Palette, c: Control, box: Box, state: ControlState
   let fill: string;
   let stroke: string | undefined;
   let text: string;
+  const B = P.button;
   if (variant === 'primary') {
-    fill = disabled ? alpha(P.yellow, 0.35) : pressed ? mix('#000000', P.yellow, 0.14) : hover ? mix('#ffffff', P.yellow, 0.22) : P.yellow;
+    fill = disabled ? mix(P.yellow, P.surface, 0.35) : pressed ? mix('#000000', P.yellow, 0.14) : hover ? mix('#ffffff', P.yellow, 0.22) : P.yellow;
+    stroke = mix('#000000', P.yellow, 0.18);
     text = P.onAccent;
   } else if (variant === 'quiet') {
-    fill = pressed ? alpha(P.ink, 0.16) : hover ? P.hover : 'none';
-    text = disabled ? alpha(P.muted, 0.5) : hover || pressed ? P.ink : P.muted;
+    fill = pressed ? B.pressed : hover ? B.hover : 'none';
+    if (hover || pressed) stroke = B.line;
+    text = disabled ? mix(P.muted, P.surface, 0.5) : hover || pressed ? P.ink : P.muted;
   } else {
-    fill = pressed ? alpha(P.ink, 0.17) : hover ? alpha(P.ink, 0.11) : alpha(P.ink, 0.05);
-    stroke = pressed || hover ? alpha(P.ink, 0.38) : alpha(P.ink, disabled ? 0.12 : 0.22);
-    text = disabled ? alpha(P.ink, 0.4) : P.ink;
+    fill = disabled ? P.surface : pressed ? B.pressed : hover ? B.hover : B.fill;
+    stroke = pressed || hover ? B.lineHover : B.line;
+    text = disabled ? mix(P.ink, P.surface, 0.4) : P.ink;
   }
   const out: string[] = [rect(x + 0.5, y + 0.5, w - 1, h - 1, { fill, rx: 7, ...(stroke ? { stroke, sw: 1 } : {}) })];
   // Contents centred in the box, a pixel lower while pressed.
@@ -422,7 +441,7 @@ export function drawSelect(P: Palette, value: string, box: Box, state: ControlSt
   const cy = y + h / 2;
   const room = w - 2 * CONTROL.pad - 24 - (hotkey ? 27 : 0);
   return [
-    rect(x + 0.5, y + 0.5, w - 1, h - 1, { fill: pressed ? alpha(P.ink, 0.15) : hover ? alpha(P.ink, 0.11) : alpha(P.ink, 0.05), stroke: open ? P.accent : alpha(P.ink, pressed || hover ? 0.38 : 0.22), sw: open ? 1.5 : 1, rx: 7 }),
+    rect(x + 0.5, y + 0.5, w - 1, h - 1, { fill: pressed ? P.button.pressed : hover ? P.button.hover : P.button.fill, stroke: open ? P.accent : pressed || hover ? P.button.lineHover : P.button.line, sw: open ? 1.5 : 1, rx: 7 }),
     txt(x + CONTROL.pad, cy + CONTROL.size * 0.36, clip(value, room, CONTROL.size, 500), { size: CONTROL.size, weight: 500, color: P.ink }),
     hotkey ? keycap(x + w - CONTROL.pad - 16 - 9 - CONTROL.keycap, cy, hotkey, P.ink) : '',
     icon('chevron-down', x + w - CONTROL.pad - 16, cy - 8, 16, P.muted, 2),

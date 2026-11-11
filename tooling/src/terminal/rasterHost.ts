@@ -167,9 +167,8 @@ export async function rasterize(input: RasterInput, assets: RasterAssets): Promi
   const theme = draw.theme!;
   const resvgOptions = {
     font: { fontBuffers: fonts, defaultFontFamily: 'Inter', sansSerifFamily: 'Inter', monospaceFamily: 'JetBrains Mono' },
-    background: CANVAS_TOKENS[theme].paper,
   };
-  const base = drawArchitecture(laid, draw);
+  const base = asCard(drawArchitecture(laid, draw), theme);
   const svgWidth = Number(/width="(\d+)"/.exec(base)![1]);
   const max = options.maxWidthPx;
   const scale = options.scale ?? DEFAULT_SCALE;
@@ -203,7 +202,7 @@ export async function rasterize(input: RasterInput, assets: RasterAssets): Promi
   let frames: string[][] | undefined;
   for (let index = 0; steps && index < steps.length; index++) {
     const count = Math.max(1, Math.round(options.play!.frames ?? DEFAULT_FRAMES));
-    const svgs = Array.from({ length: count }, (_, k) => drawArchitecture(laid, { ...draw, play: { steps, index, progress: count === 1 ? 100 : (k * 100) / (count - 1) } }));
+    const svgs = Array.from({ length: count }, (_, k) => asCard(drawArchitecture(laid, { ...draw, play: { steps, index, progress: count === 1 ? 100 : (k * 100) / (count - 1) } }), theme));
     const files = svgs.map(fileOf);
     (frames ??= []).push(files);
     if (files.every((f) => existsSync(f))) {
@@ -226,6 +225,19 @@ export async function rasterize(input: RasterInput, assets: RasterAssets): Promi
   const out: RasterOutput = { width, height, base: baseFile, ...(frames ? { frames } : {}), cellHint: { columns: Math.ceil(width / cell.width), rows: Math.ceil(height / cell.height) } };
   put(manifest, JSON.stringify(out));
   return out;
+}
+
+/**
+ * The diagram as a card, as the UI panels are (render/ui/theme.ts): the
+ * canvas's paper in a rounded rectangle with a clear border, the corners
+ * outside it transparent, so the picture stands apart from the terminal's
+ * background instead of reading as a slab.
+ */
+function asCard(svg: string, theme: Theme): string {
+  const w = Number(/width="([\d.]+)"/.exec(svg)![1]);
+  const h = Number(/height="([\d.]+)"/.exec(svg)![1]);
+  const border = theme === 'dark' ? 'rgba(255,255,255,0.14)' : 'rgba(17,17,17,0.12)';
+  return svg.replace(/^(<svg[^>]*>)/, `$1<rect x="0.5" y="0.5" width="${w - 1}" height="${h - 1}" rx="6" fill="${CANVAS_TOKENS[theme].paper}" stroke="${border}" stroke-width="1"/>`);
 }
 
 /** A packet as render/architecture.ts draws it (drawPacket): its own group, centred on its translate. */

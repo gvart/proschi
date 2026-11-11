@@ -53,37 +53,35 @@ const PANELS: Record<string, Panel> = {
 
 describe('UI panels: the cell grid', () => {
   for (const [kind, panel] of Object.entries(PANELS)) {
-    it(`cuts ${kind} into tiles that cover it exactly`, () => {
+    it(`cuts ${kind} into strips that cover it exactly`, () => {
       for (const columns of [80, 120, 200]) {
         const { surface, height } = drawPanel(panel, columns, 'dark');
         expect(height % CELL.height).toBe(0);
         const rows = height / CELL.height;
-        const strips = cut(columns, rows, surface.controls.map((c) => ({ control: c.control, cells: cellsOf(c.box, columns, rows) })), surface.cuttable(rows));
-        const seen = new Uint8Array(columns * rows);
+        const strips = cut(rows, surface.controls.map((c) => ({ control: c.control, cells: cellsOf(c.box, columns, rows) })), surface.cuttable(rows));
         let row = 0;
         for (const s of strips) {
           expect(s.row).toBe(row);
+          expect(s.rows).toBeLessThanOrEqual(255);
+          // Areas side by side, never sharing a column.
           let col = 0;
-          for (const t of s.tiles) {
-            expect([t.row, t.rows, t.col]).toEqual([s.row, s.rows, col]);
-            for (let r = t.row; r < t.row + t.rows; r++) for (let c = t.col; c < t.col + t.columns; c++) seen[r * columns + c]++;
-            col += t.columns;
+          for (const a of s.controls) {
+            expect(a.col).toBeGreaterThanOrEqual(col);
+            col = a.col + a.columns;
           }
-          expect(col).toBe(columns);
-          if (s.tiles.every((t) => !t.control)) expect(s.rows).toBeLessThanOrEqual(255);
+          expect(col).toBeLessThanOrEqual(columns);
           row += s.rows;
         }
         expect(row).toBe(rows);
-        expect(seen.every((n) => n === 1)).toBe(true);
-        // Every control has a tile of its own, which holds its whole drawing.
-        const tiles = strips.flatMap((s) => s.tiles);
+        // Every control has an area of its own, which holds its whole drawing.
         for (const c of surface.controls) {
-          const t = tiles.find((x) => x.control?.id === c.control.id)!;
-          expect(t).toBeDefined();
-          expect(c.box.x).toBeGreaterThanOrEqual(t.col * CELL.width);
-          expect(c.box.x + c.box.w).toBeLessThanOrEqual((t.col + t.columns) * CELL.width);
-          expect(c.box.y).toBeGreaterThanOrEqual(t.row * CELL.height - 1e-6);
-          expect(c.box.y + c.box.h).toBeLessThanOrEqual((t.row + t.rows) * CELL.height + 1e-6);
+          const s = strips.find((x) => x.controls.some((a) => a.control.id === c.control.id))!;
+          expect(s).toBeDefined();
+          const a = s.controls.find((x) => x.control.id === c.control.id)!;
+          expect(c.box.x).toBeGreaterThanOrEqual(a.col * CELL.width);
+          expect(c.box.x + c.box.w).toBeLessThanOrEqual((a.col + a.columns) * CELL.width);
+          expect(c.box.y).toBeGreaterThanOrEqual(s.row * CELL.height - 1e-6);
+          expect(c.box.y + c.box.h).toBeLessThanOrEqual((s.row + s.rows) * CELL.height + 1e-6);
         }
       }
     });
@@ -98,7 +96,7 @@ describe('UI panels: the cell grid', () => {
       for (const columns of [80, 120]) {
         const { surface, height } = drawPanel(panel, columns, 'dark');
         const rows = height / CELL.height;
-        const strips = cut(columns, rows, surface.controls.map((c) => ({ control: c.control, cells: cellsOf(c.box, columns, rows) })), surface.cuttable(rows));
+        const strips = cut(rows, surface.controls.map((c) => ({ control: c.control, cells: cellsOf(c.box, columns, rows) })), surface.cuttable(rows));
         const textOnly = surface.svg(height).replace(/<(rect|line|circle|path)\b[^>]*\/>/g, '');
         const image = new Resvg(textOnly, { font: { fontBuffers: fonts, defaultFontFamily: 'Inter', sansSerifFamily: 'Inter', monospaceFamily: 'JetBrains Mono' } }).render();
         const ink = (x: number, y: number) => image.pixels[(y * image.width + x) * 4 + 3] > 24;
@@ -121,7 +119,7 @@ describe('UI panels: the cell grid', () => {
 
   it('refuses controls that share cells', () => {
     const control = (id: string) => ({ id, kind: 'button' as const });
-    expect(() => cut(20, 4, [{ control: control('a'), cells: { col: 0, row: 0, columns: 5, rows: 2 } }, { control: control('b'), cells: { col: 4, row: 1, columns: 5, rows: 2 } }])).toThrow(/share cells/);
+    expect(() => cut(4, [{ control: control('a'), cells: { col: 0, row: 0, columns: 5, rows: 2 } }, { control: control('b'), cells: { col: 4, row: 1, columns: 5, rows: 2 } }])).toThrow(/share cells/);
   });
 
   it('draws the same panel from its JSON', () => {
@@ -168,12 +166,18 @@ describe('UI panels: the raster helper', () => {
     const tabs = out.panels[0] as PanelOutput;
     expect(tabs.id).toBe('tabs');
     expect(tabs.cellPx).toEqual({ width: 16, height: 34 });
+    expect(tabs.tiles.map((t) => [t.col, t.columns])).toEqual(tabs.tiles.map(() => [0, 100]));
     expect(out.panels[1]).toEqual({ id: 'bad', error: "Unknown panel kind 'nope'" });
     for (const t of tabs.tiles) {
-      const head = readFileSync(t.file).subarray(16, 24);
+      const head = readFileSync(t.file!).subarray(16, 24);
       expect([head.readUInt32BE(0), head.readUInt32BE(4)]).toEqual([t.columns * 16, t.rows * 34]);
-      if (t.control) expect(existsSync(t.hoverFile!)).toBe(true);
+      for (const a of t.controls ?? []) expect(existsSync(a.hoverFile!)).toBe(true);
     }
+    // A terminal cell of another shape: the same layout, drawn 16 by round(16 × aspect) px a cell.
+    const square = (await answer({ ...input, cellAspect: 2 }, { dir: HOOKS })) as PanelsOutput;
+    const t = (square.panels[0] as PanelOutput).tiles[0];
+    expect((square.panels[0] as PanelOutput).cellPx).toEqual({ width: 16, height: 32 });
+    expect(readFileSync(t.file!).readUInt32BE(20)).toBe(t.rows * 32);
     expect(((await answer(input, { dir: HOOKS })) as PanelsOutput).panels[0]).toEqual(tabs);
   });
 
