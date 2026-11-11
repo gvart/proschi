@@ -30,7 +30,10 @@ With `traffic`, the drawing shows what the canvas's overlay shows
 - the bottleneck (`NodeOverlay.bottleneck`) carries a red **BOTTLENECK** chip
   on its top border, the terminal's stand-in for the canvas's ring;
 - an edge takes the heat of the node it feeds (`edgeOverlays`), and its
-  label gains `rps · +latency`; one without a label gets the numbers alone;
+  label gains `rps · +latency`; one without a label gets the numbers alone.
+  An edge drawn into an expanded system is carried by the flow into the
+  system, as the scope that declares it simulates it (`flowEnds`,
+  `terminal/document.ts`), and the picture takes the same edge load;
 - the p99 path of the busiest use case is drawn heavy, in the ink colour
   unless its heat colours it.
 

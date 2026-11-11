@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { layoutGraph } from '../../frontend/src/dsl/autoLayout';
 import { examples } from '../../frontend/src/dsl/examples';
-import { importFilePath, keyOf, loadDocument, missingImports, parseSource, viewSource, type Source } from '../src/terminal/document';
+import { flowEnds, importFilePath, keyOf, loadDocument, missingImports, parseSource, viewSource, type Source } from '../src/terminal/document';
 import { viewError, viewOptions, type SystemsView } from '../src/terminal/systems';
 import { DEFAULT, Grid, base64 } from '../src/terminal/grid';
 import { COLOR, heatOf, paint } from '../src/terminal/paint';
@@ -386,6 +386,19 @@ describe('terminal systems', () => {
     expect(doc.overlay?.['orders.db']).toMatchObject({ saturated: true });
     expect(text).toContain('ORDER PROCESSING ✗ saturated · @Orders');
     expect(text).toMatchSnapshot();
+  });
+
+  it('carries the load of an edge drawn into an expanded system, from the flow into the system', async () => {
+    const { doc } = await droneText('org-busy.proschi', { expanded: ['orders'] });
+    const into = doc.diagram.edges.find((e) => e.source === 'frontend' && e.target === 'orders.gateway')!;
+    expect(doc.edges?.[into.id]?.rps).toBeGreaterThan(0);
+    // Inside the system, its own flows.
+    const inside = doc.diagram.edges.find((e) => e.source === 'orders.api' && e.target === 'orders.db')!;
+    expect(doc.edges?.[inside.id]?.rps).toBeGreaterThan(0);
+    expect(flowEnds('frontend', 'orders.gateway')).toEqual({ source: 'frontend', target: 'orders' });
+    expect(flowEnds('orders.gateway', 'orders.api')).toEqual({ source: 'orders.gateway', target: 'orders.api' });
+    expect(flowEnds('orders.api', 'orders.wh.stock')).toEqual({ source: 'orders.api', target: 'orders.wh' });
+    expect(flowEnds('web', 'api')).toEqual({ source: 'web', target: 'api' });
   });
 
   it('enters an expanded frame straight, without a jog under its title', async () => {

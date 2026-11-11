@@ -40,8 +40,6 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFile
 import { join } from 'node:path';
 import { deflateSync } from 'node:zlib';
 import { initWasm, Resvg } from '@resvg/resvg-wasm';
-import { edgeOverlays, analysisOverlay } from '../../../frontend/src/sim/overlay';
-import { analyze } from '../../../frontend/src/sim';
 import { CANVAS_TOKENS } from '../../../frontend/src/utils/canvasColors';
 import { drawArchitecture, layoutArchitecture, type ArchitectureOptions } from '../render/architecture';
 import type { Theme } from '../render/svg';
@@ -128,9 +126,8 @@ export async function rasterize(input: RasterInput, assets: RasterAssets): Promi
   if (options.selected !== undefined) draw.selected = options.selected;
   if (options.overlay && doc.overlay) {
     draw.nodes = doc.overlay;
-    // The edges' load is the root document's; inside a focused system only the cards carry it.
-    const edges = view?.focus === undefined ? edgeOverlays(doc.diagram.edges, analysisOverlay(doc.root, analyze(doc.root, analyzeOptions))) : {};
-    draw.overlay = { edges };
+    // The edges' load as the text cells draw it: the flows of the scope drawn, inside an expanded or focused system too.
+    draw.overlay = { edges: doc.edges ?? {} };
   }
   let steps;
   if (options.play) {

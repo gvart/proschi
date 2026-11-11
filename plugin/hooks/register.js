@@ -7873,7 +7873,7 @@ function loadDocument(input, options) {
   }
   const overlay = sim && Object.keys(sim.nodes).length ? sim.nodes : void 0;
   const shown = errors.length ? diagram : applyView(diagram, view);
-  const edges = sim && overlay ? edgeOverlays(shown.edges.map((e) => ({ id: e.id, source: e.source, target: e.target })), { nodes: sim.nodes, flows: sim.flows, ...sim.critical ? { critical: sim.critical } : {} }) : {};
+  const edges = sim && overlay ? edgeOverlays(shown.edges.map((e) => ({ id: e.id, ...flowEnds(e.source, e.target) })), { nodes: sim.nodes, flows: sim.flows, ...sim.critical ? { critical: sim.critical } : {} }) : {};
   const noted = new Set(sim?.notes.map((n) => n.text));
   return {
     diagram: shown,
@@ -7889,6 +7889,13 @@ function loadDocument(input, options) {
     tests: analysis ? runTests(diagram, analysis, options) : [],
     link: (playback) => EDITOR + encodeShareHash(input.source, playback, imports)
   };
+}
+function flowEnds(source, target) {
+  const a = source.split(".");
+  const b = target.split(".");
+  let shared = 0;
+  while (shared < a.length - 1 && shared < b.length - 1 && a[shared] === b[shared]) shared++;
+  return { source: a.slice(0, shared + 1).join("."), target: b.slice(0, shared + 1).join(".") };
 }
 function missingImports(input) {
   const missing = /* @__PURE__ */ new Set();

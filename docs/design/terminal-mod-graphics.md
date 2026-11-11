@@ -16,7 +16,8 @@ pixels: `plugin/hooks/raster.cjs`. How the hooks show them is D11 of
     tints and heat fills of that theme.
   - `overlay: { edges }` (with `nodes`): the editor's load overlay. Cards take
     the canvas heat scale (`utils/heat.ts`), edges are tinted by the load of
-    the node they feed, with a dark casing and an `rps · +latency` chip (label,
+    the node they feed (the text cells' edge load, `Document.edges`, so an
+    expanded or focused system's edges carry theirs too), with a dark casing and an `rps · +latency` chip (label,
     rps and latency one per line when the edge has a label), the p99 path is
     bold, and the bottleneck gets a dashed red ring and a `BOTTLENECK` tab.
   - `selected`: an accent ring around a node or expanded system.
@@ -125,8 +126,6 @@ server renderer and the icon sets), `resvg.wasm` 2.5 MB, fonts 400 KB.
 - resvg 2.6 panics on layers (nested `<svg>`, group opacity) reaching out of
   a cropped viewBox, which is why frames composite packets instead of
   rendering a window of the full drawing.
-- In a focused system view the overlay colours cards but not edges: the
-  edges' load comes from the root document's analysis.
 - The editor's flowing dashes once a packet arrives are left out; a still
   dashed line would read as a failed call.
 - Labels are fitted with the renderer's width estimate, not Inter's metrics.
