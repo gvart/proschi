@@ -1,0 +1,23 @@
+tooling/test/ui.test.ts
+  s_50cc5c1ed1a510::t_73fe5d12d14b9e 1-186
+plugin/hooks/raster.cjs
+  s_50cc5c1ed1a510::t_d05d6f98eec47a 1-22,24-35,39,41-52,56,58-59,63-69,71-75,79-80,82-92,96,100-101,103-118,1451-1454,1458,1462,1465-1473
+docs/impl/terminal-rendered-ui.md
+  s_50cc5c1ed1a510::t_5643a3e4562fb9 32,39-44,47-51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a5631d438de04a2eb5de184e60a63d09ea7e5ab3",
+  "prompts": {},
+  "sessions": {
+    "s_50cc5c1ed1a510": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7e5513ad-e496-40de-9a6e-d587aa393ce5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
