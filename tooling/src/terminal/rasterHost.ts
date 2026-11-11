@@ -18,6 +18,7 @@
  *         overlay?: boolean,                       the load overlay (when the document has `traffic`)
  *         selected?: string,                       a node or expanded system id, ringed in the accent
  *         play?: { useCase, scenario?, frames? },  id or name; scenario defaults to the first; frames per step, default 8
+ *         whatIf?: { multiplier, failed, saved? }, the pane's live what-if: the load drawn is the what-if's
  *         cellPx?: { width, height } } }           the terminal's cell in screen px, for cellHint; default 16×32
  *   stdout RasterOutput as JSON:
  *     { width, height,                             PNG size in px, the same for every file
@@ -44,7 +45,8 @@ import { analyze } from '../../../frontend/src/sim';
 import { CANVAS_TOKENS } from '../../../frontend/src/utils/canvasColors';
 import { drawArchitecture, layoutArchitecture, type ArchitectureOptions } from '../render/architecture';
 import type { Theme } from '../render/svg';
-import { loadDocument, type Source } from './document';
+import { loadDocument, parseSource, type Source } from './document';
+import { isActive, liveOptions, type LiveWhatIf } from '../../../frontend/src/components/WhatIf/whatIf';
 
 export interface RasterOptions {
   theme?: Theme;
@@ -53,6 +55,8 @@ export interface RasterOptions {
   overlay?: boolean;
   selected?: string;
   play?: { useCase: string; scenario?: string; frames?: number };
+  /** The pane's live what-if (components/WhatIf/whatIf.ts LiveWhatIf): the overlay shows the load under it. */
+  whatIf?: LiveWhatIf;
   cellPx?: { width: number; height: number };
 }
 
@@ -115,14 +119,17 @@ export async function rasterize(input: RasterInput, assets: RasterAssets): Promi
     if ([done.base, ...(done.frames ?? []).flat()].every((f) => existsSync(f))) return done;
   }
 
-  const doc = loadDocument({ source, path, imports, view });
+  // Under a what-if, the document is analysed as the pane's What-if tab analyses it (plugin/src/views/whatif.ts optionsOf).
+  const written = options.whatIf && isActive(options.whatIf) ? parseSource({ source, path, imports }) : undefined;
+  const analyzeOptions = written && written.errors.length === 0 ? liveOptions(written.diagram, options.whatIf!) : undefined;
+  const doc = loadDocument({ source, path, imports, view }, analyzeOptions);
   if (doc.errors.length) throw new Error(doc.errors.map((e) => `${e.line}:${e.col} ${e.message}`).join('\n'));
-  const draw: ArchitectureOptions = { theme: options.theme ?? 'light', systems: doc.systems };
+  const draw: ArchitectureOptions = { theme: options.theme ?? 'light', systems: doc.systems, terminal: true };
   if (options.selected !== undefined) draw.selected = options.selected;
   if (options.overlay && doc.overlay) {
     draw.nodes = doc.overlay;
     // The edges' load is the root document's; inside a focused system only the cards carry it.
-    const edges = view?.focus === undefined ? edgeOverlays(doc.diagram.edges, analysisOverlay(doc.root, analyze(doc.root))) : {};
+    const edges = view?.focus === undefined ? edgeOverlays(doc.diagram.edges, analysisOverlay(doc.root, analyze(doc.root, analyzeOptions))) : {};
     draw.overlay = { edges };
   }
   let steps;

@@ -62,6 +62,24 @@ describe('architecture SVG: theme, overlay, playback, selection', () => {
     expect(svg).toContain('data-play="failing"');
   });
 
+  it('draws for a terminal: replica stacks, the canvas load line and opaque chips; the default SVG keeps none of it', async () => {
+    const replicated = 'api "API" [REST API] x3\ndb "DB" [PostgreSQL]\napi -> db : SQL\nusecase "Read" {\n  api -> db : SELECT\n}\ntraffic {\n  "Read" 100 rps\n}\n';
+    const doc = loadDocument({ source: replicated });
+    const laid = await layoutArchitecture(doc.diagram);
+    const edges = edgeOverlays(doc.diagram.edges, analysisOverlay(doc.root, analyze(doc.root)));
+    const plain = drawArchitecture(laid, { nodes: doc.overlay, overlay: { edges } });
+    const terminal = drawArchitecture(laid, { nodes: doc.overlay, overlay: { edges }, terminal: true });
+    expect(plain).not.toContain('data-stack');
+    expect(plain).toContain('fill-opacity="0.92"');
+    // Two cards behind the API's (at most two, as the canvas draws three or more replicas).
+    expect(terminal.match(/data-stack="\d"/g)).toEqual(['data-stack="2"', 'data-stack="1"']);
+    expect(terminal).toMatch(/×3 · \d+%/);
+    expect(terminal).not.toContain('fill-opacity="0.92"');
+    // No overlay: the stack still shows the replicas, as the terminal's text cards do.
+    expect(drawArchitecture(laid, { terminal: true }).match(/data-stack="\d"/g)).toHaveLength(2);
+    expect(drawArchitecture(laid)).toBe(await renderArchitectureSvg(doc.diagram));
+  });
+
   it('rings the selected node', async () => {
     const { diagram } = loadDocument({ source: source('ecommerce') });
     const svg = drawArchitecture(await layoutArchitecture(diagram), { selected: diagram.nodes.find((n) => n.kind !== 'group')!.id });
@@ -89,6 +107,16 @@ describe('raster helper', () => {
     expect([head.readUInt32BE(16), head.readUInt32BE(20)]).toEqual([out.width, out.height]);
     expect(out.cellHint).toEqual({ columns: Math.ceil(out.width / 16), rows: Math.ceil(out.height / 32) });
     expect(await rasterize(input, { dir: HOOKS })).toEqual(out);
+  });
+
+  it('draws the load under a live what-if', async () => {
+    const outDir = mkdtempSync(join(tmpdir(), 'proschi-raster-'));
+    const options = { scale: 0.5, overlay: true };
+    const written = await rasterize({ source: source('url-shortener'), outDir, options }, { dir: HOOKS });
+    const tripled = await rasterize({ source: source('url-shortener'), outDir, options: { ...options, whatIf: { multiplier: 3, failed: [] } } }, { dir: HOOKS });
+    const unchanged = await rasterize({ source: source('url-shortener'), outDir, options: { ...options, whatIf: { multiplier: 1, failed: [] } } }, { dir: HOOKS });
+    expect(tripled.base).not.toBe(written.base);
+    expect(unchanged.base).toBe(written.base);
   });
 
   it('fits maxWidthPx, and names an unknown use case', async () => {

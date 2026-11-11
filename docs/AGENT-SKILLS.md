@@ -143,6 +143,16 @@ It needs a Claude Code build with mod support and Node 18 or newer on the
 `PATH`. Icons are [Nerd Font](https://www.nerdfonts.com) glyphs; without
 one, set the plugin's `icons` option to `symbols` or `none`.
 
+In a terminal that shows images (kitty and Ghostty; iTerm2 3.5 or later in
+fullscreen mode), the diagram is drawn as a picture, as sharp as the
+editor's canvas, with the buttons and the player as text around it. Other
+terminals get the drawing in text cells. The plugin's `graphics` option
+picks: `auto` (the default) asks the terminal once a session, `on` always
+draws pictures, `off` always draws text. Inside tmux, pictures need
+`set -g allow-passthrough on` and `set -g focus-events on`; until both are
+on, the plugin draws text and says so under the drawing. The pictures are
+written to `$TMPDIR/proschi-raster`.
+
 Limits:
 
 - The plugin never uses the network. Remote imports come from the cache

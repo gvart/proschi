@@ -8,7 +8,7 @@ The Claude Code plugin draws Proschi diagrams in the terminal: a
 ```` ```proschi ```` block in a reply, a `.proschi` file Claude writes or
 edits, and `/proschi view <file>` in a pane. It should give what the web
 editor gives someone reading a design, without leaving the terminal. This
-page records the decisions behind that (D1 to D10).
+page records the decisions behind that (D1 to D11).
 
 ---
 
@@ -122,3 +122,45 @@ The HLD tab draws `toMarkdown(hld(…))` of the document as written with the
 each replaced by a line naming the tab that draws them. **⧉ Copy HLD
 markdown** (`c`) copies the whole document, Mermaid included. The HLD code
 adds about 65 KB to the hooks module (565 KB of its 1 MiB).
+
+## D11. Pictures where the terminal shows them
+
+Round 2 (D1): every place that draws the Diagram (a reply's block, a Write
+or Edit row, the pane's Diagram tab) shows it as an `Image` of the PNG
+`hooks/raster.cjs` draws (terminal-mod-graphics.md), in place of the
+`Raster`. The controls around it (header, warnings, legend, verdict, system
+bar, use case bar or step panel, buttons) stay text; the other tabs stay
+text. The code is `plugin/src/graphics.ts`.
+
+- **Setting.** `userConfig.graphics`: `auto` (default), `on`, `off`. `off`
+  never runs the helper. `on` always draws the Image, its `alt` where the
+  terminal has no pictures.
+- **Probe.** The API says nothing up front about images, but `$.ui.blit` of
+  a keyed Image is refused while it draws its alt. So the first Image of a
+  session is swapped to the same PNG, by file name and then as `{ png }`
+  bytes (what iTerm2 and tmux need), a try every 150 ms, six tries (it may
+  not be mounted yet). The answer goes in `$.state` (`graphics`): `yes`
+  with the form that worked, `tmux` for a refusal with
+  `fix: 'tmux-passthrough'`, else `no`; every drawing is drawn again by it,
+  and none asks again that session. Under `auto`, `no` and `tmux` draw the
+  Raster, `tmux` with a one-line hint to turn passthrough and focus events on.
+- **No flicker where avoidable.** Until the helper answers (0.2 to 2.5 s),
+  the Raster is drawn; the Image replaces it on the redraw that follows. A
+  terminal without pictures sees the alt for under a second, once.
+- **Size.** The helper is asked for at most 16 px a column of the room
+  (`maxWidthPx`), about twice a cell's width. The Image is as wide as the
+  PNG's `cellHint` at most the room, and as tall as its aspect ratio over
+  cells twice as tall as wide; at most 40 rows in the transcript, the pane's
+  body height less 10 in the pane, narrower to keep the ratio when capped.
+- **Theme.** Dark, unless Claude Code's `theme` setting names a light one.
+- **What it shows.** The same as the cells: the load overlay (off while a
+  scenario plays, as the canvas fades it), the selected system, the pane's
+  what-if (`whatIf`, added to the helper's input).
+- **Playback.** Playing, the helper is asked once for the scenario's frames
+  (8 a step) and the Image shows the step's first frame while it animates,
+  its last otherwise. `animate` blits frame `round(progress · (n − 1))`
+  by file on its 50 ms tick when it changes; until the frames exist it
+  keeps blitting cells into the Raster.
+- **Cache.** `$TMPDIR/proschi-raster` (the API names no plugin data folder),
+  read once through `$.env`. Files are content-hashed; nothing prunes them,
+  so the system's temporary-folder cleanup does.

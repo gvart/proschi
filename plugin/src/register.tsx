@@ -13,12 +13,13 @@ import { idList, systemAt, viewError, type SystemsView } from '../../tooling/src
 import type { DiagramScenario, DiagramUseCase, FlowStep } from '../../frontend/src/dsl/types'
 import { groupByEndpoint } from '../../frontend/src/playground/useCaseGroups'
 import type { PaneSource, PaneTab, Player, WhatIfState } from '../types'
+import { graphicsMode, imageSize, maxWidthPx, probe, probeOf, rasterOf, sourceOf, themeOf, TMUX_HINT, type GraphicsMode, type RasterRequest } from './graphics'
 import { hldTab } from './views/hld'
 import { legendLine, verdictLine } from './views/lines'
 import { lineView, type Ui } from './views/render'
 import { sequenceTab } from './views/sequenceTab'
 import { tabBar, tabBody, tabOf } from './views/tabs'
-import { NO_WHATIF, optionsOf, whatIfOf } from './views/whatif'
+import { liveOf, NO_WHATIF, optionsOf, whatIfOf } from './views/whatif'
 import { whatIfBanner, whatIfTab } from './views/whatifTab'
 
 /**
@@ -33,10 +34,16 @@ import { whatIfBanner, whatIfTab } from './views/whatifTab'
  * module) and hooks/layout.cjs (ELK, which the hooks run in Node).
  */
 
-type Draw = { ui: Ui; requestId: string; columns: number }
+/** Where a diagram is drawn: the elements, the site, the columns it has, and the rows a picture of it may take. */
+type Draw = { ui: Ui; requestId: string; columns: number; rows?: number }
 
 /** The `icons` setting: Nerd Font glyphs, plain symbols, or none. */
 let icons: IconStyle = 'nerd-font'
+/** The `graphics` setting: pictures where the terminal shows them (auto), always, or never (src/graphics.ts). */
+let graphics: GraphicsMode = 'auto'
+
+/** Rows a picture takes at most in the transcript; the pane gives it its own height. */
+const INLINE_ROWS = 40
 
 const PANE = 'proschi-view'
 /** The pane's one drawing, by the id its player is stored under. */
@@ -76,6 +83,7 @@ const FENCE = /^```proschi[^\n]*\n([\s\S]*?)\n```[ \t]*$/gm
 export function register(on: On, options: PluginOptions): void {
   const chosen = (options as { icons?: unknown }).icons
   icons = chosen === 'symbols' || chosen === 'none' ? chosen : 'nerd-font'
+  graphics = graphicsMode((options as { graphics?: unknown }).graphics)
 
   on('session.start', async ($, e, next) => {
     await $.command.register({ name: 'proschi', description: 'Proschi diagrams: /proschi view <file.proschi> shows one in a pane', argumentHint: 'view [--expand <id>,…] [--focus <id>] <file>' })
@@ -208,7 +216,8 @@ export function register(on: On, options: PluginOptions): void {
         </ui.Box>
       )
     }
-    const view = await diagramView($, { ui, requestId: PANE, columns }, PANE_VIEW, source, undefined, whatIf)
+    const bodyRows = 'scroll' in e.props && typeof (e.props.scroll as { bodyRows?: unknown } | undefined)?.bodyRows === 'number' ? (e.props.scroll as { bodyRows: number }).bodyRows : 0
+    const view = await diagramView($, { ui, requestId: PANE, columns, rows: Math.max(INLINE_ROWS, bodyRows - 10) }, PANE_VIEW, source, undefined, whatIf)
     if ('error' in view) return <ui.Text color="red">{view.error}</ui.Text>
     return (
       <ui.Box flexDirection="column">
@@ -423,7 +432,7 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
   const { ui } = d
   const loaded = await documentOf($, viewId, written, file, whatIf)
   if ('error' in loaded) return loaded
-  const { doc, source, key, player } = loaded
+  const { doc, base, source, key, player } = loaded
 
   const layout = layouts.get(key)
   if (!layout) {
@@ -464,6 +473,19 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
   const hasSystems = systems.length > 0 || player.focus !== undefined
   // Wide enough for the long labels, else the short ones.
   const roomy = view.width >= 79
+  // The same drawing as a picture, where the terminal shows them: what the cells would show, playback's frames included.
+  const request: RasterRequest = {
+    source,
+    options: {
+      theme: graphics === 'off' ? 'dark' : await themeOf($),
+      maxWidthPx: maxWidthPx(d.columns),
+      ...(doc.overlay && !playing ? { overlay: true } : {}),
+      ...(view.selected ? { selected: view.selected } : {}),
+      ...(whatIf && doc !== base ? { whatIf: liveOf(whatIf) } : {}),
+      ...(playing ? { play: { useCase: playing.useCase.id, scenario: playing.scenario.id } } : {}),
+    },
+  }
+  const picture = await pictureOf($, view, request, `${doc.diagram.title ?? title}: the architecture diagram as a picture`, step, progress === 0)
 
   return { element: (
     <ui.Box flexDirection="column">
@@ -476,7 +498,12 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
             </ui.Box>
           )}
       <ui.Box key={view.anchorKey} flexDirection="column">
-        {grid.columns > d.columns && (
+        {picture.hint && (
+          <ui.Text dimColor wrap="truncate-end">
+            {TMUX_HINT}
+          </ui.Text>
+        )}
+        {!picture.image && grid.columns > d.columns && (
           <ui.Text dimColor wrap="truncate-end">
             ↔ {grid.columns} columns wide, wider than the {d.columns} here: {view.inPane ? 'widen the window' : 'use ⛶ Focus or a wider window'} to see it whole.
           </ui.Text>
@@ -507,7 +534,7 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
             … {doc.warnings.length - INLINE_WARNINGS} more: ⛶ Focus, then Analysis
           </ui.Text>
         )}
-        <ui.Raster key={view.rasterKey} columns={grid.columns} rows={grid.rows} cells={grid.toBase64()} />
+        {picture.image ?? <ui.Raster key={view.rasterKey} columns={grid.columns} rows={grid.rows} cells={grid.toBase64()} />}
         {doc.edges && !playing && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)}
       </ui.Box>
       {verdict && !playing && (
@@ -526,6 +553,36 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
       </ui.Box>
     </ui.Box>
   ), systems: hasSystems }
+}
+
+/** The picture a drawing shows in place of its Raster, by view id: what the animation swaps frames into. */
+const images = new Map<string, { key: string; frames?: string[][]; form?: 'file' | 'png' }>()
+
+/**
+ * The diagram as an Image where the terminal shows pictures (src/graphics.ts,
+ * D11), else none and the Raster stands: with graphics off, where the
+ * terminal was found to show none (auto), while the PNGs are drawn, or when
+ * the helper fails. Playing, the step's first frame while it animates from
+ * the start, else its last. With `hint`, tmux holds pictures back.
+ */
+async function pictureOf($: EngineInterface, view: View, request: RasterRequest, alt: string, step: number, fromStart: boolean): Promise<{ image?: RenderElement; hint?: boolean }> {
+  const { ui } = view.d
+  images.delete(view.viewId)
+  if (graphics === 'off') return {}
+  const probed = await probeOf($)
+  const hint = probed.status === 'tmux'
+  if (graphics === 'auto' && (probed.status === 'no' || probed.status === 'tmux')) return { hint }
+  const out = rasterOf($, request)
+  if (!out || 'error' in out) return { hint }
+  const frames = request.options.play ? out.frames : undefined
+  if (request.options.play && !frames?.length) return { hint }
+  const shown = frames?.[step]
+  const file = shown?.length ? shown[fromStart ? 0 : shown.length - 1]! : out.base
+  const size = imageSize(out, view.d.columns, view.d.rows ?? INLINE_ROWS)
+  const key = `img-${view.viewId}`
+  images.set(view.viewId, { key, ...(frames ? { frames } : {}), ...(probed.form ? { form: probed.form } : {}) })
+  if (probed.status === 'unknown') probe($, view.d.requestId, key, file)
+  return { hint, image: <ui.Image key={key} source={await sourceOf($, file, probed.form)} columns={size.columns} rows={size.rows} alt={alt} /> }
 }
 
 /** A system the keys can act on: a collapsed box or an expanded frame, by its id in the scene and its path from the root document. */
@@ -1002,6 +1059,7 @@ function animate($: EngineInterface, view: View, steps: FlowStep[]): void {
   stop(view.viewId)
   let started = -1
   let tick = 0
+  let sent = ''
   const timer = $.clock.every(FRAME, async () => {
     const player = normal(await read($, memberOf(players, { requestId: view.viewId })))
     if (player.mode !== 'play') return stop(view.viewId)
@@ -1009,8 +1067,20 @@ function animate($: EngineInterface, view: View, steps: FlowStep[]): void {
     const now = await $.clock.now()
     if (started < 0) started = now
     const elapsed = now - started
-    const play = playAt(view.scene, steps, step, Math.min(100, (elapsed / TRAVEL_MS) * 100), tick++)
-    await $.ui.blit({ requestId: view.d.requestId, key: view.rasterKey, cells: paint(view.scene, { overlay: view.overlay, edges: view.edges, icons, systems: view.systems, ...(view.selected ? { selected: view.selected } : {}), play }).toBase64() })
+    const progress = Math.min(100, (elapsed / TRAVEL_MS) * 100)
+    // Drawn as a picture, the helper's frame for this moment (frame k of n at k / (n - 1) of the way); else the cells.
+    const image = images.get(view.viewId)
+    const frames = image?.frames?.[step]
+    if (image && frames?.length) {
+      const file = frames[Math.round((progress / 100) * (frames.length - 1))]!
+      if (file !== sent) {
+        sent = file
+        await $.ui.blit({ requestId: view.d.requestId, key: image.key, source: await sourceOf($, file, image.form) })
+      }
+    } else {
+      const play = playAt(view.scene, steps, step, progress, tick++)
+      await $.ui.blit({ requestId: view.d.requestId, key: view.rasterKey, cells: paint(view.scene, { overlay: view.overlay, edges: view.edges, icons, systems: view.systems, ...(view.selected ? { selected: view.selected } : {}), play }).toBase64() })
+    }
     if (!player.isPlaying) {
       if (elapsed >= TRAVEL_MS) stop(view.viewId)
       return

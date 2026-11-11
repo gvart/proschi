@@ -485,7 +485,7 @@ var require_lz_string = __commonJS({
 });
 
 // ../plugin/src/register.tsx
-import { atom, memberOf, read, update } from "claude-code";
+import { atom as atom2, memberOf, read as read2, update as update2 } from "claude-code";
 
 // ../frontend/src/catalog/componentCatalog.ts
 var componentCatalog = [
@@ -1279,8 +1279,8 @@ function nodeBaseColor(node) {
   return category ? PALETTE[CATEGORY_COLOR[category]] : void 0;
 }
 var MIX = { fill: 0.12, groupFill: 0.06, line: 0.72 };
-function tint(base, theme) {
-  const { surface, ink } = CANVAS_TOKENS[theme];
+function tint(base, theme2) {
+  const { surface, ink } = CANVAS_TOKENS[theme2];
   return {
     fill: mix(base, surface, MIX.fill),
     groupFill: mix(base, surface, MIX.groupFill),
@@ -2080,9 +2080,9 @@ type OpenAI extends External {
 
 // ../frontend/src/dsl/typesys/stdlib.ts
 var cached;
-function loadStdlib(read2) {
+function loadStdlib(read3) {
   if (!cached) {
-    const files = STDLIB_SOURCES.map(({ source, path }) => read2(source, path));
+    const files = STDLIB_SOURCES.map(({ source, path }) => read3(source, path));
     const resolution = resolveTypes(files.flatMap((f) => f.decls.map((d) => ({ ...d, builtin: true }))));
     cached = { ...resolution, diagnostics: [...files.flatMap((f) => f.diagnostics), ...resolution.diagnostics] };
   }
@@ -3227,10 +3227,10 @@ var Parser = class _Parser {
         else if (n < 1) this.error("A fan-out needs at least one call per request: x1, x2, \u2026", at(match[0].length));
         else out.multiplier = n;
       } else {
-        const bytes = parseSize(size[1]);
+        const bytes2 = parseSize(size[1]);
         if (out.sizeBytes !== void 0) this.error("The payload size is given twice; write one ~<size>", at(match[0].length));
-        else if ("error" in bytes) this.error(bytes.error, at(match[0].length));
-        else out.sizeBytes = bytes.value;
+        else if ("error" in bytes2) this.error(bytes2.error, at(match[0].length));
+        else out.sizeBytes = bytes2.value;
       }
       offset += match[0].length;
       offset += label.slice(offset).length - label.slice(offset).trimStart().length;
@@ -4292,10 +4292,10 @@ var Parser = class _Parser {
     const atoms = [];
     let next = i;
     for (; ; ) {
-      const atom2 = this.parseSelectorAtom(tokens, next, line2);
-      if (!atom2) return void 0;
-      atoms.push(atom2);
-      next = atom2.next;
+      const atom3 = this.parseSelectorAtom(tokens, next, line2);
+      if (!atom3) return void 0;
+      atoms.push(atom3);
+      next = atom3.next;
       if (!isWord(tokens[next], "or")) break;
       next++;
     }
@@ -6376,13 +6376,13 @@ function computeEgressGb(diagram, traffic, kindOf2 = (id) => profileOfId(diagram
 }
 var BANDWIDTH_BOUND = (kind) => !["client", "external", "dns", "other", "storage", "cdn"].includes(kind);
 function computeBytesPerSecond(diagram, traffic) {
-  const bytes = /* @__PURE__ */ new Map();
+  const bytes2 = /* @__PURE__ */ new Map();
   forEachStepRate(diagram, traffic, (step, rate) => {
     if (!step.sizeBytes || step.sizeBytes <= 0) return;
     const b = rate * multiplierOf(step) * step.sizeBytes;
-    for (const id of /* @__PURE__ */ new Set([step.fromServiceId, step.toServiceId])) bytes.set(id, (bytes.get(id) ?? 0) + b);
+    for (const id of /* @__PURE__ */ new Set([step.fromServiceId, step.toServiceId])) bytes2.set(id, (bytes2.get(id) ?? 0) + b);
   });
-  return bytes;
+  return bytes2;
 }
 function profileOfId(diagram, id) {
   const node = diagram.nodes.find((n) => n.id === id);
@@ -6540,14 +6540,14 @@ function analyze(diagram, options = {}) {
   const drains = new Map((diagram.capacity ?? []).flatMap((o) => o.drainRps !== void 0 ? [[o.node, o.drainRps]] : []));
   const load = computeLoad(diagram, traffic);
   const egress = computeEgressGb(diagram, averageTraffic(traffic), kindOf2);
-  const bytes = computeBytesPerSecond(diagram, traffic);
+  const bytes2 = computeBytesPerSecond(diagram, traffic);
   const systems = diagram.systems?.length ? analyzeSystems(diagram, traffic, options) : void 0;
   const hops = /* @__PURE__ */ new Map();
   const nodeResults = nodes.map((n) => {
     const p = profiles.get(n.id);
     const replicas = Math.max(1, options.replicas?.get(n.id) ?? replicasOf(n));
-    const { read: read2, write } = load.get(n.id) ?? { read: 0, write: 0 };
-    const usage = usageOf(p, replicas, read2, write, bytes.get(n.id) ?? 0);
+    const { read: read3, write } = load.get(n.id) ?? { read: 0, write: 0 };
+    const usage = usageOf(p, replicas, read3, write, bytes2.get(n.id) ?? 0);
     const servers = serversOf(usage, replicas);
     const hop = hopModel(p.latencyMs, usage.utilization, servers);
     hops.set(n.id, hop);
@@ -6572,7 +6572,7 @@ function analyze(diagram, options = {}) {
       egressUsd,
       durable: p.durable,
       ...down ? { failed: true } : {},
-      ...drains.has(n.id) ? { queue: queueOf(read2 + write, drains.get(n.id)) } : {},
+      ...drains.has(n.id) ? { queue: queueOf(read3 + write, drains.get(n.id)) } : {},
       ...retries.has(n.id) ? { retry: { ...retries.get(n.id), stormRisk: usage.utilization >= HOT && retries.get(n.id).retries > 0 && retries.get(n.id).errorRate > 0 } } : {}
     };
   });
@@ -6975,8 +6975,8 @@ function writeGap(run, u, s, accept, isWrite = run.isWrite) {
   if (early) return { kind: "async", step: early.m.step };
   const late = writes.find(({ i }) => i >= beforeResponse);
   if (late) return { kind: "after", step: late.m.step };
-  const read2 = hits.find(({ m, i }) => i < beforeResponse && !m.async);
-  if (read2) return { kind: "read", step: read2.m.step };
+  const read3 = hits.find(({ m, i }) => i < beforeResponse && !m.async);
+  if (read3) return { kind: "read", step: read3.m.step };
   return { kind: "none" };
 }
 function writesCheck(run, u, scenarios, accept, what) {
@@ -8125,19 +8125,19 @@ var Grid = class {
   }
 };
 var ALPHABET2 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-function base64(bytes) {
+function base64(bytes2) {
   let out = "";
   let i = 0;
-  for (; i + 2 < bytes.length; i += 3) {
-    const n = bytes[i] << 16 | bytes[i + 1] << 8 | bytes[i + 2];
+  for (; i + 2 < bytes2.length; i += 3) {
+    const n = bytes2[i] << 16 | bytes2[i + 1] << 8 | bytes2[i + 2];
     out += ALPHABET2[n >> 18] + ALPHABET2[n >> 12 & 63] + ALPHABET2[n >> 6 & 63] + ALPHABET2[n & 63];
   }
-  const rest = bytes.length - i;
+  const rest = bytes2.length - i;
   if (rest === 1) {
-    const n = bytes[i] << 16;
+    const n = bytes2[i] << 16;
     out += ALPHABET2[n >> 18] + ALPHABET2[n >> 12 & 63] + "==";
   } else if (rest === 2) {
-    const n = bytes[i] << 16 | bytes[i + 1] << 8;
+    const n = bytes2[i] << 16 | bytes2[i + 1] << 8;
     out += ALPHABET2[n >> 18] + ALPHABET2[n >> 12 & 63] + ALPHABET2[n >> 6 & 63] + "=";
   }
   return out;
@@ -9025,6 +9025,112 @@ function groupByEndpoint(useCases) {
     groups.set(label, [...groups.get(label) ?? [], u]);
   }
   return [...groups].map(([label, list]) => ({ label, useCases: list }));
+}
+
+// ../plugin/src/graphics.ts
+import { atom, read, update } from "claude-code";
+var graphicsMode = (value) => value === "on" || value === "off" ? value : "auto";
+var UNKNOWN = { status: "unknown" };
+var probed = atom({ plugin: "proschi", key: "graphics" }, UNKNOWN);
+var TMUX_HINT = "tmux: set allow-passthrough on and focus-events on for pixel diagrams";
+var PX_PER_COLUMN = 16;
+var MAX_PNG_BYTES = 2 * 1024 * 1024;
+var PROBE_TRIES = 6;
+var PROBE_MS = 150;
+var rasters = /* @__PURE__ */ new Map();
+var pending = /* @__PURE__ */ new Set();
+var bytes = /* @__PURE__ */ new Map();
+var cache;
+var theme;
+var probing = false;
+async function cacheDir($) {
+  if (cache) return cache;
+  const dir = await $.env.get("TMPDIR").catch(() => void 0);
+  cache = `${(dir || "/tmp").replace(/\/+$/, "")}/proschi-raster`;
+  return cache;
+}
+async function themeOf($) {
+  if (theme) return theme;
+  const rows = await $.config.list().catch(() => []);
+  theme = /light/i.test(String(rows.find((row) => row.key === "theme")?.value ?? "")) ? "light" : "dark";
+  return theme;
+}
+function rasterOf($, request2) {
+  const key = `${keyOf(request2.source)}\0${JSON.stringify(request2.options)}`;
+  const done = rasters.get(key);
+  if (done || pending.has(key)) return done;
+  pending.add(key);
+  void (async () => {
+    const outDir = await cacheDir($);
+    const { source, path, imports, view } = request2.source;
+    const stdin = JSON.stringify({ source, path, imports, view, outDir, options: request2.options });
+    const answer = await $.process.run(["node", `${$.plugin.root}/hooks/raster.cjs`], { stdin, timeoutMs: 6e4 }).then(
+      ({ exitCode, stdout, stderr }) => {
+        if (exitCode !== 0) return { error: stderr.trim() || `raster exited with ${exitCode}` };
+        const out = JSON.parse(stdout);
+        return typeof out.base === "string" && out.width > 0 && out.height > 0 ? out : { error: "raster answered no picture" };
+      },
+      (error) => ({ error: String(error) })
+    ).catch((error) => ({ error: String(error) }));
+    if ("error" in answer) $.ui.log(`proschi: no picture, the text drawing stands: ${answer.error}`, { to: "debug" });
+    rasters.set(key, answer);
+    pending.delete(key);
+    $.ui.invalidate("ui.render");
+  })();
+  return void 0;
+}
+var maxWidthPx = (columns) => Math.max(1, Math.min(255, columns)) * PX_PER_COLUMN;
+function imageSize(out, room, maxRows) {
+  let columns = Math.max(1, Math.min(255, room, out.cellHint.columns));
+  let rows = Math.max(1, Math.round(columns * out.height / out.width / 2));
+  const cap = Math.max(1, Math.min(255, maxRows));
+  if (rows > cap) {
+    rows = cap;
+    columns = Math.max(1, Math.min(columns, Math.round(rows * 2 * out.width / out.height)));
+  }
+  return { columns, rows };
+}
+async function sourceOf($, file, form) {
+  if (form !== "png") return { file, format: "png" };
+  const png = await pngOf($, file);
+  return png ? { png } : { file, format: "png" };
+}
+async function pngOf($, file) {
+  const known = bytes.get(file);
+  if (known) return known;
+  const read3 = await $.fs.read(file, { as: "bytes" }).catch(() => void 0);
+  if (!read3 || read3.base64.length * 3 / 4 > MAX_PNG_BYTES) return void 0;
+  if (bytes.size >= 48) bytes.delete(bytes.keys().next().value);
+  bytes.set(file, read3.base64);
+  return read3.base64;
+}
+async function probeOf($) {
+  const p = await read($, probed);
+  return p && (p.status === "yes" || p.status === "no" || p.status === "tmux") ? p : UNKNOWN;
+}
+function probe($, requestId, key, file) {
+  if (probing) return;
+  probing = true;
+  let tries = 0;
+  const settle = async (answer) => {
+    timer.cancel();
+    probing = false;
+    if (!answer) return;
+    await update($, probed, () => answer);
+    $.ui.invalidate("ui.render");
+  };
+  const timer = $.clock.every(PROBE_MS, async () => {
+    if (tries++ >= PROBE_TRIES) return settle({ status: "no" });
+    const byName = await $.ui.blit({ requestId, key, source: { file, format: "png" } }).catch((error) => ({ deny: String(error), fix: void 0 }));
+    if (!byName.deny) return settle({ status: "yes", form: "file" });
+    if (byName.fix === "tmux-passthrough") return settle({ status: "tmux" });
+    if (/no-surface/.test(byName.deny)) return settle(void 0);
+    const png = await pngOf($, file);
+    if (!png) return;
+    const asBytes = await $.ui.blit({ requestId, key, source: { png } }).catch((error) => ({ deny: String(error), fix: void 0 }));
+    if (!asBytes.deny) return settle({ status: "yes", form: "png" });
+    if (asBytes.fix === "tmux-passthrough") return settle({ status: "tmux" });
+  });
 }
 
 // ../frontend/src/hld/hld.ts
@@ -10370,15 +10476,17 @@ function whatIfTab(t) {
 
 // ../plugin/src/register.tsx
 var icons = "nerd-font";
+var graphics = "auto";
+var INLINE_ROWS = 40;
 var PANE = "proschi-view";
 var PANE_VIEW = `${PANE}:0`;
 var IDLE = { pick: "", step: 0, isPlaying: false, mode: "diagram", explorer: false, expanded: [] };
 var NO_SOURCE = { source: "" };
-var paneFile = atom({ plugin: "proschi", key: "paneFile" }, "");
-var paneSource = atom({ plugin: "proschi", key: "paneSource" }, NO_SOURCE);
-var players = atom({ plugin: "proschi", key: "player" }, IDLE);
-var paneTab = atom({ plugin: "proschi", key: "paneTab" }, "diagram");
-var paneWhatIf = atom({ plugin: "proschi", key: "paneWhatIf" }, NO_WHATIF);
+var paneFile = atom2({ plugin: "proschi", key: "paneFile" }, "");
+var paneSource = atom2({ plugin: "proschi", key: "paneSource" }, NO_SOURCE);
+var players = atom2({ plugin: "proschi", key: "player" }, IDLE);
+var paneTab = atom2({ plugin: "proschi", key: "paneTab" }, "diagram");
+var paneWhatIf = atom2({ plugin: "proschi", key: "paneWhatIf" }, NO_WHATIF);
 var PANE_KEYS = "1-6 tabs \xB7 p play \xB7 n/b step \xB7 r restart \xB7 e end \xB7 x explorer \xB7 d diagram \xB7 esc back to the prompt";
 var TAB_KEYS = "1-6 tabs \xB7 \u2191\u2193 scroll \xB7 esc back to the prompt";
 var SYSTEM_KEYS = "s next system \xB7 o open/close \xB7 f focus in \xB7 u back out";
@@ -10390,7 +10498,7 @@ var HINT = [
   "Mermaid or ASCII art when showing an architecture or a request flow."
 ].join(" ");
 var layouts = /* @__PURE__ */ new Map();
-var pending = /* @__PURE__ */ new Set();
+var pending2 = /* @__PURE__ */ new Set();
 var documents = /* @__PURE__ */ new Map();
 var scenes = /* @__PURE__ */ new Map();
 var timers = /* @__PURE__ */ new Map();
@@ -10398,6 +10506,7 @@ var FENCE = /^```proschi[^\n]*\n([\s\S]*?)\n```[ \t]*$/gm;
 function register(on, options) {
   const chosen = options.icons;
   icons = chosen === "symbols" || chosen === "none" ? chosen : "nerd-font";
+  graphics = graphicsMode(options.graphics);
   on("session.start", async ($, e, next) => {
     await $.command.register({ name: "proschi", description: "Proschi diagrams: /proschi view <file.proschi> shows one in a pane", argumentHint: "view [--expand <id>,\u2026] [--focus <id>] <file>" });
     return next(e);
@@ -10427,9 +10536,9 @@ function register(on, options) {
       if (refused) return { text: refused };
     }
     stop(PANE_VIEW);
-    await update($, memberOf(players, { requestId: PANE_VIEW }), () => ({ ...IDLE, expanded: view.expanded ?? [], ...view.focus !== void 0 ? { focus: view.focus } : {} }));
-    await update($, paneFile, () => file);
-    await update($, paneWhatIf, () => NO_WHATIF);
+    await update2($, memberOf(players, { requestId: PANE_VIEW }), () => ({ ...IDLE, expanded: view.expanded ?? [], ...view.focus !== void 0 ? { focus: view.focus } : {} }));
+    await update2($, paneFile, () => file);
+    await update2($, paneWhatIf, () => NO_WHATIF);
     await $.ui.open({ id: PANE, title: `Proschi \xB7 ${basename(file)}` });
     watch($, file);
     return { text: `Showing ${file} in the Proschi pane.` };
@@ -10476,20 +10585,20 @@ function register(on, options) {
       return /* @__PURE__ */ h(Text, null, "The Proschi pane draws in a terminal.");
     }
     const ui = $.ui.resolve(e);
-    const file = await read($, paneFile);
-    const focused = file ? NO_SOURCE : await read($, paneSource);
+    const file = await read2($, paneFile);
+    const focused = file ? NO_SOURCE : await read2($, paneSource);
     if (!file && !focused.source) return /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Run /proschi view <file.proschi>.");
     const source = file ? await readWithImports($, file).catch(() => void 0) : focused;
     if (!source) return /* @__PURE__ */ h(ui.Text, { color: "red" }, "Cannot read ", file, ".");
     const columns = "bodyColumns" in e.props && typeof e.props.bodyColumns === "number" ? e.props.bodyColumns : (e.viewport?.columns ?? 120) - 4;
     const isFocused = "isFocused" in e.props && e.props.isFocused === true;
-    const tab = tabOf(await read($, paneTab));
-    const whatIf = whatIfOf(await read($, paneWhatIf));
+    const tab = tabOf(await read2($, paneTab));
+    const whatIf = whatIfOf(await read2($, paneWhatIf));
     const loaded = await documentOf($, PANE_VIEW, source, void 0, whatIf);
     const failing = "error" in loaded ? 0 : loaded.doc.tests.filter((t) => !t.passed).length;
-    const setWhatIf = (fn) => void update($, paneWhatIf, (w) => fn(whatIfOf(w)));
+    const setWhatIf = (fn) => void update2($, paneWhatIf, (w) => fn(whatIfOf(w)));
     const banner = "error" in loaded || loaded.doc === loaded.base ? void 0 : whatIfBanner(ui, loaded.base, whatIf, columns, tab !== "diagram", () => setWhatIf((w) => ({ ...NO_WHATIF, ...w.node ? { node: w.node } : {} })));
-    const bar = tabBar(ui, tab, failing, (to) => void update($, paneTab, () => to));
+    const bar = tabBar(ui, tab, failing, (to) => void update2($, paneTab, () => to));
     const keys = (systems) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, isFocused ? tab === "diagram" ? PANE_KEYS : TAB_KEYS : "ctrl+x tab focuses the pane for its keys"), isFocused && systems && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, SYSTEM_KEYS));
     if (tab !== "diagram") {
       if ("error" in loaded) return /* @__PURE__ */ h(ui.Text, { color: "red" }, loaded.error);
@@ -10498,7 +10607,8 @@ function register(on, options) {
       const body = tab === "whatif" ? whatIfTab({ ui, base, key, now: doc, w: whatIf, set: setWhatIf, columns }) : tab === "sequence" ? sequenceTab({ ui, diagram: doc.diagram, player, columns, pick: (value) => void paneStep($, doc, (p) => ({ ...p, pick: value, step: 0, isPlaying: false })), go: (step, isPlaying) => void paneStep($, doc, (p) => ({ ...p, mode: "play", step, isPlaying })), pause: () => void paneStep($, doc, (p) => ({ ...p, isPlaying: false })) }) : tab === "hld" ? hldTab(ui, base, key, (surface, text) => void copy($, surface, text, "the HLD markdown")) : tabBody(ui, tab, doc, columns);
       return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, bar, banner, body, keys(false));
     }
-    const view = await diagramView($, { ui, requestId: PANE, columns }, PANE_VIEW, source, void 0, whatIf);
+    const bodyRows2 = "scroll" in e.props && typeof e.props.scroll?.bodyRows === "number" ? e.props.scroll.bodyRows : 0;
+    const view = await diagramView($, { ui, requestId: PANE, columns, rows: Math.max(INLINE_ROWS, bodyRows2 - 10) }, PANE_VIEW, source, void 0, whatIf);
     if ("error" in view) return /* @__PURE__ */ h(ui.Text, { color: "red" }, view.error);
     return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, bar, banner, view.element, keys(view.systems));
   });
@@ -10554,10 +10664,10 @@ async function readRemote($, root, spec, locked) {
   const file = `${root}/${CACHE_DIR}/${hash}`;
   if (!await $.fs.exists(file)) throw remoteError.notCached(spec);
   const { base64: base642 } = await $.fs.read(file, { as: "bytes" });
-  const bytes = Uint8Array.from(atob(base642), (c) => c.charCodeAt(0));
-  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  const bytes2 = Uint8Array.from(atob(base642), (c) => c.charCodeAt(0));
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes2));
   if ([...digest].map((b) => b.toString(16).padStart(2, "0")).join("") !== hash) throw remoteError.altered(spec);
-  return new TextDecoder().decode(bytes);
+  return new TextDecoder().decode(bytes2);
 }
 function watch($, file) {
   stop(PANE);
@@ -10565,7 +10675,7 @@ function watch($, file) {
   timers.set(
     PANE,
     $.clock.every(1e3, async () => {
-      if (await read($, paneFile) !== file) return;
+      if (await read2($, paneFile) !== file) return;
       const stat = await $.fs.stat(file).catch(() => void 0);
       const mtime = stat && "mtimeMs" in stat ? Number(stat.mtimeMs) : 0;
       if (seen && mtime !== seen) $.ui.invalidate("ui.render");
@@ -10574,8 +10684,8 @@ function watch($, file) {
   );
 }
 function requestLayout($, key, source) {
-  if (pending.has(key)) return;
-  pending.add(key);
+  if (pending2.has(key)) return;
+  pending2.add(key);
   void $.process.run(["node", `${$.plugin.root}/hooks/layout.cjs`], { stdin: JSON.stringify(source), timeoutMs: 3e4 }).then(
     ({ exitCode, stdout, stderr }) => {
       layouts.set(key, exitCode === 0 ? JSON.parse(stdout) : { error: stderr.trim() || `layout exited with ${exitCode}` });
@@ -10584,7 +10694,7 @@ function requestLayout($, key, source) {
       layouts.set(key, { error: `Proschi lays diagrams out with Node.js 18 or newer, which did not start: ${String(error)}` });
     }
   ).finally(() => {
-    pending.delete(key);
+    pending2.delete(key);
     $.ui.invalidate("ui.render");
   });
 }
@@ -10608,7 +10718,7 @@ var PAUSE = "\u275A\u275A Pause";
 var PLAY = " \u25B6 Play ";
 var BARS_WIDTH = 80;
 async function documentOf($, viewId, written, file, whatIf) {
-  const player = normal(await read($, memberOf(players, { requestId: viewId })));
+  const player = normal(await read2($, memberOf(players, { requestId: viewId })));
   const shown = { ...player.expanded.length ? { expanded: player.expanded } : {}, ...player.focus !== void 0 ? { focus: player.focus } : {} };
   const source = shown.expanded || shown.focus !== void 0 ? { ...written, view: shown } : written;
   const key = keyOf(source);
@@ -10638,7 +10748,7 @@ async function diagramView($, d, viewId, written, file, whatIf) {
   const { ui } = d;
   const loaded = await documentOf($, viewId, written, file, whatIf);
   if ("error" in loaded) return loaded;
-  const { doc, source, key, player } = loaded;
+  const { doc, base, source, key, player } = loaded;
   const layout = layouts.get(key);
   if (!layout) {
     requestLayout($, key, source);
@@ -10671,7 +10781,39 @@ async function diagramView($, d, viewId, written, file, whatIf) {
   const verdict = verdictLine(doc.tests, view.width - (view.inPane ? 0 : 13));
   const hasSystems = systems.length > 0 || player.focus !== void 0;
   const roomy = view.width >= 79;
-  return { element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, playing ? playerHeader($, view, playing, player) : doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, grid.columns > d.columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", grid.columns, " columns wide, wider than the ", d.columns, " here: ", view.inPane ? "widen the window" : "use \u26F6 Focus or a wider window", " to see it whole."), lost.some((name) => !importReasons.has(name)) && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u26A0 Not found, so drawn as plain boxes: ", lost.filter((name) => !importReasons.has(name)).join(", ")), lost.filter((name) => importReasons.has(name)).map((name) => /* @__PURE__ */ h(ui.Text, { key: `lost-${name}`, dimColor: true }, "\u26A0 ", importReasons.get(name))), doc.notes.map((note2) => /* @__PURE__ */ h(ui.Text, { color: "yellow" }, "\u26A0 ", note2.text, note2.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true }, " \u2192 ", note2.hint))), (view.inPane ? doc.warnings : doc.warnings.slice(0, INLINE_WARNINGS)).map((w) => /* @__PURE__ */ h(ui.Text, { key: `warn-${w}`, color: "yellow", wrap: "truncate-end" }, "\u26A0 ", w)), !view.inPane && doc.warnings.length > INLINE_WARNINGS && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2026 ", doc.warnings.length - INLINE_WARNINGS, " more: \u26F6 Focus, then Analysis"), /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), doc.edges && !playing && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)), verdict && !playing && /* @__PURE__ */ h(ui.Box, { key: `verdict-${viewId}`, flexDirection: "row", gap: 1, width: view.width }, lineView(ui, verdict), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `tests-${viewId}`, label: "\u26F6 Details", dimColor: true, onPress: () => focus($, view, title, what, "tests") })), hasSystems && !playing && systemBar($, view, doc, systems, selected, player), playing ? stepPanel($, view, playing, step, player) : pick2 && useCaseBar($, view, doc, pick2, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: roomy ? "\u29C9 Copy source" : "\u29C9 Source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: roomy ? "\u29C9 Copy share link" : "\u29C9 Link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: roomy ? "\u2197 Open in Proschi" : "\u2197 Open", variant: "primary", onPress: (press) => void openLink($, press.surface, link) }), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `focus-${viewId}`, label: "\u26F6 Focus", onPress: () => focus($, view, title, what) }))), systems: hasSystems };
+  const request2 = {
+    source,
+    options: {
+      theme: graphics === "off" ? "dark" : await themeOf($),
+      maxWidthPx: maxWidthPx(d.columns),
+      ...doc.overlay && !playing ? { overlay: true } : {},
+      ...view.selected ? { selected: view.selected } : {},
+      ...whatIf && doc !== base ? { whatIf: liveOf(whatIf) } : {},
+      ...playing ? { play: { useCase: playing.useCase.id, scenario: playing.scenario.id } } : {}
+    }
+  };
+  const picture = await pictureOf($, view, request2, `${doc.diagram.title ?? title}: the architecture diagram as a picture`, step, progress === 0);
+  return { element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, playing ? playerHeader($, view, playing, player) : doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, picture.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, TMUX_HINT), !picture.image && grid.columns > d.columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", grid.columns, " columns wide, wider than the ", d.columns, " here: ", view.inPane ? "widen the window" : "use \u26F6 Focus or a wider window", " to see it whole."), lost.some((name) => !importReasons.has(name)) && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u26A0 Not found, so drawn as plain boxes: ", lost.filter((name) => !importReasons.has(name)).join(", ")), lost.filter((name) => importReasons.has(name)).map((name) => /* @__PURE__ */ h(ui.Text, { key: `lost-${name}`, dimColor: true }, "\u26A0 ", importReasons.get(name))), doc.notes.map((note2) => /* @__PURE__ */ h(ui.Text, { color: "yellow" }, "\u26A0 ", note2.text, note2.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true }, " \u2192 ", note2.hint))), (view.inPane ? doc.warnings : doc.warnings.slice(0, INLINE_WARNINGS)).map((w) => /* @__PURE__ */ h(ui.Text, { key: `warn-${w}`, color: "yellow", wrap: "truncate-end" }, "\u26A0 ", w)), !view.inPane && doc.warnings.length > INLINE_WARNINGS && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2026 ", doc.warnings.length - INLINE_WARNINGS, " more: \u26F6 Focus, then Analysis"), picture.image ?? /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), doc.edges && !playing && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)), verdict && !playing && /* @__PURE__ */ h(ui.Box, { key: `verdict-${viewId}`, flexDirection: "row", gap: 1, width: view.width }, lineView(ui, verdict), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `tests-${viewId}`, label: "\u26F6 Details", dimColor: true, onPress: () => focus($, view, title, what, "tests") })), hasSystems && !playing && systemBar($, view, doc, systems, selected, player), playing ? stepPanel($, view, playing, step, player) : pick2 && useCaseBar($, view, doc, pick2, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: roomy ? "\u29C9 Copy source" : "\u29C9 Source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: roomy ? "\u29C9 Copy share link" : "\u29C9 Link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: roomy ? "\u2197 Open in Proschi" : "\u2197 Open", variant: "primary", onPress: (press) => void openLink($, press.surface, link) }), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `focus-${viewId}`, label: "\u26F6 Focus", onPress: () => focus($, view, title, what) }))), systems: hasSystems };
+}
+var images = /* @__PURE__ */ new Map();
+async function pictureOf($, view, request2, alt, step, fromStart) {
+  const { ui } = view.d;
+  images.delete(view.viewId);
+  if (graphics === "off") return {};
+  const probed2 = await probeOf($);
+  const hint = probed2.status === "tmux";
+  if (graphics === "auto" && (probed2.status === "no" || probed2.status === "tmux")) return { hint };
+  const out = rasterOf($, request2);
+  if (!out || "error" in out) return { hint };
+  const frames = request2.options.play ? out.frames : void 0;
+  if (request2.options.play && !frames?.length) return { hint };
+  const shown = frames?.[step];
+  const file = shown?.length ? shown[fromStart ? 0 : shown.length - 1] : out.base;
+  const size = imageSize(out, view.d.columns, view.d.rows ?? INLINE_ROWS);
+  const key = `img-${view.viewId}`;
+  images.set(view.viewId, { key, ...frames ? { frames } : {}, ...probed2.form ? { form: probed2.form } : {} });
+  if (probed2.status === "unknown") probe($, view.d.requestId, key, file);
+  return { hint, image: /* @__PURE__ */ h(ui.Image, { key, source: await sourceOf($, file, probed2.form), columns: size.columns, rows: size.rows, alt }) };
 }
 function selectable(scene, focus2) {
   return [...scene.nodes.values()].map((n) => n.node).filter((n) => n.kind === "system" || n.kind === "group" && n.system === n.id).map((n) => ({ id: n.id, path: focus2 !== void 0 ? `${focus2}.${n.id}` : n.id, name: n.name, expanded: n.kind === "group" }));
@@ -10870,20 +11012,20 @@ async function scroll($, args) {
 function focus($, view, title, what, tab = "diagram") {
   const opened = $.ui.open({ id: PANE, title: `Proschi \xB7 ${title}`, focus: true, closeOnEscape: true });
   void (async () => {
-    await update($, paneTab, () => tab);
-    const player = normal(await read($, memberOf(players, { requestId: view.viewId })));
+    await update2($, paneTab, () => tab);
+    const player = normal(await read2($, memberOf(players, { requestId: view.viewId })));
     if (player.isPlaying) await setPlayer($, view, (p) => ({ ...p, isPlaying: false }));
     stop(PANE_VIEW);
-    await update($, memberOf(players, { requestId: PANE_VIEW }), () => player);
-    await update($, paneWhatIf, () => NO_WHATIF);
+    await update2($, memberOf(players, { requestId: PANE_VIEW }), () => player);
+    await update2($, paneWhatIf, () => NO_WHATIF);
     if ("file" in what) {
-      await update($, paneFile, () => what.file);
+      await update2($, paneFile, () => what.file);
       watch($, what.file);
     } else {
       const { source, path, imports } = what.source;
       stop(PANE);
-      await update($, paneFile, () => "");
-      await update($, paneSource, () => ({ source, ...path ? { path } : {}, ...imports ? { imports } : {} }));
+      await update2($, paneFile, () => "");
+      await update2($, paneSource, () => ({ source, ...path ? { path } : {}, ...imports ? { imports } : {} }));
     }
     const placed = await opened;
     if (!placed.isPlaced) $.ui.toast(`The Proschi pane is open but not shown: ${placed.reason}`);
@@ -10892,11 +11034,11 @@ function focus($, view, title, what, tab = "diagram") {
 async function setPlayer($, view, fn, steps) {
   stop(view.viewId);
   if (steps && steps.length > 0) animate($, view, steps);
-  await update($, memberOf(players, { requestId: view.viewId }), (p) => fn(normal(p)));
+  await update2($, memberOf(players, { requestId: view.viewId }), (p) => fn(normal(p)));
 }
 async function paneStep($, doc, fn) {
   stop(PANE_VIEW);
-  await update($, memberOf(players, { requestId: PANE_VIEW }), (p) => {
+  await update2($, memberOf(players, { requestId: PANE_VIEW }), (p) => {
     const next = fn(normal(p));
     const picks = doc.diagram.useCases.flatMap((u) => u.scenarios.map((s) => ({ value: `${u.id}:${s.id}`, steps: s.steps.length })));
     const pick2 = picks.find((x) => x.value === next.pick) ?? picks[0];
@@ -10907,16 +11049,16 @@ function stepper($, doc) {
   timers.set(
     PANE_VIEW,
     $.clock.every(STEP_MS, async () => {
-      const p = normal(await read($, memberOf(players, { requestId: PANE_VIEW })));
+      const p = normal(await read2($, memberOf(players, { requestId: PANE_VIEW })));
       const steps = doc.diagram.useCases.flatMap((u) => u.scenarios.map((s) => ({ value: `${u.id}:${s.id}`, steps: s.steps }))).find((x) => x.value === p.pick)?.steps ?? [];
-      if (tabOf(await read($, paneTab)) !== "sequence" || p.mode !== "play" || !p.isPlaying || steps.length === 0) {
+      if (tabOf(await read2($, paneTab)) !== "sequence" || p.mode !== "play" || !p.isPlaying || steps.length === 0) {
         stop(PANE_VIEW);
         $.ui.invalidate("ui.render");
         return;
       }
       const last = p.step >= steps.length - 1;
       if (last) stop(PANE_VIEW);
-      await update($, memberOf(players, { requestId: PANE_VIEW }), (q) => ({ ...normal(q), step: last ? p.step : p.step + 1, isPlaying: !last }));
+      await update2($, memberOf(players, { requestId: PANE_VIEW }), (q) => ({ ...normal(q), step: last ? p.step : p.step + 1, isPlaying: !last }));
     })
   );
 }
@@ -10928,15 +11070,27 @@ function animate($, view, steps) {
   stop(view.viewId);
   let started = -1;
   let tick = 0;
+  let sent = "";
   const timer = $.clock.every(FRAME3, async () => {
-    const player = normal(await read($, memberOf(players, { requestId: view.viewId })));
+    const player = normal(await read2($, memberOf(players, { requestId: view.viewId })));
     if (player.mode !== "play") return stop(view.viewId);
     const step = Math.max(0, Math.min(player.step, steps.length - 1));
     const now = await $.clock.now();
     if (started < 0) started = now;
     const elapsed = now - started;
-    const play = playAt(view.scene, steps, step, Math.min(100, elapsed / TRAVEL_MS * 100), tick++);
-    await $.ui.blit({ requestId: view.d.requestId, key: view.rasterKey, cells: paint(view.scene, { overlay: view.overlay, edges: view.edges, icons, systems: view.systems, ...view.selected ? { selected: view.selected } : {}, play }).toBase64() });
+    const progress = Math.min(100, elapsed / TRAVEL_MS * 100);
+    const image = images.get(view.viewId);
+    const frames = image?.frames?.[step];
+    if (image && frames?.length) {
+      const file = frames[Math.round(progress / 100 * (frames.length - 1))];
+      if (file !== sent) {
+        sent = file;
+        await $.ui.blit({ requestId: view.d.requestId, key: image.key, source: await sourceOf($, file, image.form) });
+      }
+    } else {
+      const play = playAt(view.scene, steps, step, progress, tick++);
+      await $.ui.blit({ requestId: view.d.requestId, key: view.rasterKey, cells: paint(view.scene, { overlay: view.overlay, edges: view.edges, icons, systems: view.systems, ...view.selected ? { selected: view.selected } : {}, play }).toBase64() });
+    }
     if (!player.isPlaying) {
       if (elapsed >= TRAVEL_MS) stop(view.viewId);
       return;
@@ -10945,7 +11099,7 @@ function animate($, view, steps) {
     started = -1;
     const last = step >= steps.length - 1;
     if (last) stop(view.viewId);
-    await update($, memberOf(players, { requestId: view.viewId }), (p) => ({ ...normal(p), step: last ? step : step + 1, isPlaying: !last }));
+    await update2($, memberOf(players, { requestId: view.viewId }), (p) => ({ ...normal(p), step: last ? step : step + 1, isPlaying: !last }));
     if (view.inPane) await scroll($, { to: { key: view.anchorKey }, in: PANE, block: "nearest" });
   });
   timers.set(view.viewId, timer);

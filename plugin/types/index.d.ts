@@ -38,6 +38,14 @@ export type WhatIfState = {
   sweep?: string
 }
 
+/**
+ * Whether this terminal shows the diagrams as pictures (src/graphics.ts), as
+ * the first picture drawn found out: `yes` (by file name, or as PNG bytes
+ * where the terminal needs them), `no` (it draws the alt), `tmux` (tmux holds
+ * them back: its allow-passthrough or focus-events is off), or not asked yet.
+ */
+export type GraphicsProbe = { status: 'unknown' | 'yes' | 'no' | 'tmux'; form?: 'file' | 'png' }
+
 declare module 'claude-code' {
   interface PluginState {
     proschi: {
@@ -51,6 +59,8 @@ declare module 'claude-code' {
       paneTab: PaneTab
       /** The pane's what-if; read through `whatIfOf`, as a version before what-ifs stored none. */
       paneWhatIf: WhatIfState
+      /** Whether the terminal shows pictures, once asked; read through `probeOf`. */
+      graphics: GraphicsProbe
     }
   }
 }
