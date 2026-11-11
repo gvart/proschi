@@ -173,10 +173,12 @@ text. The code is `plugin/src/graphics.ts`.
   scenario plays, as the canvas fades it), the selected system, the pane's
   what-if (`whatIf`, added to the helper's input).
 - **Playback.** Playing, the helper is asked once for the scenario's frames
-  (8 a step) and the Image shows the step's first frame while it animates,
-  its last otherwise. `animate` blits frame `round(progress · (n − 1))`
-  by file on its 50 ms tick when it changes; until the frames exist it
-  keeps blitting cells into the Raster.
+  (46 a step, one each 33 ms tick of the 1.5 s travel) as tiles of 16×8
+  cells (`grid`, terminal-mod-graphics.md), and the tiles show the step's
+  first frame while it animates, its last otherwise. `animate` works out
+  frame `round(progress · (n − 1))` on each tick and blits only the tiles
+  whose file differs from the one shown, a tile or two a frame; until the
+  frames exist it keeps blitting cells into the Raster.
 - **Cache.** `$TMPDIR/proschi-raster` (the API names no plugin data folder),
   read once through `$.env`. Files are content-hashed. The session's first
   call asks the helper to `prune`: it deletes what no call used for a week

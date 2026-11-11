@@ -127,7 +127,21 @@ text cells** (today's drawing). Never a text preview followed by a picture.
   switch shows one Box and hides another: one new picture (the tab bar).
   Test: a hidden page's Images are the ones shown after the switch, same
   keys and sources.
-- [ ] R3. Playback at ≈5 fps.
+- [x] R3. **Playback at ≈5 fps.** Cause: 8 frames a step over the 1.5 s
+  travel (one every 190 ms) on a 50 ms tick, each a blit of the whole
+  diagram PNG (1920 px wide) the terminal decodes again. Fix: the helper
+  cuts the picture into tiles of 16×8 cells at the size they are shown
+  (`grid`: scaled into the room, padded to whole cells, so no letterbox),
+  and per step draws the tiles with no packet once and, per frame, only the
+  tiles a packet covers, PNG files named by their pixels; the plugin mounts
+  a keyed Image per tile and on a 33 ms tick blits only the tiles that
+  differ from the ones shown. 46 frames a step: ≈30 fps. Measured
+  (url-shortener, 120 columns, Redirect): 1.6 tiles a frame (2 at most), 12
+  KB a frame against a 1920×1190 PNG before; all 3 steps' tiles in 330 ms.
+  Raw rgba was weighed and lost (67 MB against 1.6 MB, same draw time; the
+  terminal's decode of two small PNGs is well under a millisecond). Tests:
+  the helper's tiles cover the grid once at exact sizes and a frame changes
+  at most 4 tiles; the plugin blits only the changed tiles.
 - [x] R4. **Panels blend into the terminal background.** Every panel is an
   opaque card (#1C1C21 dark, #FFFFFF light, border rgba(255,255,255,.14) /
   ink .12, radius 8, 2 px transparent margin); a page is a card per section

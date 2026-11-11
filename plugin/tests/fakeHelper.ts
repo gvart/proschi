@@ -55,8 +55,27 @@ export function answer(input: Record<string, unknown>, size = { width: 1600, hei
     })
     return { panels }
   }
-  const options = (input.options ?? {}) as { play?: unknown }
+  const options = (input.options ?? {}) as { play?: unknown; maxWidthPx?: number; grid?: { room: number; maxRows: number; cellPx: { width: number; height: number } } }
   const out = { ...size, base: '/tmp/proschi-raster/base.png', cellHint: { columns: Math.ceil(size.width / 16), rows: Math.ceil(size.height / 32) } }
+  const g = options.grid
+  if (g) {
+    // As the helper: scaled to the room, cut into tiles of 16×8 cells; a step's packet covers tile k in frame k.
+    const width = Math.min(size.width, options.maxWidthPx ?? size.width)
+    const height = (size.height * width) / size.width
+    const f = Math.min(1, (g.room * g.cellPx.width) / width, (g.maxRows * g.cellPx.height) / height)
+    const columns = Math.ceil((width * f) / g.cellPx.width)
+    const rows = Math.ceil((height * f) / g.cellPx.height)
+    const tiles: { col: number; row: number; columns: number; rows: number; width: number; height: number }[] = []
+    for (let row = 0; row < rows; row += 8) for (let col = 0; col < columns; col += 16) tiles.push({ col, row, columns: Math.min(16, columns - col), rows: Math.min(8, rows - row), width: 0, height: 0 })
+    const grid = {
+      columns,
+      rows,
+      tiles,
+      base: tiles.map((_, i) => `/tmp/proschi-raster/base-${i}.png`),
+      ...(options.play ? { steps: Array.from({ length: 7 }, (_, s) => ({ behind: tiles.map((_, i) => `/tmp/proschi-raster/s${s}-t${i}.png`), frames: [0, 1, 2].map(k => ({ [k]: `/tmp/proschi-raster/s${s}-f${k}.png` })) })) } : {}),
+    }
+    return { ...out, grid }
+  }
   const frames = Array.from({ length: 7 }, (_, s) => [0, 1, 2].map(k => `/tmp/proschi-raster/s${s}-f${k}.png`))
   return options.play ? { ...out, frames } : out
 }

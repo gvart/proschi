@@ -20,13 +20,16 @@
  *         selected?: string,                       a node or expanded system id, ringed in the accent
  *         play?: { useCase, scenario?, frames? },  id or name; scenario defaults to the first; frames per step, default 8
  *         whatIf?: { multiplier, failed, saved? }, the pane's live what-if: the load drawn is the what-if's
- *         cellPx?: { width, height } } }           the terminal's cell in screen px, for cellHint; default 16×34
+ *         cellPx?: { width, height },              the terminal's cell in screen px, for cellHint; default 16×34
+ *         grid?: { room, maxRows, cellPx, tile? } } }  the picture as tiles of whole cells (see RasterGrid):
+ *                                                  at most room × maxRows cells of cellPx, tiles default 16×8
  *   stdout RasterOutput as JSON:
  *     { width, height,                             PNG size in px, the same for every file
  *       base,                                      absolute path of the still image
  *       frames?: string[][],                       with `play`: per step of the scenario, its frames in order
  *                                                  (progress 0..100; the last one shows the call arrived)
- *       cellHint: { columns, rows } }              cells the PNG covers at one PNG px per screen px
+ *       cellHint: { columns, rows },               cells the PNG covers at one PNG px per screen px
+ *       grid? }                                    with `grid`: RasterGrid (and no `frames`)
  *   exit 1 with the message on stderr when the document has errors or the use case is unknown.
  *
  * Files are named by a hash of their SVG and the zoom, so a frame that
@@ -38,6 +41,7 @@
  * now, so `prune` (the hooks ask once a session) deletes only what no call
  * used for a week.
  */
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, watch, type FSWatcher } from 'node:fs';
 import { join } from 'node:path';
 import { initWasm, Resvg } from '@resvg/resvg-wasm';
@@ -61,6 +65,34 @@ export interface RasterOptions {
   /** The pane's live what-if (components/WhatIf/whatIf.ts LiveWhatIf): the overlay shows the load under it. */
   whatIf?: LiveWhatIf;
   cellPx?: { width: number; height: number };
+  grid?: GridOptions;
+}
+
+/** The picture as tiles of whole cells, for a terminal that swaps keyed Images: playback then blits only the tiles a frame changes. */
+export interface GridOptions {
+  /** The box the picture may take, in cells: it is scaled down to fit, never up. */
+  room: number;
+  maxRows: number;
+  /** A cell in PNG px (2× a Retina screen's cell: render/ui panelHost's cellPxOf). */
+  cellPx: { width: number; height: number };
+  /** A tile in cells; default 16×8. */
+  tile?: { columns: number; rows: number };
+}
+
+/**
+ * The picture cut on the cell grid: `columns` × `rows` cells, exactly that
+ * many cellPx (padded, transparent, right and bottom), in `tiles` row-major.
+ * Each tile's file is named by its pixels, so a tile that looks the same is
+ * one file. `base` is the still's file per tile; with `play`, per step its
+ * `behind` (the step with no packet) per tile, and per frame only the tiles
+ * a packet touches, by tile index.
+ */
+export interface RasterGrid {
+  columns: number;
+  rows: number;
+  tiles: { col: number; row: number; columns: number; rows: number; width: number; height: number }[];
+  base: string[];
+  steps?: { behind: string[]; frames: Record<string, string>[] }[];
 }
 
 export interface RasterInput extends Source {
@@ -76,7 +108,11 @@ export interface RasterOutput {
   base: string;
   frames?: string[][];
   cellHint: { columns: number; rows: number };
+  grid?: RasterGrid;
 }
+
+/** Every file an answer names. */
+const filesOf = (o: RasterOutput): string[] => [o.base, ...(o.frames ?? []).flat(), ...(o.grid ? [...o.grid.base, ...(o.grid.steps ?? []).flatMap((s) => [...s.behind, ...s.frames.flatMap((f) => Object.values(f))])] : [])];
 
 /** Where the helper finds `resvg.wasm` and `fonts/*.ttf`. */
 export interface RasterAssets {
@@ -133,7 +169,7 @@ export async function rasterize(input: RasterInput, assets: RasterAssets): Promi
   const manifest = join(input.outDir, `${hash(JSON.stringify([assets.build ?? '', source, path, imports, view, options]))}.json`);
   if (existsSync(manifest)) {
     const done = JSON.parse(readFileSync(manifest, 'utf8')) as RasterOutput;
-    const files = [done.base, ...(done.frames ?? []).flat()];
+    const files = [...new Set(filesOf(done))];
     if (files.every((f) => existsSync(f))) {
       touch([manifest, ...files]);
       return done;
@@ -170,9 +206,13 @@ export async function rasterize(input: RasterInput, assets: RasterAssets): Promi
   };
   const base = asCard(drawArchitecture(laid, draw), theme);
   const svgWidth = Number(/width="(\d+)"/.exec(base)![1]);
+  const svgHeight = Number(/height="(\d+)"/.exec(base)![1]);
   const max = options.maxWidthPx;
   const scale = options.scale ?? DEFAULT_SCALE;
-  const zoom = max && svgWidth * scale > max ? max / svgWidth : scale;
+  let zoom = max && svgWidth * scale > max ? max / svgWidth : scale;
+  const g = options.grid;
+  // On a grid, no wider than the room and no taller than maxRows: the tiles are drawn at the size they are shown.
+  if (g) zoom *= Math.min(1, (g.room * g.cellPx.width) / (svgWidth * zoom), (g.maxRows * g.cellPx.height) / (svgHeight * zoom));
   const fileOf = (svg: string) => join(input.outDir, `${hash(`${zoom}\u0000${svg}`)}.png`);
 
   const render = (svg: string): Pixels => {
@@ -200,7 +240,21 @@ export async function rasterize(input: RasterInput, assets: RasterAssets): Promi
 
   const baseFile = await still(base);
   let frames: string[][] | undefined;
-  for (let index = 0; steps && index < steps.length; index++) {
+  let grid: RasterGrid | undefined;
+  if (g) {
+    const still = render(base);
+    const cut = cutter(still, g, input.outDir, writer);
+    grid = { columns: cut.columns, rows: cut.rows, tiles: cut.tiles, base: await cut.files(still) };
+    for (let index = 0; steps && index < steps.length; index++) {
+      const count = Math.max(1, Math.round(options.play!.frames ?? DEFAULT_FRAMES));
+      const svgs = Array.from({ length: count }, (_, k) => asCard(drawArchitecture(laid, { ...draw, play: { steps, index, progress: count === 1 ? 100 : (k * 100) / (count - 1) } }), theme));
+      const behind = render(svgs[0].replace(PACKET, ''));
+      const step = { behind: await cut.files(behind), frames: [] as Record<string, string>[] };
+      for (const svg of svgs) step.frames.push(await cut.dirty(behind, [...svg.matchAll(PACKET)].map(([packet, x, y]) => packetPixels(packet, Number(x), Number(y), zoom, behind))));
+      (grid.steps ??= []).push(step);
+    }
+  }
+  for (let index = 0; !g && steps && index < steps.length; index++) {
     const count = Math.max(1, Math.round(options.play!.frames ?? DEFAULT_FRAMES));
     const svgs = Array.from({ length: count }, (_, k) => asCard(drawArchitecture(laid, { ...draw, play: { steps, index, progress: count === 1 ? 100 : (k * 100) / (count - 1) } }), theme));
     const files = svgs.map(fileOf);
@@ -222,7 +276,7 @@ export async function rasterize(input: RasterInput, assets: RasterAssets): Promi
   await writer.done();
   const cell = options.cellPx ?? DEFAULT_CELL;
   const { width, height } = size!;
-  const out: RasterOutput = { width, height, base: baseFile, ...(frames ? { frames } : {}), cellHint: { columns: Math.ceil(width / cell.width), rows: Math.ceil(height / cell.height) } };
+  const out: RasterOutput = { width, height, base: baseFile, ...(frames ? { frames } : {}), ...(grid ? { grid } : {}), cellHint: { columns: Math.ceil(width / cell.width), rows: Math.ceil(height / cell.height) } };
   put(manifest, JSON.stringify(out));
   return out;
 }
@@ -268,8 +322,8 @@ function packetPixels(packet: string, x: number, y: number, zoom: number, whole:
 /** Lays `piece` over `into` (source-over, premultiplied). */
 function over(into: Pixels, piece: Pixels & { left: number; top: number }): void {
   const { data } = into;
-  for (let row = 0; row < piece.height && piece.top + row < into.height; row++) {
-    for (let col = 0; col < piece.width && piece.left + col < into.width; col++) {
+  for (let row = Math.max(0, -piece.top); row < piece.height && piece.top + row < into.height; row++) {
+    for (let col = Math.max(0, -piece.left); col < piece.width && piece.left + col < into.width; col++) {
       const s = (row * piece.width + col) * 4;
       const a = piece.data[s + 3];
       if (a === 0) continue;
@@ -278,6 +332,61 @@ function over(into: Pixels, piece: Pixels & { left: number; top: number }): void
       for (let c = 0; c < 4; c++) data[d + c] = piece.data[s + c] + Math.round((data[d + c] * keep) / 255);
     }
   }
+}
+
+/**
+ * Cuts pictures the size of `first` into the grid's tiles: every tile of a
+ * picture, or only the ones the packets cover (a frame over its `behind`).
+ */
+function cutter(first: Pixels, g: GridOptions, outDir: string, writer: Writer) {
+  const { width: cw, height: ch } = g.cellPx;
+  const columns = Math.max(1, Math.ceil(first.width / cw));
+  const rows = Math.max(1, Math.ceil(first.height / ch));
+  const tc = g.tile?.columns ?? 16;
+  const tr = g.tile?.rows ?? 8;
+  const tiles: RasterGrid['tiles'] = [];
+  for (let row = 0; row < rows; row += tr) {
+    for (let col = 0; col < columns; col += tc) {
+      const c = Math.min(tc, columns - col);
+      const r = Math.min(tr, rows - row);
+      tiles.push({ col, row, columns: c, rows: r, width: c * cw, height: r * ch });
+    }
+  }
+  /** A tile of `from`, the transparent padding where it reaches past it. */
+  const crop = (from: Pixels, t: RasterGrid['tiles'][number]): Pixels => {
+    const data = new Uint8Array(t.width * t.height * 4);
+    const x = t.col * cw;
+    const y = t.row * ch;
+    const w = Math.max(0, Math.min(t.width, from.width - x)) * 4;
+    for (let r = 0; r < t.height && y + r < from.height; r++) data.set(from.data.subarray(((y + r) * from.width + x) * 4, ((y + r) * from.width + x) * 4 + w), r * t.width * 4);
+    return { width: t.width, height: t.height, data };
+  };
+  const save = async (p: Pixels): Promise<string> => {
+    const name = createHash('sha256').update(`${p.width}x${p.height}:`).update(p.data).digest('hex').slice(0, 20);
+    const file = join(outDir, `t-${name}.png`);
+    if (existsSync(file)) touch([file]);
+    else await writer.add(file, p);
+    return file;
+  };
+  const files = async (p: Pixels): Promise<string[]> => {
+    const out: string[] = [];
+    for (const t of tiles) out.push(await save(crop(p, t)));
+    return out;
+  };
+  const dirty = async (behind: Pixels, packets: (Pixels & { left: number; top: number })[]): Promise<Record<string, string>> => {
+    const out: Record<string, string> = {};
+    for (const [i, t] of tiles.entries()) {
+      const x = t.col * cw;
+      const y = t.row * ch;
+      const on = packets.filter((p) => p.left < x + t.width && p.left + p.width > x && p.top < y + t.height && p.top + p.height > y);
+      if (on.length === 0) continue;
+      const tile = crop(behind, t);
+      for (const p of on) over(tile, { ...p, left: p.left - x, top: p.top - y });
+      out[i] = await save(tile);
+    }
+    return out;
+  };
+  return { columns, rows, tiles, files, dirty };
 }
 
 /** Answers one input: a diagram (RasterInput), or panels (PanelsInput) with the diagram it carries drawn in the same run. */

@@ -67,7 +67,12 @@ stdin, JSON:
     selected?: string;                              // node or expanded system id
     play?: { useCase: string; scenario?: string; frames?: number };  // id or name; first scenario; 8 frames per step
     whatIf?: { multiplier: number; failed: string[]; saved?: string }; // the pane's live what-if: the overlay's load under it
-    cellPx?: { width: number; height: number };     // terminal cell in screen px, default 16×32
+    cellPx?: { width: number; height: number };     // terminal cell in screen px, default 16×34
+    grid?: {                                        // the picture as tiles of whole cells (below)
+      room: number; maxRows: number;                // the box it may take, in cells: scaled down to fit
+      cellPx: { width: number; height: number };   // a cell in PNG px
+      tile?: { columns: number; rows: number };    // default 16×8 cells
+    };
   };
 }
 ```
@@ -80,15 +85,34 @@ stdout, JSON:
   base: string;                    // absolute path of the still
   frames?: string[][];             // with play: per step of the scenario, its frames in order
   cellHint: { columns: number; rows: number };  // cells covering the PNG at 1 PNG px per screen px
+  grid?: {                         // with grid (and then no frames)
+    columns: number; rows: number;  // the picture's cells, padded transparent to whole cells
+    tiles: { col: number; row: number; columns: number; rows: number; width: number; height: number }[];
+    base: string[];                 // the still, a PNG per tile
+    steps?: { behind: string[]; frames: Record<string, string>[] }[];  // with play: per step the tiles
+                                    // with no packet, per frame only the tiles a packet covers, by index
+  };
 }
 ```
+
+With `grid`, the plugin mounts a keyed Image per tile and plays a step by
+blitting only the tiles whose file changes from one frame to the next (where
+the packet is and where it was): a tile or two a frame instead of the whole
+picture. Tile files are named by a hash of their pixels, so a tile that looks
+the same in two steps is one file. Measured (M-series Mac, url-shortener at
+120 columns, 75×35 cells in 25 tiles, Redirect's 3 steps at 46 frames): the
+tiles of every frame drawn in 330 ms, 1.6 tiles a frame on average (2 at
+most), 12 KB of PNG a frame, 1.6 MB in all. Raw `rgba` tiles (no decoding in
+the terminal) took as long to write and 67 MB, 442 KB read a frame, for a
+decode of two 256×272 PNGs that costs the terminal well under a millisecond,
+so the tiles are PNG.
 
 Errors (document errors, unknown use case or scenario) exit 1 with the message
 on stderr.
 
 Frame `k` of `n` in a step is at progress `k / (n - 1)` (0..100); the last frame
 shows the call arrived (no packet), or the cross for a failed call. To play a
-scenario, blit each step's frames at `TRAVEL_MS / n` (≈190 ms for 8), then hold
+scenario, blit each step's frames at `TRAVEL_MS / n` (33 ms for the plugin's 46), then hold
 the last frame until the step's `STEP_MS` is up (`terminal/playback.ts`).
 
 Caching: every PNG is named by a hash of its SVG and zoom, so identical frames

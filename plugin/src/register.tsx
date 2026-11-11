@@ -18,7 +18,7 @@ import type { Control, Notice, NoticesPanel, Panel, PlayerHeaderPanel, SequenceP
 import { components } from '../../frontend/src/sim/analyze'
 import { formatMs } from '../../frontend/src/sim/format'
 import { MULTIPLIERS, stopOf, toggleFailed } from '../../frontend/src/components/WhatIf/whatIf'
-import { graphicsMode, imageSize, maxWidthPx, probe, probeKey, probeOf, probeSource, rasterOf, sourceOf, themeOf, TMUX_HINT, type GraphicsMode, type RasterRequest } from './graphics'
+import { cellPx, graphicsMode, gridFrame, imageSize, maxWidthPx, probe, probeKey, probeOf, probeSource, rasterOf, sourceOf, themeOf, TMUX_HINT, type GraphicsMode, type RasterGrid, type RasterRequest } from './graphics'
 import { loading, pictureSite, pressTimings, registerPicture, type Action, type Picture, type Piece, type Site } from './picture'
 import { setCellAspect } from './helper'
 import { hldMarkdown, hldTab } from './views/hld'
@@ -69,8 +69,10 @@ const PANE_KEYS = '1-6 tabs · p play · n/b step · r restart · e end · x exp
 const TAB_KEYS = '1-6 tabs · ↑↓ scroll · esc back to the prompt'
 const SYSTEM_KEYS = 's next system · o open/close · f focus in · u back out'
 
-/** One animation frame, in ms. */
-const FRAME = 50
+/** One animation frame, in ms: about 30 a second. */
+const FRAME = 33
+/** Frames a step's packet travels in, one a FRAME (the helper draws them, only the tiles the packet covers). */
+const FRAMES = Math.round(TRAVEL_MS / FRAME) + 1
 
 const HINT = [
   'Proschi diagrams render in this terminal: put a Proschi document in a ```proschi fenced block',
@@ -684,7 +686,8 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
     ...(doc.overlay && !play ? { overlay: true } : {}),
     ...(view.selected ? { selected: view.selected } : {}),
     ...(whatIf && doc !== base ? { whatIf: liveOf(whatIf) } : {}),
-    ...(play ? { play: { useCase: play.useCase.id, scenario: play.scenario.id } } : {}),
+    ...(play ? { play: { useCase: play.useCase.id, scenario: play.scenario.id, frames: FRAMES } } : {}),
+    grid: { room: d.columns, maxRows: d.rows ?? INLINE_ROWS, cellPx: cellPx() },
   })
   const request: RasterRequest = { source, options: optionsFor(playing) }
   const alt = `${doc.diagram.title ?? title}: the architecture diagram as a picture`
@@ -692,20 +695,30 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
   if (mode.kind !== 'text') {
     images.delete(viewId)
     const out = rasterOf($, request)
-    const size = out && !('error' in out) ? imageSize(out, d.columns, d.rows ?? INLINE_ROWS) : undefined
+    const size = out && !('error' in out) ? (out.grid ? { columns: out.grid.columns, rows: out.grid.rows } : imageSize(out, d.columns, d.rows ?? INLINE_ROWS)) : undefined
     const rows = (size?.rows ?? Math.min(scene.rows, d.rows ?? INLINE_ROWS)) + (playing ? 22 : 12)
     if (mode.kind === 'loading') return { kind: 'loading', rows }
     // No picture: the text drawing stands.
     if (out && 'error' in out) return diagramView($, d, viewId, written, file, whatIf, { kind: 'text' })
     let picture: Picture | undefined
     if (out && size) {
-      const frames = request.options.play ? out.frames : undefined
-      const shownFrames = frames?.[step]
-      const file = shownFrames?.length ? shownFrames[progress === 0 ? 0 : shownFrames.length - 1]! : out.base
       const imageKey = `img-${viewId}`
-      if (!request.options.play || frames?.length) {
-        images.set(viewId, { key: imageKey, ...(frames ? { frames } : {}), ...(mode.form ? { form: mode.form } : {}) })
-        picture = { key: imageKey, file, columns: size.columns, rows: size.rows, alt, anchorKey: view.anchorKey, ...(mode.form ? { form: mode.form } : {}) }
+      const g = out.grid
+      if (g && (!request.options.play || g.steps?.length)) {
+        // In tiles: the step's first frame while it animates (the animation blits the rest), else its last.
+        const at = request.options.play ? step : undefined
+        const shown = gridFrame(g, at, progress === 0 ? 0 : FRAMES - 1)
+        images.set(viewId, { key: imageKey, grid: g, shown, ...(mode.form ? { form: mode.form } : {}) })
+        const tiles = g.tiles.map((t, i) => ({ key: `${imageKey}-${i}`, col: t.col, row: t.row, columns: t.columns, rows: t.rows, file: shown[i]! }))
+        picture = { key: imageKey, file: out.base, columns: size.columns, rows: size.rows, alt, anchorKey: view.anchorKey, tiles, ...(mode.form ? { form: mode.form } : {}) }
+      } else if (!g) {
+        const frames = request.options.play ? out.frames : undefined
+        const shownFrames = frames?.[step]
+        const file = shownFrames?.length ? shownFrames[progress === 0 ? 0 : shownFrames.length - 1]! : out.base
+        if (!request.options.play || frames?.length) {
+          images.set(viewId, { key: imageKey, ...(frames ? { frames } : {}), ...(mode.form ? { form: mode.form } : {}) })
+          picture = { key: imageKey, file, columns: size.columns, rows: size.rows, alt, anchorKey: view.anchorKey, ...(mode.form ? { form: mode.form } : {}) }
+        }
       }
     }
     const built = pictureParts($, view, doc, { pick, playing, step, player, systems, selected, link, lost, title, what, roomy, sourceText: source.source, picture })
@@ -787,7 +800,7 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
 }
 
 /** The picture a drawing shows in place of its Raster, by view id: what the animation swaps frames into. */
-const images = new Map<string, { key: string; frames?: string[][]; form?: 'file' | 'png' }>()
+const images = new Map<string, { key: string; frames?: string[][]; grid?: RasterGrid; shown?: string[]; form?: 'file' | 'png' }>()
 
 /** The select open in a drawing in pictures, by view id: its menu is drawn under it until an option or the select is pressed again. */
 const menus = new Map<string, string>()
@@ -1437,7 +1450,15 @@ function animate($: EngineInterface, view: View, steps: FlowStep[]): void {
     // Drawn as a picture, the helper's frame for this moment (frame k of n at k / (n - 1) of the way); else the cells.
     const image = images.get(view.viewId)
     const frames = image?.frames?.[step]
-    if (image && frames?.length) {
+    const tiles = image?.grid?.steps?.[step]
+    if (image?.grid && image.shown && tiles) {
+      // Only the tiles that differ from what is shown: where the packet is now and where it was.
+      const files = gridFrame(image.grid, step, Math.round((progress / 100) * (tiles.frames.length - 1)))
+      const shown = image.shown
+      const changed = files.flatMap((file, i) => (file === shown[i] ? [] : [i]))
+      for (const i of changed) shown[i] = files[i]!
+      await Promise.all(changed.map(async i => $.ui.blit({ requestId: view.d.requestId, key: `${image.key}-${i}`, source: await sourceOf($, files[i]!, image.form) })))
+    } else if (image && frames?.length) {
       const file = frames[Math.round((progress / 100) * (frames.length - 1))]!
       if (file !== sent) {
         sent = file

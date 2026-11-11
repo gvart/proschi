@@ -35,6 +35,8 @@ export interface Picture {
   form?: 'file' | 'png'
   /** A keyed Box around it, for the pane's scroll to. */
   anchorKey?: string
+  /** The picture as tiles of whole cells (the helper's grid), each keyed for the animation's blits; `file` is then the whole still. */
+  tiles?: { key: string; col: number; row: number; columns: number; rows: number; file: string }[]
 }
 
 /** One piece of a drawing, top to bottom: a panel the helper draws `columns` wide, or the diagram's picture (none while it is drawn). */
@@ -231,9 +233,25 @@ async function build($: EngineInterface, ui: Ui, s: Site, d: Shown): Promise<{ e
   for (const p of d.pieces) {
     if ('picture' in p) {
       const pic = p.picture
+      let body: RenderElement | RenderElement[]
+      if (pic.tiles) {
+        // A row of tiles per tile row, the alt on the first tile only.
+        const lines: RenderElement[] = []
+        for (const row of [...new Set(pic.tiles.map(t => t.row))]) {
+          const line = pic.tiles.filter(t => t.row === row)
+          const images: RenderElement[] = []
+          for (const t of line) images.push(<ui.Image key={t.key} source={await source(t.key, t.file)} columns={t.columns} rows={t.rows} alt={t === pic.tiles[0] ? pic.alt : ' '} />)
+          lines.push(
+            <ui.Box key={`${pic.key}-r${row}`} flexDirection="row" height={line[0]!.rows}>
+              {images}
+            </ui.Box>,
+          )
+        }
+        body = lines
+      } else body = <ui.Image key={pic.key} source={await source(pic.key, pic.file)} columns={pic.columns} rows={pic.rows} alt={pic.alt} />
       parts.push(
         <ui.Box key={pic.anchorKey ?? `pic-${s.site}-${p.id}`} flexDirection="column" height={pic.rows}>
-          <ui.Image key={pic.key} source={await source(pic.key, pic.file)} columns={pic.columns} rows={pic.rows} alt={pic.alt} />
+          {body}
         </ui.Box>,
       )
       top += pic.rows

@@ -168,9 +168,12 @@ test('pictures: a reserved area with one line while the terminal is asked, then 
   expect(await ui.find({ type: 'Raster' })).toBeUndefined()
   expect(await ui.find({ type: 'Text' })).toBeUndefined()
   expect(await ui.find({ type: 'Button' })).toBeUndefined()
-  const diagram = (await ui.find({ type: 'Image', key: 'img-m1:0' })) as Found
-  expect(diagram?.props).toMatchObject({ source: { file: '/tmp/proschi-raster/base.png' }, columns: 100, rows: 26 })
-  expect(String(diagram?.props.alt)).toMatch(/Checkout.*picture/)
+  // The diagram in tiles of 16×8 cells (100×27 cells: 7 by 4), each its own keyed Image, the alt on the first.
+  const tiles = ((await ui.findAll({ type: 'Image' })) as unknown as NonNullable<Found>[]).filter(x => String(x.key).startsWith('img-m1:0-'))
+  expect(tiles).toHaveLength(28)
+  expect(tiles[0]?.props).toMatchObject({ source: { file: '/tmp/proschi-raster/base-0.png' }, columns: 16, rows: 8 })
+  expect(tiles[27]?.props).toMatchObject({ source: { file: '/tmp/proschi-raster/base-27.png' }, columns: 4, rows: 3 })
+  expect(String(tiles[0]?.props.alt)).toMatch(/Checkout.*picture/)
   // The overlay covers the drawing and maps its controls.
   const overlay = await overlayOf(ui, 'm1:0')
   expect(String(overlay?.props.module)).toMatch(/uiOverlay\.js$/)
@@ -180,10 +183,13 @@ test('pictures: a reserved area with one line while the terminal is asked, then 
 
 test('a picture keeps its aspect ratio and takes at most 40 rows in the transcript', SLOW, async ($, on) => {
   const clock = mock.clock(on)
-  host(on, clock, { size: { width: 800, height: 3200 } })
+  const h = host(on, clock, { size: { width: 800, height: 3200 } })
   const ui = await settle($, clock)
-  // 50 columns would want 94 rows: capped at 40, and 21 columns keep the ratio (cells 17/8 as tall as wide).
-  expect(((await ui.find({ type: 'Image', key: 'img-m1:0' })) as Found)?.props).toMatchObject({ columns: 21, rows: 40 })
+  // 50 columns would want 94 rows: capped at 40, and the helper draws it 22 columns wide to keep the ratio (cells 17/8 as tall as wide).
+  const tiles = ((await ui.findAll({ type: 'Image' })) as unknown as NonNullable<Found>[]).filter(x => String(x.key).startsWith('img-m1:0-'))
+  expect(tiles.reduce((n, t) => n + Number(t.props.rows) * Number(t.props.columns), 0)).toBe(22 * 40)
+  const asked = h.requests.map(r => (r.input.options as { grid?: unknown } | undefined)?.grid).find(Boolean)
+  expect(asked).toMatchObject({ maxRows: 40, cellPx: { width: 16, height: 34 } })
   await ui.unmount()
 })
 
@@ -348,7 +354,7 @@ test('where spawn is refused, every request runs one shot', SLOW, async ($, on) 
   await ui.unmount()
 })
 
-test('pictures shown: Play swaps in the helper\'s frames by file, asked for once ahead of the press', SLOW, async ($, on) => {
+test('pictures shown: Play blits only the tiles a frame changes, asked for once ahead of the press', SLOW, async ($, on) => {
   const clock = mock.clock(on)
   const h = host(on, clock)
   let ui = await settle($, clock)
@@ -363,9 +369,14 @@ test('pictures shown: Play swaps in the helper\'s frames by file, asked for once
   ui = await settle($, clock, reply, 'm1:0', c => c.some(x => x.id === 'step/next'))
   expect(plays()).toHaveLength(1)
   h.blits.length = 0
-  await clock.advance(2100)
-  const files = h.blits.filter(b => b.key === 'img-m1:0').map(b => b.file)
-  expect(files).toContain('/tmp/proschi-raster/s0-f1.png')
-  expect(files).toContain('/tmp/proschi-raster/s1-f0.png')
+  await clock.advance(2600)
+  // Frame 1 of step 1 covers tile 1 alone: tile 0 goes back to what is behind it, tile 1 takes the frame; no other tile is sent.
+  const step0 = h.blits.filter(b => b.file?.includes('/s0-'))
+  expect(step0).toEqual(expect.arrayContaining([{ key: 'img-m1:0-0', file: '/tmp/proschi-raster/s0-t0.png' }, { key: 'img-m1:0-1', file: '/tmp/proschi-raster/s0-f1.png' }]))
+  expect(step0.every(b => ['img-m1:0-0', 'img-m1:0-1', 'img-m1:0-2'].includes(b.key))).toBe(true)
+  // Step 2 is drawn at its first frame; its next frame is a blit again.
+  expect(h.blits).toContainEqual({ key: 'img-m1:0-1', file: '/tmp/proschi-raster/s1-f1.png' })
+  const plays2 = (plays()[0]!.input.options as { play: { frames: number } }).play.frames
+  expect(plays2).toBe(46)
   await ui.unmount()
 })

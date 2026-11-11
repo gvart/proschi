@@ -109,6 +109,43 @@ describe('raster helper', () => {
     expect(await rasterize(input, { dir: HOOKS })).toEqual(out);
   });
 
+  it('cuts the picture into tiles of whole cells, and a frame into only the tiles its packets cover', async () => {
+    const outDir = mkdtempSync(join(tmpdir(), 'proschi-raster-'));
+    const grid = { room: 60, maxRows: 30, cellPx: { width: 16, height: 34 }, tile: { columns: 16, rows: 8 } };
+    const input = { source: source('url-shortener'), outDir, options: { theme: 'dark' as const, maxWidthPx: 120 * 16, play: { useCase: 'Redirect', frames: 12 }, grid } };
+    const out = await rasterize(input, { dir: HOOKS });
+    const g = out.grid!;
+    expect(out.frames).toBeUndefined();
+    // Scaled down into the room, never past it.
+    expect(g.columns).toBeLessThanOrEqual(60);
+    expect(g.rows).toBeLessThanOrEqual(30);
+    // The tiles cover the grid once, each exactly its cells in px.
+    expect(g.tiles.reduce((n, t) => n + t.columns * t.rows, 0)).toBe(g.columns * g.rows);
+    const size = (f: string) => [readFileSync(f).readUInt32BE(16), readFileSync(f).readUInt32BE(20)];
+    for (const [i, t] of g.tiles.entries()) {
+      expect([t.width, t.height]).toEqual([t.columns * 16, t.rows * 34]);
+      expect(size(g.base[i])).toEqual([t.width, t.height]);
+    }
+    const steps = loadDocument({ source: source('url-shortener') }).diagram.useCases.find((u) => u.id === 'Redirect' || u.name === 'Redirect')!.scenarios[0].steps;
+    expect(g.steps).toHaveLength(steps.length);
+    for (const s of g.steps!) {
+      expect(s.behind).toHaveLength(g.tiles.length);
+      expect(s.frames).toHaveLength(12);
+      // The packet moves: some frames cover tiles.
+      expect(s.frames.some((f) => Object.keys(f).length > 0)).toBe(true);
+      for (const f of s.frames) {
+        const dirty = Object.keys(f).map(Number);
+        // A packet is small: a frame changes a tile or a few, never the picture.
+        expect(dirty.length).toBeLessThanOrEqual(4);
+        for (const i of dirty) {
+          expect(f[i]).not.toBe(s.behind[i]);
+          expect(size(f[i])).toEqual([g.tiles[i].width, g.tiles[i].height]);
+        }
+      }
+    }
+    expect(await rasterize(input, { dir: HOOKS })).toEqual(out);
+  });
+
   it('draws the load under a live what-if', async () => {
     const outDir = mkdtempSync(join(tmpdir(), 'proschi-raster-'));
     const options = { scale: 0.5, overlay: true };

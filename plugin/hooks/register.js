@@ -9812,6 +9812,13 @@ var MAX_PNG_BYTES = 2 * 1024 * 1024;
 var PROBE_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNgAAIAAAUAAen63NgAAAAASUVORK5CYII=";
 var PROBE_TRIES = 6;
 var PROBE_MS = 150;
+var cellPx = () => ({ width: 16, height: Math.round(16 * cellAspectOf()) });
+function gridFrame(g, step, k = 0) {
+  const s = step === void 0 ? void 0 : g.steps?.[step];
+  if (!s) return g.base;
+  const over = s.frames[Math.max(0, Math.min(k, s.frames.length - 1))] ?? {};
+  return s.behind.map((file, i) => over[i] ?? file);
+}
 var rasters = /* @__PURE__ */ new Map();
 var pending = /* @__PURE__ */ new Set();
 var wanted2 = /* @__PURE__ */ new Set();
@@ -10007,8 +10014,21 @@ async function build($, ui, s, d) {
   for (const p of d.pieces) {
     if ("picture" in p) {
       const pic = p.picture;
+      let body;
+      if (pic.tiles) {
+        const lines = [];
+        for (const row of [...new Set(pic.tiles.map((t) => t.row))]) {
+          const line2 = pic.tiles.filter((t) => t.row === row);
+          const images2 = [];
+          for (const t of line2) images2.push(/* @__PURE__ */ h(ui.Image, { key: t.key, source: await source(t.key, t.file), columns: t.columns, rows: t.rows, alt: t === pic.tiles[0] ? pic.alt : " " }));
+          lines.push(
+            /* @__PURE__ */ h(ui.Box, { key: `${pic.key}-r${row}`, flexDirection: "row", height: line2[0].rows }, images2)
+          );
+        }
+        body = lines;
+      } else body = /* @__PURE__ */ h(ui.Image, { key: pic.key, source: await source(pic.key, pic.file), columns: pic.columns, rows: pic.rows, alt: pic.alt });
       parts.push(
-        /* @__PURE__ */ h(ui.Box, { key: pic.anchorKey ?? `pic-${s.site}-${p.id}`, flexDirection: "column", height: pic.rows }, /* @__PURE__ */ h(ui.Image, { key: pic.key, source: await source(pic.key, pic.file), columns: pic.columns, rows: pic.rows, alt: pic.alt }))
+        /* @__PURE__ */ h(ui.Box, { key: pic.anchorKey ?? `pic-${s.site}-${p.id}`, flexDirection: "column", height: pic.rows }, body)
       );
       top += pic.rows;
       width = Math.max(width, pic.columns);
@@ -11424,7 +11444,8 @@ var panePassing = atom2({ plugin: "proschi", key: "panePassing" }, false);
 var PANE_KEYS = "1-6 tabs \xB7 p play \xB7 n/b step \xB7 r restart \xB7 e end \xB7 x explorer \xB7 d diagram \xB7 esc back to the prompt";
 var TAB_KEYS = "1-6 tabs \xB7 \u2191\u2193 scroll \xB7 esc back to the prompt";
 var SYSTEM_KEYS = "s next system \xB7 o open/close \xB7 f focus in \xB7 u back out";
-var FRAME3 = 50;
+var FRAME3 = 33;
+var FRAMES = Math.round(TRAVEL_MS / FRAME3) + 1;
 var HINT = [
   "Proschi diagrams render in this terminal: put a Proschi document in a ```proschi fenced block",
   "(or write a .proschi file) and Claude Code draws it as the architecture, with a player for its",
@@ -11866,26 +11887,36 @@ async function diagramView($, d, viewId, written, file, whatIf, mode = { kind: "
     ...doc.overlay && !play ? { overlay: true } : {},
     ...view.selected ? { selected: view.selected } : {},
     ...whatIf && doc !== base ? { whatIf: liveOf(whatIf) } : {},
-    ...play ? { play: { useCase: play.useCase.id, scenario: play.scenario.id } } : {}
+    ...play ? { play: { useCase: play.useCase.id, scenario: play.scenario.id, frames: FRAMES } } : {},
+    grid: { room: d.columns, maxRows: d.rows ?? INLINE_ROWS, cellPx: cellPx() }
   });
   const request2 = { source, options: optionsFor(playing) };
   const alt = `${doc.diagram.title ?? title}: the architecture diagram as a picture`;
   if (mode.kind !== "text") {
     images.delete(viewId);
     const out = rasterOf($, request2);
-    const size = out && !("error" in out) ? imageSize(out, d.columns, d.rows ?? INLINE_ROWS) : void 0;
+    const size = out && !("error" in out) ? out.grid ? { columns: out.grid.columns, rows: out.grid.rows } : imageSize(out, d.columns, d.rows ?? INLINE_ROWS) : void 0;
     const rows = (size?.rows ?? Math.min(scene.rows, d.rows ?? INLINE_ROWS)) + (playing ? 22 : 12);
     if (mode.kind === "loading") return { kind: "loading", rows };
     if (out && "error" in out) return diagramView($, d, viewId, written, file, whatIf, { kind: "text" });
     let picture;
     if (out && size) {
-      const frames = request2.options.play ? out.frames : void 0;
-      const shownFrames = frames?.[step];
-      const file2 = shownFrames?.length ? shownFrames[progress === 0 ? 0 : shownFrames.length - 1] : out.base;
       const imageKey = `img-${viewId}`;
-      if (!request2.options.play || frames?.length) {
-        images.set(viewId, { key: imageKey, ...frames ? { frames } : {}, ...mode.form ? { form: mode.form } : {} });
-        picture = { key: imageKey, file: file2, columns: size.columns, rows: size.rows, alt, anchorKey: view.anchorKey, ...mode.form ? { form: mode.form } : {} };
+      const g = out.grid;
+      if (g && (!request2.options.play || g.steps?.length)) {
+        const at = request2.options.play ? step : void 0;
+        const shown2 = gridFrame(g, at, progress === 0 ? 0 : FRAMES - 1);
+        images.set(viewId, { key: imageKey, grid: g, shown: shown2, ...mode.form ? { form: mode.form } : {} });
+        const tiles = g.tiles.map((t, i) => ({ key: `${imageKey}-${i}`, col: t.col, row: t.row, columns: t.columns, rows: t.rows, file: shown2[i] }));
+        picture = { key: imageKey, file: out.base, columns: size.columns, rows: size.rows, alt, anchorKey: view.anchorKey, tiles, ...mode.form ? { form: mode.form } : {} };
+      } else if (!g) {
+        const frames = request2.options.play ? out.frames : void 0;
+        const shownFrames = frames?.[step];
+        const file2 = shownFrames?.length ? shownFrames[progress === 0 ? 0 : shownFrames.length - 1] : out.base;
+        if (!request2.options.play || frames?.length) {
+          images.set(viewId, { key: imageKey, ...frames ? { frames } : {}, ...mode.form ? { form: mode.form } : {} });
+          picture = { key: imageKey, file: file2, columns: size.columns, rows: size.rows, alt, anchorKey: view.anchorKey, ...mode.form ? { form: mode.form } : {} };
+        }
       }
     }
     const built = pictureParts($, view, doc, { pick: pick2, playing, step, player, systems, selected, link, lost, title, what, roomy, sourceText: source.source, picture });
@@ -12283,7 +12314,14 @@ function animate($, view, steps) {
     const progress = Math.min(100, elapsed / TRAVEL_MS * 100);
     const image = images.get(view.viewId);
     const frames = image?.frames?.[step];
-    if (image && frames?.length) {
+    const tiles = image?.grid?.steps?.[step];
+    if (image?.grid && image.shown && tiles) {
+      const files = gridFrame(image.grid, step, Math.round(progress / 100 * (tiles.frames.length - 1)));
+      const shown2 = image.shown;
+      const changed = files.flatMap((file, i) => file === shown2[i] ? [] : [i]);
+      for (const i of changed) shown2[i] = files[i];
+      await Promise.all(changed.map(async (i) => $.ui.blit({ requestId: view.d.requestId, key: `${image.key}-${i}`, source: await sourceOf($, files[i], image.form) })));
+    } else if (image && frames?.length) {
       const file = frames[Math.round(progress / 100 * (frames.length - 1))];
       if (file !== sent) {
         sent = file;

@@ -45,6 +45,16 @@ export interface RasterOptions {
   selected?: string
   play?: { useCase: string; scenario?: string; frames?: number }
   whatIf?: { multiplier: number; failed: readonly string[]; saved?: string }
+  grid?: { room: number; maxRows: number; cellPx: { width: number; height: number }; tile?: { columns: number; rows: number } }
+}
+
+/** The picture as tiles of whole cells; per step the tiles behind the packet, per frame the ones it covers. */
+export interface RasterGrid {
+  columns: number
+  rows: number
+  tiles: { col: number; row: number; columns: number; rows: number; width: number; height: number }[]
+  base: string[]
+  steps?: { behind: string[]; frames: Record<string, string>[] }[]
 }
 
 export interface RasterOutput {
@@ -53,6 +63,18 @@ export interface RasterOutput {
   base: string
   frames?: string[][]
   cellHint: { columns: number; rows: number }
+  grid?: RasterGrid
+}
+
+/** A cell in PNG px: 2× a Retina screen's, as tall as the `cellAspect` setting makes it (the panels' too). */
+export const cellPx = () => ({ width: 16, height: Math.round(16 * cellAspectOf()) })
+
+/** The files a grid shows: the still, or frame `k` of a step (its behind, the tiles the packet covers over it). */
+export function gridFrame(g: RasterGrid, step?: number, k = 0): string[] {
+  const s = step === undefined ? undefined : g.steps?.[step]
+  if (!s) return g.base
+  const over = s.frames[Math.max(0, Math.min(k, s.frames.length - 1))] ?? {}
+  return s.behind.map((file, i) => over[i] ?? file)
 }
 
 export interface RasterRequest {
