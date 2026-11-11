@@ -263,6 +263,47 @@ text cells** (today's drawing). Never a text preview followed by a picture.
   scrolled above the screen is pinned to its first row by the engine until it
   closes (a pick, a press outside); unverified against the live engine.
 
+## Round 5: a taste of the editor
+
+The mod is there to bring people to proschi.app, not to replace the editor:
+each tab is a polished, compact version of its view with a way into the
+editor (docs/design/terminal-mod.md D3, D8, D10, D11).
+
+- [x] R1. **The Diagram first, kept mounted.** The pane's Diagram is drawn as
+  soon as the pane opens, whichever tab shows, before any other page
+  (priority `first`, requests `b…` between `a…` and the prefetches' `c…`),
+  and stays mounted in a hidden Box at a stable key, so tab 1 asks the helper
+  nothing. `/proschi perf` lists `open` and `open: diagram`. Measured with
+  the helper at 100 columns (url-shortener, M-series Mac): start and the tab
+  bar 169 ms, the Diagram cold 268 ms, every other page cold 964 ms after
+  it, the Diagram again 1 ms from its manifest; switching back to tab 1
+  draws no new picture.
+- [x] R2. **No live what-if.** The What-if tab, its state (`paneWhatIf`),
+  banner, sweep chart, the helper's `whatIf` option and `loadDocument`'s
+  options are gone. Analysis ends with the saved `whatif` blocks (verdict,
+  worst p99, availability, cost) and **↗ Explore what-ifs in Proschi**. Tabs
+  are Diagram · Analysis · Sequence · HLD · Tests, `1` to `5`; a stored
+  `whatif` tab opens on Analysis.
+- [x] R3. **The Sequence picker floats** over the page as the player bar's
+  menus do (`floats`, a `menu` Float anchored to `page-sequence/seq-pick`);
+  the header's height never changes (a test checks every strip's top with it
+  open and after a pick).
+- [x] R4. **The HLD as the editor's HLD view**: the checks at the top, Copy
+  HLD markdown, a contents row whose entries scroll the pane to their
+  section (`toc=<kind>`, the helper's `anchors`, `scrollToAnchor`), numbered
+  sections with tables, chips, bars, callouts and stat cards, the
+  architecture and each use case's sequence as figures (Block `figure`, drawn
+  by the helper). Text: numbered sections under a line of contents.
+- [x] R5. **↗ Open in Proschi on every tab**, at the tab bar's right end
+  (label, then `Proschi`, then the icon alone as the room shrinks): the
+  Sequence tab at its scenario's first step, the others at the document.
+- [x] R6. **Review** at 80, 100 and 140 columns, dark on #262626 and light,
+  beside the editor's HLD view: the overview's teams moved out of a stat
+  card that cut them off; the checks verdict moved to the top as the editor
+  has it; sequence figures capped at 24 rows and their caption no longer
+  repeats the scenario's name; the tab bar's Open in Proschi on the tabs'
+  centre line; the Sequence picker capped so its row never wraps.
+
 ## Risks
 
 - Cell aspect is assumed 1:2; tiles must stay seamless under the terminal's

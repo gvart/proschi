@@ -66,7 +66,6 @@ stdin, JSON:
     overlay?: boolean;                              // load overlay, when the document has traffic
     selected?: string;                              // node or expanded system id
     play?: { useCase: string; scenario?: string; frames?: number };  // id or name; first scenario; 8 frames per step
-    whatIf?: { multiplier: number; failed: string[]; saved?: string }; // the pane's live what-if: the overlay's load under it
     cellPx?: { width: number; height: number };     // terminal cell in screen px, default 16×34
     grid?: {                                        // the picture as tiles of whole cells (below)
       room: number; maxRows: number;                // the box it may take, in cells: scaled down to fit

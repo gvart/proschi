@@ -53,13 +53,20 @@ names the scale and the p99 path.
 
 ## D3. A tabbed pane
 
-The pane has a tab bar: Diagram · Analysis · What-if · Sequence · HLD ·
-Tests, picked with `1` to `6` while the pane holds the keys (hotkeys stay in
-the pane, as every other key does: the transcript's drawings share no
-keyboard). The tab is stored in `$.state` (`paneTab`) and read through
-`tabOf`, so a stored value from an older version, or none, is the Diagram.
-What-if, Sequence and HLD came second (D8 to D10). View code lives in
-`plugin/src/views/` so `register.tsx` does not keep growing.
+The pane has a tab bar: Diagram · Analysis · Sequence · HLD · Tests, picked
+with `1` to `5` while the pane holds the keys (hotkeys stay in the pane, as
+every other key does: the transcript's drawings share no keyboard). At its
+right end a quiet **↗ Open in Proschi** opens the same view in the editor:
+the Sequence tab at its scenario's first step (the share link's playback
+target), the others at the document, as the share link has no view. The tab
+is stored in `$.state` (`paneTab`) and read through `tabOf`: none is the
+Diagram, and an older version's What-if tab is Analysis (D8). Sequence and
+HLD came second (D9, D10). View code lives in `plugin/src/views/` so
+`register.tsx` does not keep growing.
+
+The mod is a taste of the editor, not a copy of it: each tab shows a
+polished, compact version of its view and a way into the editor for the
+rest.
 
 ## D4. Views as rows of styled text
 
@@ -95,23 +102,17 @@ in the pane.
 (`frontend/src/playground/share.ts`); the player stores a 0-based step, so
 the link passes `step + 1`.
 
-## D8. The live what-if belongs to the pane
+## D8. Saved what-ifs on Analysis; exploring them is the editor's
 
-The What-if tab holds the editor's live what-if
-(`components/WhatIf/whatIf.ts`): a traffic multiplier from its stops
-(`MULTIPLIERS`, ×0.5 to ×10, `l`/`m` or a Select), nodes taken down (a node
-Select, `t`), or a saved `whatif` block previewed. It is stored in `$.state`
-(`paneWhatIf`, read through `whatIfOf`) and reset when the pane opens another
-document. `loadDocument(source, options)` (`tooling/src/terminal/document.ts`)
-analyses the document under `liveOptions`, so the Diagram (heat, edge chips,
-a node drawn down), Analysis and Tests tabs and the tab bar's failing count
-all follow it, under a yellow `What-if: …` banner with **↺ Reset** (`r`
-except on the Diagram tab, where `r` restarts the player). Transcript
-drawings never take a what-if. The tab shows the impact against the design
-as written with the rows of `sim/delta.ts` (headline, checks, use cases, the
-checks that flipped, the load that moved), the saved blocks
-(`runWhatIfs`, a Preview each), and a sweep of a use case from half to ten
-times its traffic (`sweep`, as the editor's Results) as a text bar chart.
+The Analysis tab ends with **What-ifs**: the saved `whatif` blocks
+(`runWhatIfs`, as the editor's WhatIfTable) with their verdict, worst p99,
+availability and cost against the design as written, an arrow where each
+moved, and their warnings; or, with none saved, how to write one. Under it
+**↗ Explore what-ifs in Proschi** opens the editor, where traffic is turned
+up, nodes taken down and swept live. The pane drew a live what-if until
+Round 5 (a What-if tab, a multiplier, node toggles, a banner and a sweep);
+that is the editor's work, so the pane keeps no what-if state and every tab
+draws the design as written.
 
 ## D9. A sequence diagram in text cells
 
@@ -127,13 +128,22 @@ a scenario picker and no step keys of its own: playback is the Diagram
 tab's, and while its player is in that scenario the Sequence tab lights the
 same step, the current request in pink with a yellow badge.
 
-## D10. The HLD through the terminal's Markdown
+## D10. The HLD as the editor's HLD view
 
-The HLD tab draws `toMarkdown(hld(…))` of the document as written with the
-`Markdown` element; its Mermaid blocks, which the terminal cannot draw, are
-each replaced by a line naming the tab that draws them. **⧉ Copy HLD
-markdown** (`c`) copies the whole document, Mermaid included. The HLD code
-adds about 65 KB to the hooks module (565 KB of its 1 MiB).
+In pictures the HLD tab is `hldPage(hld(…), source)`
+(`tooling/src/render/ui/data.ts`), close to the editor's
+`components/Hld/HldView.tsx`: the title, how the checks stand, **⧉ Copy HLD
+markdown** (`c`, the whole document, Mermaid included), a table of contents,
+then each section numbered with its tables (header rows, dividers, status
+chips, utilisation bars), callouts (requirements, risks by severity) and key
+figures. The architecture and each use case's first scenario are drawn as
+figures (Block `figure`, drawn by the raster helper from the page's
+`source`). Each contents entry (`toc=<kind>`) scrolls the pane to its
+section: the helper answers each anchored heading's row (`anchors`), and
+`scrollToAnchor` moves the pane's window there. In text, the tab draws
+`toMarkdown(hld(…))` with the `Markdown` element, its sections numbered
+under a line of contents and each Mermaid block replaced by a line naming
+the tab that draws it. The HLD code adds about 65 KB to the hooks module.
 
 ## D11. Pictures where the terminal shows them
 
@@ -170,8 +180,13 @@ text. The code is `plugin/src/graphics.ts`.
   body height less 10 in the pane, narrower to keep the ratio when capped.
 - **Theme.** Dark, unless Claude Code's `theme` setting names a light one.
 - **What it shows.** The same as the cells: the load overlay (off while a
-  scenario plays, as the canvas fades it), the selected system, the pane's
-  what-if (`whatIf`, added to the helper's input).
+  scenario plays, as the canvas fades it) and the selected system.
+- **The Diagram first.** The pane's Diagram is drawn as soon as the pane
+  opens, whichever tab shows, ahead of every other page (requests named
+  `b…`, after what is shown, `a…`, and before prefetches, `c…`), and kept
+  mounted (hidden at a stable key), so going back to tab 1 asks the helper
+  nothing. `/proschi perf` lists `open` (to the first drawing in pictures)
+  and `open: diagram` (to the first drawing holding the Diagram).
 - **Playback.** Playing, the helper is asked once for the scenario's frames
   (46 a step, one each 33 ms tick of the 1.5 s travel) as tiles of 16×8
   cells (`grid`, terminal-mod-graphics.md), and the tiles show the step's

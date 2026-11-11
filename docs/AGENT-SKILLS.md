@@ -104,34 +104,30 @@ Buttons copy the source or a share link, open the diagram in Proschi, or,
 with **⛶ Focus**, move it into a pane you drive from the keyboard. The pane
 has tabs: **Diagram**, **Analysis** (cost, the busiest node, load, latency,
 availability and cost per node, percentiles per use case, queues, the cost
-breakdown and single points of failure), **What-if**, **Sequence**, **HLD**
-and **Tests** (each requirement and test, failing ones first with their
-hints, the passing ones folded under **N passing**).
+breakdown, single points of failure and the document's
+[`whatif` blocks](TESTS.md#what-ifs) with their results), **Sequence**,
+**HLD** and **Tests** (each requirement and test, failing ones first with
+their hints, the passing ones folded under **N passing**). **↗ Open in
+Proschi** on the tab bar opens the same design in the editor, where you can
+also explore what-ifs live.
 
-- **What-if** multiplies all traffic (×0.5 to ×10) and takes nodes down, as
-  the editor's what-if does, and shows what that does to p99, availability,
-  cost, the checks and the load against the design as written. It lists the
-  document's [`whatif` blocks](TESTS.md#what-ifs) with their results, each
-  with a Preview, and sweeps a use case from half to ten times its traffic.
-  While a what-if is on, the Diagram, Analysis and Tests tabs show its
-  numbers under a yellow banner with a reset. The file never changes.
 - **Sequence** draws the picked scenario as a sequence diagram, a still
   with a scenario picker. While the Diagram tab's player plays that
   scenario, its current step is lit here too.
-- **HLD** shows the [HLD document](EDITORS.md#hld-documents), and
-  **⧉ Copy HLD markdown** copies it with its Mermaid diagrams.
+- **HLD** shows the [HLD document](EDITORS.md#hld-documents) with numbered
+  sections, its tables and the architecture and sequence diagrams; its
+  contents jump to a section, and **⧉ Copy HLD markdown** copies it with its
+  Mermaid diagrams.
 
 | Key | Does |
 |---|---|
-| `1`–`6` | Switch tabs |
+| `1`–`5` | Switch tabs |
 | `p` | Play or pause |
 | `n` / `b` | Next or previous step |
-| `r` / `e` | Restart, or jump to the end; on What-if, Analysis, HLD and Tests, `r` resets the what-if |
+| `r` / `e` | Restart, or jump to the end |
 | `x` | Show or hide the use case explorer |
 | `d` | Back to the diagram |
-| `s` / `o` | Select the next [team system](SYSTEMS.md), open or close it in place; on What-if, `s` sweeps |
-| `l` / `m` | What-if: less or more traffic |
-| `t` | What-if: take the picked node down, or bring it back up |
+| `s` / `o` | Select the next [team system](SYSTEMS.md), open or close it in place |
 | `c` | HLD: copy it as Markdown |
 | `f` / `u` | Draw only the selected system's design, go back out |
 | `Esc` | Close the pane, back to the prompt |
