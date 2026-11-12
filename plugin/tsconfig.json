@@ -12,7 +12,11 @@
     "resolveJsonModule": true,
     "jsx": "react",
     "jsxFactory": "h",
-    "jsxFragmentFactory": "Fragment"
+    "jsxFragmentFactory": "Fragment",
+    "paths": {
+      "elkjs/*": ["../tooling/node_modules/elkjs/*"],
+      "lz-string": ["../tooling/node_modules/lz-string"]
+    }
   },
   "include": [".claude-plugin/types", "src", "types"]
 }

@@ -7,24 +7,27 @@ import { importFilePath, keyOf, loadDocument, missingImports, parseSource, type 
 import { CACHE_DIR, LOCK_FILE, lockedHash, parseLock, remoteError, type Lock } from '../../tooling/src/lockFormat'
 import { isRemoteSpec } from '../../frontend/src/dsl/imports'
 import { paint } from '../../tooling/src/terminal/paint'
-import { currentStepsOf, isErrorStep, playAt, STEP_MS, TRAVEL_MS } from '../../tooling/src/terminal/playback'
+import { playAt, STEP_MS, TRAVEL_MS } from '../../tooling/src/terminal/playback'
 import { buildScene, type Scene } from '../../tooling/src/terminal/scene'
 import { idList, systemAt, viewError, type SystemsView } from '../../tooling/src/terminal/systems'
-import type { DiagramScenario, DiagramUseCase, FlowStep } from '../../frontend/src/dsl/types'
-import { groupByEndpoint } from '../../frontend/src/playground/useCaseGroups'
+import type { FlowStep } from '../../frontend/src/dsl/types'
 import type { HldSectionKind } from '../../frontend/src/hld/hld'
 import type { PaneSource, PaneTab, Player } from '../types'
-import { analysisPage, hldAnchor, hldPage, stepCardsOf, tabBarPanel } from '../../tooling/src/render/ui/data'
-import type { Control, DrawerPanel, ExplorerPanel, Notice, NoticesPanel, Option, Panel, PlayerBarPanel, Span } from '../../tooling/src/render/ui/contract'
-import { cellPx, graphicsMode, gridFrame, imageSize, maxWidthPx, mergedGrid, probe, probeKey, probeOf, probeSource, rasterOf, sourceOf, themeOf, TMUX_HINT, type GraphicsMode, type RasterGrid, type RasterRequest } from './graphics'
+import { analysisPage, hldAnchor, hldPage, tabBarPanel } from '../../tooling/src/render/ui/data'
+import { ZOOM_COLUMNS, type Control, type Notice, type Panel } from '../../tooling/src/render/ui/contract'
+import { cellPx, graphicsMode, gridFrame, imageSize, maxWidthPx, mergedGrid, probe, probeKey, probeOf, probeSource, rasterOf, sourceOf, themeChanged, themeOf, TMUX_HINT, type GraphicsMode, type RasterGrid, type RasterRequest } from './graphics'
 import { loading, markOpened, paneWindow, pictureSite, otherOverlays, pressTimings, registerPicture, scrollKey, scrollToAnchor, scrollToAnchorOnceShown, type Action, type Ahead, type Drag, type Float, type Picture, type Piece, type Site } from './picture'
 import { around, FIT, isMoved, meets, PAN_STEP, panTo, stepZoom, viewportOf, ZOOMS, zoomLabel, zoomOf, type Viewport, type ZoomState } from './zoom'
-import { answered, ask, didNotStart, isAborted, redraw, retry, serveRequests, setCellAspect } from './helper'
+import { answered, ask, didNotStart, isAborted, isRetryable, redraw, retry, serveRequests, setCellAspect, stopWorker } from './helper'
+import { Lru } from './lru'
 import { hldDocument, hldMarkdown, hldTab } from './views/hld'
-import { legendLine, verdictLine } from './views/lines'
+import { legendLine } from './views/lines'
+import { controlsText, DETAILS, linkControls, noticesOf, noticesText, systemsText, verdictOf, verdictText, type Systems } from './views/pieces'
+import { barPanel, floatOf, playerBarText, playerModel, type Open, type PlayerCtl } from './views/player'
 import { lineView, type Ui } from './views/render'
 import { analysisTab, TABS, tabBar, tabOf } from './views/tabs'
 import { savedWhatIfs } from './views/whatif'
+import { FLOAT_EDGES, hotkey, panelColumns, pickOf, type Draw, type Pick, type View } from './views/view'
 
 /**
  * Draws Proschi diagrams in Claude Code's terminal: ```proschi blocks in
@@ -35,11 +38,10 @@ import { savedWhatIfs } from './views/whatif'
  * docs/design/terminal-mod.md).
  *
  * Built from plugin/src by tooling/build.mjs into hooks/register.js (this
- * module) and hooks/layout.cjs (ELK, which the hooks run in Node).
+ * module); ELK lays diagrams out in hooks/raster.cjs, which the hooks run in
+ * Node (src/helper.ts).
  */
 
-/** Where a diagram is drawn: the elements, the site, the columns it has, and the rows a picture of it may take. */
-type Draw = { ui: Ui; requestId: string; columns: number; rows?: number }
 
 /** The `icons` setting: Nerd Font glyphs, plain symbols, or none. */
 let icons: IconStyle = 'nerd-font'
@@ -63,7 +65,10 @@ let paneAnchor: string | undefined
 
 /** The pane's keys, as its Buttons' hotkeys name them; the system keys where the diagram has systems. */
 const PANE_KEYS = '1-3 tabs · p play · n/b step · r first · e last · d stop · esc back to the prompt'
+/** In pictures the diagram zooms too. */
+const PICTURE_KEYS = '1-3 tabs · p play · n/b step · r first · e last · d stop · z/x zoom · 0 fit · esc back to the prompt'
 const TAB_KEYS = '1-3 tabs · ↑↓ scroll · esc back to the prompt'
+const HLD_KEYS = '1-3 tabs · ↑↓ scroll · c copy · esc back to the prompt'
 const SYSTEM_KEYS = 's next system · o open/close · f focus in · u back out'
 
 /** One animation frame, in ms: about 30 a second. */
@@ -78,26 +83,41 @@ const HINT = [
   'Mermaid or ASCII art when showing an architecture or a request flow.',
 ].join(' ')
 
-// Per module load: what is laid out, being laid out, or failed, by document key.
-const layouts = new Map<string, Layout | { error: string }>()
+// Per module load: what is laid out, being laid out, or failed, by document key (the latest few: a session may draw many).
+const layouts = new Lru<string, Layout | { error: string }>(32)
 const pending = new Set<string>()
-const documents = new Map<string, Document>()
-const scenes = new Map<string, Scene>()
+const documents = new Lru<string, Document>(32)
+const scenes = new Lru<string, Scene>(64)
 const timers = new Map<string, { cancel(): void }>()
+/** Per-drawing state (by view id) is kept for the latest SITES drawings. */
+const SITES = 64
 
 const FENCE = /^```proschi[^\n]*\n([\s\S]*?)\n```[ \t]*$/gm
 
 export function register(on: On, options: PluginOptions): void {
-  const chosen = (options as { icons?: unknown }).icons
-  icons = chosen === 'symbols' || chosen === 'none' ? chosen : 'nerd-font'
-  graphics = graphicsMode((options as { graphics?: unknown }).graphics)
-  setCellAspect((options as { cellAspect?: unknown }).cellAspect)
+  icons = options.icons === 'symbols' || options.icons === 'none' ? options.icons : 'nerd-font'
+  graphics = graphicsMode(options.graphics)
+  const refused = setCellAspect(options.cellAspect)
 
   on('session.start', async ($, e, next) => {
+    if (refused) $.ui.log(`proschi: ${refused}`, { to: 'debug' })
     // Layouts and pictures are asked from this session's task, so no redraw aborts them.
     void serveRequests($)
     await $.command.register({ name: 'proschi', description: 'Proschi diagrams: /proschi view <file.proschi> shows one in a pane', argumentHint: 'view [--expand <id>,…] [--focus <id>] <file>' })
     return next(e)
+  })
+
+  // The worker goes with the session (it deletes its folder as it goes).
+  on('session.end', async ($, e, next) => {
+    stopWorker()
+    return next(e)
+  })
+
+  // The pictures' theme follows Claude Code's.
+  on('config.set', { key: 'theme' }, async ($, e, next) => {
+    const set = await next(e)
+    themeChanged()
+    return set
   })
 
   on('prompt.compose', async ($, e, next) => {
@@ -206,6 +226,16 @@ export function register(on: On, options: PluginOptions): void {
     const failing = 'error' in loaded ? 0 : loaded.doc.tests.filter(t => !t.passed).length
     const draw: Draw = { ui, requestId: PANE, columns, rows: Math.max(INLINE_ROWS, bodyRows - 10) }
 
+    // The keys, one muted row (and the systems' where it has them) under the tab's body, in either mode.
+    const keys = (systems: boolean, pictures = false) => (
+      <ui.Box flexDirection="column">
+        <ui.Text dimColor wrap="truncate-end">
+          {isFocused ? (tab === 'diagram' ? (pictures ? PICTURE_KEYS : PANE_KEYS) : tab === 'hld' ? HLD_KEYS : TAB_KEYS) : 'ctrl+x tab focuses the pane for its keys'}
+        </ui.Text>
+        {isFocused && systems && <ui.Text dimColor wrap="truncate-end">{SYSTEM_KEYS}</ui.Text>}
+      </ui.Box>
+    )
+
     // In pictures: the tab bar and the tab's body, one drawing.
     const mode = await modeOf($, ui, PANE, PANE_VIEW)
     if (mode.kind !== 'text' && !('error' in loaded)) {
@@ -242,26 +272,23 @@ export function register(on: On, options: PluginOptions): void {
           scrollToAnchorOnceShown($, PANE_VIEW, paneAnchor)
           paneAnchor = undefined
         }
-        return view.element
+        return (
+          <ui.Box flexDirection="column">
+            {view.element}
+            {keys(tab === 'diagram' && view.systems, true)}
+          </ui.Box>
+        )
       }
     }
 
     const opens = 'error' in loaded ? undefined : loaded.doc.link()
     const bar = tabBar(ui, tab, failing, to => void update($, paneTab, () => to), opens === undefined ? undefined : surface => void openLink($, surface, opens))
-    const keys = (systems: boolean) => (
-      <ui.Box flexDirection="column">
-        <ui.Text dimColor wrap="truncate-end">
-          {isFocused ? (tab === 'diagram' ? PANE_KEYS : TAB_KEYS) : 'ctrl+x tab focuses the pane for its keys'}
-        </ui.Text>
-        {isFocused && systems && <ui.Text dimColor wrap="truncate-end">{SYSTEM_KEYS}</ui.Text>}
-      </ui.Box>
-    )
     if (tab !== 'diagram') {
       if ('error' in loaded) return <ui.Text color="red">{loaded.error}</ui.Text>
       const { doc, key } = loaded
       const link = opens!
       const body =
-        tab === 'hld' ? hldTab(ui, doc, key, (surface, text) => void copy($, surface, text, 'the HLD markdown'))
+        tab === 'hld' ? hldTab(ui, doc, key, (surface, text) => void copy($, surface, text, 'the HLD markdown'), anchor => void scroll($, { to: { key: anchor }, in: PANE, block: 'start' }))
         : analysisTab(ui, doc, savedWhatIfs(key, doc), columns, surface => void openLink($, surface, link))
       // Opened on a section: the pane scrolls to its heading once drawn.
       if (paneAnchor && tab === 'hld') {
@@ -307,14 +334,22 @@ function pagePart($: EngineInterface, tab: Exclude<PaneTab, 'diagram'>, c: PageC
   if (tab === 'analysis') {
     const link = doc.link()
     actions['explore-whatifs'] = surface => void openLink($, surface, link)
-    return { panel: analysisPage(doc, savedWhatIfs(key, doc)), actions }
+    return { panel: pageOf(`analysis\0${key}`, () => analysisPage(doc, savedWhatIfs(key, doc))), actions }
   }
   const markdown = hldMarkdown(doc, key)
-  const h = hldDocument(doc, key)
+  const design = hldDocument(doc, key)
   actions['hld-copy'] = surface => void copy($, surface, markdown, 'the HLD markdown')
   // The table of contents: each entry scrolls the pane to its section.
-  for (const s of h.sections) actions[`toc=${s.kind}`] = () => void scrollToAnchor($, PANE_VIEW, hldAnchor(s.kind))
-  return { panel: hldPage(h, c.source), actions }
+  for (const s of design.sections) actions[`toc=${s.kind}`] = () => void scrollToAnchor($, PANE_VIEW, hldAnchor(s.kind))
+  return { panel: pageOf(`hld\0${key}`, () => hldPage(design, c.source)), actions }
+}
+
+/** The pages built, by tab and document: the same object each render, so its key (helper.ts panelKey) is hashed once. */
+const pages = new Lru<string, Panel>(8)
+function pageOf(key: string, make: () => Panel): Panel {
+  let panel = pages.get(key)
+  if (!panel) pages.set(key, (panel = make()))
+  return panel
 }
 
 /** A diagram drawn at a site: in pictures where the terminal shows them (with `top`'s pieces over it, the pane's tabs), else in text cells. */
@@ -391,7 +426,7 @@ async function projectRoot($: EngineInterface, dir: string): Promise<string> {
 }
 
 /** Why an import was not read, by its key: a remote one not synced, as `proschi check` says it. */
-const importReasons = new Map<string, string>()
+const importReasons = new Lru<string, string>(256)
 
 /** A file with the files it imports, keyed relative to it as the editor resolves them (tooling/src/share.ts). */
 async function readWithImports($: EngineInterface, file: string): Promise<Source> {
@@ -462,23 +497,22 @@ function watch($: EngineInterface, file: string): void {
 
 /**
  * Lays a document out in Node: a request to the session's raster worker
- * (src/helper.ts), or hooks/layout.cjs one shot where none runs;
- * redraws once it is done. Aborted (the drawing that asked was redrawn, or
- * another view opened), it is not laid out, nor failed: the next draw asks
- * again, a few times before the abort is reported.
+ * (src/helper.ts), which caches the layout for the pictures too; redraws
+ * once it is done. Aborted (the drawing that asked was redrawn, or another
+ * view opened), timed out or with the worker gone, it is not laid out, nor
+ * failed: the next draw asks again, a few times before it is reported.
  */
 function requestLayout($: EngineInterface, key: string, source: Source): void {
   if (pending.has(key)) return
   pending.add(key)
-  // Without pictures no worker is started for it: one shot, unless one runs.
-  void ask($, { kind: 'layout', ...source }, 'now', graphics !== 'off')
+  void ask($, { kind: 'layout', ...source }, 'now')
     .then(
       out => {
         answered(`layout:${key}`)
         layouts.set(key, out as Layout)
       },
       (error: unknown) => {
-        if (isAborted(error) && retry(`layout:${key}`)) return
+        if (isRetryable(error) && retry(`layout:${key}`)) return
         const why = error instanceof Error ? error.message : String(error)
         layouts.set(key, { error: didNotStart(error) ? `Proschi lays diagrams out with Node.js 18 or newer, which did not start: ${why}` : why })
       },
@@ -487,34 +521,6 @@ function requestLayout($: EngineInterface, key: string, source: Source): void {
       pending.delete(key)
       redraw($)
     })
-}
-
-/** One scenario of a use case, as the player plays it. */
-interface Pick {
-  value: string
-  useCase: DiagramUseCase
-  scenario: DiagramScenario
-}
-
-const pickOf = (useCase: DiagramUseCase, scenario: DiagramScenario): Pick => ({ value: `${useCase.id}:${scenario.id}`, useCase, scenario })
-
-/** A drawn diagram, as its handlers and its animation need it. */
-interface View {
-  d: Draw
-  viewId: string
-  rasterKey: string
-  /** The keyed Box around the Raster: what a press scrolls the pane to, the Raster itself being no scroll target. */
-  anchorKey: string
-  scene: Scene
-  /** System badges and the one the system keys act on, for the frames the animation paints. */
-  systems: Document['systems']
-  selected?: string
-  /** The width of the bars under the diagram: the diagram's, at least as wide as their controls want where the terminal has room. */
-  width: number
-  overlay: Document['overlay']
-  edges: Document['edges']
-  /** Drawn in the pane, whose Buttons take hotkeys and whose body scrolls under the plugin. */
-  inPane: boolean
 }
 
 /** A stored player in the current shape: an older version stored `beat` instead of `step` and `mode`. */
@@ -531,11 +537,6 @@ function normal(p: Partial<Player> | undefined): Player {
     ...(isMoved(zoomOf(p?.zoom)) ? { zoom: zoomOf(p?.zoom) } : {}),
   }
 }
-
-/** The canvas's tokens (design/tokens.css): the pink of playback, the ink on it, the yellow of the primary control. */
-const PINK = '#ff5da2'
-const INK = '#111111'
-const YELLOW = '#ffd23f'
 
 /** What the bars under a diagram want, so they lay out on one row each. */
 const BARS_WIDTH = 80
@@ -560,9 +561,6 @@ async function documentOf($: EngineInterface, viewId: string, written: Source, f
   if (doc.diagram.nodes.length === 0) return { error: `${where} has no components to draw.` }
   return { doc, source, key, player }
 }
-
-/** Warnings a drawing in the transcript lists before it points at the pane's Analysis tab for the rest. */
-const INLINE_WARNINGS = 2
 
 /**
  * How a site draws (docs/design/terminal-mod.md D11, D12): text cells with
@@ -591,9 +589,29 @@ type DrawnView =
   | { kind: 'loading'; rows: number }
   | { kind: 'picture'; pieces: Piece[]; actions: Record<string, Action>; ahead: Ahead[]; float?: Float; rows: number; systems: boolean; corner?: Site['corner']; keys?: Site['keys']; onDrag?: Site['onDrag'] }
 
+/** What both halves of a drawing (pictures, text) draw from: the document, its scene and player, and what its pieces show. */
+interface Prepared {
+  doc: Document
+  source: Source
+  view: View
+  player: Player
+  pick?: Pick
+  playing?: Pick
+  /** The step shown, 0-based, and how far its packet has travelled (0 while it animates, else 100). */
+  step: number
+  progress: number
+  systems: Selectable[]
+  selected?: Selectable
+  link: string
+  lost: string[]
+  title: string
+  what: { file: string } | { source: Source }
+  /** Wide enough for the long labels, else the short ones. */
+  roomy: boolean
+}
+
 /** The drawing of one document: the diagram with its use case picker or player and its links, or why it cannot be drawn. `file` is where the source was read from, if anywhere. */
 async function diagramView($: EngineInterface, d: Draw, viewId: string, written: Source, file?: string, mode: Mode = { kind: 'text' }, priority: 'now' | 'first' = 'now'): Promise<DrawnView | { error: string }> {
-  const { ui } = d
   const loaded = await documentOf($, viewId, written, file)
   if ('error' in loaded) return loaded
   const { doc, source, key, player } = loaded
@@ -602,7 +620,7 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
   if (!layout) {
     requestLayout($, key, source)
     if (mode.kind !== 'text') return { kind: 'loading', rows: Math.min(d.rows ?? INLINE_ROWS, 20) }
-    return { kind: 'text', element: <ui.Text dimColor>Laying out {doc.diagram.title ?? 'the diagram'}…</ui.Text>, systems: false }
+    return { kind: 'text', element: <d.ui.Text dimColor>Laying out {doc.diagram.title ?? 'the diagram'}…</d.ui.Text>, systems: false }
   }
   if ('error' in layout) return { error: `Proschi could not lay ${file ?? 'this diagram'} out: ${layout.error}` }
 
@@ -625,18 +643,55 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
   const view: View = { d, viewId, rasterKey: `d-${viewId}`, anchorKey: `at-${viewId}`, scene, width, overlay: doc.overlay, edges: doc.edges, systems: doc.systems, ...(selected ? { selected: selected.id } : {}), inPane: d.requestId === PANE }
   if (playing && player.isPlaying && !timers.has(viewId)) animate($, view, steps)
 
-  // While a step animates, its frames are blitted in place; a drawing starts it from the beginning.
-  const progress = timers.has(viewId) ? 0 : 100
-  // The link's step counts from 1, as the editor's player does (playground/share.ts PlaybackTarget).
-  const link = doc.link(playing ? { useCase: playing.useCase.id, ...(playing.useCase.scenarios.length > 1 ? { scenario: playing.scenario.id } : {}), step: step + 1 } : undefined)
-  const lost = lostImports(written, keyOf(written))
-  const title = file ? basename(file) : (doc.diagram.title ?? 'diagram')
-  const what = file ? { file } : { source }
-  const hasSystems = systems.length > 0 || player.focus !== undefined
-  // Wide enough for the long labels, else the short ones.
-  const roomy = view.width >= 79
-  // The same drawing as a picture, where the terminal shows them: what the cells would show, playback's frames included.
-  const theme = graphics === 'off' ? 'dark' : await themeOf($)
+  const p: Prepared = {
+    doc,
+    source,
+    view,
+    player,
+    ...(pick ? { pick } : {}),
+    ...(playing ? { playing } : {}),
+    step,
+    // While a step animates, its frames are blitted in place; a drawing starts it from the beginning.
+    progress: timers.has(viewId) ? 0 : 100,
+    systems,
+    ...(selected ? { selected } : {}),
+    // The link's step counts from 1, as the editor's player does (playground/share.ts PlaybackTarget).
+    link: doc.link(playing ? { useCase: playing.useCase.id, ...(playing.useCase.scenarios.length > 1 ? { scenario: playing.scenario.id } : {}), step: step + 1 } : undefined),
+    lost: lostImports(written, keyOf(written)),
+    title: file ? basename(file) : (doc.diagram.title ?? 'diagram'),
+    what: file ? { file } : { source },
+    roomy: view.width >= 79,
+  }
+  if (mode.kind === 'text') return textView($, p, mode)
+  return (await pictureView($, p, mode, priority)) ?? textView($, p, { kind: 'text' })
+}
+
+/** Whether a diagram is wider than its room drawn as text cells, so its picture at fit is too small to read. */
+const isWide = (p: Prepared) => p.view.scene.columns > p.view.d.columns
+
+/** The notice a picture too wide to read at fit gets, pointing to what shows it larger. */
+function wideNotice(p: Prepared, z: ZoomState): Notice[] {
+  if (!isWide(p) || z.level > 1) return []
+  const { d, inPane } = p.view
+  const text = inPane
+    ? `Drawn small: ${p.view.scene.columns} columns wide in ${d.columns}. Zoom with + or z, then drag to pan.`
+    : `Drawn small: ${p.view.scene.columns} columns wide in ${d.columns}. Focus opens it in the pane to zoom.`
+  return [{ text, tone: 'muted' }]
+}
+
+/**
+ * The drawing as pictures (src/picture.tsx draws the pieces): the reserved
+ * area while the first are drawn; undefined where the helper could not draw
+ * it, for the text drawing to stand instead.
+ */
+async function pictureView($: EngineInterface, p: Prepared, mode: Exclude<Mode, { kind: 'text' }>, priority: 'now' | 'first'): Promise<DrawnView | undefined> {
+  const { doc, source, view, pick, playing, step, progress } = p
+  const { d, viewId } = view
+  const hasSystems = p.systems.length > 0 || p.player.focus !== undefined
+  const z = view.inPane ? zoomOf(p.player.zoom) : FIT
+  const notices = noticesOf(doc, p.lost, importReasons, view.inPane, wideNotice(p, z))
+  const theme = await themeOf($)
+  // The same drawing as a picture: what the cells would show, playback's frames included.
   const optionsFor = (play?: Pick, zoomed?: { zoom: number; window?: Viewport }): RasterRequest['options'] => ({
     theme,
     maxWidthPx: maxWidthPx(d.columns),
@@ -648,150 +703,126 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
       room: d.columns,
       maxRows: d.rows ?? INLINE_ROWS,
       cellPx: cellPx(),
-      fill: { columns: panelColumns(d.columns), ...(!pick && !view.inPane && !doc.diagram.title && noticesOf(view, doc, lost).length === 0 ? { top: true } : {}), ...(!play && doc.overlay && doc.edges ? { legend: true } : {}) },
+      fill: { columns: panelColumns(d.columns), ...(view.inPane ? { controls: ZOOM_COLUMNS + 1 } : {}), ...(!pick && !view.inPane && !doc.diagram.title && notices.length === 0 ? { top: true } : {}), ...(!play && doc.overlay && doc.edges ? { legend: true } : {}) },
       ...(zoomed ? { zoom: zoomed.zoom, ...(zoomed.window ? { window: zoomed.window } : {}) } : {}),
     },
   })
+  const alt = `${doc.diagram.title ?? p.title}: the architecture diagram as a picture`
+  images.delete(viewId)
+  // Zoomed (the pane): the still at fit for the room, then the zoomed tiles of the viewport.
+  if (z.level > 1) {
+    const zoomed = zoomedPicture($, view, { source, z, ...(playing ? { playing } : {}), ...(pick ? { pick } : {}), step, progress, priority, optionsFor, mode, alt })
+    if ('error' in zoomed) return undefined
+    const built = pictureParts($, p, notices, zoomed.picture, { z, ...(zoomed.at ? { at: zoomed.at } : {}) })
+    return { kind: 'picture', ...built, rows: zoomed.rows, systems: hasSystems }
+  }
   const request: RasterRequest = { source, options: optionsFor(playing) }
-  const alt = `${doc.diagram.title ?? title}: the architecture diagram as a picture`
-
-  if (mode.kind !== 'text') {
-    images.delete(viewId)
-    // Zoomed (the pane): the still at fit for the room, then the zoomed tiles of the viewport.
-    const z = view.inPane ? zoomOf(player.zoom) : FIT
-    if (z.level > 1) {
-      const zoomed = zoomedPicture($, view, { source, z, ...(playing ? { playing } : {}), ...(pick ? { pick } : {}), step, progress, priority, optionsFor, mode, alt })
-      if ('error' in zoomed) return diagramView($, d, viewId, written, file, { kind: 'text' }, priority)
-      const built = pictureParts($, view, doc, { pick, playing, step, player, systems, selected, link, lost, title, what, roomy, sourceText: source.source, ...(zoomed.picture ? { picture: zoomed.picture } : {}), zoom: { z, ...(zoomed.at ? { at: zoomed.at } : {}) } })
-      return { kind: 'picture', ...built, rows: zoomed.rows, systems: hasSystems }
-    }
-    const out = rasterOf($, request, priority)
-    const size = out && !('error' in out) ? (out.grid ? { columns: out.grid.columns, rows: out.grid.rows } : imageSize(out, d.columns, d.rows ?? INLINE_ROWS)) : undefined
-    const rows = (size?.rows ?? Math.min(scene.rows, d.rows ?? INLINE_ROWS)) + 16
-    if (mode.kind === 'loading') return { kind: 'loading', rows }
-    // No picture: the text drawing stands.
-    if (out && 'error' in out) return diagramView($, d, viewId, written, file, { kind: 'text' }, priority)
-    let picture: Picture | undefined
-    if (out && size) {
-      const imageKey = `img-${viewId}`
-      const g = out.grid
-      if (g && (!request.options.play || g.steps?.length)) {
-        // In tiles: the step's first frame while it animates (the animation blits the rest), else its last.
-        const at = request.options.play ? step : undefined
-        const shown = gridFrame(g, at, progress === 0 ? 0 : FRAMES - 1)
-        images.set(viewId, { key: imageKey, grid: g, shown, ...(mode.form ? { form: mode.form } : {}) })
-        const tiles = g.tiles.map((t, i) => ({ key: `${imageKey}-${i}`, col: t.col, row: t.row, columns: t.columns, rows: t.rows, file: shown[i]! }))
-        picture = { key: imageKey, file: out.base, columns: size.columns, rows: size.rows, alt, anchorKey: view.anchorKey, tiles, ...(mode.form ? { form: mode.form } : {}) }
-      } else if (!g) {
-        const frames = request.options.play ? out.frames : undefined
-        const shownFrames = frames?.[step]
-        const file = shownFrames?.length ? shownFrames[progress === 0 ? 0 : shownFrames.length - 1]! : out.base
-        if (!request.options.play || frames?.length) {
-          images.set(viewId, { key: imageKey, ...(frames ? { frames } : {}), ...(mode.form ? { form: mode.form } : {}) })
-          picture = { key: imageKey, file, columns: size.columns, rows: size.rows, alt, anchorKey: view.anchorKey, ...(mode.form ? { form: mode.form } : {}) }
-        }
+  const out = rasterOf($, request, priority)
+  const size = out && !('error' in out) ? (out.grid ? { columns: out.grid.columns, rows: out.grid.rows } : imageSize(out, d.columns, d.rows ?? INLINE_ROWS)) : undefined
+  const rows = (size?.rows ?? Math.min(view.scene.rows, d.rows ?? INLINE_ROWS)) + 16
+  if (mode.kind === 'loading') return { kind: 'loading', rows }
+  // No picture: the text drawing stands.
+  if (out && 'error' in out) return undefined
+  let picture: Picture | undefined
+  if (out && size) {
+    const imageKey = `img-${viewId}`
+    const g = out.grid
+    if (g && (!request.options.play || g.steps?.length)) {
+      // In tiles: the step's first frame while it animates (the animation blits the rest), else its last.
+      const at = request.options.play ? step : undefined
+      const shown = gridFrame(g, at, progress === 0 ? 0 : FRAMES - 1)
+      images.set(viewId, { key: imageKey, grid: g, shown, ...(mode.form ? { form: mode.form } : {}) })
+      const tiles = g.tiles.map((t, i) => ({ key: `${imageKey}-${i}`, col: t.col, row: t.row, columns: t.columns, rows: t.rows, file: shown[i]! }))
+      picture = { key: imageKey, file: out.base, columns: size.columns, rows: size.rows, alt, anchorKey: view.anchorKey, tiles, ...(mode.form ? { form: mode.form } : {}) }
+    } else if (!g) {
+      const frames = request.options.play ? out.frames : undefined
+      const shownFrames = frames?.[step]
+      const file = shownFrames?.length ? shownFrames[progress === 0 ? 0 : shownFrames.length - 1]! : out.base
+      if (!request.options.play || frames?.length) {
+        images.set(viewId, { key: imageKey, ...(frames ? { frames } : {}), ...(mode.form ? { form: mode.form } : {}) })
+        picture = { key: imageKey, file, columns: size.columns, rows: size.rows, alt, anchorKey: view.anchorKey, ...(mode.form ? { form: mode.form } : {}) }
       }
     }
-    const fitAt = out && !('error' in out) && out.grid ? { grid: out.grid, vp: { col: 0, row: 0, columns: out.grid.columns, rows: out.grid.rows } } : undefined
-    const built = pictureParts($, view, doc, { pick, playing, step, player, systems, selected, link, lost, title, what, roomy, sourceText: source.source, picture, ...(view.inPane ? { zoom: { z, ...(fitAt ? { at: fitAt } : {}) } } : {}) })
-    // Ahead: the scenario's frames before Play is pressed (its bar is in `built.ahead`).
-    if (!playing && pick) rasterOf($, { source, options: optionsFor(pick) }, 'later')
-    return { kind: 'picture', ...built, rows, systems: hasSystems }
   }
+  const fitAt = out && !('error' in out) && out.grid ? { grid: out.grid, vp: { col: 0, row: 0, columns: out.grid.columns, rows: out.grid.rows } } : undefined
+  const built = pictureParts($, p, notices, picture, view.inPane ? { z, ...(fitAt ? { at: fitAt } : {}) } : undefined)
+  // Ahead: the scenario's frames before Play is pressed (its bar is in `built.ahead`); in the pane, the first zoom level's viewport.
+  if (!playing && pick) rasterOf($, { source, options: optionsFor(pick) }, 'later')
+  if (view.inPane && fitAt && picture) prefetchZoom($, view, fitAt.grid, stepZoom(z, 1), playing, optionsFor, source)
+  return { kind: 'picture', ...built, rows, systems: hasSystems }
+}
 
+/** The drawing as text cells: the player bar, the title, the notices, the diagram (in the pane, panned where it is wider), the legend, the verdict, the systems and the links. */
+function textView($: EngineInterface, p: Prepared, mode: Extract<Mode, { kind: 'text' }>): DrawnView {
+  const { doc, view, pick, playing, step, progress } = p
+  const { d, viewId } = view
+  const { ui } = d
+  const scene = view.scene
+  const steps = playing?.scenario.steps ?? []
   const painted = paint(scene, { overlay: doc.overlay, edges: doc.edges, icons, systems: doc.systems, ...(view.selected ? { selected: view.selected } : {}), ...(steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {}) })
   // In the pane, a drawing wider than it shows a viewport of it, panned by a drag, h and l, and ← → with the focus on it.
   const wide = view.inPane && painted.columns > d.columns
-  const pan = wide ? textPan($, view, painted, zoomOf(player.zoom)) : undefined
+  const pan = wide ? textPan($, view, painted, zoomOf(p.player.zoom)) : undefined
   textCrops.set(viewId, pan ? pan.vp : undefined)
   const grid = pan ? painted.crop(pan.vp.col, 0, pan.vp.columns, painted.rows) : painted
-  // The verdict on one row, with room left for its Details button in the transcript.
-  const verdict = verdictLine(doc.tests, view.width - (view.inPane ? 0 : 13))
-
-  const m = pick && playerModel($, view, doc, pick, playing, step, player)
-  return { kind: 'text', element: (
-    <ui.Box flexDirection="column">
-      {m && playerBarText(view, doc, m)}
-      {doc.diagram.title && (
-        <ui.Box flexDirection="column">
-          <ui.Text bold>{doc.diagram.title}</ui.Text>
-          {doc.diagram.summary && <ui.Text dimColor>{doc.diagram.summary}</ui.Text>}
-        </ui.Box>
-      )}
-      <ui.Box key={view.anchorKey} flexDirection="column">
-        {mode.hint && (
-          <ui.Text dimColor wrap="truncate-end">
-            {TMUX_HINT}
-          </ui.Text>
-        )}
-        {painted.columns > d.columns && (
-          <ui.Text dimColor wrap="truncate-end">
-            {pan
+  const lead: Notice[] = [
+    ...(mode.hint ? [{ text: TMUX_HINT, tone: 'muted' as const }] : []),
+    ...(painted.columns > d.columns
+      ? [
+          {
+            text: pan
               ? `↔ ${painted.columns} columns wide, wider than the ${d.columns} here: columns ${pan.vp.col + 1}–${pan.vp.col + pan.vp.columns} shown. Drag it, or h and l (← → after a click on it), to pan.`
-              : `↔ ${painted.columns} columns wide, wider than the ${d.columns} here: use ⛶ Focus or a wider window to see it whole.`}
-          </ui.Text>
-        )}
-        {lost.some(name => !importReasons.has(name)) && (
-          <ui.Text dimColor wrap="truncate-end">
-            ⚠ Not found, so drawn as plain boxes: {lost.filter(name => !importReasons.has(name)).join(', ')}
-          </ui.Text>
-        )}
-        {lost.filter(name => importReasons.has(name)).map(name => (
-          <ui.Text key={`lost-${name}`} dimColor>
-            ⚠ {importReasons.get(name)}
-          </ui.Text>
-        ))}
-        {doc.notes.map(note => (
-          <ui.Text color="yellow">
-            ⚠ {note.text}
-            {note.hint && <ui.Text dimColor> → {note.hint}</ui.Text>}
-          </ui.Text>
-        ))}
-        {(view.inPane ? doc.warnings : doc.warnings.slice(0, INLINE_WARNINGS)).map(w => (
-          <ui.Text key={`warn-${w}`} color="yellow" wrap="truncate-end">
-            ⚠ {w}
-          </ui.Text>
-        ))}
-        {!view.inPane && doc.warnings.length > INLINE_WARNINGS && (
-          <ui.Text dimColor wrap="truncate-end">
-            … {doc.warnings.length - INLINE_WARNINGS} more: ⛶ Focus, then Analysis
-          </ui.Text>
-        )}
-        {pan ? (
-          <ui.Box key={`${view.rasterKey}-pan`} flexDirection="column" width={grid.columns} height={grid.rows}>
-            <ui.Raster key={view.rasterKey} columns={grid.columns} rows={grid.rows} cells={grid.toBase64()} />
-            <ui.Box position="absolute" top={0} left={0} width={grid.columns} height={grid.rows}>
-              <ui.Client key={pan.overlay} module="./uiOverlay.js" props={{ controls: [], drag: 'x' }} width={grid.columns} height={grid.rows} />
-            </ui.Box>
-            <ui.Box display="none">
-              <ui.Button key={`pan-h-${viewId}`} label="h" hotkey="h" onPress={pan.keys.left!} />
-              <ui.Button key={`pan-l-${viewId}`} label="l" hotkey="l" onPress={pan.keys.right!} />
-            </ui.Box>
+              : `↔ ${painted.columns} columns wide, wider than the ${d.columns} here: ⛶ Focus opens it in the pane, where it pans.`,
+            tone: 'muted' as const,
+          },
+        ]
+      : []),
+  ]
+  const verdict = verdictOf(doc.tests)
+  const sys = systemsOf($, p)
+  const links = linksOf($, p)
+  const m = pick && playerModel(view, doc, pick, playing, step, p.player.isPlaying, playerCtl($, view, pick.scenario.steps))
+  return {
+    kind: 'text',
+    element: (
+      <ui.Box flexDirection="column">
+        {m && playerBarText(view, doc, m)}
+        {doc.diagram.title && (
+          <ui.Box flexDirection="column">
+            <ui.Text bold>{doc.diagram.title}</ui.Text>
+            {doc.diagram.summary && <ui.Text dimColor>{doc.diagram.summary}</ui.Text>}
           </ui.Box>
-        ) : (
-          <ui.Raster key={view.rasterKey} columns={grid.columns} rows={grid.rows} cells={grid.toBase64()} />
         )}
-        {doc.edges && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)}
-      </ui.Box>
-      {verdict && (
-        <ui.Box key={`verdict-${viewId}`} flexDirection="row" gap={1} width={view.width}>
-          {lineView(ui, verdict)}
-          {!view.inPane && <ui.Button key={`tests-${viewId}`} label="⛶ Details" dimColor onPress={() => focus($, view, title, what, 'hld', 'requirements')} />}
+        <ui.Box key={view.anchorKey} flexDirection="column">
+          {noticesText(ui, noticesOf(doc, p.lost, importReasons, view.inPane, lead), `notice-${viewId}`)}
+          {pan ? (
+            <ui.Box key={`${view.rasterKey}-pan`} flexDirection="column" width={grid.columns} height={grid.rows}>
+              <ui.Raster key={view.rasterKey} columns={grid.columns} rows={grid.rows} cells={grid.toBase64()} />
+              <ui.Box position="absolute" top={0} left={0} width={grid.columns} height={grid.rows}>
+                <ui.Client key={pan.overlay} module="./uiOverlay.js" props={{ controls: [], drag: 'x' }} width={grid.columns} height={grid.rows} />
+              </ui.Box>
+              <ui.Box display="none">
+                <ui.Button key={`pan-h-${viewId}`} label="h" hotkey="h" onPress={pan.keys.left!} />
+                <ui.Button key={`pan-l-${viewId}`} label="l" hotkey="l" onPress={pan.keys.right!} />
+              </ui.Box>
+            </ui.Box>
+          ) : (
+            <ui.Raster key={view.rasterKey} columns={grid.columns} rows={grid.rows} cells={grid.toBase64()} />
+          )}
+          {/* The load legend, as the picture's badge: on a still, not while a scenario plays. */}
+          {doc.edges && !playing && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)}
         </ui.Box>
-      )}
-      {hasSystems && systemBar($, view, doc, systems, selected, player)}
-      <ui.Box flexDirection="row" gap={1} borderStyle="round" borderColor="gray" paddingX={1} width={view.width}>
-        <ui.Button key={`src-${viewId}`} label={roomy ? '⧉ Copy source' : '⧉ Source'} onPress={press => void copy($, press.surface, source.source, 'the Proschi source')} />
-        <ui.Button key={`lnk-${viewId}`} label={roomy ? '⧉ Copy share link' : '⧉ Link'} onPress={press => void copy($, press.surface, link, 'the share link')} />
-        <ui.Button key={`open-${viewId}`} label={roomy ? '↗ Open in Proschi' : '↗ Open'} variant="primary" onPress={press => void openLink($, press.surface, link)} />
-        {!view.inPane && <ui.Button key={`focus-${viewId}`} label="⛶ Focus" onPress={() => focus($, view, title, what)} />}
+        {verdict && verdictText(ui, verdict, view.width, viewId, view.inPane ? undefined : () => focus($, view, p.title, p.what, 'hld', 'requirements'))}
+        {sys && systemsText(ui, sys.model, viewId, view.width, id => sys.actions[id]?.())}
+        {controlsText(ui, links.controls, viewId, view.width, (id, surface) => links.actions[id]?.(surface))}
       </ui.Box>
-    </ui.Box>
-  ), systems: hasSystems }
+    ),
+    systems: sys !== undefined,
+  }
 }
 
 /** The columns of a text drawing the pane shows, by view, where it is wider than the pane: what the animation crops its frames to. */
-const textCrops = new Map<string, Viewport | undefined>()
+const textCrops = new Lru<string, Viewport | undefined>(SITES)
 
 /** A text drawing wider than the pane: the viewport across it, and what pans it (a row a drag's column, PAN_STEP a key). */
 function textPan($: EngineInterface, view: View, painted: { columns: number; rows: number }, z: ZoomState): { vp: Viewport; overlay: string; keys: Record<string, () => void> } {
@@ -817,10 +848,10 @@ function textPan($: EngineInterface, view: View, painted: { columns: number; row
 }
 
 /** The picture a drawing shows in place of its Raster, by view id: what the animation swaps frames into. */
-const images = new Map<string, { key: string; frames?: string[][]; grid?: RasterGrid; shown?: string[]; form?: 'file' | 'png'; mounted?: Set<number> }>()
+const images = new Lru<string, { key: string; frames?: string[][]; grid?: RasterGrid; shown?: string[]; form?: 'file' | 'png'; mounted?: Set<number> }>(SITES)
 
 /** The select open in a drawing in pictures, by view id: its menu is drawn under it until an option or the select is pressed again. */
-const menus = new Map<string, string>()
+const menus = new Lru<string, string>(SITES)
 
 /** Opens a picture's select, or closes it when it is the one open; the drawing follows. */
 function toggleMenu($: EngineInterface, viewId: string, id: string): void {
@@ -829,63 +860,79 @@ function toggleMenu($: EngineInterface, viewId: string, id: string): void {
   $.ui.invalidate('ui.render')
 }
 
-/** A panel `columns` wide as the helper draws it: between 20 and 255 columns. */
-const panelColumns = (columns: number) => Math.max(20, Math.min(255, columns))
 
-/** What a drawing in pictures shows, as data, for src/picture.tsx. */
-interface Parts {
-  pick?: Pick
-  playing?: Pick
-  step: number
-  player: Player
-  systems: Selectable[]
-  selected?: Selectable
-  link: string
-  lost: string[]
-  title: string
-  what: { file: string } | { source: Source }
-  roomy: boolean
-  sourceText: string
-  picture?: Picture
-  /** In the pane: its zoom, and the picture's grid with the viewport shown once it is drawn. */
-  zoom?: { z: ZoomState; at?: { grid: { columns: number; rows: number }; vp: Viewport } }
+/** What a player's controls do in a drawing: what floats over it (`menus`), and its stored player. */
+function playerCtl($: EngineInterface, view: View, steps: FlowStep[]): PlayerCtl {
+  const id = view.viewId
+  const open = menus.get(id) as Open | undefined
+  return {
+    ...(open ? { open } : {}),
+    toggle: k => toggleMenu($, id, k),
+    openMenu: k => {
+      menus.set(id, k)
+      $.ui.invalidate('ui.render')
+    },
+    close: () => {
+      if (menus.delete(id)) $.ui.invalidate('ui.render')
+    },
+    start: (pick, isPlaying = true) => start($, view, pick, isPlaying),
+    go: (to, isPlaying = false) => goTo($, view, steps, to, isPlaying),
+    pause: () => void setPlayer($, view, p => ({ ...p, isPlaying: false })),
+    stop: () => void setPlayer($, view, p => ({ ...p, mode: 'diagram', isPlaying: false })),
+    pick: pick => void setPlayer($, view, p => ({ ...p, pick: pick.value })),
+  }
 }
 
-/** A float is a card of its own: rounded all round. */
-const FLOAT_EDGES = { top: true, bottom: true }
+/** The links row (src/views/pieces.tsx): its controls, and what each does. */
+function linksOf($: EngineInterface, p: Prepared): { controls: Control[]; actions: Record<string, Action> } {
+  return {
+    controls: linkControls(p.view.inPane, p.roomy),
+    actions: {
+      src: surface => void copy($, surface, p.source.source, 'the Proschi source'),
+      lnk: surface => void copy($, surface, p.link, 'the share link'),
+      open: surface => void openLink($, surface, p.link),
+      focus: () => focus($, p.view, p.title, p.what),
+    },
+  }
+}
+
+/** The systems row (src/views/pieces.tsx) where the diagram has systems or is focused into one: its model, and what each control does. */
+function systemsOf($: EngineInterface, p: Prepared): { model: Systems; actions: Record<string, () => void> } | undefined {
+  const { view, doc, systems, selected, player } = p
+  if (systems.length === 0 && player.focus === undefined) return undefined
+  const s = systemActions($, view, doc, systems, selected, player)
+  const controls: Control[] = [
+    ...(systems.length > 1 ? [{ id: 'next', icon: 'cycle' as const, label: 'Next', ...hotkey(view, 's') }] : []),
+    ...(selected && s.design ? [{ id: 'open', icon: s.open ? ('collapse' as const) : ('expand' as const), label: s.open ? 'Collapse' : 'Expand', ...hotkey(view, 'o') }, { id: 'focus', icon: 'enter' as const, label: 'Focus in', ...hotkey(view, 'f') }] : []),
+    ...(player.focus !== undefined ? [{ id: 'back', icon: 'leave' as const, label: 'Back out', ...hotkey(view, 'u') }] : []),
+  ]
+  return {
+    model: { ...(player.focus !== undefined ? { inside: `${player.focus.split('.').join(' › ')} · ${doc.diagram.title ?? 'its design'}` } : {}), ...(selected ? { selected: { name: selected.name, path: selected.path } } : {}), controls },
+    actions: { next: s.next, open: s.toggle, focus: s.enter, back: s.leave },
+  }
+}
 
 /**
- * A drawing as pictures: its pieces top to bottom (header, warnings, the
- * diagram, legend and verdict, systems, the player or the use case bar, the
- * links), what each control does, and the panels a press is likely to want
- * next: every step of the scenario playing, or the player of the one picked.
+ * A drawing as pictures: its pieces top to bottom (the player, the title,
+ * the notices, the diagram, the verdict, the systems, the links), what each
+ * control does, and the panels a press is likely to want next: every step's
+ * bar of the scenario playing, or Play's bar of the one picked, and the
+ * pickers' menus.
  */
-/** The notices over a drawing in pictures: imports not found, the design's notes and warnings (in the transcript, the first few). */
-function noticesOf(view: View, doc: Document, lost: string[]): Notice[] {
-  const unknown = lost.filter(name => !importReasons.has(name))
-  return [
-    ...(unknown.length ? [{ text: `Not found, so drawn as plain boxes: ${unknown.join(', ')}`, tone: 'muted' as const }] : []),
-    ...lost.filter(name => importReasons.has(name)).map(name => ({ text: importReasons.get(name)!, tone: 'muted' as const })),
-    ...doc.notes.map(n => ({ text: n.text, ...(n.hint ? { hint: n.hint } : {}) })),
-    ...(view.inPane ? doc.warnings : doc.warnings.slice(0, INLINE_WARNINGS)).map(text => ({ text })),
-    ...(!view.inPane && doc.warnings.length > INLINE_WARNINGS ? [{ text: `… ${doc.warnings.length - INLINE_WARNINGS} more: Focus, then Analysis`, tone: 'muted' as const }] : []),
-  ]
-}
-
-function pictureParts($: EngineInterface, view: View, doc: Document, c: Parts): { pieces: Piece[]; actions: Record<string, Action>; ahead: Ahead[]; float?: Float } & ZoomSite {
+function pictureParts($: EngineInterface, p: Prepared, notices: Notice[], picture: Picture | undefined, zoomed?: { z: ZoomState; at?: { grid: { columns: number; rows: number }; vp: Viewport } }): { pieces: Piece[]; actions: Record<string, Action>; ahead: Ahead[]; float?: Float } & ZoomSite {
+  const { view, doc, pick, playing, player, step } = p
   // Every piece as wide as the room: the drawing is one surface, the diagram centred on its strip.
   const W = panelColumns(view.d.columns)
   const pieces: Piece[] = []
   const actions: Record<string, Action> = {}
   const ahead: Ahead[] = []
   const on = (piece: string, id: string, fn: Action) => (actions[`${piece}/${id}`] = fn)
-  const { playing, player, pick } = c
   let float: Float | undefined
 
   // The player on top, one size whether a scenario plays or not; what it opens floats over the drawing.
   if (pick) {
-    const m = playerModel($, view, doc, pick, playing, c.step, player)
-    const bar = barPanel(view, doc, m, playing ? c.step : undefined, player.isPlaying)
+    const m = playerModel(view, doc, pick, playing, step, player.isPlaying, playerCtl($, view, pick.scenario.steps))
+    const bar = barPanel(view, doc, m, playing ? step : undefined, player.isPlaying)
     pieces.push({ id: 'bar', panel: bar, columns: W })
     for (const [id, fn] of Object.entries(m.actions)) on('bar', id, () => fn())
     float = floatOf(view, doc, m, bar, W)
@@ -906,63 +953,30 @@ function pictureParts($: EngineInterface, view: View, doc: Document, c: Parts): 
     pieces.push({ id: 'title', panel: { kind: 'page', blocks: [{ type: 'heading', level: 3, text: doc.diagram.title }, ...(doc.diagram.summary ? [{ type: 'paragraph' as const, small: true, text: doc.diagram.summary }] : [])] }, columns: W })
   }
 
-  const notices = noticesOf(view, doc, c.lost)
   if (notices.length) pieces.push({ id: 'warn', panel: { kind: 'notices', notices }, columns: W })
 
-  pieces.push({ id: 'diagram', ...(c.picture ? { picture: c.picture } : {}) })
+  pieces.push({ id: 'diagram', ...(picture ? { picture } : {}) })
 
   // The verdict only when a check fails (the HLD tab's badge says how many), the legend in the diagram's corner.
-  const failing = doc.tests.filter(t => !t.passed)
-  if (failing[0]) {
-    const below: NoticesPanel = {
-      kind: 'notices',
-      verdict: { passed: doc.tests.length - failing.length, total: doc.tests.length, first: `${failing[0].name}: ${failing[0].message}` },
-      ...(!view.inPane ? { details: { id: 'details', icon: 'focus' as const, label: 'Details' } } : {}),
-    }
-    pieces.push({ id: 'below', panel: below, columns: W })
-  }
-  on('below', 'details', () => focus($, view, c.title, c.what, 'hld', 'requirements'))
+  const verdict = verdictOf(doc.tests)
+  if (verdict) pieces.push({ id: 'below', panel: { kind: 'notices', verdict, ...(!view.inPane ? { details: DETAILS } : {}) }, columns: W })
+  on('below', 'details', () => focus($, view, p.title, p.what, 'hld', 'requirements'))
 
-  if (c.systems.length > 0 || player.focus !== undefined) {
-    const s = systemActions($, view, doc, c.systems, c.selected, player)
-    const controls: Control[] = [
-      ...(c.systems.length > 1 ? [{ id: 'next', icon: 'cycle' as const, label: 'Next', ...hotkey(view, 's') }] : []),
-      ...(c.selected && s.design ? [{ id: 'open', icon: s.open ? ('collapse' as const) : ('expand' as const), label: s.open ? 'Collapse' : 'Expand', ...hotkey(view, 'o') }, { id: 'focus', icon: 'enter' as const, label: 'Focus in', ...hotkey(view, 'f') }] : []),
-      ...(player.focus !== undefined ? [{ id: 'back', icon: 'leave' as const, label: 'Back out', ...hotkey(view, 'u') }] : []),
-    ]
-    pieces.push({
-      id: 'systems',
-      panel: { kind: 'systemBar', ...(player.focus !== undefined ? { inside: `${player.focus.split('.').join(' › ')} · ${doc.diagram.title ?? 'its design'}` } : {}), ...(c.selected ? { selected: { name: c.selected.name, path: c.selected.path } } : {}), controls },
-      columns: W,
-    })
-    on('systems', 'next', s.next)
-    on('systems', 'open', s.toggle)
-    on('systems', 'focus', s.enter)
-    on('systems', 'back', s.leave)
+  const sys = systemsOf($, p)
+  if (sys) {
+    pieces.push({ id: 'systems', panel: { kind: 'systemBar', ...sys.model }, columns: W })
+    for (const [id, fn] of Object.entries(sys.actions)) on('systems', id, fn)
   }
 
-  pieces.push({
-    id: 'links',
-    panel: {
-      kind: 'actionBar',
-      controls: [
-        { id: 'src', icon: 'copy', label: c.roomy ? 'Copy source' : 'Source' },
-        { id: 'lnk', icon: 'copy', label: c.roomy ? 'Copy share link' : 'Link' },
-        { id: 'open', icon: 'open', label: c.roomy ? 'Open in Proschi' : 'Open', variant: 'primary' },
-        ...(view.inPane ? [] : [{ id: 'focus', icon: 'focus' as const, label: 'Focus' }]),
-      ],
-    },
-    columns: W,
-  })
-  on('links', 'src', surface => void copy($, surface, c.sourceText, 'the Proschi source'))
-  on('links', 'lnk', surface => void copy($, surface, c.link, 'the share link'))
-  on('links', 'open', surface => void openLink($, surface, c.link))
-  on('links', 'focus', () => focus($, view, c.title, c.what))
-  const zoom = c.zoom ? zoomParts($, view, c.zoom.z, c.zoom.at) : undefined
+  const links = linksOf($, p)
+  pieces.push({ id: 'links', panel: { kind: 'actionBar', controls: links.controls }, columns: W })
+  for (const [id, fn] of Object.entries(links.actions)) on('links', id, fn)
+
+  const zoom = zoomed ? zoomParts($, view, zoomed.z, zoomed.at) : undefined
   if (zoom) {
     Object.assign(actions, zoom.actions)
     // Ahead: the controls at the levels either side.
-    for (const dir of [1, -1] as const) ahead.push({ panel: zoomPanel(stepZoom(c.zoom!.z, dir)), columns: ZOOM_COLUMNS, edges: FLOAT_EDGES })
+    for (const dir of [1, -1] as const) ahead.push({ panel: zoomPanel(stepZoom(zoomed!.z, dir)), columns: ZOOM_COLUMNS, edges: FLOAT_EDGES })
   }
   return { pieces, actions, ahead, ...(float ? { float } : {}), ...(zoom ? { corner: zoom.corner, keys: zoom.keys, onDrag: zoom.onDrag } : {}) }
 }
@@ -972,18 +986,17 @@ type ZoomSite = { corner?: Site['corner']; keys?: Site['keys']; onDrag?: Site['o
 
 /** The zoom controls' panel: −, the level (back to fit), +, Fit; x, z and 0 press them in the pane. */
 const zoomPanel = (z: ZoomState): Panel => ({
-  kind: 'actionBar',
+  kind: 'zoom',
   controls: [
-    { id: 'out', label: '−', variant: 'quiet', hotkey: 'x', keycap: false, ...(z.level === 1 ? { disabled: true } : {}) },
-    { id: 'level', label: zoomLabel(z.level), variant: 'quiet', ...(z.level === 1 ? { disabled: true } : {}) },
-    { id: 'in', label: '+', variant: 'quiet', hotkey: 'z', keycap: false, ...(z.level === ZOOMS[ZOOMS.length - 1] ? { disabled: true } : {}) },
-    { id: 'fit', icon: 'collapse', label: 'Fit', variant: 'quiet', hotkey: '0', keycap: false, ...(z.level === 1 ? { disabled: true } : {}) },
+    { id: 'out', label: '−', hotkey: 'x', ...(z.level === 1 ? { disabled: true } : {}) },
+    { id: 'level', label: zoomLabel(z.level), ...(z.level === 1 ? { disabled: true } : {}) },
+    { id: 'in', label: '+', hotkey: 'z', ...(z.level === ZOOMS[ZOOMS.length - 1] ? { disabled: true } : {}) },
+    { id: 'fit', label: 'Fit', hotkey: '0', ...(z.level === 1 ? { disabled: true } : {}) },
   ],
 })
-const ZOOM_COLUMNS = 24
 
 /** A drag on the zoomed picture, by view: the viewport it started from. */
-const drags = new Map<string, { n: number; z: ZoomState; vp: Viewport }>()
+const drags = new Lru<string, { n: number; z: ZoomState; vp: Viewport }>(SITES)
 
 /** Stores a pane view's zoom (fit stores none); the drawing follows, a playing step playing on. */
 async function setZoom($: EngineInterface, viewId: string, next: ZoomState): Promise<void> {
@@ -1032,8 +1045,21 @@ function zoomParts($: EngineInterface, view: View, z: ZoomState, at: { grid: { c
   return { actions, keys, corner: { piece: 'diagram', id: 'zoom', panel: zoomPanel(z), columns: ZOOM_COLUMNS }, onDrag }
 }
 
+/**
+ * Asks ahead for the viewport the zoom `to` shows first (centred as now), so
+ * the first press of + draws from tiles drawn already (the worker renders
+ * the whole zoomed picture for it, every step's frames while playing).
+ */
+function prefetchZoom($: EngineInterface, view: View, fitGrid: { columns: number; rows: number }, to: ZoomState, playing: Pick | undefined, optionsFor: (play?: Pick, zoomed?: { zoom: number; window?: Viewport }) => RasterRequest['options'], source: Source): void {
+  if (to.level <= 1) return
+  const options = optionsFor(playing, { zoom: to.level })
+  const grid = mergedGrid({ source, options }) ?? { columns: Math.ceil(fitGrid.columns * to.level), rows: Math.ceil(fitGrid.rows * to.level) }
+  const vp = viewportOf(grid, { columns: fitGrid.columns, rows: view.d.rows ?? INLINE_ROWS }, to)
+  rasterOf($, { source, options: optionsFor(playing, { zoom: to.level, window: vp }) }, 'later')
+}
+
 /** Steps auto-panned to, by view: each step's call is brought into view once, then the viewport is the person's. */
-const autoPanned = new Map<string, string>()
+const autoPanned = new Lru<string, string>(SITES)
 
 /**
  * The zoomed diagram (the pane): the viewport over the picture drawn `z`
@@ -1080,6 +1106,7 @@ function zoomedPicture(
   else {
     rasterOf($, { source, options: c.optionsFor(playing, { zoom: z.level, window: around(vp) }) }, 'later')
     if (!playing && c.pick) rasterOf($, { source, options: c.optionsFor(c.pick, { zoom: z.level, window: around(vp) }) }, 'later')
+    prefetchZoom($, view, fitGrid, stepZoom(z, 1), playing, c.optionsFor, source)
   }
   if (!ready || !m) return { rows, at: { grid, vp } }
   const imageKey = `img-${viewId}`
@@ -1103,35 +1130,6 @@ function selectable(scene: Scene, focus: string | undefined): Selectable[] {
     .map(n => n.node)
     .filter(n => n.kind === 'system' || (n.kind === 'group' && n.system === n.id))
     .map(n => ({ id: n.id, path: focus !== undefined ? `${focus}.${n.id}` : n.id, name: n.name, expanded: n.kind === 'group' }))
-}
-
-/**
- * The systems row: which system the keys act on, and opening it in place,
- * focusing into it, or back out to the diagram around it
- * (docs/design/team-systems-and-imports.md D6).
- */
-function systemBar($: EngineInterface, view: View, doc: Document, systems: Selectable[], selected: Selectable | undefined, player: Player): RenderElement {
-  const { ui } = view.d
-  const { design, open, next, toggle, enter, leave } = systemActions($, view, doc, systems, selected, player)
-  return (
-    <ui.Box flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1} width={view.width}>
-      {player.focus !== undefined && (
-        <ui.Text dimColor wrap="truncate-end">
-          Inside {player.focus.split('.').join(' › ')} · {doc.diagram.title ?? 'its design'}
-        </ui.Text>
-      )}
-      <ui.Box flexDirection="row" gap={1} alignItems="center" flexWrap="wrap">
-        <ui.Text bold>System</ui.Text>
-        <ui.Text color={PINK} wrap="truncate-end">
-          {selected ? `${selected.name} (${selected.path})` : 'none here'}
-        </ui.Text>
-        {systems.length > 1 && <ui.Button key={`sys-next-${view.viewId}`} label="⇥ Next" {...hotkey(view, 's')} onPress={next} />}
-        {selected && design && <ui.Button key={`sys-open-${view.viewId}`} label={open ? '⊟ Collapse' : '⊞ Expand'} {...hotkey(view, 'o')} onPress={toggle} />}
-        {selected && design && <ui.Button key={`sys-focus-${view.viewId}`} label="⤢ Focus in" {...hotkey(view, 'f')} onPress={enter} />}
-        {player.focus !== undefined && <ui.Button key={`sys-back-${view.viewId}`} label="↑ Back out" {...hotkey(view, 'u')} onPress={leave} />}
-      </ui.Box>
-    </ui.Box>
-  )
 }
 
 /** What the systems row's controls do, in text and in pictures. */
@@ -1171,7 +1169,7 @@ function systemActions($: EngineInterface, view: View, doc: Document, systems: S
 }
 
 /** The imports a document names that were not found, which it draws as plain boxes: none were read for a block in a reply, and a file's were read as empty. */
-const lostByKey = new Map<string, string[]>()
+const lostByKey = new Lru<string, string[]>(32)
 function lostImports(source: Source, key: string): string[] {
   let names = lostByKey.get(key)
   if (!names) {
@@ -1182,382 +1180,12 @@ function lostImports(source: Source, key: string): string[] {
   return names
 }
 
-/** The use case picker's last entry: the explorer of every scenario. */
-const EXPLORE_ALL = '__explore'
-
-/** What floats over a drawing (src/picture.tsx Float): a picker's menu, the bodies drawer, the explorer. */
-type Open = 'uc' | 'sc' | 'body' | 'explore'
-
-/** A scenario as the editor's scenario tabs name it: the branch (or the main flow), the status an error ends with. */
-const scenarioName = (u: DiagramUseCase, s: DiagramScenario) => {
-  const status = s.outcome === 'error' ? s.steps.find(isErrorStep)?.statusCode : undefined
-  return `${u.scenarios.length > 1 ? s.name : 'Main flow'}${status ? ` · ${status}` : ''}`
-}
-
-/**
- * The player as data, for the bar in pictures and in text alike: one bar
- * on top of the drawing, the same whether a scenario plays or not. Before
- * Play the step keys are there but do nothing; Play plays the picked
- * scenario, ✕ stops it, back to the diagram, in the bar.
- */
-interface PlayerModel {
-  pick: Pick
-  playing?: Pick
-  /** The step shown, 0-based, while playing. */
-  step: number
-  total: number
-  isPlaying: boolean
-  open?: Open
-  /** What each of the bar's controls (and its menus' options) does, by id: `uc=<id>`, `sc=<id>`, `x-<uc>-<sc>`. */
-  actions: Record<string, () => void>
-  /** The second line: the current step's call, who calls whom and how, or the use case's description before Play. */
-  line: { number?: number; error?: boolean; spans: Span[] }
-}
-
-function playerModel($: EngineInterface, view: View, doc: Document, pick: Pick, playing: Pick | undefined, step: number, player: Player): PlayerModel {
-  const steps = pick.scenario.steps
-  const total = steps.length
-  const go = (to: number, isPlaying = false) => goTo($, view, steps, to, isPlaying)
-  const close = () => {
-    if (menus.delete(view.viewId)) $.ui.invalidate('ui.render')
-  }
-  const actions: Record<string, () => void> = {
-    uc: () => toggleMenu($, view.viewId, 'uc'),
-    sc: () => toggleMenu($, view.viewId, 'sc'),
-    body: () => (playing ? toggleMenu($, view.viewId, 'body') : undefined),
-    explore: () => toggleMenu($, view.viewId, 'explore'),
-    close,
-    play: () => {
-      close()
-      if (!playing) start($, view, pick)
-      else if (player.isPlaying) void setPlayer($, view, p => ({ ...p, isPlaying: false }))
-      else go(step >= total - 1 ? 0 : step, true)
-    },
-    stop: () => {
-      if (!playing) return
-      close()
-      void setPlayer($, view, p => ({ ...p, mode: 'diagram', isPlaying: false }))
-    },
-  }
-  for (const [id, to] of [['first', () => 0], ['prev', () => step - 1], ['next', () => step + 1], ['last', () => total - 1]] as const) actions[id] = () => (playing ? go(to()) : undefined)
-  // Another use case or scenario: played from its first step while one plays, else picked.
-  const choose = (next: Pick) => {
-    menus.delete(view.viewId)
-    if (playing) start($, view, next, player.isPlaying)
-    else void setPlayer($, view, p => ({ ...p, pick: next.value }))
-  }
-  for (const u of doc.diagram.useCases) {
-    if (u.scenarios[0]) actions[`uc=${u.id}`] = () => choose(pickOf(u, u.scenarios[0]!))
-    for (const s of u.scenarios) {
-      actions[`x-${u.id}-${s.id}`] = () => {
-        menus.delete(view.viewId)
-        start($, view, pickOf(u, s))
-      }
-    }
-  }
-  actions[`uc=${EXPLORE_ALL}`] = () => {
-    menus.set(view.viewId, 'explore')
-    $.ui.invalidate('ui.render')
-  }
-  for (const s of pick.useCase.scenarios) actions[`sc=${s.id}`] = () => choose(pickOf(pick.useCase, s))
-  const open = menus.get(view.viewId) as Open | undefined
-  return { pick, ...(playing ? { playing } : {}), step, total, isPlaying: player.isPlaying, ...(open && (open !== 'body' || playing) ? { open } : {}), actions, line: stepLine(view, pick, playing ? step : undefined) }
-}
-
-/** The bar's second line: the step at `at` (its call, who calls whom, how) or, before Play, the use case's description. */
-function stepLine(view: View, pick: Pick, at: number | undefined): PlayerModel['line'] {
-  const steps = pick.scenario.steps
-  if (at === undefined || !steps[at]) {
-    const about = pick.useCase.description?.replace(/\s*\n\s*/g, ' ')
-    return { spans: [{ text: about ? `${about} · ` : '', tone: 'muted' }, { text: 'Press ▶ to play', tone: 'muted' }].filter(s => s.text) as Span[] }
-  }
-  const current = currentStepsOf(steps, at)
-  const s = current[0]!
-  const name = (id: string) => view.scene.nodes.get(id)?.node.name ?? id
-  const call = `${s.httpMethod} ${s.endpoint}`.trim()
-  const exec = s.executionType === 'ASYNC_FIRE_AND_FORGET' ? { text: 'Fire & Forget', tone: 'warn' as const } : s.executionType === 'ASYNC_REQUEST_RESPONSE' ? { text: 'Async', tone: 'info' as const } : { text: 'Sync', tone: 'good' as const }
-  const spans: Span[] = [
-    call ? { text: call, mono: true } : { text: s.stepName, bold: true },
-    { text: ` · ${name(s.fromServiceId)} → ${name(s.toServiceId)} · `, tone: 'muted' },
-    exec,
-    ...(s.failed ? [{ text: ' · ', tone: 'muted' as const }, { text: 'Failed', tone: 'bad' as const, bold: true }] : (s.statusCode ?? 0) >= 400 ? [{ text: ' · ', tone: 'muted' as const }, { text: String(s.statusCode), tone: 'bad' as const, bold: true }] : []),
-    ...(current.length > 1 ? [{ text: ` · +${current.length - 1} in parallel`, tone: 'muted' as const }] : []),
-  ]
-  return { number: steps.indexOf(s) + 1, ...(isErrorStep(s) || s.failed ? { error: true } : {}), spans }
-}
-
-/** The use case picker's options, the explorer last. */
-const useCaseOptions = (doc: Document): Option[] => [
-  ...groupByEndpoint(doc.diagram.useCases).flatMap(g => g.useCases.map(u => ({ value: u.id, label: u.name, ...(g.label ? { group: g.label } : {}) }))),
-  { value: EXPLORE_ALL, label: 'Explore all…', icon: 'explore' as const, divider: true },
-]
-
-/** A scenario picker's options: ✓ or ✗ and the name. */
-const scenarioOptions = (u: DiagramUseCase): Option[] => u.scenarios.map(s => ({ value: s.id, label: scenarioName(u, s), icon: s.outcome === 'error' ? ('cross' as const) : ('check' as const), tone: s.outcome === 'error' ? ('bad' as const) : ('good' as const) }))
-
-/** The player bar as a panel: its controls dimmed until Play. */
-function barPanel(view: View, doc: Document, m: PlayerModel, at: number | undefined, isPlaying: boolean): PlayerBarPanel {
-  const on = at !== undefined
-  const key = (k: string) => (view.inPane ? { hotkey: k, keycap: false } : {})
-  const ctl = (id: string, icon: 'first' | 'prev' | 'next' | 'last' | 'exit', k: string, enabled: boolean): Control => ({ id, icon, variant: 'quiet', ...key(k), ...(enabled ? {} : { disabled: true }) })
-  const total = m.total
-  const line = on ? stepLine(view, m.pick, at) : m.line
-  return {
-    kind: 'playerBar',
-    useCase: { id: 'uc', value: m.pick.useCase.id, options: useCaseOptions(doc), ...(m.open === 'uc' || m.open === 'explore' ? { open: true } : {}) },
-    scenario: { id: 'sc', value: m.pick.scenario.id, options: scenarioOptions(m.pick.useCase), ...(m.open === 'sc' ? { open: true } : {}) },
-    controls: [
-      ctl('first', 'first', 'r', on && at > 0),
-      ctl('prev', 'prev', 'b', on && at > 0),
-      { id: 'play', icon: isPlaying ? 'pause' : 'play', variant: 'primary', ...key('p') },
-      ctl('next', 'next', 'n', on && at < total - 1),
-      ctl('last', 'last', 'e', on && at < total - 1),
-      ctl('stop', 'exit', 'd', on),
-    ],
-    step: { ...(on ? { at: at + 1 } : {}), total },
-    line: { ...(line.number !== undefined ? { number: line.number } : {}), ...(line.error ? { error: true } : {}), text: line.spans },
-    body: { id: 'body', label: 'Body', ...(on ? {} : { disabled: true }), ...(m.open === 'body' ? { active: true } : {}) },
-  }
-}
-
-/** The drawer's cards for the step at `at`: the step and its parallel siblings with their bodies. */
-const drawerPanel = (view: View, pick: Pick, at: number): DrawerPanel => ({
-  kind: 'drawer',
-  ...(pick.scenario.condition ? { condition: pick.scenario.condition } : {}),
-  cards: stepCardsOf(pick.scenario, id => view.scene.nodes.get(id)?.node.name ?? id)[at] ?? [],
-  close: { id: 'close', icon: 'exit', variant: 'quiet' },
-})
-
-/** The explorer: every use case by endpoint, each scenario a chip that plays it. */
-const explorerPanel = (doc: Document, pick: Pick): ExplorerPanel => ({
-  kind: 'explorer',
-  groups: groupByEndpoint(doc.diagram.useCases).map(g => ({
-    ...(g.label ? { label: g.label } : {}),
-    useCases: g.useCases.map(u => ({
-      name: u.name,
-      ...(u.id === pick.useCase.id ? { current: true } : {}),
-      scenarios: u.scenarios.map(s => ({ id: `x-${u.id}-${s.id}`, name: u.scenarios.length > 1 ? s.name : 'Play', outcome: s.outcome === 'error' ? ('error' as const) : ('ok' as const), ...(s.outcome === 'error' && s.steps.find(isErrorStep)?.statusCode ? { status: s.steps.find(isErrorStep)!.statusCode } : {}) })),
-    })),
-  })),
-  close: { id: 'close', icon: 'exit', variant: 'quiet' },
-})
-
-/** A float's width: a menu as wide as its longest option wants, the explorer wider, the drawer the drawing's width. */
-function floatColumns(W: number, panel: Panel): number {
-  if (panel.kind === 'menu') return Math.min(W, Math.max(28, ...panel.select.options.map(o => Math.ceil(o.label.length * 1.05) + 14)))
-  if (panel.kind === 'explorer') return Math.min(W, 76)
-  return W
-}
-
-/** What floats over the drawing in pictures for what is open, under its anchor; none while nothing is. */
-function floatOf(view: View, doc: Document, m: PlayerModel, bar: PlayerBarPanel, W: number): Float | undefined {
-  const panel: Panel | undefined =
-    m.open === 'uc' ? { kind: 'menu', select: { ...bar.useCase, open: false } }
-    : m.open === 'sc' ? { kind: 'menu', select: { ...bar.scenario, open: false } }
-    : m.open === 'explore' ? explorerPanel(doc, m.pick)
-    : m.open === 'body' && m.playing ? drawerPanel(view, m.playing, m.step)
-    : undefined
-  if (!panel || !m.open) return undefined
-  const id = m.open === 'body' ? 'drawer' : m.open === 'explore' ? 'explorer' : 'menu'
-  const actions: Record<string, Action> = {}
-  for (const [k, fn] of Object.entries(m.actions)) actions[`${id}/${k}`] = () => fn()
-  return { id, panel, columns: floatColumns(W, panel), anchor: { piece: 'bar', ...(m.open === 'body' ? {} : { control: m.open === 'explore' ? 'uc' : m.open }) }, close: () => m.actions.close!(), actions }
-}
-
-/**
- * The player bar in text cells, on top of the drawing and the same rows
- * whether a scenario plays or not: the pickers (the use case's last entry
- * the explorer), the step keys (dim until Play), the count and a bar; under
- * them the current step and Body, which opens the bodies under the bar.
- */
-function playerBarText(view: View, doc: Document, m: PlayerModel): RenderElement {
-  const { ui } = view.d
-  const id = view.viewId
-  const on = m.playing !== undefined
-  const at = m.step
-  const total = m.total
-  const counter = `Step ${(on ? String(at + 1) : '–').padStart(String(total).length)}/${total}`
-  const key = (k: string) => hotkey(view, k)
-  const step = (k: string, label: string, name: string, enabled: boolean) => <ui.Button key={`${name}-${id}`} label={label} {...key(k)} dimColor={!enabled} onPress={() => m.actions[name]!()} />
-  // What the first row holds besides the bar, as the terminal draws it (a Button is `[ label ]`, a Select its value and ▾).
-  const ucWidth = Math.max(...doc.diagram.useCases.map(u => u.name.length), 14) + 4
-  const scWidth = Math.max(...m.pick.useCase.scenarios.map(s => scenarioName(m.pick.useCase, s).length + 2)) + 4
-  const used = 9 + ucWidth + 1 + scWidth + 1 + 6 * 6 + counter.length + 1
-  const bar = Math.max(0, Math.min(30, view.width - 4 - used))
-  const filled = on && total ? Math.round((bar * (at + 1)) / total) : 0
-  const line = m.line
-  return (
-    <ui.Box key={`bar-${id}`} flexDirection="column" borderStyle="round" borderColor={PINK} paddingX={1} width={view.width}>
-      <ui.Box flexDirection="row" gap={1} alignItems="center" flexWrap="wrap">
-        <ui.Text bold color={PINK}>
-          Use case
-        </ui.Text>
-        <ui.Select key={`uc-${id}`} value={m.pick.useCase.id} options={useCaseOptions(doc).map(o => ({ value: o.value, label: o.value === EXPLORE_ALL ? '≡ Explore all…' : o.label }))} onSelect={v => m.actions[`uc=${v}`]?.()} />
-        <ui.Select key={`sc-${id}`} value={m.pick.scenario.id} options={m.pick.useCase.scenarios.map(s => ({ value: s.id, label: `${s.outcome === 'error' ? '✗' : '✓'} ${scenarioName(m.pick.useCase, s)}` }))} onSelect={v => m.actions[`sc=${v}`]?.()} />
-        {step('r', '⇤', 'first', on && at > 0)}
-        {step('b', '‹', 'prev', on && at > 0)}
-        <ui.Button key={`play-${id}`} label={m.isPlaying ? '❚❚' : ' ▶'} variant="primary" {...key('p')} onPress={() => m.actions.play!()} />
-        {step('n', '›', 'next', on && at < total - 1)}
-        {step('e', '⇥', 'last', on && at < total - 1)}
-        {step('d', '✕', 'stop', on)}
-        <ui.Text bold={on} dimColor={!on}>
-          {counter}
-        </ui.Text>
-        {bar > 0 && (
-          <ui.Text>
-            <ui.Text color={YELLOW}>{'━'.repeat(filled)}</ui.Text>
-            <ui.Text dimColor>{'━'.repeat(bar - filled)}</ui.Text>
-          </ui.Text>
-        )}
-      </ui.Box>
-      <ui.Box flexDirection="row" gap={1}>
-        <ui.Box flexGrow={1}>
-          <ui.Text wrap="truncate-end">
-            {line.number !== undefined && chip(ui, String(line.number), line.error ? '#ff3b30' : PINK)}
-            {line.number !== undefined ? ' ' : ''}
-            {line.spans.map(s => (
-              <ui.Text bold={s.bold === true} dimColor={s.tone === 'muted'} color={s.tone === 'bad' ? 'red' : s.tone === 'good' ? 'green' : s.tone === 'warn' ? 'yellow' : s.tone === 'info' ? 'magenta' : undefined}>
-                {s.text}
-              </ui.Text>
-            ))}
-          </ui.Text>
-        </ui.Box>
-        <ui.Button key={`body-${id}`} label={m.open === 'body' ? 'Body ▴' : 'Body ▾'} dimColor={!on} onPress={() => m.actions.body!()} />
-      </ui.Box>
-      {m.open === 'body' && m.playing && stepRows(ui, view, m.playing.scenario.steps, at).nodes}
-      {m.open === 'explore' &&
-        groupByEndpoint(doc.diagram.useCases).map(g => (
-          <ui.Box flexDirection="column" marginTop={1}>
-            {g.label && (
-              <ui.Text bold color="cyan">
-                {g.label}
-              </ui.Text>
-            )}
-            {g.useCases.map(u => (
-              <ui.Box flexDirection="row" gap={1} flexWrap="wrap" paddingLeft={g.label ? 2 : 0}>
-                <ui.Text bold={u.id === m.pick.useCase.id}>{u.name}</ui.Text>
-                {u.scenarios.map(s => (
-                  <ui.Button key={`x-${id}-${u.id}-${s.id}`} onPress={() => m.actions[`x-${u.id}-${s.id}`]!()}>
-                    <ui.Text color={s.outcome === 'error' ? 'red' : 'green'}>
-                      {s.outcome === 'error' ? '✗' : '✓'} {u.scenarios.length > 1 ? scenarioName(u, s) : 'Play'}
-                    </ui.Text>
-                  </ui.Button>
-                ))}
-              </ui.Box>
-            ))}
-          </ui.Box>
-        ))}
-    </ui.Box>
-  )
-}
-
-const FORMAT: Record<FlowStep['requestFormat'], string> = { JSON: 'JSON', XML: 'XML', FREE_TEXT: 'Text' }
-const LANGUAGE: Record<FlowStep['requestFormat'], string | undefined> = { JSON: 'json', XML: 'xml', FREE_TEXT: undefined }
-
-/** A badge as the editor draws one: a coloured chip. */
-const chip = (ui: Ui, text: string, background: string) => (
-  <ui.Text backgroundColor={background} color={INK} bold>
-    {` ${text} `}
-  </ui.Text>
-)
-
-/** Lines of a request or response body the player shows; the rest is counted. */
-const BODY_LINES = 8
-
-/** Rows of a step panel: each element one terminal row, except a Code, which takes a row per line of its source. */
-interface Rows {
-  nodes: RenderNode[]
-  height: number
-}
-
-/** A body, at most BODY_LINES lines of it, each cut at the panel's edge. */
-function bodyRows(ui: Ui, label: RenderElement, text: string, format: FlowStep['requestFormat']): Rows {
-  const lines = text.replace(/\n+$/, '').split('\n')
-  const shown = lines.slice(0, BODY_LINES)
-  const more = lines.length - shown.length
-  const language = LANGUAGE[format]
-  return {
-    nodes: [
-      label,
-      <ui.Code source={shown.join('\n')} wrap="truncate-end" {...(language ? { language } : {})} />,
-      ...(more > 0 ? [<ui.Text dimColor>… {more} more line{more === 1 ? '' : 's'}</ui.Text>] : []),
-    ],
-    height: 1 + shown.length + (more > 0 ? 1 : 0),
-  }
-}
-
-/** The step at `at` (and its parallel siblings) with what it sends and gets back, one row per line, cut at the panel's edge. */
-function stepRows(ui: Ui, view: View, steps: FlowStep[], at: number): Rows {
-  const name = (id: string) => view.scene.nodes.get(id)?.node.name ?? id
-  const current = currentStepsOf(steps, at)
-  const nodes: RenderNode[] = []
-  let height = 0
-  const row = (node: RenderNode) => {
-    nodes.push(node)
-    height++
-  }
-  const add = (rows: Rows) => {
-    nodes.push(...rows.nodes)
-    height += rows.height
-  }
-  if (current.length > 1) {
-    row(
-      <ui.Text bold color="blue" wrap="truncate-end">
-        ⚡ Parallel Execution ({current.length} steps running simultaneously)
-      </ui.Text>,
-    )
-  }
-  if (steps.length === 0) row(<ui.Text dimColor>This scenario has no steps.</ui.Text>)
-  current.forEach((s, i) => {
-    const error = isErrorStep(s)
-    const call = `${s.httpMethod} ${s.endpoint}`.trim()
-    if (i > 0) row(<ui.Text> </ui.Text>)
-    row(
-      <ui.Text wrap="truncate-end">
-        {chip(ui, String(steps.indexOf(s) + 1), error ? '#ff3b30' : PINK)} <ui.Text bold>{s.stepName}</ui.Text>
-        {s.failed && <ui.Text> {chip(ui, 'Failed', '#fca5a5')}</ui.Text>}
-        {!s.failed && (s.statusCode ?? 0) >= 400 && <ui.Text> {chip(ui, String(s.statusCode), '#fca5a5')}</ui.Text>}
-        {s.executionType === 'SYNC_REQUEST_RESPONSE' && <ui.Text> {chip(ui, 'Sync', '#86efac')}</ui.Text>}
-        {s.executionType === 'ASYNC_FIRE_AND_FORGET' && <ui.Text> {chip(ui, 'Fire & Forget', '#fdba74')}</ui.Text>}
-        {s.executionType === 'ASYNC_REQUEST_RESPONSE' && <ui.Text> {chip(ui, 'Async', '#d8b4fe')}</ui.Text>}
-      </ui.Text>,
-    )
-    row(
-      <ui.Text dimColor wrap="truncate-end">
-        {name(s.fromServiceId)} → {name(s.toServiceId)}
-        {call && call !== s.stepName ? `   ${call}` : ''}
-      </ui.Text>,
-    )
-    if (s.description) row(<ui.Text wrap="truncate-end">{s.description.replace(/\s*\n\s*/g, ' ')}</ui.Text>)
-    if (s.requestBody) add(bodyRows(ui, <ui.Text dimColor>Request ({FORMAT[s.requestFormat]})</ui.Text>, s.requestBody, s.requestFormat))
-    if (s.responseBody && s.executionType !== 'ASYNC_FIRE_AND_FORGET') {
-      const label = (
-        <ui.Text color={error ? 'red' : undefined} dimColor={!error}>
-          Response ({FORMAT[s.responseFormat]}){s.statusCode !== undefined ? ` - ${s.statusCode}` : ''}
-        </ui.Text>
-      )
-      add(bodyRows(ui, label, s.responseBody, s.responseFormat))
-    }
-    if (!s.responseBody && !s.failed && (s.statusCode ?? 0) >= 400) row(<ui.Text color="red">Answered with {s.statusCode}</ui.Text>)
-    if (s.failed) {
-      row(
-        <ui.Text color="red" wrap="truncate-end">
-          No response: the call failed (timeout, connection refused or similar).
-        </ui.Text>,
-      )
-    }
-  })
-  return { nodes, height }
-}
-
 /** Goes to a step of the scenario playing (clamped), playing on from there or not; the drawing brought into view first. */
 function goTo($: EngineInterface, view: View, steps: FlowStep[], to: number, isPlaying: boolean): void {
   reveal($, view)
   void setPlayer($, view, p => ({ ...p, step: Math.max(0, Math.min(steps.length - 1, to)), isPlaying }), steps)
 }
 
-/** A control's hotkey, in the pane alone: the transcript's drawings share no keyboard. */
-const hotkey = (view: View, key: string) => (view.inPane ? { hotkey: key } : {})
 
 /** Plays a scenario from its first step: the diagram brought into view first, while the press is still the person's. */
 function start($: EngineInterface, view: View, pick: Pick, isPlaying = true): void {

@@ -1,6 +1,7 @@
 import type { RenderElement, RenderSurface } from 'claude-code'
 
 import type { WhatIfResult } from '../../../frontend/src/sim'
+import { trafficExample } from '../../../tooling/src/render/ui/data'
 import type { Document } from '../../../tooling/src/terminal/document'
 import type { PaneTab } from '../../types'
 import { analysisLines, type Line } from './lines'
@@ -51,7 +52,7 @@ export function tabBar(ui: Ui, current: PaneTab, failing: number, pick: (tab: Pa
 
 /** The Analysis tab's lines, `columns` wide: the analysis, or how to get one. */
 export function analysisBody(doc: Document, columns: number): Line[] {
-  if (!doc.analysis) return [{ segs: [{ text: 'No traffic yet: add a traffic { … } block and Proschi estimates load, latency, availability and cost for every node, e.g.' }], wrap: true }, { segs: [] }, { segs: [{ text: 'traffic {', dim: true }] }, { segs: [{ text: '  "Redirect" 10k rps  mix "Cache hit" 90%, "Cache miss" 10%', dim: true }] }, { segs: [{ text: '}', dim: true }] }]
+  if (!doc.analysis) return [{ segs: [{ text: 'No traffic yet: add a traffic { … } block and Proschi estimates load, latency, availability and cost for every node, e.g.' }], wrap: true }, { segs: [] }, ...trafficExample(doc.diagram).split('\n').map(text => ({ segs: [{ text, dim: true }] }))]
   return analysisLines(doc.root, doc.analysis, columns)
 }
 
@@ -64,7 +65,7 @@ export function analysisTab(ui: Ui, doc: Document, whatIfs: WhatIfResult[], colu
   return (
     <ui.Box key="body-analysis" flexDirection="column">
       {linesView(ui, analysisLines(doc.root, doc.analysis, columns), 'analysis-lines')}
-      {linesView(ui, whatIfLines(doc.analysis, whatIfs, columns), 'whatif-lines')}
+      {linesView(ui, whatIfLines(doc.diagram, doc.analysis, whatIfs, columns), 'whatif-lines')}
       <ui.Box marginTop={1}>
         <ui.Button key="explore-whatifs" label="↗ Explore what-ifs in Proschi" onPress={press => explore(press.surface)} />
       </ui.Box>

@@ -1,5 +1,5 @@
 import type { Diagram } from '../../../frontend/src/dsl/types'
-import { HOT, costBreakdown, type Analysis, type CostShare, type NodeAnalysis, type TestResult } from '../../../frontend/src/sim'
+import { HOT, costBreakdown, type Analysis, type CostShare, type NodeAnalysis } from '../../../frontend/src/sim'
 import { formatAvailability, formatCount, formatDuration, formatMs, formatPercent, formatRps, formatTraffic, formatUsd } from '../../../frontend/src/sim/format'
 import { BOTTLENECK_FROM, busiestOf, type CriticalPathOverlay } from '../../../frontend/src/sim/overlay'
 
@@ -258,16 +258,6 @@ export function analysisLines(diagram: Diagram, analysis: Analysis, width: numbe
   }
   out.push(blank(), { segs: [{ text: 'Teaching numbers from default profiles per technology and a simple queueing model; override them with capacity { … }.', dim: true }], wrap: true })
   return out
-}
-
-/** `✓ All 5 checks pass`, `✗ 2 of 5 checks fail: <the first>`; undefined without requirements or tests. */
-export function verdictLine(results: TestResult[], width: number): Line | undefined {
-  if (results.length === 0) return undefined
-  const failing = results.filter(r => !r.passed)
-  const checks = results.length === 1 ? 'check' : 'checks'
-  if (failing.length === 0) return line({ text: `✓ All ${results.length} ${checks} pass`, color: TONE.good, bold: true })
-  const head = `✗ ${failing.length} of ${results.length} ${checks} fail`
-  return line({ text: head, color: TONE.bad, bold: true }, { text: cut(`: ${failing[0].name}: ${failing[0].message}`, width - head.length) })
 }
 
 /** The canvas's load legend (Overlay/LoadLegend.tsx) on one row: the heat scale, the p99 path, what the edges say. */

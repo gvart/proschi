@@ -7023,7 +7023,7 @@ function survive(run, target) {
     return target === "any" ? pass("No nodes to lose") : fail(`No node matches ${what}`, "Use a node id, [Tech] or any <kind>");
   }
   const latencies = (run.diagram.requirements ?? []).filter((r) => r.kind === "latency" && requirement(run, r).passed);
-  const failures = [];
+  const failures2 = [];
   for (const node of selected) {
     const n = run.nodes.get(node.id);
     const label = nodeLabel(run.diagram, node.id);
@@ -7036,12 +7036,12 @@ function survive(run, target) {
       if (left.saturated) {
         const leaves = bandwidthBound(left) ? `leaves ${usageText(left)}` : n.shards > 1 ? `leaves that shard ${formatRps(left.capacityRps / n.shards)} for ${formatRps(n.loadRps / n.shards)}` : `leaves ${formatRps(left.capacityRps)} for ${formatRps(n.loadRps)}`;
         const lever = writeBound(left) ? saturationLever(run, { ...n, ...left }) : { hint: `Add a replica to ${label} (x${replicas + 1}) so the rest carry the load`, fix: { kind: "replicas", node: node.id, replicas: replicas + 1 } };
-        failures.push(fail(`Losing ${lost} ${leaves}${bandwidthBound(left) ? "" : ` (${formatPercent(left.utilization)})`}`, lever.hint, lever.fix));
+        failures2.push(fail(`Losing ${lost} ${leaves}${bandwidthBound(left) ? "" : ` (${formatPercent(left.utilization)})`}`, lever.hint, lever.fix));
         continue;
       }
       const broken = latencies.map((r) => requirement(degraded, r)).find((c) => !c.passed);
       if (broken) {
-        failures.push(
+        failures2.push(
           fail(
             `Losing ${lost} breaks a latency limit: ${broken.message}`,
             `Add a replica to ${label} (x${replicas + 1}) so the rest keep it under ${formatPercent(HOT)}, or take load off it`,
@@ -7053,7 +7053,7 @@ function survive(run, target) {
     }
     for (const u of run.diagram.useCases) {
       if (needs(u, node.id) && fallbacksFor(u, node.id).length === 0) {
-        failures.push(
+        failures2.push(
           fail(
             `Losing ${label} breaks "${u.name}"`,
             `Add a replica (x2 on ${node.id}) or a fallback scenario in "${u.name}" that calls ${node.id} with -x and still completes`,
@@ -7063,12 +7063,12 @@ function survive(run, target) {
       }
     }
   }
-  if (failures.length === 0) {
+  if (failures2.length === 0) {
     const count = selected.length === 1 ? selected[0].id : `any of ${selected.length} nodes`;
     return pass(`Every use case keeps working after losing ${count}`);
   }
-  const more = failures.length > 1 ? ` (and ${failures.length - 1} more)` : "";
-  return fail(`${failures[0].message}${more}`, failures[0].hint, failures[0].fix);
+  const more = failures2.length > 1 ? ` (and ${failures2.length - 1} more)` : "";
+  return fail(`${failures2[0].message}${more}`, failures2[0].hint, failures2[0].fix);
 }
 function cost(run, max) {
   const { totalCostUsd: total, totalEgressUsd: egress } = run.analysis;
@@ -7871,17 +7871,17 @@ var remoteError = {
 var isRecord = (v) => !!v && typeof v === "object" && !Array.isArray(v);
 function parseLock(text) {
   const invalid = (why) => new ImportError(`Invalid ${LOCK_FILE}: ${why}; delete it and run proschi imports sync`);
-  let json;
+  let json2;
   try {
-    json = JSON.parse(text);
+    json2 = JSON.parse(text);
   } catch (e) {
     throw invalid(e.message);
   }
-  if (!isRecord(json) || json.version !== 1) throw invalid('expected {"version": 1, \u2026}');
+  if (!isRecord(json2) || json2.version !== 1) throw invalid('expected {"version": 1, \u2026}');
   const lock = emptyLock();
-  const git = json.git ?? {};
-  const https = json.https ?? {};
-  const cloud = json.cloud ?? {};
+  const git = json2.git ?? {};
+  const https = json2.https ?? {};
+  const cloud = json2.cloud ?? {};
   if (!isRecord(git) || !isRecord(https) || !isRecord(cloud)) throw invalid('"git", "https" and "cloud" must be objects');
   for (const [key, entry] of Object.entries(git)) {
     const at = key.lastIndexOf("@");
@@ -9029,17 +9029,6 @@ function playAt(scene, steps, index, progress, tick = 0) {
   return { active, failing, pathNodes: pathNodes2, pathEdges, edges, packets, tick };
 }
 
-// ../frontend/src/playground/useCaseGroups.ts
-function groupByEndpoint(useCases) {
-  if (!useCases.some((u) => u.endpoint)) return [{ useCases }];
-  const groups = /* @__PURE__ */ new Map();
-  for (const u of useCases) {
-    const label = u.endpointGroup ?? u.endpoint ?? "Other flows";
-    groups.set(label, [...groups.get(label) ?? [], u]);
-  }
-  return [...groups].map(([label, list]) => ({ label, useCases: list }));
-}
-
 // ../frontend/src/hld/hld.ts
 var HOT_UTILIZATION = 0.7;
 function selectorLabel(s) {
@@ -9350,6 +9339,17 @@ function stepCardsOf(scenario, name) {
 }
 var splits = (n) => n.writeLoadRps > 0 && (n.writeScaling === "shards" || n.readCapacityRps !== n.writeCapacityRps);
 var bare = (rps) => formatRps(rps).replace(" rps", "");
+var exampleUseCase = (d) => JSON.stringify(d.useCases[0]?.name ?? "Checkout");
+function trafficExample(d) {
+  const s = d.useCases[0]?.scenarios ?? [];
+  const mix2 = s.length > 1 && !s.some((x) => x.name.includes(" \u203A ")) ? `  mix ${JSON.stringify(s[0].name)} 90%, ${JSON.stringify(s[1].name)} 10%` : "";
+  return `traffic {
+  ${exampleUseCase(d)} 1k rps${mix2}
+}`;
+}
+var whatIfExample = (d) => `whatif "Launch day" {
+  traffic ${exampleUseCase(d)} x3
+}`;
 function analysisPage(doc, whatIfs) {
   const analysis = doc.analysis;
   if (!analysis) {
@@ -9357,7 +9357,7 @@ function analysisPage(doc, whatIfs) {
       kind: "page",
       blocks: [
         { type: "paragraph", text: "No traffic yet: add a traffic { \u2026 } block and Proschi estimates load, latency, availability and cost for every node, e.g." },
-        { type: "code", text: 'traffic {\n  "Redirect" 10k rps  mix "Cache hit" 90%, "Cache miss" 10%\n}' }
+        { type: "code", text: trafficExample(doc.diagram) }
       ]
     };
   }
@@ -9487,7 +9487,7 @@ function whatIfBlocks(doc, results) {
   const blocks = [{ type: "heading", text: "What-ifs" }];
   if (results.length === 0) {
     blocks.push({ type: "paragraph", small: true, text: "None saved yet: a whatif block runs the design again with more traffic or nodes down, e.g." });
-    blocks.push({ type: "code", text: 'whatif "Launch day" {\n  traffic "Redirect" x3\n}' });
+    blocks.push({ type: "code", text: whatIfExample(doc.diagram) });
   } else {
     const arrow2 = (r, up, down) => {
       const tone2 = deltaTone(r);
@@ -9511,7 +9511,7 @@ function whatIfBlocks(doc, results) {
     });
     for (const text of results.flatMap((r) => r.warnings)) blocks.push({ type: "callout", tone: "warn", text });
   }
-  blocks.push({ type: "controls", items: [{ control: { id: "explore-whatifs", icon: "open", label: "Explore what-ifs in Proschi" } }, { text: [{ text: "more traffic, nodes down, a sweep", tone: "muted" }] }] });
+  blocks.push({ type: "controls", items: [{ control: { id: "explore-whatifs", icon: "open", label: "Explore what-ifs in Proschi" } }] });
   return blocks;
 }
 var STATUS2 = {
@@ -9522,6 +9522,17 @@ var STATUS2 = {
 var measured = (text, hint) => [...text ? [{ text }] : [{ text: "\u2014", tone: "muted" }], ...hint ? [{ text: `  Fix: ${hint}`, tone: "warn" }] : []];
 var dash = (text) => text === void 0 || text === "" ? [{ text: "\u2014", tone: "muted" }] : [{ text: String(text) }];
 var RISK_TONE = { high: "bad", medium: "warn", low: "info" };
+var playsCaption = (others = 0) => `The Diagram tab's player plays it${others > 0 ? ` and the other ${others === 1 ? "scenario" : `${others} scenarios`}` : ""}.`;
+var HLD_SUBTITLE = "High-level design, generated from the model and its simulation";
+function hldVerdict(doc) {
+  const out = [];
+  const checks = doc.sections.flatMap((s) => s.kind === "requirements" ? [...s.nonFunctional, ...s.flowTests] : []);
+  const failing = checks.filter((r) => r.status === "fail").length;
+  const checked = checks.filter((r) => r.status !== "unchecked").length;
+  if (checked) out.push(failing ? { tone: "bad", text: [{ text: `${failing} of ${checked} checks fail`, bold: true }, { text: `: section ${doc.sections.findIndex((s) => s.kind === "requirements") + 1}, Requirements, has the measured values and their fixes.` }] } : { tone: "good", text: [{ text: `All ${checked} checks pass`, bold: true }, { text: " against the simulation." }] });
+  if (!doc.checked && doc.sections.some((s) => s.kind === "requirements" && (s.nonFunctional.length || s.flowTests.length))) out.push({ tone: "warn", text: [{ text: "The simulation did not run, so requirements and tests are listed but not checked." }] });
+  return out;
+}
 var hldAnchor = (kind) => `hld-${kind}`;
 function hldSection(doc, s) {
   const out = [];
@@ -9630,7 +9641,7 @@ function hldSection(doc, s) {
           }))
         });
         const first = u.scenarios.find((sc) => sc.steps > 0);
-        if (first) out.push({ type: "figure", of: { useCase: u.useCaseId, scenario: first.id }, caption: u.scenarios.length > 1 ? `The Diagram tab's player plays the other ${u.scenarios.length - 1 === 1 ? "scenario" : `${u.scenarios.length - 1} scenarios`}.` : void 0, maxRows: 24 });
+        if (first) out.push({ type: "figure", of: { useCase: u.useCaseId, scenario: first.id }, caption: playsCaption(u.scenarios.length - 1), maxRows: 24 });
       }
       break;
     case "decisions":
@@ -9647,12 +9658,8 @@ function hldSection(doc, s) {
   return out;
 }
 function hldPage(doc, source) {
-  const blocks = [{ type: "heading", level: 1, text: doc.title }, { type: "paragraph", small: true, text: "High-level design, generated from the model and its simulation" }];
-  const checks = doc.sections.flatMap((s) => s.kind === "requirements" ? [...s.nonFunctional, ...s.flowTests] : []);
-  const failing = checks.filter((r) => r.status === "fail").length;
-  const checked = checks.filter((r) => r.status !== "unchecked").length;
-  if (checked) blocks.push(failing ? { type: "callout", tone: "bad", text: [{ text: `${failing} of ${checked} checks fail`, bold: true }, { text: `: section ${doc.sections.findIndex((s) => s.kind === "requirements") + 1}, Requirements, has the measured values and their fixes.` }] } : { type: "callout", tone: "good", text: [{ text: `All ${checked} checks pass`, bold: true }, { text: " against the simulation." }] });
-  if (!doc.checked && doc.sections.some((s) => s.kind === "requirements" && (s.nonFunctional.length || s.flowTests.length))) blocks.push({ type: "callout", tone: "warn", text: "The simulation did not run, so requirements and tests are listed but not checked." });
+  const blocks = [{ type: "heading", level: 1, text: doc.title }, { type: "paragraph", small: true, text: HLD_SUBTITLE }];
+  for (const v of hldVerdict(doc)) blocks.push({ type: "callout", tone: v.tone, text: v.text });
   blocks.push({ type: "controls", items: [{ control: { id: "hld-copy", icon: "copy", label: "Copy HLD markdown", hotkey: "c", variant: "primary" } }, { text: [{ text: "with Mermaid diagrams, for a README or a wiki", tone: "muted" }] }] });
   if (doc.sections.length === 0) return { kind: "page", blocks: [...blocks, { type: "paragraph", text: "Add components and use cases to generate a design document." }] };
   blocks.push({ type: "heading", level: 3, text: [{ text: "CONTENTS", tone: "muted" }] });
@@ -9664,11 +9671,34 @@ function hldPage(doc, source) {
   return { kind: "page", source, blocks };
 }
 
+// src/render/ui/contract.ts
+var ZOOM_COLUMNS = 20;
+var CELL_ASPECT = 17 / 8;
+
 // ../plugin/src/graphics.ts
 import { atom, read, update } from "claude-code";
 
-// src/render/ui/contract.ts
-var CELL_ASPECT = 17 / 8;
+// ../plugin/src/lru.ts
+var Lru = class extends Map {
+  constructor(max) {
+    super();
+    this.max = max;
+  }
+  max;
+  get(key) {
+    if (!super.has(key)) return void 0;
+    const value = super.get(key);
+    super.delete(key);
+    super.set(key, value);
+    return value;
+  }
+  set(key, value) {
+    super.delete(key);
+    super.set(key, value);
+    if (this.size > this.max) super.delete(this.keys().next().value);
+    return this;
+  }
+};
 
 // ../plugin/src/helper.ts
 var RANK = { now: "a", first: "b", later: "c", mount: "c" };
@@ -9680,6 +9710,7 @@ var cellAspect = CELL_ASPECT;
 function setCellAspect(value) {
   const n = typeof value === "number" ? value : Number.parseFloat(String(value ?? ""));
   cellAspect = Number.isFinite(n) && n >= 1.5 && n <= 3 ? n : CELL_ASPECT;
+  return cellAspect === n || value === void 0 || value === "" ? void 0 : `the cellAspect setting ${JSON.stringify(value)} is not a number from 1.5 to 3: pictures are drawn for ${CELL_ASPECT}`;
 }
 var cellAspectOf = () => cellAspect;
 var pruned = false;
@@ -9696,7 +9727,7 @@ async function serveRequests($) {
         continue;
       }
       if (job === "redraw") $.ui.invalidate("ui.render");
-      else send($, job.input, job.priority, job.spawn).then(job.resolve, job.reject);
+      else send($, job.input, job.priority).then(job.resolve, job.reject);
     }
   } finally {
     serving = false;
@@ -9719,15 +9750,21 @@ function isAborted(error) {
 function didNotStart(error) {
   return /\b(ENOENT|EACCES|EPERM)\b|cannot start|could not start|not found|spawn/i.test(error instanceof Error ? error.message : String(error));
 }
-var aborts = /* @__PURE__ */ new Map();
-var MAX_ABORTS = 3;
-function retry(key) {
-  const n = (aborts.get(key) ?? 0) + 1;
-  aborts.set(key, n);
-  return n <= MAX_ABORTS;
+var Transient = class extends Error {
+  transient = true;
+};
+function isRetryable(error) {
+  return isAborted(error) || error?.transient === true;
 }
-var answered = (key) => void aborts.delete(key);
-var TIMEOUT_MS = 6e4;
+var failures = new Lru(256);
+var MAX_RETRIES2 = 3;
+function retry(key) {
+  const n = (failures.get(key) ?? 0) + 1;
+  failures.set(key, n);
+  return n <= MAX_RETRIES2;
+}
+var answered = (key) => void failures.delete(key);
+var TIMEOUT_MS = { now: 1e4, first: 1e4, later: 6e4, mount: 6e4 };
 async function cacheDir($) {
   if (cache) return cache;
   const dir = await $.env.get("TMPDIR").catch((error) => isAborted(error) ? null : void 0);
@@ -9744,10 +9781,10 @@ function helper($) {
   return `${$.plugin.root}/hooks/raster.cjs`;
 }
 async function oneShot($, input) {
-  const layout = input.kind === "layout";
-  const script = layout ? `${$.plugin.root}/hooks/layout.cjs` : helper($);
-  const { exitCode, stdout, stderr } = await $.process.run(["node", script], { stdin: JSON.stringify(input), timeoutMs: TIMEOUT_MS });
-  if (exitCode !== 0) throw new Error(stderr.trim() || `${layout ? "layout" : "raster"} exited with ${exitCode}`);
+  const { exitCode, stdout, stderr } = await $.process.run(["node", helper($)], { stdin: JSON.stringify(input), timeoutMs: TIMEOUT_MS.later }).catch((error) => {
+    throw isAborted(error) || didNotStart(error) ? error : new Transient(error instanceof Error ? error.message : String(error));
+  });
+  if (exitCode !== 0) throw stderr.trim() ? new Error(stderr.trim()) : new Transient(`raster exited with ${exitCode}`);
   return JSON.parse(stdout);
 }
 function start($, root) {
@@ -9758,6 +9795,7 @@ function start($, root) {
     let started = false;
     try {
       const stream = $.process.spawn({ argv: ["node", helper($), "--serve", w.dir] });
+      w.stop = () => void stream.return?.(void 0);
       for await (const chunk of stream) {
         started = true;
         if (chunk.stream !== "stdout") continue;
@@ -9781,6 +9819,11 @@ function start($, root) {
   })();
   return w;
 }
+function stopWorker() {
+  const w = worker;
+  worker = void 0;
+  w?.stop?.();
+}
 function settle(w, line2) {
   let reply;
   try {
@@ -9795,19 +9838,20 @@ function settle(w, line2) {
   if (typeof reply.error === "string") waiter.reject(new Error(reply.error));
   else waiter.resolve(reply.output);
 }
-function ask($, input, priority = "now", spawn = true) {
-  if (!serving) return send($, input, priority, spawn);
-  return new Promise((resolve, reject) => enqueue({ input, priority, spawn, resolve, reject }));
+function ask($, input, priority = "now") {
+  if (!serving) return send($, input, priority);
+  return new Promise((resolve, reject) => enqueue({ input, priority, resolve, reject }));
 }
-async function send($, input, priority, spawn) {
-  if (refused || !spawn && !worker) return oneShot($, input);
+async function send($, input, priority) {
+  if (refused) return oneShot($, input);
   const root = await cacheDir($);
   const w = worker ?? start($, root);
   const id = `${RANK[priority]}${String(seq++).padStart(9, "0")}`;
+  const ms = TIMEOUT_MS[priority];
   return new Promise((resolve, reject) => {
-    const timer = $.clock.after(TIMEOUT_MS, () => {
+    const timer = $.clock.after(ms, () => {
       if (!w.waiting.delete(id)) return;
-      reject(new Error(`the raster worker did not answer in ${TIMEOUT_MS / 1e3} s`));
+      reject(new Transient(`the raster worker did not answer in ${ms / 1e3} s`));
     });
     w.waiting.set(id, {
       input,
@@ -9828,12 +9872,31 @@ async function send($, input, priority, spawn) {
     });
   });
 }
-var panels = /* @__PURE__ */ new Map();
+var panels = new Lru(512);
 var drawing = /* @__PURE__ */ new Set();
 var wanted = /* @__PURE__ */ new Set();
 var batch;
-var panelKey = (p) => JSON.stringify([p.theme, p.columns, p.edges?.top === true, p.edges?.bottom === true, p.panel]);
+var json = /* @__PURE__ */ new WeakMap();
+function digest(text) {
+  let h1 = 3735928559;
+  let h2 = 1103547991;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 2654435761);
+    h2 = Math.imul(h2 ^ c, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ h1 >>> 16, 2246822507) ^ Math.imul(h2 ^ h2 >>> 13, 3266489909);
+  h2 = Math.imul(h2 ^ h2 >>> 16, 2246822507) ^ Math.imul(h1 ^ h1 >>> 13, 3266489909);
+  return `${(4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36)}.${text.length}`;
+}
+function panelKey(p) {
+  let text = json.get(p.panel);
+  if (text === void 0) json.set(p.panel, text = digest(JSON.stringify(p.panel)));
+  return `${p.theme}\0${p.columns}\0${p.edges?.top === true}\0${p.edges?.bottom === true}\0${p.variants === true}\0${text}`;
+}
 function panelOf($, p, priority = "now") {
+  const rich = panels.get(panelKey({ ...p, variants: true }));
+  if (rich && !("error" in rich)) return rich;
   const key = panelKey(p);
   const done = panels.get(key);
   if (done) return done;
@@ -9847,6 +9910,29 @@ function panelOf($, p, priority = "now") {
   batch[priority === "mount" ? "later" : priority].set(key, p);
   return void 0;
 }
+function variantsOf($, p) {
+  const rich = { ...p, variants: true };
+  const key = panelKey(rich);
+  const done = panels.get(key);
+  if (done) return Promise.resolve(done);
+  let going2 = hovering.get(key);
+  if (!going2) {
+    going2 = (async () => {
+      const input = { kind: "panels", outDir: await cacheDir($), theme: p.theme, cellAspect, panels: [requestOf(key, rich)] };
+      const out = await ask($, input, "now").then(
+        (o) => o.panels?.[0] ?? { error: "the helper answered no panel" },
+        (error) => ({ error: error instanceof Error ? error.message : String(error) })
+      );
+      if (!("error" in out)) panels.set(key, out);
+      hovering.delete(key);
+      return out;
+    })();
+    hovering.set(key, going2);
+  }
+  return going2;
+}
+var hovering = /* @__PURE__ */ new Map();
+var requestOf = (id, p) => ({ id, panel: p.panel, columns: p.columns, variants: p.variants ? ["hover", "pressed"] : [], ...p.edges?.top || p.edges?.bottom ? { edges: p.edges } : {} });
 function prefetch($, asks) {
   for (const p of asks) panelOf($, p, "later");
 }
@@ -9857,9 +9943,10 @@ async function flush($) {
   for (const priority of ["now", "first", "later"]) {
     const asks = [...b[priority].entries()];
     if (asks.length === 0) continue;
-    for (const theme2 of new Set(asks.map(([, p]) => p.theme))) {
-      const mine = asks.filter(([, p]) => p.theme === theme2);
-      const input = withPrune({ kind: "panels", outDir, theme: theme2, cellAspect, panels: mine.map(([key, p]) => ({ id: key, panel: p.panel, columns: p.columns, variants: ["hover", "pressed"], ...p.edges?.top || p.edges?.bottom ? { edges: p.edges } : {} })) });
+    const groups = priority === "later" ? asks.map((a) => [a]) : [...new Set(asks.map(([, p]) => p.theme))].map((theme2) => asks.filter(([, p]) => p.theme === theme2));
+    for (const mine of groups) {
+      const theme2 = mine[0][1].theme;
+      const input = withPrune({ kind: "panels", outDir, theme: theme2, cellAspect, panels: mine.map(([key, p]) => requestOf(key, p)) });
       void ask($, input, priority).then(
         (out) => {
           const answers = out.panels ?? [];
@@ -9869,7 +9956,7 @@ async function flush($) {
           }
         },
         (error) => {
-          for (const [key] of mine) if (!isAborted(error) || !retry(key)) panels.set(key, { error: error instanceof Error ? error.message : String(error) });
+          for (const [key] of mine) if (!isRetryable(error) || !retry(key)) panels.set(key, { error: error instanceof Error ? error.message : String(error) });
         }
       ).finally(() => {
         for (const [key] of mine) drawing.delete(key);
@@ -9925,7 +10012,7 @@ function gridFrame(g, step, k = 0) {
   const over = s.frames[Math.max(0, Math.min(k, s.frames.length - 1))] ?? {};
   return s.behind.map((file, i) => over[i] ?? file);
 }
-var rasters = /* @__PURE__ */ new Map();
+var rasters = new Lru(256);
 var pending = /* @__PURE__ */ new Set();
 var wanted2 = /* @__PURE__ */ new Set();
 var bytes = /* @__PURE__ */ new Map();
@@ -9936,6 +10023,9 @@ async function themeOf($) {
   const rows = await $.config.list().catch(() => []);
   theme = /light/i.test(String(rows.find((row) => row.key === "theme")?.value ?? "")) ? "light" : "dark";
   return theme;
+}
+function themeChanged() {
+  theme = void 0;
 }
 function rasterOf($, request2, priority = "now") {
   const key = `${keyOf(request2.source)}\0${JSON.stringify(request2.options)}`;
@@ -9955,8 +10045,8 @@ function rasterOf($, request2, priority = "now") {
         const o = out;
         return typeof o.base === "string" && o.width > 0 && o.height > 0 ? o : { error: "raster answered no picture" };
       },
-      // Aborted (a redraw, a new view): not an answer; the next draw asks again.
-      (error) => isAborted(error) && retry(key) ? void 0 : { error: error instanceof Error ? error.message : String(error) }
+      // Aborted (a redraw, a new view), timed out, the worker gone: not an answer; the next draw asks again.
+      (error) => isRetryable(error) && retry(key) ? void 0 : { error: error instanceof Error ? error.message : String(error) }
     );
     if (answer && "error" in answer) $.ui.log(`proschi: no picture: ${answer.error}`, { to: "debug" });
     if (answer) rasters.set(key, answer);
@@ -10033,16 +10123,16 @@ function probe($, requestId, key) {
 }
 
 // ../plugin/src/picture.tsx
-var shown = /* @__PURE__ */ new Map();
-var live = /* @__PURE__ */ new Map();
-var overlaySites = /* @__PURE__ */ new Map();
+var SITES = 64;
+var shown = new Lru(SITES);
+var live = new Lru(SITES);
+var overlaySites = new Lru(SITES * 64);
 var tileKey = (site, piece, i) => `t-${site}-${piece}-${i}`;
 var overlayKey = (strip) => `ov-${strip}`;
-var timings = {};
 var PERF_KEEP = 40;
 var perf = [];
 var pressTimings = () => perf;
-var opening = /* @__PURE__ */ new Map();
+var opening = new Lru(SITES);
 async function markOpened($, site) {
   try {
     opening.set(site, { at: await $.clock.now() });
@@ -10073,44 +10163,48 @@ async function pictureSite($, ui, s) {
       else if (!hidden) waiting = true;
       continue;
     }
-    const out = panelOf($, { panel: p.panel, columns: p.columns, theme: s.theme, edges: { ...i === 0 ? { top: true } : {}, ...i === last ? { bottom: true } : {} } }, hidden ? "first" : "now");
+    const ask2 = { panel: p.panel, columns: p.columns, theme: s.theme, edges: { ...i === 0 ? { top: true } : {}, ...i === last ? { bottom: true } : {} } };
+    const out = panelOf($, ask2, hidden ? "first" : "now");
     if (out && "error" in out) {
       if (hidden) continue;
       return { error: out.error };
     }
     if (!out) {
       if (!hidden) waiting = true;
-    } else resolved.push({ id: p.id, out });
+    } else resolved.push({ id: p.id, out, ask: ask2 });
   }
-  const pages = [];
+  const pages2 = [];
   for (const page of s.pages ?? []) {
-    const out = panelOf($, { panel: page.panel, columns: page.columns, theme: s.theme, edges: { bottom: true } }, page.shown ? "now" : "mount");
+    const ask2 = { panel: page.panel, columns: page.columns, theme: s.theme, edges: { bottom: true } };
+    const out = panelOf($, ask2, page.shown ? "now" : "mount");
     if (out && "error" in out) {
       if (page.shown) return { error: out.error };
       continue;
     }
-    if (out) pages.push({ id: page.id, out, shown: page.shown });
+    if (out) pages2.push({ id: page.id, out, ask: ask2, shown: page.shown });
     else if (page.shown) waiting = true;
   }
   let float;
   if (s.float) {
-    const out = panelOf($, { panel: s.float.panel, columns: s.float.columns, theme: s.theme, edges: { top: true, bottom: true } });
+    const ask2 = { panel: s.float.panel, columns: s.float.columns, theme: s.theme, edges: { top: true, bottom: true } };
+    const out = panelOf($, ask2);
     if (out && "error" in out) return { error: out.error };
     if (!out) waiting = true;
-    else float = { def: s.float, out };
+    else float = { def: s.float, out, ask: ask2 };
   }
   let corner;
   if (s.corner) {
-    const out = panelOf($, { panel: s.corner.panel, columns: s.corner.columns, theme: s.theme, edges: { top: true, bottom: true } });
+    const ask2 = { panel: s.corner.panel, columns: s.corner.columns, theme: s.theme, edges: { top: true, bottom: true } };
+    const out = panelOf($, ask2);
     if (out && "error" in out) return { error: out.error };
     if (!out) waiting = true;
-    else corner = { def: s.corner, out };
+    else corner = { def: s.corner, out, ask: ask2 };
   }
   const onTop = (a) => a.panel.kind === "tabs" || a.panel.kind === "playerBar" && !s.pieces.some((p) => "panel" in p && p.panel.kind === "tabs");
   if (s.ahead?.length) prefetch($, s.ahead.map((a) => ({ panel: a.panel, columns: a.columns, theme: s.theme, edges: a.edges ?? (onTop(a) ? { top: true } : {}) })));
   let now;
   if (!waiting) {
-    now = { pieces: resolved, pages, actions: { ...s.actions, ...s.float?.actions ?? {} }, ...float ? { float } : {}, ...corner ? { corner } : {}, ...s.paged ? { paged: s.paged } : {} };
+    now = { pieces: resolved, pages: pages2, actions: { ...s.actions, ...s.float?.actions ?? {} }, ...float ? { float } : {}, ...corner ? { corner } : {}, ...s.paged ? { paged: s.paged } : {} };
     shown.set(s.site, now);
   } else now = shown.get(s.site);
   if (!now) return { element: loading(ui, s.site, s.rows) };
@@ -10123,9 +10217,7 @@ async function pictureSite($, ui, s) {
   const done = await $.clock.now();
   const l = live.get(s.site);
   if (!waiting && l?.pressedAt !== void 0) {
-    const t = { at: l.pressedAt, site: s.site, control: l.pressed ?? "", toRender: (l.renderedAt ?? started) - l.pressedAt, toShown: done - l.pressedAt, build: done - started, images: built.images, sent: built.sent };
-    timings.press = t.toShown;
-    timed($, t);
+    timed($, { at: l.pressedAt, site: s.site, control: l.pressed ?? "", toRender: (l.renderedAt ?? started) - l.pressedAt, toShown: done - l.pressedAt, build: done - started, images: built.images, sent: built.sent });
     l.pressedAt = void 0;
     l.renderedAt = void 0;
   }
@@ -10144,7 +10236,7 @@ async function pictureSite($, ui, s) {
   }
   return { element: built.element };
 }
-async function strips(ui, s, piece, out, source, into) {
+async function strips(ui, s, piece, out, ask2, source, into) {
   const rows = [];
   for (const [i, tile] of out.tiles.entries()) {
     const key = tileKey(s.site, piece, i);
@@ -10160,7 +10252,7 @@ async function strips(ui, s, piece, out, source, into) {
     if (into) {
       for (const a of areas) {
         const id = `${piece}/${a.control.id}`;
-        into.tiles.set(id, { key, file, ...a.hoverFile ? { hoverFile: a.hoverFile } : {}, ...a.pressedFile ? { pressedFile: a.pressedFile } : {} });
+        into.tiles.set(id, { key, file, ...a.hoverFile ? { hoverFile: a.hoverFile } : {}, ...a.pressedFile ? { pressedFile: a.pressedFile } : {}, ask: ask2, tile: i, control: a.control.id });
         controls.push({ id, col: tile.col + a.col, row: 0, columns: a.columns, rows: tile.rows });
         if (a.control.hotkey && s.hotkeys && s.actions[id]) into.hotkeys.set(a.control.hotkey, id);
       }
@@ -10186,7 +10278,7 @@ async function floatOver(ui, s, f, anchor, rows, width, source, into, $) {
   const elements = [
     /* @__PURE__ */ h(ui.Box, { key: `scrim-${s.site}`, position: "absolute", top: 0, left: 0, width, height: rows }, /* @__PURE__ */ h(ui.Client, { key: scrim, module: "./uiOverlay.js", props: { controls: [{ id: `${f.def.id}/close`, col: 0, row: 0, columns: width, rows }] }, width, height: rows }))
   ];
-  const floated = await strips(ui, s, f.def.id, f.out, source, into);
+  const floated = await strips(ui, s, f.def.id, f.out, f.ask, source, into);
   f.out.tiles.forEach(
     (t, i) => elements.push(
       /* @__PURE__ */ h(ui.Box, { key: `fl-${s.site}-${i}`, position: "absolute", top: at + t.row, left, width: t.columns, height: t.rows }, floated[i])
@@ -10257,10 +10349,10 @@ async function build($, ui, s, d) {
           const scrolled = (windows.get(s.requestId)?.offset ?? 0) > at;
           cornerAt = { top: at, hidden: scrolled };
           if (!scrolled) {
-            const placed = await strips(ui, s, c.def.id, c.out, source, into);
+            const placed = await strips(ui, s, c.def.id, c.out, c.ask, source, into);
             c.out.tiles.forEach(
               (t, i2) => body.push(
-                /* @__PURE__ */ h(ui.Box, { key: `${pic.key}-corner-${i2}`, position: "absolute", top: pic.rows - c.out.rows + t.row, left: Math.max(0, pic.columns - c.out.columns), width: t.columns, height: t.rows }, placed[i2])
+                /* @__PURE__ */ h(ui.Box, { key: `${pic.key}-corner-${i2}`, position: "absolute", top: pic.rows - c.out.rows + t.row, left: Math.max(0, pic.columns - c.out.columns - 1), width: t.columns, height: t.rows }, placed[i2])
               )
             );
           }
@@ -10275,7 +10367,7 @@ async function build($, ui, s, d) {
       const { out } = p;
       if (!hidden) anchors.set(p.id, { row: top - layerTop, out });
       target.push(
-        /* @__PURE__ */ h(ui.Box, { key: `p-${s.site}-${p.id}`, flexDirection: "column", height: out.rows }, await strips(ui, s, p.id, out, source, hidden ? void 0 : into))
+        /* @__PURE__ */ h(ui.Box, { key: `p-${s.site}-${p.id}`, flexDirection: "column", height: out.rows }, await strips(ui, s, p.id, out, p.ask, source, hidden ? void 0 : into))
       );
       rows = out.rows;
       columns = out.columns;
@@ -10307,10 +10399,10 @@ async function build($, ui, s, d) {
   }
   let page;
   if (d.pages.length) {
-    const pages = [];
+    const pages2 = [];
     for (const pg of d.pages) {
-      const rows = await strips(ui, s, pg.id, pg.out, source, pg.shown ? into : void 0);
-      pages.push(
+      const rows = await strips(ui, s, pg.id, pg.out, pg.ask, source, pg.shown ? into : void 0);
+      pages2.push(
         /* @__PURE__ */ h(ui.Box, { key: `pg-${s.site}-${pg.id}`, flexDirection: "column", height: pg.out.rows, display: pg.shown ? "flex" : "none" }, rows)
       );
       if (pg.shown) {
@@ -10320,7 +10412,7 @@ async function build($, ui, s, d) {
       }
     }
     parts.push(
-      /* @__PURE__ */ h(ui.Box, { key: `pages-${s.site}`, flexDirection: "column" }, pages)
+      /* @__PURE__ */ h(ui.Box, { key: `pages-${s.site}`, flexDirection: "column" }, pages2)
     );
   }
   for (const [key, id] of Object.entries(s.keys ?? {})) if (d.actions[id] && !into.hotkeys.has(key)) into.hotkeys.set(key, id);
@@ -10349,6 +10441,20 @@ async function blit($, l, ref, file) {
   const r = await $.ui.blit({ requestId: l.requestId, key: ref.key, source: await sourceOf($, file, l.form) }).catch((error) => ({ deny: String(error) }));
   if (r.deny) $.ui.log(`proschi: blit refused: ${r.deny}`, { to: "debug" });
 }
+async function hoverLater($, site, id, ref) {
+  const key = panelKey(ref.ask);
+  const out = await variantsOf($, ref.ask);
+  if ("error" in out) return $.ui.log(`proschi: no hover pictures: ${out.error}`, { to: "debug" });
+  const l = live.get(site);
+  if (!l) return;
+  for (const t of l.tiles.values()) {
+    if (panelKey(t.ask) !== key) continue;
+    const area = out.tiles[t.tile]?.controls?.find((a) => a.control.id === t.control);
+    if (area?.hoverFile) t.hoverFile = area.hoverFile;
+    if (area?.pressedFile) t.pressedFile = area.pressedFile;
+  }
+  if (l.hovered === id) await blit($, l, l.tiles.get(id), l.tiles.get(id)?.hoverFile);
+}
 async function act($, site, id, surface) {
   const l = live.get(site);
   const action = l?.actions[id];
@@ -10372,13 +10478,13 @@ function registerPicture(on) {
     if (!site || !l) return next(e);
     const data = e.data ?? {};
     const id = typeof data.id === "string" ? data.id : "";
-    const started = await $.clock.now();
     if (data.type === "hover") {
       if (!id && l.hovered && !l.overlays.get(e.element)?.includes(l.hovered)) return {};
       if (l.hovered && l.hovered !== id) await blit($, l, l.tiles.get(l.hovered), l.tiles.get(l.hovered)?.file);
       l.hovered = id || void 0;
-      if (id) await blit($, l, l.tiles.get(id), l.tiles.get(id)?.hoverFile);
-      timings.hover = await $.clock.now() - started;
+      const ref = id ? l.tiles.get(id) : void 0;
+      if (ref?.hoverFile) await blit($, l, ref, ref.hoverFile);
+      else if (ref) await hoverLater($, site, id, ref);
     } else if (data.type === "down") {
       await blit($, l, l.tiles.get(id), l.tiles.get(id)?.pressedFile);
     } else if (data.type === "press") {
@@ -10804,8 +10910,8 @@ function toMarkdown(doc) {
 }
 
 // ../plugin/src/views/hld.tsx
-var documents = /* @__PURE__ */ new Map();
-var markdowns = /* @__PURE__ */ new Map();
+var documents = new Lru(16);
+var markdowns = new Lru(16);
 function hldDocument(doc, key) {
   let h2 = documents.get(key);
   if (!h2) {
@@ -10823,28 +10929,24 @@ function hldMarkdown(doc, key) {
   return text;
 }
 function shownMarkdown(markdown) {
-  const text = markdown.replace(
-    /```mermaid\n([\s\S]*?)```\n?/g,
-    (_, code2) => code2.startsWith("sequenceDiagram") ? "_The Diagram tab's player plays this scenario._\n" : "_The Diagram tab draws the architecture._\n"
-  );
-  const titles = [];
-  const numbered = text.replace(/^## (.+)$/gm, (_, title) => `## ${titles.push(title)}. ${title}`);
-  if (titles.length === 0) return numbered;
-  const contents = `**Contents** ${titles.map((t, i) => `${i + 1} ${t}`).join(" \xB7 ")}
-
-`;
-  const at = numbered.search(/^## /m);
-  return numbered.slice(0, at) + contents + numbered.slice(at);
+  const text = markdown.replace(/```mermaid\n([\s\S]*?)```\n?/g, (_, code2) => `_${code2.startsWith("sequenceDiagram") ? playsCaption() : "The Diagram tab draws the architecture."}_
+`).replace(/<br>/g, "; ");
+  let n = 0;
+  return text.split(/^(?=## )/m).slice(1).map((s) => s.replace(/^## (.+)$/m, (_, title) => `## ${++n}. ${title}`));
 }
-function hldTab(ui, doc, key, copy2) {
+var TONE = { bad: { color: "red", glyph: "\u2717" }, good: { color: "green", glyph: "\u2713" }, warn: { color: "yellow", glyph: "\u26A0" } };
+function hldTab(ui, doc, key, copy2, scrollTo) {
   const markdown = hldMarkdown(doc, key);
-  const text = shownMarkdown(markdown);
-  const at = text.search(/^## \d+\. Requirements$/m);
-  return /* @__PURE__ */ h(ui.Box, { key: "body-hld", flexDirection: "column" }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Button, { key: "hld-copy", label: "\u29C9 Copy HLD markdown", hotkey: "c", variant: "primary", onPress: (press) => copy2(press.surface, markdown) }), /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "with its Mermaid diagrams, for a README or a wiki")), /* @__PURE__ */ h(ui.Markdown, { key: "hld-md", text: at < 0 ? text : text.slice(0, at) }), at >= 0 && /* @__PURE__ */ h(ui.Box, { key: hldAnchor("requirements"), flexDirection: "column" }, /* @__PURE__ */ h(ui.Markdown, { key: "hld-md-requirements", text: text.slice(at) })));
+  const design = hldDocument(doc, key);
+  const sections = shownMarkdown(markdown);
+  return /* @__PURE__ */ h(ui.Box, { key: "body-hld", flexDirection: "column" }, /* @__PURE__ */ h(ui.Markdown, { key: "hld-md-title", text: `# ${design.title}` }), /* @__PURE__ */ h(ui.Text, { dimColor: true }, HLD_SUBTITLE), hldVerdict(design).map((v, i) => /* @__PURE__ */ h(ui.Text, { key: `hld-verdict-${i}`, wrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { color: TONE[v.tone].color, bold: true }, TONE[v.tone].glyph, " "), v.text.map((span2, j) => /* @__PURE__ */ h(ui.Text, { key: `s${j}`, ...span2.bold ? { bold: true, color: TONE[v.tone].color } : {} }, span2.text)))), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Button, { key: "hld-copy", label: "\u29C9 Copy HLD markdown", hotkey: "c", variant: "primary", onPress: (press) => copy2(press.surface, markdown) }), /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "with its Mermaid diagrams, for a README or a wiki")), design.sections.length > 0 && /* @__PURE__ */ h(ui.Box, { key: "hld-toc", flexDirection: "row", flexWrap: "wrap", columnGap: 1 }, /* @__PURE__ */ h(ui.Text, { dimColor: true, bold: true }, "CONTENTS"), design.sections.map((sec, i) => /* @__PURE__ */ h(ui.Button, { key: `toc-${sec.kind}`, label: `${i + 1} ${sec.title}`, dimColor: true, onPress: () => scrollTo(hldAnchor(sec.kind)) }))), sections.map((text, i) => {
+    const kind = design.sections[i]?.kind ?? `section-${i}`;
+    return /* @__PURE__ */ h(ui.Box, { key: hldAnchor(kind), flexDirection: "column" }, /* @__PURE__ */ h(ui.Markdown, { key: `hld-md-${kind}`, text }));
+  }));
 }
 
 // ../plugin/src/views/lines.ts
-var TONE = { good: "#22c55e", warn: "#eab308", bad: "#ef4444", ink: "#111111", pink: "#ff5da2" };
+var TONE2 = { good: "#22c55e", warn: "#eab308", bad: "#ef4444", ink: "#111111", pink: "#ff5da2" };
 var HEAT = { warm: "#ffd23f", hot: "#ff7ab4", over: "#ff6b61" };
 var line = (...segs) => ({ segs: segs.map((s) => typeof s === "string" ? { text: s } : s) });
 var blank = () => line("");
@@ -10892,7 +10994,7 @@ function stats(items, width) {
   return out;
 }
 var splits2 = (n) => n.writeLoadRps > 0 && (n.writeScaling === "shards" || n.readCapacityRps !== n.writeCapacityRps);
-var utilTone = (n) => n.saturated ? TONE.bad : n.utilization > HOT ? TONE.warn : void 0;
+var utilTone = (n) => n.saturated ? TONE2.bad : n.utilization > HOT ? TONE2.warn : void 0;
 function utilCell(u, tone2) {
   const filled = Math.max(u > 0 ? 1 : 0, Math.min(5, Math.round(u * 5)));
   return { text: `${"\u2501".repeat(filled)}${"\u2500".repeat(5 - filled)} ${formatPercent(u)}`, ...tone2 ? { color: tone2 } : {} };
@@ -10905,7 +11007,7 @@ function busiestLine(analysis) {
   const headroom = u >= 1 ? "past its capacity: requests are dropped" : `${(Math.floor(1 / u * 10) / 10).toFixed(1)}\xD7 headroom before it saturates`;
   return {
     segs: [
-      bottleneck ? { text: " BOTTLENECK ", bg: HEAT.over, color: TONE.ink, bold: true } : { text: " BUSIEST ", bold: true, dim: true },
+      bottleneck ? { text: " BOTTLENECK ", bg: HEAT.over, color: TONE2.ink, bold: true } : { text: " BUSIEST ", bold: true, dim: true },
       { text: " " },
       { text: node.id, bold: true },
       { text: ` at ${formatPercent(u)}: ${headroom}.` }
@@ -10922,8 +11024,8 @@ function analysisLines(diagram, analysis, width) {
     ...stats(
       [
         { label: "Total cost", value: `${formatUsd(analysis.totalCostUsd)}${analysis.totalEgressUsd > 0 ? ` (incl. ${usd3(analysis.totalEgressUsd)} egress)` : ""}` },
-        { label: "Saturated", value: String(saturated), tone: saturated ? TONE.bad : TONE.good },
-        { label: "SPOFs", value: String(spofs.length), tone: spofs.length ? TONE.warn : TONE.good },
+        { label: "Saturated", value: String(saturated), tone: saturated ? TONE2.bad : TONE2.good },
+        { label: "SPOFs", value: String(spofs.length), tone: spofs.length ? TONE2.warn : TONE2.good },
         { label: "Use cases with traffic", value: String(analysis.useCases.filter((u) => u.rps > 0).length) }
       ],
       width
@@ -10931,7 +11033,7 @@ function analysisLines(diagram, analysis, width) {
   );
   const busiest = busiestLine(analysis);
   if (busiest) out.push(blank(), busiest);
-  if (analysis.warnings.length) out.push(blank(), ...analysis.warnings.map((w) => ({ segs: [{ text: `\u26A0 ${w}`, color: TONE.warn }], wrap: true })));
+  if (analysis.warnings.length) out.push(blank(), ...analysis.warnings.map((w) => ({ segs: [{ text: `\u26A0 ${w}`, color: TONE2.warn }], wrap: true })));
   out.push(blank(), heading("Nodes"));
   const rows = [];
   for (const n of nodes) {
@@ -10974,7 +11076,7 @@ function analysisLines(diagram, analysis, width) {
             { text: n.id, bold: true },
             `${formatRps(q.inflowRps).replace(" rps", "")} / ${formatRps(q.drainRps)}`,
             Number.isFinite(q.utilization) ? formatPercent(q.utilization) : "\u2014",
-            behind ? { text: `+${formatCount(q.backlogPerHour)} msgs/h`, color: TONE.bad } : `lag ${formatDuration(q.lagMs)}`
+            behind ? { text: `+${formatCount(q.backlogPerHour)} msgs/h`, color: TONE2.bad } : `lag ${formatDuration(q.lagMs)}`
           ];
         }),
         width
@@ -11026,7 +11128,7 @@ function analysisLines(diagram, analysis, width) {
               { text: s.label, bold: true },
               usd3(s.costUsd),
               b.totalCostUsd > 0 ? formatPercent(s.costUsd / b.totalCostUsd) : "\u2014",
-              budget2 === void 0 ? { text: "\u2014", dim: true } : { text: `${usd3(budget2)}${over ? " over" : ""}`, color: over ? TONE.bad : TONE.good },
+              budget2 === void 0 ? { text: "\u2014", dim: true } : { text: `${usd3(budget2)}${over ? " over" : ""}`, color: over ? TONE2.bad : TONE2.good },
               { text: s.nodes.join(", "), dim: true }
             ];
           })
@@ -11037,18 +11139,10 @@ function analysisLines(diagram, analysis, width) {
   }
   if (spofs.length) {
     out.push(blank(), heading("Single points of failure"));
-    out.push({ segs: [{ text: `${spofs.join(", ")}`, color: TONE.warn, bold: true }, { text: ": one replica, and a use case cannot do without it. Add x2, or a fallback scenario that calls it with -x and still completes." }], wrap: true });
+    out.push({ segs: [{ text: `${spofs.join(", ")}`, color: TONE2.warn, bold: true }, { text: ": one replica, and a use case cannot do without it. Add x2, or a fallback scenario that calls it with -x and still completes." }], wrap: true });
   }
   out.push(blank(), { segs: [{ text: "Teaching numbers from default profiles per technology and a simple queueing model; override them with capacity { \u2026 }.", dim: true }], wrap: true });
   return out;
-}
-function verdictLine(results, width) {
-  if (results.length === 0) return void 0;
-  const failing = results.filter((r) => !r.passed);
-  const checks = results.length === 1 ? "check" : "checks";
-  if (failing.length === 0) return line({ text: `\u2713 All ${results.length} ${checks} pass`, color: TONE.good, bold: true });
-  const head = `\u2717 ${failing.length} of ${results.length} ${checks} fail`;
-  return line({ text: head, color: TONE.bad, bold: true }, { text: cut(`: ${failing[0].name}: ${failing[0].message}`, width - head.length) });
 }
 function legendLine(critical, width) {
   const swatch = (bg) => ({ text: "  ", bg });
@@ -11072,885 +11166,117 @@ function legendLine(critical, width) {
   return { segs };
 }
 
-// ../plugin/src/views/render.tsx
-var span = (ui, s, i) => /* @__PURE__ */ h(ui.Text, { key: String(i), ...s.color ? { color: s.color } : {}, ...s.bg ? { backgroundColor: s.bg } : {}, bold: s.bold === true, dimColor: s.dim === true }, s.text);
-function lineView(ui, l, key) {
-  const text = /* @__PURE__ */ h(ui.Text, { wrap: l.wrap ? "wrap" : "truncate-end" }, l.segs.length === 0 || l.segs.every((s) => s.text === "") ? " " : l.segs.map((s, i) => span(ui, s, i)));
-  return l.indent ? /* @__PURE__ */ h(ui.Box, { key, paddingLeft: l.indent }, text) : /* @__PURE__ */ h(ui.Box, { key }, text);
-}
-function linesView(ui, lines, key) {
-  return /* @__PURE__ */ h(ui.Box, { key, flexDirection: "column" }, lines.map((l, i) => lineView(ui, l, `${key}-${i}`)));
-}
-
-// ../plugin/src/views/whatif.ts
-var saved = /* @__PURE__ */ new Map();
-function savedWhatIfs(key, doc) {
-  let results = saved.get(key);
-  if (!results) {
-    results = doc.analysis ? runWhatIfs(doc.root) : [];
-    saved.set(key, results);
-  }
-  return results;
-}
-var toneColor = (r) => r.tone === "better" ? TONE.good : r.tone === "worse" ? TONE.bad : void 0;
-var versus = (r) => {
-  const color = toneColor(r);
-  const changed = r.change !== "same" && r.before !== r.after;
-  return { text: changed && r.tone !== "same" ? `${r.after} ${r.tone === "better" ? "\u2193" : "\u2191"}` : `${r.after}  `, ...color ? { color } : { dim: !changed } };
-};
-function savedLines(base, results, width) {
-  const a = headlineOf(base);
-  const availability2 = (r) => ({ ...versus(r), text: r.change !== "same" && r.before !== r.after ? `${r.after} ${r.tone === "better" ? "\u2191" : "\u2193"}` : `${r.after}  ` });
-  return table2(
-    [{ title: "What-if" }, { title: "Result" }, { title: "Worst p99", right: true }, { title: "Avail", right: true, drop: 2 }, { title: "Cost", right: true, drop: 1 }],
-    results.map((w) => [
-      { text: w.name, bold: true },
-      w.passed ? { text: "\u2713 pass", color: TONE.good, bold: true } : { text: "\u2717 fail", color: TONE.bad, bold: true },
-      versus(p99Row("", a.p99Ms, w.headline.p99Ms)),
-      availability2(availabilityRow("", a.availability, w.headline.availability)),
-      versus(costRow(a.costUsd, w.headline.costUsd))
-    ]),
-    width
-  );
-}
-function whatIfLines(base, results, width) {
-  const out = [{ segs: [] }, { segs: [{ text: "What-ifs", bold: true }] }];
-  if (results.length === 0) {
-    out.push({ segs: [{ text: "None saved yet: a whatif block runs the design again with more traffic or nodes down, e.g.", dim: true }], wrap: true });
-    out.push(...['whatif "Launch day" {', '  traffic "Redirect" x3', "}"].map((text) => ({ segs: [{ text, dim: true }] })));
-    return out;
-  }
-  out.push(...savedLines(base, results, width));
-  for (const text of results.flatMap((r) => r.warnings)) out.push({ segs: [{ text: `\u26A0 ${text}`, color: TONE.warn }], wrap: true });
-  return out;
-}
-
-// ../plugin/src/views/tabs.tsx
-var TABS = [
-  { id: "diagram", label: "Diagram", key: "1" },
-  { id: "analysis", label: "Analysis", key: "2" },
-  { id: "hld", label: "HLD", key: "3" }
-];
-var MOVED = { whatif: "analysis", sequence: "hld", tests: "hld" };
-var tabOf = (stored) => typeof stored === "string" && MOVED[stored] || (TABS.find((t) => t.id === stored)?.id ?? "diagram");
-function tabBar(ui, current, failing, pick2, open) {
-  return /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap" }, TABS.map((t) => /* @__PURE__ */ h(
-    ui.Button,
-    {
-      key: `tab-${t.id}`,
-      label: t.id === "hld" && failing > 0 ? `${t.label} \u2717${failing}` : t.label,
-      hotkey: t.key,
-      ...t.id === current ? { variant: "primary" } : { dimColor: true },
-      onPress: () => pick2(t.id)
-    }
-  )), open && /* @__PURE__ */ h(ui.Button, { key: "tab-open", label: "\u2197 Open in Proschi", dimColor: true, onPress: (press) => open(press.surface) }));
-}
-function analysisBody(doc, columns) {
-  if (!doc.analysis) return [{ segs: [{ text: "No traffic yet: add a traffic { \u2026 } block and Proschi estimates load, latency, availability and cost for every node, e.g." }], wrap: true }, { segs: [] }, { segs: [{ text: "traffic {", dim: true }] }, { segs: [{ text: '  "Redirect" 10k rps  mix "Cache hit" 90%, "Cache miss" 10%', dim: true }] }, { segs: [{ text: "}", dim: true }] }];
-  return analysisLines(doc.root, doc.analysis, columns);
-}
-function analysisTab(ui, doc, whatIfs, columns, explore) {
-  if (!doc.analysis) return linesView(ui, analysisBody(doc, columns), "body-analysis");
-  return /* @__PURE__ */ h(ui.Box, { key: "body-analysis", flexDirection: "column" }, linesView(ui, analysisLines(doc.root, doc.analysis, columns), "analysis-lines"), linesView(ui, whatIfLines(doc.analysis, whatIfs, columns), "whatif-lines"), /* @__PURE__ */ h(ui.Box, { marginTop: 1 }, /* @__PURE__ */ h(ui.Button, { key: "explore-whatifs", label: "\u2197 Explore what-ifs in Proschi", onPress: (press) => explore(press.surface) })));
-}
-
-// ../plugin/src/register.tsx
-var icons = "nerd-font";
-var graphics = "auto";
-var INLINE_ROWS = 40;
-var PANE = "proschi-view";
-var PANE_VIEW = `${PANE}:0`;
-var IDLE = { pick: "", step: 0, isPlaying: false, mode: "diagram", explorer: false, expanded: [] };
-var NO_SOURCE = { source: "" };
-var paneFile = atom2({ plugin: "proschi", key: "paneFile" }, "");
-var paneSource = atom2({ plugin: "proschi", key: "paneSource" }, NO_SOURCE);
-var players = atom2({ plugin: "proschi", key: "player" }, IDLE);
-var paneTab = atom2({ plugin: "proschi", key: "paneTab" }, "diagram");
-var paneAnchor;
-var PANE_KEYS = "1-3 tabs \xB7 p play \xB7 n/b step \xB7 r first \xB7 e last \xB7 d stop \xB7 esc back to the prompt";
-var TAB_KEYS = "1-3 tabs \xB7 \u2191\u2193 scroll \xB7 esc back to the prompt";
-var SYSTEM_KEYS = "s next system \xB7 o open/close \xB7 f focus in \xB7 u back out";
-var FRAME2 = 33;
-var FRAMES = Math.round(TRAVEL_MS / FRAME2) + 1;
-var HINT = [
-  "Proschi diagrams render in this terminal: put a Proschi document in a ```proschi fenced block",
-  "(or write a .proschi file) and Claude Code draws it as the architecture, with a player for its",
-  "use cases and the simulation's load on each node when it has `traffic`. Use the block instead of",
-  "Mermaid or ASCII art when showing an architecture or a request flow."
-].join(" ");
-var layouts = /* @__PURE__ */ new Map();
-var pending3 = /* @__PURE__ */ new Set();
-var documents2 = /* @__PURE__ */ new Map();
-var scenes = /* @__PURE__ */ new Map();
-var timers = /* @__PURE__ */ new Map();
-var FENCE = /^```proschi[^\n]*\n([\s\S]*?)\n```[ \t]*$/gm;
-function register(on, options) {
-  const chosen = options.icons;
-  icons = chosen === "symbols" || chosen === "none" ? chosen : "nerd-font";
-  graphics = graphicsMode(options.graphics);
-  setCellAspect(options.cellAspect);
-  on("session.start", async ($, e, next) => {
-    void serveRequests($);
-    await $.command.register({ name: "proschi", description: "Proschi diagrams: /proschi view <file.proschi> shows one in a pane", argumentHint: "view [--expand <id>,\u2026] [--focus <id>] <file>" });
-    return next(e);
-  });
-  on("prompt.compose", async ($, e, next) => {
-    const composed = await next(e);
-    return { ...composed, sections: [...composed.sections, { id: "proschi:render", text: HINT, scope: "session" }] };
-  });
-  on("command.run", { command: "proschi" }, async ($, e) => {
-    const [verb, ...rest] = e.args.trim().split(/\s+/);
-    const words = [];
-    const view = {};
-    for (let i = 0; i < rest.length; i++) {
-      if (rest[i] === "--expand" || rest[i] === "--focus") {
-        const value = rest[++i];
-        if (!value || idList(value).length === 0) return { text: `Missing system id after ${rest[i - 1]}` };
-        if (rest[i - 1] === "--expand") view.expanded = [...view.expanded ?? [], ...idList(value)];
-        else view.focus = value;
-      } else words.push(rest[i]);
-    }
-    const file = words.join(" ");
-    if (verb === "perf") return { text: perfReport(Number(words[0]) || 10) };
-    if (verb !== "view" || !file) return { text: USAGE };
-    if (!await $.fs.exists(file)) return { text: `No such file: ${file}` };
-    if (view.expanded || view.focus !== void 0) {
-      const { diagram, errors } = parseSource(await readWithImports($, file));
-      const refused2 = errors.length ? void 0 : viewError(diagram, view);
-      if (refused2) return { text: refused2 };
-    }
-    stop(PANE_VIEW);
-    await update2($, memberOf(players, { requestId: PANE_VIEW }), () => ({ ...IDLE, expanded: view.expanded ?? [], ...view.focus !== void 0 ? { focus: view.focus } : {} }));
-    await update2($, paneFile, () => file);
-    await markOpened($, PANE_VIEW);
-    await $.ui.open({ id: PANE, title: `Proschi \xB7 ${basename(file)}` });
-    watch($, file);
-    return { text: `Showing ${file} in the Proschi pane.` };
-  });
-  on("ui.close", { id: PANE }, async ($, e, next) => {
-    if (e.origin.kind === "person" && menus.delete(PANE_VIEW)) {
-      $.ui.invalidate("ui.render");
-      return { value: void 0 };
-    }
-    stop(PANE_VIEW);
-    stop(PANE);
-    return next(e);
-  });
-  on("ui.render", { component: "AssistantMessage" }, async ($, e, next) => {
-    if (e.surface !== "terminal" || !e.props.text.includes("```proschi")) return next(e);
-    const ui = $.ui.resolve(e);
-    const parts = [];
-    let last = 0;
-    let n = 0;
-    for (const match of e.props.text.matchAll(FENCE)) {
-      const before2 = e.props.text.slice(last, match.index);
-      if (before2.trim()) parts.push(/* @__PURE__ */ h(ui.Markdown, { text: before2 }));
-      const view = await drawDiagram($, { ui, requestId: e.requestId, columns: (e.viewport?.columns ?? 120) - 4 }, `${e.requestId}:${n++}`, { source: match[1] });
-      if ("error" in view) {
-        parts.push(/* @__PURE__ */ h(ui.Markdown, { text: match[0] }));
-        parts.push(/* @__PURE__ */ h(ui.Text, { dimColor: true }, view.error));
-      } else parts.push(view.element);
-      last = match.index + match[0].length;
-    }
-    if (n === 0) return next(e);
-    const after2 = e.props.text.slice(last);
-    if (after2.trim()) parts.push(/* @__PURE__ */ h(ui.Markdown, { text: after2 }));
-    return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, parts);
-  });
-  on("ui.render", { component: "ToolUse" }, async ($, e, next) => {
-    const file = proschiFile(e.props.tool, e.props.input);
-    if (e.surface !== "terminal" || !file || e.props.isRunning || e.props.isErrored) return next(e);
-    const row = await next(e);
-    const ui = $.ui.resolve(e);
-    const source = await readWithImports($, file).catch(() => void 0);
-    if (!source) return row;
-    const view = await drawDiagram($, { ui, requestId: e.requestId, columns: (e.viewport?.columns ?? 120) - 6 }, `${e.requestId}:0`, source, file);
-    return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, row, /* @__PURE__ */ h(ui.Box, { paddingLeft: 2 }, "error" in view ? /* @__PURE__ */ h(ui.Text, { dimColor: true }, view.error) : view.element));
-  });
-  on("ui.render", { component: "Pane", requestId: PANE }, async ($, e) => {
-    if (e.surface !== "terminal") {
-      const { Text } = $.ui.resolve(e);
-      return /* @__PURE__ */ h(Text, null, "The Proschi pane draws in a terminal.");
-    }
-    const ui = $.ui.resolve(e);
-    const file = await read2($, paneFile);
-    const focused = file ? NO_SOURCE : await read2($, paneSource);
-    if (!file && !focused.source) return /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Run /proschi view <file.proschi>.");
-    const source = file ? await readWithImports($, file).catch(() => void 0) : focused;
-    if (!source) return /* @__PURE__ */ h(ui.Text, { color: "red" }, "Cannot read ", file, ".");
-    const columns = "bodyColumns" in e.props && typeof e.props.bodyColumns === "number" ? e.props.bodyColumns : (e.viewport?.columns ?? 120) - 4;
-    const isFocused = "isFocused" in e.props && e.props.isFocused === true;
-    const scrolled = "scroll" in e.props ? e.props.scroll : void 0;
-    const bodyRows2 = typeof scrolled?.bodyRows === "number" ? scrolled.bodyRows : 0;
-    paneWindow(PANE, typeof scrolled?.offset === "number" ? scrolled.offset : 0, bodyRows2);
-    const tab = tabOf(await read2($, paneTab));
-    const loaded = await documentOf($, PANE_VIEW, source);
-    const failing = "error" in loaded ? 0 : loaded.doc.tests.filter((t) => !t.passed).length;
-    const draw = { ui, requestId: PANE, columns, rows: Math.max(INLINE_ROWS, bodyRows2 - 10) };
-    const mode = await modeOf($, ui, PANE, PANE_VIEW);
-    if (mode.kind !== "text" && !("error" in loaded)) {
-      const W2 = panelColumns(columns);
-      const { doc, key } = loaded;
-      const pieces = [{ id: "tabs", panel: tabBarPanel(tab, failing), columns: W2 }];
-      const actions = {};
-      for (const t of TABS)
-        actions[`tabs/${t.id}`] = () => {
-          menus.delete(PANE_VIEW);
-          void update2($, paneTab, () => t.id);
-        };
-      const link = doc.link();
-      actions["tabs/open"] = (surface) => void openLink($, surface, link);
-      const page = { doc, key, source: loaded.source };
-      const ahead = TABS.filter((t) => t.id !== tab).map((t) => ({ panel: tabBarPanel(t.id, failing), columns: W2 }));
-      const pages = [];
-      for (const t of TABS) {
-        if (t.id === "diagram") continue;
-        const body = pagePart($, t.id, page);
-        pages.push({ id: `page-${t.id}`, panel: body.panel, columns: W2, shown: t.id === tab });
-        if (t.id !== tab) continue;
-        for (const [id, fn] of Object.entries(body.actions)) actions[`page-${t.id}/${id}`] = fn;
-      }
-      const view2 = await drawDiagram($, draw, PANE_VIEW, source, void 0, { pieces, actions, ahead, pages, hidden: tab !== "diagram" }, mode);
-      if ("error" in view2) {
-        if (tab === "diagram") return /* @__PURE__ */ h(ui.Text, { color: "red" }, view2.error);
-        $.ui.log(`proschi: the ${tab} tab in text: ${view2.error}`, { to: "debug" });
-      } else if (view2.picture) {
-        if (paneAnchor && tab === "hld") {
-          scrollToAnchorOnceShown($, PANE_VIEW, paneAnchor);
-          paneAnchor = void 0;
-        }
-        return view2.element;
-      }
-    }
-    const opens = "error" in loaded ? void 0 : loaded.doc.link();
-    const bar = tabBar(ui, tab, failing, (to) => void update2($, paneTab, () => to), opens === void 0 ? void 0 : (surface) => void openLink($, surface, opens));
-    const keys = (systems) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, isFocused ? tab === "diagram" ? PANE_KEYS : TAB_KEYS : "ctrl+x tab focuses the pane for its keys"), isFocused && systems && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, SYSTEM_KEYS));
-    if (tab !== "diagram") {
-      if ("error" in loaded) return /* @__PURE__ */ h(ui.Text, { color: "red" }, loaded.error);
-      const { doc, key } = loaded;
-      const link = opens;
-      const body = tab === "hld" ? hldTab(ui, doc, key, (surface, text) => void copy($, surface, text, "the HLD markdown")) : analysisTab(ui, doc, savedWhatIfs(key, doc), columns, (surface) => void openLink($, surface, link));
-      if (paneAnchor && tab === "hld") {
-        const anchor = paneAnchor;
-        paneAnchor = void 0;
-        $.clock.after(0, () => void scroll($, { to: { key: anchor }, in: PANE, block: "start" }));
-      }
-      return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, bar, body, keys(false));
-    }
-    const view = await drawDiagram($, draw, PANE_VIEW, source, void 0, void 0, { kind: "text" });
-    if ("error" in view) return /* @__PURE__ */ h(ui.Text, { color: "red" }, view.error);
-    return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, bar, view.element, keys(view.systems));
-  });
-  registerPicture(on);
-}
-function pagePart($, tab, c) {
-  const actions = {};
-  const { doc, key } = c;
-  if (tab === "analysis") {
-    const link = doc.link();
-    actions["explore-whatifs"] = (surface) => void openLink($, surface, link);
-    return { panel: analysisPage(doc, savedWhatIfs(key, doc)), actions };
-  }
-  const markdown = hldMarkdown(doc, key);
-  const h2 = hldDocument(doc, key);
-  actions["hld-copy"] = (surface) => void copy($, surface, markdown, "the HLD markdown");
-  for (const s of h2.sections) actions[`toc=${s.kind}`] = () => void scrollToAnchor($, PANE_VIEW, hldAnchor(s.kind));
-  return { panel: hldPage(h2, c.source), actions };
-}
-async function drawDiagram($, d, viewId, source, file, top = { pieces: [], actions: {}, ahead: [] }, known) {
-  const mode = known ?? await modeOf($, d.ui, d.requestId, viewId);
-  const hidden = top.hidden === true;
-  const view = await diagramView($, d, viewId, source, file, mode, hidden ? "first" : "now");
-  if (!hidden) {
-    if ("error" in view) return view;
-    if (view.kind === "text") return { element: view.element, systems: view.systems, picture: false };
-    if (view.kind === "loading") return { element: loading(d.ui, viewId, view.rows, mode.kind === "loading" ? mode.probe : void 0), systems: false, picture: true };
-  } else if (mode.kind === "loading") return { element: loading(d.ui, viewId, d.rows ?? INLINE_ROWS, mode.probe), systems: false, picture: true };
-  const pic = !("error" in view) && view.kind === "picture" ? view : void 0;
-  const float = hidden ? void 0 : pic?.float;
-  const drawn = await pictureSite($, d.ui, {
-    requestId: d.requestId,
-    site: viewId,
-    theme: await themeOf($),
-    pieces: [...top.pieces, ...pic?.pieces ?? []],
-    actions: { ...top.actions, ...pic?.actions ?? {} },
-    hotkeys: d.requestId === PANE,
-    ahead: [...top.ahead, ...pic?.ahead ?? []],
-    layer: "bar",
-    ...float ? { float } : {},
-    ...pic?.corner ? { corner: pic.corner } : {},
-    ...pic?.keys ? { keys: pic.keys } : {},
-    ...pic?.onDrag ? { onDrag: pic.onDrag } : {},
-    ...top.pages ? { pages: top.pages } : {},
-    ...top.pages && pic?.pieces[0] ? { paged: { from: pic.pieces[0].id, shown: !hidden } } : {},
-    rows: pic?.rows ?? d.rows ?? INLINE_ROWS,
-    ...mode.kind === "picture" && mode.form ? { form: mode.form } : {}
-  });
-  if ("element" in drawn) return { element: drawn.element, systems: pic?.systems ?? false, picture: true };
-  $.ui.log(`proschi: the drawing in text: ${drawn.error}`, { to: "debug" });
-  return hidden ? { error: drawn.error } : drawDiagram($, d, viewId, source, file, top, { kind: "text" });
-}
-function proschiFile(tool, input) {
-  if (tool !== "Write" && tool !== "Edit") return void 0;
-  const path = input?.file_path;
-  return typeof path === "string" && path.endsWith(".proschi") ? path : void 0;
-}
-var USAGE = "Usage: /proschi view [--expand <system>[,<system>\u2026]] [--focus <system>] <file.proschi>, or /proschi perf [count]";
-function perfReport(n) {
-  const last = pressTimings().slice(-n);
-  if (last.length === 0) return "No presses timed yet: press a tab or a control in the pictures, then run /proschi perf again.";
-  const lines = last.map((t) => `${t.control.padEnd(22)} ${String(t.toShown).padStart(5)} ms  (render after ${t.toRender} ms, built in ${t.build} ms, ${t.sent}/${t.images} pictures new)`);
-  return [`The last ${last.length} presses, press to drawn:`, ...lines].join("\n");
-}
-var basename = (path) => path.split("/").pop() ?? path;
-var dirname = (path) => path.slice(0, Math.max(0, path.lastIndexOf("/")));
-async function projectRoot($, dir) {
-  for (let current = dir; ; current = dirname(current)) {
-    if (await $.fs.exists(`${current}/proschi.json`) || await $.fs.exists(`${current}/.git`)) return current || "/";
-    if (!current || current === "/") return dir;
-  }
-}
-var importReasons = /* @__PURE__ */ new Map();
-async function readWithImports($, file) {
-  const name = basename(file);
-  const dir = dirname(file);
-  const root = await projectRoot($, dir);
-  const doc = { source: await $.fs.read(file), path: name, imports: {} };
-  const lock = {};
-  for (let round2 = 0; round2 < 8; round2++) {
-    const missing = missingImports(doc).filter((key) => key !== name && !(key in doc.imports));
-    if (missing.length === 0) break;
-    for (const key of missing) {
-      importReasons.delete(key);
-      if (isRemoteSpec(key)) {
-        doc.imports[key] = await readRemote($, root, key, lock.read ??= readLock($, root)).catch((error) => {
-          importReasons.set(key, error instanceof Error ? error.message : String(error));
-          return "";
-        });
-        continue;
-      }
-      const path = importFilePath(dir, root, key);
-      doc.imports[key] = path && await $.fs.exists(path) ? await $.fs.read(path) : "";
-    }
-  }
-  return doc;
-}
-async function readLock($, root) {
-  const file = `${root}/${LOCK_FILE}`;
-  return await $.fs.exists(file) ? parseLock(await $.fs.read(file)) : void 0;
-}
-async function readRemote($, root, spec, locked) {
-  const lock = await locked;
-  if (!lock) throw remoteError.noLock(spec);
-  const hash = lockedHash(lock, spec);
-  if (!hash) throw remoteError.notLocked(spec);
-  const file = `${root}/${CACHE_DIR}/${hash}`;
-  if (!await $.fs.exists(file)) throw remoteError.notCached(spec);
-  const { base64: base642 } = await $.fs.read(file, { as: "bytes" });
-  const bytes2 = Uint8Array.from(atob(base642), (c) => c.charCodeAt(0));
-  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes2));
-  if ([...digest].map((b) => b.toString(16).padStart(2, "0")).join("") !== hash) throw remoteError.altered(spec);
-  return new TextDecoder().decode(bytes2);
-}
-function watch($, file) {
-  stop(PANE);
-  let seen = 0;
-  timers.set(
-    PANE,
-    $.clock.every(1e3, async () => {
-      if (await read2($, paneFile) !== file) return;
-      const stat = await $.fs.stat(file).catch(() => void 0);
-      const mtime = stat && "mtimeMs" in stat ? Number(stat.mtimeMs) : 0;
-      if (seen && mtime !== seen) $.ui.invalidate("ui.render");
-      seen = mtime;
-    })
-  );
-}
-function requestLayout($, key, source) {
-  if (pending3.has(key)) return;
-  pending3.add(key);
-  void ask($, { kind: "layout", ...source }, "now", graphics !== "off").then(
-    (out) => {
-      answered(`layout:${key}`);
-      layouts.set(key, out);
-    },
-    (error) => {
-      if (isAborted(error) && retry(`layout:${key}`)) return;
-      const why = error instanceof Error ? error.message : String(error);
-      layouts.set(key, { error: didNotStart(error) ? `Proschi lays diagrams out with Node.js 18 or newer, which did not start: ${why}` : why });
-    }
-  ).finally(() => {
-    pending3.delete(key);
-    redraw($);
-  });
-}
+// ../plugin/src/views/view.ts
 var pickOf = (useCase, scenario) => ({ value: `${useCase.id}:${scenario.id}`, useCase, scenario });
-function normal(p) {
-  return {
-    pick: p?.pick ?? "",
-    step: typeof p?.step === "number" ? p.step : 0,
-    isPlaying: p?.isPlaying === true && p.mode === "play",
-    mode: p?.mode === "play" ? "play" : "diagram",
-    explorer: p?.explorer === true,
-    expanded: Array.isArray(p?.expanded) ? p.expanded.filter((id) => typeof id === "string") : [],
-    ...typeof p?.focus === "string" ? { focus: p.focus } : {},
-    ...typeof p?.selected === "string" ? { selected: p.selected } : {},
-    ...isMoved(zoomOf(p?.zoom)) ? { zoom: zoomOf(p?.zoom) } : {}
-  };
-}
 var PINK = "#ff5da2";
 var INK = "#111111";
 var YELLOW = "#ffd23f";
-var BARS_WIDTH = 80;
-async function documentOf($, viewId, written, file) {
-  const player = normal(await read2($, memberOf(players, { requestId: viewId })));
-  const shown2 = { ...player.expanded.length ? { expanded: player.expanded } : {}, ...player.focus !== void 0 ? { focus: player.focus } : {} };
-  const source = shown2.expanded || shown2.focus !== void 0 ? { ...written, view: shown2 } : written;
-  const key = keyOf(source);
-  let doc = documents2.get(key);
-  if (!doc) {
-    doc = loadDocument(source);
-    documents2.set(key, doc);
-  }
-  const where2 = file ?? "The diagram";
-  if (doc.errors.length > 0) {
-    const [first] = doc.errors;
-    return { error: `${where2} has errors (line ${first.line}: ${first.message})${file ? `: run \`npx proschi check ${file}\`` : ""}.` };
-  }
-  if (doc.diagram.nodes.length === 0) return { error: `${where2} has no components to draw.` };
-  return { doc, source, key, player };
-}
-var INLINE_WARNINGS = 2;
-async function modeOf($, ui, requestId, probeId) {
-  if (graphics === "off") return { kind: "text" };
-  const p = await probeOf($);
-  if (p.status === "unknown") {
-    const key = probeKey(probeId);
-    probe($, requestId, key);
-    return { kind: "loading", probe: /* @__PURE__ */ h(ui.Image, { key, source: probeSource($), columns: 1, rows: 1, alt: " " }) };
-  }
-  if (graphics === "auto" && (p.status === "no" || p.status === "tmux")) return { kind: "text", ...p.status === "tmux" ? { hint: true } : {} };
-  return { kind: "picture", ...p.form ? { form: p.form } : {} };
-}
-async function diagramView($, d, viewId, written, file, mode = { kind: "text" }, priority = "now") {
-  const { ui } = d;
-  const loaded = await documentOf($, viewId, written, file);
-  if ("error" in loaded) return loaded;
-  const { doc, source, key, player } = loaded;
-  const layout = layouts.get(key);
-  if (!layout) {
-    requestLayout($, key, source);
-    if (mode.kind !== "text") return { kind: "loading", rows: Math.min(d.rows ?? INLINE_ROWS, 20) };
-    return { kind: "text", element: /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Laying out ", doc.diagram.title ?? "the diagram", "\u2026"), systems: false };
-  }
-  if ("error" in layout) return { error: `Proschi could not lay ${file ?? "this diagram"} out: ${layout.error}` };
-  const columns = Math.max(40, Math.min(512, d.columns));
-  const sceneKey = `${key}@${columns}`;
-  let scene = scenes.get(sceneKey);
-  if (!scene) {
-    scene = buildScene(doc.diagram, layout, columns);
-    scenes.set(sceneKey, scene);
-  }
-  const picks = doc.diagram.useCases.flatMap((u) => u.scenarios.map((s) => pickOf(u, s)));
-  const pick2 = picks.find((p) => p.value === player.pick) ?? picks[0];
-  const playing = player.mode === "play" ? pick2 : void 0;
-  const steps = playing?.scenario.steps ?? [];
-  const step = Math.max(0, Math.min(player.step, steps.length - 1));
-  const width = Math.min(Math.max(40, d.columns), Math.max(scene.columns, BARS_WIDTH));
-  const systems = selectable(scene, player.focus);
-  const selected = systems.find((s) => s.path === player.selected) ?? systems[0];
-  const view = { d, viewId, rasterKey: `d-${viewId}`, anchorKey: `at-${viewId}`, scene, width, overlay: doc.overlay, edges: doc.edges, systems: doc.systems, ...selected ? { selected: selected.id } : {}, inPane: d.requestId === PANE };
-  if (playing && player.isPlaying && !timers.has(viewId)) animate($, view, steps);
-  const progress = timers.has(viewId) ? 0 : 100;
-  const link = doc.link(playing ? { useCase: playing.useCase.id, ...playing.useCase.scenarios.length > 1 ? { scenario: playing.scenario.id } : {}, step: step + 1 } : void 0);
-  const lost = lostImports(written, keyOf(written));
-  const title = file ? basename(file) : doc.diagram.title ?? "diagram";
-  const what = file ? { file } : { source };
-  const hasSystems = systems.length > 0 || player.focus !== void 0;
-  const roomy = view.width >= 79;
-  const theme2 = graphics === "off" ? "dark" : await themeOf($);
-  const optionsFor = (play, zoomed) => ({
-    theme: theme2,
-    maxWidthPx: maxWidthPx(d.columns),
-    ...doc.overlay && !play ? { overlay: true } : {},
-    ...view.selected ? { selected: view.selected } : {},
-    ...play ? { play: { useCase: play.useCase.id, scenario: play.scenario.id, frames: FRAMES } } : {},
-    // A strip of the drawing's one surface, as wide as its panels: its top where nothing is above it (no tabs, header, title or notice), the load legend in its corner.
-    grid: {
-      room: d.columns,
-      maxRows: d.rows ?? INLINE_ROWS,
-      cellPx: cellPx(),
-      fill: { columns: panelColumns(d.columns), ...!pick2 && !view.inPane && !doc.diagram.title && noticesOf(view, doc, lost).length === 0 ? { top: true } : {}, ...!play && doc.overlay && doc.edges ? { legend: true } : {} },
-      ...zoomed ? { zoom: zoomed.zoom, ...zoomed.window ? { window: zoomed.window } : {} } : {}
-    }
-  });
-  const request2 = { source, options: optionsFor(playing) };
-  const alt = `${doc.diagram.title ?? title}: the architecture diagram as a picture`;
-  if (mode.kind !== "text") {
-    images.delete(viewId);
-    const z = view.inPane ? zoomOf(player.zoom) : FIT;
-    if (z.level > 1) {
-      const zoomed = zoomedPicture($, view, { source, z, ...playing ? { playing } : {}, ...pick2 ? { pick: pick2 } : {}, step, progress, priority, optionsFor, mode, alt });
-      if ("error" in zoomed) return diagramView($, d, viewId, written, file, { kind: "text" }, priority);
-      const built2 = pictureParts($, view, doc, { pick: pick2, playing, step, player, systems, selected, link, lost, title, what, roomy, sourceText: source.source, ...zoomed.picture ? { picture: zoomed.picture } : {}, zoom: { z, ...zoomed.at ? { at: zoomed.at } : {} } });
-      return { kind: "picture", ...built2, rows: zoomed.rows, systems: hasSystems };
-    }
-    const out = rasterOf($, request2, priority);
-    const size = out && !("error" in out) ? out.grid ? { columns: out.grid.columns, rows: out.grid.rows } : imageSize(out, d.columns, d.rows ?? INLINE_ROWS) : void 0;
-    const rows = (size?.rows ?? Math.min(scene.rows, d.rows ?? INLINE_ROWS)) + 16;
-    if (mode.kind === "loading") return { kind: "loading", rows };
-    if (out && "error" in out) return diagramView($, d, viewId, written, file, { kind: "text" }, priority);
-    let picture;
-    if (out && size) {
-      const imageKey = `img-${viewId}`;
-      const g = out.grid;
-      if (g && (!request2.options.play || g.steps?.length)) {
-        const at = request2.options.play ? step : void 0;
-        const shown2 = gridFrame(g, at, progress === 0 ? 0 : FRAMES - 1);
-        images.set(viewId, { key: imageKey, grid: g, shown: shown2, ...mode.form ? { form: mode.form } : {} });
-        const tiles = g.tiles.map((t, i) => ({ key: `${imageKey}-${i}`, col: t.col, row: t.row, columns: t.columns, rows: t.rows, file: shown2[i] }));
-        picture = { key: imageKey, file: out.base, columns: size.columns, rows: size.rows, alt, anchorKey: view.anchorKey, tiles, ...mode.form ? { form: mode.form } : {} };
-      } else if (!g) {
-        const frames = request2.options.play ? out.frames : void 0;
-        const shownFrames = frames?.[step];
-        const file2 = shownFrames?.length ? shownFrames[progress === 0 ? 0 : shownFrames.length - 1] : out.base;
-        if (!request2.options.play || frames?.length) {
-          images.set(viewId, { key: imageKey, ...frames ? { frames } : {}, ...mode.form ? { form: mode.form } : {} });
-          picture = { key: imageKey, file: file2, columns: size.columns, rows: size.rows, alt, anchorKey: view.anchorKey, ...mode.form ? { form: mode.form } : {} };
-        }
-      }
-    }
-    const fitAt = out && !("error" in out) && out.grid ? { grid: out.grid, vp: { col: 0, row: 0, columns: out.grid.columns, rows: out.grid.rows } } : void 0;
-    const built = pictureParts($, view, doc, { pick: pick2, playing, step, player, systems, selected, link, lost, title, what, roomy, sourceText: source.source, picture, ...view.inPane ? { zoom: { z, ...fitAt ? { at: fitAt } : {} } } : {} });
-    if (!playing && pick2) rasterOf($, { source, options: optionsFor(pick2) }, "later");
-    return { kind: "picture", ...built, rows, systems: hasSystems };
-  }
-  const painted = paint(scene, { overlay: doc.overlay, edges: doc.edges, icons, systems: doc.systems, ...view.selected ? { selected: view.selected } : {}, ...steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {} });
-  const wide = view.inPane && painted.columns > d.columns;
-  const pan = wide ? textPan($, view, painted, zoomOf(player.zoom)) : void 0;
-  textCrops.set(viewId, pan ? pan.vp : void 0);
-  const grid = pan ? painted.crop(pan.vp.col, 0, pan.vp.columns, painted.rows) : painted;
-  const verdict = verdictLine(doc.tests, view.width - (view.inPane ? 0 : 13));
-  const m = pick2 && playerModel($, view, doc, pick2, playing, step, player);
-  return { kind: "text", element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, m && playerBarText(view, doc, m), doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, mode.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, TMUX_HINT), painted.columns > d.columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, pan ? `\u2194 ${painted.columns} columns wide, wider than the ${d.columns} here: columns ${pan.vp.col + 1}\u2013${pan.vp.col + pan.vp.columns} shown. Drag it, or h and l (\u2190 \u2192 after a click on it), to pan.` : `\u2194 ${painted.columns} columns wide, wider than the ${d.columns} here: use \u26F6 Focus or a wider window to see it whole.`), lost.some((name) => !importReasons.has(name)) && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u26A0 Not found, so drawn as plain boxes: ", lost.filter((name) => !importReasons.has(name)).join(", ")), lost.filter((name) => importReasons.has(name)).map((name) => /* @__PURE__ */ h(ui.Text, { key: `lost-${name}`, dimColor: true }, "\u26A0 ", importReasons.get(name))), doc.notes.map((note) => /* @__PURE__ */ h(ui.Text, { color: "yellow" }, "\u26A0 ", note.text, note.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true }, " \u2192 ", note.hint))), (view.inPane ? doc.warnings : doc.warnings.slice(0, INLINE_WARNINGS)).map((w) => /* @__PURE__ */ h(ui.Text, { key: `warn-${w}`, color: "yellow", wrap: "truncate-end" }, "\u26A0 ", w)), !view.inPane && doc.warnings.length > INLINE_WARNINGS && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2026 ", doc.warnings.length - INLINE_WARNINGS, " more: \u26F6 Focus, then Analysis"), pan ? /* @__PURE__ */ h(ui.Box, { key: `${view.rasterKey}-pan`, flexDirection: "column", width: grid.columns, height: grid.rows }, /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), /* @__PURE__ */ h(ui.Box, { position: "absolute", top: 0, left: 0, width: grid.columns, height: grid.rows }, /* @__PURE__ */ h(ui.Client, { key: pan.overlay, module: "./uiOverlay.js", props: { controls: [], drag: "x" }, width: grid.columns, height: grid.rows })), /* @__PURE__ */ h(ui.Box, { display: "none" }, /* @__PURE__ */ h(ui.Button, { key: `pan-h-${viewId}`, label: "h", hotkey: "h", onPress: pan.keys.left }), /* @__PURE__ */ h(ui.Button, { key: `pan-l-${viewId}`, label: "l", hotkey: "l", onPress: pan.keys.right }))) : /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), doc.edges && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)), verdict && /* @__PURE__ */ h(ui.Box, { key: `verdict-${viewId}`, flexDirection: "row", gap: 1, width: view.width }, lineView(ui, verdict), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `tests-${viewId}`, label: "\u26F6 Details", dimColor: true, onPress: () => focus($, view, title, what, "hld", "requirements") })), hasSystems && systemBar($, view, doc, systems, selected, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: roomy ? "\u29C9 Copy source" : "\u29C9 Source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: roomy ? "\u29C9 Copy share link" : "\u29C9 Link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: roomy ? "\u2197 Open in Proschi" : "\u2197 Open", variant: "primary", onPress: (press) => void openLink($, press.surface, link) }), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `focus-${viewId}`, label: "\u26F6 Focus", onPress: () => focus($, view, title, what) }))), systems: hasSystems };
-}
-var textCrops = /* @__PURE__ */ new Map();
-function textPan($, view, painted, z) {
-  const grid = { columns: painted.columns, rows: painted.rows };
-  const vp = viewportOf(grid, { columns: view.d.columns, rows: painted.rows }, { ...z, level: 1 });
-  const at = { ...z, level: 1 };
-  const to = (col) => void setZoom($, view.viewId, panTo(at, grid, vp, col, 0));
-  const keys = { left: () => to(vp.col - PAN_STEP.columns), right: () => to(vp.col + PAN_STEP.columns) };
-  const overlay = `ov-text-${view.viewId}`;
-  otherOverlays.set(overlay, (data) => {
-    if (data.type === "drag") {
-      const d = data;
-      if (![d.n, d.sx, d.x].every((v) => typeof v === "number")) return;
-      let started = drags.get(view.viewId);
-      if (!started || started.n !== d.n) drags.set(view.viewId, started = { n: d.n, z: at, vp });
-      const col = Math.max(0, Math.min(grid.columns - vp.columns, started.vp.col - (d.x - d.sx)));
-      if (col !== vp.col) to(col);
-    } else if (data.type === "key" && (data.key === "left" || data.key === "right")) keys[data.key]();
-    else if (data.type === "scroll" && typeof data.key === "string") void scrollKey($, PANE, data.key);
-  });
-  return { vp, overlay, keys };
-}
-var images = /* @__PURE__ */ new Map();
-var menus = /* @__PURE__ */ new Map();
-function toggleMenu($, viewId, id) {
-  if (menus.get(viewId) === id) menus.delete(viewId);
-  else menus.set(viewId, id);
-  $.ui.invalidate("ui.render");
-}
+var hotkey = (view, key) => view.inPane ? { hotkey: key } : {};
 var panelColumns = (columns) => Math.max(20, Math.min(255, columns));
 var FLOAT_EDGES = { top: true, bottom: true };
-function noticesOf(view, doc, lost) {
-  const unknown = lost.filter((name) => !importReasons.has(name));
+
+// ../plugin/src/views/pieces.tsx
+var INLINE_WARNINGS = 2;
+var GLYPH = { copy: "\u29C9", open: "\u2197", focus: "\u26F6", cycle: "\u21E5", collapse: "\u229F", expand: "\u229E", enter: "\u2922", leave: "\u2191", explore: "\u2261" };
+var textLabel = (c) => [c.icon && GLYPH[c.icon], c.label].filter(Boolean).join(" ");
+function noticesOf(doc, lost, reasons, inPane, lead = []) {
+  const unknown = lost.filter((name) => !reasons.has(name));
+  const warnings = inPane ? doc.warnings : doc.warnings.slice(0, INLINE_WARNINGS);
   return [
+    ...lead,
     ...unknown.length ? [{ text: `Not found, so drawn as plain boxes: ${unknown.join(", ")}`, tone: "muted" }] : [],
-    ...lost.filter((name) => importReasons.has(name)).map((name) => ({ text: importReasons.get(name), tone: "muted" })),
+    ...lost.filter((name) => reasons.has(name)).map((name) => ({ text: reasons.get(name), tone: "muted" })),
     ...doc.notes.map((n) => ({ text: n.text, ...n.hint ? { hint: n.hint } : {} })),
-    ...(view.inPane ? doc.warnings : doc.warnings.slice(0, INLINE_WARNINGS)).map((text) => ({ text })),
-    ...!view.inPane && doc.warnings.length > INLINE_WARNINGS ? [{ text: `\u2026 ${doc.warnings.length - INLINE_WARNINGS} more: Focus, then Analysis`, tone: "muted" }] : []
+    ...warnings.map((text) => ({ text })),
+    ...!inPane && doc.warnings.length > INLINE_WARNINGS ? [{ text: `\u2026 ${doc.warnings.length - INLINE_WARNINGS} more: Focus, then Analysis`, tone: "muted" }] : []
   ];
 }
-function pictureParts($, view, doc, c) {
-  const W2 = panelColumns(view.d.columns);
-  const pieces = [];
-  const actions = {};
-  const ahead = [];
-  const on = (piece, id, fn) => actions[`${piece}/${id}`] = fn;
-  const { playing, player, pick: pick2 } = c;
-  let float;
-  if (pick2) {
-    const m = playerModel($, view, doc, pick2, playing, c.step, player);
-    const bar = barPanel(view, doc, m, playing ? c.step : void 0, player.isPlaying);
-    pieces.push({ id: "bar", panel: bar, columns: W2 });
-    for (const [id, fn] of Object.entries(m.actions)) on("bar", id, () => fn());
-    float = floatOf(view, doc, m, bar, W2);
-    if (float) Object.assign(actions, float.actions);
-    if (playing) {
-      for (let i = 0; i < m.total; i++) for (const isPlaying of [true, false]) ahead.push({ panel: barPanel(view, doc, m, i, isPlaying), columns: W2 });
-      const drawer = floatOf(view, doc, { ...m, open: "body" }, bar, W2);
-      if (drawer) ahead.push({ panel: drawer.panel, columns: drawer.columns, edges: FLOAT_EDGES });
-    } else ahead.push({ panel: barPanel(view, doc, m, 0, true), columns: W2 });
-    for (const open of ["uc", "sc"]) {
-      const f = floatOf(view, doc, { ...m, open }, bar, W2);
-      if (f) ahead.push({ panel: f.panel, columns: f.columns, edges: FLOAT_EDGES });
-    }
-  }
-  if (doc.diagram.title) {
-    pieces.push({ id: "title", panel: { kind: "page", blocks: [{ type: "heading", level: 3, text: doc.diagram.title }, ...doc.diagram.summary ? [{ type: "paragraph", small: true, text: doc.diagram.summary }] : []] }, columns: W2 });
-  }
-  const notices = noticesOf(view, doc, c.lost);
-  if (notices.length) pieces.push({ id: "warn", panel: { kind: "notices", notices }, columns: W2 });
-  pieces.push({ id: "diagram", ...c.picture ? { picture: c.picture } : {} });
-  const failing = doc.tests.filter((t) => !t.passed);
-  if (failing[0]) {
-    const below = {
-      kind: "notices",
-      verdict: { passed: doc.tests.length - failing.length, total: doc.tests.length, first: `${failing[0].name}: ${failing[0].message}` },
-      ...!view.inPane ? { details: { id: "details", icon: "focus", label: "Details" } } : {}
-    };
-    pieces.push({ id: "below", panel: below, columns: W2 });
-  }
-  on("below", "details", () => focus($, view, c.title, c.what, "hld", "requirements"));
-  if (c.systems.length > 0 || player.focus !== void 0) {
-    const s = systemActions($, view, doc, c.systems, c.selected, player);
-    const controls = [
-      ...c.systems.length > 1 ? [{ id: "next", icon: "cycle", label: "Next", ...hotkey(view, "s") }] : [],
-      ...c.selected && s.design ? [{ id: "open", icon: s.open ? "collapse" : "expand", label: s.open ? "Collapse" : "Expand", ...hotkey(view, "o") }, { id: "focus", icon: "enter", label: "Focus in", ...hotkey(view, "f") }] : [],
-      ...player.focus !== void 0 ? [{ id: "back", icon: "leave", label: "Back out", ...hotkey(view, "u") }] : []
-    ];
-    pieces.push({
-      id: "systems",
-      panel: { kind: "systemBar", ...player.focus !== void 0 ? { inside: `${player.focus.split(".").join(" \u203A ")} \xB7 ${doc.diagram.title ?? "its design"}` } : {}, ...c.selected ? { selected: { name: c.selected.name, path: c.selected.path } } : {}, controls },
-      columns: W2
-    });
-    on("systems", "next", s.next);
-    on("systems", "open", s.toggle);
-    on("systems", "focus", s.enter);
-    on("systems", "back", s.leave);
-  }
-  pieces.push({
-    id: "links",
-    panel: {
-      kind: "actionBar",
-      controls: [
-        { id: "src", icon: "copy", label: c.roomy ? "Copy source" : "Source" },
-        { id: "lnk", icon: "copy", label: c.roomy ? "Copy share link" : "Link" },
-        { id: "open", icon: "open", label: c.roomy ? "Open in Proschi" : "Open", variant: "primary" },
-        ...view.inPane ? [] : [{ id: "focus", icon: "focus", label: "Focus" }]
-      ]
-    },
-    columns: W2
-  });
-  on("links", "src", (surface) => void copy($, surface, c.sourceText, "the Proschi source"));
-  on("links", "lnk", (surface) => void copy($, surface, c.link, "the share link"));
-  on("links", "open", (surface) => void openLink($, surface, c.link));
-  on("links", "focus", () => focus($, view, c.title, c.what));
-  const zoom = c.zoom ? zoomParts($, view, c.zoom.z, c.zoom.at) : void 0;
-  if (zoom) {
-    Object.assign(actions, zoom.actions);
-    for (const dir of [1, -1]) ahead.push({ panel: zoomPanel(stepZoom(c.zoom.z, dir)), columns: ZOOM_COLUMNS, edges: FLOAT_EDGES });
-  }
-  return { pieces, actions, ahead, ...float ? { float } : {}, ...zoom ? { corner: zoom.corner, keys: zoom.keys, onDrag: zoom.onDrag } : {} };
+function noticesText(ui, notices, key) {
+  return notices.map((n, i) => /* @__PURE__ */ h(ui.Text, { key: `${key}-${i}`, ...n.tone === "muted" ? { dimColor: true } : { color: n.tone === "bad" ? "red" : "yellow" }, wrap: "truncate-end" }, n.tone === "muted" ? "" : "\u26A0 ", n.text, n.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true }, " \u2192 ", n.hint)));
 }
-var zoomPanel = (z) => ({
-  kind: "actionBar",
-  controls: [
-    { id: "out", label: "\u2212", variant: "quiet", hotkey: "x", keycap: false, ...z.level === 1 ? { disabled: true } : {} },
-    { id: "level", label: zoomLabel(z.level), variant: "quiet", ...z.level === 1 ? { disabled: true } : {} },
-    { id: "in", label: "+", variant: "quiet", hotkey: "z", keycap: false, ...z.level === ZOOMS[ZOOMS.length - 1] ? { disabled: true } : {} },
-    { id: "fit", icon: "collapse", label: "Fit", variant: "quiet", hotkey: "0", keycap: false, ...z.level === 1 ? { disabled: true } : {} }
-  ]
-});
-var ZOOM_COLUMNS = 24;
-var drags = /* @__PURE__ */ new Map();
-async function setZoom($, viewId, next) {
-  await update2($, memberOf(players, { requestId: viewId }), (p) => {
-    const { zoom: _zoom, ...rest } = normal(p);
-    void _zoom;
-    return isMoved(next) ? { ...rest, zoom: next } : rest;
-  });
+function verdictOf(tests) {
+  const failing = tests.filter((t) => !t.passed);
+  if (!failing[0]) return void 0;
+  return { passed: tests.length - failing.length, total: tests.length, first: `${failing[0].name}: ${failing[0].message}` };
 }
-function zoomParts($, view, z, at) {
-  const id = view.viewId;
-  const actions = {
-    "zoom/in": () => void setZoom($, id, stepZoom(z, 1)),
-    "zoom/out": () => void setZoom($, id, stepZoom(z, -1)),
-    "zoom/level": () => void setZoom($, id, FIT),
-    "zoom/fit": () => void setZoom($, id, FIT)
-  };
-  const keys = { "+": "zoom/in", "=": "zoom/in", "-": "zoom/out" };
-  if (z.level > 1 && at) {
-    const pan = (dc, dr) => () => void setZoom($, id, panTo(z, at.grid, at.vp, at.vp.col + dc, at.vp.row + dr));
-    const moves = [
-      ["left", ["h", "left"], -PAN_STEP.columns, 0],
-      ["right", ["l", "right"], PAN_STEP.columns, 0],
-      ["up", ["k", "up"], 0, -PAN_STEP.rows],
-      ["down", ["j", "down"], 0, PAN_STEP.rows]
-    ];
-    for (const [name, ks, dc, dr] of moves) {
-      actions[`zoom/pan-${name}`] = pan(dc, dr);
-      for (const k of ks) keys[k] = `zoom/pan-${name}`;
-    }
+var DETAILS = { id: "details", icon: "focus", label: "Details" };
+function verdictText(ui, v, width, viewId, details) {
+  const key = `verdict-${viewId}`;
+  const failing = v.total - v.passed;
+  const head = `\u2717 ${failing} of ${v.total} ${v.total === 1 ? "check" : "checks"} fail`;
+  return /* @__PURE__ */ h(ui.Box, { key, flexDirection: "row", gap: 1, width }, /* @__PURE__ */ h(ui.Box, { flexGrow: 1 }, /* @__PURE__ */ h(ui.Text, { wrap: "truncate-end" }, /* @__PURE__ */ h(ui.Text, { color: "red", bold: true }, head), v.first ? `: ${v.first}` : "")), details && /* @__PURE__ */ h(ui.Button, { key: `tests-${viewId}`, label: textLabel(DETAILS), dimColor: true, onPress: details }));
+}
+function linkControls(inPane, roomy) {
+  return [
+    { id: "src", icon: "copy", label: roomy ? "Copy source" : "Source" },
+    { id: "lnk", icon: "copy", label: roomy ? "Copy share link" : "Link" },
+    { id: "open", icon: "open", label: roomy ? "Open in Proschi" : "Open", variant: "primary" },
+    ...inPane ? [] : [{ id: "focus", icon: "focus", label: "Focus" }]
+  ];
+}
+function controlsText(ui, controls, key, width, act2) {
+  return /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width }, controls.map((c) => /* @__PURE__ */ h(ui.Button, { key: `${c.id}-${key}`, label: textLabel(c), ...c.variant === "primary" ? { variant: "primary" } : {}, ...c.hotkey ? { hotkey: c.hotkey } : {}, onPress: (press) => act2(c.id, press.surface) })));
+}
+function systemsText(ui, s, key, width, act2) {
+  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: "gray", paddingX: 1, width }, s.inside && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "Inside ", s.inside), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "System"), /* @__PURE__ */ h(ui.Text, { color: PINK, wrap: "truncate-end" }, s.selected ? `${s.selected.name} (${s.selected.path})` : "none here"), s.controls.map((c) => /* @__PURE__ */ h(ui.Button, { key: `sys-${c.id}-${key}`, label: textLabel(c), ...c.hotkey ? { hotkey: c.hotkey } : {}, onPress: () => act2(c.id) }))));
+}
+
+// ../frontend/src/playground/useCaseGroups.ts
+function groupByEndpoint(useCases) {
+  if (!useCases.some((u) => u.endpoint)) return [{ useCases }];
+  const groups = /* @__PURE__ */ new Map();
+  for (const u of useCases) {
+    const label = u.endpointGroup ?? u.endpoint ?? "Other flows";
+    groups.set(label, [...groups.get(label) ?? [], u]);
   }
-  const onDrag = (d) => {
-    if (z.level === 1 || !at) return;
-    let started = drags.get(id);
-    if (!started || started.n !== d.n) drags.set(id, started = { n: d.n, z, vp: at.vp });
-    const next = panTo(started.z, at.grid, started.vp, started.vp.col - (d.x - d.sx), started.vp.row - (d.y - d.sy));
-    const to = viewportOf(at.grid, at.vp, next);
-    if (to.col !== at.vp.col || to.row !== at.vp.row) void setZoom($, id, next);
-  };
-  return { actions, keys, corner: { piece: "diagram", id: "zoom", panel: zoomPanel(z), columns: ZOOM_COLUMNS }, onDrag };
+  return [...groups].map(([label, list]) => ({ label, useCases: list }));
 }
-var autoPanned = /* @__PURE__ */ new Map();
-function zoomedPicture($, view, c) {
-  const { source, z, playing } = c;
-  const viewId = view.viewId;
-  const fit2 = rasterOf($, { source, options: c.optionsFor() }, c.priority);
-  if (fit2 && "error" in fit2) return fit2;
-  const fitGrid = fit2?.grid;
-  const m = mergedGrid({ source, options: c.optionsFor(playing, { zoom: z.level }) });
-  const grid = m ?? (fitGrid ? { columns: Math.ceil(fitGrid.columns * z.level), rows: Math.ceil(fitGrid.rows * z.level) } : void 0);
-  const maxRows = view.d.rows ?? INLINE_ROWS;
-  if (!grid || !fitGrid) return { rows: Math.min(maxRows, 20) + 16 };
-  const vp = viewportOf(grid, { columns: fitGrid.columns, rows: maxRows }, z);
-  const rows = vp.rows + 16;
-  if (playing && m) {
-    const s = playing.scenario.steps[c.step];
-    const ends = s ? [view.scene.nodes.get(s.fromServiceId)?.rect, view.scene.nodes.get(s.toServiceId)?.rect].filter((r) => r !== void 0) : [];
-    const mark = `${playing.value}:${c.step}`;
-    if (ends.length && autoPanned.get(viewId) !== mark) {
-      autoPanned.set(viewId, mark);
-      const fx = ends.reduce((n, r) => n + r.x + r.w / 2, 0) / ends.length / view.scene.columns;
-      const fy = ends.reduce((n, r) => n + r.y + r.h / 2, 0) / ends.length / view.scene.rows;
-      const inside = fx * grid.columns >= vp.col + 4 && fx * grid.columns <= vp.col + vp.columns - 4 && fy * grid.rows >= vp.row + 2 && fy * grid.rows <= vp.row + vp.rows - 2;
-      if (!inside) void setZoom($, viewId, { level: z.level, x: fx, y: fy });
-    }
-  }
-  const visible = m ? m.tiles.flatMap((t, i) => meets(t, vp) ? [i] : []) : [];
-  const files = m ? gridFrame(m, playing ? c.step : void 0, c.progress === 0 ? 0 : FRAMES - 1) : [];
-  const ready = !!m && visible.length > 0 && visible.every((i) => files[i]) && (!playing || !!m.steps?.length);
-  if (!ready) rasterOf($, { source, options: c.optionsFor(playing, { zoom: z.level, window: vp }) }, c.priority);
-  else {
-    rasterOf($, { source, options: c.optionsFor(playing, { zoom: z.level, window: around(vp) }) }, "later");
-    if (!playing && c.pick) rasterOf($, { source, options: c.optionsFor(c.pick, { zoom: z.level, window: around(vp) }) }, "later");
-  }
-  if (!ready || !m) return { rows, at: { grid, vp } };
-  const imageKey = `img-${viewId}`;
-  const form = c.mode.kind === "picture" ? c.mode.form : void 0;
-  images.set(viewId, { key: imageKey, grid: m, shown: files.slice(), mounted: new Set(visible), ...form ? { form } : {} });
-  const tiles = visible.map((i) => ({ key: `${imageKey}-${i}`, col: m.tiles[i].col, row: m.tiles[i].row, columns: m.tiles[i].columns, rows: m.tiles[i].rows, file: files[i] }));
-  const picture = { key: imageKey, file: files[visible[0]], columns: vp.columns, rows: vp.rows, alt: c.alt, anchorKey: view.anchorKey, tiles, view: vp, drag: true, ...form ? { form } : {} };
-  return { picture, rows, at: { grid: m, vp } };
-}
-function selectable(scene, focus2) {
-  return [...scene.nodes.values()].map((n) => n.node).filter((n) => n.kind === "system" || n.kind === "group" && n.system === n.id).map((n) => ({ id: n.id, path: focus2 !== void 0 ? `${focus2}.${n.id}` : n.id, name: n.name, expanded: n.kind === "group" }));
-}
-function systemBar($, view, doc, systems, selected, player) {
-  const { ui } = view.d;
-  const { design, open, next, toggle, enter, leave } = systemActions($, view, doc, systems, selected, player);
-  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, player.focus !== void 0 && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "Inside ", player.focus.split(".").join(" \u203A "), " \xB7 ", doc.diagram.title ?? "its design"), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "System"), /* @__PURE__ */ h(ui.Text, { color: PINK, wrap: "truncate-end" }, selected ? `${selected.name} (${selected.path})` : "none here"), systems.length > 1 && /* @__PURE__ */ h(ui.Button, { key: `sys-next-${view.viewId}`, label: "\u21E5 Next", ...hotkey(view, "s"), onPress: next }), selected && design && /* @__PURE__ */ h(ui.Button, { key: `sys-open-${view.viewId}`, label: open ? "\u229F Collapse" : "\u229E Expand", ...hotkey(view, "o"), onPress: toggle }), selected && design && /* @__PURE__ */ h(ui.Button, { key: `sys-focus-${view.viewId}`, label: "\u2922 Focus in", ...hotkey(view, "f"), onPress: enter }), player.focus !== void 0 && /* @__PURE__ */ h(ui.Button, { key: `sys-back-${view.viewId}`, label: "\u2191 Back out", ...hotkey(view, "u"), onPress: leave })));
-}
-function systemActions($, view, doc, systems, selected, player) {
-  const design = selected !== void 0 && !!systemAt2(doc.root, selected.path)?.diagram;
-  const next = () => {
-    const at = systems.findIndex((s) => s.path === selected?.path);
-    const to = systems[(at + 1) % systems.length];
-    if (to) void setPlayer($, view, (p) => ({ ...p, selected: to.path }));
-  };
-  const toggle = () => {
-    if (!selected || !design) return;
-    const open2 = player.expanded.includes(selected.path) || selected.expanded;
-    void setPlayer($, view, (p) => ({
-      ...p,
-      // Closing a system closes the ones inside it too.
-      expanded: open2 ? p.expanded.filter((id) => id !== selected.path && !id.startsWith(`${selected.path}.`)) : [...p.expanded, selected.path],
-      selected: selected.path
-    }));
-  };
-  const enter = () => {
-    if (!selected || !design) return;
-    void setPlayer($, view, (p) => ({ ...p, focus: selected.path, selected: void 0, pick: "", mode: "diagram", isPlaying: false }));
-  };
-  const leave = () => {
-    const focus2 = player.focus;
-    if (focus2 === void 0) return;
-    const up = focus2.includes(".") ? focus2.slice(0, focus2.lastIndexOf(".")) : void 0;
-    void setPlayer($, view, (p) => {
-      const { focus: _focus, ...rest } = p;
-      void _focus;
-      return { ...rest, ...up !== void 0 ? { focus: up } : {}, selected: focus2, pick: "", mode: "diagram", isPlaying: false };
-    });
-  };
-  const open = selected !== void 0 && (selected.expanded || player.expanded.includes(selected.path));
-  return { design, open, next, toggle, enter, leave };
-}
-var lostByKey = /* @__PURE__ */ new Map();
-function lostImports(source, key) {
-  let names = lostByKey.get(key);
-  if (!names) {
-    const empty = Object.entries(source.imports ?? {}).filter(([, text]) => text === "").map(([name]) => name);
-    names = [.../* @__PURE__ */ new Set([...missingImports(source), ...empty])];
-    lostByKey.set(key, names);
-  }
-  return names;
-}
+
+// ../plugin/src/views/player.tsx
 var EXPLORE_ALL = "__explore";
 var scenarioName = (u, s) => {
   const status = s.outcome === "error" ? s.steps.find(isErrorStep)?.statusCode : void 0;
   return `${u.scenarios.length > 1 ? s.name : "Main flow"}${status ? ` \xB7 ${status}` : ""}`;
 };
-function playerModel($, view, doc, pick2, playing, step, player) {
-  const steps = pick2.scenario.steps;
-  const total = steps.length;
-  const go = (to, isPlaying = false) => goTo($, view, steps, to, isPlaying);
-  const close = () => {
-    if (menus.delete(view.viewId)) $.ui.invalidate("ui.render");
-  };
+function playerModel(view, doc, pick2, playing, step, isPlaying, ctl) {
+  const total = pick2.scenario.steps.length;
   const actions = {
-    uc: () => toggleMenu($, view.viewId, "uc"),
-    sc: () => toggleMenu($, view.viewId, "sc"),
-    body: () => playing ? toggleMenu($, view.viewId, "body") : void 0,
-    explore: () => toggleMenu($, view.viewId, "explore"),
-    close,
+    uc: () => ctl.toggle("uc"),
+    sc: () => ctl.toggle("sc"),
+    body: () => playing ? ctl.toggle("body") : void 0,
+    explore: () => ctl.toggle("explore"),
+    close: () => ctl.close(),
     play: () => {
-      close();
-      if (!playing) start2($, view, pick2);
-      else if (player.isPlaying) void setPlayer($, view, (p) => ({ ...p, isPlaying: false }));
-      else go(step >= total - 1 ? 0 : step, true);
+      ctl.close();
+      if (!playing) ctl.start(pick2);
+      else if (isPlaying) ctl.pause();
+      else ctl.go(step >= total - 1 ? 0 : step, true);
     },
     stop: () => {
       if (!playing) return;
-      close();
-      void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false }));
+      ctl.close();
+      ctl.stop();
     }
   };
-  for (const [id, to] of [["first", () => 0], ["prev", () => step - 1], ["next", () => step + 1], ["last", () => total - 1]]) actions[id] = () => playing ? go(to()) : void 0;
+  for (const [id, to] of [["first", () => 0], ["prev", () => step - 1], ["next", () => step + 1], ["last", () => total - 1]]) actions[id] = () => playing ? ctl.go(to()) : void 0;
   const choose = (next) => {
-    menus.delete(view.viewId);
-    if (playing) start2($, view, next, player.isPlaying);
-    else void setPlayer($, view, (p) => ({ ...p, pick: next.value }));
+    ctl.close();
+    if (playing) ctl.start(next, isPlaying);
+    else ctl.pick(next);
   };
   for (const u of doc.diagram.useCases) {
     if (u.scenarios[0]) actions[`uc=${u.id}`] = () => choose(pickOf(u, u.scenarios[0]));
     for (const s of u.scenarios) {
       actions[`x-${u.id}-${s.id}`] = () => {
-        menus.delete(view.viewId);
-        start2($, view, pickOf(u, s));
+        ctl.close();
+        ctl.start(pickOf(u, s));
       };
     }
   }
-  actions[`uc=${EXPLORE_ALL}`] = () => {
-    menus.set(view.viewId, "explore");
-    $.ui.invalidate("ui.render");
-  };
+  actions[`uc=${EXPLORE_ALL}`] = () => ctl.openMenu("explore");
   for (const s of pick2.useCase.scenarios) actions[`sc=${s.id}`] = () => choose(pickOf(pick2.useCase, s));
-  const open = menus.get(view.viewId);
-  return { pick: pick2, ...playing ? { playing } : {}, step, total, isPlaying: player.isPlaying, ...open && (open !== "body" || playing) ? { open } : {}, actions, line: stepLine(view, pick2, playing ? step : void 0) };
+  const open = ctl.open;
+  return { pick: pick2, ...playing ? { playing } : {}, step, total, isPlaying, ...open && (open !== "body" || playing) ? { open } : {}, actions, line: stepLine(view, pick2, playing ? step : void 0) };
 }
 function stepLine(view, pick2, at) {
   const steps = pick2.scenario.steps;
@@ -12019,10 +11345,11 @@ var explorerPanel = (doc, pick2) => ({
   close: { id: "close", icon: "exit", variant: "quiet" }
 });
 function floatColumns(W2, panel) {
-  if (panel.kind === "menu") return Math.min(W2, Math.max(28, ...panel.select.options.map((o) => Math.ceil(o.label.length * 1.05) + 14)));
+  if (panel.kind === "menu") return Math.min(W2, MENU_COLUMNS);
   if (panel.kind === "explorer") return Math.min(W2, 76);
   return W2;
 }
+var MENU_COLUMNS = 64;
 function floatOf(view, doc, m, bar, W2) {
   const panel = m.open === "uc" ? { kind: "menu", select: { ...bar.useCase, open: false } } : m.open === "sc" ? { kind: "menu", select: { ...bar.scenario, open: false } } : m.open === "explore" ? explorerPanel(doc, m.pick) : m.open === "body" && m.playing ? drawerPanel(view, m.playing, m.step) : void 0;
   if (!panel || !m.open) return void 0;
@@ -12110,11 +11437,899 @@ function stepRows(ui, view, steps, at) {
   });
   return { nodes, height };
 }
+
+// ../plugin/src/views/render.tsx
+var span = (ui, s, i) => /* @__PURE__ */ h(ui.Text, { key: String(i), ...s.color ? { color: s.color } : {}, ...s.bg ? { backgroundColor: s.bg } : {}, bold: s.bold === true, dimColor: s.dim === true }, s.text);
+function lineView(ui, l, key) {
+  const text = /* @__PURE__ */ h(ui.Text, { wrap: l.wrap ? "wrap" : "truncate-end" }, l.segs.length === 0 || l.segs.every((s) => s.text === "") ? " " : l.segs.map((s, i) => span(ui, s, i)));
+  return l.indent ? /* @__PURE__ */ h(ui.Box, { key, paddingLeft: l.indent }, text) : /* @__PURE__ */ h(ui.Box, { key }, text);
+}
+function linesView(ui, lines, key) {
+  return /* @__PURE__ */ h(ui.Box, { key, flexDirection: "column" }, lines.map((l, i) => lineView(ui, l, `${key}-${i}`)));
+}
+
+// ../plugin/src/views/whatif.ts
+var saved = new Lru(16);
+function savedWhatIfs(key, doc) {
+  let results = saved.get(key);
+  if (!results) {
+    results = doc.analysis ? runWhatIfs(doc.root) : [];
+    saved.set(key, results);
+  }
+  return results;
+}
+var toneColor = (r) => r.tone === "better" ? TONE2.good : r.tone === "worse" ? TONE2.bad : void 0;
+var versus = (r) => {
+  const color = toneColor(r);
+  const changed = r.change !== "same" && r.before !== r.after;
+  return { text: changed && r.tone !== "same" ? `${r.after} ${r.tone === "better" ? "\u2193" : "\u2191"}` : `${r.after}  `, ...color ? { color } : { dim: !changed } };
+};
+function savedLines(base, results, width) {
+  const a = headlineOf(base);
+  const availability2 = (r) => ({ ...versus(r), text: r.change !== "same" && r.before !== r.after ? `${r.after} ${r.tone === "better" ? "\u2191" : "\u2193"}` : `${r.after}  ` });
+  return table2(
+    [{ title: "What-if" }, { title: "Result" }, { title: "Worst p99", right: true }, { title: "Avail", right: true, drop: 2 }, { title: "Cost", right: true, drop: 1 }],
+    results.map((w) => [
+      { text: w.name, bold: true },
+      w.passed ? { text: "\u2713 pass", color: TONE2.good, bold: true } : { text: "\u2717 fail", color: TONE2.bad, bold: true },
+      versus(p99Row("", a.p99Ms, w.headline.p99Ms)),
+      availability2(availabilityRow("", a.availability, w.headline.availability)),
+      versus(costRow(a.costUsd, w.headline.costUsd))
+    ]),
+    width
+  );
+}
+function whatIfLines(diagram, base, results, width) {
+  const out = [{ segs: [] }, { segs: [{ text: "What-ifs", bold: true }] }];
+  if (results.length === 0) {
+    out.push({ segs: [{ text: "None saved yet: a whatif block runs the design again with more traffic or nodes down, e.g.", dim: true }], wrap: true });
+    out.push(...whatIfExample(diagram).split("\n").map((text) => ({ segs: [{ text, dim: true }] })));
+    return out;
+  }
+  out.push(...savedLines(base, results, width));
+  for (const text of results.flatMap((r) => r.warnings)) out.push({ segs: [{ text: `\u26A0 ${text}`, color: TONE2.warn }], wrap: true });
+  return out;
+}
+
+// ../plugin/src/views/tabs.tsx
+var TABS = [
+  { id: "diagram", label: "Diagram", key: "1" },
+  { id: "analysis", label: "Analysis", key: "2" },
+  { id: "hld", label: "HLD", key: "3" }
+];
+var MOVED = { whatif: "analysis", sequence: "hld", tests: "hld" };
+var tabOf = (stored) => typeof stored === "string" && MOVED[stored] || (TABS.find((t) => t.id === stored)?.id ?? "diagram");
+function tabBar(ui, current, failing, pick2, open) {
+  return /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap" }, TABS.map((t) => /* @__PURE__ */ h(
+    ui.Button,
+    {
+      key: `tab-${t.id}`,
+      label: t.id === "hld" && failing > 0 ? `${t.label} \u2717${failing}` : t.label,
+      hotkey: t.key,
+      ...t.id === current ? { variant: "primary" } : { dimColor: true },
+      onPress: () => pick2(t.id)
+    }
+  )), open && /* @__PURE__ */ h(ui.Button, { key: "tab-open", label: "\u2197 Open in Proschi", dimColor: true, onPress: (press) => open(press.surface) }));
+}
+function analysisBody(doc, columns) {
+  if (!doc.analysis) return [{ segs: [{ text: "No traffic yet: add a traffic { \u2026 } block and Proschi estimates load, latency, availability and cost for every node, e.g." }], wrap: true }, { segs: [] }, ...trafficExample(doc.diagram).split("\n").map((text) => ({ segs: [{ text, dim: true }] }))];
+  return analysisLines(doc.root, doc.analysis, columns);
+}
+function analysisTab(ui, doc, whatIfs, columns, explore) {
+  if (!doc.analysis) return linesView(ui, analysisBody(doc, columns), "body-analysis");
+  return /* @__PURE__ */ h(ui.Box, { key: "body-analysis", flexDirection: "column" }, linesView(ui, analysisLines(doc.root, doc.analysis, columns), "analysis-lines"), linesView(ui, whatIfLines(doc.diagram, doc.analysis, whatIfs, columns), "whatif-lines"), /* @__PURE__ */ h(ui.Box, { marginTop: 1 }, /* @__PURE__ */ h(ui.Button, { key: "explore-whatifs", label: "\u2197 Explore what-ifs in Proschi", onPress: (press) => explore(press.surface) })));
+}
+
+// ../plugin/src/register.tsx
+var icons = "nerd-font";
+var graphics = "auto";
+var INLINE_ROWS = 40;
+var PANE = "proschi-view";
+var PANE_VIEW = `${PANE}:0`;
+var IDLE = { pick: "", step: 0, isPlaying: false, mode: "diagram", explorer: false, expanded: [] };
+var NO_SOURCE = { source: "" };
+var paneFile = atom2({ plugin: "proschi", key: "paneFile" }, "");
+var paneSource = atom2({ plugin: "proschi", key: "paneSource" }, NO_SOURCE);
+var players = atom2({ plugin: "proschi", key: "player" }, IDLE);
+var paneTab = atom2({ plugin: "proschi", key: "paneTab" }, "diagram");
+var paneAnchor;
+var PANE_KEYS = "1-3 tabs \xB7 p play \xB7 n/b step \xB7 r first \xB7 e last \xB7 d stop \xB7 esc back to the prompt";
+var PICTURE_KEYS = "1-3 tabs \xB7 p play \xB7 n/b step \xB7 r first \xB7 e last \xB7 d stop \xB7 z/x zoom \xB7 0 fit \xB7 esc back to the prompt";
+var TAB_KEYS = "1-3 tabs \xB7 \u2191\u2193 scroll \xB7 esc back to the prompt";
+var HLD_KEYS = "1-3 tabs \xB7 \u2191\u2193 scroll \xB7 c copy \xB7 esc back to the prompt";
+var SYSTEM_KEYS = "s next system \xB7 o open/close \xB7 f focus in \xB7 u back out";
+var FRAME2 = 33;
+var FRAMES = Math.round(TRAVEL_MS / FRAME2) + 1;
+var HINT = [
+  "Proschi diagrams render in this terminal: put a Proschi document in a ```proschi fenced block",
+  "(or write a .proschi file) and Claude Code draws it as the architecture, with a player for its",
+  "use cases and the simulation's load on each node when it has `traffic`. Use the block instead of",
+  "Mermaid or ASCII art when showing an architecture or a request flow."
+].join(" ");
+var layouts = new Lru(32);
+var pending3 = /* @__PURE__ */ new Set();
+var documents2 = new Lru(32);
+var scenes = new Lru(64);
+var timers = /* @__PURE__ */ new Map();
+var SITES2 = 64;
+var FENCE = /^```proschi[^\n]*\n([\s\S]*?)\n```[ \t]*$/gm;
+function register(on, options) {
+  icons = options.icons === "symbols" || options.icons === "none" ? options.icons : "nerd-font";
+  graphics = graphicsMode(options.graphics);
+  const refused2 = setCellAspect(options.cellAspect);
+  on("session.start", async ($, e, next) => {
+    if (refused2) $.ui.log(`proschi: ${refused2}`, { to: "debug" });
+    void serveRequests($);
+    await $.command.register({ name: "proschi", description: "Proschi diagrams: /proschi view <file.proschi> shows one in a pane", argumentHint: "view [--expand <id>,\u2026] [--focus <id>] <file>" });
+    return next(e);
+  });
+  on("session.end", async ($, e, next) => {
+    stopWorker();
+    return next(e);
+  });
+  on("config.set", { key: "theme" }, async ($, e, next) => {
+    const set = await next(e);
+    themeChanged();
+    return set;
+  });
+  on("prompt.compose", async ($, e, next) => {
+    const composed = await next(e);
+    return { ...composed, sections: [...composed.sections, { id: "proschi:render", text: HINT, scope: "session" }] };
+  });
+  on("command.run", { command: "proschi" }, async ($, e) => {
+    const [verb, ...rest] = e.args.trim().split(/\s+/);
+    const words = [];
+    const view = {};
+    for (let i = 0; i < rest.length; i++) {
+      if (rest[i] === "--expand" || rest[i] === "--focus") {
+        const value = rest[++i];
+        if (!value || idList(value).length === 0) return { text: `Missing system id after ${rest[i - 1]}` };
+        if (rest[i - 1] === "--expand") view.expanded = [...view.expanded ?? [], ...idList(value)];
+        else view.focus = value;
+      } else words.push(rest[i]);
+    }
+    const file = words.join(" ");
+    if (verb === "perf") return { text: perfReport(Number(words[0]) || 10) };
+    if (verb !== "view" || !file) return { text: USAGE };
+    if (!await $.fs.exists(file)) return { text: `No such file: ${file}` };
+    if (view.expanded || view.focus !== void 0) {
+      const { diagram, errors } = parseSource(await readWithImports($, file));
+      const refused3 = errors.length ? void 0 : viewError(diagram, view);
+      if (refused3) return { text: refused3 };
+    }
+    stop(PANE_VIEW);
+    await update2($, memberOf(players, { requestId: PANE_VIEW }), () => ({ ...IDLE, expanded: view.expanded ?? [], ...view.focus !== void 0 ? { focus: view.focus } : {} }));
+    await update2($, paneFile, () => file);
+    await markOpened($, PANE_VIEW);
+    await $.ui.open({ id: PANE, title: `Proschi \xB7 ${basename(file)}` });
+    watch($, file);
+    return { text: `Showing ${file} in the Proschi pane.` };
+  });
+  on("ui.close", { id: PANE }, async ($, e, next) => {
+    if (e.origin.kind === "person" && menus.delete(PANE_VIEW)) {
+      $.ui.invalidate("ui.render");
+      return { value: void 0 };
+    }
+    stop(PANE_VIEW);
+    stop(PANE);
+    return next(e);
+  });
+  on("ui.render", { component: "AssistantMessage" }, async ($, e, next) => {
+    if (e.surface !== "terminal" || !e.props.text.includes("```proschi")) return next(e);
+    const ui = $.ui.resolve(e);
+    const parts = [];
+    let last = 0;
+    let n = 0;
+    for (const match of e.props.text.matchAll(FENCE)) {
+      const before2 = e.props.text.slice(last, match.index);
+      if (before2.trim()) parts.push(/* @__PURE__ */ h(ui.Markdown, { text: before2 }));
+      const view = await drawDiagram($, { ui, requestId: e.requestId, columns: (e.viewport?.columns ?? 120) - 4 }, `${e.requestId}:${n++}`, { source: match[1] });
+      if ("error" in view) {
+        parts.push(/* @__PURE__ */ h(ui.Markdown, { text: match[0] }));
+        parts.push(/* @__PURE__ */ h(ui.Text, { dimColor: true }, view.error));
+      } else parts.push(view.element);
+      last = match.index + match[0].length;
+    }
+    if (n === 0) return next(e);
+    const after2 = e.props.text.slice(last);
+    if (after2.trim()) parts.push(/* @__PURE__ */ h(ui.Markdown, { text: after2 }));
+    return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, parts);
+  });
+  on("ui.render", { component: "ToolUse" }, async ($, e, next) => {
+    const file = proschiFile(e.props.tool, e.props.input);
+    if (e.surface !== "terminal" || !file || e.props.isRunning || e.props.isErrored) return next(e);
+    const row = await next(e);
+    const ui = $.ui.resolve(e);
+    const source = await readWithImports($, file).catch(() => void 0);
+    if (!source) return row;
+    const view = await drawDiagram($, { ui, requestId: e.requestId, columns: (e.viewport?.columns ?? 120) - 6 }, `${e.requestId}:0`, source, file);
+    return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, row, /* @__PURE__ */ h(ui.Box, { paddingLeft: 2 }, "error" in view ? /* @__PURE__ */ h(ui.Text, { dimColor: true }, view.error) : view.element));
+  });
+  on("ui.render", { component: "Pane", requestId: PANE }, async ($, e) => {
+    if (e.surface !== "terminal") {
+      const { Text } = $.ui.resolve(e);
+      return /* @__PURE__ */ h(Text, null, "The Proschi pane draws in a terminal.");
+    }
+    const ui = $.ui.resolve(e);
+    const file = await read2($, paneFile);
+    const focused = file ? NO_SOURCE : await read2($, paneSource);
+    if (!file && !focused.source) return /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Run /proschi view <file.proschi>.");
+    const source = file ? await readWithImports($, file).catch(() => void 0) : focused;
+    if (!source) return /* @__PURE__ */ h(ui.Text, { color: "red" }, "Cannot read ", file, ".");
+    const columns = "bodyColumns" in e.props && typeof e.props.bodyColumns === "number" ? e.props.bodyColumns : (e.viewport?.columns ?? 120) - 4;
+    const isFocused = "isFocused" in e.props && e.props.isFocused === true;
+    const scrolled = "scroll" in e.props ? e.props.scroll : void 0;
+    const bodyRows2 = typeof scrolled?.bodyRows === "number" ? scrolled.bodyRows : 0;
+    paneWindow(PANE, typeof scrolled?.offset === "number" ? scrolled.offset : 0, bodyRows2);
+    const tab = tabOf(await read2($, paneTab));
+    const loaded = await documentOf($, PANE_VIEW, source);
+    const failing = "error" in loaded ? 0 : loaded.doc.tests.filter((t) => !t.passed).length;
+    const draw = { ui, requestId: PANE, columns, rows: Math.max(INLINE_ROWS, bodyRows2 - 10) };
+    const keys = (systems, pictures = false) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, isFocused ? tab === "diagram" ? pictures ? PICTURE_KEYS : PANE_KEYS : tab === "hld" ? HLD_KEYS : TAB_KEYS : "ctrl+x tab focuses the pane for its keys"), isFocused && systems && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, SYSTEM_KEYS));
+    const mode = await modeOf($, ui, PANE, PANE_VIEW);
+    if (mode.kind !== "text" && !("error" in loaded)) {
+      const W2 = panelColumns(columns);
+      const { doc, key } = loaded;
+      const pieces = [{ id: "tabs", panel: tabBarPanel(tab, failing), columns: W2 }];
+      const actions = {};
+      for (const t of TABS)
+        actions[`tabs/${t.id}`] = () => {
+          menus.delete(PANE_VIEW);
+          void update2($, paneTab, () => t.id);
+        };
+      const link = doc.link();
+      actions["tabs/open"] = (surface) => void openLink($, surface, link);
+      const page = { doc, key, source: loaded.source };
+      const ahead = TABS.filter((t) => t.id !== tab).map((t) => ({ panel: tabBarPanel(t.id, failing), columns: W2 }));
+      const pages2 = [];
+      for (const t of TABS) {
+        if (t.id === "diagram") continue;
+        const body = pagePart($, t.id, page);
+        pages2.push({ id: `page-${t.id}`, panel: body.panel, columns: W2, shown: t.id === tab });
+        if (t.id !== tab) continue;
+        for (const [id, fn] of Object.entries(body.actions)) actions[`page-${t.id}/${id}`] = fn;
+      }
+      const view2 = await drawDiagram($, draw, PANE_VIEW, source, void 0, { pieces, actions, ahead, pages: pages2, hidden: tab !== "diagram" }, mode);
+      if ("error" in view2) {
+        if (tab === "diagram") return /* @__PURE__ */ h(ui.Text, { color: "red" }, view2.error);
+        $.ui.log(`proschi: the ${tab} tab in text: ${view2.error}`, { to: "debug" });
+      } else if (view2.picture) {
+        if (paneAnchor && tab === "hld") {
+          scrollToAnchorOnceShown($, PANE_VIEW, paneAnchor);
+          paneAnchor = void 0;
+        }
+        return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, view2.element, keys(tab === "diagram" && view2.systems, true));
+      }
+    }
+    const opens = "error" in loaded ? void 0 : loaded.doc.link();
+    const bar = tabBar(ui, tab, failing, (to) => void update2($, paneTab, () => to), opens === void 0 ? void 0 : (surface) => void openLink($, surface, opens));
+    if (tab !== "diagram") {
+      if ("error" in loaded) return /* @__PURE__ */ h(ui.Text, { color: "red" }, loaded.error);
+      const { doc, key } = loaded;
+      const link = opens;
+      const body = tab === "hld" ? hldTab(ui, doc, key, (surface, text) => void copy($, surface, text, "the HLD markdown"), (anchor) => void scroll($, { to: { key: anchor }, in: PANE, block: "start" })) : analysisTab(ui, doc, savedWhatIfs(key, doc), columns, (surface) => void openLink($, surface, link));
+      if (paneAnchor && tab === "hld") {
+        const anchor = paneAnchor;
+        paneAnchor = void 0;
+        $.clock.after(0, () => void scroll($, { to: { key: anchor }, in: PANE, block: "start" }));
+      }
+      return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, bar, body, keys(false));
+    }
+    const view = await drawDiagram($, draw, PANE_VIEW, source, void 0, void 0, { kind: "text" });
+    if ("error" in view) return /* @__PURE__ */ h(ui.Text, { color: "red" }, view.error);
+    return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, bar, view.element, keys(view.systems));
+  });
+  registerPicture(on);
+}
+function pagePart($, tab, c) {
+  const actions = {};
+  const { doc, key } = c;
+  if (tab === "analysis") {
+    const link = doc.link();
+    actions["explore-whatifs"] = (surface) => void openLink($, surface, link);
+    return { panel: pageOf(`analysis\0${key}`, () => analysisPage(doc, savedWhatIfs(key, doc))), actions };
+  }
+  const markdown = hldMarkdown(doc, key);
+  const design = hldDocument(doc, key);
+  actions["hld-copy"] = (surface) => void copy($, surface, markdown, "the HLD markdown");
+  for (const s of design.sections) actions[`toc=${s.kind}`] = () => void scrollToAnchor($, PANE_VIEW, hldAnchor(s.kind));
+  return { panel: pageOf(`hld\0${key}`, () => hldPage(design, c.source)), actions };
+}
+var pages = new Lru(8);
+function pageOf(key, make) {
+  let panel = pages.get(key);
+  if (!panel) pages.set(key, panel = make());
+  return panel;
+}
+async function drawDiagram($, d, viewId, source, file, top = { pieces: [], actions: {}, ahead: [] }, known) {
+  const mode = known ?? await modeOf($, d.ui, d.requestId, viewId);
+  const hidden = top.hidden === true;
+  const view = await diagramView($, d, viewId, source, file, mode, hidden ? "first" : "now");
+  if (!hidden) {
+    if ("error" in view) return view;
+    if (view.kind === "text") return { element: view.element, systems: view.systems, picture: false };
+    if (view.kind === "loading") return { element: loading(d.ui, viewId, view.rows, mode.kind === "loading" ? mode.probe : void 0), systems: false, picture: true };
+  } else if (mode.kind === "loading") return { element: loading(d.ui, viewId, d.rows ?? INLINE_ROWS, mode.probe), systems: false, picture: true };
+  const pic = !("error" in view) && view.kind === "picture" ? view : void 0;
+  const float = hidden ? void 0 : pic?.float;
+  const drawn = await pictureSite($, d.ui, {
+    requestId: d.requestId,
+    site: viewId,
+    theme: await themeOf($),
+    pieces: [...top.pieces, ...pic?.pieces ?? []],
+    actions: { ...top.actions, ...pic?.actions ?? {} },
+    hotkeys: d.requestId === PANE,
+    ahead: [...top.ahead, ...pic?.ahead ?? []],
+    layer: "bar",
+    ...float ? { float } : {},
+    ...pic?.corner ? { corner: pic.corner } : {},
+    ...pic?.keys ? { keys: pic.keys } : {},
+    ...pic?.onDrag ? { onDrag: pic.onDrag } : {},
+    ...top.pages ? { pages: top.pages } : {},
+    ...top.pages && pic?.pieces[0] ? { paged: { from: pic.pieces[0].id, shown: !hidden } } : {},
+    rows: pic?.rows ?? d.rows ?? INLINE_ROWS,
+    ...mode.kind === "picture" && mode.form ? { form: mode.form } : {}
+  });
+  if ("element" in drawn) return { element: drawn.element, systems: pic?.systems ?? false, picture: true };
+  $.ui.log(`proschi: the drawing in text: ${drawn.error}`, { to: "debug" });
+  return hidden ? { error: drawn.error } : drawDiagram($, d, viewId, source, file, top, { kind: "text" });
+}
+function proschiFile(tool, input) {
+  if (tool !== "Write" && tool !== "Edit") return void 0;
+  const path = input?.file_path;
+  return typeof path === "string" && path.endsWith(".proschi") ? path : void 0;
+}
+var USAGE = "Usage: /proschi view [--expand <system>[,<system>\u2026]] [--focus <system>] <file.proschi>, or /proschi perf [count]";
+function perfReport(n) {
+  const last = pressTimings().slice(-n);
+  if (last.length === 0) return "No presses timed yet: press a tab or a control in the pictures, then run /proschi perf again.";
+  const lines = last.map((t) => `${t.control.padEnd(22)} ${String(t.toShown).padStart(5)} ms  (render after ${t.toRender} ms, built in ${t.build} ms, ${t.sent}/${t.images} pictures new)`);
+  return [`The last ${last.length} presses, press to drawn:`, ...lines].join("\n");
+}
+var basename = (path) => path.split("/").pop() ?? path;
+var dirname = (path) => path.slice(0, Math.max(0, path.lastIndexOf("/")));
+async function projectRoot($, dir) {
+  for (let current = dir; ; current = dirname(current)) {
+    if (await $.fs.exists(`${current}/proschi.json`) || await $.fs.exists(`${current}/.git`)) return current || "/";
+    if (!current || current === "/") return dir;
+  }
+}
+var importReasons = new Lru(256);
+async function readWithImports($, file) {
+  const name = basename(file);
+  const dir = dirname(file);
+  const root = await projectRoot($, dir);
+  const doc = { source: await $.fs.read(file), path: name, imports: {} };
+  const lock = {};
+  for (let round2 = 0; round2 < 8; round2++) {
+    const missing = missingImports(doc).filter((key) => key !== name && !(key in doc.imports));
+    if (missing.length === 0) break;
+    for (const key of missing) {
+      importReasons.delete(key);
+      if (isRemoteSpec(key)) {
+        doc.imports[key] = await readRemote($, root, key, lock.read ??= readLock($, root)).catch((error) => {
+          importReasons.set(key, error instanceof Error ? error.message : String(error));
+          return "";
+        });
+        continue;
+      }
+      const path = importFilePath(dir, root, key);
+      doc.imports[key] = path && await $.fs.exists(path) ? await $.fs.read(path) : "";
+    }
+  }
+  return doc;
+}
+async function readLock($, root) {
+  const file = `${root}/${LOCK_FILE}`;
+  return await $.fs.exists(file) ? parseLock(await $.fs.read(file)) : void 0;
+}
+async function readRemote($, root, spec, locked) {
+  const lock = await locked;
+  if (!lock) throw remoteError.noLock(spec);
+  const hash = lockedHash(lock, spec);
+  if (!hash) throw remoteError.notLocked(spec);
+  const file = `${root}/${CACHE_DIR}/${hash}`;
+  if (!await $.fs.exists(file)) throw remoteError.notCached(spec);
+  const { base64: base642 } = await $.fs.read(file, { as: "bytes" });
+  const bytes2 = Uint8Array.from(atob(base642), (c) => c.charCodeAt(0));
+  const digest2 = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes2));
+  if ([...digest2].map((b) => b.toString(16).padStart(2, "0")).join("") !== hash) throw remoteError.altered(spec);
+  return new TextDecoder().decode(bytes2);
+}
+function watch($, file) {
+  stop(PANE);
+  let seen = 0;
+  timers.set(
+    PANE,
+    $.clock.every(1e3, async () => {
+      if (await read2($, paneFile) !== file) return;
+      const stat = await $.fs.stat(file).catch(() => void 0);
+      const mtime = stat && "mtimeMs" in stat ? Number(stat.mtimeMs) : 0;
+      if (seen && mtime !== seen) $.ui.invalidate("ui.render");
+      seen = mtime;
+    })
+  );
+}
+function requestLayout($, key, source) {
+  if (pending3.has(key)) return;
+  pending3.add(key);
+  void ask($, { kind: "layout", ...source }, "now").then(
+    (out) => {
+      answered(`layout:${key}`);
+      layouts.set(key, out);
+    },
+    (error) => {
+      if (isRetryable(error) && retry(`layout:${key}`)) return;
+      const why = error instanceof Error ? error.message : String(error);
+      layouts.set(key, { error: didNotStart(error) ? `Proschi lays diagrams out with Node.js 18 or newer, which did not start: ${why}` : why });
+    }
+  ).finally(() => {
+    pending3.delete(key);
+    redraw($);
+  });
+}
+function normal(p) {
+  return {
+    pick: p?.pick ?? "",
+    step: typeof p?.step === "number" ? p.step : 0,
+    isPlaying: p?.isPlaying === true && p.mode === "play",
+    mode: p?.mode === "play" ? "play" : "diagram",
+    explorer: p?.explorer === true,
+    expanded: Array.isArray(p?.expanded) ? p.expanded.filter((id) => typeof id === "string") : [],
+    ...typeof p?.focus === "string" ? { focus: p.focus } : {},
+    ...typeof p?.selected === "string" ? { selected: p.selected } : {},
+    ...isMoved(zoomOf(p?.zoom)) ? { zoom: zoomOf(p?.zoom) } : {}
+  };
+}
+var BARS_WIDTH = 80;
+async function documentOf($, viewId, written, file) {
+  const player = normal(await read2($, memberOf(players, { requestId: viewId })));
+  const shown2 = { ...player.expanded.length ? { expanded: player.expanded } : {}, ...player.focus !== void 0 ? { focus: player.focus } : {} };
+  const source = shown2.expanded || shown2.focus !== void 0 ? { ...written, view: shown2 } : written;
+  const key = keyOf(source);
+  let doc = documents2.get(key);
+  if (!doc) {
+    doc = loadDocument(source);
+    documents2.set(key, doc);
+  }
+  const where2 = file ?? "The diagram";
+  if (doc.errors.length > 0) {
+    const [first] = doc.errors;
+    return { error: `${where2} has errors (line ${first.line}: ${first.message})${file ? `: run \`npx proschi check ${file}\`` : ""}.` };
+  }
+  if (doc.diagram.nodes.length === 0) return { error: `${where2} has no components to draw.` };
+  return { doc, source, key, player };
+}
+async function modeOf($, ui, requestId, probeId) {
+  if (graphics === "off") return { kind: "text" };
+  const p = await probeOf($);
+  if (p.status === "unknown") {
+    const key = probeKey(probeId);
+    probe($, requestId, key);
+    return { kind: "loading", probe: /* @__PURE__ */ h(ui.Image, { key, source: probeSource($), columns: 1, rows: 1, alt: " " }) };
+  }
+  if (graphics === "auto" && (p.status === "no" || p.status === "tmux")) return { kind: "text", ...p.status === "tmux" ? { hint: true } : {} };
+  return { kind: "picture", ...p.form ? { form: p.form } : {} };
+}
+async function diagramView($, d, viewId, written, file, mode = { kind: "text" }, priority = "now") {
+  const loaded = await documentOf($, viewId, written, file);
+  if ("error" in loaded) return loaded;
+  const { doc, source, key, player } = loaded;
+  const layout = layouts.get(key);
+  if (!layout) {
+    requestLayout($, key, source);
+    if (mode.kind !== "text") return { kind: "loading", rows: Math.min(d.rows ?? INLINE_ROWS, 20) };
+    return { kind: "text", element: /* @__PURE__ */ h(d.ui.Text, { dimColor: true }, "Laying out ", doc.diagram.title ?? "the diagram", "\u2026"), systems: false };
+  }
+  if ("error" in layout) return { error: `Proschi could not lay ${file ?? "this diagram"} out: ${layout.error}` };
+  const columns = Math.max(40, Math.min(512, d.columns));
+  const sceneKey = `${key}@${columns}`;
+  let scene = scenes.get(sceneKey);
+  if (!scene) {
+    scene = buildScene(doc.diagram, layout, columns);
+    scenes.set(sceneKey, scene);
+  }
+  const picks = doc.diagram.useCases.flatMap((u) => u.scenarios.map((s) => pickOf(u, s)));
+  const pick2 = picks.find((p2) => p2.value === player.pick) ?? picks[0];
+  const playing = player.mode === "play" ? pick2 : void 0;
+  const steps = playing?.scenario.steps ?? [];
+  const step = Math.max(0, Math.min(player.step, steps.length - 1));
+  const width = Math.min(Math.max(40, d.columns), Math.max(scene.columns, BARS_WIDTH));
+  const systems = selectable(scene, player.focus);
+  const selected = systems.find((s) => s.path === player.selected) ?? systems[0];
+  const view = { d, viewId, rasterKey: `d-${viewId}`, anchorKey: `at-${viewId}`, scene, width, overlay: doc.overlay, edges: doc.edges, systems: doc.systems, ...selected ? { selected: selected.id } : {}, inPane: d.requestId === PANE };
+  if (playing && player.isPlaying && !timers.has(viewId)) animate($, view, steps);
+  const p = {
+    doc,
+    source,
+    view,
+    player,
+    ...pick2 ? { pick: pick2 } : {},
+    ...playing ? { playing } : {},
+    step,
+    // While a step animates, its frames are blitted in place; a drawing starts it from the beginning.
+    progress: timers.has(viewId) ? 0 : 100,
+    systems,
+    ...selected ? { selected } : {},
+    // The link's step counts from 1, as the editor's player does (playground/share.ts PlaybackTarget).
+    link: doc.link(playing ? { useCase: playing.useCase.id, ...playing.useCase.scenarios.length > 1 ? { scenario: playing.scenario.id } : {}, step: step + 1 } : void 0),
+    lost: lostImports(written, keyOf(written)),
+    title: file ? basename(file) : doc.diagram.title ?? "diagram",
+    what: file ? { file } : { source },
+    roomy: view.width >= 79
+  };
+  if (mode.kind === "text") return textView($, p, mode);
+  return await pictureView($, p, mode, priority) ?? textView($, p, { kind: "text" });
+}
+var isWide = (p) => p.view.scene.columns > p.view.d.columns;
+function wideNotice(p, z) {
+  if (!isWide(p) || z.level > 1) return [];
+  const { d, inPane } = p.view;
+  const text = inPane ? `Drawn small: ${p.view.scene.columns} columns wide in ${d.columns}. Zoom with + or z, then drag to pan.` : `Drawn small: ${p.view.scene.columns} columns wide in ${d.columns}. Focus opens it in the pane to zoom.`;
+  return [{ text, tone: "muted" }];
+}
+async function pictureView($, p, mode, priority) {
+  const { doc, source, view, pick: pick2, playing, step, progress } = p;
+  const { d, viewId } = view;
+  const hasSystems = p.systems.length > 0 || p.player.focus !== void 0;
+  const z = view.inPane ? zoomOf(p.player.zoom) : FIT;
+  const notices = noticesOf(doc, p.lost, importReasons, view.inPane, wideNotice(p, z));
+  const theme2 = await themeOf($);
+  const optionsFor = (play, zoomed) => ({
+    theme: theme2,
+    maxWidthPx: maxWidthPx(d.columns),
+    ...doc.overlay && !play ? { overlay: true } : {},
+    ...view.selected ? { selected: view.selected } : {},
+    ...play ? { play: { useCase: play.useCase.id, scenario: play.scenario.id, frames: FRAMES } } : {},
+    // A strip of the drawing's one surface, as wide as its panels: its top where nothing is above it (no tabs, header, title or notice), the load legend in its corner.
+    grid: {
+      room: d.columns,
+      maxRows: d.rows ?? INLINE_ROWS,
+      cellPx: cellPx(),
+      fill: { columns: panelColumns(d.columns), ...view.inPane ? { controls: ZOOM_COLUMNS + 1 } : {}, ...!pick2 && !view.inPane && !doc.diagram.title && notices.length === 0 ? { top: true } : {}, ...!play && doc.overlay && doc.edges ? { legend: true } : {} },
+      ...zoomed ? { zoom: zoomed.zoom, ...zoomed.window ? { window: zoomed.window } : {} } : {}
+    }
+  });
+  const alt = `${doc.diagram.title ?? p.title}: the architecture diagram as a picture`;
+  images.delete(viewId);
+  if (z.level > 1) {
+    const zoomed = zoomedPicture($, view, { source, z, ...playing ? { playing } : {}, ...pick2 ? { pick: pick2 } : {}, step, progress, priority, optionsFor, mode, alt });
+    if ("error" in zoomed) return void 0;
+    const built2 = pictureParts($, p, notices, zoomed.picture, { z, ...zoomed.at ? { at: zoomed.at } : {} });
+    return { kind: "picture", ...built2, rows: zoomed.rows, systems: hasSystems };
+  }
+  const request2 = { source, options: optionsFor(playing) };
+  const out = rasterOf($, request2, priority);
+  const size = out && !("error" in out) ? out.grid ? { columns: out.grid.columns, rows: out.grid.rows } : imageSize(out, d.columns, d.rows ?? INLINE_ROWS) : void 0;
+  const rows = (size?.rows ?? Math.min(view.scene.rows, d.rows ?? INLINE_ROWS)) + 16;
+  if (mode.kind === "loading") return { kind: "loading", rows };
+  if (out && "error" in out) return void 0;
+  let picture;
+  if (out && size) {
+    const imageKey = `img-${viewId}`;
+    const g = out.grid;
+    if (g && (!request2.options.play || g.steps?.length)) {
+      const at = request2.options.play ? step : void 0;
+      const shown2 = gridFrame(g, at, progress === 0 ? 0 : FRAMES - 1);
+      images.set(viewId, { key: imageKey, grid: g, shown: shown2, ...mode.form ? { form: mode.form } : {} });
+      const tiles = g.tiles.map((t, i) => ({ key: `${imageKey}-${i}`, col: t.col, row: t.row, columns: t.columns, rows: t.rows, file: shown2[i] }));
+      picture = { key: imageKey, file: out.base, columns: size.columns, rows: size.rows, alt, anchorKey: view.anchorKey, tiles, ...mode.form ? { form: mode.form } : {} };
+    } else if (!g) {
+      const frames = request2.options.play ? out.frames : void 0;
+      const shownFrames = frames?.[step];
+      const file = shownFrames?.length ? shownFrames[progress === 0 ? 0 : shownFrames.length - 1] : out.base;
+      if (!request2.options.play || frames?.length) {
+        images.set(viewId, { key: imageKey, ...frames ? { frames } : {}, ...mode.form ? { form: mode.form } : {} });
+        picture = { key: imageKey, file, columns: size.columns, rows: size.rows, alt, anchorKey: view.anchorKey, ...mode.form ? { form: mode.form } : {} };
+      }
+    }
+  }
+  const fitAt = out && !("error" in out) && out.grid ? { grid: out.grid, vp: { col: 0, row: 0, columns: out.grid.columns, rows: out.grid.rows } } : void 0;
+  const built = pictureParts($, p, notices, picture, view.inPane ? { z, ...fitAt ? { at: fitAt } : {} } : void 0);
+  if (!playing && pick2) rasterOf($, { source, options: optionsFor(pick2) }, "later");
+  if (view.inPane && fitAt && picture) prefetchZoom($, view, fitAt.grid, stepZoom(z, 1), playing, optionsFor, source);
+  return { kind: "picture", ...built, rows, systems: hasSystems };
+}
+function textView($, p, mode) {
+  const { doc, view, pick: pick2, playing, step, progress } = p;
+  const { d, viewId } = view;
+  const { ui } = d;
+  const scene = view.scene;
+  const steps = playing?.scenario.steps ?? [];
+  const painted = paint(scene, { overlay: doc.overlay, edges: doc.edges, icons, systems: doc.systems, ...view.selected ? { selected: view.selected } : {}, ...steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {} });
+  const wide = view.inPane && painted.columns > d.columns;
+  const pan = wide ? textPan($, view, painted, zoomOf(p.player.zoom)) : void 0;
+  textCrops.set(viewId, pan ? pan.vp : void 0);
+  const grid = pan ? painted.crop(pan.vp.col, 0, pan.vp.columns, painted.rows) : painted;
+  const lead = [
+    ...mode.hint ? [{ text: TMUX_HINT, tone: "muted" }] : [],
+    ...painted.columns > d.columns ? [
+      {
+        text: pan ? `\u2194 ${painted.columns} columns wide, wider than the ${d.columns} here: columns ${pan.vp.col + 1}\u2013${pan.vp.col + pan.vp.columns} shown. Drag it, or h and l (\u2190 \u2192 after a click on it), to pan.` : `\u2194 ${painted.columns} columns wide, wider than the ${d.columns} here: \u26F6 Focus opens it in the pane, where it pans.`,
+        tone: "muted"
+      }
+    ] : []
+  ];
+  const verdict = verdictOf(doc.tests);
+  const sys = systemsOf($, p);
+  const links = linksOf($, p);
+  const m = pick2 && playerModel(view, doc, pick2, playing, step, p.player.isPlaying, playerCtl($, view, pick2.scenario.steps));
+  return {
+    kind: "text",
+    element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, m && playerBarText(view, doc, m), doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, noticesText(ui, noticesOf(doc, p.lost, importReasons, view.inPane, lead), `notice-${viewId}`), pan ? /* @__PURE__ */ h(ui.Box, { key: `${view.rasterKey}-pan`, flexDirection: "column", width: grid.columns, height: grid.rows }, /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), /* @__PURE__ */ h(ui.Box, { position: "absolute", top: 0, left: 0, width: grid.columns, height: grid.rows }, /* @__PURE__ */ h(ui.Client, { key: pan.overlay, module: "./uiOverlay.js", props: { controls: [], drag: "x" }, width: grid.columns, height: grid.rows })), /* @__PURE__ */ h(ui.Box, { display: "none" }, /* @__PURE__ */ h(ui.Button, { key: `pan-h-${viewId}`, label: "h", hotkey: "h", onPress: pan.keys.left }), /* @__PURE__ */ h(ui.Button, { key: `pan-l-${viewId}`, label: "l", hotkey: "l", onPress: pan.keys.right }))) : /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), doc.edges && !playing && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)), verdict && verdictText(ui, verdict, view.width, viewId, view.inPane ? void 0 : () => focus($, view, p.title, p.what, "hld", "requirements")), sys && systemsText(ui, sys.model, viewId, view.width, (id) => sys.actions[id]?.()), controlsText(ui, links.controls, viewId, view.width, (id, surface) => links.actions[id]?.(surface))),
+    systems: sys !== void 0
+  };
+}
+var textCrops = new Lru(SITES2);
+function textPan($, view, painted, z) {
+  const grid = { columns: painted.columns, rows: painted.rows };
+  const vp = viewportOf(grid, { columns: view.d.columns, rows: painted.rows }, { ...z, level: 1 });
+  const at = { ...z, level: 1 };
+  const to = (col) => void setZoom($, view.viewId, panTo(at, grid, vp, col, 0));
+  const keys = { left: () => to(vp.col - PAN_STEP.columns), right: () => to(vp.col + PAN_STEP.columns) };
+  const overlay = `ov-text-${view.viewId}`;
+  otherOverlays.set(overlay, (data) => {
+    if (data.type === "drag") {
+      const d = data;
+      if (![d.n, d.sx, d.x].every((v) => typeof v === "number")) return;
+      let started = drags.get(view.viewId);
+      if (!started || started.n !== d.n) drags.set(view.viewId, started = { n: d.n, z: at, vp });
+      const col = Math.max(0, Math.min(grid.columns - vp.columns, started.vp.col - (d.x - d.sx)));
+      if (col !== vp.col) to(col);
+    } else if (data.type === "key" && (data.key === "left" || data.key === "right")) keys[data.key]();
+    else if (data.type === "scroll" && typeof data.key === "string") void scrollKey($, PANE, data.key);
+  });
+  return { vp, overlay, keys };
+}
+var images = new Lru(SITES2);
+var menus = new Lru(SITES2);
+function toggleMenu($, viewId, id) {
+  if (menus.get(viewId) === id) menus.delete(viewId);
+  else menus.set(viewId, id);
+  $.ui.invalidate("ui.render");
+}
+function playerCtl($, view, steps) {
+  const id = view.viewId;
+  const open = menus.get(id);
+  return {
+    ...open ? { open } : {},
+    toggle: (k) => toggleMenu($, id, k),
+    openMenu: (k) => {
+      menus.set(id, k);
+      $.ui.invalidate("ui.render");
+    },
+    close: () => {
+      if (menus.delete(id)) $.ui.invalidate("ui.render");
+    },
+    start: (pick2, isPlaying = true) => start2($, view, pick2, isPlaying),
+    go: (to, isPlaying = false) => goTo($, view, steps, to, isPlaying),
+    pause: () => void setPlayer($, view, (p) => ({ ...p, isPlaying: false })),
+    stop: () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })),
+    pick: (pick2) => void setPlayer($, view, (p) => ({ ...p, pick: pick2.value }))
+  };
+}
+function linksOf($, p) {
+  return {
+    controls: linkControls(p.view.inPane, p.roomy),
+    actions: {
+      src: (surface) => void copy($, surface, p.source.source, "the Proschi source"),
+      lnk: (surface) => void copy($, surface, p.link, "the share link"),
+      open: (surface) => void openLink($, surface, p.link),
+      focus: () => focus($, p.view, p.title, p.what)
+    }
+  };
+}
+function systemsOf($, p) {
+  const { view, doc, systems, selected, player } = p;
+  if (systems.length === 0 && player.focus === void 0) return void 0;
+  const s = systemActions($, view, doc, systems, selected, player);
+  const controls = [
+    ...systems.length > 1 ? [{ id: "next", icon: "cycle", label: "Next", ...hotkey(view, "s") }] : [],
+    ...selected && s.design ? [{ id: "open", icon: s.open ? "collapse" : "expand", label: s.open ? "Collapse" : "Expand", ...hotkey(view, "o") }, { id: "focus", icon: "enter", label: "Focus in", ...hotkey(view, "f") }] : [],
+    ...player.focus !== void 0 ? [{ id: "back", icon: "leave", label: "Back out", ...hotkey(view, "u") }] : []
+  ];
+  return {
+    model: { ...player.focus !== void 0 ? { inside: `${player.focus.split(".").join(" \u203A ")} \xB7 ${doc.diagram.title ?? "its design"}` } : {}, ...selected ? { selected: { name: selected.name, path: selected.path } } : {}, controls },
+    actions: { next: s.next, open: s.toggle, focus: s.enter, back: s.leave }
+  };
+}
+function pictureParts($, p, notices, picture, zoomed) {
+  const { view, doc, pick: pick2, playing, player, step } = p;
+  const W2 = panelColumns(view.d.columns);
+  const pieces = [];
+  const actions = {};
+  const ahead = [];
+  const on = (piece, id, fn) => actions[`${piece}/${id}`] = fn;
+  let float;
+  if (pick2) {
+    const m = playerModel(view, doc, pick2, playing, step, player.isPlaying, playerCtl($, view, pick2.scenario.steps));
+    const bar = barPanel(view, doc, m, playing ? step : void 0, player.isPlaying);
+    pieces.push({ id: "bar", panel: bar, columns: W2 });
+    for (const [id, fn] of Object.entries(m.actions)) on("bar", id, () => fn());
+    float = floatOf(view, doc, m, bar, W2);
+    if (float) Object.assign(actions, float.actions);
+    if (playing) {
+      for (let i = 0; i < m.total; i++) for (const isPlaying of [true, false]) ahead.push({ panel: barPanel(view, doc, m, i, isPlaying), columns: W2 });
+      const drawer = floatOf(view, doc, { ...m, open: "body" }, bar, W2);
+      if (drawer) ahead.push({ panel: drawer.panel, columns: drawer.columns, edges: FLOAT_EDGES });
+    } else ahead.push({ panel: barPanel(view, doc, m, 0, true), columns: W2 });
+    for (const open of ["uc", "sc"]) {
+      const f = floatOf(view, doc, { ...m, open }, bar, W2);
+      if (f) ahead.push({ panel: f.panel, columns: f.columns, edges: FLOAT_EDGES });
+    }
+  }
+  if (doc.diagram.title) {
+    pieces.push({ id: "title", panel: { kind: "page", blocks: [{ type: "heading", level: 3, text: doc.diagram.title }, ...doc.diagram.summary ? [{ type: "paragraph", small: true, text: doc.diagram.summary }] : []] }, columns: W2 });
+  }
+  if (notices.length) pieces.push({ id: "warn", panel: { kind: "notices", notices }, columns: W2 });
+  pieces.push({ id: "diagram", ...picture ? { picture } : {} });
+  const verdict = verdictOf(doc.tests);
+  if (verdict) pieces.push({ id: "below", panel: { kind: "notices", verdict, ...!view.inPane ? { details: DETAILS } : {} }, columns: W2 });
+  on("below", "details", () => focus($, view, p.title, p.what, "hld", "requirements"));
+  const sys = systemsOf($, p);
+  if (sys) {
+    pieces.push({ id: "systems", panel: { kind: "systemBar", ...sys.model }, columns: W2 });
+    for (const [id, fn] of Object.entries(sys.actions)) on("systems", id, fn);
+  }
+  const links = linksOf($, p);
+  pieces.push({ id: "links", panel: { kind: "actionBar", controls: links.controls }, columns: W2 });
+  for (const [id, fn] of Object.entries(links.actions)) on("links", id, fn);
+  const zoom = zoomed ? zoomParts($, view, zoomed.z, zoomed.at) : void 0;
+  if (zoom) {
+    Object.assign(actions, zoom.actions);
+    for (const dir of [1, -1]) ahead.push({ panel: zoomPanel(stepZoom(zoomed.z, dir)), columns: ZOOM_COLUMNS, edges: FLOAT_EDGES });
+  }
+  return { pieces, actions, ahead, ...float ? { float } : {}, ...zoom ? { corner: zoom.corner, keys: zoom.keys, onDrag: zoom.onDrag } : {} };
+}
+var zoomPanel = (z) => ({
+  kind: "zoom",
+  controls: [
+    { id: "out", label: "\u2212", hotkey: "x", ...z.level === 1 ? { disabled: true } : {} },
+    { id: "level", label: zoomLabel(z.level), ...z.level === 1 ? { disabled: true } : {} },
+    { id: "in", label: "+", hotkey: "z", ...z.level === ZOOMS[ZOOMS.length - 1] ? { disabled: true } : {} },
+    { id: "fit", label: "Fit", hotkey: "0", ...z.level === 1 ? { disabled: true } : {} }
+  ]
+});
+var drags = new Lru(SITES2);
+async function setZoom($, viewId, next) {
+  await update2($, memberOf(players, { requestId: viewId }), (p) => {
+    const { zoom: _zoom, ...rest } = normal(p);
+    void _zoom;
+    return isMoved(next) ? { ...rest, zoom: next } : rest;
+  });
+}
+function zoomParts($, view, z, at) {
+  const id = view.viewId;
+  const actions = {
+    "zoom/in": () => void setZoom($, id, stepZoom(z, 1)),
+    "zoom/out": () => void setZoom($, id, stepZoom(z, -1)),
+    "zoom/level": () => void setZoom($, id, FIT),
+    "zoom/fit": () => void setZoom($, id, FIT)
+  };
+  const keys = { "+": "zoom/in", "=": "zoom/in", "-": "zoom/out" };
+  if (z.level > 1 && at) {
+    const pan = (dc, dr) => () => void setZoom($, id, panTo(z, at.grid, at.vp, at.vp.col + dc, at.vp.row + dr));
+    const moves = [
+      ["left", ["h", "left"], -PAN_STEP.columns, 0],
+      ["right", ["l", "right"], PAN_STEP.columns, 0],
+      ["up", ["k", "up"], 0, -PAN_STEP.rows],
+      ["down", ["j", "down"], 0, PAN_STEP.rows]
+    ];
+    for (const [name, ks, dc, dr] of moves) {
+      actions[`zoom/pan-${name}`] = pan(dc, dr);
+      for (const k of ks) keys[k] = `zoom/pan-${name}`;
+    }
+  }
+  const onDrag = (d) => {
+    if (z.level === 1 || !at) return;
+    let started = drags.get(id);
+    if (!started || started.n !== d.n) drags.set(id, started = { n: d.n, z, vp: at.vp });
+    const next = panTo(started.z, at.grid, started.vp, started.vp.col - (d.x - d.sx), started.vp.row - (d.y - d.sy));
+    const to = viewportOf(at.grid, at.vp, next);
+    if (to.col !== at.vp.col || to.row !== at.vp.row) void setZoom($, id, next);
+  };
+  return { actions, keys, corner: { piece: "diagram", id: "zoom", panel: zoomPanel(z), columns: ZOOM_COLUMNS }, onDrag };
+}
+function prefetchZoom($, view, fitGrid, to, playing, optionsFor, source) {
+  if (to.level <= 1) return;
+  const options = optionsFor(playing, { zoom: to.level });
+  const grid = mergedGrid({ source, options }) ?? { columns: Math.ceil(fitGrid.columns * to.level), rows: Math.ceil(fitGrid.rows * to.level) };
+  const vp = viewportOf(grid, { columns: fitGrid.columns, rows: view.d.rows ?? INLINE_ROWS }, to);
+  rasterOf($, { source, options: optionsFor(playing, { zoom: to.level, window: vp }) }, "later");
+}
+var autoPanned = new Lru(SITES2);
+function zoomedPicture($, view, c) {
+  const { source, z, playing } = c;
+  const viewId = view.viewId;
+  const fit2 = rasterOf($, { source, options: c.optionsFor() }, c.priority);
+  if (fit2 && "error" in fit2) return fit2;
+  const fitGrid = fit2?.grid;
+  const m = mergedGrid({ source, options: c.optionsFor(playing, { zoom: z.level }) });
+  const grid = m ?? (fitGrid ? { columns: Math.ceil(fitGrid.columns * z.level), rows: Math.ceil(fitGrid.rows * z.level) } : void 0);
+  const maxRows = view.d.rows ?? INLINE_ROWS;
+  if (!grid || !fitGrid) return { rows: Math.min(maxRows, 20) + 16 };
+  const vp = viewportOf(grid, { columns: fitGrid.columns, rows: maxRows }, z);
+  const rows = vp.rows + 16;
+  if (playing && m) {
+    const s = playing.scenario.steps[c.step];
+    const ends = s ? [view.scene.nodes.get(s.fromServiceId)?.rect, view.scene.nodes.get(s.toServiceId)?.rect].filter((r) => r !== void 0) : [];
+    const mark = `${playing.value}:${c.step}`;
+    if (ends.length && autoPanned.get(viewId) !== mark) {
+      autoPanned.set(viewId, mark);
+      const fx = ends.reduce((n, r) => n + r.x + r.w / 2, 0) / ends.length / view.scene.columns;
+      const fy = ends.reduce((n, r) => n + r.y + r.h / 2, 0) / ends.length / view.scene.rows;
+      const inside = fx * grid.columns >= vp.col + 4 && fx * grid.columns <= vp.col + vp.columns - 4 && fy * grid.rows >= vp.row + 2 && fy * grid.rows <= vp.row + vp.rows - 2;
+      if (!inside) void setZoom($, viewId, { level: z.level, x: fx, y: fy });
+    }
+  }
+  const visible = m ? m.tiles.flatMap((t, i) => meets(t, vp) ? [i] : []) : [];
+  const files = m ? gridFrame(m, playing ? c.step : void 0, c.progress === 0 ? 0 : FRAMES - 1) : [];
+  const ready = !!m && visible.length > 0 && visible.every((i) => files[i]) && (!playing || !!m.steps?.length);
+  if (!ready) rasterOf($, { source, options: c.optionsFor(playing, { zoom: z.level, window: vp }) }, c.priority);
+  else {
+    rasterOf($, { source, options: c.optionsFor(playing, { zoom: z.level, window: around(vp) }) }, "later");
+    if (!playing && c.pick) rasterOf($, { source, options: c.optionsFor(c.pick, { zoom: z.level, window: around(vp) }) }, "later");
+    prefetchZoom($, view, fitGrid, stepZoom(z, 1), playing, c.optionsFor, source);
+  }
+  if (!ready || !m) return { rows, at: { grid, vp } };
+  const imageKey = `img-${viewId}`;
+  const form = c.mode.kind === "picture" ? c.mode.form : void 0;
+  images.set(viewId, { key: imageKey, grid: m, shown: files.slice(), mounted: new Set(visible), ...form ? { form } : {} });
+  const tiles = visible.map((i) => ({ key: `${imageKey}-${i}`, col: m.tiles[i].col, row: m.tiles[i].row, columns: m.tiles[i].columns, rows: m.tiles[i].rows, file: files[i] }));
+  const picture = { key: imageKey, file: files[visible[0]], columns: vp.columns, rows: vp.rows, alt: c.alt, anchorKey: view.anchorKey, tiles, view: vp, drag: true, ...form ? { form } : {} };
+  return { picture, rows, at: { grid: m, vp } };
+}
+function selectable(scene, focus2) {
+  return [...scene.nodes.values()].map((n) => n.node).filter((n) => n.kind === "system" || n.kind === "group" && n.system === n.id).map((n) => ({ id: n.id, path: focus2 !== void 0 ? `${focus2}.${n.id}` : n.id, name: n.name, expanded: n.kind === "group" }));
+}
+function systemActions($, view, doc, systems, selected, player) {
+  const design = selected !== void 0 && !!systemAt2(doc.root, selected.path)?.diagram;
+  const next = () => {
+    const at = systems.findIndex((s) => s.path === selected?.path);
+    const to = systems[(at + 1) % systems.length];
+    if (to) void setPlayer($, view, (p) => ({ ...p, selected: to.path }));
+  };
+  const toggle = () => {
+    if (!selected || !design) return;
+    const open2 = player.expanded.includes(selected.path) || selected.expanded;
+    void setPlayer($, view, (p) => ({
+      ...p,
+      // Closing a system closes the ones inside it too.
+      expanded: open2 ? p.expanded.filter((id) => id !== selected.path && !id.startsWith(`${selected.path}.`)) : [...p.expanded, selected.path],
+      selected: selected.path
+    }));
+  };
+  const enter = () => {
+    if (!selected || !design) return;
+    void setPlayer($, view, (p) => ({ ...p, focus: selected.path, selected: void 0, pick: "", mode: "diagram", isPlaying: false }));
+  };
+  const leave = () => {
+    const focus2 = player.focus;
+    if (focus2 === void 0) return;
+    const up = focus2.includes(".") ? focus2.slice(0, focus2.lastIndexOf(".")) : void 0;
+    void setPlayer($, view, (p) => {
+      const { focus: _focus, ...rest } = p;
+      void _focus;
+      return { ...rest, ...up !== void 0 ? { focus: up } : {}, selected: focus2, pick: "", mode: "diagram", isPlaying: false };
+    });
+  };
+  const open = selected !== void 0 && (selected.expanded || player.expanded.includes(selected.path));
+  return { design, open, next, toggle, enter, leave };
+}
+var lostByKey = new Lru(32);
+function lostImports(source, key) {
+  let names = lostByKey.get(key);
+  if (!names) {
+    const empty = Object.entries(source.imports ?? {}).filter(([, text]) => text === "").map(([name]) => name);
+    names = [.../* @__PURE__ */ new Set([...missingImports(source), ...empty])];
+    lostByKey.set(key, names);
+  }
+  return names;
+}
 function goTo($, view, steps, to, isPlaying) {
   reveal($, view);
   void setPlayer($, view, (p) => ({ ...p, step: Math.max(0, Math.min(steps.length - 1, to)), isPlaying }), steps);
 }
-var hotkey = (view, key) => view.inPane ? { hotkey: key } : {};
 function start2($, view, pick2, isPlaying = true) {
   reveal($, view);
   void setPlayer($, view, (p) => ({ ...p, pick: pick2.value, step: 0, isPlaying, mode: "play" }), pick2.scenario.steps);

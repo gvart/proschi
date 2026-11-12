@@ -1,5 +1,8 @@
 import { availabilityRow, costRow, headlineOf, p99Row, runWhatIfs, type Analysis, type DeltaRow, type WhatIfResult } from '../../../frontend/src/sim'
+import type { Diagram } from '../../../frontend/src/dsl/types'
+import { whatIfExample } from '../../../tooling/src/render/ui/data'
 import type { Document } from '../../../tooling/src/terminal/document'
+import { Lru } from '../lru'
 import { TONE, table, type Cell, type Line, type Seg } from './lines'
 
 /**
@@ -10,7 +13,7 @@ import { TONE, table, type Cell, type Line, type Seg } from './lines'
  */
 
 // Per module load, by document key: running every block takes a while.
-const saved = new Map<string, WhatIfResult[]>()
+const saved = new Lru<string, WhatIfResult[]>(16)
 
 /** The document's saved what-ifs with their results, run once per document. */
 export function savedWhatIfs(key: string, doc: Document): WhatIfResult[] {
@@ -55,11 +58,11 @@ export function savedLines(base: Analysis, results: WhatIfResult[], width: numbe
 }
 
 /** The What-ifs section: a heading, the blocks' table and their warnings, or how to save one. */
-export function whatIfLines(base: Analysis, results: WhatIfResult[], width: number): Line[] {
+export function whatIfLines(diagram: Diagram, base: Analysis, results: WhatIfResult[], width: number): Line[] {
   const out: Line[] = [{ segs: [] }, { segs: [{ text: 'What-ifs', bold: true }] }]
   if (results.length === 0) {
     out.push({ segs: [{ text: 'None saved yet: a whatif block runs the design again with more traffic or nodes down, e.g.', dim: true }], wrap: true })
-    out.push(...['whatif "Launch day" {', '  traffic "Redirect" x3', '}'].map(text => ({ segs: [{ text, dim: true }] })))
+    out.push(...whatIfExample(diagram).split('\n').map(text => ({ segs: [{ text, dim: true }] })))
     return out
   }
   out.push(...savedLines(base, results, width))
