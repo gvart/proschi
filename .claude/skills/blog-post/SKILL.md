@@ -109,7 +109,7 @@ From `frontend/` (on this Mac, prefix the test runners with
 ```sh
 npx vitest run plugins/blogSite.test.ts   # frontmatter, links, examples parse, RSS is valid XML
 npm run build
-npx playwright test e2e/blog.e2e.ts       # needs `npm run build:accounts` once, too
+npx playwright test e2e/blog.e2e.ts       # needs `npm run build:accounts` and `npm run build:accounts-free` once, too
 npx vite preview --port 4180 --base /     # then open http://localhost:4180/blog/<slug>/
 ```
 
