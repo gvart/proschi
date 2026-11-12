@@ -11,7 +11,7 @@ test.describe('blog', () => {
     await page.getByRole('link', { name: 'Proschi diagrams in the Claude Code terminal' }).first().click();
     await expect(page).toHaveURL(/\/proschi\/blog\/terminal-diagrams\/$/);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Proschi diagrams in the Claude Code terminal');
-    await expect(page.getByRole('navigation', { name: 'Blog' }).getByRole('link', { name: /Claude Code terminal/ })).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('navigation', { name: 'Blog' }).getByRole('link', { name: 'Proschi diagrams in the Claude Code terminal', exact: true })).toHaveAttribute('aria-current', 'page');
     await expect(page.locator('link[rel="alternate"][type="application/rss+xml"]')).toHaveAttribute('href', '../rss.xml');
 
     // The picture next to the post loads.
