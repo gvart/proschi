@@ -4,7 +4,9 @@
  * whether the use case explorer is open. And which systems it draws open
  * (`expanded`), which one it is focused into (`focus`), and which one the
  * system keys act on (`selected`), each by its path from the root document
- * (`orders`, `orders.warehouse`).
+ * (`orders`, `orders.warehouse`). In the pane, how far its diagram is zoomed
+ * in (`zoom.level`, times the size that fits; absent at fit) and where its
+ * viewport's centre is, as fractions of the picture (src/zoom.ts).
  */
 export type Player = {
   pick: string
@@ -15,6 +17,7 @@ export type Player = {
   expanded: string[]
   focus?: string
   selected?: string
+  zoom?: { level: number; x: number; y: number }
 }
 
 /** A document the pane draws when it shows no file: a fenced block focused from a reply, with its imports. */

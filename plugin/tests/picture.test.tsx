@@ -534,7 +534,7 @@ test('every control in the pane runs its own action when pressed on its cell, th
   on('command.register', () => ({ value: { command: 'proschi' } }))
   await $.command.run({ command: 'proschi', args: `view ${root}/org-busy.proschi` })
   const pressed = await tour($, clock, h, pane, 'proschi-view:0')
-  expect(panelsOf(pressed)).toEqual(['bar', 'drawer', 'explorer', 'links', 'menu', 'page-analysis', 'page-hld', 'systems', 'tabs'])
+  expect(panelsOf(pressed)).toEqual(['bar', 'drawer', 'explorer', 'links', 'menu', 'page-analysis', 'page-hld', 'systems', 'tabs', 'zoom'])
   expect(pressed).toEqual(expect.arrayContaining(['systems/next', 'systems/open', 'systems/focus', 'systems/back', 'tabs/diagram', 'tabs/analysis', 'tabs/hld', 'tabs/open', 'links/src', 'links/lnk', 'links/open', ...BAR, 'menu/uc=__explore', 'drawer/close', 'page-analysis/explore-whatifs', 'page-hld/hld-copy']))
   expect(pressed.some(id => id.startsWith('menu/sc='))).toBe(true)
   expect(pressed.some(id => id.startsWith('explorer/x-'))).toBe(true)
@@ -708,6 +708,168 @@ test('the pane opened on another tab draws its Diagram first: ahead of every pag
   const pages = asked.filter(r => r.input.kind === 'panels' && (r.input.panels as { panel: { kind: string } }[]).some(q => q.panel.kind === 'page'))
   expect(pages.filter(r => r.id.startsWith('c')).length).toBeGreaterThan(0)
   expect(pages.every(r => r.id[0]! !== 'b' || r.id > diagram[0]!.id)).toBe(true)
+  await p.unmount()
+})
+
+// Zoom and pan over the pane's diagram (src/zoom.ts): re-rendered tiles of the viewport, the controls in its corner, keys, drags.
+
+const PANE_SITE = 'proschi-view:0'
+const DRAG = `ov-drag-${PANE_SITE}`
+
+/** The pane on the reply's diagram, its zoom controls drawn. */
+async function zoomPane($: T, clock: Clock): Promise<Mounted> {
+  const ui = await settle($, clock)
+  await click(ui, 'm1:0', 'links/focus')
+  await ui.unmount()
+  return settle($, clock, pane, PANE_SITE, has('zoom/in'))
+}
+
+/** The pane's zoom as last stored: its level (1 at fit) and centre. */
+function zoomStored(h: { stored: string[] }): { level: number; x: number; y: number } {
+  const last = h.stored.map(e => JSON.parse(e) as { key?: string; id?: string; value?: { zoom?: { level: number; x: number; y: number } } }).filter(e => e.key === 'player' && e.id === PANE_SITE).at(-1)
+  return last?.value?.zoom ?? { level: 1, x: 0.5, y: 0.5 }
+}
+
+/** The zoomed diagram's tiles mounted: their keys and files. */
+const zoomTiles = async (ui: Mounted) => ((await ui.findAll({ type: 'Image' })) as unknown as NonNullable<Found>[]).filter(x => String(x.key).startsWith(`img-${PANE_SITE}-`)).map(x => ({ key: String(x.key), file: String((x.props.source as { file?: string }).file) }))
+
+/** Draws the pane again once the zoom stored is `level`, its tiles at that zoom drawn. */
+async function zoomed($: T, clock: Clock, p: Mounted, h: { stored: string[] }, level: number): Promise<Mounted> {
+  expect(zoomStored(h).level).toBe(level)
+  await p.unmount()
+  for (let i = 0; i < 12; i++) {
+    const ui = await $.ui.mount(pane)
+    const tiles = await zoomTiles(ui)
+    if (tiles.length && tiles.every(t => (level === 1 ? !t.file.includes('/z') : t.file.includes(`/z${level}-`)))) return ui
+    await ui.unmount()
+    await clock.advance(250)
+  }
+  throw new Error(`the pane never drew at ${level}`)
+}
+
+type Window = { col: number; row: number; columns: number; rows: number }
+
+/** The viewport's window the helper was last asked for at a zoom (not the ring drawn ahead). */
+const windowAsked = (h: ReturnType<typeof host>, level: number) =>
+  h.requests
+    .filter(r => !r.id.startsWith('c'))
+    .map(r => (r.input.options as { grid?: { zoom?: number; window?: Window } } | undefined)?.grid)
+    .filter(g => g?.zoom === level && g.window)
+    .at(-1)?.window
+
+test('zoom: the corner\'s controls and the keys step the level, each zoom asks for its viewport\'s tiles re-rendered, and fit draws the still again', TOUR, async ($, on) => {
+  const clock = mock.clock(on)
+  const h = host(on, clock)
+  let p = await zoomPane($, clock)
+  // At fit: + and its hotkey; −, the level and Fit are dimmed, with no overlay.
+  expect(await ids(p, PANE_SITE)).toEqual(expect.arrayContaining(['zoom/in']))
+  expect(await ids(p, PANE_SITE)).not.toEqual(expect.arrayContaining(['zoom/out']))
+  expect(await p.find({ key: DRAG })).toBeUndefined()
+  await click(p, PANE_SITE, 'zoom/in')
+  p = await zoomed($, clock, p, h, 1.25)
+  // 100×27 cells at fit: 125×34 at 125%, a 100-column viewport over its middle, its tiles only, re-rendered.
+  expect(windowAsked(h, 1.25)).toEqual({ col: 13, row: 0, columns: 100, rows: 34 })
+  const box = (await p.find({ key: `at-${PANE_SITE}` })) as Found
+  expect(box?.props).toMatchObject({ width: 100, height: 34, overflow: 'hidden' })
+  expect(((await p.find({ key: `img-${PANE_SITE}-pan` })) as Found)?.props).toMatchObject({ marginLeft: -13, marginTop: 0 })
+  expect((await zoomTiles(p)).length).toBe(8 * 5)
+  // The hotkey z (a Button drawn as nothing), then + and = from the picture's overlay with the focus, - , x and 0.
+  await p.press({ key: `hk-${PANE_SITE}-z` })
+  p = await zoomed($, clock, p, h, 1.5)
+  await p.key({ key: '+', in: DRAG })
+  p = await zoomed($, clock, p, h, 2)
+  await p.key({ key: '=', in: DRAG })
+  p = await zoomed($, clock, p, h, 3)
+  expect(await ids(p, PANE_SITE)).not.toContain('zoom/in')
+  await p.key({ key: '-', in: DRAG })
+  p = await zoomed($, clock, p, h, 2)
+  await p.press({ key: `hk-${PANE_SITE}-x` })
+  p = await zoomed($, clock, p, h, 1.5)
+  await p.press({ key: `hk-${PANE_SITE}-0` })
+  p = await zoomed($, clock, p, h, 1)
+  expect(await p.find({ key: DRAG })).toBeUndefined()
+  expect((await zoomTiles(p)).map(t => t.file)).toContain('/tmp/proschi-raster/base-0.png')
+  // The level shown, pressed, is fit too.
+  await click(p, PANE_SITE, 'zoom/in')
+  p = await zoomed($, clock, p, h, 1.25)
+  await click(p, PANE_SITE, 'zoom/level')
+  p = await zoomed($, clock, p, h, 1)
+  await p.unmount()
+})
+
+test('pan: arrows, h j k l and a drag move the viewport, clamped to the picture, and a pan within the tiles drawn asks for none', TOUR, async ($, on) => {
+  const clock = mock.clock(on)
+  const h = host(on, clock)
+  let p = await zoomPane($, clock)
+  for (const level of [1.25, 1.5, 2, 3]) {
+    await p.press({ key: `hk-${PANE_SITE}-z` })
+    p = await zoomed($, clock, p, h, level)
+  }
+  // 300×80 cells at 300%, a 100×70 viewport in the middle: the tiles from column 96 and row 0 shifted under it.
+  expect(windowAsked(h, 3)).toMatchObject({ col: 100, columns: 100, rows: 70 })
+  expect(((await p.find({ key: `img-${PANE_SITE}-pan` })) as Found)?.props).toMatchObject({ marginLeft: -4, marginTop: -5 })
+  const col = () => Math.round(zoomStored(h).x * 300 - 50)
+  const row = () => Math.round(zoomStored(h).y * 80 - 35)
+  await p.key({ key: 'left', in: DRAG })
+  expect(col()).toBe(92)
+  p = await zoomed($, clock, p, h, 3)
+  await p.press({ key: `hk-${PANE_SITE}-l` })
+  expect(col()).toBe(100)
+  p = await zoomed($, clock, p, h, 3)
+  await p.key({ key: 'down', in: DRAG })
+  expect(row()).toBe(9)
+  p = await zoomed($, clock, p, h, 3)
+  await p.press({ key: `hk-${PANE_SITE}-k` })
+  expect(row()).toBe(5)
+  p = await zoomed($, clock, p, h, 3)
+  // A drag 30 columns right moves the picture with it: the viewport 30 columns left; held past the region's edge, it stops at the picture's.
+  await p.pointer({ type: 'down', in: DRAG, x: 50, y: 30, button: 'left' })
+  await p.pointer({ type: 'move', in: DRAG, x: 80, y: 30, button: 'left' })
+  expect(col()).toBe(70)
+  await p.pointer({ type: 'move', in: DRAG, x: 900, y: -200, button: 'left' })
+  await p.pointer({ type: 'up', in: DRAG, x: 900, y: -200, button: 'left' })
+  expect([col(), row()]).toEqual([0, 10])
+  p = await zoomed($, clock, p, h, 3)
+  expect(((await p.find({ key: `img-${PANE_SITE}-pan` })) as Found)?.props).toMatchObject({ marginLeft: 0, marginTop: -2 })
+  await p.press({ key: `hk-${PANE_SITE}-h` })
+  expect(col()).toBe(0)
+  // A pan back within the tiles drawn already (and the ring drawn ahead) shows at once and asks for no tiles.
+  await p.press({ key: `hk-${PANE_SITE}-l` })
+  for (let i = 0; i < 3; i++) await clock.advance(100)
+  const asked = h.requests.length
+  await p.unmount()
+  p = await $.ui.mount(pane)
+  expect(((await p.find({ key: `img-${PANE_SITE}-pan` })) as Found)?.props).toMatchObject({ marginLeft: -8 })
+  expect(h.requests.slice(asked).filter(r => (r.input.options as { grid?: { zoom?: number } } | undefined)?.grid?.zoom === 3 && !r.id.startsWith('c'))).toEqual([])
+  await p.unmount()
+})
+
+test('playback while zoomed: the step\'s tiles at that zoom, and the animation blits only the zoomed tiles mounted in the viewport', SLOW, async ($, on) => {
+  const clock = mock.clock(on)
+  const h = host(on, clock)
+  let p = await zoomPane($, clock)
+  await p.press({ key: `hk-${PANE_SITE}-z` })
+  p = await zoomed($, clock, p, h, 1.25)
+  await click(p, PANE_SITE, 'bar/play')
+  await p.unmount()
+  p = await settle($, clock, pane, PANE_SITE, c => c.some(x => x.id === 'bar/next') && c.some(x => x.id === 'zoom/out'))
+  for (let i = 0; i < 12 && !(await zoomTiles(p)).some(t => /z1\.25-s\d/.test(t.file)); i++) {
+    await p.unmount()
+    await clock.advance(250)
+    p = await $.ui.mount(pane)
+  }
+  const mounted = await zoomTiles(p)
+  expect(mounted.length).toBe(8 * 5)
+  expect(mounted.every(t => /\/z1\.25-s\d+-(t|f)\d+\.png$/.test(t.file))).toBe(true)
+  h.blits.length = 0
+  for (let i = 0; i < 40; i++) await clock.advance(33)
+  const played = h.blits.filter(b => b.key.startsWith(`img-${PANE_SITE}-`))
+  expect(played.length).toBeGreaterThan(0)
+  const keys = new Set(mounted.map(t => t.key))
+  for (const b of played) {
+    expect(keys.has(b.key)).toBe(true)
+    expect(b.file).toMatch(/\/z1\.25-s\d+-(f|t)\d+\.png$/)
+  }
   await p.unmount()
 })
 

@@ -16,8 +16,9 @@ import type { HldSectionKind } from '../../frontend/src/hld/hld'
 import type { PaneSource, PaneTab, Player } from '../types'
 import { analysisPage, hldAnchor, hldPage, stepCardsOf, tabBarPanel } from '../../tooling/src/render/ui/data'
 import type { Control, DrawerPanel, ExplorerPanel, Notice, NoticesPanel, Option, Panel, PlayerBarPanel, Span } from '../../tooling/src/render/ui/contract'
-import { cellPx, graphicsMode, gridFrame, imageSize, maxWidthPx, probe, probeKey, probeOf, probeSource, rasterOf, sourceOf, themeOf, TMUX_HINT, type GraphicsMode, type RasterGrid, type RasterRequest } from './graphics'
-import { loading, markOpened, paneWindow, pictureSite, pressTimings, registerPicture, scrollToAnchor, scrollToAnchorOnceShown, type Action, type Ahead, type Float, type Picture, type Piece, type Site } from './picture'
+import { cellPx, graphicsMode, gridFrame, imageSize, maxWidthPx, mergedGrid, probe, probeKey, probeOf, probeSource, rasterOf, sourceOf, themeOf, TMUX_HINT, type GraphicsMode, type RasterGrid, type RasterRequest } from './graphics'
+import { loading, markOpened, paneWindow, pictureSite, pressTimings, registerPicture, scrollToAnchor, scrollToAnchorOnceShown, type Action, type Ahead, type Drag, type Float, type Picture, type Piece, type Site } from './picture'
+import { around, FIT, meets, PAN_STEP, panTo, stepZoom, viewportOf, ZOOMS, zoomLabel, zoomOf, type Viewport, type ZoomState } from './zoom'
 import { answered, ask, didNotStart, isAborted, redraw, retry, serveRequests, setCellAspect } from './helper'
 import { hldDocument, hldMarkdown, hldTab } from './views/hld'
 import { legendLine, verdictLine } from './views/lines'
@@ -346,6 +347,9 @@ async function drawDiagram(
     ahead: [...top.ahead, ...(pic?.ahead ?? [])],
     layer: 'bar',
     ...(float ? { float } : {}),
+    ...(pic?.corner ? { corner: pic.corner } : {}),
+    ...(pic?.keys ? { keys: pic.keys } : {}),
+    ...(pic?.onDrag ? { onDrag: pic.onDrag } : {}),
     ...(top.pages ? { pages: top.pages } : {}),
     ...(top.pages && pic?.pieces[0] ? { paged: { from: pic.pieces[0].id, shown: !hidden } } : {}),
     rows: pic?.rows ?? d.rows ?? INLINE_ROWS,
@@ -522,6 +526,7 @@ function normal(p: Partial<Player> | undefined): Player {
     expanded: Array.isArray(p?.expanded) ? p.expanded.filter((id): id is string => typeof id === 'string') : [],
     ...(typeof p?.focus === 'string' ? { focus: p.focus } : {}),
     ...(typeof p?.selected === 'string' ? { selected: p.selected } : {}),
+    ...(zoomOf(p?.zoom).level > 1 ? { zoom: zoomOf(p?.zoom) } : {}),
   }
 }
 
@@ -582,7 +587,7 @@ async function modeOf($: EngineInterface, ui: Ui, requestId: string, probeId: st
 type DrawnView =
   | { kind: 'text'; element: RenderElement; systems: boolean }
   | { kind: 'loading'; rows: number }
-  | { kind: 'picture'; pieces: Piece[]; actions: Record<string, Action>; ahead: Ahead[]; float?: Float; rows: number; systems: boolean }
+  | { kind: 'picture'; pieces: Piece[]; actions: Record<string, Action>; ahead: Ahead[]; float?: Float; rows: number; systems: boolean; corner?: Site['corner']; keys?: Site['keys']; onDrag?: Site['onDrag'] }
 
 /** The drawing of one document: the diagram with its use case picker or player and its links, or why it cannot be drawn. `file` is where the source was read from, if anywhere. */
 async function diagramView($: EngineInterface, d: Draw, viewId: string, written: Source, file?: string, mode: Mode = { kind: 'text' }, priority: 'now' | 'first' = 'now'): Promise<DrawnView | { error: string }> {
@@ -630,7 +635,7 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
   const roomy = view.width >= 79
   // The same drawing as a picture, where the terminal shows them: what the cells would show, playback's frames included.
   const theme = graphics === 'off' ? 'dark' : await themeOf($)
-  const optionsFor = (play?: Pick): RasterRequest['options'] => ({
+  const optionsFor = (play?: Pick, zoomed?: { zoom: number; window?: Viewport }): RasterRequest['options'] => ({
     theme,
     maxWidthPx: maxWidthPx(d.columns),
     ...(doc.overlay && !play ? { overlay: true } : {}),
@@ -642,6 +647,7 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
       maxRows: d.rows ?? INLINE_ROWS,
       cellPx: cellPx(),
       fill: { columns: panelColumns(d.columns), ...(!pick && !view.inPane && !doc.diagram.title && noticesOf(view, doc, lost).length === 0 ? { top: true } : {}), ...(!play && doc.overlay && doc.edges ? { legend: true } : {}) },
+      ...(zoomed ? { zoom: zoomed.zoom, ...(zoomed.window ? { window: zoomed.window } : {}) } : {}),
     },
   })
   const request: RasterRequest = { source, options: optionsFor(playing) }
@@ -649,6 +655,14 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
 
   if (mode.kind !== 'text') {
     images.delete(viewId)
+    // Zoomed (the pane): the still at fit for the room, then the zoomed tiles of the viewport.
+    const z = view.inPane ? zoomOf(player.zoom) : FIT
+    if (z.level > 1) {
+      const zoomed = zoomedPicture($, view, { source, z, ...(playing ? { playing } : {}), ...(pick ? { pick } : {}), step, progress, priority, optionsFor, mode, alt })
+      if ('error' in zoomed) return diagramView($, d, viewId, written, file, { kind: 'text' }, priority)
+      const built = pictureParts($, view, doc, { pick, playing, step, player, systems, selected, link, lost, title, what, roomy, sourceText: source.source, ...(zoomed.picture ? { picture: zoomed.picture } : {}), zoom: { z, ...(zoomed.at ? { at: zoomed.at } : {}) } })
+      return { kind: 'picture', ...built, rows: zoomed.rows, systems: hasSystems }
+    }
     const out = rasterOf($, request, priority)
     const size = out && !('error' in out) ? (out.grid ? { columns: out.grid.columns, rows: out.grid.rows } : imageSize(out, d.columns, d.rows ?? INLINE_ROWS)) : undefined
     const rows = (size?.rows ?? Math.min(scene.rows, d.rows ?? INLINE_ROWS)) + 16
@@ -676,7 +690,8 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
         }
       }
     }
-    const built = pictureParts($, view, doc, { pick, playing, step, player, systems, selected, link, lost, title, what, roomy, sourceText: source.source, picture })
+    const fitAt = out && !('error' in out) && out.grid ? { grid: out.grid, vp: { col: 0, row: 0, columns: out.grid.columns, rows: out.grid.rows } } : undefined
+    const built = pictureParts($, view, doc, { pick, playing, step, player, systems, selected, link, lost, title, what, roomy, sourceText: source.source, picture, ...(view.inPane ? { zoom: { z, ...(fitAt ? { at: fitAt } : {}) } } : {}) })
     // Ahead: the scenario's frames before Play is pressed (its bar is in `built.ahead`).
     if (!playing && pick) rasterOf($, { source, options: optionsFor(pick) }, 'later')
     return { kind: 'picture', ...built, rows, systems: hasSystems }
@@ -754,7 +769,7 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
 }
 
 /** The picture a drawing shows in place of its Raster, by view id: what the animation swaps frames into. */
-const images = new Map<string, { key: string; frames?: string[][]; grid?: RasterGrid; shown?: string[]; form?: 'file' | 'png' }>()
+const images = new Map<string, { key: string; frames?: string[][]; grid?: RasterGrid; shown?: string[]; form?: 'file' | 'png'; mounted?: Set<number> }>()
 
 /** The select open in a drawing in pictures, by view id: its menu is drawn under it until an option or the select is pressed again. */
 const menus = new Map<string, string>()
@@ -784,6 +799,8 @@ interface Parts {
   roomy: boolean
   sourceText: string
   picture?: Picture
+  /** In the pane: its zoom, and the picture's grid with the viewport shown once it is drawn. */
+  zoom?: { z: ZoomState; at?: { grid: { columns: number; rows: number }; vp: Viewport } }
 }
 
 /** A float is a card of its own: rounded all round. */
@@ -807,7 +824,7 @@ function noticesOf(view: View, doc: Document, lost: string[]): Notice[] {
   ]
 }
 
-function pictureParts($: EngineInterface, view: View, doc: Document, c: Parts): { pieces: Piece[]; actions: Record<string, Action>; ahead: Ahead[]; float?: Float } {
+function pictureParts($: EngineInterface, view: View, doc: Document, c: Parts): { pieces: Piece[]; actions: Record<string, Action>; ahead: Ahead[]; float?: Float } & ZoomSite {
   // Every piece as wide as the room: the drawing is one surface, the diagram centred on its strip.
   const W = panelColumns(view.d.columns)
   const pieces: Piece[] = []
@@ -893,7 +910,136 @@ function pictureParts($: EngineInterface, view: View, doc: Document, c: Parts): 
   on('links', 'lnk', surface => void copy($, surface, c.link, 'the share link'))
   on('links', 'open', surface => void openLink($, surface, c.link))
   on('links', 'focus', () => focus($, view, c.title, c.what))
-  return { pieces, actions, ahead, ...(float ? { float } : {}) }
+  const zoom = c.zoom ? zoomParts($, view, c.zoom.z, c.zoom.at) : undefined
+  if (zoom) {
+    Object.assign(actions, zoom.actions)
+    // Ahead: the controls at the levels either side.
+    for (const dir of [1, -1] as const) ahead.push({ panel: zoomPanel(stepZoom(c.zoom!.z, dir)), columns: ZOOM_COLUMNS, edges: FLOAT_EDGES })
+  }
+  return { pieces, actions, ahead, ...(float ? { float } : {}), ...(zoom ? { corner: zoom.corner, keys: zoom.keys, onDrag: zoom.onDrag } : {}) }
+}
+
+/** What the pane's zoom adds to its drawing. */
+type ZoomSite = { corner?: Site['corner']; keys?: Site['keys']; onDrag?: Site['onDrag'] }
+
+/** The zoom controls' panel: −, the level (back to fit), +, Fit; x, z and 0 press them in the pane. */
+const zoomPanel = (z: ZoomState): Panel => ({
+  kind: 'actionBar',
+  controls: [
+    { id: 'out', label: '−', variant: 'quiet', hotkey: 'x', keycap: false, ...(z.level === 1 ? { disabled: true } : {}) },
+    { id: 'level', label: zoomLabel(z.level), variant: 'quiet', ...(z.level === 1 ? { disabled: true } : {}) },
+    { id: 'in', label: '+', variant: 'quiet', hotkey: 'z', keycap: false, ...(z.level === ZOOMS[ZOOMS.length - 1] ? { disabled: true } : {}) },
+    { id: 'fit', icon: 'collapse', label: 'Fit', variant: 'quiet', hotkey: '0', keycap: false, ...(z.level === 1 ? { disabled: true } : {}) },
+  ],
+})
+const ZOOM_COLUMNS = 30
+
+/** A drag on the zoomed picture, by view: the viewport it started from. */
+const drags = new Map<string, { n: number; z: ZoomState; vp: Viewport }>()
+
+/** Stores a pane view's zoom (fit stores none); the drawing follows, a playing step playing on. */
+async function setZoom($: EngineInterface, viewId: string, next: ZoomState): Promise<void> {
+  await update($, memberOf(players, { requestId: viewId }), p => {
+    const { zoom: _zoom, ...rest } = normal(p)
+    void _zoom
+    return next.level > 1 ? { ...rest, zoom: next } : rest
+  })
+}
+
+/**
+ * The pane's zoom and pan: the controls in the diagram's corner, keys (+ =
+ * z in, - x out, 0 fit; zoomed, h j k l and the arrows pan), and a drag on
+ * the picture; each pan clamped to the picture's edges.
+ */
+function zoomParts($: EngineInterface, view: View, z: ZoomState, at: { grid: { columns: number; rows: number }; vp: Viewport } | undefined): { actions: Record<string, Action>; keys: Record<string, string>; corner: NonNullable<Site['corner']>; onDrag: (d: Drag) => void } {
+  const id = view.viewId
+  const actions: Record<string, Action> = {
+    'zoom/in': () => void setZoom($, id, stepZoom(z, 1)),
+    'zoom/out': () => void setZoom($, id, stepZoom(z, -1)),
+    'zoom/level': () => void setZoom($, id, FIT),
+    'zoom/fit': () => void setZoom($, id, FIT),
+  }
+  const keys: Record<string, string> = { '+': 'zoom/in', '=': 'zoom/in', '-': 'zoom/out' }
+  if (z.level > 1 && at) {
+    const pan = (dc: number, dr: number) => () => void setZoom($, id, panTo(z, at.grid, at.vp, at.vp.col + dc, at.vp.row + dr))
+    const moves: [string, string[], number, number][] = [
+      ['left', ['h', 'left'], -PAN_STEP.columns, 0],
+      ['right', ['l', 'right'], PAN_STEP.columns, 0],
+      ['up', ['k', 'up'], 0, -PAN_STEP.rows],
+      ['down', ['j', 'down'], 0, PAN_STEP.rows],
+    ]
+    for (const [name, ks, dc, dr] of moves) {
+      actions[`zoom/pan-${name}`] = pan(dc, dr)
+      for (const k of ks) keys[k] = `zoom/pan-${name}`
+    }
+  }
+  const onDrag = (d: Drag) => {
+    if (z.level === 1 || !at) return
+    let started = drags.get(id)
+    if (!started || started.n !== d.n) drags.set(id, (started = { n: d.n, z, vp: at.vp }))
+    const next = panTo(started.z, at.grid, started.vp, started.vp.col - (d.x - d.sx), started.vp.row - (d.y - d.sy))
+    const to = viewportOf(at.grid, at.vp, next)
+    if (to.col !== at.vp.col || to.row !== at.vp.row) void setZoom($, id, next)
+  }
+  return { actions, keys, corner: { piece: 'diagram', id: 'zoom', panel: zoomPanel(z), columns: ZOOM_COLUMNS }, onDrag }
+}
+
+/** Steps auto-panned to, by view: each step's call is brought into view once, then the viewport is the person's. */
+const autoPanned = new Map<string, string>()
+
+/**
+ * The zoomed diagram (the pane): the viewport over the picture drawn `z`
+ * times the size that fits, from the tiles drawn so far of it (a pan within
+ * them shows at once), asking for the viewport's tiles it lacks and for the
+ * ring around it ahead. No picture while the first are drawn (the drawing
+ * shown last stands).
+ */
+function zoomedPicture(
+  $: EngineInterface,
+  view: View,
+  c: { source: Source; z: ZoomState; playing?: Pick; pick?: Pick; step: number; progress: number; priority: 'now' | 'first'; optionsFor: (play?: Pick, zoomed?: { zoom: number; window?: Viewport }) => RasterRequest['options']; mode: Mode; alt: string },
+): { picture?: Picture; rows: number; at?: { grid: { columns: number; rows: number }; vp: Viewport } } | { error: string } {
+  const { source, z, playing } = c
+  const viewId = view.viewId
+  // The still at fit: the room the viewport has, and the zoomed picture's size until an answer says.
+  const fit = rasterOf($, { source, options: c.optionsFor() }, c.priority)
+  if (fit && 'error' in fit) return fit
+  const fitGrid = fit?.grid
+  const m = mergedGrid({ source, options: c.optionsFor(playing, { zoom: z.level }) })
+  const grid = m ?? (fitGrid ? { columns: Math.ceil(fitGrid.columns * z.level), rows: Math.ceil(fitGrid.rows * z.level) } : undefined)
+  const maxRows = view.d.rows ?? INLINE_ROWS
+  if (!grid || !fitGrid) return { rows: Math.min(maxRows, 20) + 16 }
+  const vp = viewportOf(grid, { columns: fitGrid.columns, rows: maxRows }, z)
+  const rows = vp.rows + 16
+  // Playing: each step's call brought into view once (the middle of its two ends), unless it shows already.
+  if (playing && m) {
+    const s = playing.scenario.steps[c.step]
+    const ends = s ? [view.scene.nodes.get(s.fromServiceId)?.rect, view.scene.nodes.get(s.toServiceId)?.rect].filter(r => r !== undefined) : []
+    const mark = `${playing.value}:${c.step}`
+    if (ends.length && autoPanned.get(viewId) !== mark) {
+      autoPanned.set(viewId, mark)
+      const fx = ends.reduce((n, r) => n + r.x + r.w / 2, 0) / ends.length / view.scene.columns
+      const fy = ends.reduce((n, r) => n + r.y + r.h / 2, 0) / ends.length / view.scene.rows
+      const inside = fx * grid.columns >= vp.col + 4 && fx * grid.columns <= vp.col + vp.columns - 4 && fy * grid.rows >= vp.row + 2 && fy * grid.rows <= vp.row + vp.rows - 2
+      if (!inside) void setZoom($, viewId, { level: z.level, x: fx, y: fy })
+    }
+  }
+  const visible = m ? m.tiles.flatMap((t, i) => (meets(t, vp) ? [i] : [])) : []
+  const files = m ? gridFrame(m, playing ? c.step : undefined, c.progress === 0 ? 0 : FRAMES - 1) : []
+  const ready = !!m && visible.length > 0 && visible.every(i => files[i]) && (!playing || !!m.steps?.length)
+  // The viewport's missing tiles now; with them in, the ring around it ahead (and the scenario's, before Play).
+  if (!ready) rasterOf($, { source, options: c.optionsFor(playing, { zoom: z.level, window: vp }) }, c.priority)
+  else {
+    rasterOf($, { source, options: c.optionsFor(playing, { zoom: z.level, window: around(vp) }) }, 'later')
+    if (!playing && c.pick) rasterOf($, { source, options: c.optionsFor(c.pick, { zoom: z.level, window: around(vp) }) }, 'later')
+  }
+  if (!ready || !m) return { rows, at: { grid, vp } }
+  const imageKey = `img-${viewId}`
+  const form = c.mode.kind === 'picture' ? c.mode.form : undefined
+  images.set(viewId, { key: imageKey, grid: m, shown: files.slice(), mounted: new Set(visible), ...(form ? { form } : {}) })
+  const tiles = visible.map(i => ({ key: `${imageKey}-${i}`, col: m.tiles[i]!.col, row: m.tiles[i]!.row, columns: m.tiles[i]!.columns, rows: m.tiles[i]!.rows, file: files[i]! }))
+  const picture: Picture = { key: imageKey, file: files[visible[0]!]!, columns: vp.columns, rows: vp.rows, alt: c.alt, anchorKey: view.anchorKey, tiles, view: vp, drag: true, ...(form ? { form } : {}) }
+  return { picture, rows, at: { grid: m, vp } }
 }
 
 /** A system the keys can act on: a collapsed box or an expanded frame, by its id in the scene and its path from the root document. */
@@ -1457,7 +1603,8 @@ function animate($: EngineInterface, view: View, steps: FlowStep[]): void {
       // Only the tiles that differ from what is shown: where the packet is now and where it was.
       const files = gridFrame(image.grid, step, Math.round((progress / 100) * (tiles.frames.length - 1)))
       const shown = image.shown
-      const changed = files.flatMap((file, i) => (file === shown[i] ? [] : [i]))
+      // Zoomed, only the tiles mounted in the viewport, and only those drawn.
+      const changed = files.flatMap((file, i) => (file === shown[i] || !file || (image.mounted && !image.mounted.has(i)) ? [] : [i]))
       for (const i of changed) shown[i] = files[i]!
       await Promise.all(changed.map(async i => $.ui.blit({ requestId: view.d.requestId, key: `${image.key}-${i}`, source: await sourceOf($, files[i]!, image.form) })))
     } else if (image && frames?.length) {

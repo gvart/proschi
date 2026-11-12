@@ -43,7 +43,19 @@ export interface Picture {
   anchorKey?: string
   /** The picture as tiles of whole cells (the helper's grid), each keyed for the animation's blits; `file` is then the whole still. */
   tiles?: { key: string; col: number; row: number; columns: number; rows: number; file: string }[]
+  /**
+   * Zoomed in (the pane): the cells of the tile grid shown, `columns` ×
+   * `rows` from (`col`, `row`); `tiles` are then the ones that meet it, laid
+   * in a Box that clips them to it, shifted by a negative margin (not an
+   * absolute offset: the engine pins a negative absolute top to row 0).
+   */
+  view?: { col: number; row: number; columns: number; rows: number }
+  /** Pannable: an overlay over the picture that posts drags, and arrows as keys rather than scrolls. */
+  drag?: boolean
 }
+
+/** A drag over a pannable picture, as its overlay posts it: drag `n` went down at (sx, sy) and is now at (x, y), in cells. */
+export type Drag = { n: number; sx: number; sy: number; x: number; y: number; end?: boolean }
 
 /** A panel likely next, drawn ahead of need; `edges` where it is not where the drawing's pieces would put it (a float). */
 export type Ahead = { panel: Panel; columns: number; edges?: { top?: boolean; bottom?: boolean } }
@@ -96,6 +108,16 @@ export interface Site {
   paged?: { from: string; shown: boolean }
   /** What floats over the drawing now, anchored to a piece. */
   float?: Float
+  /**
+   * A panel in the bottom-right corner of a picture piece (the zoom
+   * controls), its controls `<id>/<control id>`; left out while the pane is
+   * scrolled past its top, which the engine would pin to the window's first row.
+   */
+  corner?: { piece: string; id: string; panel: Panel; columns: number }
+  /** Keys that run actions, by key: a digit or a letter is a hotkey Button too; any key (`+`, `left`) works from an overlay with the focus. */
+  keys?: Record<string, string>
+  /** A drag over the pannable picture. */
+  onDrag?: (drag: Drag) => void
   /** The rows the drawing is expected to take, reserved while its first pictures are drawn. */
   rows: number
   form?: 'file' | 'png'
@@ -112,6 +134,7 @@ type Resolved = { id: string; out: PanelOutput } | { id: string; picture: Pictur
 
 interface Shown {
   float?: { def: Float; out: PanelOutput }
+  corner?: { def: NonNullable<Site['corner']>; out: PanelOutput }
   pieces: Resolved[]
   pages: { id: string; out: PanelOutput; shown: boolean }[]
   actions: Record<string, Action>
@@ -147,6 +170,9 @@ interface Live {
   float?: { top: number; close: () => void }
   /** The page shown: the drawing's row its top is on, and its anchors' rows within it (a heading a table of contents scrolls to). */
   page?: { top: number; anchors: Record<string, number> }
+  /** The corner panel: the drawing's row its top is on, and whether it was left out as scrolled past. */
+  corner?: { top: number; hidden: boolean }
+  onDrag?: (drag: Drag) => void
 }
 
 // Per module load: the drawing shown last per site, what its overlays map, and each overlay's site.
@@ -270,12 +296,20 @@ export async function pictureSite($: EngineInterface, ui: Ui, s: Site): Promise<
     if (!out) waiting = true
     else float = { def: s.float, out }
   }
+  // The corner panel: a card of its own, waited for.
+  let corner: Shown['corner']
+  if (s.corner) {
+    const out = panelOf($, { panel: s.corner.panel, columns: s.corner.columns, theme: s.theme, edges: { top: true, bottom: true } })
+    if (out && 'error' in out) return { error: out.error }
+    if (!out) waiting = true
+    else corner = { def: s.corner, out }
+  }
   // Ahead, where each will sit: the tab bar on top, the player bar on top where no tab bar is, a float as a card, the rest between.
   const onTop = (a: { panel: Panel }) => a.panel.kind === 'tabs' || (a.panel.kind === 'playerBar' && !s.pieces.some(p => 'panel' in p && p.panel.kind === 'tabs'))
   if (s.ahead?.length) prefetch($, s.ahead.map(a => ({ panel: a.panel, columns: a.columns, theme: s.theme, edges: a.edges ?? (onTop(a) ? { top: true } : {}) })))
   let now: Shown | undefined
   if (!waiting) {
-    now = { pieces: resolved, pages, actions: { ...s.actions, ...(s.float?.actions ?? {}) }, ...(float ? { float } : {}), ...(s.paged ? { paged: s.paged } : {}) }
+    now = { pieces: resolved, pages, actions: { ...s.actions, ...(s.float?.actions ?? {}) }, ...(float ? { float } : {}), ...(corner ? { corner } : {}), ...(s.paged ? { paged: s.paged } : {}) }
     shown.set(s.site, now)
   } else now = shown.get(s.site)
   if (!now) return { element: loading(ui, s.site, s.rows) }
@@ -413,6 +447,7 @@ async function build($: EngineInterface, ui: Ui, s: Site, d: Shown): Promise<{ e
   let layerTop = 0
   let layerRows = 0
   const anchors = new Map<string, { row: number; out: PanelOutput }>()
+  let cornerAt: Live['corner']
   for (const [i, p] of d.pieces.entries()) {
     const hidden = pagedAt >= 0 && i >= pagedAt && !pagedShown
     if (i === layerAt) layerTop = top
@@ -421,7 +456,7 @@ async function build($: EngineInterface, ui: Ui, s: Site, d: Shown): Promise<{ e
     let columns: number
     if ('picture' in p) {
       const pic = p.picture
-      let body: RenderElement | RenderElement[]
+      let body: RenderElement[]
       if (pic.tiles) {
         // A row of tiles per tile row, the alt on the first tile only.
         const lines: RenderElement[] = []
@@ -430,15 +465,53 @@ async function build($: EngineInterface, ui: Ui, s: Site, d: Shown): Promise<{ e
           const images: RenderElement[] = []
           for (const t of line) images.push(<ui.Image key={t.key} source={await source(t.key, t.file)} columns={t.columns} rows={t.rows} alt={t === pic.tiles[0] ? pic.alt : ' '} />)
           lines.push(
-            <ui.Box key={`${pic.key}-r${row}`} flexDirection="row" height={line[0]!.rows}>
+            <ui.Box key={`${pic.key}-r${row}`} flexDirection="row" height={line[0]!.rows} flexShrink={0}>
               {images}
             </ui.Box>,
           )
         }
         body = lines
-      } else body = <ui.Image key={pic.key} source={await source(pic.key, pic.file)} columns={pic.columns} rows={pic.rows} alt={pic.alt} />
+        const v = pic.view
+        if (v && pic.tiles.length) {
+          // Zoomed: the tiles that meet the viewport, shifted so its top left is the Box's, clipped to it.
+          const left = Math.min(...pic.tiles.map(t => t.col))
+          const up = Math.min(...pic.tiles.map(t => t.row))
+          body = [
+            <ui.Box key={`${pic.key}-pan`} flexDirection="column" flexShrink={0} marginLeft={left - v.col} marginTop={up - v.row}>
+              {lines}
+            </ui.Box>,
+          ]
+        }
+        if (pic.drag && !hidden) {
+          const ov = `ov-drag-${s.site}`
+          overlaySites.set(ov, s.site)
+          into.overlays.set(ov, [])
+          body.push(
+            <ui.Box key={`${pic.key}-drag`} position="absolute" top={0} left={0} width={pic.columns} height={pic.rows}>
+              <ui.Client key={ov} module="./uiOverlay.js" props={{ controls: [], drag: true }} width={pic.columns} height={pic.rows} />
+            </ui.Box>,
+          )
+        }
+        const c = d.corner
+        if (c && c.def.piece === p.id && !hidden) {
+          const at = top + pic.rows - c.out.rows
+          // Scrolled past its top, the engine would pin it to the window's first row: left out until it is back.
+          const scrolled = (windows.get(s.requestId)?.offset ?? 0) > at
+          cornerAt = { top: at, hidden: scrolled }
+          if (!scrolled) {
+            const placed = await strips(ui, s, c.def.id, c.out, source, into)
+            c.out.tiles.forEach((t, i) =>
+              body.push(
+                <ui.Box key={`${pic.key}-corner-${i}`} position="absolute" top={pic.rows - c.out.rows + t.row} left={Math.max(0, pic.columns - c.out.columns)} width={t.columns} height={t.rows}>
+                  {placed[i]}
+                </ui.Box>,
+              ),
+            )
+          }
+        }
+      } else body = [<ui.Image key={pic.key} source={await source(pic.key, pic.file)} columns={pic.columns} rows={pic.rows} alt={pic.alt} />]
       target.push(
-        <ui.Box key={pic.anchorKey ?? `pic-${s.site}-${p.id}`} flexDirection="column" height={pic.rows}>
+        <ui.Box key={pic.anchorKey ?? `pic-${s.site}-${p.id}`} flexDirection="column" height={pic.rows} {...(pic.view ? { width: pic.columns, overflow: 'hidden' as const } : {})}>
           {body}
         </ui.Box>,
       )
@@ -507,6 +580,8 @@ async function build($: EngineInterface, ui: Ui, s: Site, d: Shown): Promise<{ e
       </ui.Box>,
     )
   }
+  // Keys of their own (the zoom's): every one from an overlay with the focus, the digits and letters as Buttons too.
+  for (const [key, id] of Object.entries(s.keys ?? {})) if (d.actions[id] && !into.hotkeys.has(key)) into.hotkeys.set(key, id)
   const { tiles, overlays, hotkeys } = into
   live.set(s.site, {
     requestId: s.requestId,
@@ -517,6 +592,8 @@ async function build($: EngineInterface, ui: Ui, s: Site, d: Shown): Promise<{ e
     sources,
     ...(floatTop !== undefined && d.float ? { float: { top: floatTop, close: d.float.def.close } } : {}),
     ...(page ? { page } : {}),
+    ...(cornerAt ? { corner: cornerAt } : {}),
+    ...(s.onDrag ? { onDrag: s.onDrag } : {}),
     ...(s.form ? { form: s.form } : {}),
     ...(was?.pressedAt !== undefined ? { pressedAt: was.pressedAt, ...(was.pressed ? { pressed: was.pressed } : {}), ...(was.renderedAt !== undefined ? { renderedAt: was.renderedAt } : {}) } : {}),
   })
@@ -527,7 +604,7 @@ async function build($: EngineInterface, ui: Ui, s: Site, d: Shown): Promise<{ e
       {parts}
       {hotkeys.size > 0 && (
         <ui.Box key={`keys-${s.site}`} display="none">
-          {[...hotkeys].map(([key, id]) => (
+          {[...hotkeys].filter(([key]) => /^[a-z0-9]$/.test(key)).map(([key, id]) => (
             <ui.Button key={`hk-${s.site}-${key}`} label={key} hotkey={key} onPress={press => void act($, s.site, id, press.surface)} />
           ))}
         </ui.Box>
@@ -580,6 +657,9 @@ export function registerPicture(on: On): void {
     } else if (data.type === 'key' && typeof data.key === 'string') {
       const target = l.hotkeys.get(data.key)
       if (target) await act($, site, target, e.surface)
+    } else if (data.type === 'drag' && l.onDrag) {
+      const d = e.data as Drag
+      if ([d.n, d.sx, d.sy, d.x, d.y].every(v => typeof v === 'number')) l.onDrag(d)
     } else if (data.type === 'scroll' && typeof data.key === 'string') {
       await scrollKey($, l.requestId, data.key)
     }
@@ -598,6 +678,8 @@ export function registerPicture(on: On): void {
     if (windows.has(e.requestId)) windows.set(e.requestId, { offset: e.offset, bodyRows: e.bodyRows })
     // A float whose top would go above the window is closed: the engine would pin it to the window's first row.
     for (const l of live.values()) if (l.requestId === e.requestId && l.float && e.offset > l.float.top) l.float.close()
+    // The corner panel comes and goes as the pane scrolls past its top.
+    if ([...live.values()].some(l => l.requestId === e.requestId && l.corner && e.offset > l.corner.top !== l.corner.hidden)) $.ui.invalidate('ui.render')
     return next(e)
   })
 }

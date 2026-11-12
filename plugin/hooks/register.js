@@ -5705,14 +5705,14 @@ function formatTraffic(rps, avgRps) {
 function formatMs(ms) {
   return `${trim(ms, ms < 100 ? 1 : 0)} ms`;
 }
-function formatAvailability(fraction) {
-  if (fraction >= 1) return "100%";
-  const down = (1 - fraction) * 100;
+function formatAvailability(fraction2) {
+  if (fraction2 >= 1) return "100%";
+  const down = (1 - fraction2) * 100;
   const digits = Math.min(6, Math.max(1, Math.ceil(-Math.log10(down)) + 1));
-  return `${trim(Math.floor(fraction * 100 * 10 ** digits + 1e-6) / 10 ** digits, digits)}%`;
+  return `${trim(Math.floor(fraction2 * 100 * 10 ** digits + 1e-6) / 10 ** digits, digits)}%`;
 }
-function formatPercent(fraction) {
-  return `${Math.round(fraction * 100)}%`;
+function formatPercent(fraction2) {
+  return `${Math.round(fraction2 * 100)}%`;
 }
 function formatDuration(ms) {
   if (!Number.isFinite(ms)) return "\u221E";
@@ -8024,10 +8024,10 @@ var Grid = class {
   line(x, y, dirs, fg, heavy = false) {
     if (!this.inside(x, y)) return;
     const i = y * this.columns + x;
-    const merged = this.lines[i] | dirs;
-    this.glyphs[i] = (heavy ? HEAVY_GLYPH : LINE_GLYPH)[merged].codePointAt(0);
+    const merged2 = this.lines[i] | dirs;
+    this.glyphs[i] = (heavy ? HEAVY_GLYPH : LINE_GLYPH)[merged2].codePointAt(0);
     this.fg[i] = fg;
-    this.lines[i] = merged;
+    this.lines[i] = merged2;
   }
   /** The cells as `Raster` takes them: base64 of little-endian u32 triplets. */
   toBase64() {
@@ -9270,7 +9270,7 @@ function formatTraffic2(rps, avgRps) {
   return `avg ${formatRps2(avgRps).replace(/ rps$/, "")} \xB7 peak ${formatRps2(rps)}`;
 }
 var formatMs2 = (ms) => `${ms >= 100 ? Math.round(ms) : formatNumber(Number(ms.toFixed(1)))} ms`;
-var formatPercent2 = (fraction) => `${formatNumber(Number((fraction * 100).toFixed(1)))}%`;
+var formatPercent2 = (fraction2) => `${formatNumber(Number((fraction2 * 100).toFixed(1)))}%`;
 var formatUsd2 = (usd4) => `$${Math.round(usd4).toLocaleString("en-US")}`;
 function formatGb(gb) {
   const n = (x, digits) => Number(x.toFixed(digits)).toLocaleString("en-US");
@@ -9879,6 +9879,29 @@ var PROBE_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNgAAI
 var PROBE_TRIES = 6;
 var PROBE_MS = 150;
 var cellPx = () => ({ width: 16, height: Math.round(16 * cellAspectOf()) });
+var merged = /* @__PURE__ */ new Map();
+var mergeKey = (request2) => {
+  const { window: _window, ...grid } = request2.options.grid ?? {};
+  void _window;
+  return `${keyOf(request2.source)}\0${JSON.stringify({ ...request2.options, grid })}`;
+};
+function merge(request2, g) {
+  const key = mergeKey(request2);
+  const was = merged.get(key);
+  if (!was || was.columns !== g.columns || was.rows !== g.rows || (was.steps?.length ?? 0) !== (g.steps?.length ?? 0)) {
+    merged.delete(key);
+    merged.set(key, { ...g, base: [...g.base], ...g.steps ? { steps: g.steps.map((s) => ({ behind: [...s.behind], frames: s.frames.map((f) => ({ ...f })) })) } : {} });
+    if (merged.size > 12) merged.delete(merged.keys().next().value);
+    return;
+  }
+  g.base.forEach((f, i) => was.base[i] ||= f);
+  g.steps?.forEach((s, k) => {
+    const into = was.steps[k];
+    s.behind.forEach((f, i) => into.behind[i] ||= f);
+    s.frames.forEach((f, j) => Object.assign(into.frames[j] ??= {}, f));
+  });
+}
+var mergedGrid = (request2) => merged.get(mergeKey(request2));
 function gridFrame(g, step, k = 0) {
   const s = step === void 0 ? void 0 : g.steps?.[step];
   if (!s) return g.base;
@@ -9920,6 +9943,7 @@ function rasterOf($, request2, priority = "now") {
     );
     if (answer && "error" in answer) $.ui.log(`proschi: no picture: ${answer.error}`, { to: "debug" });
     if (answer) rasters.set(key, answer);
+    if (answer && !("error" in answer) && answer.grid && request2.options.grid?.window) merge(request2, answer.grid);
     pending.delete(key);
     if (priority === "now" || priority === "first" || wanted2.delete(key)) redraw($);
   })();
@@ -10058,11 +10082,18 @@ async function pictureSite($, ui, s) {
     if (!out) waiting = true;
     else float = { def: s.float, out };
   }
+  let corner;
+  if (s.corner) {
+    const out = panelOf($, { panel: s.corner.panel, columns: s.corner.columns, theme: s.theme, edges: { top: true, bottom: true } });
+    if (out && "error" in out) return { error: out.error };
+    if (!out) waiting = true;
+    else corner = { def: s.corner, out };
+  }
   const onTop = (a) => a.panel.kind === "tabs" || a.panel.kind === "playerBar" && !s.pieces.some((p) => "panel" in p && p.panel.kind === "tabs");
   if (s.ahead?.length) prefetch($, s.ahead.map((a) => ({ panel: a.panel, columns: a.columns, theme: s.theme, edges: a.edges ?? (onTop(a) ? { top: true } : {}) })));
   let now;
   if (!waiting) {
-    now = { pieces: resolved, pages, actions: { ...s.actions, ...s.float?.actions ?? {} }, ...float ? { float } : {}, ...s.paged ? { paged: s.paged } : {} };
+    now = { pieces: resolved, pages, actions: { ...s.actions, ...s.float?.actions ?? {} }, ...float ? { float } : {}, ...corner ? { corner } : {}, ...s.paged ? { paged: s.paged } : {} };
     shown.set(s.site, now);
   } else now = shown.get(s.site);
   if (!now) return { element: loading(ui, s.site, s.rows) };
@@ -10166,6 +10197,7 @@ async function build($, ui, s, d) {
   let layerTop = 0;
   let layerRows = 0;
   const anchors = /* @__PURE__ */ new Map();
+  let cornerAt;
   for (const [i, p] of d.pieces.entries()) {
     const hidden = pagedAt >= 0 && i >= pagedAt && !pagedShown;
     if (i === layerAt) layerTop = top;
@@ -10182,13 +10214,43 @@ async function build($, ui, s, d) {
           const images2 = [];
           for (const t of line2) images2.push(/* @__PURE__ */ h(ui.Image, { key: t.key, source: await source(t.key, t.file), columns: t.columns, rows: t.rows, alt: t === pic.tiles[0] ? pic.alt : " " }));
           lines.push(
-            /* @__PURE__ */ h(ui.Box, { key: `${pic.key}-r${row}`, flexDirection: "row", height: line2[0].rows }, images2)
+            /* @__PURE__ */ h(ui.Box, { key: `${pic.key}-r${row}`, flexDirection: "row", height: line2[0].rows, flexShrink: 0 }, images2)
           );
         }
         body = lines;
-      } else body = /* @__PURE__ */ h(ui.Image, { key: pic.key, source: await source(pic.key, pic.file), columns: pic.columns, rows: pic.rows, alt: pic.alt });
+        const v = pic.view;
+        if (v && pic.tiles.length) {
+          const left = Math.min(...pic.tiles.map((t) => t.col));
+          const up = Math.min(...pic.tiles.map((t) => t.row));
+          body = [
+            /* @__PURE__ */ h(ui.Box, { key: `${pic.key}-pan`, flexDirection: "column", flexShrink: 0, marginLeft: left - v.col, marginTop: up - v.row }, lines)
+          ];
+        }
+        if (pic.drag && !hidden) {
+          const ov = `ov-drag-${s.site}`;
+          overlaySites.set(ov, s.site);
+          into.overlays.set(ov, []);
+          body.push(
+            /* @__PURE__ */ h(ui.Box, { key: `${pic.key}-drag`, position: "absolute", top: 0, left: 0, width: pic.columns, height: pic.rows }, /* @__PURE__ */ h(ui.Client, { key: ov, module: "./uiOverlay.js", props: { controls: [], drag: true }, width: pic.columns, height: pic.rows }))
+          );
+        }
+        const c = d.corner;
+        if (c && c.def.piece === p.id && !hidden) {
+          const at = top + pic.rows - c.out.rows;
+          const scrolled = (windows.get(s.requestId)?.offset ?? 0) > at;
+          cornerAt = { top: at, hidden: scrolled };
+          if (!scrolled) {
+            const placed = await strips(ui, s, c.def.id, c.out, source, into);
+            c.out.tiles.forEach(
+              (t, i2) => body.push(
+                /* @__PURE__ */ h(ui.Box, { key: `${pic.key}-corner-${i2}`, position: "absolute", top: pic.rows - c.out.rows + t.row, left: Math.max(0, pic.columns - c.out.columns), width: t.columns, height: t.rows }, placed[i2])
+              )
+            );
+          }
+        }
+      } else body = [/* @__PURE__ */ h(ui.Image, { key: pic.key, source: await source(pic.key, pic.file), columns: pic.columns, rows: pic.rows, alt: pic.alt })];
       target.push(
-        /* @__PURE__ */ h(ui.Box, { key: pic.anchorKey ?? `pic-${s.site}-${p.id}`, flexDirection: "column", height: pic.rows }, body)
+        /* @__PURE__ */ h(ui.Box, { key: pic.anchorKey ?? `pic-${s.site}-${p.id}`, flexDirection: "column", height: pic.rows, ...pic.view ? { width: pic.columns, overflow: "hidden" } : {} }, body)
       );
       rows = pic.rows;
       columns = pic.columns;
@@ -10244,6 +10306,7 @@ async function build($, ui, s, d) {
       /* @__PURE__ */ h(ui.Box, { key: `pages-${s.site}`, flexDirection: "column" }, pages)
     );
   }
+  for (const [key, id] of Object.entries(s.keys ?? {})) if (d.actions[id] && !into.hotkeys.has(key)) into.hotkeys.set(key, id);
   const { tiles, overlays, hotkeys } = into;
   live.set(s.site, {
     requestId: s.requestId,
@@ -10254,12 +10317,14 @@ async function build($, ui, s, d) {
     sources,
     ...floatTop !== void 0 && d.float ? { float: { top: floatTop, close: d.float.def.close } } : {},
     ...page ? { page } : {},
+    ...cornerAt ? { corner: cornerAt } : {},
+    ...s.onDrag ? { onDrag: s.onDrag } : {},
     ...s.form ? { form: s.form } : {},
     ...was?.pressedAt !== void 0 ? { pressedAt: was.pressedAt, ...was.pressed ? { pressed: was.pressed } : {}, ...was.renderedAt !== void 0 ? { renderedAt: was.renderedAt } : {} } : {}
   });
   let sent = 0;
   for (const [key, file] of sources) if (before2.get(key) !== file) sent++;
-  const element = /* @__PURE__ */ h(ui.Box, { key: `site-${s.site}`, flexDirection: "column", width, height: top }, parts, hotkeys.size > 0 && /* @__PURE__ */ h(ui.Box, { key: `keys-${s.site}`, display: "none" }, [...hotkeys].map(([key, id]) => /* @__PURE__ */ h(ui.Button, { key: `hk-${s.site}-${key}`, label: key, hotkey: key, onPress: (press) => void act($, s.site, id, press.surface) }))));
+  const element = /* @__PURE__ */ h(ui.Box, { key: `site-${s.site}`, flexDirection: "column", width, height: top }, parts, hotkeys.size > 0 && /* @__PURE__ */ h(ui.Box, { key: `keys-${s.site}`, display: "none" }, [...hotkeys].filter(([key]) => /^[a-z0-9]$/.test(key)).map(([key, id]) => /* @__PURE__ */ h(ui.Button, { key: `hk-${s.site}-${key}`, label: key, hotkey: key, onPress: (press) => void act($, s.site, id, press.surface) }))));
   return { element, images: sources.size, sent };
 }
 async function blit($, l, ref, file) {
@@ -10300,6 +10365,9 @@ function registerPicture(on) {
     } else if (data.type === "key" && typeof data.key === "string") {
       const target = l.hotkeys.get(data.key);
       if (target) await act($, site, target, e.surface);
+    } else if (data.type === "drag" && l.onDrag) {
+      const d = e.data;
+      if ([d.n, d.sx, d.sy, d.x, d.y].every((v) => typeof v === "number")) l.onDrag(d);
     } else if (data.type === "scroll" && typeof data.key === "string") {
       await scrollKey($, l.requestId, data.key);
     }
@@ -10315,6 +10383,7 @@ function registerPicture(on) {
     }
     if (windows.has(e.requestId)) windows.set(e.requestId, { offset: e.offset, bodyRows: e.bodyRows });
     for (const l of live.values()) if (l.requestId === e.requestId && l.float && e.offset > l.float.top) l.float.close();
+    if ([...live.values()].some((l) => l.requestId === e.requestId && l.corner && e.offset > l.corner.top !== l.corner.hidden)) $.ui.invalidate("ui.render");
     return next(e);
   });
 }
@@ -10350,6 +10419,42 @@ function scrollToAnchorOnceShown($, site, anchor) {
   if (live.get(site)?.page?.anchors[anchor] === void 0) pending2.set(site, anchor);
   else $.clock.after(0, () => void scrollToAnchor($, site, anchor));
 }
+
+// ../plugin/src/zoom.ts
+var ZOOMS = [1, 1.25, 1.5, 2, 3];
+var FIT = { level: 1, x: 0.5, y: 0.5 };
+var PAN_STEP = { columns: 8, rows: 4 };
+var clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+var fraction = (v) => typeof v === "number" && Number.isFinite(v) ? clamp(v, 0, 1) : 0.5;
+function zoomOf(v) {
+  const z = v;
+  if (!z || typeof z !== "object" || typeof z.level !== "number" || !Number.isFinite(z.level)) return FIT;
+  const level = ZOOMS.reduce((best, l) => Math.abs(l - z.level) < Math.abs(best - z.level) ? l : best, 1);
+  return level === 1 ? FIT : { level, x: fraction(z.x), y: fraction(z.y) };
+}
+function stepZoom(z, dir) {
+  const at = ZOOMS.indexOf(z.level);
+  const level = ZOOMS[clamp((at < 0 ? 0 : at) + dir, 0, ZOOMS.length - 1)];
+  return level === 1 ? FIT : { ...z, level };
+}
+var zoomLabel = (level) => level === 1 ? "Fit" : `${Math.round(level * 100)}%`;
+function viewportOf(grid, room, z) {
+  const columns = Math.max(1, Math.min(grid.columns, room.columns));
+  const rows = Math.max(1, Math.min(grid.rows, room.rows));
+  return {
+    col: clamp(Math.round(z.x * grid.columns - columns / 2), 0, grid.columns - columns),
+    row: clamp(Math.round(z.y * grid.rows - rows / 2), 0, grid.rows - rows),
+    columns,
+    rows
+  };
+}
+function panTo(z, grid, vp, col, row) {
+  const c = clamp(Math.round(col), 0, grid.columns - vp.columns);
+  const r = clamp(Math.round(row), 0, grid.rows - vp.rows);
+  return { level: z.level, x: (c + vp.columns / 2) / grid.columns, y: (r + vp.rows / 2) / grid.rows };
+}
+var around = (vp, ring = { columns: 16, rows: 8 }) => ({ col: vp.col - ring.columns, row: vp.row - ring.rows, columns: vp.columns + 2 * ring.columns, rows: vp.rows + 2 * ring.rows });
+var meets = (t, w) => t.col < w.col + w.columns && t.col + t.columns > w.col && t.row < w.row + w.rows && t.row + t.rows > w.row;
 
 // ../frontend/src/dsl/mermaid.ts
 var RESERVED = new Set(
@@ -11249,6 +11354,9 @@ async function drawDiagram($, d, viewId, source, file, top = { pieces: [], actio
     ahead: [...top.ahead, ...pic?.ahead ?? []],
     layer: "bar",
     ...float ? { float } : {},
+    ...pic?.corner ? { corner: pic.corner } : {},
+    ...pic?.keys ? { keys: pic.keys } : {},
+    ...pic?.onDrag ? { onDrag: pic.onDrag } : {},
     ...top.pages ? { pages: top.pages } : {},
     ...top.pages && pic?.pieces[0] ? { paged: { from: pic.pieces[0].id, shown: !hidden } } : {},
     rows: pic?.rows ?? d.rows ?? INLINE_ROWS,
@@ -11362,7 +11470,8 @@ function normal(p) {
     explorer: p?.explorer === true,
     expanded: Array.isArray(p?.expanded) ? p.expanded.filter((id) => typeof id === "string") : [],
     ...typeof p?.focus === "string" ? { focus: p.focus } : {},
-    ...typeof p?.selected === "string" ? { selected: p.selected } : {}
+    ...typeof p?.selected === "string" ? { selected: p.selected } : {},
+    ...zoomOf(p?.zoom).level > 1 ? { zoom: zoomOf(p?.zoom) } : {}
   };
 }
 var PINK = "#ff5da2";
@@ -11436,7 +11545,7 @@ async function diagramView($, d, viewId, written, file, mode = { kind: "text" },
   const hasSystems = systems.length > 0 || player.focus !== void 0;
   const roomy = view.width >= 79;
   const theme2 = graphics === "off" ? "dark" : await themeOf($);
-  const optionsFor = (play) => ({
+  const optionsFor = (play, zoomed) => ({
     theme: theme2,
     maxWidthPx: maxWidthPx(d.columns),
     ...doc.overlay && !play ? { overlay: true } : {},
@@ -11447,13 +11556,21 @@ async function diagramView($, d, viewId, written, file, mode = { kind: "text" },
       room: d.columns,
       maxRows: d.rows ?? INLINE_ROWS,
       cellPx: cellPx(),
-      fill: { columns: panelColumns(d.columns), ...!pick2 && !view.inPane && !doc.diagram.title && noticesOf(view, doc, lost).length === 0 ? { top: true } : {}, ...!play && doc.overlay && doc.edges ? { legend: true } : {} }
+      fill: { columns: panelColumns(d.columns), ...!pick2 && !view.inPane && !doc.diagram.title && noticesOf(view, doc, lost).length === 0 ? { top: true } : {}, ...!play && doc.overlay && doc.edges ? { legend: true } : {} },
+      ...zoomed ? { zoom: zoomed.zoom, ...zoomed.window ? { window: zoomed.window } : {} } : {}
     }
   });
   const request2 = { source, options: optionsFor(playing) };
   const alt = `${doc.diagram.title ?? title}: the architecture diagram as a picture`;
   if (mode.kind !== "text") {
     images.delete(viewId);
+    const z = view.inPane ? zoomOf(player.zoom) : FIT;
+    if (z.level > 1) {
+      const zoomed = zoomedPicture($, view, { source, z, ...playing ? { playing } : {}, ...pick2 ? { pick: pick2 } : {}, step, progress, priority, optionsFor, mode, alt });
+      if ("error" in zoomed) return diagramView($, d, viewId, written, file, { kind: "text" }, priority);
+      const built2 = pictureParts($, view, doc, { pick: pick2, playing, step, player, systems, selected, link, lost, title, what, roomy, sourceText: source.source, ...zoomed.picture ? { picture: zoomed.picture } : {}, zoom: { z, ...zoomed.at ? { at: zoomed.at } : {} } });
+      return { kind: "picture", ...built2, rows: zoomed.rows, systems: hasSystems };
+    }
     const out = rasterOf($, request2, priority);
     const size = out && !("error" in out) ? out.grid ? { columns: out.grid.columns, rows: out.grid.rows } : imageSize(out, d.columns, d.rows ?? INLINE_ROWS) : void 0;
     const rows = (size?.rows ?? Math.min(scene.rows, d.rows ?? INLINE_ROWS)) + 16;
@@ -11479,7 +11596,8 @@ async function diagramView($, d, viewId, written, file, mode = { kind: "text" },
         }
       }
     }
-    const built = pictureParts($, view, doc, { pick: pick2, playing, step, player, systems, selected, link, lost, title, what, roomy, sourceText: source.source, picture });
+    const fitAt = out && !("error" in out) && out.grid ? { grid: out.grid, vp: { col: 0, row: 0, columns: out.grid.columns, rows: out.grid.rows } } : void 0;
+    const built = pictureParts($, view, doc, { pick: pick2, playing, step, player, systems, selected, link, lost, title, what, roomy, sourceText: source.source, picture, ...view.inPane ? { zoom: { z, ...fitAt ? { at: fitAt } : {} } } : {} });
     if (!playing && pick2) rasterOf($, { source, options: optionsFor(pick2) }, "later");
     return { kind: "picture", ...built, rows, systems: hasSystems };
   }
@@ -11582,7 +11700,103 @@ function pictureParts($, view, doc, c) {
   on("links", "lnk", (surface) => void copy($, surface, c.link, "the share link"));
   on("links", "open", (surface) => void openLink($, surface, c.link));
   on("links", "focus", () => focus($, view, c.title, c.what));
-  return { pieces, actions, ahead, ...float ? { float } : {} };
+  const zoom = c.zoom ? zoomParts($, view, c.zoom.z, c.zoom.at) : void 0;
+  if (zoom) {
+    Object.assign(actions, zoom.actions);
+    for (const dir of [1, -1]) ahead.push({ panel: zoomPanel(stepZoom(c.zoom.z, dir)), columns: ZOOM_COLUMNS, edges: FLOAT_EDGES });
+  }
+  return { pieces, actions, ahead, ...float ? { float } : {}, ...zoom ? { corner: zoom.corner, keys: zoom.keys, onDrag: zoom.onDrag } : {} };
+}
+var zoomPanel = (z) => ({
+  kind: "actionBar",
+  controls: [
+    { id: "out", label: "\u2212", variant: "quiet", hotkey: "x", keycap: false, ...z.level === 1 ? { disabled: true } : {} },
+    { id: "level", label: zoomLabel(z.level), variant: "quiet", ...z.level === 1 ? { disabled: true } : {} },
+    { id: "in", label: "+", variant: "quiet", hotkey: "z", keycap: false, ...z.level === ZOOMS[ZOOMS.length - 1] ? { disabled: true } : {} },
+    { id: "fit", icon: "collapse", label: "Fit", variant: "quiet", hotkey: "0", keycap: false, ...z.level === 1 ? { disabled: true } : {} }
+  ]
+});
+var ZOOM_COLUMNS = 30;
+var drags = /* @__PURE__ */ new Map();
+async function setZoom($, viewId, next) {
+  await update2($, memberOf(players, { requestId: viewId }), (p) => {
+    const { zoom: _zoom, ...rest } = normal(p);
+    void _zoom;
+    return next.level > 1 ? { ...rest, zoom: next } : rest;
+  });
+}
+function zoomParts($, view, z, at) {
+  const id = view.viewId;
+  const actions = {
+    "zoom/in": () => void setZoom($, id, stepZoom(z, 1)),
+    "zoom/out": () => void setZoom($, id, stepZoom(z, -1)),
+    "zoom/level": () => void setZoom($, id, FIT),
+    "zoom/fit": () => void setZoom($, id, FIT)
+  };
+  const keys = { "+": "zoom/in", "=": "zoom/in", "-": "zoom/out" };
+  if (z.level > 1 && at) {
+    const pan = (dc, dr) => () => void setZoom($, id, panTo(z, at.grid, at.vp, at.vp.col + dc, at.vp.row + dr));
+    const moves = [
+      ["left", ["h", "left"], -PAN_STEP.columns, 0],
+      ["right", ["l", "right"], PAN_STEP.columns, 0],
+      ["up", ["k", "up"], 0, -PAN_STEP.rows],
+      ["down", ["j", "down"], 0, PAN_STEP.rows]
+    ];
+    for (const [name, ks, dc, dr] of moves) {
+      actions[`zoom/pan-${name}`] = pan(dc, dr);
+      for (const k of ks) keys[k] = `zoom/pan-${name}`;
+    }
+  }
+  const onDrag = (d) => {
+    if (z.level === 1 || !at) return;
+    let started = drags.get(id);
+    if (!started || started.n !== d.n) drags.set(id, started = { n: d.n, z, vp: at.vp });
+    const next = panTo(started.z, at.grid, started.vp, started.vp.col - (d.x - d.sx), started.vp.row - (d.y - d.sy));
+    const to = viewportOf(at.grid, at.vp, next);
+    if (to.col !== at.vp.col || to.row !== at.vp.row) void setZoom($, id, next);
+  };
+  return { actions, keys, corner: { piece: "diagram", id: "zoom", panel: zoomPanel(z), columns: ZOOM_COLUMNS }, onDrag };
+}
+var autoPanned = /* @__PURE__ */ new Map();
+function zoomedPicture($, view, c) {
+  const { source, z, playing } = c;
+  const viewId = view.viewId;
+  const fit2 = rasterOf($, { source, options: c.optionsFor() }, c.priority);
+  if (fit2 && "error" in fit2) return fit2;
+  const fitGrid = fit2?.grid;
+  const m = mergedGrid({ source, options: c.optionsFor(playing, { zoom: z.level }) });
+  const grid = m ?? (fitGrid ? { columns: Math.ceil(fitGrid.columns * z.level), rows: Math.ceil(fitGrid.rows * z.level) } : void 0);
+  const maxRows = view.d.rows ?? INLINE_ROWS;
+  if (!grid || !fitGrid) return { rows: Math.min(maxRows, 20) + 16 };
+  const vp = viewportOf(grid, { columns: fitGrid.columns, rows: maxRows }, z);
+  const rows = vp.rows + 16;
+  if (playing && m) {
+    const s = playing.scenario.steps[c.step];
+    const ends = s ? [view.scene.nodes.get(s.fromServiceId)?.rect, view.scene.nodes.get(s.toServiceId)?.rect].filter((r) => r !== void 0) : [];
+    const mark = `${playing.value}:${c.step}`;
+    if (ends.length && autoPanned.get(viewId) !== mark) {
+      autoPanned.set(viewId, mark);
+      const fx = ends.reduce((n, r) => n + r.x + r.w / 2, 0) / ends.length / view.scene.columns;
+      const fy = ends.reduce((n, r) => n + r.y + r.h / 2, 0) / ends.length / view.scene.rows;
+      const inside = fx * grid.columns >= vp.col + 4 && fx * grid.columns <= vp.col + vp.columns - 4 && fy * grid.rows >= vp.row + 2 && fy * grid.rows <= vp.row + vp.rows - 2;
+      if (!inside) void setZoom($, viewId, { level: z.level, x: fx, y: fy });
+    }
+  }
+  const visible = m ? m.tiles.flatMap((t, i) => meets(t, vp) ? [i] : []) : [];
+  const files = m ? gridFrame(m, playing ? c.step : void 0, c.progress === 0 ? 0 : FRAMES - 1) : [];
+  const ready = !!m && visible.length > 0 && visible.every((i) => files[i]) && (!playing || !!m.steps?.length);
+  if (!ready) rasterOf($, { source, options: c.optionsFor(playing, { zoom: z.level, window: vp }) }, c.priority);
+  else {
+    rasterOf($, { source, options: c.optionsFor(playing, { zoom: z.level, window: around(vp) }) }, "later");
+    if (!playing && c.pick) rasterOf($, { source, options: c.optionsFor(c.pick, { zoom: z.level, window: around(vp) }) }, "later");
+  }
+  if (!ready || !m) return { rows, at: { grid, vp } };
+  const imageKey = `img-${viewId}`;
+  const form = c.mode.kind === "picture" ? c.mode.form : void 0;
+  images.set(viewId, { key: imageKey, grid: m, shown: files.slice(), mounted: new Set(visible), ...form ? { form } : {} });
+  const tiles = visible.map((i) => ({ key: `${imageKey}-${i}`, col: m.tiles[i].col, row: m.tiles[i].row, columns: m.tiles[i].columns, rows: m.tiles[i].rows, file: files[i] }));
+  const picture = { key: imageKey, file: files[visible[0]], columns: vp.columns, rows: vp.rows, alt: c.alt, anchorKey: view.anchorKey, tiles, view: vp, drag: true, ...form ? { form } : {} };
+  return { picture, rows, at: { grid: m, vp } };
 }
 function selectable(scene, focus2) {
   return [...scene.nodes.values()].map((n) => n.node).filter((n) => n.kind === "system" || n.kind === "group" && n.system === n.id).map((n) => ({ id: n.id, path: focus2 !== void 0 ? `${focus2}.${n.id}` : n.id, name: n.name, expanded: n.kind === "group" }));
@@ -11915,7 +12129,7 @@ function animate($, view, steps) {
     if (image?.grid && image.shown && tiles) {
       const files = gridFrame(image.grid, step, Math.round(progress / 100 * (tiles.frames.length - 1)));
       const shown2 = image.shown;
-      const changed = files.flatMap((file, i) => file === shown2[i] ? [] : [i]);
+      const changed = files.flatMap((file, i) => file === shown2[i] || !file || image.mounted && !image.mounted.has(i) ? [] : [i]);
       for (const i of changed) shown2[i] = files[i];
       await Promise.all(changed.map(async (i) => $.ui.blit({ requestId: view.d.requestId, key: `${image.key}-${i}`, source: await sourceOf($, files[i], image.form) })));
     } else if (image && frames?.length) {

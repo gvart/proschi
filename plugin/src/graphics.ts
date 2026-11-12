@@ -44,7 +44,17 @@ export interface RasterOptions {
   overlay?: boolean
   selected?: string
   play?: { useCase: string; scenario?: string; frames?: number }
-  grid?: { room: number; maxRows: number; cellPx: { width: number; height: number }; tile?: { columns: number; rows: number }; fill?: { columns: number; top?: boolean; bottom?: boolean; legend?: boolean } }
+  grid?: {
+    room: number
+    maxRows: number
+    cellPx: { width: number; height: number }
+    tile?: { columns: number; rows: number }
+    fill?: { columns: number; top?: boolean; bottom?: boolean; legend?: boolean }
+    /** Times the size that fits, re-rendered (src/zoom.ts). */
+    zoom?: number
+    /** Only the tiles that meet these cells are drawn; the others are ''. */
+    window?: { col: number; row: number; columns: number; rows: number }
+  }
 }
 
 /** The picture as tiles of whole cells; per step the tiles behind the packet, per frame the ones it covers. */
@@ -67,6 +77,38 @@ export interface RasterOutput {
 
 /** A cell in PNG px: 2× a Retina screen's, as tall as the `cellAspect` setting makes it (the panels' too). */
 export const cellPx = () => ({ width: 16, height: Math.round(16 * cellAspectOf()) })
+
+/**
+ * A zoomed picture's tiles as every window drawn of it so far has them, by
+ * the request without its window: a pan shows the tiles drawn already at
+ * once and asks only for the ones it lacks.
+ */
+const merged = new Map<string, RasterGrid>()
+const mergeKey = (request: RasterRequest) => {
+  const { window: _window, ...grid } = request.options.grid ?? ({} as NonNullable<RasterOptions['grid']>)
+  void _window
+  return `${keyOf(request.source)}\u0000${JSON.stringify({ ...request.options, grid })}`
+}
+
+function merge(request: RasterRequest, g: RasterGrid): void {
+  const key = mergeKey(request)
+  const was = merged.get(key)
+  if (!was || was.columns !== g.columns || was.rows !== g.rows || (was.steps?.length ?? 0) !== (g.steps?.length ?? 0)) {
+    merged.delete(key)
+    merged.set(key, { ...g, base: [...g.base], ...(g.steps ? { steps: g.steps.map(s => ({ behind: [...s.behind], frames: s.frames.map(f => ({ ...f })) })) } : {}) })
+    if (merged.size > 12) merged.delete(merged.keys().next().value!)
+    return
+  }
+  g.base.forEach((f, i) => (was.base[i] ||= f))
+  g.steps?.forEach((s, k) => {
+    const into = was.steps![k]!
+    s.behind.forEach((f, i) => (into.behind[i] ||= f))
+    s.frames.forEach((f, j) => Object.assign((into.frames[j] ??= {}), f))
+  })
+}
+
+/** The tiles drawn so far of a zoomed picture (any window of the request), or undefined before the first. */
+export const mergedGrid = (request: RasterRequest): RasterGrid | undefined => merged.get(mergeKey(request))
 
 /** The files a grid shows: the still, or frame `k` of a step (its behind, the tiles the packet covers over it). */
 export function gridFrame(g: RasterGrid, step?: number, k = 0): string[] {
@@ -122,6 +164,7 @@ export function rasterOf($: EngineInterface, request: RasterRequest, priority: P
     )
     if (answer && 'error' in answer) $.ui.log(`proschi: no picture: ${answer.error}`, { to: 'debug' })
     if (answer) rasters.set(key, answer)
+    if (answer && !('error' in answer) && answer.grid && request.options.grid?.window) merge(request, answer.grid)
     pending.delete(key)
     if (priority === 'now' || priority === 'first' || wanted.delete(key)) redraw($)
   })()
