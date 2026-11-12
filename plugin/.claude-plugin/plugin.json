@@ -29,6 +29,23 @@
         "none"
       ],
       "default": "nerd-font"
+    },
+    "graphics": {
+      "type": "string",
+      "title": "Diagram pictures",
+      "description": "Draw diagrams as pictures where the terminal shows images (kitty, Ghostty; iTerm2 and tmux with passthrough): auto asks the terminal once a session and falls back to text cells; on always draws a picture; off always draws text cells.",
+      "options": [
+        "auto",
+        "on",
+        "off"
+      ],
+      "default": "auto"
+    },
+    "cellAspect": {
+      "type": "string",
+      "title": "Terminal cell shape",
+      "description": "How many times taller than wide a terminal cell is, so pictures fill their cells exactly: 2.125 fits Ghostty, kitty and iTerm2 at their default fonts. If pictures show thin gaps between their strips, set it to your cell's height over its width (e.g. 17/8 = 2.125, 16/8 = 2).",
+      "default": "2.125"
     }
   }
 }

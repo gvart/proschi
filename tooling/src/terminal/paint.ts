@@ -1,6 +1,7 @@
 import { nodeBaseColor } from '../../../frontend/src/dsl/palette';
 import type { Dash, DiagramNode } from '../../../frontend/src/dsl/types';
-import type { NodeOverlay } from '../../../frontend/src/sim/overlay';
+import { formatMs, formatRps } from '../../../frontend/src/sim/format';
+import type { EdgeOverlay, NodeOverlay } from '../../../frontend/src/sim/overlay';
 import { DEFAULT, E, Grid, N, S, W, hex } from './grid';
 import { iconOf, type IconStyle } from './icons';
 import type { Play } from './playback';
@@ -10,7 +11,10 @@ import { loadText, type SystemBadge, type SystemStatus } from './systems';
 /**
  * Paints a scene into a grid the way the canvas draws it: dashed group
  * frames, then the edges with their labels, then the group names and replica
- * counts the edges would cut, then the cards on top. Colors
+ * counts the edges would cut, then the cards on top. Under the load overlay
+ * (canvas RoutedEdge.tsx), an edge takes the heat of the node it feeds, its
+ * label gains the requests it carries and the latency they add, and the p99
+ * path is drawn heavy; the bottleneck card carries a chip. Colors
  * follow the canvas's palette (dsl/palette.ts): the base hue of a node's
  * `color`, tag or category for its border and icon tile, the ink (the
  * terminal's own foreground) for its text. The background stays the
@@ -38,7 +42,7 @@ export const COLOR = {
   good: 0x22c55e,
   warn: 0xeab308,
   bad: 0xef4444,
-  /** The canvas's load overlay (utils/heat.ts): a busy card's fill, from yellow through pink to red. */
+  /** The canvas's load overlay (utils/heat.ts): a busy card's border and bar in yellow, then its fill in yellow, pink and red. */
   heatWarm: 0xffd23f,
   heatHot: 0xff7ab4,
   heatOver: 0xff6b61,
@@ -55,6 +59,8 @@ export interface PaintOptions {
   systems?: Record<string, SystemBadge>;
   /** The system the plugin's keys act on, drawn in the accent. */
   selected?: string;
+  /** What each edge carries, by edge id (sim/overlay.ts edgeOverlays): its heat, rps and latency chip, and the heavy p99 path. */
+  edges?: Record<string, EdgeOverlay>;
 }
 
 const HEAD: Record<number, string> = { [N]: '▲', [S]: '▼', [E]: '►', [W]: '◄' };
@@ -81,11 +87,16 @@ export function paint(scene: Scene, options: PaintOptions = {}): Grid {
   // The cards behind cards with replicas, under the edges so a line leaving the front card crosses them.
   for (const n of all) drawStack(grid, scene, n, options.overlay?.[n.node.id], lookOf(play, n.node.id));
 
-  for (const { edge, path } of scene.edges) {
+  // Playback fades the load away, as it does the cards'.
+  const loadOf = (id: string) => (play ? undefined : options.edges?.[id]);
+  // The p99 path last, so its heavy line wins where it crosses another.
+  const edges = [...scene.edges].sort((a, b) => Number(!!loadOf(a.edge.id)?.critical) - Number(!!loadOf(b.edge.id)?.critical));
+  for (const { edge, path } of edges) {
     const own = edge.style?.color ? hex(edge.style.color) : COLOR.line;
     const off = !!play && !play.pathEdges.has(edge.id);
-    const color = play ? (off ? COLOR.fadedMore : COLOR.faded) : own;
-    drawPath(grid, path, color, off ? 'dotted' : edge.style?.dash);
+    const load = loadOf(edge.id);
+    const color = play ? (off ? COLOR.fadedMore : COLOR.faded) : (edgeHeat(load) ?? (load?.critical ? DEFAULT : own));
+    drawPath(grid, path, color, off ? 'dotted' : load?.critical ? undefined : edge.style?.dash, !!load?.critical);
   }
   // The current step's line: thick ink, red for an error, dashed for a call that never arrived; flowing once the packet is there.
   for (const active of play?.edges ?? []) {
@@ -101,19 +112,60 @@ export function paint(scene: Scene, options: PaintOptions = {}): Grid {
     grid.set(last.x, last.y, HEAD[head], color);
   }
   // A label that would land on one drawn before it moves a row or two up or down, where there is room.
+  // Under the load overlay the label carries the edge's requests and the latency they add (an edge with no label gets them
+  // alone), on or beside a straight run of its own line where it covers no other line, card or frame: further off, it would
+  // not read as the edge's. Short of room on one row, the label and the numbers go on two, then the label is shortened, then
+  // the numbers go where they fit and the label where it was. A short run hemmed in by the cards it joins (a gap of a few
+  // cells) has no such room: the same tries then go a few rows up or down from its middle, the first row clear of the
+  // cards. Only where the numbers fit nowhere does the label stand alone, the numbers left to the Analysis tab.
   const taken = new Set<string>();
-  for (const { edge, label } of scene.edges) {
-    if (!label || !edge.label) continue;
-    const text = ` ${edge.label} `;
-    const x = label.x - Math.floor(text.length / 2);
-    const free = (y: number) => y >= 0 && y < grid.rows && Array.from(text, (_, i) => `${x + i},${y}`).every((k) => !taken.has(k));
-    const y = [0, -1, 1, -2, 2].map((d) => label.y + d).find(free) ?? label.y;
-    const color = play && !play.pathEdges.has(edge.id) ? COLOR.fadedMore : COLOR.muted;
-    for (let i = 0; i < text.length; i++) {
-      taken.add(`${x + i},${y}`);
-      if (!onCard(scene, x + i, y)) grid.set(x + i, y, text[i], color);
+  const owner = new Map<string, number>();
+  scene.edges.forEach(({ path }, i) => path.cells.forEach(({ x, y }) => owner.set(`${x},${y}`, (owner.get(`${x},${y}`) ?? i) === i ? i : -1)));
+  // An arrowhead stays: it says which way the edge goes.
+  for (const { path } of scene.edges) owner.set(`${path.cells[path.cells.length - 1].x},${path.cells[path.cells.length - 1].y}`, -1);
+  const blocked = blockedCells(grid, scene);
+  const take = (spots: Spot[]) => spots.forEach(({ text, x, y }) => Array.from(text).forEach((_, i) => taken.add(`${x + i},${y}`)));
+  scene.edges.forEach(({ edge, path, label }, index) => {
+    const load = loadOf(edge.id);
+    const chip = loadChip(load);
+    const free = (x: number, y: number, alone: boolean) =>
+      x >= 0 && x < grid.columns && y >= 0 && y < grid.rows && !taken.has(`${x},${y}`) && (!alone || ((owner.get(`${x},${y}`) ?? index) === index && !blocked[y * grid.columns + x]));
+    const fits = (spots: Spot[], alone: boolean) => spots.every(({ text, x, y }) => Array.from(text).every((_, i) => free(x + i, y, alone)));
+    /** Words one row each, padded, centred on the anchor's column (inside the grid) or set beside it. */
+    const stack = (words: string[], at: Anchor): Spot[] => {
+      const texts = words.map((w) => ` ${w} `);
+      const wide = Math.max(...texts.map((t) => t.length));
+      return texts.map((text, i) => ({
+        text,
+        x: at.side === 'right' ? at.x + 1 : at.side === 'left' ? at.x - text.length : Math.max(0, Math.min(grid.columns - wide, at.x - Math.floor(text.length / 2))),
+        y: at.y + i,
+      }));
+    };
+    const near = anchorsOf(path, label);
+    const far = clearOf(path);
+    const plain = (words: string, at: Cell): Spot => {
+      const tries = [0, -1, 1, -2, 2].map((dy) => stack([words], { x: at.x, y: at.y + dy })[0]);
+      return tries.find((s) => fits([s], false)) ?? tries[0];
+    };
+    const name = edge.label ?? '';
+    let spots: Spot[] | undefined;
+    for (const anchors of chip ? [near, far] : []) {
+      const first = (words: string[]) => anchors.map((at) => stack(words, at)).find((s) => fits(s, true));
+      spots = first([[name, chip].filter(Boolean).join(' · ')]) ?? (name ? first([name, chip!]) : undefined);
+      for (let room = name.length - 1; !spots && room >= 4; room--) spots = first([`${fit(name, room)} · ${chip}`]);
+      const numbers = spots ? undefined : first([chip!]);
+      if (numbers) {
+        take(numbers);
+        spots = label && name ? [...numbers, plain(name, label)] : numbers;
+      }
+      if (spots) break;
     }
-  }
+    spots ??= label && name ? [plain(name, label)] : undefined;
+    if (!spots) return;
+    take(spots);
+    const color = play && !play.pathEdges.has(edge.id) ? COLOR.fadedMore : load?.critical ? DEFAULT : COLOR.muted;
+    for (const at of spots) for (let i = 0; i < at.text.length; i++) if (!onCard(scene, at.x + i, at.y)) grid.set(at.x + i, at.y, at.text[i], color);
+  });
 
   // Over the edges, so a line crossing them leaves them whole: group names and descriptions, the replica counts.
   for (const g of all) if (g.node.kind === 'group') drawGroupHeading(grid, g, play ? 'path' : undefined, frameOf(g));
@@ -141,18 +193,115 @@ function onCard(scene: Scene, x: number, y: number): boolean {
   return false;
 }
 
-/** An edge's line in its dash; playback draws the edges it fades out dotted. */
-function drawPath(grid: Grid, path: Path, color: number, dash: Dash | undefined): void {
+/** An edge's line in its dash, heavy on the p99 path; playback draws the edges it fades out dotted. */
+function drawPath(grid: Grid, path: Path, color: number, dash: Dash | undefined, heavy = false): void {
   const { cells, dirs, head } = path;
   const g = dash ? LINES[dash] : undefined;
   for (let i = 0; i < cells.length - 1; i++) {
     const { x, y } = cells[i];
     const straight = dirs[i] === (N | S) || dirs[i] === (E | W);
     if (g && straight) grid.set(x, y, dirs[i] === (N | S) ? g.v : g.h, color);
-    else grid.line(x, y, dirs[i], color);
+    else grid.line(x, y, dirs[i], color, heavy);
   }
   const last = cells[cells.length - 1];
   grid.set(last.x, last.y, HEAD[head], color);
+}
+
+/** An edge's color under the load overlay (utils/heat.ts heatStroke): its own below 40% of the node it feeds, then yellow, pink and red. */
+export function edgeHeat(load: EdgeOverlay | undefined): number | undefined {
+  const u = load?.utilization;
+  if (load?.saturated || (u !== undefined && u >= 1)) return COLOR.heatOver;
+  if (u === undefined || u < 0.4) return undefined;
+  return u < 0.9 ? COLOR.heatWarm : COLOR.heatHot;
+}
+
+/** `1.2k rps · +4.5 ms`: what an edge carries and the latency it adds, as the canvas's edge chip; empty when it carries nothing. */
+export function loadChip(load: EdgeOverlay | undefined): string {
+  if (!load || !(load.rps > 0)) return '';
+  return load.latencyMs !== undefined ? `${formatRps(load.rps)} · +${formatMs(load.latencyMs)}` : formatRps(load.rps);
+}
+
+interface Cell {
+  x: number;
+  y: number;
+}
+
+/** Text at a cell: a row of an edge's label or chip. */
+interface Spot extends Cell {
+  text: string;
+}
+
+/** Where words go: centred on a column, or beside a line, right or left of it. */
+interface Anchor extends Cell {
+  side?: 'left' | 'right';
+}
+
+/**
+ * Where an edge's label and chip may go, the likeliest first: the label's own
+ * place and a row either side; the middle of each straight run, the longest
+ * first, on it and a row either side; then every other cell of those runs,
+ * nearest the middle first, a horizontal run's on it and a row either side, a
+ * vertical run's on it, then beside it, right and left.
+ */
+function anchorsOf(path: Path, label: Cell | undefined): Anchor[] {
+  const { cells, dirs } = path;
+  const runs: { from: number; length: number; vertical: boolean }[] = [];
+  for (let i = 0; i < cells.length - 1; ) {
+    let j = i;
+    while (j + 1 < cells.length - 1 && dirs[j + 1] === dirs[i]) j++;
+    runs.push({ from: i, length: j - i + 1, vertical: dirs[i] === (N | S) });
+    i = j + 1;
+  }
+  runs.sort((a, b) => b.length - a.length);
+  const rows = (at: Cell): Anchor[] => [0, -1, 1].map((dy) => ({ x: at.x, y: at.y + dy }));
+  const out: Anchor[] = label ? rows(label) : [];
+  for (const r of runs) out.push(...rows(cells[r.from + Math.floor(r.length / 2)]));
+  if (runs.length === 0) out.push(...rows(cells[0]));
+  for (const r of runs) {
+    const mid = Math.floor(r.length / 2);
+    const order = Array.from({ length: r.length }, (_, k) => k).sort((a, b) => Math.abs(a - mid) - Math.abs(b - mid));
+    for (const k of order) {
+      const at = cells[r.from + k];
+      if (r.vertical) out.push(at, { ...at, y: at.y - 1 }, { ...at, side: 'right' }, { ...at, side: 'left' });
+      else if (k !== mid) out.push(...rows(at));
+    }
+  }
+  return out;
+}
+
+/** Past the rows beside a line: two to five rows up, then down, from the middle of each horizontal run, the longest first. */
+function clearOf({ cells, dirs }: Path): Anchor[] {
+  const out: Anchor[] = [];
+  for (let i = 0; i < cells.length - 1; ) {
+    let j = i;
+    while (j + 1 < cells.length - 1 && dirs[j + 1] === dirs[i]) j++;
+    if (dirs[i] === (E | W)) out.push(cells[i + Math.floor((j - i) / 2)]);
+    i = j + 1;
+  }
+  return out.flatMap((at) => [-2, -3, -4, -5, 2, 3, 4, 5].map((dy) => ({ x: at.x, y: at.y + dy })));
+}
+
+/** Cells a chip never covers: the cards, and the frames of groups. */
+function blockedCells(grid: Grid, scene: Scene): Uint8Array {
+  const out = new Uint8Array(grid.columns * grid.rows);
+  const mark = (x: number, y: number) => {
+    if (grid.inside(x, y)) out[y * grid.columns + x] = 1;
+  };
+  for (const { node, rect } of scene.nodes.values()) {
+    if (node.kind !== 'group') {
+      for (let y = rect.y; y < rect.y + rect.h; y++) for (let x = rect.x; x < rect.x + rect.w; x++) mark(x, y);
+      continue;
+    }
+    for (let x = rect.x; x < rect.x + rect.w; x++) {
+      mark(x, rect.y);
+      mark(x, rect.y + rect.h - 1);
+    }
+    for (let y = rect.y; y < rect.y + rect.h; y++) {
+      mark(rect.x, y);
+      mark(rect.x + rect.w - 1, y);
+    }
+  }
+  return out;
 }
 
 function baseColor(node: DiagramNode, fallback: number): number {
@@ -283,7 +432,9 @@ function drawSystem(grid: Grid, { node, rect }: SceneNode, badge: SystemBadge | 
   const accent = look === 'failing' ? COLOR.fail : look === 'lit' || selected ? COLOR.pink : undefined;
   const status = badge?.status;
   const color = accent ?? fade(look, statusColor(status, baseColor(node, COLOR.line)));
-  const heat = look || !badge || badge.utilization === undefined ? undefined : heatOf({ utilization: badge.utilization, saturated: status === 'saturated' });
+  const busy = look || !badge || badge.utilization === undefined ? undefined : { utilization: badge.utilization, saturated: status === 'saturated' };
+  const heat = heatOf(busy);
+  const tint = tintOf(busy);
   const ink = heat !== undefined ? COLOR.onColor : look === 'off' ? COLOR.fadedMore : DEFAULT;
   const muted = heat !== undefined ? COLOR.onColor : look === 'off' ? COLOR.fadedMore : COLOR.muted;
   fill(grid, rect, DEFAULT, DEFAULT);
@@ -310,20 +461,32 @@ function drawSystem(grid: Grid, { node, rect }: SceneNode, badge: SystemBadge | 
   const filled = Math.max(share > 0 ? 1 : 0, Math.min(bar, Math.round(share * bar)));
   for (let i = 0; i < bar; i++) {
     const full = i < filled;
-    grid.set(left + text.length + 1 + i, rect.y + 4, full ? '━' : '─', heat !== undefined ? COLOR.onColor : full ? ink : COLOR.muted, heat);
+    grid.set(left + text.length + 1 + i, rect.y + 4, full ? '━' : '─', heat !== undefined ? COLOR.onColor : full ? (tint ?? ink) : COLOR.muted, heat);
   }
 }
 
 /** The canvas's icon tile: a square of the card's color left of the name, the icon dark on it. */
 const TILE = { w: 5, h: 3 };
 
-/** The fill of a busy card (utils/heat.ts); none below 70%, where the bar alone tells. */
+/**
+ * The fill of a busy card (utils/heat.ts): yellow from 70%, then pink and red.
+ * Below 70% none: the canvas's faint yellow has no faint form in a terminal,
+ * where a solid one shouts on a dark background, so `tintOf` colours the
+ * border and bar instead.
+ */
 export function heatOf(overlay: NodeOverlay | undefined): number | undefined {
   const u = overlay?.utilization;
   if (!overlay || overlay.down || u === undefined) return undefined;
   if (overlay.saturated || u >= 1) return COLOR.heatOver;
   if (u >= 0.9) return COLOR.heatHot;
   return u >= 0.7 ? COLOR.heatWarm : undefined;
+}
+
+/** The border and bar of a card from 40% to 70% of capacity: yellow, the card unfilled (the canvas's pale fill). */
+export function tintOf(overlay: NodeOverlay | undefined): number | undefined {
+  const u = overlay?.utilization;
+  if (!overlay || overlay.down || overlay.saturated || u === undefined) return undefined;
+  return u >= 0.4 && u < 0.7 ? COLOR.heatWarm : undefined;
 }
 
 const replicasOf = (node: DiagramNode, overlay: NodeOverlay | undefined) => overlay?.replicas ?? node.replicas ?? 1;
@@ -372,7 +535,8 @@ function drawStackCount(grid: Grid, scene: Scene, n: SceneNode, overlay: NodeOve
  * A card: a heavy border and a solid icon tile, both in the node's
  * color, or the accent while it is lit. On the scenario's path it turns grey
  * and keeps its ink; off it, it all turns grey and dotted. Under the load
- * overlay (ComponentNode.tsx) a busy card fills with its heat, one past
+ * overlay (ComponentNode.tsx) a card from 40% of capacity takes a yellow
+ * border and bar, from 70% it fills with its heat, one past
  * capacity turns its border red, one that is down turns grey and dotted, and
  * the team line gives way to the numbers and a bar of how busy it is.
  */
@@ -381,6 +545,7 @@ function drawCard(grid: Grid, scene: Scene, n: SceneNode, overlay: NodeOverlay |
   const down = !!overlay?.down;
   const over = !down && !!overlay && (!!overlay.saturated || (overlay.utilization ?? 0) >= 1);
   const heat = look ? undefined : heatOf(overlay);
+  const tint = look ? undefined : tintOf(overlay);
   const accent = look === 'failing' ? COLOR.fail : look === 'lit' ? COLOR.pink : undefined;
   const color = accent ?? (down && !look ? COLOR.muted : over && !look ? COLOR.fail : fade(look, baseColor(node, COLOR.line)));
   const faded = look === 'path' || look === 'off' || down;
@@ -388,7 +553,7 @@ function drawCard(grid: Grid, scene: Scene, n: SceneNode, overlay: NodeOverlay |
   const muted = heat !== undefined ? COLOR.onColor : look === 'off' ? COLOR.fadedMore : COLOR.muted;
   fill(grid, rect, DEFAULT, DEFAULT);
   if (heat !== undefined) fill(grid, { x: rect.x + 1, y: rect.y + 1, w: rect.w - 2, h: rect.h - 2 }, COLOR.onColor, heat);
-  frame(grid, rect, color, look === 'off' || down ? 'dotted' : accent ? 'solid' : (node.style?.dash ?? 'solid'), true);
+  frame(grid, rect, accent ?? tint ?? color, look === 'off' || down ? 'dotted' : accent ? 'solid' : (node.style?.dash ?? 'solid'), true);
 
   const icon = iconOf(node, icons);
   const tiled = icon !== undefined && rect.w >= 22;
@@ -404,9 +569,11 @@ function drawCard(grid: Grid, scene: Scene, n: SceneNode, overlay: NodeOverlay |
   const room = rect.x + rect.w - 2 - left;
   grid.text(left, rect.y + 1, fit(node.name, room), ink, Infinity, heat);
   grid.text(left, rect.y + 2, fit(node.techStack, room), muted, Infinity, heat);
-  const load = overlay ? loadRow(grid, { x: left, y: rect.y + 3, room }, node, overlay, look, heat, stackShown(grid, scene, n, overlay)) : false;
+  const load = overlay ? loadRow(grid, { x: left, y: rect.y + 3, room }, node, overlay, look, heat, tint, stackShown(grid, scene, n, overlay)) : false;
   if (!load && node.ownerTeam) grid.text(left, rect.y + 3, fit(`Team: ${node.ownerTeam}`, room), muted, Infinity, heat);
   if (node.critical) grid.text(rect.x + rect.w - 4, rect.y, ' ! ', look === 'off' ? muted : COLOR.critical);
+  // The canvas's bottleneck ring: a red chip on the top border, the first card to give way as traffic grows.
+  if (overlay?.bottleneck && !look && !down && rect.w >= 10) grid.text(rect.x + 2, rect.y, fit(' BOTTLENECK ', rect.w - (node.critical ? 8 : 4)), COLOR.onColor, Infinity, COLOR.heatOver);
 }
 
 /**
@@ -414,7 +581,7 @@ function drawCard(grid: Grid, scene: Scene, n: SceneNode, overlay: NodeOverlay |
  * card shows them), size, shards and how busy, or "down", then a bar of the
  * utilisation. False when there is nothing to show.
  */
-function loadRow(grid: Grid, at: { x: number; y: number; room: number }, node: DiagramNode, o: NodeOverlay, look: Look, heat: number | undefined, stack: boolean): boolean {
+function loadRow(grid: Grid, at: { x: number; y: number; room: number }, node: DiagramNode, o: NodeOverlay, look: Look, heat: number | undefined, tint: number | undefined, stack: boolean): boolean {
   const u = o.utilization;
   const replicas = replicasOf(node, o);
   const parts = [
@@ -433,7 +600,7 @@ function loadRow(grid: Grid, at: { x: number; y: number; room: number }, node: D
   const filled = Math.max(u > 0 ? 1 : 0, Math.min(bar, Math.round(u * bar)));
   for (let i = 0; i < bar; i++) {
     const full = i < filled;
-    grid.set(at.x + text.length + 1 + i, at.y, full ? '━' : '─', on ? COLOR.onColor : full ? ink : COLOR.muted, heat);
+    grid.set(at.x + text.length + 1 + i, at.y, full ? '━' : '─', on ? COLOR.onColor : full ? (tint ?? ink) : COLOR.muted, heat);
   }
   return true;
 }

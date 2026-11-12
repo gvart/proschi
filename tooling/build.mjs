@@ -55,8 +55,8 @@ writeFileSync(
 );
 
 // Claude Code plugin (../plugin): the hooks module that draws diagrams in the terminal, an ES
-// module with no Node or DOM, kept under the engine's 1 MiB per file, so without ELK; and the
-// layout helper the hooks run in Node, which carries ELK.
+// module with no Node or DOM, kept under the engine's 1 MiB per file, so without ELK, which the
+// raster helper below carries (it lays diagrams out for the hooks too).
 await build({
   ...common,
   entryPoints: ['../plugin/src/register.tsx'],
@@ -74,8 +74,24 @@ await build({
 });
 const hooks = readFileSync('../plugin/hooks/register.js', 'utf8');
 if (hooks.includes('import(') || hooks.includes('elkjs')) throw new Error('plugin/hooks/register.js must not load ELK or use import()');
-if (hooks.length > 1024 * 1024) throw new Error(`plugin/hooks/register.js is ${hooks.length} bytes, over the 1 MiB a hooks module may be`);
-await build({ ...common, entryPoints: ['src/terminal/layoutHost.ts'], outfile: '../plugin/hooks/layout.cjs', alias: { ...renderAlias, 'lz-string': './node_modules/lz-string' }, minify: true, legalComments: 'none' });
+const hooksBytes = Buffer.byteLength(hooks, 'utf8');
+if (hooksBytes > 1024 * 1024) throw new Error(`plugin/hooks/register.js is ${hooksBytes} bytes, over the 1 MiB a hooks module may be`);
+// The overlay laid over drawings in pictures (src/picture.tsx): a surface module the hooks module names as `./uiOverlay.js`, beside it.
+await build({ ...common, entryPoints: ['../plugin/src/uiOverlay.ts'], outfile: '../plugin/hooks/uiOverlay.js', platform: 'neutral', format: 'esm', external: ['claude-code'], legalComments: 'none' });
+// The raster helper: the architecture SVG as PNGs for terminal image protocols, with resvg's
+// wasm beside it (the fonts it draws with are committed in plugin/hooks/fonts). lucide-react's ES
+// module build, so only the icons the canvas maps are bundled rather than all of them (its CommonJS
+// build is one file), and React's production build alone, as react-dom/server otherwise carries both.
+await build({
+  ...common,
+  entryPoints: ['src/terminal/rasterHost.ts'],
+  outfile: '../plugin/hooks/raster.cjs',
+  alias: { ...renderAlias, 'lucide-react': './node_modules/lucide-react/dist/esm/lucide-react.mjs', 'lz-string': './node_modules/lz-string' },
+  define: { ...common.define, 'process.env.NODE_ENV': '"production"' },
+  minify: true,
+  legalComments: 'none',
+});
+copyFileSync('node_modules/@resvg/resvg-wasm/index_bg.wasm', '../plugin/hooks/resvg.wasm');
 
 // VS Code extension: its own client bundle (minified, as the preview carries the renderer),
 // plus copies of the server and grammar.

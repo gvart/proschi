@@ -1,12 +1,14 @@
-import { layoutGraph, SYSTEM_SIZE, type Point } from '../../../frontend/src/dsl/autoLayout';
+import { layoutGraph, SYSTEM_SIZE, type Layout, type Point } from '../../../frontend/src/dsl/autoLayout';
 import { fallbackRoute, labelPoint, roundedPath, snapToBottom, withHead } from '../../../frontend/src/dsl/edgePath';
 import type { Diagram, DiagramNode } from '../proschi';
-import { DASH_ARRAY, nodeBaseColor, tint } from '../../../frontend/src/dsl/palette';
-import type { DiagramEdge, LegendEntry } from '../../../frontend/src/dsl/types';
-import type { NodeOverlay } from '../../../frontend/src/sim/overlay';
+import { DASH_ARRAY, mix, nodeBaseColor, tint } from '../../../frontend/src/dsl/palette';
+import type { DiagramEdge, FlowStep, LegendEntry } from '../../../frontend/src/dsl/types';
+import { formatMs, formatRps } from '../../../frontend/src/sim/format';
+import type { EdgeOverlay, NodeOverlay } from '../../../frontend/src/sim/overlay';
+import { currentStepsOf, isErrorStep } from '../terminal/playback';
 import { loadText, type SystemBadge, type SystemStatus } from '../terminal/systems';
 import { techIcon } from './icons';
-import { COLORS, MONO, card, esc, fit, r, svgDocument, text, textWidth, wrap } from './svg';
+import { COLORS, MONO, card, currentTheme, esc, fit, r, svgDocument, text, textWidth, withTheme, wrap, type Theme } from './svg';
 
 /**
  * The architecture as SVG, drawn like the editor's canvas (canvas.css): the
@@ -49,10 +51,77 @@ export interface ArchitectureOptions {
   systems?: Record<string, SystemBadge>;
   /** The load on each card, by node id (terminal/systems.ts viewOverlay): a team's nodes inside an expanded system under what it is sent. */
   nodes?: Record<string, NodeOverlay>;
+  /** The canvas's theme to draw in; light by default. */
+  theme?: Theme;
+  /**
+   * The editor's load overlay (sim/overlay.ts): each edge tinted by the load
+   * of the node it feeds with an `rps · +latency` chip, the p99 path bold,
+   * cards filled with the canvas's heat and the bottleneck ringed. `edges` is
+   * edgeOverlays() by edge id; the cards' load comes from `nodes`.
+   */
+  overlay?: { edges: Record<string, EdgeOverlay> };
+  /** A node or expanded system drawn selected, ringed in the accent. */
+  selected?: string;
+  /** A moment of a scenario's playback (see PlayMoment). */
+  play?: PlayMoment;
+  /**
+   * Drawn for a terminal image (the Claude Code plugin's raster helper), closer
+   * to the canvas than `proschi render`: a card with replicas stacked as the
+   * canvas stacks it (`[data-stack]`), its load line as the canvas's
+   * (`×3 · L · ⧉2 · 42%`), and edge chips opaque, so their own line does not
+   * show through the numbers. Off by default, which leaves the SVG as it was.
+   */
+  terminal?: boolean;
+  /** The paper's colour instead of the theme's (the plugin's UI surface, which the picture sits on). */
+  background?: string;
+}
+
+/**
+ * One moment of playback as the editor's player draws it
+ * (components/UseCases): step `index` of `steps` (with the earlier steps of
+ * its `par` group) `progress` (0..100) of the way through, its edges in the
+ * accent (red for an error) with the packet on them, its nodes lit; steps
+ * already played stay half lit, the rest of the scenario fainter, and nodes
+ * it never touches fade out.
+ */
+export interface PlayMoment {
+  steps: FlowStep[];
+  index: number;
+  progress: number;
+}
+
+/** A diagram with its layout, so several moments of it draw without laying it out again. */
+export interface ArchitectureLayout {
+  diagram: Diagram;
+  layout: Layout;
+}
+
+export async function layoutArchitecture(diagram: Diagram): Promise<ArchitectureLayout> {
+  return { diagram, layout: await layoutGraph(diagram) };
 }
 
 export async function renderArchitectureSvg(diagram: Diagram, options: ArchitectureOptions = {}): Promise<string> {
-  const layout = await layoutGraph(diagram);
+  return drawArchitecture(await layoutArchitecture(diagram), options);
+}
+
+/** The SVG of a laid-out diagram (layoutArchitecture). */
+export function drawArchitecture(laid: ArchitectureLayout, options: ArchitectureOptions = {}): string {
+  return withTheme(options.theme ?? 'light', () => {
+    if (!options.background) return draw(laid, options);
+    const colors = COLORS as { background: string };
+    const was = colors.background;
+    colors.background = options.background;
+    try {
+      return draw(laid, options);
+    } finally {
+      colors.background = was;
+    }
+  });
+}
+
+function draw({ diagram, layout }: ArchitectureLayout, options: ArchitectureOptions): string {
+  const theme = currentTheme();
+  const play = options.play ? playState(options.play) : undefined;
   const boxes = new Map(layout.nodes.map((b) => [b.id, b]));
 
   // Absolute positions: group members are laid out relative to their group.
@@ -90,10 +159,12 @@ export async function renderArchitectureSvg(diagram: Diagram, options: Architect
     return parent ? depth(parent.node) + 1 : 0;
   };
   for (const p of all.filter((p) => p.node.kind === 'group').sort((a, b) => depth(a.node) - depth(b.node))) {
+    if (play) body.push(`<g opacity="${GROUP_OPACITY}">`);
+    if (options.selected === p.node.id) body.push(selectionRing(p.x + dx, p.y + dy, p.width, p.height, 10));
     const x = p.x + dx;
     const y = p.y + dy;
     const base = nodeBaseColor(p.node);
-    const t = base ? tint(base, 'light') : undefined;
+    const t = base ? tint(base, theme) : undefined;
     if (p.node.system === p.node.id) {
       // An expanded system: a solid double frame in its status color, its status, team, promise and load after the name.
       const badge = options.systems?.[p.node.id];
@@ -114,6 +185,7 @@ export async function renderArchitectureSvg(diagram: Diagram, options: Architect
         about ? halo(text(after, y + 24, fit(about, x + p.width - 14 - after, 12), { size: 12, weight: 600, fill: statusColor(badge?.status) ?? COLORS.muted })) : '',
         '</g>',
       );
+      if (play) body.push('</g>');
       continue;
     }
     const dash = p.node.style?.dash ? DASH_ARRAY[p.node.style.dash] : '7 5';
@@ -125,6 +197,7 @@ export async function renderArchitectureSvg(diagram: Diagram, options: Architect
       `<rect x="${r(x + 1)}" y="${r(y + 1)}" width="${r(p.width - 2)}" height="${r(p.height - 2)}" rx="10" ${frame}/>`,
       '</g>',
     );
+    if (play) body.push('</g>');
     // The title and description go over the edges (with a halo), so an edge entering the group does not strike them through.
     titles.push(
       `<g data-group-title="${esc(p.node.id)}">`,
@@ -135,25 +208,76 @@ export async function renderArchitectureSvg(diagram: Diagram, options: Architect
     );
   }
 
+  const boxOf = (p: Placed) => ({ x: p.x + dx, y: p.y + dy, width: p.width, height: p.height });
+  const routed = new Map<string, Point[]>();
+  // In the terminal, the load chips placed so far: a chip that would cover one moves along its own edge (clearOf).
+  const chips: Box[] = [];
+  const frames = [...placed.values()].map(boxOf);
+  // The cards: what holds no other box (a group's or an expanded system's frame does).
+  const cards = frames.filter((f) => !frames.some((o) => o !== f && o.x >= f.x && o.y >= f.y && o.x + o.width <= f.x + f.width && o.y + o.height <= f.y + f.height));
   for (const edge of diagram.edges) {
     const s = placed.get(edge.source);
     const t = placed.get(edge.target);
     if (!s || !t || s === t) continue;
-    const sBox = { x: s.x + dx, y: s.y + dy, width: s.width, height: s.height };
-    const tBox = { x: t.x + dx, y: t.y + dy, width: t.width, height: t.height };
+    const sBox = boxOf(s);
+    const tBox = boxOf(t);
     const route = layout.routes[edge.id];
     const shift = (p: Point) => ({ x: p.x + dx, y: p.y + dy });
     // Cards here are drawn at their own height, so ends on a bottom move onto it.
-    const points = route ? snapToBottom(snapToBottom(route.points.map(shift), 'start', sBox), 'end', tBox) : fallbackRoute(sBox, tBox);
-    body.push(drawEdge(edge.id, edge.label, points, route?.label ? shift(route.label) : labelPoint(points), edgeStroke(edge)));
+    const routedPoints = route ? snapToBottom(snapToBottom(route.points.map(shift), 'start', sBox), 'end', tBox) : fallbackRoute(sBox, tBox);
+    routed.set(edge.id, routedPoints);
+    // In the terminal, an arrow into a handle stops at the handle's edge, so the card's handle (drawn over the edges) leaves its head whole.
+    const points = options.terminal ? clearOfHandle(routedPoints, tBox) : routedPoints;
+    let at = route?.label ? shift(route.label) : labelPoint(points);
+    const load = options.overlay?.edges[edge.id];
+    if (options.terminal && load && load.rps > 0) at = clearOf(at, chipSize(edge.label, load), points, chips, cards);
+    const move = play?.moveOn(edge);
+    if (!load && !play) {
+      body.push(drawEdge(edge.id, edge.label, points, at, edgeStroke(edge)));
+      continue;
+    }
+    if (play) body.push(`<g opacity="${play.edgeOpacity(edge)}">`);
+    body.push(drawLiveEdge(edge, points, at, load, move, options.terminal));
+    if (play) body.push('</g>');
+  }
+  // The packets go over the cards, so one leaving or reaching a card stays in sight.
+  const packets: string[] = [];
+  for (const move of play?.moves ?? []) {
+    const edge = diagram.edges.find((e) => routed.has(e.id) && connects(e, move.step));
+    let points = edge && routed.get(edge.id);
+    if (!edge || !points) {
+      // A step between nodes no edge connects still plays, along a route of its own.
+      const s = placed.get(move.step.fromServiceId);
+      const t = placed.get(move.step.toServiceId);
+      if (!s || !t || s === t) continue;
+      points = fallbackRoute(boxOf(s), boxOf(t));
+      body.push(drawLiveEdge(undefined, points, labelPoint(points), undefined, move));
+    } else if (edge.source !== move.step.fromServiceId) points = points.slice().reverse();
+    packets.push(drawPacket(points, move, options.play!.progress));
   }
 
   body.push(...titles);
 
   for (const p of all) {
     if (p.node.kind === 'group') continue;
-    body.push(p.node.kind === 'text' ? drawNote(p, dx, dy) : p.node.kind === 'system' ? drawSystem(p, dx, dy, options.systems?.[p.node.id]) : drawCard(p, dx, dy, options.nodes?.[p.node.id]));
+    const id = p.node.id;
+    if (!play && options.selected === undefined) {
+      body.push(p.node.kind === 'text' ? drawNote(p, dx, dy) : p.node.kind === 'system' ? drawSystem(p, dx, dy, options.systems?.[id]) : drawCard(p, dx, dy, options.nodes?.[id], { overlay: !!options.overlay, ...(options.terminal ? { terminal: true } : {}) }));
+      continue;
+    }
+    const mark: Mark | undefined = play?.failing.has(id) ? 'failing' : play?.active.has(id) ? 'active' : undefined;
+    if (play) body.push(`<g opacity="${play.nodeOpacity(id)}">`);
+    if (options.selected === id) body.push(selectionRing(p.x + dx, p.y + dy, p.width, p.height, 8));
+    body.push(
+      p.node.kind === 'text'
+        ? drawNote(p, dx, dy)
+        : p.node.kind === 'system'
+          ? drawSystem(p, dx, dy, options.systems?.[id], mark)
+          : drawCard(p, dx, dy, options.nodes?.[id], { overlay: !!options.overlay, mark, ...(options.terminal ? { terminal: true } : {}) }),
+    );
+    if (play) body.push('</g>');
   }
+  body.push(...packets);
 
   if (diagram.legend && diagram.nodes.length > 0) {
     const size = legendSize(diagram.legend);
@@ -173,37 +297,69 @@ function halo(textElement: string): string {
   return textElement.replace('<text ', `<text paint-order="stroke" stroke="${COLORS.background}" stroke-width="5" stroke-linejoin="round" `);
 }
 
+/** An edge whose last point is a handle of `box` (the middle of its top or bottom), ended 5 px short of that point along its last run: at the handle's edge. */
+function clearOfHandle(points: Point[], box: { x: number; y: number; width: number; height: number }): Point[] {
+  const end = points.at(-1);
+  const before = points.at(-2);
+  if (!end || !before) return points;
+  const atHandle = Math.abs(end.x - (box.x + box.width / 2)) < 1 && (Math.abs(end.y - box.y) < 1 || Math.abs(end.y - (box.y + box.height)) < 1);
+  const run = Math.hypot(end.x - before.x, end.y - before.y);
+  if (!atHandle || run < 20) return points;
+  const k = 5 / run;
+  return [...points.slice(0, -1), { x: end.x - (end.x - before.x) * k, y: end.y - (end.y - before.y) * k }];
+}
+
 /** React Flow's handle (`.pc-handle`): a 9px square centred on (cx, cy). */
 function handle(cx: number, cy: number): string {
   return `<rect x="${r(cx - 4.5)}" y="${r(cy - 4.5)}" width="9" height="9" rx="1" fill="${COLORS.surface}" stroke="${COLORS.border}" stroke-width="2"/>`;
 }
 
-function drawCard(p: Placed, dx: number, dy: number, load?: NodeOverlay): string {
+/** How playback lights a card: one of the current step's nodes, or the one whose call failed. */
+type Mark = 'active' | 'failing';
+
+function drawCard(p: Placed, dx: number, dy: number, load?: NodeOverlay, live: { overlay?: boolean; mark?: Mark; terminal?: boolean } = {}): string {
   const { node, width, height } = p;
-  const x = p.x + dx;
-  const y = p.y + dy;
+  const { overlay, mark, terminal } = live;
+  // Lit by playback, a card lifts off its shadow (canvas.css `.pc-active`).
+  const lift = mark ? 2 : 0;
+  const x = p.x + dx - lift;
+  const y = p.y + dy - lift;
   const textX = x + PAD_X + ICON + 10;
   const base = nodeBaseColor(node);
-  const t = base ? tint(base, 'light') : undefined;
+  const t = base ? tint(base, currentTheme()) : undefined;
   const dash = node.style?.dash ? DASH_ARRAY[node.style.dash].replace(/\d+/g, (n) => String(Number(n) * 1.5)) : undefined;
   // The load, as on the terminal's cards: how busy (or down) after the tech, a bar along the bottom, and the heat as the fill.
   const u = load?.utilization;
-  const busy = load?.down ? 'down' : u !== undefined ? `${Math.round(u * 100)}%` : '';
-  const heat = heatOf(load);
+  const percent = load?.down ? 'down' : u !== undefined ? `${Math.round(u * 100)}%` : '';
+  const replicas = terminal ? (load?.replicas ?? node.replicas ?? 1) : 1;
+  // For a terminal, the canvas's load line (LoadBadge): replicas, size, shards, then how busy.
+  const busy = terminal && load ? [replicas > 1 ? `×${replicas}` : '', load.size ?? '', load.shards && load.shards > 1 ? `⧉${load.shards}` : '', percent].filter(Boolean).join(' · ') : percent;
+  // Lit by playback, the accent shadow takes the stack's place, as on the canvas (`.pc-active` wins over `[data-stack]`).
+  const stack = node.kind === 'component' && !mark ? Math.min(2, replicas - 1) : 0;
+  // Under the load overlay, the canvas's heat scale (utils/heat.ts) and, on its solid fills, the dark text drawn on accents.
+  const scale = overlay ? canvasHeat(load) : undefined;
+  const heat = scale ? scale.fill : heatOf(load);
+  const fg = scale?.accent ? ON_ACCENT : COLORS.text;
+  const dim = scale?.fill ? fg : COLORS.muted;
   const textMax = width - PAD_X * 2 - ICON - 10;
   const techMax = busy ? textMax - textWidth(busy, 11, true) - 8 : textMax;
-  const ink = load?.saturated || (u ?? 0) >= 1 ? COLORS.error : load?.down ? COLORS.muted : COLORS.text;
+  const ink = load?.saturated || (u ?? 0) >= 1 ? (scale?.accent ? ON_ACCENT : COLORS.error) : load?.down ? COLORS.muted : fg;
   const bar = u !== undefined && !load?.down ? loadBar(x + PAD_X, y + height - 11, width - PAD_X * 2, u, ink) : '';
+  const lit = mark === 'failing' ? COLORS.error : mark === 'active' ? COLORS.active : undefined;
+  const ringed = overlay && load?.bottleneck;
   return [
-    `<g data-node="${esc(node.id)}" data-kind="${esc(node.type)}"${busy ? ` data-load="${busy}"` : ''}>`,
-    card(x, y, width, height, { fill: heat ?? t?.fill, line: t?.line, dash }),
-    `<rect x="${r(x + PAD_X + 1)}" y="${r(y + PAD_Y + 1)}" width="${ICON - 2}" height="${ICON - 2}" rx="4" fill="${COLORS.background}" stroke="${COLORS.border}" stroke-width="2"/>`,
-    techIcon(node.techStack, x + PAD_X + 8, y + PAD_Y + 8, 18, COLORS.text, node.type),
-    text(textX, y + PAD_Y + 15, fit(node.name, textMax, 14, true), { size: 14, weight: 700 }),
-    text(textX, y + PAD_Y + 31, fit(node.techStack, techMax, 12), { size: 11, weight: 500, fill: COLORS.muted, family: MONO }),
+    `<g data-node="${esc(node.id)}" data-kind="${esc(node.type)}"${busy ? ` data-load="${busy}"` : ''}${mark ? ` data-play="${mark}"` : ''}>`,
+    ringed ? bottleneckRing(x, y, width, height) : '',
+    stack > 0 ? stackOf(x, y, width, height, stack) : '',
+    card(x, y, width, height, { fill: heat ?? t?.fill, line: mark === 'failing' ? COLORS.error : t?.line, dash, ...(lit ? { shade: lit, depth: 5 } : stack > 0 ? { shadow: false } : {}) }),
+    `<rect x="${r(x + PAD_X + 1)}" y="${r(y + PAD_Y + 1)}" width="${ICON - 2}" height="${ICON - 2}" rx="4" fill="${lit ?? COLORS.background}" stroke="${lit ?? COLORS.border}" stroke-width="2"/>`,
+    techIcon(node.techStack, x + PAD_X + 8, y + PAD_Y + 8, 18, lit ? ON_ACCENT : COLORS.text, node.type),
+    text(textX, y + PAD_Y + 15, fit(node.name, textMax, 14, true), { size: 14, weight: 700, ...(fg !== COLORS.text ? { fill: fg } : {}) }),
+    text(textX, y + PAD_Y + 31, fit(node.techStack, techMax, 12), { size: 11, weight: 500, fill: dim, family: MONO }),
     busy ? text(x + width - PAD_X, y + PAD_Y + 31, busy, { size: 11, weight: 700, fill: ink, anchor: 'end', family: MONO }) : '',
     bar,
-    node.ownerTeam ? text(x + PAD_X, y + PAD_Y + 60, fit(`Team: ${node.ownerTeam}`, width - PAD_X * 2, 12), { size: 12, fill: COLORS.muted }) : '',
+    node.ownerTeam ? text(x + PAD_X, y + PAD_Y + 60, fit(`Team: ${node.ownerTeam}`, width - PAD_X * 2, 12), { size: 12, fill: dim }) : '',
+    ringed ? bottleneckTag(x, y) : '',
     handle(x + width / 2, y),
     handle(x + width / 2, y + height),
     node.critical ? criticalBadge(x + width, y) : '',
@@ -213,12 +369,37 @@ function drawCard(p: Placed, dx: number, dy: number, load?: NodeOverlay): string
     .join('\n');
 }
 
+/**
+ * The cards behind a card with replicas, as the canvas stacks them in place of
+ * its shadow (canvas.css `.pc-node[data-stack]`): one outlined card per extra
+ * replica, at most two, each 4px further right and down.
+ */
+function stackOf(x: number, y: number, w: number, h: number, count: number): string {
+  const out: string[] = [];
+  for (let k = count; k >= 1; k--) {
+    out.push(
+      `<rect data-stack="${k}" x="${r(x + 4 * k)}" y="${r(y + 4 * k)}" width="${r(w)}" height="${r(h)}" rx="4" fill="${COLORS.border}"/>`,
+      `<rect x="${r(x + 4 * k + 2)}" y="${r(y + 4 * k + 2)}" width="${r(w - 4)}" height="${r(h - 4)}" rx="3" fill="${COLORS.surface}"/>`,
+    );
+  }
+  return out.join('\n');
+}
+
 /** The status word of a system, and its color: red past capacity or its SLA, amber running hot (as the terminal's, paint.ts). */
 const STATUS: Record<SystemStatus, string> = { ok: '✓ ok', hot: '▲ hot', saturated: '✗ saturated', breach: '✗ breaks SLA', idle: 'not simulated' };
-const STATUS_COLOR: Partial<Record<SystemStatus, string>> = { saturated: COLORS.error, breach: COLORS.error, hot: '#B7791F' };
-const statusColor = (status: SystemStatus | undefined) => (status ? STATUS_COLOR[status] : undefined);
-// The canvas's load fills (utils/heat.ts), light theme.
-const HEAT = { warm: '#FFF1BF', hot: '#FFD6E8', over: '#FFD9D6' };
+const STATUS_COLOR: Partial<Record<SystemStatus, string>> = { hot: '#B7791F' };
+const statusColor = (status: SystemStatus | undefined) =>
+  status === 'saturated' || status === 'breach' ? COLORS.error : status === 'hot' && currentTheme() === 'dark' ? '#E0A43A' : status ? STATUS_COLOR[status] : undefined;
+// The canvas's load fills (utils/heat.ts), light theme; the dark theme's are the same hues over its surface.
+const LIGHT_HEAT = { warm: '#FFF1BF', hot: '#FFD6E8', over: '#FFD9D6' };
+const heatColors = () =>
+  currentTheme() === 'light'
+    ? LIGHT_HEAT
+    : { warm: mix(YELLOW, COLORS.surface, 0.28), hot: mix(COLORS.active, COLORS.surface, 0.3), over: mix(COLORS.error, COLORS.surface, 0.3) };
+
+/** The canvas's yellow (`--c-yellow`), the same in both themes, and the dark text drawn on its accents (`--c-on-accent`). */
+const YELLOW = '#FFD23F';
+const ON_ACCENT = '#111111';
 
 /**
  * A collapsed system (docs/design/team-systems-and-imports.md D3): a card
@@ -231,7 +412,7 @@ const HEAT = { warm: '#FFF1BF', hot: '#FFD6E8', over: '#FFD9D6' };
 function loadBar(x: number, y: number, w: number, u: number, ink: string): string {
   const share = Math.min(1, u);
   return [
-    `<rect x="${r(x)}" y="${r(y)}" width="${r(w)}" height="3" rx="1.5" fill="${COLORS.text}" fill-opacity="0.12"/>`,
+    `<rect x="${r(x)}" y="${r(y)}" width="${r(w)}" height="3" rx="1.5" fill="${ink === ON_ACCENT ? ON_ACCENT : COLORS.text}" fill-opacity="0.12"/>`,
     `<rect x="${r(x)}" y="${r(y)}" width="${r(Math.max(share > 0 ? 3 : 0, w * share))}" height="3" rx="1.5" fill="${ink}"/>`,
   ].join('\n');
 }
@@ -240,27 +421,31 @@ function loadBar(x: number, y: number, w: number, u: number, ink: string): strin
 function heatOf(load: NodeOverlay | undefined): string | undefined {
   const u = load?.utilization;
   if (!load || load.down || u === undefined) return undefined;
+  const HEAT = heatColors();
   return load.saturated || u >= 1 ? HEAT.over : u >= 0.9 ? HEAT.hot : u >= 0.7 ? HEAT.warm : undefined;
 }
 
-function drawSystem(p: Placed, dx: number, dy: number, badge: SystemBadge | undefined): string {
+function drawSystem(p: Placed, dx: number, dy: number, badge: SystemBadge | undefined, mark?: Mark): string {
   const { node, width, height } = p;
-  const x = p.x + dx;
-  const y = p.y + dy;
+  const lift = mark ? 2 : 0;
+  const x = p.x + dx - lift;
+  const y = p.y + dy - lift;
   const base = nodeBaseColor(node);
-  const t = base ? tint(base, 'light') : undefined;
+  const t = base ? tint(base, currentTheme()) : undefined;
   const status = badge?.status;
-  const line = statusColor(status) ?? t?.line ?? COLORS.border;
+  const lit = mark === 'failing' ? COLORS.error : mark === 'active' ? COLORS.active : undefined;
+  const line = (mark === 'failing' ? COLORS.error : undefined) ?? statusColor(status) ?? t?.line ?? COLORS.border;
   const u = badge?.utilization;
+  const HEAT = heatColors();
   const heat = u === undefined ? undefined : status === 'saturated' || u >= 1 ? HEAT.over : u >= 0.9 ? HEAT.hot : u >= 0.7 ? HEAT.warm : undefined;
   const textX = x + PAD_X + ICON + 10;
   const textMax = width - PAD_X * 2 - ICON - 10;
   const out = [
     `<g data-node="${esc(node.id)}" data-kind="system"${status ? ` data-status="${status}"` : ''}>`,
-    card(x, y, width, height, { fill: heat ?? t?.fill, line }),
+    card(x, y, width, height, { fill: heat ?? t?.fill, line, ...(lit ? { shade: lit, depth: 5 } : {}) }),
     `<rect x="${r(x + 6)}" y="${r(y + 6)}" width="${r(width - 12)}" height="${r(height - 12)}" rx="2" fill="none" stroke="${line}" stroke-width="1.5"/>`,
-    `<rect x="${r(x + PAD_X + 1)}" y="${r(y + PAD_Y + 1)}" width="${ICON - 2}" height="${ICON - 2}" rx="4" fill="${COLORS.background}" stroke="${COLORS.border}" stroke-width="2"/>`,
-    techIcon(node.techStack, x + PAD_X + 8, y + PAD_Y + 8, 18, COLORS.text, node.type),
+    `<rect x="${r(x + PAD_X + 1)}" y="${r(y + PAD_Y + 1)}" width="${ICON - 2}" height="${ICON - 2}" rx="4" fill="${lit ?? COLORS.background}" stroke="${lit ?? COLORS.border}" stroke-width="2"/>`,
+    techIcon(node.techStack, x + PAD_X + 8, y + PAD_Y + 8, 18, lit ? ON_ACCENT : COLORS.text, node.type),
     text(textX, y + PAD_Y + 15, fit(node.name, textMax, 14, true), { size: 14, weight: 700 }),
     text(textX, y + PAD_Y + 31, fit(badge?.team ? `@${badge.team}` : 'system', textMax, 12), { size: 12, weight: 600, fill: COLORS.muted }),
   ];
@@ -306,10 +491,10 @@ function drawNote(p: Placed, dx: number, dy: number): string {
 function criticalBadge(cx: number, cy: number): string {
   return [
     `<g data-critical="true">`,
-    `<circle cx="${r(cx + 1)}" cy="${r(cy + 1)}" r="11" fill="${COLORS.border}"/>`,
-    `<circle cx="${r(cx)}" cy="${r(cy)}" r="10.5" fill="${CRITICAL_FILL}" stroke="${COLORS.border}" stroke-width="1.5"/>`,
-    `<path d="M${r(cx)},${r(cy - 5.5)} L${r(cx + 5.5)},${r(cy + 4)} L${r(cx - 5.5)},${r(cy + 4)} Z" fill="none" stroke="${COLORS.border}" stroke-width="1.6" stroke-linejoin="round"/>`,
-    `<path d="M${r(cx)},${r(cy - 1.5)} V${r(cy + 0.8)} M${r(cx)},${r(cy + 2.4)} v0.1" stroke="${COLORS.border}" stroke-width="1.6" stroke-linecap="round"/>`,
+    `<circle cx="${r(cx + 1)}" cy="${r(cy + 1)}" r="11" fill="${COLORS.shadow}"/>`,
+    `<circle cx="${r(cx)}" cy="${r(cy)}" r="10.5" fill="${CRITICAL_FILL}" stroke="${ON_ACCENT}" stroke-width="1.5"/>`,
+    `<path d="M${r(cx)},${r(cy - 5.5)} L${r(cx + 5.5)},${r(cy + 4)} L${r(cx - 5.5)},${r(cy + 4)} Z" fill="none" stroke="${ON_ACCENT}" stroke-width="1.6" stroke-linejoin="round"/>`,
+    `<path d="M${r(cx)},${r(cy - 1.5)} V${r(cy + 0.8)} M${r(cx)},${r(cy + 2.4)} v0.1" stroke="${ON_ACCENT}" stroke-width="1.6" stroke-linecap="round"/>`,
     '</g>',
   ].join('\n');
 }
@@ -332,7 +517,7 @@ function drawLegend(entries: LegendEntry[], x: number, y: number, width: number)
   out.push(text(x + LEGEND_PAD, y + LEGEND_PAD + 8, 'LEGEND', { size: 10, weight: 700, fill: COLORS.muted, spacing: 1 }));
   entries.forEach((entry, i) => {
     const rowY = y + LEGEND_PAD + 16 + i * LEGEND_ROW;
-    const t = entry.color ? tint(entry.color, 'light') : undefined;
+    const t = entry.color ? tint(entry.color, currentTheme()) : undefined;
     const dash = entry.dash ? ` stroke-dasharray="${DASH_ARRAY[entry.dash]}"` : '';
     out.push(
       `<rect data-entry="${esc(entry.id)}" x="${r(x + LEGEND_PAD + 1)}" y="${r(rowY + 5)}" width="${LEGEND_SWATCH - 2}" height="12" rx="3" fill="${t?.fill ?? COLORS.surface}" stroke="${t?.line ?? COLORS.border}" stroke-width="2"${dash}/>`,
@@ -343,10 +528,10 @@ function drawLegend(entries: LegendEntry[], x: number, y: number, width: number)
   return out.join('\n');
 }
 
-/** A tagged edge's stroke color and dash, light theme. */
+/** A tagged edge's stroke color and dash. */
 function edgeStroke(edge: DiagramEdge): { color?: string; dash?: string } {
   return {
-    ...(edge.style?.color ? { color: tint(edge.style.color, 'light').line } : {}),
+    ...(edge.style?.color ? { color: tint(edge.style.color, currentTheme()).line } : {}),
     ...(edge.style?.dash ? { dash: DASH_ARRAY[edge.style.dash] } : {}),
   };
 }
@@ -370,4 +555,237 @@ function drawEdge(id: string, label: string | undefined, points: Point[], at: Po
   }
   out.push('</g>');
   return out.join('\n');
+}
+
+// ---- Live state: the load overlay, playback and selection (ArchitectureOptions `overlay`, `play`, `selected`).
+
+/** Groups while a scenario plays, as the editor fades them (playbackView.ts). */
+const GROUP_OPACITY = 0.45;
+/** How far along the edge (in %) a failed call gets before it is cut off (AnimatedPlaybackEdge.tsx). */
+const FAIL_AT = 55;
+
+/** A call of the current moment: the step, and how it plays. */
+interface Move {
+  step: FlowStep;
+  /** Failed, or answered with a 4xx/5xx: drawn red. */
+  error: boolean;
+  /** Never answered: dashed, the packet cut off part way. */
+  failed: boolean;
+  /** Request-response: the packet goes out and comes back. */
+  roundTrip: boolean;
+}
+
+interface PlayState {
+  active: Set<string>;
+  failing: Set<string>;
+  moves: Move[];
+  nodeOpacity: (id: string) => number;
+  edgeOpacity: (edge: DiagramEdge) => number;
+  moveOn: (edge: DiagramEdge) => Move | undefined;
+}
+
+const connects = (edge: { source: string; target: string }, step: FlowStep) =>
+  (edge.source === step.fromServiceId && edge.target === step.toServiceId) || (edge.target === step.fromServiceId && edge.source === step.toServiceId);
+
+function playState({ steps, index }: PlayMoment): PlayState {
+  const current = currentStepsOf(steps, index);
+  const done = steps.slice(0, index).filter((step) => !current.includes(step));
+  const active = new Set<string>();
+  const failing = new Set<string>();
+  for (const step of current) {
+    active.add(step.fromServiceId);
+    active.add(step.toServiceId);
+    if (isErrorStep(step)) failing.add(step.toServiceId);
+  }
+  const visited = new Set(done.flatMap((s) => [s.fromServiceId, s.toServiceId]));
+  const path = new Set(steps.flatMap((s) => [s.fromServiceId, s.toServiceId]));
+  const moves = current.map((step) => ({
+    step,
+    error: isErrorStep(step),
+    failed: !!step.failed,
+    roundTrip: step.executionType === 'SYNC_REQUEST_RESPONSE' && !step.failed,
+  }));
+  return {
+    active,
+    failing,
+    moves,
+    nodeOpacity: (id) => (active.has(id) ? 1 : visited.has(id) ? 0.75 : path.has(id) ? 0.45 : 0.15),
+    edgeOpacity: (edge) =>
+      moves.some((m) => connects(edge, m.step)) ? 1 : done.some((s) => connects(edge, s)) ? 0.75 : steps.some((s) => connects(edge, s)) ? 0.45 : 0.12,
+    moveOn: (edge) => moves.find((m) => connects(edge, m.step)),
+  };
+}
+
+/** The canvas's heat fill for a card under the load overlay (utils/heat.ts), and whether it is solid enough to take the dark text. */
+function canvasHeat(load: NodeOverlay | undefined): { fill?: string; accent: boolean } | undefined {
+  if (!load) return undefined;
+  const u = load.utilization;
+  if (load.down) return { fill: mix(COLORS.muted, COLORS.surface, 0.35), accent: false };
+  if (u === undefined || u < 0.4) return { accent: false };
+  if (u < 0.7) return { fill: mix(YELLOW, COLORS.surface, 0.4), accent: false };
+  if (u < 0.9) return { fill: YELLOW, accent: true };
+  if (u < 1) return { fill: COLORS.active, accent: true };
+  return { fill: COLORS.error, accent: true };
+}
+
+/** An edge's colour for the load of the node it feeds (heatStroke): none below 40%, then yellow, pink and red. */
+function heatStroke(load: EdgeOverlay): string | undefined {
+  const u = load.utilization;
+  if (load.saturated || (u !== undefined && u >= 1)) return COLORS.error;
+  if (u === undefined || u < 0.4) return undefined;
+  return u < 0.9 ? YELLOW : COLORS.active;
+}
+
+/** The accent ring of a selected node (`outline` around it). */
+function selectionRing(x: number, y: number, w: number, h: number, rx: number): string {
+  return `<rect data-selected="true" x="${r(x - 7)}" y="${r(y - 7)}" width="${r(w + 14)}" height="${r(h + 14)}" rx="${rx}" fill="none" stroke="${COLORS.active}" stroke-width="3"/>`;
+}
+
+/** The load overlay's bottleneck: a dashed red ring around the card (canvas.css `[data-bottleneck]`)… */
+function bottleneckRing(x: number, y: number, w: number, h: number): string {
+  return `<rect data-bottleneck="true" x="${r(x - 6)}" y="${r(y - 6)}" width="${r(w + 12)}" height="${r(h + 12)}" rx="6" fill="none" stroke="${COLORS.error}" stroke-width="2" stroke-dasharray="6 4"/>`;
+}
+
+/** …and its name on a tab above (`.pc-node__tag`). */
+function bottleneckTag(x: number, y: number): string {
+  const word = 'BOTTLENECK';
+  const w = textWidth(word, 9, true) + word.length * 0.7 + 12;
+  return [
+    `<rect x="${r(x + 10)}" y="${r(y - 10)}" width="${r(w)}" height="15" rx="3" fill="${COLORS.error}"/>`,
+    text(x + 16, y + 1, word, { size: 9, weight: 700, fill: ON_ACCENT, spacing: 0.7 }),
+  ].join('\n');
+}
+
+/** Advance width of `text` in the canvas's monospace font (JetBrains Mono: 0.6 em a character). */
+const monoWidth = (content: string, size: number) => [...content].length * size * 0.6;
+
+/**
+ * An edge under the load overlay or during playback: tinted and bold by its
+ * load with a dark casing under a tint, its label swapped for the chip of
+ * what it carries; on the current step in the accent (red for an error),
+ * dashed when the call fails (it never arrives).
+ */
+function drawLiveEdge(edge: DiagramEdge | undefined, points: Point[], at: Point, load: EdgeOverlay | undefined, move: Move | undefined, opaque = false): string {
+  const own = edge ? edgeStroke(edge) : {};
+  let color = own.color ?? COLORS.line;
+  let width = 2;
+  let dash = own.dash;
+  let casing = false;
+  if (load) {
+    const heat = heatStroke(load);
+    if (heat) [color, casing] = [heat, true];
+    else if (load.critical) color = COLORS.text;
+    width = load.critical ? 5 : 2.5;
+  }
+  if (move) {
+    color = move.error ? COLORS.error : COLORS.active;
+    width = Math.max(width, 3.5);
+    casing = false;
+    dash = move.failed ? '6 4' : undefined;
+  }
+  const { points: line, head } = withHead(points);
+  const d = roundedPath(line);
+  const id = edge?.id ?? `step:${move?.step.fromServiceId}->${move?.step.toServiceId}`;
+  const out = [`<g data-edge="${esc(id)}"${load?.critical ? ' data-critical="true"' : ''}${move ? ' data-play="active"' : ''}>`];
+  if (casing) out.push(`<path d="${d}" fill="none" stroke="${COLORS.text}" stroke-opacity="0.85" stroke-width="${width + 2}"/>`);
+  out.push(`<path d="${d}" fill="none" stroke="${color}" stroke-width="${width}"${dash ? ` stroke-dasharray="${dash}"` : ''}/>`);
+  if (head) out.push(`<path d="${head}" fill="${color}"${casing ? ` stroke="${COLORS.text}" stroke-opacity="0.85" stroke-width="1"` : ''}/>`);
+  const label = edge?.label;
+  if (load && load.rps > 0) {
+    // The chip (EdgeLoadLabel): the label, then its requests and the latency they add, one a
+    // line under a label so it is no wider than the room the layout kept for that.
+    const { lines, w, h } = chipSize(label, load);
+    out.push(
+      `<rect x="${r(at.x - w / 2)}" y="${r(at.y - h / 2)}" width="${r(w)}" height="${h}" rx="3" fill="${COLORS.background}" fill-opacity="${opaque ? 1 : 0.92}" stroke="${COLORS.text}" stroke-opacity="${load.critical ? 1 : 0.35}" stroke-width="${load.critical ? 1.5 : 1}"/>`,
+      ...lines.map((l, i) =>
+        text(at.x, at.y - h / 2 + 13 + i * 14, l, { size: 11, weight: label && i === 0 ? 500 : 600, anchor: 'middle', family: MONO, ...(label && i === 0 ? { opacity: 0.75 } : {}) }),
+      ),
+    );
+  } else if (label) {
+    const shown = fit(label, 200, 11);
+    const w = textWidth(shown, 11) + 12;
+    out.push(
+      `<rect x="${r(at.x - w / 2)}" y="${r(at.y - 9)}" width="${r(w)}" height="18" rx="2" fill="${COLORS.background}"/>`,
+      text(at.x, at.y + 4, shown, { size: 11, weight: 500, fill: COLORS.text, opacity: 0.8, anchor: 'middle', family: MONO }),
+    );
+  }
+  out.push('</g>');
+  return out.join('\n');
+}
+
+/** A load chip's lines (the label, then its requests and the latency they add, one a line under a label) and its size. */
+function chipSize(label: string | undefined, load: EdgeOverlay): { lines: string[]; w: number; h: number } {
+  const latency = load.latencyMs !== undefined ? `+${formatMs(load.latencyMs)}` : undefined;
+  const numbers = label ? [formatRps(load.rps), ...(latency ? [latency] : [])] : [[formatRps(load.rps), latency].filter(Boolean).join(' · ')];
+  const lines = label ? [fit(label, 200, 11), ...numbers] : numbers;
+  return { lines, w: Math.max(...lines.map((l) => monoWidth(l, 11))) + 12, h: lines.length * 14 + 4 };
+}
+
+type Box = { x: number; y: number; width: number; height: number };
+
+const meets = (a: Box, b: Box, gap = 3) => a.x < b.x + b.width + gap && b.x < a.x + a.width + gap && a.y < b.y + b.height + gap && b.y < a.y + a.height + gap;
+
+/**
+ * Where a chip of `size` centred at `at` covers no chip placed before it: there,
+ * else the first point along its own edge (from its middle outwards) where it
+ * covers neither a chip nor a card; else where it was. Its box joins `chips`.
+ */
+function clearOf(at: Point, size: { w: number; h: number }, points: Point[], chips: Box[], cards: Box[]): Point {
+  const boxAt = (p: Point): Box => ({ x: p.x - size.w / 2, y: p.y - size.h / 2, width: size.w, height: size.h });
+  let best = at;
+  if (chips.some((c) => meets(c, boxAt(at)))) {
+    for (const share of [0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8]) {
+      const p = along(points, share);
+      const b = boxAt(p);
+      if (!chips.some((c) => meets(c, b)) && !cards.some((c) => meets(c, b, 0))) {
+        best = p;
+        break;
+      }
+    }
+  }
+  chips.push(boxAt(best));
+  return best;
+}
+
+/** The point `share` (0..1) of the way along a polyline. */
+function along(points: Point[], share: number): Point {
+  const lengths = points.slice(1).map((p, i) => Math.hypot(p.x - points[i].x, p.y - points[i].y));
+  let left = Math.max(0, Math.min(1, share)) * lengths.reduce((a, b) => a + b, 0);
+  for (let i = 0; i < lengths.length; i++) {
+    if (left <= lengths[i] || i === lengths.length - 1) {
+      const k = lengths[i] ? Math.min(1, left / lengths[i]) : 0;
+      return { x: points[i].x + (points[i + 1].x - points[i].x) * k, y: points[i].y + (points[i + 1].y - points[i].y) * k };
+    }
+    left -= lengths[i];
+  }
+  return points[0];
+}
+
+/**
+ * The packet on a step's route, caller to callee (AnimatedPlaybackEdge's
+ * Packet): an ink-outlined square in the accent that tumbles as it goes,
+ * out and back for a request-response, red on an error answer; a failed call
+ * stops short under a cross. Nothing once it has arrived.
+ */
+function drawPacket(points: Point[], move: Move, progress: number): string {
+  const share = move.failed ? Math.min(progress, FAIL_AT) / 100 : move.roundTrip ? (progress <= 50 ? progress / 50 : 1 - (progress - 50) / 50) : progress / 100;
+  const at = along(points, share);
+  const where = `translate(${r(at.x)} ${r(at.y)})`;
+  if (move.failed && progress >= FAIL_AT) {
+    return [
+      `<g data-packet="cut" transform="${where}" stroke-linecap="round">`,
+      `<circle r="13" fill="${COLORS.surface}" stroke="${COLORS.text}" stroke-width="2.5"/>`,
+      `<path d="M-5.5,-5.5 L5.5,5.5 M-5.5,5.5 L5.5,-5.5" stroke="${COLORS.error}" stroke-width="3.5"/>`,
+      '</g>',
+    ].join('\n');
+  }
+  if (progress >= 100) return '';
+  const color = move.error && (!move.roundTrip || progress > 50) ? COLORS.error : COLORS.active;
+  const spin = r((progress / 100) * 180);
+  return [
+    `<g data-packet="${move.error ? 'error' : 'ok'}" transform="${where}">`,
+    `<rect x="-6" y="-4" width="16" height="16" rx="3" transform="rotate(${spin})" fill="${COLORS.shadow}"/>`,
+    `<rect x="-8" y="-8" width="16" height="16" rx="3" transform="rotate(${spin})" fill="${color}" stroke="${COLORS.text}" stroke-width="2.5"/>`,
+    '</g>',
+  ].join('\n');
 }

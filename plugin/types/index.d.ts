@@ -4,7 +4,9 @@
  * whether the use case explorer is open. And which systems it draws open
  * (`expanded`), which one it is focused into (`focus`), and which one the
  * system keys act on (`selected`), each by its path from the root document
- * (`orders`, `orders.warehouse`).
+ * (`orders`, `orders.warehouse`). In the pane, how far its diagram is zoomed
+ * in (`zoom.level`, times the size that fits; absent at fit) and where its
+ * viewport's centre is, as fractions of the picture (src/zoom.ts).
  */
 export type Player = {
   pick: string
@@ -15,10 +17,27 @@ export type Player = {
   expanded: string[]
   focus?: string
   selected?: string
+  zoom?: { level: number; x: number; y: number }
 }
 
 /** A document the pane draws when it shows no file: a fenced block focused from a reply, with its imports. */
 export type PaneSource = { source: string; path?: string; imports?: Record<string, string> }
+
+/**
+ * The pane's tabs (src/views/tabs.tsx), as the editor's views. Older
+ * versions stored `whatif`, `sequence` and `tests` too: `tabOf` reads the
+ * first as the Analysis tab, where the saved what-ifs are listed now, and the
+ * others as the HLD tab, which has the sequences and the checks now.
+ */
+export type PaneTab = 'diagram' | 'analysis' | 'hld'
+
+/**
+ * Whether this terminal shows the diagrams as pictures (src/graphics.ts), as
+ * the first picture drawn found out: `yes` (by file name, or as PNG bytes
+ * where the terminal needs them), `no` (it draws the alt), `tmux` (tmux holds
+ * them back: its allow-passthrough or focus-events is off), or not asked yet.
+ */
+export type GraphicsProbe = { status: 'unknown' | 'yes' | 'no' | 'tmux'; form?: 'file' | 'png' }
 
 declare module 'claude-code' {
   interface PluginState {
@@ -29,6 +48,10 @@ declare module 'claude-code' {
       paneFile: string
       /** What the pane draws while `paneFile` is empty: the block a Focus press opened. */
       paneSource: PaneSource
+      /** The pane's tab; read through `tabOf`, as a version before tabs stored none. */
+      paneTab: PaneTab
+      /** Whether the terminal shows pictures, once asked; read through `probeOf`. */
+      graphics: GraphicsProbe
     }
   }
 }

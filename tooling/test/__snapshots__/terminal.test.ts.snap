@@ -113,8 +113,8 @@ exports[`terminal systems > flags a system sent more than it takes, in red, with
 
 exports[`terminal systems > focuses into a system: its own design, with what is said about it 1`] = `
 "
-                                                  ┏━━━━━━━━━━━━━━━━━━━┓
- ┏━━━━━━━━━━━━━━━━━━━┓   ┏━━━━━━━━━━━━━━━━━━━┓    ┃ db                ┃╮
+                                                  ┏━ BOTTLENECK ━━━━━━┓
+ ┏━━━━━━━━━━━━━━━━━━━┓   ┏━ BOTTLENECK ━━━━━━┓    ┃ db                ┃╮
  ┃ gateway           ┃╮  ┃ api               ┃╮   ┃ PostgreSQL        ┃│
  ┃ AWS API Gateway   ┃──►┃ REST API          ┃───►┃ 110% ━━━━━━━━━━━━ ┃│
  ┃ 0% ────────────── ┃│  ┃ 92% ━━━━━━━━━━━━─ ┃──╮ ┗━━━━━━━━━━━━━━━━━━━┛│
@@ -156,7 +156,7 @@ exports[`terminal systems > opens an expanded system as a frame around its team 
  ║                                 ╰─────────────│───────── ×2 ─╯      ║
  ║                                               │                     ║
  ║                                               ▼                     ║
- ║                                ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓       ║
+ ║                                ┏━ BOTTLENECK ━━━━━━━━━━━━━━━┓       ║
  ║                                ┃        api                 ┃╮      ║
  ║                                ┃   ▣    REST API            ┃│      ║
  ║                                ┃        92% ━━━━━━━━━━━━━━─ ┃│      ║
@@ -165,7 +165,7 @@ exports[`terminal systems > opens an expanded system as a frame around its team 
  ║                                          │         │                ║
  ║                 ╭────────────────────────╯         │                ║
  ║                 ▼                                  ▼                ║
- ║  ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓     ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓  ║
+ ║  ┏━ BOTTLENECK ━━━━━━━━━━━━━━━┓     ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓  ║
  ║  ┃        db                  ┃╮    ┃        svc1                ┃╮ ║
  ║  ┃   ◉    PostgreSQL          ┃│    ┃   ▣    Service             ┃│ ║
  ║  ┃        110% ━━━━━━━━━━━━━━ ┃│    ┃        3% ━─────────────── ┃│ ║
