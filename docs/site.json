@@ -14,6 +14,12 @@
       "description": "Why write architecture diagrams as text: they diff in pull requests, lay themselves out, play request flows and check the design with a simulation."
     },
     {
+      "slug": "compare",
+      "title": "Proschi vs Mermaid, Structurizr, D2, PlantUML",
+      "source": "COMPARE.md",
+      "description": "How Proschi compares with Mermaid, PlantUML, Structurizr and D2: all draw diagrams from text, Proschi also simulates load, p99, cost and failures."
+    },
+    {
       "slug": "quickstart",
       "title": "Quickstart: your first Proschi diagram",
       "source": "QUICKSTART.md",
@@ -303,6 +309,7 @@
     {
       "title": "About",
       "items": [
+        { "page": "compare", "label": "Compared with other tools" },
         { "page": "privacy" },
         { "page": "terms" },
         { "href": "blog/", "label": "Blog" },
