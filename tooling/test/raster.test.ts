@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, statSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,7 +7,7 @@ import { examples } from '../src/proschi';
 import { drawArchitecture, layoutArchitecture, renderArchitectureSvg } from '../src/render/architecture';
 import { COLORS } from '../src/render/svg';
 import { loadDocument } from '../src/terminal/document';
-import { answer, PRUNE_AFTER_MS, prune, rasterize } from '../src/terminal/rasterHost';
+import { answer, PRUNE_AFTER_MS, prune, rasterize, serve, STALE_SERVE_MS } from '../src/terminal/rasterHost';
 import { layoutOf } from '../src/terminal/layout';
 import { analysisOverlay, edgeOverlays } from '../../frontend/src/sim/overlay';
 import { analyze } from '../../frontend/src/sim';
@@ -110,7 +110,7 @@ describe('raster helper', () => {
     expect(await rasterize(input, { dir: HOOKS })).toEqual(out);
   });
 
-  it('lays a document out as layout.cjs does, for the worker', async () => {
+  it('lays a document out for the worker, as the browser does', async () => {
     const input = { source: source('ecommerce'), view: { expanded: [] } };
     const laid = await answer({ kind: 'layout', ...input }, { dir: HOOKS });
     expect(laid).toEqual(await layoutOf(input));
@@ -230,4 +230,34 @@ describe('raster helper', () => {
     expect(existsSync(out.base)).toBe(true);
     expect(prune(outDir)).toBe(0);
   });
+
+  it('prunes the request folders workers left behind, not a live one', () => {
+    const outDir = mkdtempSync(join(tmpdir(), 'proschi-raster-'));
+    const left = join(outDir, 'serve-old');
+    const live = join(outDir, 'serve-new');
+    for (const dir of [left, live]) mkdirSync(dir);
+    writeFileSync(join(left, 'a.req.json'), '{}');
+    const old = new Date(Date.now() - STALE_SERVE_MS - 60_000);
+    utimesSync(left, old, old);
+    expect(prune(outDir)).toBe(1);
+    expect(existsSync(left)).toBe(false);
+    expect(existsSync(live)).toBe(true);
+  });
+
+  it('a worker deletes its request folder when it stops, and stops when idle or past its size', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'proschi-serve-'));
+    const idle = serve(join(root, 'serve-a'), { dir: HOOKS }, () => {}, 100);
+    await idle.ready;
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(existsSync(join(root, 'serve-a'))).toBe(false);
+    // Over its size after an answer, with nothing waiting: it stops, and its folder goes.
+    const lines: string[] = [];
+    const big = serve(join(root, 'serve-b'), { dir: HOOKS }, (l) => void lines.push(l), 60_000, 1);
+    await big.ready;
+    writeFileSync(join(root, 'serve-b', 'a.req.json'), JSON.stringify({ kind: 'layout', source: source('hello') }));
+    for (let i = 0; i < 100 && !lines.some((l) => l.includes('"id":"a"')); i++) await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(lines.some((l) => l.includes('"id":"a"'))).toBe(true);
+    expect(existsSync(join(root, 'serve-b'))).toBe(false);
+    big.stop();
+  }, 20_000);
 });

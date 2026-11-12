@@ -1,6 +1,6 @@
 /**
- * Zoom and pan over the pane's diagram (docs/impl/terminal-rendered-ui.md,
- * Round 7): the levels, and the viewport a zoom and a centre make of a
+ * Zoom and pan over the pane's diagram (docs/design/terminal-mod.md D13):
+ * the levels, and the viewport a zoom and a centre make of a
  * picture `grid` cells big shown in `room` cells. The centre is kept as a
  * fraction of the picture, so a zoom step keeps what is in the middle there
  * and a stored view needs no picture to read.

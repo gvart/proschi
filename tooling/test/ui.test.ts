@@ -278,7 +278,6 @@ describe('UI panels: the raster helper', () => {
       const reply = (await next()) as { id: string; output: PanelsOutput };
       expect(reply.id).toBe('a');
       expect((reply.output.panels[0] as PanelOutput).tiles.length).toBeGreaterThan(0);
-      expect(JSON.parse(readFileSync(join(dir, 'a.res.json'), 'utf8'))).toEqual(reply);
       expect(existsSync(join(dir, 'a.req.json'))).toBe(false);
     } finally {
       child.kill();

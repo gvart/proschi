@@ -1,5 +1,5 @@
 /**
- * The raster helper's UI panels (docs/impl/terminal-rendered-ui.md): each
+ * The raster helper's UI panels (docs/design/terminal-mod.md D12): each
  * panel of a PanelsInput laid out by render/ui/panels.ts, cut on the cell
  * grid into full-width strips (render/ui/tiles.ts), each drawn with resvg,
  * and each control's strip drawn again with the control under the pointer
@@ -13,7 +13,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Resvg } from '@resvg/resvg-wasm';
-import { drawArchitecture, layoutArchitecture, type ArchitectureLayout } from '../render/architecture';
+import { drawArchitecture, type ArchitectureLayout } from '../render/architecture';
 import { renderSequenceSvg } from '../render/sequence';
 import { withTheme } from '../render/svg';
 import { CELL_ASPECT, type Block, type Panel, type PanelOutput, type PanelRequest, type PanelsInput, type Tile, type TileArea, type UiTheme } from '../render/ui/contract';
@@ -22,6 +22,7 @@ import { drawPanel } from '../render/ui/panels';
 import { paletteOf } from '../render/ui/theme';
 import { cellsOf, cut } from '../render/ui/tiles';
 import { loadDocument } from './document';
+import { layoutOf } from './layout';
 import { Writer, hash, put, touch, type Pixels } from './png';
 
 /** PNG px per CSS px across: 16 a column, a Retina screen's pixels for a terminal cell 8 points wide. */
@@ -76,6 +77,15 @@ function inset(whole: Pixels, piece: Pixels, x: number): Pixels {
  */
 export async function withFigures(p: Panel, theme: UiTheme): Promise<Panel> {
   if (p.kind !== 'page' || !p.source || !p.blocks.some((b) => b.type === 'figure')) return p;
+  // The same page at another width, or with another control lit, draws the same figures: drawn once.
+  const key = JSON.stringify([theme, p.source, p.blocks.filter((b) => b.type === 'figure').map((b) => b.of)]);
+  const known = figured.get(key);
+  if (known) {
+    figured.delete(key);
+    figured.set(key, known);
+    let k = 0;
+    return { ...p, blocks: p.blocks.map((b) => (b.type === 'figure' ? known[k++]! : b)) };
+  }
   const doc = loadDocument(p.source);
   if (doc.errors.length) return p;
   let laid: ArchitectureLayout | undefined;
@@ -88,7 +98,8 @@ export async function withFigures(p: Panel, theme: UiTheme): Promise<Panel> {
     try {
       let svg: string;
       if ('architecture' in b.of) {
-        laid ??= await layoutArchitecture(doc.diagram);
+        // Laid out once for the diagram's strip and its figure alike (layoutOf).
+        laid ??= { diagram: doc.diagram, layout: await layoutOf(p.source) };
         svg = drawArchitecture(laid, { theme, systems: doc.systems, terminal: true, background: paletteOf(theme).wash });
       } else {
         const { useCase, scenario } = b.of;
@@ -102,8 +113,14 @@ export async function withFigures(p: Panel, theme: UiTheme): Promise<Panel> {
       out.push(b);
     }
   }
+  figured.set(key, out.filter((b) => b.type === 'figure'));
+  if (figured.size > FIGURED) figured.delete(figured.keys().next().value!);
   return { ...p, blocks: out };
 }
+
+/** Pages' figures drawn, by theme, source and what they show, the last FIGURED used. */
+const figured = new Map<string, Block[]>();
+const FIGURED = 8;
 
 async function panel(req: PanelRequest, input: PanelsInput, env: PanelEnv, writer: Writer): Promise<PanelOutput> {
   const theme = input.theme ?? 'light';
@@ -118,11 +135,13 @@ async function panel(req: PanelRequest, input: PanelsInput, env: PanelEnv, write
     }
   }
   const { surface, height } = drawPanel(await withFigures(req.panel, theme), req.columns, theme, req.edges);
+  // As wide as asked, but a menu, which is as wide as its options (at most that).
+  const columns = surface.columns;
   const rows = height / CELL.height;
   const anchors = Object.entries(surface.anchors);
   const strips = cut(
     rows,
-    surface.controls.map((c) => ({ control: c.control, cells: cellsOf(c.box, req.columns, rows) })),
+    surface.controls.map((c) => ({ control: c.control, cells: cellsOf(c.box, columns, rows) })),
     surface.cuttable(rows),
   );
   const variants = req.variants ?? ['hover'];
@@ -133,9 +152,9 @@ async function panel(req: PanelRequest, input: PanelsInput, env: PanelEnv, write
   };
   const tiles: Tile[] = [];
   for (const s of strips) {
-    const whole = picture(new Map(), 0, s.row, req.columns, s.rows);
+    const whole = picture(new Map(), 0, s.row, columns, s.rows);
     const file = await save(input.outDir, whole, writer);
-    const tile: Tile = { col: 0, row: s.row, columns: req.columns, rows: s.rows, ...(file ? { file } : {}) };
+    const tile: Tile = { col: 0, row: s.row, columns: columns, rows: s.rows, ...(file ? { file } : {}) };
     if (s.controls.length) {
       tile.controls = [];
       for (const a of s.controls) {
@@ -150,7 +169,7 @@ async function panel(req: PanelRequest, input: PanelsInput, env: PanelEnv, write
     }
     tiles.push(tile);
   }
-  const out: PanelOutput = { kind: req.panel.kind, columns: req.columns, rows, cellPx: px, tiles, ...(anchors.length ? { anchors: Object.fromEntries(anchors.map(([id, y]) => [id, Math.floor(y / CELL.height)])) } : {}) };
+  const out: PanelOutput = { kind: req.panel.kind, columns: columns, rows, cellPx: px, tiles, ...(anchors.length ? { anchors: Object.fromEntries(anchors.map(([id, y]) => [id, Math.floor(y / CELL.height)])) } : {}) };
   await writer.done();
   put(manifest, JSON.stringify(out));
   return { ...out, ...(req.id !== undefined ? { id: req.id } : {}) };

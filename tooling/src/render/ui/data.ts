@@ -1,4 +1,4 @@
-import type { DiagramScenario, FlowStep } from '../../../../frontend/src/dsl/types';
+import type { Diagram, DiagramScenario, FlowStep } from '../../../../frontend/src/dsl/types';
 import { HOT, availabilityRow, costBreakdown, costRow, headlineOf, p99Row, runWhatIfs, type CostShare, type DeltaRow, type NodeAnalysis, type WhatIfResult } from '../../../../frontend/src/sim';
 import { formatAvailability, formatCount, formatDuration, formatMs, formatPercent, formatRps, formatTraffic, formatUsd } from '../../../../frontend/src/sim/format';
 import { BOTTLENECK_FROM, busiestOf } from '../../../../frontend/src/sim/overlay';
@@ -66,6 +66,19 @@ export function stepCardsOf(scenario: DiagramScenario, name: (id: string) => str
 const splits = (n: NodeAnalysis) => n.writeLoadRps > 0 && (n.writeScaling === 'shards' || n.readCapacityRps !== n.writeCapacityRps);
 const bare = (rps: number) => formatRps(rps).replace(' rps', '');
 
+/** A use case of the design's own to show syntax with (its first), so an example reads as this design's. */
+const exampleUseCase = (d: Diagram) => JSON.stringify(d.useCases[0]?.name ?? 'Checkout');
+
+/** A traffic block for the design's first use case, its first two scenarios mixed where it branches once. */
+export function trafficExample(d: Diagram): string {
+  const s = d.useCases[0]?.scenarios ?? [];
+  const mix = s.length > 1 && !s.some((x) => x.name.includes(' › ')) ? `  mix ${JSON.stringify(s[0].name)} 90%, ${JSON.stringify(s[1].name)} 10%` : '';
+  return `traffic {\n  ${exampleUseCase(d)} 1k rps${mix}\n}`;
+}
+
+/** A whatif block tripling the design's first use case. */
+export const whatIfExample = (d: Diagram) => `whatif "Launch day" {\n  traffic ${exampleUseCase(d)} x3\n}`;
+
 /**
  * The editor's Analysis panel (AnalysisPanel.tsx; the text UI's
  * analysisLines), then the saved what-ifs (`whatIfs`, else run here) and a
@@ -78,7 +91,7 @@ export function analysisPage(doc: Document, whatIfs?: WhatIfResult[]): PagePanel
       kind: 'page',
       blocks: [
         { type: 'paragraph', text: 'No traffic yet: add a traffic { … } block and Proschi estimates load, latency, availability and cost for every node, e.g.' },
-        { type: 'code', text: 'traffic {\n  "Redirect" 10k rps  mix "Cache hit" 90%, "Cache miss" 10%\n}' },
+        { type: 'code', text: trafficExample(doc.diagram) },
       ],
     };
   }
@@ -219,7 +232,7 @@ function whatIfBlocks(doc: Document, results: WhatIfResult[]): Block[] {
   const blocks: Block[] = [{ type: 'heading', text: 'What-ifs' }];
   if (results.length === 0) {
     blocks.push({ type: 'paragraph', small: true, text: 'None saved yet: a whatif block runs the design again with more traffic or nodes down, e.g.' });
-    blocks.push({ type: 'code', text: 'whatif "Launch day" {\n  traffic "Redirect" x3\n}' });
+    blocks.push({ type: 'code', text: whatIfExample(doc.diagram) });
   } else {
     const arrow = (r: DeltaRow, up: '↑' | '↓', down: '↑' | '↓'): Span[] => {
       const tone = deltaTone(r);
@@ -243,7 +256,7 @@ function whatIfBlocks(doc: Document, results: WhatIfResult[]): Block[] {
     });
     for (const text of results.flatMap((r) => r.warnings)) blocks.push({ type: 'callout', tone: 'warn', text });
   }
-  blocks.push({ type: 'controls', items: [{ control: { id: 'explore-whatifs', icon: 'open', label: 'Explore what-ifs in Proschi' } }, { text: [{ text: 'more traffic, nodes down, a sweep', tone: 'muted' }] }] });
+  blocks.push({ type: 'controls', items: [{ control: { id: 'explore-whatifs', icon: 'open', label: 'Explore what-ifs in Proschi' } }] });
   return blocks;
 }
 
@@ -261,6 +274,27 @@ const measured = (text?: string, hint?: string): Span[] => [...(text ? [{ text }
 const dash = (text: string | number | undefined): Span[] => (text === undefined || text === '' ? [{ text: '—', tone: 'muted' }] : [{ text: String(text) }]);
 
 const RISK_TONE: Record<H.Risk['severity'], 'bad' | 'warn' | 'info'> = { high: 'bad', medium: 'warn', low: 'info' };
+
+/** What a scenario's sequence says the Diagram tab does with it, in both modes: its player plays it (and the use case's `others`). */
+export const playsCaption = (others = 0) => `The Diagram tab's player plays it${others > 0 ? ` and the other ${others === 1 ? 'scenario' : `${others} scenarios`}` : ''}.`;
+
+/** The HLD's subtitle, under its title in both modes. */
+export const HLD_SUBTITLE = 'High-level design, generated from the model and its simulation';
+
+/**
+ * How the HLD's checks stand, at its top as the editor puts it (both modes):
+ * how many fail and where they are, or that all pass; and that they were not
+ * checked where the simulation did not run.
+ */
+export function hldVerdict(doc: H.HldDocument): { tone: 'bad' | 'good' | 'warn'; text: Span[] }[] {
+  const out: { tone: 'bad' | 'good' | 'warn'; text: Span[] }[] = [];
+  const checks = doc.sections.flatMap((s) => (s.kind === 'requirements' ? [...s.nonFunctional, ...s.flowTests] : []));
+  const failing = checks.filter((r) => r.status === 'fail').length;
+  const checked = checks.filter((r) => r.status !== 'unchecked').length;
+  if (checked) out.push(failing ? { tone: 'bad', text: [{ text: `${failing} of ${checked} checks fail`, bold: true }, { text: `: section ${doc.sections.findIndex((s) => s.kind === 'requirements') + 1}, Requirements, has the measured values and their fixes.` }] } : { tone: 'good', text: [{ text: `All ${checked} checks pass`, bold: true }, { text: ' against the simulation.' }] });
+  if (!doc.checked && doc.sections.some((s) => s.kind === 'requirements' && (s.nonFunctional.length || s.flowTests.length))) out.push({ tone: 'warn', text: [{ text: 'The simulation did not run, so requirements and tests are listed but not checked.' }] });
+  return out;
+}
 
 /** The id of a section's anchor, which the table of contents scrolls to. */
 export const hldAnchor = (kind: H.HldSectionKind) => `hld-${kind}`;
@@ -373,7 +407,7 @@ function hldSection(doc: H.HldDocument, s: H.HldSection): Block[] {
         });
         // The use case's sequence: its first scenario with steps.
         const first = u.scenarios.find((sc) => sc.steps > 0);
-        if (first) out.push({ type: 'figure', of: { useCase: u.useCaseId, scenario: first.id }, caption: u.scenarios.length > 1 ? `The Diagram tab's player plays the other ${u.scenarios.length - 1 === 1 ? 'scenario' : `${u.scenarios.length - 1} scenarios`}.` : undefined, maxRows: 24 });
+        if (first) out.push({ type: 'figure', of: { useCase: u.useCaseId, scenario: first.id }, caption: playsCaption(u.scenarios.length - 1), maxRows: 24 });
       }
       break;
     case 'decisions':
@@ -399,13 +433,9 @@ function hldSection(doc: H.HldDocument, s: H.HldSection): Block[] {
  * pictures from `source`.
  */
 export function hldPage(doc: H.HldDocument, source: { source: string; path?: string; imports?: Record<string, string> }): PagePanel {
-  const blocks: Block[] = [{ type: 'heading', level: 1, text: doc.title }, { type: 'paragraph', small: true, text: 'High-level design, generated from the model and its simulation' }];
+  const blocks: Block[] = [{ type: 'heading', level: 1, text: doc.title }, { type: 'paragraph', small: true, text: HLD_SUBTITLE }];
   // How the checks stand, at the top as the editor puts it.
-  const checks = doc.sections.flatMap((s) => (s.kind === 'requirements' ? [...s.nonFunctional, ...s.flowTests] : []));
-  const failing = checks.filter((r) => r.status === 'fail').length;
-  const checked = checks.filter((r) => r.status !== 'unchecked').length;
-  if (checked) blocks.push(failing ? { type: 'callout', tone: 'bad', text: [{ text: `${failing} of ${checked} checks fail`, bold: true }, { text: `: section ${doc.sections.findIndex((s) => s.kind === 'requirements') + 1}, Requirements, has the measured values and their fixes.` }] } : { type: 'callout', tone: 'good', text: [{ text: `All ${checked} checks pass`, bold: true }, { text: ' against the simulation.' }] });
-  if (!doc.checked && doc.sections.some((s) => s.kind === 'requirements' && (s.nonFunctional.length || s.flowTests.length))) blocks.push({ type: 'callout', tone: 'warn', text: 'The simulation did not run, so requirements and tests are listed but not checked.' });
+  for (const v of hldVerdict(doc)) blocks.push({ type: 'callout', tone: v.tone, text: v.text });
   blocks.push({ type: 'controls', items: [{ control: { id: 'hld-copy', icon: 'copy', label: 'Copy HLD markdown', hotkey: 'c', variant: 'primary' } }, { text: [{ text: 'with Mermaid diagrams, for a README or a wiki', tone: 'muted' }] }] });
   if (doc.sections.length === 0) return { kind: 'page', blocks: [...blocks, { type: 'paragraph', text: 'Add components and use cases to generate a design document.' }] };
   blocks.push({ type: 'heading', level: 3, text: [{ text: 'CONTENTS', tone: 'muted' }] });

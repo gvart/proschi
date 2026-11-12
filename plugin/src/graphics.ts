@@ -3,7 +3,8 @@ import type { EngineInterface, ImageSource } from 'claude-code'
 
 import { keyOf, type Source } from '../../tooling/src/terminal/document'
 import type { GraphicsProbe } from '../types'
-import { answered, ask, cacheDir, cellAspectOf, isAborted, redraw, retry, withPrune, type Priority } from './helper'
+import { answered, ask, cacheDir, cellAspectOf, isAborted, isRetryable, redraw, retry, withPrune, type Priority } from './helper'
+import { Lru } from './lru'
 
 /**
  * Diagrams as pictures (docs/design/terminal-mod.md D11): the PNGs
@@ -124,7 +125,7 @@ export interface RasterRequest {
 }
 
 // Per module load: the helper's answers by request, those being drawn, and PNGs read as bytes.
-const rasters = new Map<string, RasterOutput | { error: string }>()
+const rasters = new Lru<string, RasterOutput | { error: string }>(256)
 const pending = new Set<string>()
 /** Prefetched pictures a drawing has since asked for: their answer redraws. */
 const wanted = new Set<string>()
@@ -132,12 +133,17 @@ const bytes = new Map<string, string>()
 let theme: 'light' | 'dark' | undefined
 let probing = false
 
-/** The picture's theme: Claude Code's own when it names a light one, else dark, as most terminals are. */
+/** The picture's theme: Claude Code's own when it names a light one, else dark, as most terminals are; read again once the setting changes (themeChanged). */
 export async function themeOf($: EngineInterface): Promise<'light' | 'dark'> {
   if (theme) return theme
   const rows = await $.config.list().catch(() => [])
   theme = /light/i.test(String(rows.find(row => row.key === 'theme')?.value ?? '')) ? 'light' : 'dark'
   return theme
+}
+
+/** The theme setting changed (`config.set`): the next drawing reads it again. */
+export function themeChanged(): void {
+  theme = undefined
 }
 
 /** The PNGs of a request, or why the helper could not draw them; undefined while they are drawn (a redraw follows, for a prefetch once a drawing wants it). */
@@ -159,8 +165,8 @@ export function rasterOf($: EngineInterface, request: RasterRequest, priority: P
         const o = out as RasterOutput
         return typeof o.base === 'string' && o.width > 0 && o.height > 0 ? o : { error: 'raster answered no picture' }
       },
-      // Aborted (a redraw, a new view): not an answer; the next draw asks again.
-      (error: unknown) => (isAborted(error) && retry(key) ? undefined : { error: error instanceof Error ? error.message : String(error) }),
+      // Aborted (a redraw, a new view), timed out, the worker gone: not an answer; the next draw asks again.
+      (error: unknown) => (isRetryable(error) && retry(key) ? undefined : { error: error instanceof Error ? error.message : String(error) }),
     )
     if (answer && 'error' in answer) $.ui.log(`proschi: no picture: ${answer.error}`, { to: 'debug' })
     if (answer) rasters.set(key, answer)

@@ -1,5 +1,5 @@
-import type { ActionBarPanel, Block, Control, DrawerPanel, ExplorerPanel, Item, MenuPanel, NoticesPanel, Panel, PlayerBarPanel, Rich, ScenarioChip, Select, StepCard, SystemBarPanel, TabBarPanel, UiTheme } from './contract';
-import { BODY, CODE, CONTROL_ROW, blocks, codeBox, itemsRow, menu, placeButton, upToRow } from './blocks';
+import type { ActionBarPanel, Block, Control, DrawerPanel, ExplorerPanel, Item, MenuPanel, NoticesPanel, Panel, PlayerBarPanel, Rich, ScenarioChip, Select, StepCard, SystemBarPanel, TabBarPanel, UiTheme, ZoomPanel } from './contract';
+import { BODY, CODE, CONTROL_ROW, blocks, codeBox, itemsRow, menu, menuColumns, placeButton, upToRow } from './blocks';
 import { CELL, CONTROL, Surface, buttonColumns, chip, drawLaid, drawSelect, icon, layoutRich, line, paragraph, rect, selectColumns, surfaceFrame, tint, txt, width, type Box, type ControlState, type Edges } from './kit';
 import { clip } from './metrics';
 import { alpha, mix, paletteOf, type Palette } from './theme';
@@ -140,8 +140,10 @@ const LINE = { size: 13.5 };
 /**
  * The player bar (PlayerBarPanel): `Use case [▾] [▾]  ⏮ ‹ ▶ › ⏭ ✕  Step 2/5
  * ━━──` over `② GET /x · A → B · Sync  [Body ▾]`. Always the same rows; too
- * narrow, it drops the label, then the first and last keys, then narrows the
- * pickers and the count, then the progress bar, so the row never wraps.
+ * narrow, it drops the label, then the first and last keys, then the
+ * progress bar, then narrows the pickers and the count, then drops the
+ * previous and next keys (n and b still step) before the pickers narrow past
+ * reading, so the row never wraps and a picker keeps its name the longest.
  */
 function playerBar(S: Surface, p: PlayerBarPanel): number {
   const P = S.P;
@@ -159,10 +161,12 @@ function playerBar(S: Surface, p: PlayerBarPanel): number {
   const variants = [
     { label: true, ends: true, cap: 28, short: false, progress: true },
     { label: false, ends: true, cap: 28, short: false, progress: true },
-    { label: false, ends: false, cap: 22, short: false, progress: true },
-    { label: false, ends: false, cap: 16, short: true, progress: true },
+    { label: false, ends: false, cap: 28, short: false, progress: false },
+    { label: false, ends: false, cap: 22, short: true, progress: false },
+    { label: false, ends: false, cap: 16, short: true, progress: false },
     { label: false, ends: false, cap: 13, short: true, progress: false },
-    { label: false, ends: false, cap: 10, short: true, progress: false },
+    { label: false, ends: false, cap: 13, short: true, progress: false, steps: false },
+    { label: false, ends: false, cap: 10, short: true, progress: false, steps: false },
     { label: false, ends: false, cap: 8, short: true, progress: false, steps: false },
   ];
   const itemsOf = (v: { label: boolean; ends: boolean; cap: number; short: boolean; progress: boolean; steps?: boolean }): Item[] => [
@@ -397,6 +401,47 @@ function actionBar(S: Surface, p: ActionBarPanel): number {
   return itemsRow(S, p.controls.map((c) => ({ control: c })), 1, 0, S.columns - 1);
 }
 
+/** The legend's badge and the zoom's pill: their height and their margin from the strip's edges, CSS px. */
+export const BADGE = { height: 24, margin: 8 };
+
+const PILL_TYPE = { size: 12, weight: 600 };
+
+/**
+ * The zoom's pill: − · 100% · + │ Fit in one row as the legend's badge,
+ * its bottom where the badge's is, at the panel's right; the rest of the
+ * two rows the strip's surface it sits on.
+ */
+function zoomPill(S: Surface, p: ZoomPanel): number {
+  const P = S.P;
+  const H = 2 * ROW;
+  S.add(rect(0, 0, S.width, H, { fill: P.card.fill }));
+  const y = H - BADGE.margin - BADGE.height;
+  // Each control on whole cells of its own, so a press tells them apart.
+  const segs = p.controls.map((c) => ({ c, w: Math.ceil((width(c.label ?? '', PILL_TYPE) + 12) / CELL.width) * CELL.width }));
+  const total = segs.reduce((n, s) => n + s.w, 0);
+  let x = S.width - total;
+  S.add(rect(x + 0.5, y + 0.5, total - 1, BADGE.height - 1, { fill: alpha(P.surface, 0.85), stroke: P.card.line, sw: 1, rx: 6 }));
+  for (const { c, w } of segs) {
+    if (c.id === 'fit') S.add(line(x + 0.5, y + 5, x + 0.5, y + BADGE.height - 5, P.card.line, 1));
+    const box: Box = { x: x + 1, y: y + 2, w: w - 2, h: BADGE.height - 4 };
+    const disabled = c.disabled === true;
+    S.place({
+      control: { id: c.id, kind: 'button', ...(c.hotkey ? { hotkey: c.hotkey } : {}), ...(disabled ? { disabled: true } : {}) },
+      box,
+      draw: (state: ControlState) => {
+        const lit = !disabled && state !== 'rest';
+        const color = disabled ? mix(P.muted, P.surface, 0.55) : lit || c.id === 'level' ? P.ink : P.muted;
+        return [
+          lit ? rect(box.x + 0.5, box.y + 0.5, box.w - 1, box.h - 1, { fill: state === 'pressed' ? P.button.pressed : P.button.hover, rx: 4 }) : '',
+          txt(box.x + box.w / 2, box.y + box.h / 2 + PILL_TYPE.size * 0.36 + (state === 'pressed' && !disabled ? 1 : 0), c.label ?? '', { ...PILL_TYPE, size: c.id === 'level' ? 11.5 : c.id === 'fit' ? 12 : 15, color, anchor: 'middle' }),
+        ].join('');
+      },
+    });
+    x += w;
+  }
+  return H;
+}
+
 /**
  * The load legend as LoadLegend.tsx says it, in one short row: the heat
  * scale as small swatches, the p99 path's stroke and what it is. Its left at
@@ -493,7 +538,8 @@ function page(S: Surface, b: Extract<Panel, { kind: 'page' }>): number {
 /** Lays `panel` out `columns` wide in `theme`, on the drawing's surface at its `edges`. */
 export function drawPanel(panel: Panel, columns: number, theme: UiTheme, edges: Edges = {}): Drawn {
   if (!Number.isInteger(columns) || columns < 20 || columns > 255) throw new Error(`A panel is 20 to 255 columns wide, not ${columns}`);
-  const S = new Surface(paletteOf(theme), columns);
+  // A menu floats as wide as its options are, measured here where the fonts are: `columns` is the most it may take.
+  const S = new Surface(paletteOf(theme), panel.kind === 'menu' ? menuColumns(panel.select, columns) : columns);
   let h: number;
   switch (panel.kind) {
     case 'tabs':
@@ -517,6 +563,9 @@ export function drawPanel(panel: Panel, columns: number, theme: UiTheme, edges: 
     case 'actionBar':
       h = actionBar(S, panel);
       break;
+    case 'zoom':
+      h = zoomPill(S, panel);
+      break;
     case 'notices':
       h = notices(S, panel);
       break;
@@ -527,7 +576,8 @@ export function drawPanel(panel: Panel, columns: number, theme: UiTheme, edges: 
       throw new Error(`Unknown panel kind '${(panel as { kind: string }).kind}'`);
   }
   const height = Math.max(ROW, upToRow(h));
-  S.under(surfaceFrame(S.P, S.width, height, edges));
+  // The zoom's pill sits on the diagram's strip, whose surface it draws itself: no card of its own.
+  if (panel.kind !== 'zoom') S.under(surfaceFrame(S.P, S.width, height, edges));
   return { surface: S, height };
 }
 

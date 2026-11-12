@@ -2,7 +2,8 @@ import type { EngineInterface, ImageSource, On, RenderElement, RenderSurface, Ui
 
 import type { Panel, PanelOutput, UiTheme } from '../../tooling/src/render/ui/contract'
 import { sourceOf } from './graphics'
-import { panelOf, prefetch } from './helper'
+import { panelKey, panelOf, prefetch, variantsOf, type PanelAsk } from './helper'
+import { Lru } from './lru'
 import type { OverlayControl } from './uiOverlay'
 import type { Ui } from './views/render'
 
@@ -18,7 +19,9 @@ import type { Ui } from './views/render'
  * pointer to the strip, and its controls take all the strip's rows, so a
  * strip half scrolled away still maps its columns right.
  * A hover blits the control's hover tile, a button going down its pressed
- * tile, and a press runs the control's action. In the pane, each control's
+ * tile, and a press runs the control's action. A panel's hover and pressed
+ * tiles are drawn the first time the pointer is over one of its controls
+ * (variantsOf), and blitted once in if it still is. In the pane, each control's
  * hotkey is a Button in a Box drawn as nothing (`display: none`): a Button
  * over an Image would paint its brackets over the picture. The overlay's own
  * keys (once a click has given it the focus) press the same controls.
@@ -130,24 +133,27 @@ export interface Site {
   pages?: { id: string; panel: Panel; columns: number; shown: boolean }[]
 }
 
-type Resolved = { id: string; out: PanelOutput } | { id: string; picture: Picture }
+type Resolved = { id: string; out: PanelOutput; ask: PanelAsk } | { id: string; picture: Picture }
 
 interface Shown {
-  float?: { def: Float; out: PanelOutput }
-  corner?: { def: NonNullable<Site['corner']>; out: PanelOutput }
+  float?: { def: Float; out: PanelOutput; ask: PanelAsk }
+  corner?: { def: NonNullable<Site['corner']>; out: PanelOutput; ask: PanelAsk }
   pieces: Resolved[]
-  pages: { id: string; out: PanelOutput; shown: boolean }[]
+  pages: { id: string; out: PanelOutput; ask: PanelAsk; shown: boolean }[]
   actions: Record<string, Action>
   /** Whether the paged pieces (Site.paged) show. */
   paged?: { from: string; shown: boolean }
 }
 
-/** A control's tiles in the drawing shown, by `<piece>/<control>`. */
+/** A control's tiles in the drawing shown, by `<piece>/<control>`: its strip's, and the panel and strip it is in, for its hover and pressed tiles once drawn. */
 interface TileRef {
   key: string
   file: string
   hoverFile?: string
   pressedFile?: string
+  ask: PanelAsk
+  tile: number
+  control: string
 }
 
 interface Live {
@@ -175,17 +181,15 @@ interface Live {
   onDrag?: (drag: Drag) => void
 }
 
-// Per module load: the drawing shown last per site, what its overlays map, and each overlay's site.
-const shown = new Map<string, Shown>()
-const live = new Map<string, Live>()
-const overlaySites = new Map<string, string>()
+// Per module load: the drawing shown last per site, what its overlays map, and each overlay's site (the latest few: a session's transcript draws many).
+const SITES = 64
+const shown = new Lru<string, Shown>(SITES)
+const live = new Lru<string, Live>(SITES)
+const overlaySites = new Lru<string, string>(SITES * 64)
 
 const tileKey = (site: string, piece: string, i: number) => `t-${site}-${piece}-${i}`
 /** The overlay over a strip, by the strip's key. */
 const overlayKey = (strip: string) => `ov-${strip}`
-
-/** How long the last press took to show its drawing, in ms (src/picture.tsx's measure, for the debug log and tests). */
-export const timings: { press?: number; hover?: number } = {}
 
 /**
  * A press, timed (`/proschi perf` lists the last ones): from the overlay's
@@ -211,7 +215,7 @@ const perf: PressTiming[] = []
 export const pressTimings = (): readonly PressTiming[] => perf
 
 /** When a site was opened (the pane), until its first drawing in pictures and its paged pieces' first picture are timed. */
-const opening = new Map<string, { at: number; drawn?: boolean; paged?: boolean }>()
+const opening = new Lru<string, { at: number; drawn?: boolean; paged?: boolean }>(SITES)
 
 /**
  * Times a site from now: `open` to its first drawing in pictures, and
@@ -268,41 +272,45 @@ export async function pictureSite($: EngineInterface, ui: Ui, s: Site): Promise<
       else if (!hidden) waiting = true
       continue
     }
-    const out = panelOf($, { panel: p.panel, columns: p.columns, theme: s.theme, edges: { ...(i === 0 ? { top: true } : {}), ...(i === last ? { bottom: true } : {}) } }, hidden ? 'first' : 'now')
+    const ask: PanelAsk = { panel: p.panel, columns: p.columns, theme: s.theme, edges: { ...(i === 0 ? { top: true } : {}), ...(i === last ? { bottom: true } : {}) } }
+    const out = panelOf($, ask, hidden ? 'first' : 'now')
     if (out && 'error' in out) {
       if (hidden) continue
       return { error: out.error }
     }
     if (!out) {
       if (!hidden) waiting = true
-    } else resolved.push({ id: p.id, out })
+    } else resolved.push({ id: p.id, out, ask })
   }
   // The page shown is waited for; the others are drawn once the helper has them (they are prefetched).
   const pages: Shown['pages'] = []
   for (const page of s.pages ?? []) {
-    const out = panelOf($, { panel: page.panel, columns: page.columns, theme: s.theme, edges: { bottom: true } }, page.shown ? 'now' : 'mount')
+    const ask: PanelAsk = { panel: page.panel, columns: page.columns, theme: s.theme, edges: { bottom: true } }
+    const out = panelOf($, ask, page.shown ? 'now' : 'mount')
     if (out && 'error' in out) {
       if (page.shown) return { error: out.error }
       continue
     }
-    if (out) pages.push({ id: page.id, out, shown: page.shown })
+    if (out) pages.push({ id: page.id, out, ask, shown: page.shown })
     else if (page.shown) waiting = true
   }
   // What floats: a card of its own, waited for as a press's drawing is.
   let float: Shown['float']
   if (s.float) {
-    const out = panelOf($, { panel: s.float.panel, columns: s.float.columns, theme: s.theme, edges: { top: true, bottom: true } })
+    const ask: PanelAsk = { panel: s.float.panel, columns: s.float.columns, theme: s.theme, edges: { top: true, bottom: true } }
+    const out = panelOf($, ask)
     if (out && 'error' in out) return { error: out.error }
     if (!out) waiting = true
-    else float = { def: s.float, out }
+    else float = { def: s.float, out, ask }
   }
-  // The corner panel: a card of its own, waited for.
+  // The corner panel (the zoom's pill on the diagram's strip), waited for.
   let corner: Shown['corner']
   if (s.corner) {
-    const out = panelOf($, { panel: s.corner.panel, columns: s.corner.columns, theme: s.theme, edges: { top: true, bottom: true } })
+    const ask: PanelAsk = { panel: s.corner.panel, columns: s.corner.columns, theme: s.theme, edges: { top: true, bottom: true } }
+    const out = panelOf($, ask)
     if (out && 'error' in out) return { error: out.error }
     if (!out) waiting = true
-    else corner = { def: s.corner, out }
+    else corner = { def: s.corner, out, ask }
   }
   // Ahead, where each will sit: the tab bar on top, the player bar on top where no tab bar is, a float as a card, the rest between.
   const onTop = (a: { panel: Panel }) => a.panel.kind === 'tabs' || (a.panel.kind === 'playerBar' && !s.pieces.some(p => 'panel' in p && p.panel.kind === 'tabs'))
@@ -322,9 +330,7 @@ export async function pictureSite($: EngineInterface, ui: Ui, s: Site): Promise<
   const done = await $.clock.now()
   const l = live.get(s.site)
   if (!waiting && l?.pressedAt !== undefined) {
-    const t: PressTiming = { at: l.pressedAt, site: s.site, control: l.pressed ?? '', toRender: (l.renderedAt ?? started) - l.pressedAt, toShown: done - l.pressedAt, build: done - started, images: built.images, sent: built.sent }
-    timings.press = t.toShown
-    timed($, t)
+    timed($, { at: l.pressedAt, site: s.site, control: l.pressed ?? '', toRender: (l.renderedAt ?? started) - l.pressedAt, toShown: done - l.pressedAt, build: done - started, images: built.images, sent: built.sent })
     l.pressedAt = undefined
     l.renderedAt = undefined
   }
@@ -353,7 +359,7 @@ type Into = { tiles: Map<string, TileRef>; overlays: Map<string, string[]>; hotk
  * strip is shown or not (so showing a page moves no Image), with its overlay
  * when its controls go `into` the drawing's (the page shown).
  */
-async function strips(ui: Ui, s: Site, piece: string, out: PanelOutput, source: Source, into?: Into): Promise<RenderElement[]> {
+async function strips(ui: Ui, s: Site, piece: string, out: PanelOutput, ask: PanelAsk, source: Source, into?: Into): Promise<RenderElement[]> {
   const rows: RenderElement[] = []
   for (const [i, tile] of out.tiles.entries()) {
     const key = tileKey(s.site, piece, i)
@@ -369,7 +375,7 @@ async function strips(ui: Ui, s: Site, piece: string, out: PanelOutput, source: 
     if (into) {
       for (const a of areas) {
         const id = `${piece}/${a.control.id}`
-        into.tiles.set(id, { key, file, ...(a.hoverFile ? { hoverFile: a.hoverFile } : {}), ...(a.pressedFile ? { pressedFile: a.pressedFile } : {}) })
+        into.tiles.set(id, { key, file, ...(a.hoverFile ? { hoverFile: a.hoverFile } : {}), ...(a.pressedFile ? { pressedFile: a.pressedFile } : {}), ask, tile: i, control: a.control.id })
         controls.push({ id, col: tile.col + a.col, row: 0, columns: a.columns, rows: tile.rows })
         if (a.control.hotkey && s.hotkeys && s.actions[id]) into.hotkeys.set(a.control.hotkey, id)
       }
@@ -412,7 +418,7 @@ async function floatOver(ui: Ui, s: Site, f: NonNullable<Shown['float']>, anchor
       <ui.Client key={scrim} module="./uiOverlay.js" props={{ controls: [{ id: `${f.def.id}/close`, col: 0, row: 0, columns: width, rows }] }} width={width} height={rows} />
     </ui.Box>,
   ]
-  const floated = await strips(ui, s, f.def.id, f.out, source, into)
+  const floated = await strips(ui, s, f.def.id, f.out, f.ask, source, into)
   f.out.tiles.forEach((t, i) =>
     elements.push(
       <ui.Box key={`fl-${s.site}-${i}`} position="absolute" top={at + t.row} left={left} width={t.columns} height={t.rows}>
@@ -499,10 +505,10 @@ async function build($: EngineInterface, ui: Ui, s: Site, d: Shown): Promise<{ e
           const scrolled = (windows.get(s.requestId)?.offset ?? 0) > at
           cornerAt = { top: at, hidden: scrolled }
           if (!scrolled) {
-            const placed = await strips(ui, s, c.def.id, c.out, source, into)
+            const placed = await strips(ui, s, c.def.id, c.out, c.ask, source, into)
             c.out.tiles.forEach((t, i) =>
               body.push(
-                <ui.Box key={`${pic.key}-corner-${i}`} position="absolute" top={pic.rows - c.out.rows + t.row} left={Math.max(0, pic.columns - c.out.columns)} width={t.columns} height={t.rows}>
+                <ui.Box key={`${pic.key}-corner-${i}`} position="absolute" top={pic.rows - c.out.rows + t.row} left={Math.max(0, pic.columns - c.out.columns - 1)} width={t.columns} height={t.rows}>
                   {placed[i]}
                 </ui.Box>,
               ),
@@ -522,7 +528,7 @@ async function build($: EngineInterface, ui: Ui, s: Site, d: Shown): Promise<{ e
       if (!hidden) anchors.set(p.id, { row: top - layerTop, out })
       target.push(
         <ui.Box key={`p-${s.site}-${p.id}`} flexDirection="column" height={out.rows}>
-          {await strips(ui, s, p.id, out, source, hidden ? undefined : into)}
+          {await strips(ui, s, p.id, out, p.ask, source, hidden ? undefined : into)}
         </ui.Box>,
       )
       rows = out.rows
@@ -562,7 +568,7 @@ async function build($: EngineInterface, ui: Ui, s: Site, d: Shown): Promise<{ e
   if (d.pages.length) {
     const pages: RenderElement[] = []
     for (const pg of d.pages) {
-      const rows = await strips(ui, s, pg.id, pg.out, source, pg.shown ? into : undefined)
+      const rows = await strips(ui, s, pg.id, pg.out, pg.ask, source, pg.shown ? into : undefined)
       pages.push(
         <ui.Box key={`pg-${s.site}-${pg.id}`} flexDirection="column" height={pg.out.rows} display={pg.shown ? 'flex' : 'none'}>
           {rows}
@@ -620,6 +626,27 @@ async function blit($: EngineInterface, l: Live, ref: TileRef | undefined, file:
   if (r.deny) $.ui.log(`proschi: blit refused: ${r.deny}`, { to: 'debug' })
 }
 
+/**
+ * The pointer is over a control whose panel was drawn without its hover and
+ * pressed tiles: they are drawn now (asked for ahead of anything else), every
+ * control of that panel in the drawing given them, and the hover blitted if
+ * the pointer is still there. Awaited by the hover hook, whose `$` blits.
+ */
+async function hoverLater($: EngineInterface, site: string, id: string, ref: TileRef): Promise<void> {
+  const key = panelKey(ref.ask)
+  const out = await variantsOf($, ref.ask)
+  if ('error' in out) return $.ui.log(`proschi: no hover pictures: ${out.error}`, { to: 'debug' })
+  const l = live.get(site)
+  if (!l) return
+  for (const t of l.tiles.values()) {
+    if (panelKey(t.ask) !== key) continue
+    const area = out.tiles[t.tile]?.controls?.find(a => a.control.id === t.control)
+    if (area?.hoverFile) t.hoverFile = area.hoverFile
+    if (area?.pressedFile) t.pressedFile = area.pressedFile
+  }
+  if (l.hovered === id) await blit($, l, l.tiles.get(id), l.tiles.get(id)?.hoverFile)
+}
+
 /** Runs a control's action, timed from now until its drawing shows. */
 async function act($: EngineInterface, site: string, id: string, surface: RenderSurface): Promise<void> {
   const l = live.get(site)
@@ -648,14 +675,14 @@ export function registerPicture(on: On): void {
     if (!site || !l) return next(e)
     const data = (e.data ?? {}) as { type?: unknown; id?: unknown; key?: unknown }
     const id = typeof data.id === 'string' ? data.id : ''
-    const started = await $.clock.now()
     if (data.type === 'hover') {
       // Leaving one strip's overlay may come after entering the next one's: it takes back only its own control's hover.
       if (!id && l.hovered && !l.overlays.get(e.element)?.includes(l.hovered)) return {}
       if (l.hovered && l.hovered !== id) await blit($, l, l.tiles.get(l.hovered), l.tiles.get(l.hovered)?.file)
       l.hovered = id || undefined
-      if (id) await blit($, l, l.tiles.get(id), l.tiles.get(id)?.hoverFile)
-      timings.hover = (await $.clock.now()) - started
+      const ref = id ? l.tiles.get(id) : undefined
+      if (ref?.hoverFile) await blit($, l, ref, ref.hoverFile)
+      else if (ref) await hoverLater($, site, id, ref)
     } else if (data.type === 'down') {
       await blit($, l, l.tiles.get(id), l.tiles.get(id)?.pressedFile)
     } else if (data.type === 'press') {
@@ -750,13 +777,3 @@ export function scrollToAnchorOnceShown($: EngineInterface, site: string, anchor
   else $.clock.after(0, () => void scrollToAnchor($, site, anchor))
 }
 
-/** For tests: forget what was drawn. */
-export function resetPictures(): void {
-  pending.clear()
-  windows.clear()
-  going.clear()
-  shown.clear()
-  live.clear()
-  overlaySites.clear()
-  opening.clear()
-}

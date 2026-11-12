@@ -210,6 +210,11 @@ function draw({ diagram, layout }: ArchitectureLayout, options: ArchitectureOpti
 
   const boxOf = (p: Placed) => ({ x: p.x + dx, y: p.y + dy, width: p.width, height: p.height });
   const routed = new Map<string, Point[]>();
+  // In the terminal, the load chips placed so far: a chip that would cover one moves along its own edge (clearOf).
+  const chips: Box[] = [];
+  const frames = [...placed.values()].map(boxOf);
+  // The cards: what holds no other box (a group's or an expanded system's frame does).
+  const cards = frames.filter((f) => !frames.some((o) => o !== f && o.x >= f.x && o.y >= f.y && o.x + o.width <= f.x + f.width && o.y + o.height <= f.y + f.height));
   for (const edge of diagram.edges) {
     const s = placed.get(edge.source);
     const t = placed.get(edge.target);
@@ -219,10 +224,13 @@ function draw({ diagram, layout }: ArchitectureLayout, options: ArchitectureOpti
     const route = layout.routes[edge.id];
     const shift = (p: Point) => ({ x: p.x + dx, y: p.y + dy });
     // Cards here are drawn at their own height, so ends on a bottom move onto it.
-    const points = route ? snapToBottom(snapToBottom(route.points.map(shift), 'start', sBox), 'end', tBox) : fallbackRoute(sBox, tBox);
-    routed.set(edge.id, points);
-    const at = route?.label ? shift(route.label) : labelPoint(points);
+    const routedPoints = route ? snapToBottom(snapToBottom(route.points.map(shift), 'start', sBox), 'end', tBox) : fallbackRoute(sBox, tBox);
+    routed.set(edge.id, routedPoints);
+    // In the terminal, an arrow into a handle stops at the handle's edge, so the card's handle (drawn over the edges) leaves its head whole.
+    const points = options.terminal ? clearOfHandle(routedPoints, tBox) : routedPoints;
+    let at = route?.label ? shift(route.label) : labelPoint(points);
     const load = options.overlay?.edges[edge.id];
+    if (options.terminal && load && load.rps > 0) at = clearOf(at, chipSize(edge.label, load), points, chips, cards);
     const move = play?.moveOn(edge);
     if (!load && !play) {
       body.push(drawEdge(edge.id, edge.label, points, at, edgeStroke(edge)));
@@ -287,6 +295,18 @@ function draw({ diagram, layout }: ArchitectureLayout, options: ArchitectureOpti
 /** A paper-coloured outline behind the letters, so lines underneath stop short of them. */
 function halo(textElement: string): string {
   return textElement.replace('<text ', `<text paint-order="stroke" stroke="${COLORS.background}" stroke-width="5" stroke-linejoin="round" `);
+}
+
+/** An edge whose last point is a handle of `box` (the middle of its top or bottom), ended 5 px short of that point along its last run: at the handle's edge. */
+function clearOfHandle(points: Point[], box: { x: number; y: number; width: number; height: number }): Point[] {
+  const end = points.at(-1);
+  const before = points.at(-2);
+  if (!end || !before) return points;
+  const atHandle = Math.abs(end.x - (box.x + box.width / 2)) < 1 && (Math.abs(end.y - box.y) < 1 || Math.abs(end.y - (box.y + box.height)) < 1);
+  const run = Math.hypot(end.x - before.x, end.y - before.y);
+  if (!atHandle || run < 20) return points;
+  const k = 5 / run;
+  return [...points.slice(0, -1), { x: end.x - (end.x - before.x) * k, y: end.y - (end.y - before.y) * k }];
 }
 
 /** React Flow's handle (`.pc-handle`): a 9px square centred on (cx, cy). */
@@ -674,11 +694,7 @@ function drawLiveEdge(edge: DiagramEdge | undefined, points: Point[], at: Point,
   if (load && load.rps > 0) {
     // The chip (EdgeLoadLabel): the label, then its requests and the latency they add, one a
     // line under a label so it is no wider than the room the layout kept for that.
-    const latency = load.latencyMs !== undefined ? `+${formatMs(load.latencyMs)}` : undefined;
-    const numbers = label ? [formatRps(load.rps), ...(latency ? [latency] : [])] : [[formatRps(load.rps), latency].filter(Boolean).join(' · ')];
-    const lines = label ? [fit(label, 200, 11), ...numbers] : numbers;
-    const w = Math.max(...lines.map((l) => monoWidth(l, 11))) + 12;
-    const h = lines.length * 14 + 4;
+    const { lines, w, h } = chipSize(label, load);
     out.push(
       `<rect x="${r(at.x - w / 2)}" y="${r(at.y - h / 2)}" width="${r(w)}" height="${h}" rx="3" fill="${COLORS.background}" fill-opacity="${opaque ? 1 : 0.92}" stroke="${COLORS.text}" stroke-opacity="${load.critical ? 1 : 0.35}" stroke-width="${load.critical ? 1.5 : 1}"/>`,
       ...lines.map((l, i) =>
@@ -695,6 +711,40 @@ function drawLiveEdge(edge: DiagramEdge | undefined, points: Point[], at: Point,
   }
   out.push('</g>');
   return out.join('\n');
+}
+
+/** A load chip's lines (the label, then its requests and the latency they add, one a line under a label) and its size. */
+function chipSize(label: string | undefined, load: EdgeOverlay): { lines: string[]; w: number; h: number } {
+  const latency = load.latencyMs !== undefined ? `+${formatMs(load.latencyMs)}` : undefined;
+  const numbers = label ? [formatRps(load.rps), ...(latency ? [latency] : [])] : [[formatRps(load.rps), latency].filter(Boolean).join(' · ')];
+  const lines = label ? [fit(label, 200, 11), ...numbers] : numbers;
+  return { lines, w: Math.max(...lines.map((l) => monoWidth(l, 11))) + 12, h: lines.length * 14 + 4 };
+}
+
+type Box = { x: number; y: number; width: number; height: number };
+
+const meets = (a: Box, b: Box, gap = 3) => a.x < b.x + b.width + gap && b.x < a.x + a.width + gap && a.y < b.y + b.height + gap && b.y < a.y + a.height + gap;
+
+/**
+ * Where a chip of `size` centred at `at` covers no chip placed before it: there,
+ * else the first point along its own edge (from its middle outwards) where it
+ * covers neither a chip nor a card; else where it was. Its box joins `chips`.
+ */
+function clearOf(at: Point, size: { w: number; h: number }, points: Point[], chips: Box[], cards: Box[]): Point {
+  const boxAt = (p: Point): Box => ({ x: p.x - size.w / 2, y: p.y - size.h / 2, width: size.w, height: size.h });
+  let best = at;
+  if (chips.some((c) => meets(c, boxAt(at)))) {
+    for (const share of [0.5, 0.4, 0.6, 0.3, 0.7, 0.2, 0.8]) {
+      const p = along(points, share);
+      const b = boxAt(p);
+      if (!chips.some((c) => meets(c, b)) && !cards.some((c) => meets(c, b, 0))) {
+        best = p;
+        break;
+      }
+    }
+  }
+  chips.push(boxAt(best));
+  return best;
 }
 
 /** The point `share` (0..1) of the way along a polyline. */

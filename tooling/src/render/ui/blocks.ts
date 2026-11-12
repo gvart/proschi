@@ -29,6 +29,15 @@ export function placeButton(S: Surface, c: Control, col: number, top: number, ki
 
 const OPTION_ROW = (dense: boolean) => (dense ? ROW : 2 * ROW);
 
+/** The columns a select's options take in its menu, measured in the type they are drawn in. */
+function menuTextColumns(sel: Select): number {
+  const size = sel.options.length > 8 ? 13 : 14;
+  return cols(Math.max(...sel.options.map((o) => width(o.label, { size, weight: 600 }) + (o.detail ? width(o.detail, { size: 12.5 }) + 14 : 0))) + 48);
+}
+
+/** A MenuPanel's width: its options measured, at least 28 columns and at most `max`. */
+export const menuColumns = (sel: Select, max: number) => Math.min(max, Math.max(28, menuTextColumns(sel) + 1));
+
 /** A select's menu under it from `top`: a card with an option per row, each a control `${id}=${value}`; `framed` false where the panel is the card (a MenuPanel). */
 export function menu(S: Surface, sel: Select, col: number, top: number, minColumns: number, framed = true): number {
   const P = S.P;
@@ -36,8 +45,7 @@ export function menu(S: Surface, sel: Select, col: number, top: number, minColum
   const rowH = OPTION_ROW(dense);
   const size = dense ? 13 : 14;
   const groups = new Set(sel.options.map((o) => o.group).filter(Boolean)).size > 0;
-  const textW = Math.max(...sel.options.map((o) => width(o.label, { size, weight: 600 }) + (o.detail ? width(o.detail, { size: 12.5 }) + 14 : 0)));
-  const columns = Math.min(S.columns - col - 1, Math.max(minColumns, cols(textW + 48)));
+  const columns = Math.min(S.columns - col - 1, Math.max(minColumns, menuTextColumns(sel)));
   const x = col * CELL.width;
   const w = columns * CELL.width;
   let y = top;
@@ -222,6 +230,9 @@ const lineOf = (s: TextStyle) => ((s.size ?? 13) >= 14 ? 19 : 17);
  * their cells and titles wrap, a word too long for its column broken, so
  * every cell is whole within `maxW`.
  */
+/** The narrowest a wrapping text column of a table gets before one of its columns drops, px. */
+const MIN_TEXT = 88;
+
 export function table(S: Surface, columns: Column[], rows: { cells: Cell[]; sub?: boolean; dim?: boolean }[], x0: number, top: number, maxW: number): number {
   const P = S.P;
   const controls = rows.some((row) => row.cells.some((c) => typeof c === 'object' && !Array.isArray(c) && 'control' in c));
@@ -235,7 +246,9 @@ export function table(S: Surface, columns: Column[], rows: { cells: Cell[]; sub?
   const fixed = columns.map((_, i) => rows.some((row) => isFixed(row.cells[i])));
   let shown = columns.map((_, i) => i);
   const total = () => shown.reduce((s, i) => s + widths[i], 0) + CELL_PAD * (shown.length - 1);
-  while (total() > maxW) {
+  // A column drops only where the table cannot fit even with its text columns wrapped (each at least MIN_TEXT wide), as the editor's tables wrap.
+  const least = () => shown.reduce((s, i) => s + (fixed[i] ? widths[i] : Math.min(widths[i], MIN_TEXT)), 0) + CELL_PAD * (shown.length - 1);
+  while (least() > maxW) {
     const droppable = shown.filter((i) => columns[i].drop !== undefined).sort((a, b) => columns[b].drop! - columns[a].drop!);
     if (!droppable.length) break;
     shown = shown.filter((i) => i !== droppable[0]);

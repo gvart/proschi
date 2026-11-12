@@ -1,9 +1,9 @@
 /**
  * What the raster helper (plugin/hooks/raster.cjs) takes and answers for the
  * mod's rendered UI: panels drawn whole in the canvas's style, then cut on the
- * terminal's cell grid into tiles, each control its own tile
- * (docs/impl/terminal-rendered-ui.md). Types only, so the plugin imports them
- * without pulling in the drawing.
+ * terminal's cell grid into full-width strips, each control an area of its
+ * strip (docs/design/terminal-mod.md D12). Types and a few constants only, so
+ * the plugin imports them without pulling in the drawing.
  *
  * A panel is plain data: the words, numbers and states the text UI shows
  * (plugin/src/register.tsx, plugin/src/views), with an `id` per control. The
@@ -218,6 +218,19 @@ export interface SystemBarPanel {
   controls: Control[];
 }
 
+/**
+ * The pane's zoom controls in the diagram's bottom right corner: −, the level
+ * (back to fit), + and Fit as one pill, styled as the load legend's badge
+ * across from it. Two rows; its controls `out`, `level`, `in`, `fit`.
+ */
+export interface ZoomPanel {
+  kind: 'zoom';
+  controls: Control[];
+}
+
+/** Columns a ZoomPanel is drawn (the least a panel takes; the pill sits at its right on the strip's surface): laid a column in from the strip's right edge, the legend badge's margin. */
+export const ZOOM_COLUMNS = 20;
+
 /** Copy source, copy link, open in Proschi, focus (the row under a drawing). */
 export interface ActionBarPanel {
   kind: 'actionBar';
@@ -294,7 +307,7 @@ export interface PagePanel {
   source?: { source: string; path?: string; imports?: Record<string, string> };
 }
 
-export type Panel = TabBarPanel | PlayerBarPanel | MenuPanel | DrawerPanel | ExplorerPanel | SystemBarPanel | ActionBarPanel | NoticesPanel | PagePanel;
+export type Panel = TabBarPanel | PlayerBarPanel | MenuPanel | DrawerPanel | ExplorerPanel | SystemBarPanel | ActionBarPanel | ZoomPanel | NoticesPanel | PagePanel;
 
 // ---------- the request and the answer ----------
 
