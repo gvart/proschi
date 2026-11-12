@@ -1,0 +1,35 @@
+tooling/src/terminal/layout.ts
+  s_50cc5c1ed1a510::t_bc70176f6da589 4-13,15-26
+plugin/src/helper.ts
+  s_50cc5c1ed1a510::t_a65d68320eb7f0 61,64
+  s_50cc5c1ed1a510::t_479d4a33e6c144 4,14-18,23-24,43-44,126-134,136-140,142-144,147-148,150-151,174,176-179,192,219-224,255,257,259,291-292,295,302,317-318,320-321,325-329,332-333,348-379,392-396,406-407
+  s_50cc5c1ed1a510::t_88db866e0acf25 72
+  s_50cc5c1ed1a510::t_ecbec073294ccc 95,243,245-247,250-251
+  s_50cc5c1ed1a510::t_c2affe5934abc1 301,303-316,319
+  s_50cc5c1ed1a510::t_1e6bf669094bb9 225
+tooling/src/terminal/rasterHost.ts
+  s_50cc5c1ed1a510::t_c8e925f09a427a 13,39,56,139,279,281
+  s_50cc5c1ed1a510::t_eb5c1158937937 51,158-159,163,215-223,233-235,596-599,607-610,612,620-621,656-659,680-681,684,710-717
+  s_50cc5c1ed1a510::t_877f6563f4ec7e 64
+  s_50cc5c1ed1a510::t_0e22d62c31933b 100,426,429,447
+  s_50cc5c1ed1a510::t_373738a8b91c8d 7-8,95-98
+  s_50cc5c1ed1a510::t_ff8ac6e5edb659 617,623
+tooling/build.mjs
+  s_50cc5c1ed1a510::t_c8e925f09a427a 58-59,77-78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fd9c70d1fa9424bc502238bba369dbc94336d7d9",
+  "prompts": {},
+  "sessions": {
+    "s_50cc5c1ed1a510": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7e5513ad-e496-40de-9a6e-d587aa393ce5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
