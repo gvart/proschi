@@ -107,7 +107,9 @@ describe('UI panels: the cell grid', () => {
         const strips = cut(rows, surface.controls.map((c) => ({ control: c.control, cells: cellsOf(c.box, columns, rows) })), surface.cuttable(rows));
         const textOnly = surface.svg(height).replace(/<(rect|line|circle|path)\b[^>]*\/>/g, '');
         const image = new Resvg(textOnly, { font: { fontBuffers: fonts, defaultFontFamily: 'Inter', sansSerifFamily: 'Inter', monospaceFamily: 'JetBrains Mono' } }).render();
-        const ink = (x: number, y: number) => image.pixels[(y * image.width + x) * 4 + 3] > 24;
+        // `pixels` copies the whole picture out of wasm on every read: take it once.
+        const pixels = image.pixels;
+        const ink = (x: number, y: number) => pixels[(y * image.width + x) * 4 + 3] > 24;
         for (const s of strips.slice(1)) {
           const y = s.row * CELL.height;
           const crossing = Array.from({ length: image.width }, (_, x) => x).filter((x) => ink(x, y - 1) && ink(x, y));
