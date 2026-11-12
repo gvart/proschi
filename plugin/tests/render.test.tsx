@@ -16,7 +16,7 @@ const reply = (text: string) =>
 const FENCED = `Here is the design:\n\n\`\`\`proschi\n${SOURCE}\n\`\`\`\n\nPress Play.`
 
 test('a proschi block in a reply draws as a diagram with its player', async ($, on) => {
-  // Nothing sits beneath the plugin: these hooks stand for the engine and for Node running hooks/layout.cjs.
+  // Nothing sits beneath the plugin: these hooks stand for the engine and for Node running hooks/raster.cjs.
   on('process.run', () => ({ value: { exitCode: 0, stdout: LAYOUT, stderr: '' } }))
   on('ui.invalidate', () => ({ value: undefined }))
   on('ui.render', ($, e) => {

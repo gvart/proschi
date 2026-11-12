@@ -59,6 +59,7 @@ function host(on: On, clock: Clock, o: Options = {}) {
     spawns: 0,
   }
   const inbox = new Map<string, { id: string; input: Record<string, unknown> }[]>()
+  busy = () => [...inbox.values()].some(q => q.length > 0)
   on('state.set', ($, e, next) => {
     h.stored.push(JSON.stringify(e))
     return next(e)
@@ -77,9 +78,9 @@ function host(on: On, clock: Clock, o: Options = {}) {
   on('process.run', (_, e) => {
     const run = e as unknown as Run
     h.runs.push(run)
-    const raster = run.argv[1]?.endsWith('raster.cjs')
+    // raster.cjs one shot: a layout, or the raster helper's answer.
     const input = JSON.parse(run.init?.stdin ?? '{}') as Record<string, unknown> & { view?: { expanded?: string[]; focus?: string } }
-    return { value: { exitCode: 0, stdout: raster ? JSON.stringify(answer(input, o.size)) : o.project ? o.project.layout(input.view) : LAYOUT, stderr: '' } }
+    return { value: { exitCode: 0, stdout: input.kind === 'layout' ? (o.project ? o.project.layout(input.view) : LAYOUT) : JSON.stringify(answer(input, o.size)), stderr: '' } }
   })
   if (o.project) {
     const files = o.project.files
@@ -114,7 +115,7 @@ function host(on: On, clock: Clock, o: Options = {}) {
         return { value: { code: 1, signal: null } }
       }
       const req = queue.shift()!
-      // A layout, as hooks/layout.cjs would answer it; else the raster helper's answer.
+      // A layout, as raster.cjs lays it out; else the raster helper's answer.
       const view = (req.input as { view?: { expanded?: string[]; focus?: string } }).view
       const output = req.input.kind === 'layout' ? JSON.parse(o.project ? o.project.layout(view) : LAYOUT) : answer(req.input, o.size)
       yield { stream: 'stdout' as const, text: `${JSON.stringify({ id: req.id, output })}\n` }
@@ -136,9 +137,18 @@ const overlaysOf = async (ui: Mounted, site: string) => ((await ui.findAll({ typ
 /** Every control the overlays map, with the overlay that maps it. */
 const controlsOf = async (ui: Mounted, site: string) => (await overlaysOf(ui, site)).flatMap(o => ((o.props.props as { controls?: Control[] }).controls ?? []).map(c => ({ ...c, in: String(o.key) })))
 
+/** Whether the fake worker has requests waiting (host sets it). */
+let busy = () => false
+
+/** Until the fake worker has answered every request written: a drawing mounted sooner would only ask again. */
+async function idle(): Promise<void> {
+  for (let i = 0; i < 500 && busy(); i++) await new Promise(resolve => setTimeout(resolve, 1))
+}
+
 /** Draws until the drawing is in pictures: laid out, the terminal asked, its panels drawn. */
 async function settle($: T, clock: Clock, props: typeof reply | typeof pane = reply, site = 'm1:0', ready: (c: Control[]) => boolean = c => c.length > 0): Promise<Mounted> {
   for (let i = 0; i < 12; i++) {
+    await idle()
     const ui = await $.ui.mount(props)
     if (ready(await controlsOf(ui, site))) return ui
     await ui.unmount()
@@ -177,14 +187,16 @@ const ids = async (ui: Mounted, site = 'm1:0') => (await controlsOf(ui, site)).m
 /** Whether the plugin stored this probe answer. */
 const remembered = (h: { stored: string[] }, value: object) => h.stored.some(e => e.includes('"graphics"') && e.includes(JSON.stringify(value).slice(1, -1)))
 
-test('graphics off draws the text cells and never runs the raster helper', { ...SLOW, options: { graphics: 'off' } }, async ($, on) => {
+test('graphics off draws the text cells and asks the helper for its layout alone', { ...SLOW, options: { graphics: 'off' } }, async ($, on) => {
   const h = host(on, mock.clock(on))
   for (let i = 0; i < 2; i++) await (await $.ui.mount(reply)).unmount()
   const ui = await $.ui.mount(reply)
   expect(await ui.find({ type: 'Raster' })).toBeDefined()
   expect(await ui.find({ type: 'Image' })).toBeUndefined()
-  expect(h.spawns).toBe(0)
-  expect(h.runs.some(r => r.argv[1]?.endsWith('raster.cjs'))).toBe(false)
+  // The helper lays the diagram out, as for pictures, and draws nothing.
+  const asked = [...h.requests.map(r => r.input), ...h.runs.map(r => JSON.parse(r.init?.stdin ?? '{}') as Record<string, unknown>)]
+  expect(asked.length).toBeGreaterThan(0)
+  expect(asked.every(input => input.kind === 'layout')).toBe(true)
   await ui.unmount()
 })
 
@@ -275,7 +287,9 @@ test('the pane: tabs and pages are pictures, each press and hotkey runs its cont
   await click(p, site, 'tabs/analysis')
   await p.unmount()
   p = await settle($, clock, pane, site, c => c.some(x => x.id.startsWith('page-analysis/')) || !c.some(x => x.id === 'links/src'))
-  expect(await p.find({ type: 'Text' })).toBeUndefined()
+  // Pictures but for the keys' one muted row under them, as in text.
+  expect(((await p.findAll({ type: 'Text' })) as unknown as NonNullable<Found>[]).map(t => t.props.text ?? t.text)).toHaveLength(1)
+  expect(await p.find({ type: 'Text', text: /^1-3 tabs · ↑↓ scroll|^ctrl\+x tab focuses the pane/ })).toBeDefined()
   // Every page is mounted, the ones not shown drawn as nothing, so a switch only shows one.
   for (let i = 0; i < 12 && !(await p.find({ key: `pg-${site}-page-hld` })); i++) {
     await p.unmount()
@@ -305,6 +319,10 @@ test('hover blits the control\'s hover tile and back, a button going down its pr
   h.blits.length = 0
   await ui.pointer({ type: 'move', ...src })
   expect(h.blits.at(-1)?.file).toBe('/tmp/proschi-raster/actionBar-src-hover.png')
+  // Drawn on the first hover: the panel again with its hover and pressed pictures, asked for ahead of the rest.
+  const lazy = () => h.requests.filter(r => r.input.kind === 'panels' && (r.input.panels as { variants?: string[] }[]).some(p => p.variants?.join() === 'hover,pressed'))
+  expect(lazy()).toHaveLength(1)
+  expect(lazy()[0]!.id).toMatch(/^a/)
   const key = h.blits.at(-1)!.key
   expect(key).toMatch(/^t-m1:0-links-\d+$/)
   expect(await ui.find({ type: 'Image', key })).toBeDefined()
@@ -315,6 +333,8 @@ test('hover blits the control\'s hover tile and back, a button going down its pr
   expect(h.blits.at(-1)?.file).toBe('/tmp/proschi-raster/actionBar-lnk-hover.png')
   await ui.pointer({ type: 'down', ...lnk, button: 'left' })
   expect(h.blits.at(-1)?.file).toBe('/tmp/proschi-raster/actionBar-lnk-pressed.png')
+  // Every control of that panel had them from the one request.
+  expect(lazy()).toHaveLength(1)
   await ui.unmount()
 })
 
@@ -366,8 +386,8 @@ test('the worker: one per session, a press asked before prefetching, the first r
   expect(h.requests[0]?.input.kind).toBe('layout')
   const pictures = h.requests.filter(r => r.input.kind !== 'layout')
   expect(pictures.map(r => r.input.prune)).toEqual([true, ...pictures.slice(1).map(() => undefined)])
-  // Hover and pressed variants with every panel.
-  expect(panels.every(r => (r.input.panels as { variants?: string[] }[]).every(p => p.variants?.join() === 'hover,pressed'))).toBe(true)
+  // No hover or pressed pictures until a control is hovered.
+  expect(panels.every(r => (r.input.panels as { variants?: string[] }[]).every(p => p.variants?.length === 0))).toBe(true)
   await ui.unmount()
 })
 
@@ -625,14 +645,14 @@ test('the HLD tab: every strip of the page lies within the pane\'s rows and colu
   // The page is taller than the pane (the fake helper draws it 4 × 64 rows), so it scrolls.
   expect(strips.length).toBeGreaterThan(3)
   expect(root.h).toBeGreaterThan(pane.props.scroll.bodyRows)
-  // Top to bottom with no gap, the last ending where the drawing does: the window reaches each at an offset up to root.h - bodyRows.
+  // Top to bottom with no gap, the last ending where the drawing does but for the keys' row: the window reaches each at an offset up to root.h - bodyRows.
   const tabs = [...nodes(root)].filter(n => n.el.type === 'Image' && String(n.key).startsWith(`t-${site}-tabs-`))
   expect(strips[0]!.y).toBe(tabs.reduce((s, t) => s + t.h, 0))
   for (const [i, s] of strips.entries()) {
     if (i > 0) expect(s.y).toBe(strips[i - 1]!.y + strips[i - 1]!.h)
     expect(s.x + s.w).toBeLessThanOrEqual(pane.props.bodyColumns)
   }
-  expect(strips.at(-1)!.y + strips.at(-1)!.h).toBe(root.h)
+  expect(strips.at(-1)!.y + strips.at(-1)!.h).toBe(root.h - 1)
   // A click gave an overlay the focus: the pane's scroll keys reach it, and it moves the pane (a window a page key, from where the render saw it).
   const overlay = (await overlaysOf(p, site)).find(o => String(o.key).includes('page-hld'))!
   h.logs.length = 0
@@ -738,6 +758,7 @@ async function zoomed($: T, clock: Clock, p: Mounted, h: { stored: string[] }, l
   expect(zoomStored(h).level).toBe(level)
   await p.unmount()
   for (let i = 0; i < 12; i++) {
+    await idle()
     const ui = await $.ui.mount(pane)
     const tiles = await zoomTiles(ui)
     if (tiles.length && tiles.every(t => (level === 1 ? !t.file.includes('/z') : t.file.includes(`/z${level}-`)))) return ui
@@ -749,13 +770,11 @@ async function zoomed($: T, clock: Clock, p: Mounted, h: { stored: string[] }, l
 
 type Window = { col: number; row: number; columns: number; rows: number }
 
-/** The viewport's window the helper was last asked for at a zoom (not the ring drawn ahead). */
-const windowAsked = (h: ReturnType<typeof host>, level: number) =>
-  h.requests
-    .filter(r => !r.id.startsWith('c'))
-    .map(r => (r.input.options as { grid?: { zoom?: number; window?: Window } } | undefined)?.grid)
-    .filter(g => g?.zoom === level && g.window)
-    .at(-1)?.window
+/** The request for a zoom's first viewport: asked for ahead while the level before it stood, or on the press (not the ring around it, asked for after). */
+const viewportRequest = (h: ReturnType<typeof host>, level: number) => h.requests.find(r => (r.input.options as { grid?: { zoom?: number; window?: Window } } | undefined)?.grid?.zoom === level)
+
+/** The viewport's window the helper was first asked for at a zoom. */
+const windowAsked = (h: ReturnType<typeof host>, level: number) => (viewportRequest(h, level)?.input.options as { grid?: { window?: Window } } | undefined)?.grid?.window
 
 test('zoom: the corner\'s controls and the keys step the level, each zoom asks for its viewport\'s tiles re-rendered, and fit draws the still again', TOUR, async ($, on) => {
   const clock = mock.clock(on)
@@ -769,6 +788,8 @@ test('zoom: the corner\'s controls and the keys step the level, each zoom asks f
   p = await zoomed($, clock, p, h, 1.25)
   // 100×27 cells at fit: 125×34 at 125%, a 100-column viewport over its middle, its tiles only, re-rendered.
   expect(windowAsked(h, 1.25)).toEqual({ col: 13, row: 0, columns: 100, rows: 34 })
+  // Asked for ahead, at fit: the press drew from tiles drawn already.
+  expect(viewportRequest(h, 1.25)?.id).toMatch(/^c/)
   const box = (await p.find({ key: `at-${PANE_SITE}` })) as Found
   expect(box?.props).toMatchObject({ width: 100, height: 34, overflow: 'hidden' })
   expect(((await p.find({ key: `img-${PANE_SITE}-pan` })) as Found)?.props).toMatchObject({ marginLeft: -13, marginTop: 0 })

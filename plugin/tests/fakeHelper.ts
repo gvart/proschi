@@ -36,14 +36,15 @@ function controlsOf(panel: Record<string, unknown>): { id: string; hotkey?: stri
 /** What the helper answers `input` with. */
 export function answer(input: Record<string, unknown>, size = { width: 1600, height: 900 }): unknown {
   if (input.kind === 'panels') {
-    const panels = (input.panels as { id: string; panel: Record<string, unknown>; columns: number }[]).map(req => {
+    const panels = (input.panels as { id: string; panel: Record<string, unknown>; columns: number; variants?: string[] }[]).map(req => {
       const controls = controlsOf(req.panel)
       const name = `/tmp/proschi-raster/${req.panel.kind}`
+      // The hover and pressed pictures only where asked for, as the helper.
+      const variants = (c: { id: string }) => ({ ...(req.variants?.includes('hover') ? { hoverFile: `${name}-${c.id}-hover.png` } : {}), ...(req.variants?.includes('pressed') ? { pressedFile: `${name}-${c.id}-pressed.png` } : {}) })
       const area = (c: { id: string; hotkey?: string; disabled?: boolean }, col: number, columns: number) => ({
         col,
         columns,
-        hoverFile: `${name}-${c.id}-hover.png`,
-        pressedFile: `${name}-${c.id}-pressed.png`,
+        ...variants(c),
         control: { id: c.id, kind: 'button', ...(c.hotkey ? { hotkey: c.hotkey } : {}), ...(c.disabled ? { disabled: true } : {}) },
       })
       // The player bar as the kit lays it: its controls side by side on a row three cells tall, Body at the right end of the two rows under it.
@@ -69,8 +70,7 @@ export function answer(input: Record<string, unknown>, size = { width: 1600, hei
             {
               col: 0,
               columns: req.columns,
-              hoverFile: `${name}-${c.id}-hover.png`,
-              pressedFile: `${name}-${c.id}-pressed.png`,
+              ...variants(c),
               control: { id: c.id, kind: 'button', ...(c.hotkey ? { hotkey: c.hotkey } : {}), ...(c.disabled ? { disabled: true } : {}) },
             },
           ],

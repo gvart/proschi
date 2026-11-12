@@ -120,17 +120,17 @@ test('the HLD tab draws the design document, and copies it with its Mermaid diag
   engine(on, copied)
   const p = await focused($, SOURCE)
   await p.press({ key: 'tab-hld' })
-  // The Markdown in two: up to its Requirements, then from them on in a Box a failing verdict's Details scrolls to.
+  // The title, then each section in a Box keyed by its anchor, which the contents' entries and a failing verdict's Details scroll to.
   const parts = (await p.findAll({ type: 'Markdown' })) as unknown as { props: { text: string } }[]
-  expect(parts).toHaveLength(2)
-  expect(parts[1]!.props.text).toMatch(/^## 2\. Requirements/)
+  expect(parts[0]!.props.text).toBe('# Checkout')
+  expect(parts[1]!.props.text).toMatch(/^## 1\. Overview/)
+  expect(parts[2]!.props.text).toMatch(/^## 2\. Requirements/)
   expect(await p.find({ key: 'hld-requirements' })).toBeDefined()
-  const md = { props: { text: parts.map(m => m.props.text).join('') } }
-  expect(md.props.text).toMatch(/^# Checkout\n/)
-  expect(md.props.text).toMatch(/\*\*Contents\*\* 1 Overview · 2 Requirements · 3 Capacity estimates/)
-  expect(md.props.text).toMatch(/## 3\. Capacity estimates/)
-  expect(md.props.text).not.toMatch(/```mermaid/)
-  expect(md.props.text).toMatch(/_The Diagram tab draws the architecture\._/)
+  expect(await p.find({ key: 'toc-requirements' })).toBeDefined()
+  const md = parts.map(m => m.props.text).join('')
+  expect(md).toMatch(/## 3\. Capacity estimates/)
+  expect(md).not.toMatch(/```mermaid/)
+  expect(md).toMatch(/_The Diagram tab draws the architecture\._/)
   await p.press({ key: 'hld-copy' })
   expect(copied[0]).toMatch(/^# Checkout\n/)
   expect(copied[0]).toMatch(/```mermaid\n[^`]*flowchart LR/)

@@ -85,7 +85,7 @@ test('a failing check reads in one line, and Details opens the pane on its HLD t
   // Its Requirements section in a Box of its own, which the pane scrolls to.
   const section = (await p.find({ key: 'hld-md-requirements' })) as unknown as { props: { text: string } }
   expect(section.props.text).toMatch(/^## \d+\. Requirements/)
-  expect(section.props.text).toMatch(/fail/)
+  expect(section.props.text).toMatch(/❌/)
   // The harness moves no window for a plugin's $.ui.scroll: the refusal, naming its target, goes to the debug log.
   await clock.advance(1)
   expect(logs.filter(line => line.startsWith('proschi: scroll to ')).map(line => line.split(' refused')[0])).toEqual(['proschi: scroll to {"key":"hld-requirements"}'])
