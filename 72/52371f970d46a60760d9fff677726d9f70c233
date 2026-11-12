@@ -1,0 +1,25 @@
+docs/design/terminal-mod-graphics.md
+  s_50cc5c1ed1a510::t_5488540e0f41c6 68
+plugin/hooks/raster.cjs
+  s_50cc5c1ed1a510::t_5488540e0f41c6 1470
+docs/AGENT-SKILLS.md
+  s_50cc5c1ed1a510::t_5488540e0f41c6 163
+tooling/src/terminal/rasterHost.ts
+  s_50cc5c1ed1a510::t_5488540e0f41c6 599
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7252371f970d46a60760d9fff677726d9f70c233",
+  "prompts": {},
+  "sessions": {
+    "s_50cc5c1ed1a510": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7e5513ad-e496-40de-9a6e-d587aa393ce5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
