@@ -1,0 +1,47 @@
+plugin/src/picture.tsx
+  s_50cc5c1ed1a510::t_d748cf581df2a7 46-54,57-59,111-120,137,173-175,299-306,312,450,468,474-511,514,583-584,595-596,607,660-662,681-682
+  s_50cc5c1ed1a510::t_bb9b09f889e3d9 459
+  s_50cc5c1ed1a510::t_10d3b2a3c8449b 512
+plugin/types/index.d.ts
+  s_50cc5c1ed1a510::t_d35e0a3281a7f6 7-9,20
+plugin/src/graphics.ts
+  s_50cc5c1ed1a510::t_91e7f51f4800c2 47-57,81-112,167
+plugin/src/uiOverlay.ts
+  s_50cc5c1ed1a510::t_9823a5828ca89b 17-25,32-35,47-58,60,65,70,76-77
+plugin/hooks/uiOverlay.js
+  s_50cc5c1ed1a510::t_43589bfd38d981 2,9-20,22,27,32,38-39
+plugin/src/zoom.ts
+  s_50cc5c1ed1a510::t_7c7fa6d8e53106 1-71
+plugin/src/register.tsx
+  s_50cc5c1ed1a510::t_59d8e688b0a991 19-21,350-352,529,590,638,650,658-665,693-694,772,802-803,827,913,919-940,943-1042,1606-1607
+  s_50cc5c1ed1a510::t_7c154c710951ad 914-918
+  s_50cc5c1ed1a510::t_10d3b2a3c8449b 941-942
+plugin/hooks/register.js
+  s_50cc5c1ed1a510::t_43589bfd38d981 5708-5710,5712,5714-5715,8027-8028,8030,9273,9882-9904,9946,10085-10091,10096,10200,10217,10221-10251,10253,10309,10320-10321,10327,10368-10370,10386,10423-10458,11357-11359,11473-11474,11548,11559-11560,11567-11573,11599-11600,11703-11799,12132
+plugin/tests/picture.test.tsx
+  s_50cc5c1ed1a510::t_b6a419905d4497 537
+  s_50cc5c1ed1a510::t_6b109bbeda3795 833
+  s_50cc5c1ed1a510::t_6404367a874e75 729-730
+  s_50cc5c1ed1a510::t_5b0fb74f07d73c 714-728,731-759,761-774,776-799,801-807,811-832,834-861,863-875
+  s_50cc5c1ed1a510::t_a4809ec5474e81 760,800
+  s_50cc5c1ed1a510::t_edc7bd7edaed90 775,808-810,862
+plugin/tests/fakeHelper.ts
+  s_50cc5c1ed1a510::t_8616c52e6e225f 107-108,115
+  s_50cc5c1ed1a510::t_29ed0a9813de1b 90,97-99,104-106,109,114,117
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "cdb91ea4dcbd08291558b97cbb157f52c4c74e23",
+  "prompts": {},
+  "sessions": {
+    "s_50cc5c1ed1a510": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7e5513ad-e496-40de-9a6e-d587aa393ce5",
+        "model": "unknown"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
