@@ -1,0 +1,46 @@
+tooling/src/terminal/grid.ts
+  s_50cc5c1ed1a510::t_8226d09794f863 127-144
+docs/impl/terminal-rendered-ui.md
+  s_50cc5c1ed1a510::t_c7e04d56509c54 328-354
+plugin/src/picture.tsx
+  s_50cc5c1ed1a510::t_98dbef74f8bb0c 711
+  s_50cc5c1ed1a510::t_6e459559f1e5b4 635,637,641-642,644-645
+  s_50cc5c1ed1a510::t_a2579b4fa5bb6f 636,643
+plugin/src/uiOverlay.ts
+  s_50cc5c1ed1a510::t_8226d09794f863 24-25,33,77-78
+plugin/src/register.tsx
+  s_50cc5c1ed1a510::t_8226d09794f863 21,292,531,702-707,727,729-731,760-773,793-803,809-812,815-816,993,1666-1669
+  s_50cc5c1ed1a510::t_a2579b4fa5bb6f 805,814
+  s_50cc5c1ed1a510::t_f81b45c74c5710 983
+  s_50cc5c1ed1a510::t_6e459559f1e5b4 20,293,804,806-808,813
+  s_50cc5c1ed1a510::t_005adbffa13548 817-818
+plugin/tests/render.test.tsx
+  s_50cc5c1ed1a510::t_5f978b60a4c0f6 320-321,324
+  s_50cc5c1ed1a510::t_d4e85b8af4267b 302
+  s_50cc5c1ed1a510::t_9814d6ebacc969 289-301,303-319,322-323,325-336
+plugin/src/zoom.ts
+  s_50cc5c1ed1a510::t_f81b45c74c5710 45
+  s_50cc5c1ed1a510::t_8226d09794f863 23-27,32,35-36
+  s_50cc5c1ed1a510::t_5a9fe6842590e4 37
+plugin/hooks/uiOverlay.js
+  s_50cc5c1ed1a510::t_8b1248d6738898 38
+plugin/hooks/register.js
+  s_50cc5c1ed1a510::t_8b1248d6738898 7976,8042-8058,10362,10365-10369,10456,10458,10464,11498,11628-11632,11635-11644,11649-11652,11655-11656,11768,11774,12192-12194
+  s_50cc5c1ed1a510::t_9e3b37c1ce02a1 11645-11648,11653-11654
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0a9625bee011ff7dee770bd8cd4cb5a10e830eb3",
+  "prompts": {},
+  "sessions": {
+    "s_50cc5c1ed1a510": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7e5513ad-e496-40de-9a6e-d587aa393ce5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
