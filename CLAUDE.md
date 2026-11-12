@@ -28,6 +28,12 @@ Live at <https://proschi.app/>.
   `node dist/cli.cjs problem check ../frontend/src/practice/problems`,
   `node dist/cli.cjs cards check ../frontend/src/practice/cards`,
   `node dist/cli.cjs achievements check` and `node dist/cli.cjs game check`.
+- `plugin/` (the Claude Code mod): `claude plugin validate plugin`,
+  `claude plugin test plugin` and `tsc -p plugin` (with tooling's
+  `node_modules/.bin/tsc`; it needs the engine's types, which a session that
+  loads the mod lays in `plugin/.claude-plugin/types`). After changing
+  `plugin/src` or what it imports, rebuild the committed bundles with
+  `node build.mjs` in `tooling/`.
 
 ## Deployment
 

@@ -53,3 +53,21 @@ jobs:
             tooling/dist/*.vsix
             tooling/dist/*.tgz
           retention-days: 7
+
+  # The Claude Code mod: its manifest and hooks module as the engine reads them, and its tests
+  # (against the committed bundles in plugin/hooks, which the test job checks are up to date).
+  # tsc -p plugin stays a local check: the engine lays the API declarations it type-checks
+  # against (plugin/.claude-plugin/types, gitignored) only when a session loads the mod.
+  plugin:
+    runs-on: ubuntu-latest
+    env:
+      CLAUDE_CODE: '@anthropic-ai/claude-code@2.1.322'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: Validate the plugin
+        run: npx -y "$CLAUDE_CODE" plugin validate plugin
+      - name: Test the plugin
+        run: npx -y "$CLAUDE_CODE" plugin test plugin
