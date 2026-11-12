@@ -160,7 +160,7 @@ on, the plugin draws text and says so under the drawing.
 
 The pictures are drawn by a Node process the plugin starts once a session.
 It stops after five minutes without a request (the next drawing starts it
-again, in about 150 ms), restarts itself once it holds more than 400 MB, and
+again, in about 150 ms), restarts itself once it holds more than 1 GB, and
 is stopped when the session ends. The pictures are written to
 `$TMPDIR/proschi-raster`, named by their content so a picture drawn once is
 never drawn again; each session's first drawing deletes the ones no drawing

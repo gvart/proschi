@@ -596,7 +596,7 @@ export async function answer(input: RasterInput | PanelsInput | LayoutInput, ass
 /** How long a worker waits for a request before it exits: the plugin starts another on its next request. */
 const IDLE_MS = 5 * 60 * 1000;
 /** Past this resident size, a worker with no request waiting exits after its answer, and the plugin's next request starts a fresh one. */
-export const RECYCLE_BYTES = 400 * 1024 * 1024;
+export const RECYCLE_BYTES = 1024 * 1024 * 1024;
 
 /**
  * The session-long worker: `raster.cjs --serve <dir>`. The mod's stdin is

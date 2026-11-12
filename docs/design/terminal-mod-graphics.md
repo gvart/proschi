@@ -65,7 +65,7 @@ The hooks start it once a session as a worker,
   wasm and the fonts are loaded (≈145 ms);
 - the worker stops after 5 minutes with no request (`IDLE_MS`), once its
   parent is gone, on SIGTERM, SIGINT or SIGHUP (the plugin stops it at
-  `session.end`), or after an answer that leaves it over 400 MB resident with
+  `session.end`), or after an answer that leaves it over 1 GB resident with
   nothing waiting (`RECYCLE_BYTES`). Stopping deletes `dir`. The plugin's
   next request starts another; what a worker held when it died runs one
   shot. A `serve-*` folder no worker removed (a crash) is deleted by the
