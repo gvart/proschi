@@ -1,0 +1,24 @@
+docs/AGENT-SKILLS.md
+  s_50cc5c1ed1a510::t_d2cacdc06562ab 99-109,131-133,148-155,159-167
+  s_50cc5c1ed1a510::t_f312b6b28195ed 170-171
+docs/design/terminal-mod.md
+  s_50cc5c1ed1a510::t_e27dcd8ab25445 11,84-85,88-91,140-165,168-169,173-181,183-189,191-196,199-202,206-304
+docs/design/terminal-mod-graphics.md
+  s_50cc5c1ed1a510::t_827481d0279975 7-9,51-84,87-105,112,121,127-129,153-162,199-202,218-223
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "be9dd067a37cbfa59dc4b3dfff97f62030bc5e3b",
+  "prompts": {},
+  "sessions": {
+    "s_50cc5c1ed1a510": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7e5513ad-e496-40de-9a6e-d587aa393ce5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
