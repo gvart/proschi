@@ -1,0 +1,27 @@
+tooling/test/raster.test.ts
+  s_50cc5c1ed1a510::t_cd73648d2e6117 157-184
+tooling/src/terminal/rasterHost.ts
+  s_50cc5c1ed1a510::t_c8a5b0cf0c25cd 343
+  s_50cc5c1ed1a510::t_dfe70f37b75d53 157-158,265-272
+  s_50cc5c1ed1a510::t_f969d00ea16d22 471
+  s_50cc5c1ed1a510::t_52093051007d88 488-489,491-499
+  s_50cc5c1ed1a510::t_b4a1bce4af4d65 160,353-360,362
+  s_50cc5c1ed1a510::t_db6ff7a65501cd 161-164,330-342,344-345,347-348
+  s_50cc5c1ed1a510::t_d6af2a1e75c5c0 24-27,97-109,150-156,159,165-181,296-297,299,325-326,346,544-546,549,555
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "01a3794aa308cd1c5bdf4cd2277592fdc25fd089",
+  "prompts": {},
+  "sessions": {
+    "s_50cc5c1ed1a510": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7e5513ad-e496-40de-9a6e-d587aa393ce5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
