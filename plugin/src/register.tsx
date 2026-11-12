@@ -17,8 +17,8 @@ import type { PaneSource, PaneTab, Player } from '../types'
 import { analysisPage, hldAnchor, hldPage, stepCardsOf, tabBarPanel } from '../../tooling/src/render/ui/data'
 import type { Control, DrawerPanel, ExplorerPanel, Notice, NoticesPanel, Option, Panel, PlayerBarPanel, Span } from '../../tooling/src/render/ui/contract'
 import { cellPx, graphicsMode, gridFrame, imageSize, maxWidthPx, mergedGrid, probe, probeKey, probeOf, probeSource, rasterOf, sourceOf, themeOf, TMUX_HINT, type GraphicsMode, type RasterGrid, type RasterRequest } from './graphics'
-import { loading, markOpened, paneWindow, pictureSite, pressTimings, registerPicture, scrollToAnchor, scrollToAnchorOnceShown, type Action, type Ahead, type Drag, type Float, type Picture, type Piece, type Site } from './picture'
-import { around, FIT, meets, PAN_STEP, panTo, stepZoom, viewportOf, ZOOMS, zoomLabel, zoomOf, type Viewport, type ZoomState } from './zoom'
+import { loading, markOpened, paneWindow, pictureSite, otherOverlays, pressTimings, registerPicture, scrollKey, scrollToAnchor, scrollToAnchorOnceShown, type Action, type Ahead, type Drag, type Float, type Picture, type Piece, type Site } from './picture'
+import { around, FIT, isMoved, meets, PAN_STEP, panTo, stepZoom, viewportOf, ZOOMS, zoomLabel, zoomOf, type Viewport, type ZoomState } from './zoom'
 import { answered, ask, didNotStart, isAborted, redraw, retry, serveRequests, setCellAspect } from './helper'
 import { hldDocument, hldMarkdown, hldTab } from './views/hld'
 import { legendLine, verdictLine } from './views/lines'
@@ -289,6 +289,8 @@ export function register(on: On, options: PluginOptions): void {
   })
 
   registerPicture(on)
+
+
 }
 
 /** What the pane's other tabs draw from: the document and its source. */
@@ -526,7 +528,7 @@ function normal(p: Partial<Player> | undefined): Player {
     expanded: Array.isArray(p?.expanded) ? p.expanded.filter((id): id is string => typeof id === 'string') : [],
     ...(typeof p?.focus === 'string' ? { focus: p.focus } : {}),
     ...(typeof p?.selected === 'string' ? { selected: p.selected } : {}),
-    ...(zoomOf(p?.zoom).level > 1 ? { zoom: zoomOf(p?.zoom) } : {}),
+    ...(isMoved(zoomOf(p?.zoom)) ? { zoom: zoomOf(p?.zoom) } : {}),
   }
 }
 
@@ -697,7 +699,12 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
     return { kind: 'picture', ...built, rows, systems: hasSystems }
   }
 
-  const grid = paint(scene, { overlay: doc.overlay, edges: doc.edges, icons, systems: doc.systems, ...(view.selected ? { selected: view.selected } : {}), ...(steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {}) })
+  const painted = paint(scene, { overlay: doc.overlay, edges: doc.edges, icons, systems: doc.systems, ...(view.selected ? { selected: view.selected } : {}), ...(steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {}) })
+  // In the pane, a drawing wider than it shows a viewport of it, panned by a drag, h and l, and ← → with the focus on it.
+  const wide = view.inPane && painted.columns > d.columns
+  const pan = wide ? textPan($, view, painted, zoomOf(player.zoom)) : undefined
+  textCrops.set(viewId, pan ? pan.vp : undefined)
+  const grid = pan ? painted.crop(pan.vp.col, 0, pan.vp.columns, painted.rows) : painted
   // The verdict on one row, with room left for its Details button in the transcript.
   const verdict = verdictLine(doc.tests, view.width - (view.inPane ? 0 : 13))
 
@@ -717,9 +724,11 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
             {TMUX_HINT}
           </ui.Text>
         )}
-        {grid.columns > d.columns && (
+        {painted.columns > d.columns && (
           <ui.Text dimColor wrap="truncate-end">
-            ↔ {grid.columns} columns wide, wider than the {d.columns} here: {view.inPane ? 'widen the window' : 'use ⛶ Focus or a wider window'} to see it whole.
+            {pan
+              ? `↔ ${painted.columns} columns wide, wider than the ${d.columns} here: columns ${pan.vp.col + 1}–${pan.vp.col + pan.vp.columns} shown. Drag it, or h and l (← → after a click on it), to pan.`
+              : `↔ ${painted.columns} columns wide, wider than the ${d.columns} here: use ⛶ Focus or a wider window to see it whole.`}
           </ui.Text>
         )}
         {lost.some(name => !importReasons.has(name)) && (
@@ -748,7 +757,20 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
             … {doc.warnings.length - INLINE_WARNINGS} more: ⛶ Focus, then Analysis
           </ui.Text>
         )}
-        <ui.Raster key={view.rasterKey} columns={grid.columns} rows={grid.rows} cells={grid.toBase64()} />
+        {pan ? (
+          <ui.Box key={`${view.rasterKey}-pan`} flexDirection="column" width={grid.columns} height={grid.rows}>
+            <ui.Raster key={view.rasterKey} columns={grid.columns} rows={grid.rows} cells={grid.toBase64()} />
+            <ui.Box position="absolute" top={0} left={0} width={grid.columns} height={grid.rows}>
+              <ui.Client key={pan.overlay} module="./uiOverlay.js" props={{ controls: [], drag: 'x' }} width={grid.columns} height={grid.rows} />
+            </ui.Box>
+            <ui.Box display="none">
+              <ui.Button key={`pan-h-${viewId}`} label="h" hotkey="h" onPress={pan.keys.left!} />
+              <ui.Button key={`pan-l-${viewId}`} label="l" hotkey="l" onPress={pan.keys.right!} />
+            </ui.Box>
+          </ui.Box>
+        ) : (
+          <ui.Raster key={view.rasterKey} columns={grid.columns} rows={grid.rows} cells={grid.toBase64()} />
+        )}
         {doc.edges && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)}
       </ui.Box>
       {verdict && (
@@ -766,6 +788,32 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
       </ui.Box>
     </ui.Box>
   ), systems: hasSystems }
+}
+
+/** The columns of a text drawing the pane shows, by view, where it is wider than the pane: what the animation crops its frames to. */
+const textCrops = new Map<string, Viewport | undefined>()
+
+/** A text drawing wider than the pane: the viewport across it, and what pans it (a row a drag's column, PAN_STEP a key). */
+function textPan($: EngineInterface, view: View, painted: { columns: number; rows: number }, z: ZoomState): { vp: Viewport; overlay: string; keys: Record<string, () => void> } {
+  const grid = { columns: painted.columns, rows: painted.rows }
+  const vp = viewportOf(grid, { columns: view.d.columns, rows: painted.rows }, { ...z, level: 1 })
+  const at = { ...z, level: 1 }
+  const to = (col: number) => void setZoom($, view.viewId, panTo(at, grid, vp, col, 0))
+  const keys = { left: () => to(vp.col - PAN_STEP.columns), right: () => to(vp.col + PAN_STEP.columns) }
+  const overlay = `ov-text-${view.viewId}`
+  // Its overlay's posts: a drag across it, ← → once a click gave it the focus, and the scroll keys the pane's.
+  otherOverlays.set(overlay, data => {
+    if (data.type === 'drag') {
+      const d = data as unknown as Drag
+      if (![d.n, d.sx, d.x].every(v => typeof v === 'number')) return
+      let started = drags.get(view.viewId)
+      if (!started || started.n !== d.n) drags.set(view.viewId, (started = { n: d.n, z: at, vp }))
+      const col = Math.max(0, Math.min(grid.columns - vp.columns, started.vp.col - (d.x - d.sx)))
+      if (col !== vp.col) to(col)
+    } else if (data.type === 'key' && (data.key === 'left' || data.key === 'right')) keys[data.key]()
+    else if (data.type === 'scroll' && typeof data.key === 'string') void scrollKey($, PANE, data.key)
+  })
+  return { vp, overlay, keys }
 }
 
 /** The picture a drawing shows in place of its Raster, by view id: what the animation swaps frames into. */
@@ -932,7 +980,7 @@ const zoomPanel = (z: ZoomState): Panel => ({
     { id: 'fit', icon: 'collapse', label: 'Fit', variant: 'quiet', hotkey: '0', keycap: false, ...(z.level === 1 ? { disabled: true } : {}) },
   ],
 })
-const ZOOM_COLUMNS = 30
+const ZOOM_COLUMNS = 24
 
 /** A drag on the zoomed picture, by view: the viewport it started from. */
 const drags = new Map<string, { n: number; z: ZoomState; vp: Viewport }>()
@@ -942,7 +990,7 @@ async function setZoom($: EngineInterface, viewId: string, next: ZoomState): Pro
   await update($, memberOf(players, { requestId: viewId }), p => {
     const { zoom: _zoom, ...rest } = normal(p)
     void _zoom
-    return next.level > 1 ? { ...rest, zoom: next } : rest
+    return isMoved(next) ? { ...rest, zoom: next } : rest
   })
 }
 
@@ -1615,7 +1663,10 @@ function animate($: EngineInterface, view: View, steps: FlowStep[]): void {
       }
     } else {
       const play = playAt(view.scene, steps, step, progress, tick++)
-      await $.ui.blit({ requestId: view.d.requestId, key: view.rasterKey, cells: paint(view.scene, { overlay: view.overlay, edges: view.edges, icons, systems: view.systems, ...(view.selected ? { selected: view.selected } : {}), play }).toBase64() })
+      const cells = paint(view.scene, { overlay: view.overlay, edges: view.edges, icons, systems: view.systems, ...(view.selected ? { selected: view.selected } : {}), play })
+      // Panned (a drawing wider than the pane): the frame cropped as the drawing is.
+      const vp = textCrops.get(view.viewId)
+      await $.ui.blit({ requestId: view.d.requestId, key: view.rasterKey, cells: (vp ? cells.crop(vp.col, 0, vp.columns, cells.rows) : cells).toBase64() })
     }
     if (!player.isPlaying) {
       if (elapsed >= TRAVEL_MS) stop(view.viewId)

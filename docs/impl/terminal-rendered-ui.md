@@ -325,6 +325,33 @@ Analysis · HLD (docs/design/terminal-mod.md D3, D5, D9).
   held (`scrollToAnchorOnceShown`) until the page that has the anchor is
   drawn; in text to the Requirements section's keyed Box.
 
+## Round 7: zoom and pan in the pane
+
+The pane's Diagram tab only; drawings in the transcript stay fit to width.
+
+- [x] R1. **Zoom levels** fit, 125%, 150%, 200% and 300%, re-rendered crisp:
+  the worker draws the zoomed picture whole (resvg-wasm 2.6.2 panics on a
+  cropped viewBox) and cuts only the tiles a window meets; the plugin asks
+  for the viewport's tiles now and a ring of 16 × 8 cells about it later,
+  and keeps the tiles drawn so far (`mergedGrid`). The worker caches the
+  ELK layout (1.9 s a call), composed strips and each step's packets.
+- [x] R2. **Controls**: − / level / + / ⤢ Fit in the strip's bottom right;
+  keys `z` `+` `=` in, `x` `-` out, `0` fit. Pan by a drag (pointer down
+  and move, captured past the region), h j k l, and the arrows once a click
+  gave the overlay the focus; clamped to the picture. The API has no wheel
+  events for a Client, so the wheel still scrolls the pane.
+- [x] R3. **Playback while zoomed**: the frames swap into the viewport's
+  tiles; each step pans once to its call when that is off screen.
+- [x] R4. **State**: `zoom {level, x, y}` on the pane's `Player` (the centre
+  as fractions), read leniently (`zoomOf`), dropped at fit and centred,
+  reset with a new file.
+- [x] R5. **Text**: no zoom; a drawing wider than the pane shows the
+  columns that fit, panned by a drag, h and l, or ← → after a click; the
+  hint says so.
+- Measured (order-fulfillment, 100 columns, worker warm): a zoom step's
+  viewport 117 ms (125%) to 287 ms (300%); a pan's new tiles 20–60 ms; a
+  pan within the drawn tiles needs no request.
+
 ## Risks
 
 - Cell aspect is assumed 1:2; tiles must stay seamless under the terminal's

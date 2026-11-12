@@ -286,6 +286,54 @@ test('Play and a step bring the diagram into view, in the transcript and in the 
   await p.unmount()
 })
 
+test('in the pane, a text drawing wider than it shows a viewport across it: a drag, h and l, and ← → pan it, clamped to its edges', async ($, on) => {
+  mock.clock(on)
+  on('process.run', () => ({ value: { exitCode: 0, stdout: LAYOUT, stderr: '' } }))
+  on('ui.invalidate', () => ({ value: undefined }))
+  on('ui.blit', () => ({ value: {} }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  await (await $.ui.mount(reply(FENCED))).unmount()
+  const ui = await $.ui.mount(reply(FENCED))
+  await ui.press({ key: 'focus-m1:0' })
+  await ui.unmount()
+  const narrow = { ...pane(true), props: { ...pane(true).props, bodyColumns: 30 } } as const
+  let p = await $.ui.mount(narrow)
+  const shown = async () => {
+    const text = ((await p.find({ type: 'Text', text: /columns wide/ })) as { text?: string } | undefined)?.text ?? ''
+    const m = /(\d+) columns wide.*columns (\d+)–(\d+) shown\. Drag it, or h and l \(← → after a click on it\), to pan\./.exec(text)
+    if (!m) throw new Error(`no pan hint in ${JSON.stringify(text)}`)
+    return { wide: Number(m[1]), from: Number(m[2]), to: Number(m[3]) }
+  }
+  const again = async () => {
+    await p.unmount()
+    p = await $.ui.mount(narrow)
+  }
+  // The middle of it, 30 columns, the Raster cropped to them.
+  const first = await shown()
+  expect(first.wide).toBeGreaterThan(30)
+  expect(first.to - first.from + 1).toBe(30)
+  expect(((await p.find({ type: 'Raster', key: 'd-proschi-view:0' })) as { props: { columns: number } }).props.columns).toBe(30)
+  const max = first.wide - 30
+  // l and → pan right 8 columns each, h left.
+  await p.press({ key: 'pan-l-proschi-view:0' })
+  await again()
+  const right = Math.min(max + 1, first.from + 8)
+  expect((await shown()).from).toBe(right)
+  await p.key({ key: 'left', in: 'ov-text-proschi-view:0' })
+  await again()
+  expect((await shown()).from).toBe(Math.max(1, right - 8))
+  // A drag moves the drawing with the pointer, and stops at its edge.
+  await p.pointer({ type: 'down', in: 'ov-text-proschi-view:0', x: 10, y: 2, button: 'left' })
+  await p.pointer({ type: 'move', in: 'ov-text-proschi-view:0', x: 500, y: 2, button: 'left' })
+  await p.pointer({ type: 'up', in: 'ov-text-proschi-view:0', x: 500, y: 2, button: 'left' })
+  await again()
+  expect((await shown()).from).toBe(1)
+  await p.press({ key: 'pan-h-proschi-view:0' })
+  await again()
+  expect((await shown()).from).toBe(1)
+  await p.unmount()
+})
+
 test('a layout that fails shows why under the block, and in the pane', async ($, on) => {
   on('process.run', () => ({ value: { exitCode: 1, stdout: '', stderr: 'Proschi lays diagrams out with Node.js 18 or newer' } }))
   on('ui.invalidate', () => ({ value: undefined }))

@@ -7973,7 +7973,7 @@ var HEAVY_GLYPH = {
   [N | E | W]: "\u253B",
   [N | E | S | W]: "\u254B"
 };
-var Grid = class {
+var Grid = class _Grid {
   constructor(columns, rows) {
     this.columns = columns;
     this.rows = rows;
@@ -8038,6 +8038,23 @@ var Grid = class {
       words[i * 3 + 2] = this.bg[i];
     }
     return base64(new Uint8Array(words.buffer));
+  }
+  /** The cells `columns` × `rows` from (x, y): a viewport over a drawing wider than the room. */
+  crop(x, y, columns, rows) {
+    const out = new _Grid(columns, rows);
+    for (let r = 0; r < rows; r++) {
+      if (y + r < 0 || y + r >= this.rows) continue;
+      for (let c = 0; c < columns; c++) {
+        if (!this.inside(x + c, y + r)) continue;
+        const from = (y + r) * this.columns + x + c;
+        const to = r * columns + c;
+        out.glyphs[to] = this.glyphs[from];
+        out.fg[to] = this.fg[from];
+        out.bg[to] = this.bg[from];
+        out.lines[to] = this.lines[from];
+      }
+    }
+    return out;
   }
   /** The glyphs alone, trailing spaces trimmed: for tests. */
   toText() {
@@ -10342,8 +10359,14 @@ async function act($, site, id, surface) {
   l.renderedAt = void 0;
   action(surface);
 }
+var otherOverlays = /* @__PURE__ */ new Map();
 function registerPicture(on) {
   on("ui.message", async ($, e, next) => {
+    const other = otherOverlays.get(e.element);
+    if (other) {
+      other(e.data ?? {});
+      return {};
+    }
     const site = overlaySites.get(e.element);
     const l = site !== void 0 ? live.get(site) : void 0;
     if (!site || !l) return next(e);
@@ -10430,14 +10453,15 @@ function zoomOf(v) {
   const z = v;
   if (!z || typeof z !== "object" || typeof z.level !== "number" || !Number.isFinite(z.level)) return FIT;
   const level = ZOOMS.reduce((best, l) => Math.abs(l - z.level) < Math.abs(best - z.level) ? l : best, 1);
-  return level === 1 ? FIT : { level, x: fraction(z.x), y: fraction(z.y) };
+  return { level, x: fraction(z.x), y: fraction(z.y) };
 }
+var isMoved = (z) => z.level > 1 || z.x !== 0.5 || z.y !== 0.5;
 function stepZoom(z, dir) {
   const at = ZOOMS.indexOf(z.level);
   const level = ZOOMS[clamp((at < 0 ? 0 : at) + dir, 0, ZOOMS.length - 1)];
   return level === 1 ? FIT : { ...z, level };
 }
-var zoomLabel = (level) => level === 1 ? "Fit" : `${Math.round(level * 100)}%`;
+var zoomLabel = (level) => `${Math.round(level * 100)}%`;
 function viewportOf(grid, room, z) {
   const columns = Math.max(1, Math.min(grid.columns, room.columns));
   const rows = Math.max(1, Math.min(grid.rows, room.rows));
@@ -11471,7 +11495,7 @@ function normal(p) {
     expanded: Array.isArray(p?.expanded) ? p.expanded.filter((id) => typeof id === "string") : [],
     ...typeof p?.focus === "string" ? { focus: p.focus } : {},
     ...typeof p?.selected === "string" ? { selected: p.selected } : {},
-    ...zoomOf(p?.zoom).level > 1 ? { zoom: zoomOf(p?.zoom) } : {}
+    ...isMoved(zoomOf(p?.zoom)) ? { zoom: zoomOf(p?.zoom) } : {}
   };
 }
 var PINK = "#ff5da2";
@@ -11601,10 +11625,35 @@ async function diagramView($, d, viewId, written, file, mode = { kind: "text" },
     if (!playing && pick2) rasterOf($, { source, options: optionsFor(pick2) }, "later");
     return { kind: "picture", ...built, rows, systems: hasSystems };
   }
-  const grid = paint(scene, { overlay: doc.overlay, edges: doc.edges, icons, systems: doc.systems, ...view.selected ? { selected: view.selected } : {}, ...steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {} });
+  const painted = paint(scene, { overlay: doc.overlay, edges: doc.edges, icons, systems: doc.systems, ...view.selected ? { selected: view.selected } : {}, ...steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {} });
+  const wide = view.inPane && painted.columns > d.columns;
+  const pan = wide ? textPan($, view, painted, zoomOf(player.zoom)) : void 0;
+  textCrops.set(viewId, pan ? pan.vp : void 0);
+  const grid = pan ? painted.crop(pan.vp.col, 0, pan.vp.columns, painted.rows) : painted;
   const verdict = verdictLine(doc.tests, view.width - (view.inPane ? 0 : 13));
   const m = pick2 && playerModel($, view, doc, pick2, playing, step, player);
-  return { kind: "text", element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, m && playerBarText(view, doc, m), doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, mode.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, TMUX_HINT), grid.columns > d.columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", grid.columns, " columns wide, wider than the ", d.columns, " here: ", view.inPane ? "widen the window" : "use \u26F6 Focus or a wider window", " to see it whole."), lost.some((name) => !importReasons.has(name)) && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u26A0 Not found, so drawn as plain boxes: ", lost.filter((name) => !importReasons.has(name)).join(", ")), lost.filter((name) => importReasons.has(name)).map((name) => /* @__PURE__ */ h(ui.Text, { key: `lost-${name}`, dimColor: true }, "\u26A0 ", importReasons.get(name))), doc.notes.map((note) => /* @__PURE__ */ h(ui.Text, { color: "yellow" }, "\u26A0 ", note.text, note.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true }, " \u2192 ", note.hint))), (view.inPane ? doc.warnings : doc.warnings.slice(0, INLINE_WARNINGS)).map((w) => /* @__PURE__ */ h(ui.Text, { key: `warn-${w}`, color: "yellow", wrap: "truncate-end" }, "\u26A0 ", w)), !view.inPane && doc.warnings.length > INLINE_WARNINGS && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2026 ", doc.warnings.length - INLINE_WARNINGS, " more: \u26F6 Focus, then Analysis"), /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), doc.edges && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)), verdict && /* @__PURE__ */ h(ui.Box, { key: `verdict-${viewId}`, flexDirection: "row", gap: 1, width: view.width }, lineView(ui, verdict), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `tests-${viewId}`, label: "\u26F6 Details", dimColor: true, onPress: () => focus($, view, title, what, "hld", "requirements") })), hasSystems && systemBar($, view, doc, systems, selected, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: roomy ? "\u29C9 Copy source" : "\u29C9 Source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: roomy ? "\u29C9 Copy share link" : "\u29C9 Link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: roomy ? "\u2197 Open in Proschi" : "\u2197 Open", variant: "primary", onPress: (press) => void openLink($, press.surface, link) }), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `focus-${viewId}`, label: "\u26F6 Focus", onPress: () => focus($, view, title, what) }))), systems: hasSystems };
+  return { kind: "text", element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, m && playerBarText(view, doc, m), doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, mode.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, TMUX_HINT), painted.columns > d.columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, pan ? `\u2194 ${painted.columns} columns wide, wider than the ${d.columns} here: columns ${pan.vp.col + 1}\u2013${pan.vp.col + pan.vp.columns} shown. Drag it, or h and l (\u2190 \u2192 after a click on it), to pan.` : `\u2194 ${painted.columns} columns wide, wider than the ${d.columns} here: use \u26F6 Focus or a wider window to see it whole.`), lost.some((name) => !importReasons.has(name)) && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u26A0 Not found, so drawn as plain boxes: ", lost.filter((name) => !importReasons.has(name)).join(", ")), lost.filter((name) => importReasons.has(name)).map((name) => /* @__PURE__ */ h(ui.Text, { key: `lost-${name}`, dimColor: true }, "\u26A0 ", importReasons.get(name))), doc.notes.map((note) => /* @__PURE__ */ h(ui.Text, { color: "yellow" }, "\u26A0 ", note.text, note.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true }, " \u2192 ", note.hint))), (view.inPane ? doc.warnings : doc.warnings.slice(0, INLINE_WARNINGS)).map((w) => /* @__PURE__ */ h(ui.Text, { key: `warn-${w}`, color: "yellow", wrap: "truncate-end" }, "\u26A0 ", w)), !view.inPane && doc.warnings.length > INLINE_WARNINGS && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2026 ", doc.warnings.length - INLINE_WARNINGS, " more: \u26F6 Focus, then Analysis"), pan ? /* @__PURE__ */ h(ui.Box, { key: `${view.rasterKey}-pan`, flexDirection: "column", width: grid.columns, height: grid.rows }, /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), /* @__PURE__ */ h(ui.Box, { position: "absolute", top: 0, left: 0, width: grid.columns, height: grid.rows }, /* @__PURE__ */ h(ui.Client, { key: pan.overlay, module: "./uiOverlay.js", props: { controls: [], drag: "x" }, width: grid.columns, height: grid.rows })), /* @__PURE__ */ h(ui.Box, { display: "none" }, /* @__PURE__ */ h(ui.Button, { key: `pan-h-${viewId}`, label: "h", hotkey: "h", onPress: pan.keys.left }), /* @__PURE__ */ h(ui.Button, { key: `pan-l-${viewId}`, label: "l", hotkey: "l", onPress: pan.keys.right }))) : /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), doc.edges && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)), verdict && /* @__PURE__ */ h(ui.Box, { key: `verdict-${viewId}`, flexDirection: "row", gap: 1, width: view.width }, lineView(ui, verdict), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `tests-${viewId}`, label: "\u26F6 Details", dimColor: true, onPress: () => focus($, view, title, what, "hld", "requirements") })), hasSystems && systemBar($, view, doc, systems, selected, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: roomy ? "\u29C9 Copy source" : "\u29C9 Source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: roomy ? "\u29C9 Copy share link" : "\u29C9 Link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: roomy ? "\u2197 Open in Proschi" : "\u2197 Open", variant: "primary", onPress: (press) => void openLink($, press.surface, link) }), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `focus-${viewId}`, label: "\u26F6 Focus", onPress: () => focus($, view, title, what) }))), systems: hasSystems };
+}
+var textCrops = /* @__PURE__ */ new Map();
+function textPan($, view, painted, z) {
+  const grid = { columns: painted.columns, rows: painted.rows };
+  const vp = viewportOf(grid, { columns: view.d.columns, rows: painted.rows }, { ...z, level: 1 });
+  const at = { ...z, level: 1 };
+  const to = (col) => void setZoom($, view.viewId, panTo(at, grid, vp, col, 0));
+  const keys = { left: () => to(vp.col - PAN_STEP.columns), right: () => to(vp.col + PAN_STEP.columns) };
+  const overlay = `ov-text-${view.viewId}`;
+  otherOverlays.set(overlay, (data) => {
+    if (data.type === "drag") {
+      const d = data;
+      if (![d.n, d.sx, d.x].every((v) => typeof v === "number")) return;
+      let started = drags.get(view.viewId);
+      if (!started || started.n !== d.n) drags.set(view.viewId, started = { n: d.n, z: at, vp });
+      const col = Math.max(0, Math.min(grid.columns - vp.columns, started.vp.col - (d.x - d.sx)));
+      if (col !== vp.col) to(col);
+    } else if (data.type === "key" && (data.key === "left" || data.key === "right")) keys[data.key]();
+    else if (data.type === "scroll" && typeof data.key === "string") void scrollKey($, PANE, data.key);
+  });
+  return { vp, overlay, keys };
 }
 var images = /* @__PURE__ */ new Map();
 var menus = /* @__PURE__ */ new Map();
@@ -11716,13 +11765,13 @@ var zoomPanel = (z) => ({
     { id: "fit", icon: "collapse", label: "Fit", variant: "quiet", hotkey: "0", keycap: false, ...z.level === 1 ? { disabled: true } : {} }
   ]
 });
-var ZOOM_COLUMNS = 30;
+var ZOOM_COLUMNS = 24;
 var drags = /* @__PURE__ */ new Map();
 async function setZoom($, viewId, next) {
   await update2($, memberOf(players, { requestId: viewId }), (p) => {
     const { zoom: _zoom, ...rest } = normal(p);
     void _zoom;
-    return next.level > 1 ? { ...rest, zoom: next } : rest;
+    return isMoved(next) ? { ...rest, zoom: next } : rest;
   });
 }
 function zoomParts($, view, z, at) {
@@ -12140,7 +12189,9 @@ function animate($, view, steps) {
       }
     } else {
       const play = playAt(view.scene, steps, step, progress, tick++);
-      await $.ui.blit({ requestId: view.d.requestId, key: view.rasterKey, cells: paint(view.scene, { overlay: view.overlay, edges: view.edges, icons, systems: view.systems, ...view.selected ? { selected: view.selected } : {}, play }).toBase64() });
+      const cells = paint(view.scene, { overlay: view.overlay, edges: view.edges, icons, systems: view.systems, ...view.selected ? { selected: view.selected } : {}, play });
+      const vp = textCrops.get(view.viewId);
+      await $.ui.blit({ requestId: view.d.requestId, key: view.rasterKey, cells: (vp ? cells.crop(vp.col, 0, vp.columns, cells.rows) : cells).toBase64() });
     }
     if (!player.isPlaying) {
       if (elapsed >= TRAVEL_MS) stop(view.viewId);

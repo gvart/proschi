@@ -35,7 +35,7 @@ var UiOverlay = (props, surface) => {
   });
   surface.onKey((e) => {
     if (e.ctrl || e.meta) return;
-    if (props.drag && ARROWS.includes(e.key)) surface.post({ type: "key", key: e.key });
+    if (props.drag && ARROWS.slice(0, props.drag === "x" ? 2 : 4).includes(e.key)) surface.post({ type: "key", key: e.key });
     else if (SCROLL_KEYS.includes(e.key)) surface.post({ type: "scroll", key: e.key });
     else if (e.key.length === 1) surface.post({ type: "key", key: e.key.toLowerCase() });
   });

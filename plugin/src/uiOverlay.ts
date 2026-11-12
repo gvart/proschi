@@ -21,7 +21,8 @@ import type { ClientModule } from 'claude-code'
  *
  * (the whole drag in every post, since a later post may replace one; the
  * pointer is held from down to up, so x and y may run past the region), and
- * the arrow keys as `key` posts (`left`, `right`, `up`, `down`): they pan.
+ * the arrow keys as `key` posts (`left`, `right`, `up`, `down`): they pan
+ * (with `drag: 'x'` only left and right; up and down scroll as before).
  *
  * A post can replace one not yet delivered in the same frame, so the press
  * carries everything a press needs (a lost `down` costs only its picture).
@@ -29,7 +30,7 @@ import type { ClientModule } from 'claude-code'
  */
 
 export type OverlayControl = { id: string; col: number; row: number; columns: number; rows: number }
-export type OverlayProps = { controls: OverlayControl[]; drag?: boolean }
+export type OverlayProps = { controls: OverlayControl[]; drag?: boolean | 'x' }
 type State = { hover: string; down: string; drag?: { n: number; sx: number; sy: number }; n?: number }
 
 const ARROWS = ['left', 'right', 'up', 'down']
@@ -73,7 +74,8 @@ const UiOverlay: ClientModule<OverlayProps, State> = (props, surface) => {
   })
   surface.onKey(e => {
     if (e.ctrl || e.meta) return
-    if (props.drag && ARROWS.includes(e.key)) surface.post({ type: 'key', key: e.key })
+    // Panning across only (`'x'`, the text drawing), up and down still scroll.
+    if (props.drag && ARROWS.slice(0, props.drag === 'x' ? 2 : 4).includes(e.key)) surface.post({ type: 'key', key: e.key })
     else if (SCROLL_KEYS.includes(e.key)) surface.post({ type: 'scroll', key: e.key })
     else if (e.key.length === 1) surface.post({ type: 'key', key: e.key.toLowerCase() })
   })

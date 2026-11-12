@@ -632,9 +632,17 @@ async function act($: EngineInterface, site: string, id: string, surface: Render
   action(surface)
 }
 
+/** Another overlay's posts (the text drawing's pan), by its key: one `ui.message` hook takes them all. */
+export const otherOverlays = new Map<string, (data: Record<string, unknown>) => void>()
+
 /** The overlays' posts: hover and pressed pictures blitted in place, a press or a key runs the control's action. */
 export function registerPicture(on: On): void {
   on('ui.message', async ($, e, next) => {
+    const other = otherOverlays.get(e.element)
+    if (other) {
+      other((e.data ?? {}) as Record<string, unknown>)
+      return {}
+    }
     const site = overlaySites.get(e.element)
     const l = site !== undefined ? live.get(site) : undefined
     if (!site || !l) return next(e)
@@ -700,7 +708,7 @@ export function paneWindow(id: string, offset: number, bodyRows: number): void {
  * pane. It moves the pane's window as the engine would: a row an arrow, a
  * window a page key, Home and End to the top and the bottom.
  */
-async function scrollKey($: EngineInterface, id: string, key: string): Promise<void> {
+export async function scrollKey($: EngineInterface, id: string, key: string): Promise<void> {
   const w = windows.get(id)
   if (!w) return
   const args: UiScrollArgs = key === 'home' || key === 'end' ? { to: key === 'home' ? 'start' : 'end', in: id } : { to: 'start', in: id }

@@ -20,13 +20,20 @@ export const PAN_STEP = { columns: 8, rows: 4 }
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 const fraction = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? clamp(v, 0, 1) : 0.5)
 
-/** A stored zoom, as this version reads it: a level it does not know is the nearest it does; anything else is fit. */
+/**
+ * A stored zoom, as this version reads it: a level it does not know is the
+ * nearest it does; anything else is fit. At fit the centre is kept too: the
+ * text drawing pans a diagram wider than the pane at its one size.
+ */
 export function zoomOf(v: unknown): ZoomState {
   const z = v as Partial<ZoomState> | undefined
   if (!z || typeof z !== 'object' || typeof z.level !== 'number' || !Number.isFinite(z.level)) return FIT
   const level = ZOOMS.reduce((best, l) => (Math.abs(l - z.level!) < Math.abs(best - z.level!) ? l : best), 1 as number)
-  return level === 1 ? FIT : { level, x: fraction(z.x), y: fraction(z.y) }
+  return { level, x: fraction(z.x), y: fraction(z.y) }
 }
+
+/** Whether a zoom is worth storing: zoomed in, or panned off the middle. */
+export const isMoved = (z: ZoomState) => z.level > 1 || z.x !== 0.5 || z.y !== 0.5
 
 /** One level in (`1`) or out (`-1`), the centre kept; out to fit centres it again. */
 export function stepZoom(z: ZoomState, dir: 1 | -1): ZoomState {
@@ -35,7 +42,7 @@ export function stepZoom(z: ZoomState, dir: 1 | -1): ZoomState {
   return level === 1 ? FIT : { ...z, level }
 }
 
-export const zoomLabel = (level: number) => (level === 1 ? 'Fit' : `${Math.round(level * 100)}%`)
+export const zoomLabel = (level: number) => `${Math.round(level * 100)}%`
 
 /** The cells of the picture a viewport shows: `col`, `row` its top left in the picture's cells. */
 export interface Viewport {
