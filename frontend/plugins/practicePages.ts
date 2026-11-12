@@ -193,8 +193,13 @@ function inlineText(nodes: Inline[]): string {
   return nodes.map((n) => ('children' in n ? inlineText(n.children) : n.text)).join('')
 }
 
+/** The title without the site name, worded the way people search: "<problem> system design". */
+export function headline(p: PageProblem): string {
+  return `${p.title} system design: interview practice`
+}
+
 export function pageTitle(p: PageProblem): string {
-  return `${p.title}: system design practice · Proschi`
+  return `${headline(p)} · Proschi`
 }
 
 export function pageDescription(p: PageProblem): string {
@@ -207,7 +212,7 @@ export function structuredData(p: PageProblem): string {
     {
       '@context': 'https://schema.org',
       '@type': 'LearningResource',
-      name: `${p.title}: system design practice`,
+      name: headline(p),
       description: pageDescription(p),
       url: problemUrl(p.id),
       learningResourceType: 'Practice problem',
@@ -241,7 +246,7 @@ export function headHtml(p: PageProblem): string {
     `<link rel="canonical" href="${url}" />`,
     `<meta property="og:type" content="article" />`,
     `<meta property="og:site_name" content="Proschi" />`,
-    `<meta property="og:title" content="${escapeHtml(`${p.title}: system design practice`)}" />`,
+    `<meta property="og:title" content="${escapeHtml(headline(p))}" />`,
     `<meta property="og:description" content="${description}" />`,
     `<meta property="og:url" content="${url}" />`,
     `<meta property="og:image" content="${SITE_ORIGIN}${problemOgPath(p.id)}" />`,

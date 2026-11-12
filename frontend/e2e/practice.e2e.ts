@@ -174,7 +174,7 @@ test.describe('practice', () => {
 
   test("a problem's own page shows the statement and opens it in practice", async ({ page }) => {
     await page.goto('practice/url-shortener/');
-    await expect(page).toHaveTitle('URL Shortener: system design practice · Proschi');
+    await expect(page).toHaveTitle('URL Shortener system design: interview practice · Proschi');
     await expect(page.getByRole('heading', { level: 1, name: 'URL Shortener' })).toBeVisible();
     await expect(page.getByRole('heading', { level: 2, name: 'Functional requirements' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Pastebin', exact: true })).toHaveAttribute('href', '../pastebin/');
