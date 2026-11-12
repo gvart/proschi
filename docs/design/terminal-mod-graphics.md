@@ -4,8 +4,9 @@ The Claude Code mod (`plugin/`) draws diagrams as text cells. On terminals with
 an image protocol (kitty, Ghostty, iTerm2), Claude Code's `Image` element can
 show a PNG instead, sized in columns × rows, and a keyed `Image` can be swapped
 with `$.ui.blit` at frame rate. This page covers the part that makes the
-pixels: `plugin/hooks/raster.cjs`. How the hooks show them is D11 of
-[terminal-mod.md](terminal-mod.md).
+pixels: `plugin/hooks/raster.cjs`, which draws the diagram, every UI panel
+around it, and lays out the diagram for the text cells too. How the hooks
+show them is D11 to D13 of [terminal-mod.md](terminal-mod.md).
 
 ## Pieces
 
@@ -47,16 +48,68 @@ pixels: `plugin/hooks/raster.cjs`. How the hooks show them is D11 of
   has no system fonts, so the SVG's `system-ui` stack resolves to Inter and
   the mono stack to JetBrains Mono.
 
+## Running it
+
+The hooks start it once a session as a worker,
+`$.process.spawn(['node', raster.cjs, '--serve', dir])` (`plugin/src/helper.ts`,
+`serve` in rasterHost.ts). The mod's stdin is one shot, so requests are files:
+
+- a request is `<id>.req.json` in `dir` (an input as below), written through
+  `$.fs.write`; the worker answers the lowest name first, reading the folder
+  again after each answer, so a request named lower overtakes those
+  waiting. The plugin names a request by its priority: `a…` shown or
+  pressed, `b…` the pane's Diagram under another tab, `c…` prefetched
+  (terminal-mod.md D12). The worker deletes the request once read;
+- an answer is one line on stdout, `{"id","output"}` or `{"id","error"}`;
+  nothing else is written. The first line, `{"ready":true}`, comes once the
+  wasm and the fonts are loaded (≈145 ms);
+- the worker stops after 5 minutes with no request (`IDLE_MS`), once its
+  parent is gone, on SIGTERM, SIGINT or SIGHUP (the plugin stops it at
+  `session.end`), or after an answer that leaves it over 400 MB resident with
+  nothing waiting (`RECYCLE_BYTES`). Stopping deletes `dir`. The plugin's
+  next request starts another; what a worker held when it died runs one
+  shot. A `serve-*` folder no worker removed (a crash) is deleted by the
+  next `prune` once untouched for an hour (`STALE_SERVE_MS`);
+- where spawn is refused, every request runs one shot:
+  `$.process.run(['node', raster.cjs], { stdin })`, the same input on stdin
+  and the output on stdout. A press or anything shown times out after 10 s,
+  a prefetch after 60 s; a timeout, a crash or an abort is not cached
+  (D12).
+
+In memory the worker keeps the layouts of the last 8 documents and views
+(`terminal/layout.ts`, ELK takes up to 2 s), and the pictures it composed
+last, each step's packets and each zoom's picture on its strip, up to
+160 MB together (`CACHE_BYTES`), so another window of the same zoom only cuts
+and writes tiles.
+
 ## Contract
 
-The hooks run it one shot: `$.process.run(['node', `${root}/hooks/raster.cjs`], { stdin })`.
+Three kinds of input, told apart by `kind`:
+
+- `{ kind: 'layout', source, path?, imports?, view? }`: the browser's ELK
+  layout (`terminal/layout.ts`), which the hooks draw text cells from. The
+  diagram's pictures and the HLD's figures use the same memoised layout.
+- `{ kind: 'panels', theme, panels: [{ id, panel, columns, edges?, variants? }], cellAspect?, outDir }`:
+  UI panels (`render/ui/contract.ts` PanelsInput → PanelsOutput). Each panel
+  (`tabs`, `playerBar`, `menu`, `drawer`, `explorer`, `systemBar`,
+  `actionBar`, `zoom`, `notices`, `page`) is drawn `columns` wide on the
+  8×17 CSS px cell and cut into full-width strips that end only between
+  lines (`Surface.cuttable`), each strip `{ col, row, columns, rows, file,
+  controls?: [{ col, columns, control, hoverFile?, pressedFile? }] }`, and a
+  page's `anchors` (an anchored heading's row). `variants: ['hover',
+  'pressed']` adds each control's strip drawn hovered and pressed; the
+  plugin asks for them on a control's first hover. `edges` rounds the
+  drawing's outer corners. `cellAspect` (the plugin's setting, height over
+  width, default 2.125) sets the PNG's cell: 16 by round(16 × aspect) px,
+  a Retina screen's own pixels for an 8×17 pt cell.
+- otherwise the diagram:
 
 stdin, JSON:
 
 ```ts
 {
   source: string; path?: string; imports?: Record<string, string>;
-  view?: { expanded?: string[]; focus?: string };   // as layout.cjs takes
+  view?: { expanded?: string[]; focus?: string };   // systems opened in place, the one focused into
   outDir: string;                                   // a cache dir, e.g. `${data or tmp}/proschi-raster/<doc hash>`
   prune?: boolean;                                  // first delete what in outDir went unused for 7 days
   options?: {
@@ -65,12 +118,15 @@ stdin, JSON:
     maxWidthPx?: number;                            // scale down to fit this width
     overlay?: boolean;                              // load overlay, when the document has traffic
     selected?: string;                              // node or expanded system id
-    play?: { useCase: string; scenario?: string; frames?: number };  // id or name; first scenario; 8 frames per step
+    play?: { useCase: string; scenario?: string; frames?: number };  // id or name; first scenario; frames a step, default 8 (the plugin asks 46)
     cellPx?: { width: number; height: number };     // terminal cell in screen px, default 16×34
     grid?: {                                        // the picture as tiles of whole cells (below)
       room: number; maxRows: number;                // the box it may take, in cells: scaled down to fit
       cellPx: { width: number; height: number };   // a cell in PNG px
       tile?: { columns: number; rows: number };    // default 16×8 cells
+      fill?: { columns: number; top?: boolean; bottom?: boolean; legend?: boolean; controls?: number };
+      zoom?: number;                                // times the size that fits; re-rendered, no `base`
+      window?: { col: number; row: number; columns: number; rows: number };  // only the tiles it meets
     };
   };
 }
@@ -93,6 +149,16 @@ stdout, JSON:
   };
 }
 ```
+
+`grid.fill` sets the picture on a strip of the UI's surface, as wide as the
+panels (`columns`): centred on the card fill, a hairline down each side, the
+drawing's rounded corners where it is its first or last piece (`top`,
+`bottom`), else a divider along its top. `legend` draws the load legend as a
+badge (24 px, 8 px from the edges) in its bottom left; `controls` keeps the
+badge's band free under the diagram for a panel of that many columns laid
+over its bottom right (the zoom's pill) and keeps the legend clear of it.
+The frame is composed in pixel space under the still and every frame's
+tiles.
 
 With `grid`, the plugin mounts a keyed Image per tile and plays a step by
 blitting only the tiles whose file changes from one frame to the next (where
@@ -130,9 +196,10 @@ just its packets (a tiny SVG, composited in premultiplied RGBA) over a copy and
 encodes the PNG itself (unfiltered, zlib level 3; about 3× faster than resvg's
 encoder for files about a third larger). Compression is most of a frame's
 time, so it runs on libuv's thread pool, up to four PNGs at once, while the
-next frames are drawn (the bytes are the same). Measured on an M-series Mac,
-scale 2, dark theme, 8 frames per step, including Node start-up, ELK layout
-and the still:
+next frames are drawn (the bytes are the same). Measured one shot on an
+M-series Mac, scale 2, dark theme, 8 frames per step (the plugin now asks
+46, cut into tiles, as above), including Node start-up, ELK layout and the
+still:
 
 | Diagram | PNG | Frames | Total |
 | --- | --- | --- | --- |
@@ -148,10 +215,12 @@ four encodes in flight hold their rows: the `styled` example peaks at about
 
 ## Sizes
 
-`raster.cjs` 2.1 MB: ELK (1.4 MB), the parser, the simulation, react-dom's
-server renderer (its production build) and the icons the canvas maps
-(lucide-react's ES module build, so only those). `resvg.wasm` 2.5 MB, fonts
-400 KB.
+`raster.cjs` 2.1 MB: ELK (1.4 MB), the parser, the simulation, the UI kit,
+react-dom's server renderer (its production build) and the icons the canvas
+maps (lucide-react's ES module build, so only those). It is the only bundle
+with ELK: the layout the text cells need comes from it too, so `register.js`
+(the hooks module) stays under 1 MiB, which `build.mjs` checks in bytes.
+`resvg.wasm` 2.5 MB, fonts 400 KB.
 
 ## Known limits
 

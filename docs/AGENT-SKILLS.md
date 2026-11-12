@@ -96,12 +96,17 @@ from 40% of capacity and it fills with its heat from 70%, the first to give way 
 edge takes the colour of the node it feeds and its label the requests it
 carries and the latency they add, and the p99 path of the busiest use case is
 drawn heavy. The simulation's warnings sit above the drawing, and with
-`requirements` or `test` blocks one line under it says whether they pass;
-its **⛶ Details** opens the pane's HLD at its requirements.
+`requirements` or `test` blocks that fail, one line under it says how many
+and which first; its **⛶ Details** opens the pane's HLD at its
+requirements. When every check passes, the line is left out and the HLD
+tab says so.
 
-Under the drawing, a use case picker opens a player like the editor's.
-Buttons copy the source or a share link, open the diagram in Proschi, or,
-with **⛶ Focus**, move it into a pane you drive from the keyboard. The pane
+Over the drawing, a player like the editor's: a use case picker (its last
+entry, **≡ Explore all…**, lists every use case and scenario), a scenario
+picker, the step buttons and the step being played, with **Body ▾** to show
+that step's request and response. Under it, buttons copy the source or a
+share link, open the diagram in Proschi, or, with **⛶ Focus**, move it into
+a pane you drive from the keyboard. The pane
 has tabs: **Diagram**, **Analysis** (cost, the busiest node, load, latency,
 availability and cost per node, percentiles per use case, queues, the cost
 breakdown, single points of failure and the document's
@@ -122,8 +127,10 @@ where you can also explore what-ifs live.
 | `p` | Play or pause |
 | `n` / `b` | Next or previous step |
 | `r` / `e` | Restart, or jump to the end |
-| `x` | Show or hide the use case explorer |
 | `d` | Back to the diagram |
+| `z` or `+` / `x` or `-` | Pictures: zoom in or out (125% to 300%) |
+| `0` | Pictures: back to fit |
+| `h` `j` `k` `l`, arrows | Pan a zoomed picture, or a text drawing wider than the pane |
 | `s` / `o` | Select the next [team system](SYSTEMS.md), open or close it in place |
 | `c` | HLD: copy it as Markdown |
 | `f` / `u` | Draw only the selected system's design, go back out |
@@ -138,17 +145,30 @@ It needs a Claude Code build with mod support and Node 18 or newer on the
 one, set the plugin's `icons` option to `symbols` or `none`.
 
 In a terminal that shows images (kitty and Ghostty; iTerm2 3.5 or later in
-fullscreen mode), the diagram is drawn as a picture, as sharp as the
-editor's canvas, with the buttons and the player as text around it. Other
-terminals get the drawing in text cells. The plugin's `graphics` option
+fullscreen mode), everything the plugin draws is a picture: the diagram, as
+sharp as the editor's canvas, and the player, the buttons, the tabs and the
+Analysis and HLD pages around it, which you press with the mouse as in the
+editor. Text in a picture can't be selected, so every tab keeps a copy
+button. In the pane's Diagram tab, the zoom pill in the diagram's corner (or
+the keys above) zooms the picture, and a drag pans it; a diagram too wide to
+read at the pane's width says so. Other terminals get the same drawing in
+text cells, where a diagram wider than the pane pans instead. The plugin's `graphics` option
 picks: `auto` (the default) asks the terminal once a session, `on` always
 draws pictures, `off` always draws text. Inside tmux, pictures need
 `set -g allow-passthrough on` and `set -g focus-events on`; until both are
-on, the plugin draws text and says so under the drawing. The pictures are
-written to `$TMPDIR/proschi-raster`. If the pictures show thin gaps
+on, the plugin draws text and says so under the drawing.
+
+The pictures are drawn by a Node process the plugin starts once a session.
+It stops after five minutes without a request (the next drawing starts it
+again, in about 150 ms), restarts itself once it holds more than 400 MB, and
+is stopped when the session ends. The pictures are written to
+`$TMPDIR/proschi-raster`, named by their content so a picture drawn once is
+never drawn again; each session's first drawing deletes the ones no drawing
+used for a week. If the pictures show thin gaps
 between their strips, set the `cellAspect` option to your terminal cell's
 height over its width (the default, 2.125, fits Ghostty, kitty and iTerm2
-at their default fonts).
+at their default fonts; a value outside 1.5 to 3 is ignored, and the debug
+log says so).
 
 Limits:
 
