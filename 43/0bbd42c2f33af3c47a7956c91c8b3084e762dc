@@ -1,0 +1,61 @@
+plugin/tests/picture.test.tsx
+  s_50cc5c1ed1a510::t_dd8793bdcf6d58 117-120
+  s_50cc5c1ed1a510::t_98dbe5fc1d049f 365-368
+plugin/src/register.tsx
+  s_50cc5c1ed1a510::t_ff98d29445bd48 21,96-97,482
+  s_50cc5c1ed1a510::t_f57ee90d62b334 457-458,460-463,470-472,475-477,1499,1501-1502
+  s_50cc5c1ed1a510::t_98dbe5fc1d049f 459,467-468
+tooling/test/raster.test.ts
+  s_50cc5c1ed1a510::t_5e2552e2cd11ba 10,113-116
+  s_50cc5c1ed1a510::t_d3057e851bff88 11
+  s_50cc5c1ed1a510::t_915a2cb77af583 117
+  s_50cc5c1ed1a510::t_3c30aea8d704ca 118-119
+plugin/src/graphics.ts
+  s_50cc5c1ed1a510::t_693348a18be189 208-209,218
+  s_50cc5c1ed1a510::t_188735f581c460 116,120-121,124
+  s_50cc5c1ed1a510::t_ff98d29445bd48 6,123,126,198,202
+tooling/src/terminal/rasterHost.ts
+  s_50cc5c1ed1a510::t_6f0aabfe94ff3c 51
+  s_50cc5c1ed1a510::t_d3057e851bff88 58
+  s_50cc5c1ed1a510::t_f044913d87ee8b 35-37,120-124,480-482,535,537,608
+plugin/tests/render.test.tsx
+  s_50cc5c1ed1a510::t_a3eff084c7e0cb 345
+  s_50cc5c1ed1a510::t_b8c90a201c9efb 343
+  s_50cc5c1ed1a510::t_011a74528039a5 305,321,337
+  s_50cc5c1ed1a510::t_8af75c8d5d23cd 300-304,306-320,322-336,338-342,344,346-351
+tooling/src/terminal/layoutHost.ts
+  s_50cc5c1ed1a510::t_f4e375a22de3a7 7-8
+  s_50cc5c1ed1a510::t_22ca7104378a21 14
+plugin/hooks/raster.cjs
+  s_50cc5c1ed1a510::t_821e888100eccd 1-3,5-9,18,20-22,24,26,31,34,39,41,44,49,51,63-65,68,71,74,79-80,82,85,90,92,96,100,103-106,108-110,112-116,118,1451-1454,1465-1466,1468-1472
+  s_50cc5c1ed1a510::t_dd8793bdcf6d58 32-33,35,66-67,69,72-73,75,107,111,1467
+plugin/hooks/register.js
+  s_50cc5c1ed1a510::t_be293618f5cdfa 5992,6002,6007,9669-9681,9683-9692,9694-9697,9716,9863,9865,9921,9924,9971,9975,11064,11352
+  s_50cc5c1ed1a510::t_a3eff084c7e0cb 9682,9781-9786,11340
+  s_50cc5c1ed1a510::t_dd8793bdcf6d58 4485,4492,4497,5577,5582,5585-5586,6207-6209,6342,6349,6614,6621-6622,9693,9698-9712,9717-9719,9730-9733,9756,9849-9852,9855,9914,9918-9919,9922,9981,9989,11341-11343,11346-11348,11952,11954
+plugin/hooks/layout.cjs
+  s_50cc5c1ed1a510::t_821e888100eccd 1-3,5-7,9,18,20-22,24,1357-1360,1371
+plugin/src/helper.ts
+  s_50cc5c1ed1a510::t_21536c35645d78 142-145
+  s_50cc5c1ed1a510::t_8628e9d7fc5415 15-17,102-103,109-134,159,161-164,189-190,317-320,323-324,344
+  s_50cc5c1ed1a510::t_ff98d29445bd48 18-22,66,68-89,91-101,104-108,141,332,334
+  s_50cc5c1ed1a510::t_98dbe5fc1d049f 67,90,218-229
+tooling/src/terminal/layout.ts
+  s_50cc5c1ed1a510::t_e1ec27578b1b3c 1-7
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "430bbd42c2f33af3c47a7956c91c8b3084e762dc",
+  "prompts": {},
+  "sessions": {
+    "s_50cc5c1ed1a510": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7e5513ad-e496-40de-9a6e-d587aa393ce5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
