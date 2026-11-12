@@ -21,8 +21,10 @@
  *         play?: { useCase, scenario?, frames? },  id or name; scenario defaults to the first; frames per step, default 8
  *         cellPx?: { width, height },              the terminal's cell in screen px, for cellHint; default 16×34
  *         grid?: { room, maxRows, cellPx, tile?,   the picture as tiles of whole cells (see RasterGrid):
- *                  fill? } } }                     at most room × maxRows cells of cellPx, tiles default 16×8;
- *                                                  `fill` sets it on a strip of the UI's surface (GridOptions)
+ *                  fill?, zoom?, window? } } }     at most room × maxRows cells of cellPx, tiles default 16×8;
+ *                                                  `fill` sets it on a strip of the UI's surface, `zoom` draws it
+ *                                                  that many times larger, `window` draws only the tiles it meets
+ *                                                  (GridOptions)
  *   stdout RasterOutput as JSON:
  *     { width, height,                             PNG size in px, the same for every file
  *       base,                                      absolute path of the still image
@@ -92,6 +94,19 @@ export interface GridOptions {
    * legend as a badge at the bottom left. Without it, the picture is a card.
    */
   fill?: { columns: number; top?: boolean; bottom?: boolean; legend?: boolean };
+  /**
+   * Zoomed in: the picture drawn `zoom` times the size that fits the room
+   * (1, the default, fits), re-rendered at that scale, for a viewport the
+   * plugin pans over. No whole-picture PNG (`base` is '').
+   */
+  zoom?: number;
+  /**
+   * Only the tiles that meet this box of cells get a file (the others '',
+   * still listed): the viewport and its neighbours. A worker keeps the
+   * pictures it rendered last in memory, so another window of the same
+   * picture only cuts and writes tiles.
+   */
+  window?: { col: number; row: number; columns: number; rows: number };
 }
 
 /**
@@ -132,7 +147,38 @@ export interface RasterOutput {
 }
 
 /** Every file an answer names. */
-const filesOf = (o: RasterOutput): string[] => [o.base, ...(o.frames ?? []).flat(), ...(o.grid ? [...o.grid.base, ...(o.grid.steps ?? []).flatMap((s) => [...s.behind, ...s.frames.flatMap((f) => Object.values(f))])] : [])];
+const filesOf = (o: RasterOutput): string[] => [o.base, ...(o.frames ?? []).flat(), ...(o.grid ? [...o.grid.base, ...(o.grid.steps ?? []).flatMap((s) => [...s.behind, ...s.frames.flatMap((f) => Object.values(f))])] : [])].filter(Boolean);
+
+/**
+ * The pictures rendered last, by what they are drawn from: a zoomed picture
+ * panned asks for another window of the same pixels. Up to CACHE_BYTES.
+ */
+const pixelCache = new Map<string, unknown>();
+/** The documents laid out last, by their source: a worker lays one out once, whatever it is asked to draw of it. */
+const layouts = new Map<string, Awaited<ReturnType<typeof layoutArchitecture>>>();
+let cachedBytes = 0;
+const CACHE_BYTES = 512 * 1024 * 1024;
+const bytesOf = (v: unknown): number => {
+  const px = (v as { px?: Pixels } | undefined)?.px;
+  return px?.data instanceof Uint8Array ? px.data.byteLength : 0;
+};
+function memo<T>(key: string, make: () => T): T {
+  if (pixelCache.has(key)) {
+    const v = pixelCache.get(key) as T;
+    pixelCache.delete(key);
+    pixelCache.set(key, v);
+    return v;
+  }
+  const v = make();
+  pixelCache.set(key, v);
+  cachedBytes += bytesOf(v);
+  for (const [k, old] of pixelCache) {
+    if (cachedBytes <= CACHE_BYTES || k === key) break;
+    pixelCache.delete(k);
+    cachedBytes -= bytesOf(old);
+  }
+  return v;
+}
 
 /** Where the helper finds `resvg.wasm` and `fonts/*.ttf`. */
 export interface RasterAssets {
@@ -216,7 +262,14 @@ export async function rasterize(input: RasterInput, assets: RasterAssets): Promi
   }
 
   const fonts = await engine(assets);
-  const laid = await layoutArchitecture(doc.diagram);
+  // ELK takes most of a call (≈2 s for a large design): a worker lays each document out once.
+  const layoutKey = hash(JSON.stringify([source, path, imports, view]));
+  let laid = layouts.get(layoutKey);
+  if (!laid) {
+    laid = await layoutArchitecture(doc.diagram);
+    layouts.set(layoutKey, laid);
+    if (layouts.size > 8) layouts.delete(layouts.keys().next().value!);
+  }
   const theme = draw.theme!;
   const resvgOptions = {
     font: { fontBuffers: fonts, defaultFontFamily: 'Inter', sansSerifFamily: 'Inter', monospaceFamily: 'JetBrains Mono' },
@@ -240,7 +293,10 @@ export async function rasterize(input: RasterInput, assets: RasterAssets): Promi
     const room = strip ? Math.min(g.room, fill!.columns) * g.cellPx.width - strip.side * 2 : g.room * g.cellPx.width;
     const tall = g.maxRows * g.cellPx.height - (strip ? strip.above + strip.below : 0);
     zoom *= Math.min(1, room / (svgWidth * zoom), Math.max(1, tall) / (svgHeight * zoom));
+    // Zoomed: that many times the size that fits, drawn crisp at it.
+    if (g.zoom && g.zoom > 1) zoom *= g.zoom;
   }
+  const zoomed = !!g?.zoom && g.zoom > 1;
   const fileOf = (svg: string) => join(input.outDir, `${hash(`${zoom}\u0000${svg}`)}.png`);
 
   const render = (svg: string): Pixels => {
@@ -266,25 +322,44 @@ export async function rasterize(input: RasterInput, assets: RasterAssets): Promi
     return file;
   };
 
-  const baseFile = await still(base);
+  // Zoomed, no whole PNG: it would be large and slow to write, and the plugin shows tiles.
+  const baseFile = zoomed ? '' : await still(base);
   let frames: string[][] | undefined;
   let grid: RasterGrid | undefined;
   if (g) {
-    const picture = render(base);
-    // On a strip: the picture laid onto it, centred, and the packets with it.
-    const place = strip ? strip.place(picture, resvgOptions) : undefined;
-    const onStrip = (p: Pixels): Pixels => (place ? place.compose(p) : p);
-    const shift = <P extends { left: number; top: number }>(p: P): P => (place ? { ...p, left: p.left + place.left, top: p.top + place.top } : p);
-    const still = onStrip(picture);
+    // On a strip: the picture laid onto it, centred, and the packets with it. Each kept in memory by what
+    // it is drawn from (the drawing, the zoom, the strip), so another window of a zoomed picture only cuts tiles.
+    const places = new Map<string, { left: number; top: number; compose(p: Pixels): Pixels }>();
+    const placeOf = (p: Pixels) => {
+      const at = `${p.width}x${p.height}`;
+      if (!places.has(at)) places.set(at, strip!.place(p, resvgOptions));
+      return places.get(at)!;
+    };
+    const stripKey = JSON.stringify([theme, fill, g.cellPx, fill?.legend ? doc.critical : undefined]);
+    const drawn = (svg: string): { width: number; height: number; left: number; top: number; px: Pixels } =>
+      memo(hash(`on\u0000${zoom}\u0000${stripKey}\u0000${svg}`), () => {
+        const p = render(svg);
+        const place = strip ? placeOf(p) : undefined;
+        return { width: p.width, height: p.height, left: place?.left ?? 0, top: place?.top ?? 0, px: place ? place.compose(p) : p };
+      });
+    const picture = drawn(base);
+    size ??= picture;
+    const shift = <P extends { left: number; top: number }>(p: P): P => ({ ...p, left: p.left + picture.left, top: p.top + picture.top });
+    const still = picture.px;
     const cut = cutter(still, g, input.outDir, writer);
     grid = { columns: cut.columns, rows: cut.rows, tiles: cut.tiles, base: await cut.files(still) };
     for (let index = 0; steps && index < steps.length; index++) {
       const count = Math.max(1, Math.round(options.play!.frames ?? DEFAULT_FRAMES));
-      const svgs = Array.from({ length: count }, (_, k) => asDrawn(drawArchitecture(laid, { ...draw, play: { steps, index, progress: count === 1 ? 100 : (k * 100) / (count - 1) } })));
-      const drawnBehind = render(svgs[0].replace(PACKET, ''));
-      const behind = onStrip(drawnBehind);
+      // The step's frames as the step drawn bare and the packets over it per frame: kept, so another window only cuts tiles.
+      const played = memo(hash(`play\u0000${layoutKey}\u0000${zoom}\u0000${stripKey}\u0000${JSON.stringify([options, index, count])}`), () => {
+        const svgs = Array.from({ length: count }, (_, k) => asDrawn(drawArchitecture(laid, { ...draw, play: { steps, index, progress: count === 1 ? 100 : (k * 100) / (count - 1) } })));
+        const bare = svgs[0].replace(PACKET, '');
+        const whole = drawn(bare);
+        return { bare, packets: svgs.map((svg) => [...svg.matchAll(PACKET)].map(([packet, x, y]) => shift(packetPixels(packet, Number(x), Number(y), zoom, whole)))) };
+      });
+      const behind = drawn(played.bare).px;
       const step = { behind: await cut.files(behind), frames: [] as Record<string, string>[] };
-      for (const svg of svgs) step.frames.push(await cut.dirty(behind, [...svg.matchAll(PACKET)].map(([packet, x, y]) => shift(packetPixels(packet, Number(x), Number(y), zoom, drawnBehind)))));
+      for (const packets of played.packets) step.frames.push(await cut.dirty(behind, packets));
       (grid.steps ??= []).push(step);
     }
   }
@@ -393,7 +468,7 @@ const PACKET_REACH = 20;
  * simpler, but resvg 2.6 panics on layers, nested <svg> and group opacity,
  * that reach out of the canvas.)
  */
-function packetPixels(packet: string, x: number, y: number, zoom: number, whole: Pixels): Pixels & { left: number; top: number } {
+function packetPixels(packet: string, x: number, y: number, zoom: number, whole: { width: number; height: number }): Pixels & { left: number; top: number } {
   const left = Math.max(0, Math.floor((x - PACKET_REACH) * zoom));
   const top = Math.max(0, Math.floor((y - PACKET_REACH) * zoom));
   const width = Math.min(whole.width, Math.ceil((x + PACKET_REACH) * zoom)) - left;
@@ -410,8 +485,18 @@ function packetPixels(packet: string, x: number, y: number, zoom: number, whole:
 /** Lays `piece` over `into` (source-over, premultiplied). */
 function over(into: Pixels, piece: Pixels & { left: number; top: number }): void {
   const { data } = into;
+  const from = Math.max(0, -piece.left);
+  const to = Math.min(piece.width, into.width - piece.left);
   for (let row = Math.max(0, -piece.top); row < piece.height && piece.top + row < into.height; row++) {
-    for (let col = Math.max(0, -piece.left); col < piece.width && piece.left + col < into.width; col++) {
+    // An opaque run (a zoomed picture is drawn on the surface's fill) is copied, not blended.
+    const start = (row * piece.width + from) * 4;
+    let opaque = to > from;
+    for (let s = start + 3; opaque && s < (row * piece.width + to) * 4; s += 4) opaque = piece.data[s] === 255;
+    if (opaque) {
+      data.set(piece.data.subarray(start, (row * piece.width + to) * 4), ((piece.top + row) * into.width + piece.left + from) * 4);
+      continue;
+    }
+    for (let col = from; col < to; col++) {
       const s = (row * piece.width + col) * 4;
       const a = piece.data[s + 3];
       if (a === 0) continue;
@@ -456,14 +541,18 @@ function cutter(first: Pixels, g: GridOptions, outDir: string, writer: Writer) {
     else await writer.add(file, p);
     return file;
   };
+  // Only the tiles that meet the window, if there is one; the others ''.
+  const w = g.window;
+  const shown = (t: RasterGrid['tiles'][number]) => !w || (t.col < w.col + w.columns && t.col + t.columns > w.col && t.row < w.row + w.rows && t.row + t.rows > w.row);
   const files = async (p: Pixels): Promise<string[]> => {
     const out: string[] = [];
-    for (const t of tiles) out.push(await save(crop(p, t)));
+    for (const t of tiles) out.push(shown(t) ? await save(crop(p, t)) : '');
     return out;
   };
   const dirty = async (behind: Pixels, packets: (Pixels & { left: number; top: number })[]): Promise<Record<string, string>> => {
     const out: Record<string, string> = {};
     for (const [i, t] of tiles.entries()) {
+      if (!shown(t)) continue;
       const x = t.col * cw;
       const y = t.row * ch;
       const on = packets.filter((p) => p.left < x + t.width && p.left + p.width > x && p.top < y + t.height && p.top + p.height > y);

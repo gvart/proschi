@@ -154,6 +154,34 @@ describe('raster helper', () => {
     expect(await rasterize(input, { dir: HOOKS })).toEqual(out);
   });
 
+  it('zooms: re-renders larger and draws only the tiles a window meets, the packets too', async () => {
+    const outDir = mkdtempSync(join(tmpdir(), 'proschi-raster-'));
+    const grid = { room: 60, maxRows: 30, cellPx: { width: 16, height: 34 }, fill: { columns: 60 } };
+    const options = { theme: 'dark' as const, maxWidthPx: 60 * 16, overlay: true };
+    const fit = (await rasterize({ source: source('url-shortener'), outDir, options: { ...options, grid } }, { dir: HOOKS })).grid!;
+    const window = { col: 32, row: 8, columns: 40, rows: 16 };
+    const out = await rasterize({ source: source('url-shortener'), outDir, options: { ...options, grid: { ...grid, zoom: 2, window } } }, { dir: HOOKS });
+    const g = out.grid!;
+    // Twice the picture, so about twice the cells each way; no whole PNG.
+    expect(out.base).toBe('');
+    expect(g.columns).toBeGreaterThan(fit.columns * 1.6);
+    expect(g.rows).toBeGreaterThan(fit.rows * 1.6);
+    expect(g.tiles.reduce((n, t) => n + t.columns * t.rows, 0)).toBe(g.columns * g.rows);
+    const meets = (t: (typeof g.tiles)[number]) => t.col < window.col + window.columns && t.col + t.columns > window.col && t.row < window.row + window.rows && t.row + t.rows > window.row;
+    for (const [i, t] of g.tiles.entries()) expect(Boolean(g.base[i])).toBe(meets(t));
+    // Crisp: a zoomed tile is new pixels, not a fit tile scaled.
+    expect(g.base.filter(Boolean).every((f) => !fit.base.includes(f))).toBe(true);
+    // Another window of the same zoom: the tiles both meet are the same files.
+    const next = (await rasterize({ source: source('url-shortener'), outDir, options: { ...options, grid: { ...grid, zoom: 2, window: { ...window, col: 48 } } } }, { dir: HOOKS })).grid!;
+    for (const [i, f] of next.base.entries()) if (f && g.base[i]) expect(f).toBe(g.base[i]);
+    // Playing zoomed: the steps' tiles and frames only within the window.
+    const played = (await rasterize({ source: source('url-shortener'), outDir, options: { theme: 'dark' as const, maxWidthPx: 60 * 16, play: { useCase: 'Redirect', frames: 12 }, grid: { ...grid, zoom: 2, window } } }, { dir: HOOKS })).grid!;
+    for (const s of played.steps!) {
+      for (const [i, t] of played.tiles.entries()) expect(Boolean(s.behind[i])).toBe(meets(t));
+      for (const f of s.frames) for (const i of Object.keys(f).map(Number)) expect(meets(played.tiles[i])).toBe(true);
+    }
+  }, 30_000);
+
   it('fills a strip as wide as the panels, the diagram centred on it, with the load legend in its corner', async () => {
     const outDir = mkdtempSync(join(tmpdir(), 'proschi-raster-'));
     const cellPx = { width: 16, height: 34 };
