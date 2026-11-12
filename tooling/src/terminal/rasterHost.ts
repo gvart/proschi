@@ -4,12 +4,13 @@
  * iTerm2), the way the web canvas draws it: the architecture SVG of
  * `proschi render` (render/architecture.ts) with the load overlay, the
  * selection and use case playback, rasterized with resvg (WebAssembly) and
- * the fonts shipped next to it. The hooks run it in Node, one shot.
+ * the fonts shipped next to it. The hooks run it in Node, as a session's
+ * worker (`--serve`, see serve()) or one shot.
  *
  * Contract (docs/design/terminal-mod-graphics.md):
  *
  *   stdin  RasterInput as JSON:
- *     { source, path?, imports?, view?,            as layout.cjs (terminal/document.ts Source)
+ *     { source, path?, imports?, view?,            the document (terminal/document.ts Source)
  *       outDir,                                    where the PNGs go (created if missing)
  *       prune?: boolean,                           first delete what in outDir went unused for PRUNE_AFTER_MS
  *       options?: {
@@ -35,7 +36,7 @@
  *   exit 1 with the message on stderr when the document has errors or the use case is unknown.
  *
  *   stdin  LayoutInput { kind: 'layout', source, path?, imports?, view? }:
- *   stdout the browser's ELK layout, as layout.cjs writes it (so the worker lays out too).
+ *   stdout the browser's ELK layout (terminal/layout.ts), which the hooks draw text cells from.
  *
  * Files are named by a hash of their SVG and the zoom, so a frame that
  * repeats (or another call drawing the same thing) is written once; files
@@ -47,12 +48,12 @@
  * used for a week.
  */
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, watch, type FSWatcher } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, unlinkSync, watch, type FSWatcher } from 'node:fs';
 import { join } from 'node:path';
 import { initWasm, Resvg } from '@resvg/resvg-wasm';
 import type { Layout } from '../../../frontend/src/dsl/autoLayout';
 import { CANVAS_TOKENS } from '../../../frontend/src/utils/canvasColors';
-import { drawArchitecture, layoutArchitecture, type ArchitectureOptions } from '../render/architecture';
+import { drawArchitecture, type ArchitectureLayout, type ArchitectureOptions } from '../render/architecture';
 import type { Theme } from '../render/svg';
 import { loadDocument, type Source } from './document';
 import { Writer, hash, pngSize, put, touch, type Pixels } from './png';
@@ -60,7 +61,7 @@ import { renderPanels } from './panelHost';
 import { layoutOf } from './layout';
 import { fontsLoaded, loadFonts } from '../render/ui/metrics';
 import { rect, surfaceFrame } from '../render/ui/kit';
-import { legend } from '../render/ui/panels';
+import { BADGE, legend } from '../render/ui/panels';
 import { alpha, paletteOf } from '../render/ui/theme';
 import { formatMs } from '../../../frontend/src/sim/format';
 import type { PanelsInput, PanelsOutput } from '../render/ui/contract';
@@ -91,9 +92,12 @@ export interface GridOptions {
    * centred on the UI surface's colour (its paper too), a hairline down each
    * side, the drawing's rounded corners where it is its first or last piece
    * (`top`, `bottom`), else a divider along its top; `legend` adds the load
-   * legend as a badge at the bottom left. Without it, the picture is a card.
+   * legend as a badge at the bottom left; `controls`, the columns at its
+   * bottom right a panel laid over the picture takes (the zoom's pill), keeps
+   * the badge's band free under the diagram for it and the legend clear of
+   * it. Without it, the picture is a card.
    */
-  fill?: { columns: number; top?: boolean; bottom?: boolean; legend?: boolean };
+  fill?: { columns: number; top?: boolean; bottom?: boolean; legend?: boolean; controls?: number };
   /**
    * Zoomed in: the picture drawn `zoom` times the size that fits the room
    * (1, the default, fits), re-rendered at that scale, for a viewport the
@@ -132,7 +136,7 @@ export interface RasterInput extends Source {
   options?: RasterOptions;
 }
 
-/** A document to lay out, as layout.cjs takes it on stdin. */
+/** A document to lay out. */
 export interface LayoutInput extends Source {
   kind: 'layout';
 }
@@ -151,13 +155,12 @@ const filesOf = (o: RasterOutput): string[] => [o.base, ...(o.frames ?? []).flat
 
 /**
  * The pictures rendered last, by what they are drawn from: a zoomed picture
- * panned asks for another window of the same pixels. Up to CACHE_BYTES.
+ * panned asks for another window of the same pixels. Up to CACHE_BYTES,
+ * well under the size at which a worker is recycled (RECYCLE_BYTES).
  */
 const pixelCache = new Map<string, unknown>();
-/** The documents laid out last, by their source: a worker lays one out once, whatever it is asked to draw of it. */
-const layouts = new Map<string, Awaited<ReturnType<typeof layoutArchitecture>>>();
 let cachedBytes = 0;
-const CACHE_BYTES = 512 * 1024 * 1024;
+const CACHE_BYTES = 160 * 1024 * 1024;
 const bytesOf = (v: unknown): number => {
   const px = (v as { px?: Pixels } | undefined)?.px;
   return px?.data instanceof Uint8Array ? px.data.byteLength : 0;
@@ -209,7 +212,15 @@ function engine(assets: RasterAssets): Promise<Uint8Array[]> {
 /** How long a file in the cache lives unused. */
 export const PRUNE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 
-/** Deletes the files in `dir` older than PRUNE_AFTER_MS (by their time, which a use sets to now); one that goes meanwhile is skipped. */
+/** How long a worker's request folder (`serve-*`) may go untouched before it counts as left behind: well past IDLE_MS. */
+export const STALE_SERVE_MS = 60 * 60 * 1000;
+
+/**
+ * Deletes the files in `dir` older than PRUNE_AFTER_MS (by their time, which
+ * a use sets to now), and the request folders of workers that are gone (a
+ * `serve-*` folder untouched for STALE_SERVE_MS: a worker killed before it
+ * could delete its own); one that goes meanwhile is skipped.
+ */
 export function prune(dir: string, now = Date.now()): number {
   let gone = 0;
   for (const name of readdirSync(dir)) {
@@ -218,6 +229,9 @@ export function prune(dir: string, now = Date.now()): number {
       const stat = statSync(file);
       if (stat.isFile() && now - stat.mtimeMs > PRUNE_AFTER_MS) {
         unlinkSync(file);
+        gone++;
+      } else if (stat.isDirectory() && name.startsWith('serve-') && now - stat.mtimeMs > STALE_SERVE_MS) {
+        rmSync(file, { recursive: true, force: true });
         gone++;
       }
     } catch {
@@ -262,14 +276,9 @@ export async function rasterize(input: RasterInput, assets: RasterAssets): Promi
   }
 
   const fonts = await engine(assets);
-  // ELK takes most of a call (≈2 s for a large design): a worker lays each document out once.
+  // ELK takes most of a call (≈2 s for a large design): a worker lays each document out once (layoutOf).
   const layoutKey = hash(JSON.stringify([source, path, imports, view]));
-  let laid = layouts.get(layoutKey);
-  if (!laid) {
-    laid = await layoutArchitecture(doc.diagram);
-    layouts.set(layoutKey, laid);
-    if (layouts.size > 8) layouts.delete(layouts.keys().next().value!);
-  }
+  const laid: ArchitectureLayout = { diagram: doc.diagram, layout: await layoutOf({ source, path, imports, view }) };
   const theme = draw.theme!;
   const resvgOptions = {
     font: { fontBuffers: fonts, defaultFontFamily: 'Inter', sansSerifFamily: 'Inter', monospaceFamily: 'JetBrains Mono' },
@@ -414,10 +423,10 @@ function stripOf(fill: NonNullable<GridOptions['fill']>, g: GridOptions, theme: 
   const { width: cw, height: ch } = g.cellPx;
   // CSS px: the UI kit's 8×17 cell, stretched to cellPx as the panels are.
   const kx = cw / 8;
-  const badge = { height: 24, margin: 8 };
+  const badge = BADGE;
   const side = cw;
   const above = Math.round(ch * 0.5);
-  const below = critical !== undefined || fill.legend ? Math.round((badge.height + 2 * badge.margin) * kx) : above;
+  const below = critical !== undefined || fill.legend || fill.controls ? Math.round((badge.height + 2 * badge.margin) * kx) : above;
   return {
     side,
     above,
@@ -435,7 +444,7 @@ function stripOf(fill: NonNullable<GridOptions['fill']>, g: GridOptions, theme: 
       const parts = [surfaceFrame(P, w, h, { top: fill.top === true, bottom: fill.bottom === true })];
       if (fill.legend) {
         const y = h - badge.margin - badge.height;
-        const drawn = legend(P, critical ? { useCase: critical.useCase, p99: formatMs(critical.p99Ms) } : undefined, badge.margin + 10, y + 16, w - 2 * badge.margin - 20);
+        const drawn = legend(P, critical ? { useCase: critical.useCase, p99: formatMs(critical.p99Ms) } : undefined, badge.margin + 10, y + 16, w - 2 * badge.margin - 20 - (fill.controls ?? 0) * 8);
         parts.push(rect(badge.margin + 0.5, y + 0.5, drawn.width + 20 - 1, badge.height - 1, { fill: alpha(P.surface, 0.85), stroke: P.card.line, sw: 1, rx: 6 }), drawn.svg);
       }
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" font-family="Inter">${parts.join('')}</svg>`;
@@ -584,8 +593,10 @@ export async function answer(input: RasterInput | PanelsInput | LayoutInput, ass
   return out;
 }
 
-/** How long a worker waits for a request before it exits. */
-const IDLE_MS = 30 * 60 * 1000;
+/** How long a worker waits for a request before it exits: the plugin starts another on its next request. */
+const IDLE_MS = 5 * 60 * 1000;
+/** Past this resident size, a worker with no request waiting exits after its answer, and the plugin's next request starts a fresh one. */
+export const RECYCLE_BYTES = 400 * 1024 * 1024;
 
 /**
  * The session-long worker: `raster.cjs --serve <dir>`. The mod's stdin is
@@ -593,23 +604,23 @@ const IDLE_MS = 30 * 60 * 1000;
  * takes it) put into `dir`, best written under another name and renamed in,
  * answered lowest name first (the folder read again after each, so a request
  * named lower overtakes those waiting), each by a line on stdout, `{"id","output"}` or
- * `{"id","error"}`, the same JSON also in `<id>.res.json`. The first line,
- * `{"ready":true}`, comes once the wasm and the fonts are loaded. It exits
- * when idle for `idleMs`, or once its parent is gone (it is re-parented).
+ * `{"id","error"}`. The first line, `{"ready":true}`, comes once the wasm and
+ * the fonts are loaded. It stops when idle for `idleMs`, once its parent is
+ * gone (it is re-parented), or after an answer that leaves it over
+ * `recycleBytes` with nothing waiting; stopping deletes `dir`.
  */
-export function serve(dir: string, assets: RasterAssets, write: (line: string) => void = (l) => void process.stdout.write(l), idleMs = IDLE_MS): { stop(): void; ready: Promise<void> } {
+export function serve(dir: string, assets: RasterAssets, write: (line: string) => void = (l) => void process.stdout.write(l), idleMs = IDLE_MS, recycleBytes = RECYCLE_BYTES): { stop(): void; ready: Promise<void> } {
   mkdirSync(dir, { recursive: true });
   const parent = process.ppid;
   let busy = false;
   let again = false;
+  let stopped = false;
   let last = Date.now();
   const tries = new Map<string, number>();
-  const reply = (id: string, body: { output?: unknown; error?: string }) => {
-    const text = JSON.stringify({ id, ...body });
-    put(join(dir, `${id}.res.json`), text);
-    write(`${text}\n`);
-  };
+  const reply = (id: string, body: { output?: unknown; error?: string }) => write(`${JSON.stringify({ id, ...body })}\n`);
+  const waiting = () => readdirSync(dir).some((f) => f.endsWith('.req.json'));
   const scan = async (): Promise<void> => {
+    if (stopped) return;
     if (busy) {
       again = true;
       return;
@@ -642,6 +653,10 @@ export function serve(dir: string, assets: RasterAssets, write: (line: string) =
             reply(id, { error: error instanceof Error ? error.message : String(error) });
           }
           last = Date.now();
+          if (process.memoryUsage().rss > recycleBytes && !waiting()) {
+            stop();
+            return;
+          }
           // Read the folder again after each answer: a request named lower that came meanwhile (a press's, over prefetches) goes next.
           again = true;
           break;
@@ -662,8 +677,11 @@ export function serve(dir: string, assets: RasterAssets, write: (line: string) =
     else void scan();
   }, 50);
   const stop = () => {
+    if (stopped) return;
+    stopped = true;
     clearInterval(poll);
     watcher?.close();
+    rmSync(dir, { recursive: true, force: true });
   };
   const ready = (async () => {
     if (!fontsLoaded()) loadFonts(join(assets.dir, 'fonts'));
@@ -689,7 +707,14 @@ async function main(): Promise<void> {
   if (at >= 0) {
     const dir = process.argv[at + 1];
     if (!dir) throw new Error('Usage: raster.cjs --serve <dir>');
-    await serve(dir, assets).ready;
+    const worker = serve(dir, assets);
+    // Killed (the session ended, the plugin stopped it): its folder goes with it.
+    for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP'] as const)
+      process.on(signal, () => {
+        worker.stop();
+        process.exit(0);
+      });
+    await worker.ready;
     return;
   }
   const chunks: Buffer[] = [];

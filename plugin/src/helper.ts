@@ -1,6 +1,7 @@
 import type { EngineInterface } from 'claude-code'
 
 import { CELL_ASPECT, type PanelOutput, type PanelRequest, type PanelsInput, type PanelsOutput, type UiTheme } from '../../tooling/src/render/ui/contract'
+import { Lru } from './lru'
 
 /**
  * The raster helper (hooks/raster.cjs, tooling/src/terminal/rasterHost.ts) as
@@ -10,16 +11,17 @@ import { CELL_ASPECT, type PanelOutput, type PanelRequest, type PanelsInput, typ
  * named `a…`, the pane's Diagram drawn ahead `b…`, any other prefetch `c…`,
  * and the worker answers the lowest name first, so a press never waits
  * behind prefetching, and the Diagram tab never waits behind the others. A
- * worker that dies is started again on the next request, the requests it
- * held asked once more one shot; where spawn is refused, every request runs
- * one shot (`$.process.run`, ≈150 ms more each). It lays documents out too
- * (`{ kind: 'layout' }`, layout.cjs one shot).
+ * worker that dies (or stops: idle, recycled, the session ended) is
+ * started again on the next request, the requests it held asked once more
+ * one shot; where spawn is refused, every request runs one shot
+ * (`$.process.run`, ≈150 ms more each). It lays documents out too
+ * (`{ kind: 'layout' }`).
  *
  * Requests go out from a session-long task (`serveRequests`, started by
  * session.start), not from the render hook that asks: a redraw aborts a
  * render's dispatch and every `$` call in flight with it, the worker's spawn
- * included. An abort is never an answer: whatever asked asks again on its
- * next draw (`retry`).
+ * included. An abort is never an answer, nor is a timeout or a worker that
+ * died: whatever asked asks again on its next draw, a few times (`retry`).
  */
 
 /**
@@ -38,6 +40,8 @@ type Waiter = { resolve: (output: unknown) => void; reject: (error: Error) => vo
 interface Worker {
   dir: string
   waiting: Map<string, Waiter>
+  /** Ends the worker: leaving its stream kills it, and it deletes its folder. */
+  stop?: () => void
 }
 
 // Per module load.
@@ -54,9 +58,10 @@ let cellAspect = CELL_ASPECT
  * pixels, and a terminal fits each picture into its cells keeping the
  * picture's aspect ratio, so the pictures are drawn for this one.
  */
-export function setCellAspect(value: unknown): void {
+export function setCellAspect(value: unknown): string | undefined {
   const n = typeof value === 'number' ? value : Number.parseFloat(String(value ?? ''))
   cellAspect = Number.isFinite(n) && n >= 1.5 && n <= 3 ? n : CELL_ASPECT
+  return cellAspect === n || value === undefined || value === '' ? undefined : `the cellAspect setting ${JSON.stringify(value)} is not a number from 1.5 to 3: pictures are drawn for ${CELL_ASPECT}`
 }
 
 export const cellAspectOf = () => cellAspect
@@ -64,7 +69,7 @@ export const cellAspectOf = () => cellAspect
 let pruned = false
 
 /** A request waiting for the session's task, or a redraw it is to ask for. */
-type Job = { input: object; priority: Priority; spawn: boolean; resolve: (output: unknown) => void; reject: (error: unknown) => void } | 'redraw'
+type Job = { input: object; priority: Priority; resolve: (output: unknown) => void; reject: (error: unknown) => void } | 'redraw'
 
 const jobs: Job[] = []
 /** Wakes the session's task when a job comes; set while it waits. */
@@ -87,7 +92,7 @@ export async function serveRequests($: EngineInterface): Promise<void> {
         continue
       }
       if (job === 'redraw') $.ui.invalidate('ui.render')
-      else send($, job.input, job.priority, job.spawn).then(job.resolve, job.reject)
+      else send($, job.input, job.priority).then(job.resolve, job.reject)
     }
   } finally {
     serving = false
@@ -118,22 +123,32 @@ export function didNotStart(error: unknown): boolean {
   return /\b(ENOENT|EACCES|EPERM)\b|cannot start|could not start|not found|spawn/i.test(error instanceof Error ? error.message : String(error))
 }
 
-/** Aborts in a row, by what asked: past MAX_ABORTS the abort is reported as the failure it then is. */
-const aborts = new Map<string, number>()
-const MAX_ABORTS = 3
-
-/** After an aborted request for `key`: true while it may be asked again (on the next draw), false once it was aborted too often. */
-export function retry(key: string): boolean {
-  const n = (aborts.get(key) ?? 0) + 1
-  aborts.set(key, n)
-  return n <= MAX_ABORTS
+/** A failure that says nothing of the request (the worker did not answer in time, or the process died with no message): asked again, as an abort is. */
+class Transient extends Error {
+  readonly transient = true
 }
 
-/** After an answer for `key`: its aborts are forgotten. */
-export const answered = (key: string) => void aborts.delete(key)
+/** Whether a request failed for no reason of its own: aborted, timed out, or its process died with no message. */
+export function isRetryable(error: unknown): boolean {
+  return isAborted(error) || (error as { transient?: unknown } | undefined)?.transient === true
+}
 
-/** How long one answer may take. */
-const TIMEOUT_MS = 60_000
+/** Failures in a row that say nothing of the request, by what asked: past MAX_RETRIES the failure is reported as it then is. */
+const failures = new Lru<string, number>(256)
+const MAX_RETRIES = 3
+
+/** After a retryable failure (isRetryable) for `key`: true while it may be asked again (on the next draw), false once it failed too often. */
+export function retry(key: string): boolean {
+  const n = (failures.get(key) ?? 0) + 1
+  failures.set(key, n)
+  return n <= MAX_RETRIES
+}
+
+/** After an answer for `key`: its failures are forgotten. */
+export const answered = (key: string) => void failures.delete(key)
+
+/** How long one answer may take: a drawing waited on gives up sooner (and asks again), a prefetch may wait behind others. */
+const TIMEOUT_MS: Record<Priority, number> = { now: 10_000, first: 10_000, later: 60_000, mount: 60_000 }
 
 /** Where the PNGs go: the system's temporary folder (the API names no plugin data folder). */
 export async function cacheDir($: EngineInterface): Promise<string> {
@@ -156,12 +171,12 @@ function helper($: EngineInterface): string {
   return `${$.plugin.root}/hooks/raster.cjs`
 }
 
-/** One request as its own process: a layout by layout.cjs (smaller, so sooner up), anything else by raster.cjs. */
+/** One request as its own process. Exited with no message (killed, out of memory) or not done in time, it is a Transient failure. */
 async function oneShot($: EngineInterface, input: object): Promise<unknown> {
-  const layout = (input as { kind?: unknown }).kind === 'layout'
-  const script = layout ? `${$.plugin.root}/hooks/layout.cjs` : helper($)
-  const { exitCode, stdout, stderr } = await $.process.run(['node', script], { stdin: JSON.stringify(input), timeoutMs: TIMEOUT_MS })
-  if (exitCode !== 0) throw new Error(stderr.trim() || `${layout ? 'layout' : 'raster'} exited with ${exitCode}`)
+  const { exitCode, stdout, stderr } = await $.process.run(['node', helper($)], { stdin: JSON.stringify(input), timeoutMs: TIMEOUT_MS.later }).catch((error: unknown) => {
+    throw isAborted(error) || didNotStart(error) ? error : new Transient(error instanceof Error ? error.message : String(error))
+  })
+  if (exitCode !== 0) throw stderr.trim() ? new Error(stderr.trim()) : new Transient(`raster exited with ${exitCode}`)
   return JSON.parse(stdout)
 }
 
@@ -174,6 +189,7 @@ function start($: EngineInterface, root: string): Worker {
     let started = false
     try {
       const stream = $.process.spawn({ argv: ['node', helper($), '--serve', w.dir] })
+      w.stop = () => void stream.return?.(undefined as never)
       for await (const chunk of stream) {
         started = true
         if (chunk.stream !== 'stdout') continue
@@ -200,6 +216,13 @@ function start($: EngineInterface, root: string): Worker {
   return w
 }
 
+/** Stops the session's worker (session.end); it deletes its folder as it goes. */
+export function stopWorker(): void {
+  const w = worker
+  worker = undefined
+  w?.stop?.()
+}
+
 function settle(w: Worker, line: string): void {
   let reply: { id?: unknown; output?: unknown; error?: unknown }
   try {
@@ -217,23 +240,23 @@ function settle(w: Worker, line: string): void {
 
 /**
  * Asks the helper for `input` (a RasterInput, a PanelsInput or a layout);
- * resolves with its answer, rejects with why not. `spawn: false` starts no
- * worker for it (a layout where no picture is drawn): one shot unless one runs.
+ * resolves with its answer, rejects with why not.
  */
-export function ask($: EngineInterface, input: object, priority: Priority = 'now', spawn = true): Promise<unknown> {
-  if (!serving) return send($, input, priority, spawn)
-  return new Promise<unknown>((resolve, reject) => enqueue({ input, priority, spawn, resolve, reject }))
+export function ask($: EngineInterface, input: object, priority: Priority = 'now'): Promise<unknown> {
+  if (!serving) return send($, input, priority)
+  return new Promise<unknown>((resolve, reject) => enqueue({ input, priority, resolve, reject }))
 }
 
-async function send($: EngineInterface, input: object, priority: Priority, spawn: boolean): Promise<unknown> {
-  if (refused || (!spawn && !worker)) return oneShot($, input)
+async function send($: EngineInterface, input: object, priority: Priority): Promise<unknown> {
+  if (refused) return oneShot($, input)
   const root = await cacheDir($)
   const w = worker ?? start($, root)
   const id = `${RANK[priority]}${String(seq++).padStart(9, '0')}`
+  const ms = TIMEOUT_MS[priority]
   return new Promise<unknown>((resolve, reject) => {
-    const timer = $.clock.after(TIMEOUT_MS, () => {
+    const timer = $.clock.after(ms, () => {
       if (!w.waiting.delete(id)) return
-      reject(new Error(`the raster worker did not answer in ${TIMEOUT_MS / 1000} s`))
+      reject(new Transient(`the raster worker did not answer in ${ms / 1000} s`))
     })
     w.waiting.set(id, {
       input,
@@ -265,22 +288,49 @@ export interface PanelAsk {
   theme: UiTheme
   /** Where it sits in its drawing: the first piece (top) or the last (bottom). */
   edges?: PanelRequest['edges']
+  /** With each control's strip under the pointer and pressed (asked on the first hover over the panel, not with it: variantsOf). */
+  variants?: boolean
 }
 
-const panels = new Map<string, PanelOutput | { error: string }>()
+const panels = new Lru<string, PanelOutput | { error: string }>(512)
 const drawing = new Set<string>()
 /** Prefetched panels a drawing has since asked for: their answer redraws. */
 const wanted = new Set<string>()
 let batch: { now: Map<string, PanelAsk>; first: Map<string, PanelAsk>; later: Map<string, PanelAsk> } | undefined
 
-export const panelKey = (p: PanelAsk) => JSON.stringify([p.theme, p.columns, p.edges?.top === true, p.edges?.bottom === true, p.panel])
+/** Each panel object's digest (its JSON's hash and length), worked out once: a page's JSON is tens of KB, and the pages are memoised. */
+const json = new WeakMap<object, string>()
+
+/** A 53-bit hash of `text` (cyrb53): a short key for a long JSON. */
+function digest(text: string): string {
+  let h1 = 0xdeadbeef
+  let h2 = 0x41c6ce57
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i)
+    h1 = Math.imul(h1 ^ c, 2654435761)
+    h2 = Math.imul(h2 ^ c, 1597334677)
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909)
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909)
+  return `${(4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36)}.${text.length}`
+}
+export function panelKey(p: PanelAsk): string {
+  let text = json.get(p.panel)
+  if (text === undefined) json.set(p.panel, (text = digest(JSON.stringify(p.panel))))
+  return `${p.theme}\u0000${p.columns}\u0000${p.edges?.top === true}\u0000${p.edges?.bottom === true}\u0000${p.variants === true}\u0000${text}`
+}
 
 /**
  * A panel's tiles, or why it could not be drawn; undefined while it is drawn
- * (a redraw follows for a press's; a prefetch's is kept for later). The
- * panels asked for in one turn of the event loop go as one request.
+ * (a redraw follows for a press's; a prefetch's is kept for later). Drawn
+ * with its controls' hover and pressed strips already (variantsOf), that
+ * answer is the one given. The panels a drawing asks for in one turn of the
+ * event loop go as one request; each prefetched one as a request of its own,
+ * so a press waits behind one at most.
  */
 export function panelOf($: EngineInterface, p: PanelAsk, priority: Priority = 'now'): PanelOutput | { error: string } | undefined {
+  const rich = panels.get(panelKey({ ...p, variants: true }))
+  if (rich && !('error' in rich)) return rich
   const key = panelKey(p)
   const done = panels.get(key)
   if (done) return done
@@ -295,6 +345,38 @@ export function panelOf($: EngineInterface, p: PanelAsk, priority: Priority = 'n
   return undefined
 }
 
+/**
+ * A panel with its controls' hover and pressed strips, asked the first time
+ * the pointer is over one of its controls (drawn with every panel, they were
+ * most of the helper's work and files: an HLD page's 30-odd full-width
+ * strips); resolves once drawn, or with why not.
+ */
+export function variantsOf($: EngineInterface, p: PanelAsk): Promise<PanelOutput | { error: string }> {
+  const rich: PanelAsk = { ...p, variants: true }
+  const key = panelKey(rich)
+  const done = panels.get(key)
+  if (done) return Promise.resolve(done)
+  let going = hovering.get(key)
+  if (!going) {
+    going = (async () => {
+      const input: PanelsInput = { kind: 'panels', outDir: await cacheDir($), theme: p.theme, cellAspect, panels: [requestOf(key, rich)] }
+      const out: PanelOutput | { error: string } = await ask($, input, 'now').then(
+        o => (o as PanelsOutput).panels?.[0] ?? { error: 'the helper answered no panel' },
+        (error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }),
+      )
+      if (!('error' in out)) panels.set(key, out)
+      hovering.delete(key)
+      return out
+    })()
+    hovering.set(key, going)
+  }
+  return going
+}
+const hovering = new Map<string, Promise<PanelOutput | { error: string }>>()
+
+/** A panel as the helper takes it: its hover and pressed strips only when asked for. */
+const requestOf = (id: string, p: PanelAsk): PanelRequest => ({ id, panel: p.panel, columns: p.columns, variants: p.variants ? ['hover', 'pressed'] : [], ...(p.edges?.top || p.edges?.bottom ? { edges: p.edges } : {}) })
+
 /** Asks for panels ahead of need: drawn by the worker after any press's request. */
 export function prefetch($: EngineInterface, asks: PanelAsk[]): void {
   for (const p of asks) panelOf($, p, 'later')
@@ -307,10 +389,11 @@ async function flush($: EngineInterface): Promise<void> {
   for (const priority of ['now', 'first', 'later'] as const) {
     const asks = [...b[priority].entries()]
     if (asks.length === 0) continue
-    // By theme: one request each.
-    for (const theme of new Set(asks.map(([, p]) => p.theme))) {
-      const mine = asks.filter(([, p]) => p.theme === theme)
-      const input: PanelsInput = withPrune({ kind: 'panels', outDir, theme, cellAspect, panels: mine.map(([key, p]) => ({ id: key, panel: p.panel, columns: p.columns, variants: ['hover', 'pressed'], ...(p.edges?.top || p.edges?.bottom ? { edges: p.edges } : {}) })) })
+    // By theme, one request each; a prefetch one request a panel, so a press goes after one at most.
+    const groups = priority === 'later' ? asks.map(a => [a]) : [...new Set(asks.map(([, p]) => p.theme))].map(theme => asks.filter(([, p]) => p.theme === theme))
+    for (const mine of groups) {
+      const theme = mine[0]![1].theme
+      const input: PanelsInput = withPrune({ kind: 'panels', outDir, theme, cellAspect, panels: mine.map(([key, p]) => requestOf(key, p)) })
       void ask($, input, priority).then(
         out => {
           const answers = (out as PanelsOutput).panels ?? []
@@ -320,8 +403,8 @@ async function flush($: EngineInterface): Promise<void> {
           }
         },
         (error: unknown) => {
-          // Aborted: not drawn, nor failed; asked again on the next draw.
-          for (const [key] of mine) if (!isAborted(error) || !retry(key)) panels.set(key, { error: error instanceof Error ? error.message : String(error) })
+          // Aborted, timed out, the worker gone: not drawn, nor failed; asked again on the next draw.
+          for (const [key] of mine) if (!isRetryable(error) || !retry(key)) panels.set(key, { error: error instanceof Error ? error.message : String(error) })
         },
       ).finally(() => {
         for (const [key] of mine) drawing.delete(key)
@@ -337,12 +420,3 @@ async function flush($: EngineInterface): Promise<void> {
   }
 }
 
-/** For tests: forget the worker and the panels drawn. */
-export function resetHelper(): void {
-  worker = undefined
-  refused = false
-  aborts.clear()
-  panels.clear()
-  drawing.clear()
-  wanted.clear()
-}
