@@ -3,7 +3,7 @@ import type { EngineInterface, ImageSource } from 'claude-code'
 
 import { keyOf, type Source } from '../../tooling/src/terminal/document'
 import type { GraphicsProbe } from '../types'
-import { ask, cacheDir, cellAspectOf, withPrune, type Priority } from './helper'
+import { answered, ask, cacheDir, cellAspectOf, isAborted, redraw, retry, withPrune, type Priority } from './helper'
 
 /**
  * Diagrams as pictures (docs/design/terminal-mod.md D11): the PNGs
@@ -113,15 +113,17 @@ export function rasterOf($: EngineInterface, request: RasterRequest, priority: P
     const input = withPrune({ source, path, imports, view, outDir: await cacheDir($), options: request.options })
     const answer = await ask($, input, priority).then(
       out => {
+        answered(key)
         const o = out as RasterOutput
         return typeof o.base === 'string' && o.width > 0 && o.height > 0 ? o : { error: 'raster answered no picture' }
       },
-      (error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }),
+      // Aborted (a redraw, a new view): not an answer; the next draw asks again.
+      (error: unknown) => (isAborted(error) && retry(key) ? undefined : { error: error instanceof Error ? error.message : String(error) }),
     )
-    if ('error' in answer) $.ui.log(`proschi: no picture: ${answer.error}`, { to: 'debug' })
-    rasters.set(key, answer)
+    if (answer && 'error' in answer) $.ui.log(`proschi: no picture: ${answer.error}`, { to: 'debug' })
+    if (answer) rasters.set(key, answer)
     pending.delete(key)
-    if (priority === 'now' || priority === 'first' || wanted.delete(key)) $.ui.invalidate('ui.render')
+    if (priority === 'now' || priority === 'first' || wanted.delete(key)) redraw($)
   })()
   return undefined
 }
@@ -193,16 +195,18 @@ export function probe($: EngineInterface, requestId: string, key: string): void 
     timer.cancel()
     probing = false
     if (!answer) {
-      $.ui.invalidate('ui.render')
+      redraw($)
       return
     }
     await update($, probed, () => answer)
-    $.ui.invalidate('ui.render')
+    redraw($)
   }
   const timer = $.clock.every(PROBE_MS, async () => {
     if (tries++ >= PROBE_TRIES) return settle({ status: 'no' })
     const byName = await $.ui.blit({ requestId, key, source: probeSource($) }).catch((error: unknown) => ({ deny: String(error), fix: undefined }))
     if (!byName.deny) return settle({ status: 'yes', form: 'file' })
+    // Aborted with the drawing that asked (a redraw): no answer; the next drawing probes again.
+    if (isAborted(byName.deny)) return settle(undefined)
     if (byName.fix === 'tmux-passthrough') return settle({ status: 'tmux' })
     // Nothing draws (a -p run): nothing to learn.
     if (/no-surface/.test(byName.deny)) {
@@ -211,6 +215,7 @@ export function probe($: EngineInterface, requestId: string, key: string): void 
     }
     const asBytes = await $.ui.blit({ requestId, key, source: { png: PROBE_PNG } }).catch((error: unknown) => ({ deny: String(error), fix: undefined }))
     if (!asBytes.deny) return settle({ status: 'yes', form: 'png' })
+    if (isAborted(asBytes.deny)) return settle(undefined)
     if (asBytes.fix === 'tmux-passthrough') return settle({ status: 'tmux' })
   })
 }

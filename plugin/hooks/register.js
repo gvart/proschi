@@ -4482,19 +4482,19 @@ var Parser = class _Parser {
   }
   buildSteps(useCaseId, scenarioId, raw) {
     const steps = [];
-    const answered = /* @__PURE__ */ new Set();
+    const answered2 = /* @__PURE__ */ new Set();
     const prefix = scenarioId === "main" ? useCaseId : `${useCaseId}-${scenarioId}`;
     for (const step of raw) {
       this.checkConnection(step);
       if (step.arrow === "-->") {
         const [respFrom] = this.splitRef(step.from);
         const [respTo] = this.splitRef(step.to);
-        const request2 = [...steps].reverse().find((s) => s.fromServiceId === respTo && s.toServiceId === respFrom && !answered.has(s) && !s.failed);
+        const request2 = [...steps].reverse().find((s) => s.fromServiceId === respTo && s.toServiceId === respFrom && !answered2.has(s) && !s.failed);
         if (!request2) {
           this.warning(`Response has no matching request from '${step.to}' to '${step.from}'`, step.loc);
           continue;
         }
-        answered.add(request2);
+        answered2.add(request2);
         request2.responseLoc = step.loc;
         if (steps.length > steps.indexOf(request2) + 1 && !(step.parallelGroup !== void 0 && step.parallelGroup === request2.parallelGroup)) {
           request2.deferredResponse = { after: steps.length, ...step.parallelGroup !== void 0 ? { group: step.parallelGroup } : {} };
@@ -5574,16 +5574,16 @@ function criticalPath(useCase, scenario) {
   const { items } = buildSequence(useCase, scenario);
   const working = /* @__PURE__ */ new Map([[entry.fromServiceId, 1]]);
   const opened = /* @__PURE__ */ new Set();
-  let answered = false;
+  let answered2 = false;
   const parts = [];
   const visit = (m, hops) => {
     if (m.kind === "response") {
       if (opened.delete(m.step)) working.set(m.step.toServiceId, (working.get(m.step.toServiceId) ?? 1) - 1);
-      if (m.step === entry) answered = true;
+      if (m.step === entry) answered2 = true;
       return;
     }
-    if (afterEntryResponse(entry, m.step)) answered = true;
-    if (answered || !working.get(m.from)) return;
+    if (afterEntryResponse(entry, m.step)) answered2 = true;
+    if (answered2 || !working.get(m.from)) return;
     hops.push({ step: m.step, target: m.to, failed: m.failed, async: m.async });
     if (!m.async && !m.failed) {
       opened.add(m.step);
@@ -5989,7 +5989,7 @@ function sharedLoad(root, rootInbound) {
     }
   };
   visit(root, "");
-  const send = (d, prefix, inbound) => {
+  const send2 = (d, prefix, inbound) => {
     for (const s of d.systems ?? []) {
       if (!s.diagram) continue;
       const key = teamKey(s);
@@ -5999,12 +5999,12 @@ function sharedLoad(root, rootInbound) {
       if (rps > 0) load.callers.push({ path: prefix ? `${prefix}.${s.id}` : s.id, ...d.title !== void 0 ? { from: d.title } : {}, rps });
     }
   };
-  send(root, "", rootInbound);
+  send2(root, "", rootInbound);
   for (const key of order.reverse()) {
     const { diagram, path, loc } = designs.get(key);
     if (!diagram.systems?.length) continue;
     const combined = withExtraTraffic(diagram, byFile.get(key)?.useCases ?? /* @__PURE__ */ new Map(), loc);
-    send(diagram, path, inboundLoad(combined, resolveTraffic(combined)));
+    send2(diagram, path, inboundLoad(combined, resolveTraffic(combined)));
   }
   return { byFile, analyses: /* @__PURE__ */ new Map() };
 }
@@ -6204,9 +6204,9 @@ function trafficFor(diagram, options = {}, warnings = []) {
   const retries = retriesOf(diagram, options);
   if (retries.size) {
     for (const u of diagram.useCases) {
-      const retry = /* @__PURE__ */ new Map();
-      for (const s of u.scenarios) for (const step of s.steps) if (!step.failed && retries.has(step.toServiceId)) retry.set(step, retries.get(step.toServiceId).attempts);
-      if (retry.size) traffic.set(u.id, { ...traffic.get(u.id), retry });
+      const retry2 = /* @__PURE__ */ new Map();
+      for (const s of u.scenarios) for (const step of s.steps) if (!step.failed && retries.has(step.toServiceId)) retry2.set(step, retries.get(step.toServiceId).attempts);
+      if (retry2.size) traffic.set(u.id, { ...traffic.get(u.id), retry: retry2 });
     }
   }
   const failed = options.failed;
@@ -6339,14 +6339,14 @@ var opLatencyOf = (step) => step.op?.latency !== void 0 && step.op.latency > 0 ?
 var opCostOf = (step) => step.op?.cost !== void 0 && step.op.cost > 0 ? step.op.cost : 1;
 function forEachStepRate(diagram, traffic, visit) {
   for (const u of diagram.useCases) {
-    const { rps, shares, miss, retry } = traffic.get(u.id) ?? { rps: 0, shares: [] };
+    const { rps, shares, miss, retry: retry2 } = traffic.get(u.id) ?? { rps: 0, shares: [] };
     u.scenarios.forEach((s, i) => {
       const rate = rps * (shares[i] ?? 0);
       if (!(rate > 0)) return;
       for (const step of s.steps) {
         if (step.failed) continue;
         const r = miss?.has(step) ? rate * miss.get(step) : rate;
-        visit(step, retry?.has(step) ? r * retry.get(step) : r, u);
+        visit(step, retry2?.has(step) ? r * retry2.get(step) : r, u);
       }
     });
   }
@@ -6611,15 +6611,15 @@ function analyze(diagram, options = {}) {
     )
   });
   const useCases = diagram.useCases.map((u) => {
-    const { rps, shares, stranded, average, lookups, retry } = traffic.get(u.id);
+    const { rps, shares, stranded, average, lookups, retry: retry2 } = traffic.get(u.id);
     const availabilityOf = (id, writes2) => {
       const n = nodeById.get(id);
       if (!n && systems) return systemAvailability(u, id, systems.availability);
       return !n ? 1 : writes2.has(id) ? n.writeAvailability : n.availability;
     };
     const withRetries = (writes2) => (id) => retries.has(id) ? availabilityOf(id, writes2) * retries.get(id).success : availabilityOf(id, writes2);
-    if (lookups || retry) {
-      const { scenarios: scenarios2, percentiles: percentiles2, tailScenario: tailScenario2 } = cachedLatency(u, shares, lookups ?? [], retry ? retries : /* @__PURE__ */ new Map(), pathOf, new Set(options.percentiles ?? PERCENTILES2));
+    if (lookups || retry2) {
+      const { scenarios: scenarios2, percentiles: percentiles2, tailScenario: tailScenario2 } = cachedLatency(u, shares, lookups ?? [], retry2 ? retries : /* @__PURE__ */ new Map(), pathOf, new Set(options.percentiles ?? PERCENTILES2));
       const writes2 = mainWrites(u, shares, (step) => access(step) === "write");
       const availability3 = useCaseAvailability(u, shares, retries.size ? withRetries(writes2) : (id) => availabilityOf(id, writes2)) * (1 - (stranded ?? 0));
       return { id: u.id, name: u.name, rps, ...average !== void 0 ? { avgRps: rps * average } : {}, scenarios: scenarios2, percentiles: percentiles2, tailScenario: tailScenario2, availability: availability3 };
@@ -9666,12 +9666,57 @@ function setCellAspect(value) {
 }
 var cellAspectOf = () => cellAspect;
 var pruned = false;
+var jobs = [];
+var wake;
+var serving = false;
+async function serveRequests($) {
+  serving = true;
+  try {
+    for (; ; ) {
+      const job = jobs.shift();
+      if (!job) {
+        await new Promise((resolve) => wake = resolve);
+        continue;
+      }
+      if (job === "redraw") $.ui.invalidate("ui.render");
+      else send($, job.input, job.priority, job.spawn).then(job.resolve, job.reject);
+    }
+  } finally {
+    serving = false;
+  }
+}
+function enqueue(job) {
+  jobs.push(job);
+  const w = wake;
+  wake = void 0;
+  w?.();
+}
+function redraw($) {
+  if (serving) enqueue("redraw");
+  else $.ui.invalidate("ui.render");
+}
+function isAborted(error) {
+  const e = error;
+  return e?.name === "AbortError" || /\baborted\b/i.test(typeof e?.message === "string" ? e.message : String(error));
+}
+function didNotStart(error) {
+  return /\b(ENOENT|EACCES|EPERM)\b|cannot start|could not start|not found|spawn/i.test(error instanceof Error ? error.message : String(error));
+}
+var aborts = /* @__PURE__ */ new Map();
+var MAX_ABORTS = 3;
+function retry(key) {
+  const n = (aborts.get(key) ?? 0) + 1;
+  aborts.set(key, n);
+  return n <= MAX_ABORTS;
+}
+var answered = (key) => void aborts.delete(key);
 var TIMEOUT_MS = 6e4;
 async function cacheDir($) {
   if (cache) return cache;
-  const dir = await $.env.get("TMPDIR").catch(() => void 0);
-  cache = `${(dir || "/tmp").replace(/\/+$/, "")}/proschi-raster`;
-  return cache;
+  const dir = await $.env.get("TMPDIR").catch((error) => isAborted(error) ? null : void 0);
+  const at = `${(dir || "/tmp").replace(/\/+$/, "")}/proschi-raster`;
+  if (dir !== null) cache = at;
+  return at;
 }
 function withPrune(input) {
   if (pruned) return input;
@@ -9682,8 +9727,10 @@ function helper($) {
   return `${$.plugin.root}/hooks/raster.cjs`;
 }
 async function oneShot($, input) {
-  const { exitCode, stdout, stderr } = await $.process.run(["node", helper($)], { stdin: JSON.stringify(input), timeoutMs: TIMEOUT_MS });
-  if (exitCode !== 0) throw new Error(stderr.trim() || `raster exited with ${exitCode}`);
+  const layout = input.kind === "layout";
+  const script = layout ? `${$.plugin.root}/hooks/layout.cjs` : helper($);
+  const { exitCode, stdout, stderr } = await $.process.run(["node", script], { stdin: JSON.stringify(input), timeoutMs: TIMEOUT_MS });
+  if (exitCode !== 0) throw new Error(stderr.trim() || `${layout ? "layout" : "raster"} exited with ${exitCode}`);
   return JSON.parse(stdout);
 }
 function start($, root) {
@@ -9706,7 +9753,7 @@ function start($, root) {
         }
       }
     } catch (error) {
-      if (!started) refused = true;
+      if (!started && !isAborted(error)) refused = true;
       $.ui.log(`proschi: the raster worker ${started ? "failed" : "did not start"}: ${String(error)}`, { to: "debug" });
     }
     if (worker === w) worker = void 0;
@@ -9731,8 +9778,12 @@ function settle(w, line2) {
   if (typeof reply.error === "string") waiter.reject(new Error(reply.error));
   else waiter.resolve(reply.output);
 }
-async function ask($, input, priority = "now") {
-  if (refused) return oneShot($, input);
+function ask($, input, priority = "now", spawn = true) {
+  if (!serving) return send($, input, priority, spawn);
+  return new Promise((resolve, reject) => enqueue({ input, priority, spawn, resolve, reject }));
+}
+async function send($, input, priority, spawn) {
+  if (refused || !spawn && !worker) return oneShot($, input);
   const root = await cacheDir($);
   const w = worker ?? start($, root);
   const id = `${RANK[priority]}${String(seq++).padStart(9, "0")}`;
@@ -9795,10 +9846,13 @@ async function flush($) {
       void ask($, input, priority).then(
         (out) => {
           const answers = out.panels ?? [];
-          for (const [key] of mine) panels.set(key, answers.find((a) => a.id === key) ?? { error: "the helper answered no panel" });
+          for (const [key] of mine) {
+            panels.set(key, answers.find((a) => a.id === key) ?? { error: "the helper answered no panel" });
+            answered(key);
+          }
         },
         (error) => {
-          for (const [key] of mine) panels.set(key, { error: error instanceof Error ? error.message : String(error) });
+          for (const [key] of mine) if (!isAborted(error) || !retry(key)) panels.set(key, { error: error instanceof Error ? error.message : String(error) });
         }
       ).finally(() => {
         for (const [key] of mine) drawing.delete(key);
@@ -9806,9 +9860,9 @@ async function flush($) {
           const a = panels.get(key);
           if (a && "error" in a) $.ui.log(`proschi: a panel was not drawn: ${a.error}`, { to: "debug" });
         }
-        const redraw = priority === "now" || mine.some(([key]) => wanted.has(key));
+        const again = priority === "now" || mine.some(([key]) => wanted.has(key));
         for (const [key] of mine) wanted.delete(key);
-        if (redraw) $.ui.invalidate("ui.render");
+        if (again) redraw($);
       });
     }
   }
@@ -9857,15 +9911,17 @@ function rasterOf($, request2, priority = "now") {
     const input = withPrune({ source, path, imports, view, outDir: await cacheDir($), options: request2.options });
     const answer = await ask($, input, priority).then(
       (out) => {
+        answered(key);
         const o = out;
         return typeof o.base === "string" && o.width > 0 && o.height > 0 ? o : { error: "raster answered no picture" };
       },
-      (error) => ({ error: error instanceof Error ? error.message : String(error) })
+      // Aborted (a redraw, a new view): not an answer; the next draw asks again.
+      (error) => isAborted(error) && retry(key) ? void 0 : { error: error instanceof Error ? error.message : String(error) }
     );
-    if ("error" in answer) $.ui.log(`proschi: no picture: ${answer.error}`, { to: "debug" });
-    rasters.set(key, answer);
+    if (answer && "error" in answer) $.ui.log(`proschi: no picture: ${answer.error}`, { to: "debug" });
+    if (answer) rasters.set(key, answer);
     pending.delete(key);
-    if (priority === "now" || priority === "first" || wanted2.delete(key)) $.ui.invalidate("ui.render");
+    if (priority === "now" || priority === "first" || wanted2.delete(key)) redraw($);
   })();
   return void 0;
 }
@@ -9912,16 +9968,17 @@ function probe($, requestId, key) {
     timer.cancel();
     probing = false;
     if (!answer) {
-      $.ui.invalidate("ui.render");
+      redraw($);
       return;
     }
     await update($, probed, () => answer);
-    $.ui.invalidate("ui.render");
+    redraw($);
   };
   const timer = $.clock.every(PROBE_MS, async () => {
     if (tries++ >= PROBE_TRIES) return settle2({ status: "no" });
     const byName = await $.ui.blit({ requestId, key, source: probeSource($) }).catch((error) => ({ deny: String(error), fix: void 0 }));
     if (!byName.deny) return settle2({ status: "yes", form: "file" });
+    if (isAborted(byName.deny)) return settle2(void 0);
     if (byName.fix === "tmux-passthrough") return settle2({ status: "tmux" });
     if (/no-surface/.test(byName.deny)) {
       headless = true;
@@ -9929,6 +9986,7 @@ function probe($, requestId, key) {
     }
     const asBytes = await $.ui.blit({ requestId, key, source: { png: PROBE_PNG } }).catch((error) => ({ deny: String(error), fix: void 0 }));
     if (!asBytes.deny) return settle2({ status: "yes", form: "png" });
+    if (isAborted(asBytes.deny)) return settle2(void 0);
     if (asBytes.fix === "tmux-passthrough") return settle2({ status: "tmux" });
   });
 }
@@ -11003,6 +11061,7 @@ function register(on, options) {
   graphics = graphicsMode(options.graphics);
   setCellAspect(options.cellAspect);
   on("session.start", async ($, e, next) => {
+    void serveRequests($);
     await $.command.register({ name: "proschi", description: "Proschi diagrams: /proschi view <file.proschi> shows one in a pane", argumentHint: "view [--expand <id>,\u2026] [--focus <id>] <file>" });
     return next(e);
   });
@@ -11278,16 +11337,19 @@ function watch($, file) {
 function requestLayout($, key, source) {
   if (pending3.has(key)) return;
   pending3.add(key);
-  void $.process.run(["node", `${$.plugin.root}/hooks/layout.cjs`], { stdin: JSON.stringify(source), timeoutMs: 3e4 }).then(
-    ({ exitCode, stdout, stderr }) => {
-      layouts.set(key, exitCode === 0 ? JSON.parse(stdout) : { error: stderr.trim() || `layout exited with ${exitCode}` });
+  void ask($, { kind: "layout", ...source }, "now", graphics !== "off").then(
+    (out) => {
+      answered(`layout:${key}`);
+      layouts.set(key, out);
     },
     (error) => {
-      layouts.set(key, { error: `Proschi lays diagrams out with Node.js 18 or newer, which did not start: ${String(error)}` });
+      if (isAborted(error) && retry(`layout:${key}`)) return;
+      const why = error instanceof Error ? error.message : String(error);
+      layouts.set(key, { error: didNotStart(error) ? `Proschi lays diagrams out with Node.js 18 or newer, which did not start: ${why}` : why });
     }
   ).finally(() => {
     pending3.delete(key);
-    $.ui.invalidate("ui.render");
+    redraw($);
   });
 }
 var pickOf = (useCase, scenario) => ({ value: `${useCase.id}:${scenario.id}`, useCase, scenario });
@@ -11887,8 +11949,9 @@ async function openLink($, surface, link) {
   for (const opener of ["open", "xdg-open"]) {
     const opened = await $.process.run([opener, link], { timeoutMs: 1e4 }).then(
       (r) => r.exitCode === 0,
-      () => false
+      (error) => isAborted(error) ? void 0 : false
     );
+    if (opened === void 0) return;
     if (opened) {
       $.ui.toast("Opened the diagram in Proschi");
       return;

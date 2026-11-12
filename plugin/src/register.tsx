@@ -18,7 +18,7 @@ import { analysisPage, hldAnchor, hldPage, stepCardsOf, tabBarPanel } from '../.
 import type { Control, DrawerPanel, ExplorerPanel, Notice, NoticesPanel, Option, Panel, PlayerBarPanel, Span } from '../../tooling/src/render/ui/contract'
 import { cellPx, graphicsMode, gridFrame, imageSize, maxWidthPx, probe, probeKey, probeOf, probeSource, rasterOf, sourceOf, themeOf, TMUX_HINT, type GraphicsMode, type RasterGrid, type RasterRequest } from './graphics'
 import { loading, markOpened, paneWindow, pictureSite, pressTimings, registerPicture, scrollToAnchor, scrollToAnchorOnceShown, type Action, type Ahead, type Float, type Picture, type Piece, type Site } from './picture'
-import { setCellAspect } from './helper'
+import { answered, ask, didNotStart, isAborted, redraw, retry, serveRequests, setCellAspect } from './helper'
 import { hldDocument, hldMarkdown, hldTab } from './views/hld'
 import { legendLine, verdictLine } from './views/lines'
 import { lineView, type Ui } from './views/render'
@@ -93,6 +93,8 @@ export function register(on: On, options: PluginOptions): void {
   setCellAspect((options as { cellAspect?: unknown }).cellAspect)
 
   on('session.start', async ($, e, next) => {
+    // Layouts and pictures are asked from this session's task, so no redraw aborts them.
+    void serveRequests($)
     await $.command.register({ name: 'proschi', description: 'Proschi diagrams: /proschi view <file.proschi> shows one in a pane', argumentHint: 'view [--expand <id>,…] [--focus <id>] <file>' })
     return next(e)
   })
@@ -452,23 +454,32 @@ function watch($: EngineInterface, file: string): void {
   )
 }
 
-/** Lays a document out in Node (hooks/layout.cjs); redraws once it is done. */
+/**
+ * Lays a document out in Node: a request to the session's raster worker
+ * (src/helper.ts), or hooks/layout.cjs one shot where none runs;
+ * redraws once it is done. Aborted (the drawing that asked was redrawn, or
+ * another view opened), it is not laid out, nor failed: the next draw asks
+ * again, a few times before the abort is reported.
+ */
 function requestLayout($: EngineInterface, key: string, source: Source): void {
   if (pending.has(key)) return
   pending.add(key)
-  void $.process
-    .run(['node', `${$.plugin.root}/hooks/layout.cjs`], { stdin: JSON.stringify(source), timeoutMs: 30_000 })
+  // Without pictures no worker is started for it: one shot, unless one runs.
+  void ask($, { kind: 'layout', ...source }, 'now', graphics !== 'off')
     .then(
-      ({ exitCode, stdout, stderr }) => {
-        layouts.set(key, exitCode === 0 ? (JSON.parse(stdout) as Layout) : { error: stderr.trim() || `layout exited with ${exitCode}` })
+      out => {
+        answered(`layout:${key}`)
+        layouts.set(key, out as Layout)
       },
       (error: unknown) => {
-        layouts.set(key, { error: `Proschi lays diagrams out with Node.js 18 or newer, which did not start: ${String(error)}` })
+        if (isAborted(error) && retry(`layout:${key}`)) return
+        const why = error instanceof Error ? error.message : String(error)
+        layouts.set(key, { error: didNotStart(error) ? `Proschi lays diagrams out with Node.js 18 or newer, which did not start: ${why}` : why })
       },
     )
     .finally(() => {
       pending.delete(key)
-      $.ui.invalidate('ui.render')
+      redraw($)
     })
 }
 
@@ -1485,8 +1496,10 @@ async function openLink($: EngineInterface, surface: RenderSurface, link: string
   for (const opener of ['open', 'xdg-open']) {
     const opened = await $.process.run([opener, link], { timeoutMs: 10_000 }).then(
       r => r.exitCode === 0,
-      () => false,
+      (error: unknown) => (isAborted(error) ? undefined : false),
     )
+    // Aborted with the press: neither opened nor failed, so nothing more to try.
+    if (opened === undefined) return
     if (opened) {
       $.ui.toast('Opened the diagram in Proschi')
       return

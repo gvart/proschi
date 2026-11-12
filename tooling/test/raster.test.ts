@@ -7,7 +7,8 @@ import { examples } from '../src/proschi';
 import { drawArchitecture, layoutArchitecture, renderArchitectureSvg } from '../src/render/architecture';
 import { COLORS } from '../src/render/svg';
 import { loadDocument } from '../src/terminal/document';
-import { PRUNE_AFTER_MS, prune, rasterize } from '../src/terminal/rasterHost';
+import { answer, PRUNE_AFTER_MS, prune, rasterize } from '../src/terminal/rasterHost';
+import { layoutOf } from '../src/terminal/layout';
 import { analysisOverlay, edgeOverlays } from '../../frontend/src/sim/overlay';
 import { analyze } from '../../frontend/src/sim';
 import { CANVAS_TOKENS } from '../../frontend/src/utils/canvasColors';
@@ -107,6 +108,13 @@ describe('raster helper', () => {
     expect([head.readUInt32BE(16), head.readUInt32BE(20)]).toEqual([out.width, out.height]);
     expect(out.cellHint).toEqual({ columns: Math.ceil(out.width / 16), rows: Math.ceil(out.height / 34) });
     expect(await rasterize(input, { dir: HOOKS })).toEqual(out);
+  });
+
+  it('lays a document out as layout.cjs does, for the worker', async () => {
+    const input = { source: source('ecommerce'), view: { expanded: [] } };
+    const laid = await answer({ kind: 'layout', ...input }, { dir: HOOKS });
+    expect(laid).toEqual(await layoutOf(input));
+    expect((laid as { nodes: { id: string }[] }).nodes.map((n) => n.id).sort()).toEqual(loadDocument(input).diagram.nodes.map((n) => n.id).sort());
   });
 
   it('cuts the picture into tiles of whole cells, and a frame into only the tiles its packets cover', async () => {

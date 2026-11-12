@@ -114,7 +114,10 @@ function host(on: On, clock: Clock, o: Options = {}) {
         return { value: { code: 1, signal: null } }
       }
       const req = queue.shift()!
-      yield { stream: 'stdout' as const, text: `${JSON.stringify({ id: req.id, output: answer(req.input, o.size) })}\n` }
+      // A layout, as hooks/layout.cjs would answer it; else the raster helper's answer.
+      const view = (req.input as { view?: { expanded?: string[]; focus?: string } }).view
+      const output = req.input.kind === 'layout' ? JSON.parse(o.project ? o.project.layout(view) : LAYOUT) : answer(req.input, o.size)
+      yield { stream: 'stdout' as const, text: `${JSON.stringify({ id: req.id, output })}\n` }
       answered++
     }
   })
@@ -359,7 +362,10 @@ test('the worker: one per session, a press asked before prefetching, the first r
   const kinds = (r: { input: Record<string, unknown> }) => (r.input.panels as { panel: { kind: string } }[]).map(p => p.panel.kind)
   expect(panels.filter(r => r.id.startsWith('a')).flatMap(kinds)).toEqual(expect.arrayContaining(['playerBar', 'actionBar']))
   expect(panels.filter(r => r.id.startsWith('c')).flatMap(kinds)).toEqual(expect.arrayContaining(['playerBar', 'menu']))
-  expect(h.requests.map(r => r.input.prune)).toEqual([true, ...h.requests.slice(1).map(() => undefined)])
+  // The layout first, then the pictures, the first of them pruning.
+  expect(h.requests[0]?.input.kind).toBe('layout')
+  const pictures = h.requests.filter(r => r.input.kind !== 'layout')
+  expect(pictures.map(r => r.input.prune)).toEqual([true, ...pictures.slice(1).map(() => undefined)])
   // Hover and pressed variants with every panel.
   expect(panels.every(r => (r.input.panels as { variants?: string[] }[]).every(p => p.variants?.join() === 'hover,pressed'))).toBe(true)
   await ui.unmount()

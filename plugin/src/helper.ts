@@ -12,7 +12,14 @@ import { CELL_ASPECT, type PanelOutput, type PanelRequest, type PanelsInput, typ
  * behind prefetching, and the Diagram tab never waits behind the others. A
  * worker that dies is started again on the next request, the requests it
  * held asked once more one shot; where spawn is refused, every request runs
- * one shot (`$.process.run`, ≈150 ms more each).
+ * one shot (`$.process.run`, ≈150 ms more each). It lays documents out too
+ * (`{ kind: 'layout' }`, layout.cjs one shot).
+ *
+ * Requests go out from a session-long task (`serveRequests`, started by
+ * session.start), not from the render hook that asks: a redraw aborts a
+ * render's dispatch and every `$` call in flight with it, the worker's spawn
+ * included. An abort is never an answer: whatever asked asks again on its
+ * next draw (`retry`).
  */
 
 /**
@@ -56,15 +63,86 @@ export const cellAspectOf = () => cellAspect
 /** Whether this session's first request asked the helper to prune the cache (once a session is enough). */
 let pruned = false
 
+/** A request waiting for the session's task, or a redraw it is to ask for. */
+type Job = { input: object; priority: Priority; spawn: boolean; resolve: (output: unknown) => void; reject: (error: unknown) => void } | 'redraw'
+
+const jobs: Job[] = []
+/** Wakes the session's task when a job comes; set while it waits. */
+let wake: (() => void) | undefined
+/** Whether the session's task runs: requests go to it, else out from the hook that asks. */
+let serving = false
+
+/**
+ * The session's task (session.start starts it, not awaited): sends every
+ * request and redraw asked from a drawing, with session.start's `$`, which
+ * no redraw aborts. It ends with the module.
+ */
+export async function serveRequests($: EngineInterface): Promise<void> {
+  serving = true
+  try {
+    for (;;) {
+      const job = jobs.shift()
+      if (!job) {
+        await new Promise<void>(resolve => (wake = resolve))
+        continue
+      }
+      if (job === 'redraw') $.ui.invalidate('ui.render')
+      else send($, job.input, job.priority, job.spawn).then(job.resolve, job.reject)
+    }
+  } finally {
+    serving = false
+  }
+}
+
+function enqueue(job: Job): void {
+  jobs.push(job)
+  const w = wake
+  wake = undefined
+  w?.()
+}
+
+/** Redraws once an answer is in: through the session's task, as the drawing that asked may be gone. */
+export function redraw($: EngineInterface): void {
+  if (serving) enqueue('redraw')
+  else $.ui.invalidate('ui.render')
+}
+
+/** Whether a `$` call failed only because its dispatch was aborted (a redraw, a new view): not an answer. */
+export function isAborted(error: unknown): boolean {
+  const e = error as { name?: unknown; message?: unknown } | undefined
+  return e?.name === 'AbortError' || /\baborted\b/i.test(typeof e?.message === 'string' ? e.message : String(error))
+}
+
+/** Whether a command could not start at all (no such executable, not allowed), as against one that ran and failed. */
+export function didNotStart(error: unknown): boolean {
+  return /\b(ENOENT|EACCES|EPERM)\b|cannot start|could not start|not found|spawn/i.test(error instanceof Error ? error.message : String(error))
+}
+
+/** Aborts in a row, by what asked: past MAX_ABORTS the abort is reported as the failure it then is. */
+const aborts = new Map<string, number>()
+const MAX_ABORTS = 3
+
+/** After an aborted request for `key`: true while it may be asked again (on the next draw), false once it was aborted too often. */
+export function retry(key: string): boolean {
+  const n = (aborts.get(key) ?? 0) + 1
+  aborts.set(key, n)
+  return n <= MAX_ABORTS
+}
+
+/** After an answer for `key`: its aborts are forgotten. */
+export const answered = (key: string) => void aborts.delete(key)
+
 /** How long one answer may take. */
 const TIMEOUT_MS = 60_000
 
 /** Where the PNGs go: the system's temporary folder (the API names no plugin data folder). */
 export async function cacheDir($: EngineInterface): Promise<string> {
   if (cache) return cache
-  const dir = await $.env.get('TMPDIR').catch(() => undefined)
-  cache = `${(dir || '/tmp').replace(/\/+$/, '')}/proschi-raster`
-  return cache
+  const dir = await $.env.get('TMPDIR').catch((error: unknown) => (isAborted(error) ? null : undefined))
+  const at = `${(dir || '/tmp').replace(/\/+$/, '')}/proschi-raster`
+  // An aborted read is no answer: this once the default, read again next time.
+  if (dir !== null) cache = at
+  return at
 }
 
 /** The first request of a session carries `prune`. */
@@ -78,9 +156,12 @@ function helper($: EngineInterface): string {
   return `${$.plugin.root}/hooks/raster.cjs`
 }
 
+/** One request as its own process: a layout by layout.cjs (smaller, so sooner up), anything else by raster.cjs. */
 async function oneShot($: EngineInterface, input: object): Promise<unknown> {
-  const { exitCode, stdout, stderr } = await $.process.run(['node', helper($)], { stdin: JSON.stringify(input), timeoutMs: TIMEOUT_MS })
-  if (exitCode !== 0) throw new Error(stderr.trim() || `raster exited with ${exitCode}`)
+  const layout = (input as { kind?: unknown }).kind === 'layout'
+  const script = layout ? `${$.plugin.root}/hooks/layout.cjs` : helper($)
+  const { exitCode, stdout, stderr } = await $.process.run(['node', script], { stdin: JSON.stringify(input), timeoutMs: TIMEOUT_MS })
+  if (exitCode !== 0) throw new Error(stderr.trim() || `${layout ? 'layout' : 'raster'} exited with ${exitCode}`)
   return JSON.parse(stdout)
 }
 
@@ -105,8 +186,8 @@ function start($: EngineInterface, root: string): Worker {
         }
       }
     } catch (error) {
-      // Refused before it started: one shot from now on.
-      if (!started) refused = true
+      // Refused before it started: one shot from now on (not when only its dispatch was aborted: the next request starts it again).
+      if (!started && !isAborted(error)) refused = true
       $.ui.log(`proschi: the raster worker ${started ? 'failed' : 'did not start'}: ${String(error)}`, { to: 'debug' })
     }
     if (worker === w) worker = undefined
@@ -134,9 +215,18 @@ function settle(w: Worker, line: string): void {
   else waiter.resolve(reply.output)
 }
 
-/** Asks the helper for `input` (a RasterInput or a PanelsInput); resolves with its answer, rejects with why not. */
-export async function ask($: EngineInterface, input: object, priority: Priority = 'now'): Promise<unknown> {
-  if (refused) return oneShot($, input)
+/**
+ * Asks the helper for `input` (a RasterInput, a PanelsInput or a layout);
+ * resolves with its answer, rejects with why not. `spawn: false` starts no
+ * worker for it (a layout where no picture is drawn): one shot unless one runs.
+ */
+export function ask($: EngineInterface, input: object, priority: Priority = 'now', spawn = true): Promise<unknown> {
+  if (!serving) return send($, input, priority, spawn)
+  return new Promise<unknown>((resolve, reject) => enqueue({ input, priority, spawn, resolve, reject }))
+}
+
+async function send($: EngineInterface, input: object, priority: Priority, spawn: boolean): Promise<unknown> {
+  if (refused || (!spawn && !worker)) return oneShot($, input)
   const root = await cacheDir($)
   const w = worker ?? start($, root)
   const id = `${RANK[priority]}${String(seq++).padStart(9, '0')}`
@@ -224,10 +314,14 @@ async function flush($: EngineInterface): Promise<void> {
       void ask($, input, priority).then(
         out => {
           const answers = (out as PanelsOutput).panels ?? []
-          for (const [key] of mine) panels.set(key, answers.find(a => a.id === key) ?? { error: 'the helper answered no panel' })
+          for (const [key] of mine) {
+            panels.set(key, answers.find(a => a.id === key) ?? { error: 'the helper answered no panel' })
+            answered(key)
+          }
         },
         (error: unknown) => {
-          for (const [key] of mine) panels.set(key, { error: error instanceof Error ? error.message : String(error) })
+          // Aborted: not drawn, nor failed; asked again on the next draw.
+          for (const [key] of mine) if (!isAborted(error) || !retry(key)) panels.set(key, { error: error instanceof Error ? error.message : String(error) })
         },
       ).finally(() => {
         for (const [key] of mine) drawing.delete(key)
@@ -235,9 +329,9 @@ async function flush($: EngineInterface): Promise<void> {
           const a = panels.get(key)
           if (a && 'error' in a) $.ui.log(`proschi: a panel was not drawn: ${a.error}`, { to: 'debug' })
         }
-        const redraw = priority === 'now' || mine.some(([key]) => wanted.has(key))
+        const again = priority === 'now' || mine.some(([key]) => wanted.has(key))
         for (const [key] of mine) wanted.delete(key)
-        if (redraw) $.ui.invalidate('ui.render')
+        if (again) redraw($)
       })
     }
   }
@@ -247,6 +341,7 @@ async function flush($: EngineInterface): Promise<void> {
 export function resetHelper(): void {
   worker = undefined
   refused = false
+  aborts.clear()
   panels.clear()
   drawing.clear()
   wanted.clear()

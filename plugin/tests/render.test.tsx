@@ -297,6 +297,58 @@ test('a layout that fails shows why under the block, and in the pane', async ($,
   await ui.unmount()
 })
 
+test('a layout aborted with the drawing that asked (a redraw, a new view) is no failure: the next draw lays it out', async ($, on) => {
+  let runs = 0
+  on('process.run', () => {
+    runs++
+    // As the engine aborts a $ call whose dispatch was cancelled.
+    if (runs === 1) return { deny: 'aborted' }
+    return { value: { exitCode: 0, stdout: LAYOUT, stderr: '' } }
+  })
+  on('ui.invalidate', () => ({ value: undefined }))
+  await (await $.ui.mount(reply(FENCED))).unmount()
+  let ui = await $.ui.mount(reply(FENCED))
+  expect(await ui.find({ type: 'Text', text: /could not lay/ })).toBeUndefined()
+  // Asked again on this draw, drawn on the next.
+  await ui.unmount()
+  ui = await $.ui.mount(reply(FENCED))
+  expect(runs).toBe(2)
+  expect(await ui.find({ type: 'Raster' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('a layout aborted every time is reported as aborted, not as Node missing', async ($, on) => {
+  on('process.run', () => ({ deny: 'aborted' }))
+  on('ui.invalidate', () => ({ value: undefined }))
+  let found
+  for (let i = 0; i < 6 && !found; i++) {
+    const ui = await $.ui.mount(reply(FENCED))
+    found = await ui.find({ type: 'Text', text: /could not lay this diagram out/ })
+    await ui.unmount()
+  }
+  expect(found).toBeDefined()
+  expect(JSON.stringify(found)).toMatch(/aborted/)
+  expect(JSON.stringify(found)).not.toMatch(/Node\.js/)
+})
+
+test('where Node cannot start, the layout says so; where it ran and failed, it shows what it wrote', async ($, on) => {
+  on('process.run', (_, e) => {
+    const stdin = JSON.parse(String((e as { init?: { stdin?: unknown } }).init?.stdin)) as { source: string }
+    if (stdin.source.includes('Checkout')) return { deny: 'spawn node ENOENT' }
+    return { value: { exitCode: 1, stdout: '', stderr: 'ELK could not route edge e1' } }
+  })
+  on('ui.invalidate', () => ({ value: undefined }))
+  await (await $.ui.mount(reply(FENCED))).unmount()
+  let ui = await $.ui.mount(reply(FENCED))
+  expect(await ui.find({ type: 'Text', text: /could not lay this diagram out: Proschi lays diagrams out with Node\.js 18 or newer, which did not start: .*spawn node ENOENT/ })).toBeDefined()
+  await ui.unmount()
+  const other = reply('```proschi\ntitle "B"\n\na "A" [REST API]\n```')
+  await (await $.ui.mount(other)).unmount()
+  ui = await $.ui.mount(other)
+  expect(await ui.find({ type: 'Text', text: /could not lay this diagram out: ELK could not route edge e1$/ })).toBeDefined()
+  await ui.unmount()
+})
+
 test('the player bar keeps to its width: its pickers and keys on one row, the action bar short where it is narrow', async ($, on) => {
   on('process.run', () => ({ value: { exitCode: 0, stdout: LAYOUT, stderr: '' } }))
   on('ui.invalidate', () => ({ value: undefined }))

@@ -32,6 +32,9 @@
  *       grid? }                                    with `grid`: RasterGrid (and no `frames`)
  *   exit 1 with the message on stderr when the document has errors or the use case is unknown.
  *
+ *   stdin  LayoutInput { kind: 'layout', source, path?, imports?, view? }:
+ *   stdout the browser's ELK layout, as layout.cjs writes it (so the worker lays out too).
+ *
  * Files are named by a hash of their SVG and the zoom, so a frame that
  * repeats (or another call drawing the same thing) is written once; files
  * that exist are not drawn again. A manifest named by a hash of the input
@@ -45,12 +48,14 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync, watch, type FSWatcher } from 'node:fs';
 import { join } from 'node:path';
 import { initWasm, Resvg } from '@resvg/resvg-wasm';
+import type { Layout } from '../../../frontend/src/dsl/autoLayout';
 import { CANVAS_TOKENS } from '../../../frontend/src/utils/canvasColors';
 import { drawArchitecture, layoutArchitecture, type ArchitectureOptions } from '../render/architecture';
 import type { Theme } from '../render/svg';
 import { loadDocument, type Source } from './document';
 import { Writer, hash, pngSize, put, touch, type Pixels } from './png';
 import { renderPanels } from './panelHost';
+import { layoutOf } from './layout';
 import { fontsLoaded, loadFonts } from '../render/ui/metrics';
 import { rect, surfaceFrame } from '../render/ui/kit';
 import { legend } from '../render/ui/panels';
@@ -110,6 +115,11 @@ export interface RasterInput extends Source {
   /** Deletes the files in `outDir` no call used for PRUNE_AFTER_MS first: the cache's only cleanup but the system's. */
   prune?: boolean;
   options?: RasterOptions;
+}
+
+/** A document to lay out, as layout.cjs takes it on stdin. */
+export interface LayoutInput extends Source {
+  kind: 'layout';
 }
 
 export interface RasterOutput {
@@ -467,8 +477,9 @@ function cutter(first: Pixels, g: GridOptions, outDir: string, writer: Writer) {
   return { columns, rows, tiles, files, dirty };
 }
 
-/** Answers one input: a diagram (RasterInput), or panels (PanelsInput) with the diagram it carries drawn in the same run. */
-export async function answer(input: RasterInput | PanelsInput, assets: RasterAssets): Promise<RasterOutput | PanelsOutput> {
+/** Answers one input: a diagram (RasterInput), panels (PanelsInput) with the diagram it carries drawn in the same run, or a layout (LayoutInput). */
+export async function answer(input: RasterInput | PanelsInput | LayoutInput, assets: RasterAssets): Promise<RasterOutput | PanelsOutput | Layout> {
+  if ('kind' in input && input.kind === 'layout') return layoutOf(input);
   if (!('kind' in input) || input.kind !== 'panels') return rasterize(input as RasterInput, assets);
   mkdirSync(input.outDir, { recursive: true });
   if (input.prune) prune(input.outDir);
@@ -521,9 +532,9 @@ export function serve(dir: string, assets: RasterAssets, write: (line: string) =
         for (const name of readdirSync(dir).filter((f) => f.endsWith('.req.json')).sort()) {
           const file = join(dir, name);
           const id = name.slice(0, -'.req.json'.length);
-          let input: RasterInput | PanelsInput;
+          let input: RasterInput | PanelsInput | LayoutInput;
           try {
-            input = JSON.parse(readFileSync(file, 'utf8')) as RasterInput | PanelsInput;
+            input = JSON.parse(readFileSync(file, 'utf8')) as RasterInput | PanelsInput | LayoutInput;
           } catch (error) {
             // Half written: read again on the next scans, for two seconds.
             const n = (tries.get(name) ?? 0) + 1;
@@ -594,7 +605,7 @@ async function main(): Promise<void> {
   }
   const chunks: Buffer[] = [];
   for await (const chunk of process.stdin) chunks.push(chunk as Buffer);
-  const input = JSON.parse(Buffer.concat(chunks).toString('utf8')) as RasterInput | PanelsInput;
+  const input = JSON.parse(Buffer.concat(chunks).toString('utf8')) as RasterInput | PanelsInput | LayoutInput;
   process.stdout.write(JSON.stringify(await answer(input, assets)));
 }
 
