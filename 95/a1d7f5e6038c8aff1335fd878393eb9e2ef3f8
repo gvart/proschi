@@ -1,0 +1,21 @@
+.claude/skills/blog-post/SKILL.md
+  s_2cab07677e23de::t_9755ed926a3176 112
+.claude/skills/docs-writer/SKILL.md
+  s_2cab07677e23de::t_9755ed926a3176 170
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "95a1d7f5e6038c8aff1335fd878393eb9e2ef3f8",
+  "prompts": {},
+  "sessions": {
+    "s_2cab07677e23de": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a56fe157-6b5b-4be5-9bc3-10c688423a3e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
