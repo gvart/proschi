@@ -167,7 +167,7 @@ At most one or two images per page, each on the page that explains its idea.
 
    ```sh
    npx vitest run plugins/docsSite.test.ts src/onboarding   # examples parse, links, anchors
-   npm run build && npx playwright test e2e/docs.e2e.ts      # pages, sidebar, live examples (needs `npm run build:accounts` once)
+   npm run build && npx playwright test e2e/docs.e2e.ts      # pages, sidebar, live examples (needs `npm run build:accounts` and `npm run build:accounts-free` once)
    ```
 
 6. Look at the page in `npx vite preview` at desktop width and at 390px,
