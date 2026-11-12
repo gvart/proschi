@@ -1,0 +1,24 @@
+blog/2026-11-12-terminal-rendered-ui/index.md
+  s_50cc5c1ed1a510::t_95f0088abc4242 40
+  s_50cc5c1ed1a510::t_4ea0191f747350 16
+  s_50cc5c1ed1a510::t_d50d7a50bea24e 55-56
+  s_50cc5c1ed1a510::t_81d9f3bc18ff47 1-15,17-39,41-54,57-130
+frontend/e2e/blog.e2e.ts
+  s_50cc5c1ed1a510::t_23a2b64e4bf55d 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "51c7682cfeb2634f9a14ee927048d2904403a2d3",
+  "prompts": {},
+  "sessions": {
+    "s_50cc5c1ed1a510": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7e5513ad-e496-40de-9a6e-d587aa393ce5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
