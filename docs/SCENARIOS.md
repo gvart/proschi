@@ -1,3 +1,7 @@
+---
+updated: 2026-11-10
+---
+
 # Scenarios
 
 One endpoint rarely has one outcome. Scenario blocks, written with `alt`,
@@ -28,7 +32,7 @@ usecase "Get order" {
     orders --> gateway  : 504
   }
 
-  gateway ->> audit : OrderViewed          # shared again, after them
+  gateway ->> audit : SEND OrderViewed     # shared again, after them
 }
 ```
 
@@ -87,7 +91,7 @@ usecase "Checkout" {
   user -> api : POST /checkout
   par {
     api -> db      : INSERT order
-    api ->> events : OrderPlaced
+    api ->> events : PUBLISH OrderPlaced
     api -> mail    : SEND receipt
   }
   api --> user : 201

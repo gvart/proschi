@@ -4,6 +4,8 @@ summary: Your first design, step by step - nodes, connections, a use case, traff
 difficulty: easy
 tags: [basics, proschi, availability]
 order: 1
+version: 2
+strict: true
 hints:
   - "A node is an id, a name and a tech: db \"Greetings DB\" [PostgreSQL]. Connect two nodes with api -> db."
   - "A use case is a list of steps: user -> api : GET /hello sends a request, api --> user : 200 answers it. Call it exactly \"Say hello\", the name the traffic uses."

@@ -58,3 +58,9 @@ test "Pending charges are retried from a queue with the same key" {
   "Retry charge" calls gateway before ledger
   "Retry charge" writes ledger before responding
 }
+
+test "Every charge sends the idempotency key" {
+  "Checkout" scenario "Charged" sends header Idempotency-Key to gateway
+  "Checkout" scenario "Gateway down" sends header Idempotency-Key to gateway
+  "Retry charge" sends header Idempotency-Key to gateway
+}

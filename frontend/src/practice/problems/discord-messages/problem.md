@@ -4,6 +4,8 @@ summary: "Discord's message store: Rust data services that coalesce reads in fro
 difficulty: hard
 company: Discord
 tags: [hot-partitions, request-coalescing, sharding, read-heavy, real-world]
+version: 2
+strict: true
 hints:
   - "Adding nodes does not help: one channel's recent messages live in one partition, on the three replicas that own it. What could stop thousands of identical reads from reaching those replicas at all?"
   - "Put a service between the API and ScyllaDB (Discord's data services, in Rust) and send every query through it. There is no connection from the API to the database."

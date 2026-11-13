@@ -1,0 +1,11 @@
+import "problem.proschi"
+
+# Add the gateway (id zuul), route every request through it, and write the
+# use cases "Start playback", "Save progress" and "Send logs", the last two
+# with the scenarios "Served" and "Shed".
+device -> api
+
+usecase "Start playback" {
+  device -> api    : POST /playback/start
+  api   --> device : 200
+}

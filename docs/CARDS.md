@@ -1,3 +1,7 @@
+---
+updated: 2026-11-09
+---
+
 # Writing practice cards
 
 Practice cards are short questions for daily review: a fact to recall, an

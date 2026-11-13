@@ -127,7 +127,9 @@ describe('fromMermaid: round trips', () => {
     // The export's colors (classDef, class, style, linkStyle) are not imported, only reported.
     expect(warnings.filter((w) => !/payload that does not close|^Ignored \d+ styling line/.test(w.message))).toEqual([]);
     // Same nodes (group styles and note kinds are not in Mermaid) and connections, and the same use cases and scenarios.
-    const nodes = (d: typeof diagram) => d.nodes.map((n) => [n.id, n.kind === 'component' ? n.techStack : n.kind]).sort();
+    // A node of a declared type is exported with the type's name; Mermaid has no place for the type block.
+    const techOf = (n: (typeof diagram)['nodes'][number]) => (n.resolvedType && !n.resolvedType.builtin ? n.resolvedType.name : n.techStack);
+    const nodes = (d: typeof diagram) => d.nodes.map((n) => [n.id, n.kind === 'component' ? techOf(n) : n.kind]).sort();
     expect(nodes(back.diagram)).toEqual(nodes(diagram));
     expect(back.diagram.edges.map((e) => `${e.source}>${e.target}`).sort()).toEqual(diagram.edges.map((e) => `${e.source}>${e.target}`).sort());
     expect(back.diagram.useCases.map((u) => [u.name, u.scenarios.map((s) => s.name)])).toEqual(diagram.useCases.map((u) => [u.name, u.scenarios.map((s) => s.name)]));

@@ -39,3 +39,38 @@ export function historyKey(e: { key: string; ctrlKey: boolean; metaKey: boolean;
   if (key === 'y' && !e.shiftKey) return 'redo';
   return null;
 }
+
+const MINIMAP_KEY = 'proschi.canvas.minimap';
+
+/** Whether the editor canvas shows its minimap, remembered per browser; off at first. */
+export function useMiniMap(): [boolean, (shown: boolean) => void] {
+  const [shown, setShown] = useState(() => loadJson<boolean>(MINIMAP_KEY, false));
+  const set = (next: boolean) => {
+    setShown(next);
+    saveJson(MINIMAP_KEY, next);
+  };
+  return [shown, set];
+}
+
+type KeyEvent = Parameters<typeof historyKey>[0];
+
+/** Typing in a field (the code editor is contenteditable): no canvas or page shortcut applies. */
+export function typingIn(target: EventTarget | null): boolean {
+  return !!(target as Element | null)?.closest?.('input, textarea, select, [contenteditable]');
+}
+
+export type CanvasKey = 'copy' | 'paste' | 'duplicate' | 'find';
+
+/** The canvas's own keys, outside fields: Ctrl/Cmd+C, V and D, and `/` or Ctrl/Cmd+F to find a node. */
+export function canvasKey(e: KeyEvent): CanvasKey | null {
+  if (e.altKey || typingIn(e.target)) return null;
+  if (!(e.ctrlKey || e.metaKey)) return e.key === '/' ? 'find' : null;
+  if (e.shiftKey) return null;
+  const actions: Record<string, CanvasKey> = { c: 'copy', v: 'paste', d: 'duplicate', f: 'find' };
+  return actions[e.key.toLowerCase()] ?? null;
+}
+
+/** `?` outside fields: the keyboard shortcuts. */
+export function isShortcutsKey(e: KeyEvent): boolean {
+  return e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey && !typingIn(e.target);
+}

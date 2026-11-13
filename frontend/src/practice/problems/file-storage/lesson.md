@@ -35,7 +35,7 @@ A small Dropbox is not a CRUD app with big rows: with files from 10 KB to 2 GB, 
 
 **What the tests check.**
 
-- *File bytes never pass through your servers*: in Upload the user calls the bucket directly, and in Upload and Download no service or function ever calls the bucket. Upload never touches a load balancer or other edge node.
+- *File bytes never pass through your servers*: in Upload the user `PUT`s to the bucket directly, and in Upload and Download no service or function ever calls the bucket. Upload never touches a load balancer or other edge node.
 - *The API hands out pre-signed URLs for pending files*: Start upload writes a database before answering, answers 201 and never calls the bucket (signing is a local computation, not a call).
 - *Uploads are finished without the client*: Upload starts at the user, the user calls nothing but the bucket, and a database is written *after* the bucket.
 - *Downloads are served by the CDN*: both scenarios exist, the user calls a CDN and never the bucket, a hit never reaches the bucket, and the CDN comes before the bucket.

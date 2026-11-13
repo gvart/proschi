@@ -16,7 +16,7 @@ describe('problem pages', () => {
 
   it('give each problem its own title, description, canonical URL and structured data', () => {
     const head = headHtml(shortener)
-    expect(head).toContain('<title>URL Shortener: system design practice · Proschi</title>')
+    expect(head).toContain('<title>URL Shortener system design: interview practice · Proschi</title>')
     expect(head).toContain('<link rel="canonical" href="https://proschi.app/practice/url-shortener/" />')
     expect(head).toContain('<meta name="description" content="Design URL Shortener (easy): Cache-first redirects')
     const json = JSON.parse(/<script type="application\/ld\+json">(.*)<\/script>/.exec(head)![1])

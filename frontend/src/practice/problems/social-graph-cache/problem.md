@@ -3,6 +3,8 @@ title: Social Graph Cache
 summary: "Facebook's TAO: follower and leader cache tiers over sharded MySQL."
 difficulty: hard
 tags: [caching, consistency, sharding, read-heavy, real-world]
+version: 2
+strict: true
 company: Meta
 hints:
   - "Reads are 99.8% of the traffic and 96.4% of them hit the cache. The follower tier answers the web tier; on a miss it asks the shard's leader, and only the leader reads MySQL."

@@ -3,6 +3,8 @@ title: Payments with Idempotency
 summary: Write the intent before the charge; replays never charge twice.
 difficulty: hard
 tags: [idempotency, consistency, queues, external-api, durability]
+version: 2
+strict: true
 hints:
   - What happens if the service crashes right after the gateway approved the charge? INSERT something durable before you call the gateway, so every charge has a record.
   - "Make the idempotency key the primary key of a payments table in a strongly consistent store: an INSERT that conflicts tells you this is a retry, and the stored row holds the answer to give back. Do not SELECT first (two retries race), and keep caches out of it: they can lag or forget keys."

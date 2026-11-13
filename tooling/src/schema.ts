@@ -23,6 +23,12 @@ const bool = { type: 'boolean' };
 const num = { type: 'number' };
 const percent = { type: 'number', minimum: 0, maximum: 100 };
 const selector = { $ref: '#/$defs/selector' };
+const stepMatch = {
+  type: 'object',
+  description: 'What a step must be: `with GET /urls/{code}` (method, path), `uses INSERT on` (op), `sends header Authorization to` (header).',
+  properties: { method: { type: 'string' }, path: { type: 'string' }, op: { type: 'string' }, header: { type: 'string' } },
+  additionalProperties: false,
+};
 const array = (ref: string, description?: string) => ({ type: 'array', items: { $ref: `#/$defs/${ref}` }, ...(description ? { description } : {}) });
 const file = { type: 'string', description: 'The imported file this is in; left out for the parsed file itself.' };
 const object = (properties: Record<string, unknown>, required: string[], description?: string) => ({
@@ -52,7 +58,7 @@ export function diagramSchema() {
     $defs: {
       block: object(
         {
-          kind: { enum: ['traffic', 'requirements', 'capacity', 'entity', 'decision', 'test', 'legend'] },
+          kind: { enum: ['traffic', 'requirements', 'capacity', 'entity', 'decision', 'test', 'legend', 'whatif'] },
           start: { type: 'integer', minimum: 1, description: "1-based line of the block's opening line." },
           end: { type: 'integer', minimum: 1, description: "1-based line of its closing `}`." },
         },
@@ -65,7 +71,7 @@ export function diagramSchema() {
       ),
       diagnostic: object(
         {
-          severity: { enum: ['error', 'warning'] },
+          severity: { enum: ['error', 'warning', 'info'] },
           message: str,
           line: { type: 'integer', minimum: 1 },
           col: { type: 'integer', minimum: 1 },
@@ -92,7 +98,10 @@ export function diagramSchema() {
           entities: array('entity', '`entity` blocks: the data model.'),
           decisions: array('decision', '`decision` statements.'),
           tests: array('test', '`test` blocks of flow assertions.'),
+          whatifs: array('whatif', '`whatif` blocks: variants of the design to simulate.'),
+          constants: array('constant', '`let name = value` constants, in order. Their uses are already replaced by their values.'),
           legend: array('legendEntry', 'Entries of the `legend` block, in order.'),
+          types: array('resolvedType', '`type` blocks of the document and its imports, resolved, in order; built-in types are not listed.'),
           layout: object(
             {
               direction: { enum: ['down', 'right', 'up', 'left'], description: '`direction right`: where edges flow in the whole diagram.' },
@@ -116,6 +125,7 @@ export function diagramSchema() {
             examples: componentCatalog.map((c) => c.techStack),
           },
           inferredKind: { enum: [...KINDS], description: 'Only for a tech the catalog does not know: the kind the simulation gives the node, from the words in its name.' },
+          resolvedType: { $ref: '#/$defs/resolvedType', description: 'The type `[Tech]` names, built in or declared with `type`; `techStack` is then that of its icon.' },
           ownerTeam: str,
           description: str,
           parent: { ...str, description: 'Id of the enclosing group.' },
@@ -134,6 +144,44 @@ export function diagramSchema() {
           loc,
         },
         ['id', 'kind', 'name', 'type', 'techStack', 'loc'],
+      ),
+      resolvedType: object(
+        {
+          name: str,
+          abstract: bool,
+          builtin: { ...bool, description: 'From the bundled stdlib, not the user\'s files.' },
+          parents: { type: 'array', items: str, description: 'Ancestor names, the parent first, ending with `Component`.' },
+          kind: { enum: [...KINDS] },
+          props: object(
+            {
+              rps: num,
+              readRps: num,
+              writeRps: num,
+              writeScaling: { enum: ['replicas', 'shards'] },
+              latencyMs: num,
+              availability: { type: 'number', minimum: 0, maximum: 1 },
+              costUsd: num,
+              durable: bool,
+              consistency: { enum: ['strong', 'eventual'] },
+              bandwidthMBps: num,
+              egressUsdPerGb: num,
+            },
+            [],
+            'Profile numbers the type sets, own over inherited.',
+          ),
+          ops: {
+            type: 'array',
+            items: object({ name: str, access: { enum: ['read', 'write', 'forward'] }, latency: num, cost: num }, ['name', 'access']),
+          },
+          statuses: { type: 'array', items: int },
+          headers: { type: 'array', items: str },
+          protocol: str,
+          icon: { ...str, description: 'The catalog tech stack the node is drawn with.' },
+          doc: str,
+          loc,
+        },
+        ['name', 'abstract', 'builtin', 'parents', 'props', 'ops', 'statuses', 'headers', 'loc'],
+        'A type merged with its ancestors (docs/design/typed-components.md).',
       ),
       style: object(
         { color: { ...str, description: 'Base color as #rrggbb.' }, dash: { enum: ['dashed', 'dotted'] } },
@@ -211,7 +259,17 @@ export function diagramSchema() {
           ),
           multiplier: { type: 'integer', minimum: 1, description: '`x200` at the start of the label: the step happens this many times per request (fan-out). Absent means 1.' },
           sizeBytes: { type: 'integer', minimum: 1, description: '`~2MB` at the start of the label: payload size in bytes (decimal units).' },
-          access: { enum: ['read', 'write'], description: 'From the HTTP method, or the first word of the label (INSERT, SET, PUBLISH, … write); every request step has one.' },
+          access: {
+            enum: ['read', 'write'],
+            description:
+              "From the target type's operation the label names, else from the HTTP method or the first word of the label (INSERT, SET, PUBLISH, … write); a forwarded frame takes its handler's. Every request step has one.",
+          },
+          op: object(
+            { name: str, access: { enum: ['read', 'write', 'forward'] }, latency: num, cost: num },
+            ['name', 'access'],
+            "The target type's operation the label names (its HTTP method or first words), when the target is typed and lists it.",
+          ),
+          headers: { type: 'array', items: str, description: '`GET /x header Authorization, If-None-Match`: the request headers named in the label.' },
           sections: {
             type: 'array',
             items: { $ref: '#/$defs/stepSection' },
@@ -243,7 +301,8 @@ export function diagramSchema() {
       traffic: object(
         {
           useCase: str,
-          rps: { ...num, minimum: 0, description: 'Requests per second.' },
+          rps: { ...num, minimum: 0, description: 'Requests per second the design is loaded with: the peak when `peak` is written.' },
+          avgRps: { ...num, minimum: 0, description: '`peak x3` or `peak 60k rps`: the average rate (the one written first), which egress is costed at. Left out for a flat rate.' },
           mix: {
             type: 'array',
             description: 'Shares of the use case traffic per scenario, as fractions that add up to 1. Without a mix, all traffic goes to the first scenario.',
@@ -270,7 +329,22 @@ export function diagramSchema() {
           availability: object({ kind: { const: 'availability' }, useCase: str, minPercent: percent, loc }, ['kind', 'minPercent', 'loc']),
           durable: object({ kind: { const: 'durable' }, useCase: str, loc }, ['kind', 'useCase', 'loc']),
           survive: object({ kind: { const: 'survive' }, target: { oneOf: [{ const: 'any' }, selector] }, loc }, ['kind', 'target', 'loc']),
-          cost: object({ kind: { const: 'cost' }, maxUsdPerMonth: num, loc }, ['kind', 'maxUsdPerMonth', 'loc']),
+          cost: object(
+            {
+              kind: { const: 'cost' },
+              maxUsdPerMonth: num,
+              scope: {
+                description: 'Left out: the whole design. `@Payments`: the nodes the team owns; `.edge`: the nodes with the tag or inside a group with it; `group checkout`: the nodes inside the group.',
+                oneOf: [object({ team: str }, ['team']), object({ tag: str }, ['tag']), object({ group: str }, ['group'])],
+              },
+              loc,
+            },
+            ['kind', 'maxUsdPerMonth', 'loc'],
+          ),
+          lag: object(
+            { kind: { const: 'lag' }, useCase: str, maxMs: { ...num, description: 'The longest a message may wait in the queues the use case sends to.' }, loc },
+            ['kind', 'useCase', 'maxMs', 'loc'],
+          ),
         } satisfies Record<Requirement['kind'], unknown>),
       },
       capacity: object(
@@ -289,6 +363,10 @@ export function diagramSchema() {
           bandwidthMBps: { ...num, exclusiveMinimum: 0, description: '`bandwidth`: megabytes per second per replica.' },
           egressUsdPerGb: { ...num, minimum: 0, description: '`egress`: price of data the node sends to clients and third parties (internet egress), in USD per GB.' },
           timeoutMs: { ...num, minimum: 0, description: '`timeout`: what a failed call (`-x`) to the node costs, in milliseconds.' },
+          hitPercent: { ...percent, description: '`hit`: the share of reads a cache answers itself; the miss path takes the rest.' },
+          errorPercent: { ...percent, description: '`errors`: the share of calls to the node that fail with an error.' },
+          retries: { type: 'integer', minimum: 0, maximum: 5, description: '`retries`: how many times a caller tries a failed call again.' },
+          drainRps: { ...num, description: '`drain`: how fast the consumers of a queue or broker take messages off it, in rps.' },
           loc,
         },
         ['node', 'loc'],
@@ -308,11 +386,36 @@ export function diagramSchema() {
         ['title', 'rejected', 'loc'],
       ),
       test: object({ name: str, assertions: array('assertion'), loc }, ['name', 'assertions', 'loc']),
+      whatif: object({ name: str, changes: array('whatifChange'), loc }, ['name', 'changes', 'loc']),
+      constant: object(
+        {
+          name: str,
+          value: { ...num, description: 'The value after unit normalisation: rates in rps, durations in ms.' },
+          unit: { enum: ['rps', 'ms', '%', 'usd/month', 'MBps', 'usd/GB'], description: 'Left out for a plain number.' },
+          text: { ...str, description: 'The value as written, e.g. `120k rps`.' },
+          loc: { ...loc, description: 'The name in its `let` line.' },
+        },
+        ['name', 'value', 'text', 'loc'],
+      ),
+      whatifChange: {
+        description: 'One line of a whatif block.',
+        oneOf: [
+          object(
+            { kind: { const: 'traffic' }, useCase: str, multiply: { type: 'number', minimum: 0, description: '`x3`, `x1.5`: multiplies the rate.' }, rps: { ...num, description: '`50k rps`: sets the rate.' }, loc },
+            ['kind', 'useCase', 'loc'],
+          ),
+          object({ kind: { const: 'fail' }, node: str, loc }, ['kind', 'node', 'loc']),
+          object({ kind: { const: 'replicas' }, node: str, replicas: { type: 'integer', minimum: 1 }, loc }, ['kind', 'node', 'replicas', 'loc']),
+          object({ kind: { const: 'hit' }, node: str, percent: { ...percent, description: '`cache hit 40%`: the hit rate under this what-if.' }, loc }, ['kind', 'node', 'percent', 'loc']),
+          object({ kind: { const: 'errors' }, node: str, percent: { ...percent, description: '`pay errors 20%`: the error rate under this what-if.' }, loc }, ['kind', 'node', 'percent', 'loc']),
+        ],
+      },
       assertion: {
         description: 'One assertion line of a test.',
         oneOf: Object.values({
-          calls: object({ kind: { const: 'calls' }, useCase: str, scenario: str, target: selector, quantifier: { enum: ['some', 'every', 'never'] }, loc }, ['kind', 'useCase', 'target', 'quantifier', 'loc']),
-          before: object({ kind: { const: 'before' }, useCase: str, scenario: str, first: selector, then: selector, loc }, ['kind', 'useCase', 'first', 'then', 'loc']),
+          calls: object({ kind: { const: 'calls' }, useCase: str, scenario: str, target: selector, match: stepMatch, quantifier: { enum: ['some', 'every', 'never'] }, loc }, ['kind', 'useCase', 'target', 'quantifier', 'loc']),
+          before: object({ kind: { const: 'before' }, useCase: str, scenario: str, first: selector, match: stepMatch, then: selector, loc }, ['kind', 'useCase', 'first', 'then', 'loc']),
+          beforeResponding: object({ kind: { const: 'beforeResponding' }, useCase: str, scenario: str, target: selector, match: stepMatch, loc }, ['kind', 'useCase', 'target', 'match', 'loc']),
           writesBeforeResponding: object({ kind: { const: 'writesBeforeResponding' }, useCase: str, scenario: str, target: selector, loc }, ['kind', 'useCase', 'target', 'loc']),
           responds: object({ kind: { const: 'responds' }, useCase: str, scenario: str, status: { type: 'string', pattern: '^[1-5](\\d\\d|xx)$' }, loc }, ['kind', 'useCase', 'status', 'loc']),
           hasScenario: object({ kind: { const: 'hasScenario' }, useCase: str, scenario: str, loc }, ['kind', 'useCase', 'scenario', 'loc']),
@@ -320,7 +423,7 @@ export function diagramSchema() {
           noPath: object({ kind: { const: 'noPath' }, from: selector, to: selector, loc }, ['kind', 'from', 'to', 'loc']),
           replicas: object({ kind: { const: 'replicas' }, target: selector, min: { type: 'integer', minimum: 1 }, loc }, ['kind', 'target', 'min', 'loc']),
           neverWaits: object({ kind: { const: 'neverWaits' }, useCase: str, scenario: str, target: selector, loc }, ['kind', 'useCase', 'target', 'loc']),
-          after: object({ kind: { const: 'after' }, useCase: str, scenario: str, target: selector, after: selector, loc }, ['kind', 'useCase', 'target', 'after', 'loc']),
+          after: object({ kind: { const: 'after' }, useCase: str, scenario: str, target: selector, match: stepMatch, after: selector, loc }, ['kind', 'useCase', 'target', 'after', 'loc']),
           senderCalls: object({ kind: { const: 'senderCalls' }, useCase: str, from: selector, to: selector, quantifier: { enum: ['some', 'never'] }, loc }, ['kind', 'from', 'to', 'quantifier', 'loc']),
           startsAt: object({ kind: { const: 'startsAt' }, useCase: str, target: selector, loc }, ['kind', 'useCase', 'target', 'loc']),
         } satisfies Record<Assertion['kind'], unknown>),

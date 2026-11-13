@@ -14,6 +14,7 @@ requirements {
 test "A service answers the user" {
   user calls any service
   "Say hello" starts at user
+  "Say hello" calls any service with GET /hello
 }
 
 test "Say hello answers with 200" {

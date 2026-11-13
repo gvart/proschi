@@ -2,7 +2,7 @@ import "problem.proschi"
 
 # Add the follower and leader tiers (ids followers and leaders), the
 # connections, the shard count and the use cases "Read" and "Write".
-followers "TAO Followers" [Cache]
+followers "TAO Followers" [TAO]
 
 web       -> followers
 followers -> db

@@ -60,7 +60,7 @@ const INDENT = '  ';
 /** Words that start a statement other than a node declaration. */
 const KEYWORDS = new Set(['title', 'import', 'group', 'usecase', 'par', 'alt']);
 /** Sections whose lines are laid out in aligned columns. */
-type Section = 'traffic' | 'requirements' | 'capacity' | 'entity' | 'decision' | 'test';
+type Section = 'traffic' | 'requirements' | 'capacity' | 'entity' | 'decision' | 'test' | 'whatif' | 'type';
 
 interface Base {
   depth: number;
@@ -175,7 +175,7 @@ function classify(lines: string[]): Entry[] {
     }
 
     const oneLineDecision = first.value === 'decision' && second?.kind === 'string' && third?.kind === 'ident' && third.value === 'because';
-    if (!inSection && first.kind === 'ident' && !KEYWORDS.has(first.value) && !oneLineDecision && !isLayoutHint(tokens) && tokens.slice(1).every((t) => ['string', 'tech', 'team', 'ident', 'number', 'comma', 'tag', 'hex'].includes(t.kind))) {
+    if (!inSection && first.kind === 'ident' && !KEYWORDS.has(first.value) && !oneLineDecision && !isLayoutHint(tokens) && tokens.slice(1).every((t) => ['string', 'tech', 'team', 'ident', 'number', 'comma', 'tag', 'hex', 'const'].includes(t.kind))) {
       let k = 1;
       const take = (kind: Token['kind']) => (tokens[k]?.kind === kind ? source(raw, tokens[k++]) : '');
       const cells: NodeEntry['cells'] = [first.value, take('string'), take('tech'), take('team'), join(raw, tokens.slice(k))];
@@ -221,7 +221,15 @@ function sectionOpenedBy(tokens: Token[]): Section | undefined {
       return second?.kind === 'ident' ? 'entity' : undefined;
     case 'decision':
     case 'test':
+    case 'whatif':
       return second?.kind === 'string' ? first.value : undefined;
+    // `type Name [extends Parent] {` and `abstract type …`, as the parser's isTypeHeader.
+    case 'type':
+    case 'abstract': {
+      const at = first.value === 'type' ? 1 : second?.kind === 'ident' && second.value === 'type' ? 2 : -1;
+      const [name, next] = [tokens[at], tokens[at + 1]];
+      return at !== -1 && (name?.kind === 'ident' || name?.kind === 'tech') && (next?.kind === 'lbrace' || (next?.kind === 'ident' && next.value === 'extends')) ? 'type' : undefined;
+    }
     default:
       return undefined;
   }
@@ -234,11 +242,14 @@ function sectionCells(section: Section, raw: string, tokens: Token[]): string[] 
   const rest = (from: number) => (tokens.length > from ? [join(raw, tokens.slice(from))] : []);
   switch (section) {
     case 'traffic':
-      return first.kind === 'string' && (second?.kind === 'quantity' || second?.kind === 'number') ? [source(raw, first), source(raw, second), ...rest(2)] : undefined;
+      return first.kind === 'string' && (second?.kind === 'quantity' || second?.kind === 'number' || second?.kind === 'const') ? [source(raw, first), source(raw, second), ...rest(2)] : undefined;
     case 'capacity':
       return first.kind === 'ident' && tokens.length > 1 ? [first.value, ...rest(1)] : undefined;
     case 'entity':
       return first.kind === 'ident' && second?.kind === 'ident' ? [first.value, second.value, ...rest(2)] : undefined;
+    // Runs of `op read|write names` line up their names; other type lines are written as they are.
+    case 'type':
+      return first.kind === 'ident' && first.value === 'op' && second?.kind === 'ident' && tokens.length > 2 ? [first.value, second.value, ...rest(2)] : undefined;
     default:
       return undefined;
   }

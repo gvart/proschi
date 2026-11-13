@@ -156,6 +156,12 @@ test.describe('the interview room on your own', () => {
     await expect(page.getByRole('heading', { level: 2, name: 'Back-of-the-envelope numbers' })).toBeFocused();
     await expect.poll(() => cues(page)).toContain('phase');
     await expect(page.getByTestId('requirements')).toContainText('p99 of a redirect under 50 ms');
+    // On a desktop the brief fills the rest of its column, open and scrolling inside, and the worksheet the other one.
+    const viewport = page.viewportSize()!;
+    const pinned = page.getByTestId('pinned-brief');
+    await expect(pinned.getByRole('button', { name: 'Read it all' })).toBeHidden();
+    expect((await pinned.boundingBox())!.height).toBeGreaterThanOrEqual(viewport.height * 0.4);
+    expect((await page.getByTestId('worksheet').boundingBox())!.height).toBeGreaterThanOrEqual(viewport.height * 0.6);
     const sheet = page.getByTestId('worksheet');
     await sheet.getByLabel('How many short codes are created in a year at 100 a second?').fill('100 * 86400 * 365');
     await expect(sheet.getByText('= 3.15B codes')).toBeVisible();
@@ -299,8 +305,10 @@ test.describe('the interview room on your own', () => {
     // The second use case, from the traffic's suggestion, with two steps picked on the canvas.
     await board.getByRole('button', { name: 'Flows' }).click();
     const flows = page.getByRole('region', { name: 'Flows' });
-    await flows.getByRole('button', { name: 'Start generator' }).click();
-    await expect(flows.getByRole('tab', { name: 'Start generator' })).toHaveAttribute('aria-selected', 'true');
+    const picker = flows.getByRole('combobox', { name: 'Use case' });
+    await chooseOption(picker, 'Start generator');
+    await expect(picker).toHaveText(/Start generator/);
+    await expect(flows.getByRole('region', { name: 'Use case Start generator' })).toBeVisible();
     await flows.getByRole('button', { name: 'Add a step' }).click();
     const step = flows.getByRole('form', { name: 'New step' });
     await expect(step.getByRole('status')).toHaveText('Click the component the step starts at.');

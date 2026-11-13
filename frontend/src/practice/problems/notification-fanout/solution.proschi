@@ -1,7 +1,7 @@
 import "problem.proschi"
 
-events "Notification Queue"  [AWS SQS]  x2 @notify "Accepted events; redelivered until a worker deletes them"
-worker "Notification Worker" [REST API] x3 @notify "Checks preferences and calls the providers"
+events "Notification Queue"  [AWS SQS] x2 @notify "Accepted events; redelivered until a worker deletes them"
+worker "Notification Worker" [Worker]  x3 @notify "Checks preferences and calls the providers"
 
 orders -> events    : SendMessage
 events -> worker    : deliver

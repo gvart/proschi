@@ -22,6 +22,25 @@ export function problemIds(): string[] {
   return Object.keys(problemFolders);
 }
 
+/**
+ * "N of M problems solved", counted one way everywhere (the mastery
+ * certificate, its card and the progress export): M is the published
+ * catalog, every problem folder the practice page lists, and N only the
+ * solved ones still in it, in its order. Progress on a problem since removed
+ * counts for neither.
+ */
+export function catalogSolved(solvedIds: Iterable<string>): { total: number; solved: { id: string; title: string; difficulty: string }[] } {
+  const solved = new Set(solvedIds);
+  const ids = problemIds();
+  return {
+    total: ids.length,
+    solved: ids.flatMap((id) => {
+      const problem = solved.has(id) ? findProblem(id) : undefined;
+      return problem ? [{ id, title: problem.title, difficulty: problem.difficulty }] : [];
+    }),
+  };
+}
+
 /** Every problem's id and content version (problem.md `version`, 1 when absent); stats count only progress on these. */
 export function currentVersions(): { id: string; v: number }[] {
   return problemIds().map((id) => ({ id, v: findProblem(id)?.version ?? 1 }));

@@ -1,3 +1,4 @@
+import { daysLeft, phaseOf } from '../../frontend/src/learn/interviewPlan';
 import { computeStreak, goalFor, recapIsEmpty, weeklyRecap } from '../../frontend/src/learn/streak';
 import { loadActivity } from './activity';
 import { requireUser } from './auth';
@@ -6,8 +7,11 @@ import type { Ctx } from './context';
 import { decodeJson, encodeJson, randomToken, sign, unsign } from './crypto';
 import { sendEmail, emailConfigured } from './email';
 import { pageHtml, type Accent } from './emailLayout';
-import { confirmationEmail, reminderEmail, PAUSE_AFTER, type Kind, type ReminderData } from './emails';
+import { confirmationEmail, reminderEmail, PAUSE_AFTER, type Kind, type PlanToday, type ReminderData } from './emails';
 import { now, secretOk, type Env } from './env';
+import { can } from './features';
+import { todayItems } from './interviewPlan';
+import { effectivePlan } from './plans';
 import { recordEvent } from './events';
 import { HttpError, json, rateLimit, readJson } from './http';
 import { errorText, log } from './log';
@@ -21,6 +25,10 @@ import { countEvents } from './metrics';
  *
  *   - streak at risk: a streak of at least a day, and today's goal not met yet;
  *   - cards due: at least DUE_CARDS_MIN review cards due (when no streak email went out);
+ *   - interview plan: with an interview-date plan (interview_plan, Max;
+ *     src/interviewPlan.ts) and something left on today's list (or the list
+ *     not opened today), when neither of those went out. The streak and
+ *     cards emails name what is left on the plan too;
  *   - weekly recap: Monday morning, last week's totals (the recap of GET /api/me/activity).
  *
  * Three reminders in a row with no practice in between pause them (the third
@@ -371,6 +379,26 @@ export async function unsubscribe(request: Request, ctx: Ctx): Promise<Response>
 
 interface Candidate extends PrefsRow {
   daily_goal: number;
+  plan: string;
+  comp_until: number | null;
+}
+
+interface PlanRow {
+  user_id: string;
+  interview_date: string;
+  start_day: string;
+  today_day: string | null;
+  today_items: string | null;
+}
+
+/** Today's part of the interview-date plan on local `day`, for a Max account with one; undefined on the interview day or after it. */
+export function planToday(row: PlanRow | undefined, day: string): PlanToday | undefined {
+  if (!row) return undefined;
+  const settings = { date: row.interview_date, start: row.start_day };
+  const phase = phaseOf(settings, day);
+  if (!phase || phase === 'interview') return undefined;
+  const items = row.today_day === day ? todayItems(row.today_items).filter((i) => !i.done).map((i) => i.title) : undefined;
+  return { daysLeft: daysLeft(settings, day), phase, ...(items ? { items } : {}) };
 }
 
 /** The titles of the topics most of `userId`'s due cards are from (at most three), for the cards-due email. */
@@ -418,7 +446,7 @@ export async function sendReminders(env: Env, t = now()): Promise<number> {
     for (;;) {
       const rows = (
         await DB.prepare(
-          `SELECT p.*, u.daily_goal FROM email_prefs p JOIN users u ON u.id = p.user_id
+          `SELECT p.*, u.daily_goal, u.plan, u.comp_until FROM email_prefs p JOIN users u ON u.id = p.user_id
            WHERE p.confirmed_at IS NOT NULL AND p.paused_at IS NULL AND u.blocked_at IS NULL AND p.time_zone IN (${marks(chunk.length)}) AND p.user_id > ?
            ORDER BY p.user_id LIMIT ${PAGE}`,
         )
@@ -457,13 +485,15 @@ async function processPage(env: Env, rows: Candidate[], t: number, origin: strin
   // For the whole page at once: cards due, and the latest practice (to tell an ignored reminder).
   const ids = todo.map((c) => c.row.user_id);
   const q = marks(ids.length);
-  const [due, reviews, runs, challenges, games] = await DB.batch([
+  const [due, reviews, runs, challenges, games, plans] = await DB.batch([
     DB.prepare(`SELECT user_id, COUNT(*) AS n FROM card_state WHERE user_id IN (${q}) AND due_at <= ? GROUP BY user_id`).bind(...ids, t),
     DB.prepare(`SELECT user_id, MAX(reviewed_at) AS m FROM card_reviews WHERE user_id IN (${q}) GROUP BY user_id`).bind(...ids),
     DB.prepare(`SELECT user_id, MAX(updated_at) AS m FROM progress WHERE user_id IN (${q}) GROUP BY user_id`).bind(...ids),
     DB.prepare(`SELECT user_id, MAX(COALESCE(submitted_at, started_at)) AS m FROM challenge_attempts WHERE user_id IN (${q}) GROUP BY user_id`).bind(...ids),
     DB.prepare(`SELECT user_id, MAX(submitted_at) AS m FROM game_runs WHERE user_id IN (${q}) AND submitted_at IS NOT NULL GROUP BY user_id`).bind(...ids),
+    DB.prepare(`SELECT user_id, interview_date, start_day, today_day, today_items FROM interview_plans WHERE user_id IN (${q})`).bind(...ids),
   ]);
+  const planBy = new Map((plans.results as PlanRow[]).map((r) => [r.user_id, r]));
   const dueBy = new Map((due.results as { user_id: string; n: number }[]).map((r) => [r.user_id, r.n]));
   const lastActive = new Map<string, number>();
   for (const result of [reviews, runs, challenges, games]) {
@@ -487,6 +517,10 @@ async function processPage(env: Env, rows: Candidate[], t: number, origin: strin
         if (streak.current >= 1 && !streak.todayDone) [kind, data] = ['streak', { streak, goal }];
       }
       if (!kind && row.cards_on === 1 && dueCards >= DUE_CARDS_MIN) [kind, data] = ['cards', { due: dueCards, topics: await dueTopics(DB, row.user_id, t) }];
+      // The interview-date plan (Max): named in either, or its own reminder while something is left today.
+      const plan = can({ plan: effectivePlan(row.plan, row.comp_until, t) }, 'interview_plan', env).ok ? planToday(planBy.get(row.user_id), day) : undefined;
+      if (plan && kind) data = { ...data, plan };
+      else if (plan && (plan.items === undefined || plan.items.length > 0)) [kind, data] = ['plan', { plan }];
     }
     if (!kind) continue;
 

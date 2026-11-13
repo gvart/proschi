@@ -14,7 +14,7 @@ export { previewCommand } from './serve';
  * `proschi render`: parses `<file>`, refuses on errors, and writes the files
  * of the chosen format. Systems are drawn collapsed unless `--expand` opens
  * them; `--focus` draws one system's team design alone. `--theme` picks the
- * look, else the `"theme"` of the nearest proschi.json, else sketch.
+ * look, else the `"theme"` of the nearest proschi.json, else sketch-light.
  */
 export async function renderCommand(args: string[], out: (s: string) => void, err: (s: string) => void, usage: string): Promise<number> {
   let dir = '.';

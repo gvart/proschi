@@ -2,7 +2,7 @@ import "problem.proschi"
 
 # Add the proxy, the file servers (id fs), the connections and the use cases
 # "Push" and "Fetch".
-fs "Git File Servers" [NoSQL Database]
+fs "Git File Servers" [GitFileServer]
 
 dev -> fs
 

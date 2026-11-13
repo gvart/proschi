@@ -4,6 +4,8 @@ summary: "Notion's Postgres: 480 logical shards by workspace on 32 databases, be
 difficulty: medium
 company: Notion
 tags: [sharding, write-heavy, real-world]
+version: 2
+strict: true
 hints:
   - "Read replicas copy every write, so they add read capacity only: every edit still goes to one primary. What gives you more primaries?"
   - "Split the data so that the queries you run most touch one shard. Everything in Notion (blocks, comments, discussions) belongs to a workspace, and a page load or an edit asks about one workspace. Partition by workspace id."

@@ -42,7 +42,7 @@ decision "Route between gateways with pub/sub" because "Each gateway subscribes 
 decision "Deliver after the ack" because "Delivery and push notifications (200 ms) never hold up the sender"
 
 usecase "Send message" "Send a message to another user" {
-  sender    -> lb       : SEND {"to": "bob", "text": "On my way"}
+  sender    -> lb       : MESSAGE SEND {"to": "bob", "text": "On my way"}
   lb        -> ws       : SEND
   ws        -> messages : INSERT Message m_77
   messages --> ws       : ok

@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
-import { canvasNodes, chooseOption, codeEditor, editorText, expect, loadReferenceSolution, test, waitForCanvas } from './fixtures';
+import { appendCode, canvasNodes, chooseOption, codeEditor, editorText, expect, loadReferenceSolution, test, waitForCanvas } from './fixtures';
 
 const problemList = (page: Page) => page.getByRole('main').getByRole('list').first();
 
@@ -8,11 +8,11 @@ const problemList = (page: Page) => page.getByRole('main').getByRole('list').fir
 const passedCount = (page: Page) => page.getByText(/^\d+ \/ \d+ passed/);
 
 test.describe('practice', () => {
-  test('lists 29 problems', async ({ page }) => {
+  test('lists 40 problems', async ({ page }) => {
     await page.goto('practice/');
     await expect(page.getByRole('heading', { level: 1, name: 'System design practice' })).toBeVisible();
-    await expect(problemList(page).getByRole('link')).toHaveCount(29);
-    await expect(page.getByText('0 of 29 solved')).toBeVisible();
+    await expect(problemList(page).getByRole('link')).toHaveCount(40);
+    await expect(page.getByText('0 of 40 solved')).toBeVisible();
   });
 
   test('ends with links to contribute a problem or suggest one, in a new tab', async ({ page }) => {
@@ -156,9 +156,25 @@ test.describe('practice', () => {
     await expect(page.locator('header [data-company="Twitter"]')).toBeVisible();
   });
 
+  test("completion offers the types the problem's given declares, and their operations", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('practice/#/collaborative-docs');
+    await expect(codeEditor(page)).toBeVisible();
+    const options = page.locator('.cm-tooltip-autocomplete li');
+    // SessionServer is declared in the given (problem.proschi), not in the solver's file.
+    await appendCode(page, '\nprobe [Sess');
+    await page.keyboard.press('Control+Space');
+    await expect(options.filter({ hasText: 'SessionServer' })).toHaveCount(1);
+    await page.keyboard.press('Escape');
+    await appendCode(page, ']\neditor -> probe\nusecase "Probe" {\n  editor -> gateways : ');
+    await page.keyboard.press('Control+Space');
+    // The step's target is a SessionServer: its ops, and nothing else (the editor lists them sorted).
+    await expect(options.locator('.cm-completionLabel')).toHaveText(['CURSOR', 'OP']);
+  });
+
   test("a problem's own page shows the statement and opens it in practice", async ({ page }) => {
     await page.goto('practice/url-shortener/');
-    await expect(page).toHaveTitle('URL Shortener: system design practice · Proschi');
+    await expect(page).toHaveTitle('URL Shortener system design: interview practice · Proschi');
     await expect(page.getByRole('heading', { level: 1, name: 'URL Shortener' })).toBeVisible();
     await expect(page.getByRole('heading', { level: 2, name: 'Functional requirements' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'Pastebin', exact: true })).toHaveAttribute('href', '../pastebin/');
@@ -202,7 +218,7 @@ test.describe('practice', () => {
     await expect.poll(() => editorText(page)).toBe(solution);
 
     await page.getByRole('link', { name: /Problems/ }).click();
-    await expect(page.getByText('1 of 29 solved')).toBeVisible();
+    await expect(page.getByText('1 of 40 solved')).toBeVisible();
     await expect(problemList(page).getByRole('link', { name: /URL shortener/i }).getByRole('img', { name: 'Solved' })).toBeVisible();
   });
 

@@ -24,7 +24,7 @@ requirements {
 }
 
 test "Seat maps are served from the cache" {
-  "View seats" calls any cache before any database
+  "View seats" uses GET on any cache before any database
   "View seats" scenario "Cache hit" never calls any database
 }
 

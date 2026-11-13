@@ -138,6 +138,16 @@ export default function FlowParticles({ flows, nodes, speed = 1 }: FlowParticles
           g.fill();
         }
       }
+      // The edges' load chips (rps, latency) stay readable: no dot runs across one.
+      const chips = el.closest('.react-flow')?.querySelectorAll<HTMLElement>('.pc-edge-load');
+      if (chips?.length) {
+        const origin = el.getBoundingClientRect();
+        g.setTransform(dpr, 0, 0, dpr, 0, 0);
+        for (const chip of chips) {
+          const r = chip.getBoundingClientRect();
+          g.clearRect(r.left - origin.left - 2, r.top - origin.top - 2, r.width + 4, r.height + 4);
+        }
+      }
       frame = requestAnimationFrame(draw);
     };
     frame = requestAnimationFrame(draw);

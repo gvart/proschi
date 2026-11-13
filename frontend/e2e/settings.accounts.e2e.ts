@@ -10,7 +10,7 @@ import { expect, test } from './fixtures';
  * cloud copies, sign-in methods), each destructive one asking first.
  */
 
-const SECTIONS = ['Plan & billing', 'Profile', 'Learning', 'Notifications', 'Connected accounts', 'Data & privacy', 'Danger zone'];
+const SECTIONS = ['Plan & billing', 'Profile', 'Learning', 'Exports & certificate', 'Notifications', 'Connected accounts', 'Data & privacy', 'Danger zone'];
 
 /** Answers the writes on top of mockSignedIn and records them. */
 async function mockWrites(page: Page) {
@@ -46,6 +46,20 @@ test('the sections in order, with a side list that jumps to each and marks the o
   await expect(nav.getByRole('button', { name: 'Data & privacy' })).toHaveAttribute('aria-current', 'true');
   // The address stays the page's own: the list scrolls, it doesn't route.
   await expect(page).toHaveURL(/#\/me$/);
+});
+
+test('scrolled by hand, the side list marks the section that fills the view', async ({ page }) => {
+  await mockSignedIn(page);
+  await page.goto('practice/#/me');
+  await expect(page.getByRole('region', { name: 'Exports & certificate' })).toBeVisible();
+  const nav = page.getByRole('navigation', { name: 'Settings sections' });
+  // Exports & certificate a third of the way down, with only the end of Learning above it.
+  await page.evaluate(() => window.scrollBy(0, document.getElementById('settings-exports')!.getBoundingClientRect().top - 300));
+  await expect(nav.getByRole('button', { name: 'Exports & certificate' })).toHaveAttribute('aria-current', 'true');
+  await expect(nav.locator('[aria-current="true"]')).toHaveCount(1);
+  // Learning still fills the top of the view: it stays marked.
+  await page.evaluate(() => window.scrollBy(0, document.getElementById('settings-learning')!.getBoundingClientRect().top - 100));
+  await expect(nav.getByRole('button', { name: 'Learning' })).toHaveAttribute('aria-current', 'true');
 });
 
 test.describe('on a phone', () => {

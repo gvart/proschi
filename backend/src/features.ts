@@ -19,12 +19,18 @@ export type { FeatureAccess, FeatureId, FeatureReason } from '../../frontend/src
  */
 export const FEATURES: Readonly<Record<FeatureId, { plans: readonly Plan[]; description: string }>> = {
   ai_interview: { plans: ['free', 'pro', 'max'], description: 'Mock interviews are on every plan; the credits decide how many' },
-  interview_history: { plans: ['pro', 'max'], description: 'Every mock interview verdict and the trend per skill are part of Pro; other plans see the latest verdict' },
+  interview_history: { plans: ['pro', 'max'], description: 'Every mock interview verdict and the trend per skill, with the interviewer or on your own, are part of Pro; other plans see the latest verdict' },
   ai_roadmap: { plans: ['pro', 'max'], description: 'Your next steps are part of Pro' },
   share_links: { plans: ['pro', 'max'], description: 'Live share links are part of Pro' },
   design_partner: { plans: ['free', 'pro', 'max'], description: 'Design partner is for every signed-in account; the credits decide how much' },
   deep_mode: { plans: ['max'], description: 'Deep mode is part of Max' },
   interview_report: { plans: ['max'], description: 'The printable interview report is part of Max' },
+  design_diff: { plans: ['pro', 'max'], description: 'What a change does to cost, p99 and the checks, version against version, is part of Pro' },
+  interview_plan: { plans: ['max'], description: 'The interview-date plan is part of Max' },
+  data_export: { plans: ['pro', 'max'], description: 'Your progress as JSON and CSV is part of Pro' },
+  certificate: { plans: ['max'], description: 'The mastery certificate is part of Max' },
+  pro_exports: { plans: ['pro', 'max'], description: 'Embeds without branding, 3x PNG and the HLD as PDF are part of Pro' },
+  saved_whatifs: { plans: ['pro', 'max'], description: 'Saved what-ifs compared in Results, and sweeps, are part of Pro' },
 };
 
 /**

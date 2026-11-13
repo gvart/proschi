@@ -1,4 +1,5 @@
 import { soloCounts, type InterviewDone, type SoloEffort } from '../../learn/mastery';
+import { readSoloResults, type SoloResults } from '../../learn/soloInterview';
 import { api } from '../../services/api';
 import type { InterviewSummary } from '../modes/session';
 import { loadHistory } from '../modes/store';
@@ -23,6 +24,24 @@ export const soloEffort = (s: Pick<InterviewSummary, 'totalMs' | 'phases' | 'dre
   drew: s.drew === true,
 });
 
+/** What a summary did beyond the effort, as the account keeps it (P53): the trend per skill and the report read it. */
+export const soloResults = (s: Pick<InterviewSummary, 'phases' | 'questions' | 'estimates' | 'tests' | 'checklist'>): SoloResults => ({
+  phases: { clarify: Math.round(s.phases.clarify), estimate: Math.round(s.phases.estimate), design: Math.round(s.phases.design), wrapup: Math.round(s.phases.wrapup) },
+  questions: { ...s.questions },
+  estimates: { answered: s.estimates.answered, correct: s.estimates.correct, total: s.estimates.total },
+  ...(s.tests ? { tests: { passed: s.tests.passed, total: s.tests.total } } : {}),
+  checklist: { ...s.checklist },
+});
+
+/** A summary's results as the server takes them, or undefined for an old or damaged one (it is sent without them, and still counts). */
+export function checkedSoloResults(s: InterviewSummary): SoloResults | undefined {
+  try {
+    return readSoloResults(soloResults(s));
+  } catch {
+    return undefined;
+  }
+}
+
 /** Whether an interview on your own counts towards progress. */
 export const soloSummaryCounts = (s: Pick<InterviewSummary, 'totalMs' | 'phases' | 'drew'>): boolean => soloCounts(soloEffort(s));
 
@@ -40,13 +59,10 @@ export function soloInterviewsDone(history: readonly InterviewSummary[] = loadHi
 /** Sends interviews on your own to the account, as they were done; a failure is dropped: the next sign-in sends them again. */
 export async function sendSoloInterviews(history: readonly InterviewSummary[]): Promise<void> {
   if (history.length === 0) return;
-  const sessions = history.slice(-50).map((s) => ({
-    problem: s.problem,
-    startedAt: s.startedAt,
-    durationMin: s.durationMin,
-    ...soloEffort(s),
-    solved: s.tests?.solved === true,
-  }));
+  const sessions = history.slice(-50).map((s) => {
+    const results = checkedSoloResults(s);
+    return { problem: s.problem, startedAt: s.startedAt, durationMin: s.durationMin, ...soloEffort(s), solved: s.tests?.solved === true, ...(results ? { results } : {}) };
+  });
   try {
     await api('/api/me/interviews/solo', { method: 'POST', body: { sessions } });
   } catch {

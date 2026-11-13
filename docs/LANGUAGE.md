@@ -1,3 +1,7 @@
+---
+updated: 2026-11-10
+---
+
 # Proschi language reference
 
 A Proschi document describes an architecture (nodes, groups and the
@@ -26,7 +30,7 @@ usecase "Create order" {
   alt "Created" {
     par {
       orders -> ordersDb : INSERT order
-      orders ->> events  : OrderCreated {"orderId": "o-1"}
+      orders ->> events  : PUBLISH OrderCreated {"orderId": "o-1"}
     }
     orders --> gateway : 201 {"status": "pending"}
   } alt "Invalid payload" {
@@ -58,6 +62,7 @@ parts, except in a tech stack such as `[Redis]`, where they are literal.
 | Node | `id ["Name"] [Tech] [@team] ["Description"] [x3] …` | top level, group | [Nodes](NODES.md#declare-a-node) |
 | Group | `group id ["Name"] [Style] … { … }` | top level, group | [Groups](NODES.md#frame-nodes-with-a-group) |
 | Connection | `a -> b [.tag] [: label]` | top level, group | [Connections](NODES.md#connect-two-nodes) |
+| Type | `[abstract] type Name [extends Parent] { … }` | top level | [Component types](TYPES.md) |
 | Legend | `legend { … }` | top level | [Colors and legend](STYLING.md#colors-and-legend) |
 | Direction | `direction down\|right\|up\|left` | top level, group | [Steering the layout](STYLING.md#steering-the-layout) |
 | Ordered layout | `layout ordered` | top level | [Steering the layout](STYLING.md#steering-the-layout) |
@@ -65,6 +70,7 @@ parts, except in a tech stack such as `[Redis]`, where they are literal.
 | Scenario | `alt "Name" [when "condition"] { … }` | use case, scenario | [Scenarios](SCENARIOS.md) |
 | Parallel steps | `par { … }` | use case, scenario | [Parallel steps](SCENARIOS.md#parallel-steps) |
 | Import | `import "infra.proschi"` | top level | [Imports](IMPORTS.md) |
+| Constant | `let peak = 120k rps`, used as `$peak` | top level | [Constants](HLD.md#constants) |
 | System | `system id ["Name"] [@team] … { … }` | top level, group | [The system block](SYSTEMS.md#the-system-block) |
 | Traffic | `traffic { … }` | top level | [Traffic](HLD.md#traffic) |
 | Capacity | `capacity { … }` | top level | [Capacity](HLD.md#capacity) |
@@ -72,6 +78,7 @@ parts, except in a tech stack such as `[Redis]`, where they are literal.
 | Decision | `decision "Title" { … }` | top level | [Decisions](HLD.md#decisions) |
 | Requirements | `requirements { … }` | top level | [Requirements](TESTS.md#requirements) |
 | Test | `test "Name" { … }` | top level | [Tests](TESTS.md#tests) |
+| What-if | `whatif "Name" { … }` | top level | [What-ifs](TESTS.md#what-ifs) |
 | Comment | `# …` | anywhere | To the end of the line. A `#` inside quotes or a JSON payload is text, and so is a hex color after `color`. |
 
 The [grammar](GRAMMAR.md) has every statement in EBNF.
@@ -80,6 +87,8 @@ The [grammar](GRAMMAR.md) has every statement in EBNF.
 
 - [Nodes, groups and connections](NODES.md): ids, names, tech stacks,
   replicas and owners.
+- [Component types](TYPES.md): what a tech stack names, your own types,
+  and the operations a node takes.
 - [Colors, legend and layout](STYLING.md): colors, tags, layout hints and
   what canvas edits write.
 - [Use cases](USE-CASES.md): step arrows, labels, payloads, fan-out, reads

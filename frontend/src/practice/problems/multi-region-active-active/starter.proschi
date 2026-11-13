@@ -1,0 +1,31 @@
+import "problem.proschi"
+
+# US-East is started. Add US-West, give each region the members DNS sends it,
+# write "Save progress" and "Browse in failover", and size both regions.
+eastZuul  "Zuul, US-East"         [API Gateway] x2
+eastApi   "Playback API, US-East" [Service]     x4
+eastCache "EVCache, US-East"      [Memcached]   x2
+eastDb    "Cassandra, US-East"    [Cassandra]   x2
+
+viewer   -> dns       : resolve api.netflix.com
+viewer   -> eastZuul  : HTTPS
+eastZuul -> eastApi   : HTTP
+eastApi  -> eastCache : memcached
+eastApi  -> eastDb    : CQL
+
+usecase "Browse" {
+  viewer -> dns : resolve api.netflix.com
+  alt "East" {
+    viewer   -> eastZuul : GET /home
+    eastZuul -> eastApi  : GET /home
+    alt "Hit" {
+      eastApi -> eastCache : GET member rows
+    } alt "Miss" {
+      eastApi -> eastCache : GET member rows
+      eastApi -> eastDb    : SELECT at LOCAL_QUORUM
+      eastApi -> eastCache : SET member rows
+    }
+    eastApi  --> eastZuul : 200
+    eastZuul --> viewer   : 200 home screen
+  }
+}

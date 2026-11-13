@@ -28,7 +28,7 @@ usecase "Create order" "Complete flow for creating a new order" {
     users --> orders : 200 {"verified": true}
     par {
       orders  -> ordersDb : INSERT order
-      orders ->> events   : OrderCreated {"orderId": "order-789"}
+      orders ->> events   : PUBLISH OrderCreated {"orderId": "order-789"}
     }
     orders --> gateway : 201 {"orderId": "order-789", "status": "pending"}
   } alt "Unknown user" {
@@ -111,7 +111,7 @@ usecase "Upload a photo" {
   client   -> gateway : POST /images json {"fileName": "cat.jpg"}
   gateway  -> upload  : invoke
   upload   -> bucket  : PUT /originals/cat.jpg
-  upload  ->> jobs    : ResizeRequested {"key": "originals/cat.jpg"}
+  upload  ->> jobs    : SEND ResizeRequested {"key": "originals/cat.jpg"}
   upload  --> gateway : 202 {"imageId": "img-1"}
   gateway --> client  : 202 {"imageId": "img-1"}
   jobs     -> resize  : ResizeRequested
@@ -167,12 +167,17 @@ usecase "Log out" {
 
 export const eventDrivenExample = `title "Event-Driven Checkout"
 
-checkout  "Checkout Service"  [REST API]        @payments
+# A REST service that also consumes order events: the event is one of its operations.
+type InventoryService extends [REST API] {
+  op write OrderPaid
+}
+
+checkout  "Checkout Service"  [REST API]         @payments
 payments  "Payment Provider"  [Payment Gateway]
-bus       "Order Events"      [Kafka]           @platform
-inventory "Inventory Service" [REST API]        @warehouse
-email     "Notifier"          [Email Service]   @growth
-ledger    "Ledger DB"         [PostgreSQL]      @payments
+bus       "Order Events"      [Kafka]            @platform
+inventory "Inventory Service" [InventoryService] @warehouse
+email     "Notifier"          [Email Service]    @growth
+ledger    "Ledger DB"         [PostgreSQL]       @payments
 
 checkout -> payments  : charge
 checkout -> bus       : publish
@@ -184,10 +189,10 @@ usecase "Pay for an order" {
   checkout  -> payments : POST /charges json {"amount": 4999, "currency": "EUR"}
   payments --> checkout : 201 {"chargeId": "ch_1"}
   checkout  -> ledger   : INSERT payment
-  checkout ->> bus      : OrderPaid {"orderId": "o-7"}
+  checkout ->> bus      : PUBLISH OrderPaid {"orderId": "o-7"}
   par {
     bus -> inventory : OrderPaid
-    bus -> email     : OrderPaid
+    bus -> email     : SEND receipt for OrderPaid
   }
 }
 `;
@@ -355,7 +360,7 @@ usecase "Place an order" {
   shopper  -> gateway  : POST /orders
   gateway  -> orders   : POST /orders
   orders   -> ordersDb : INSERT order
-  orders  ->> events   : OrderPlaced
+  orders  ->> events   : PUBLISH OrderPlaced
   orders  --> gateway  : 201
   gateway --> shopper  : 201
 }

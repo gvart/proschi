@@ -1,0 +1,71 @@
+# expect-fail: Pinot and the budget read only committed aggregates
+# mistake: Charging the budget straight from the raw event stream
+# explain: The budget service consumes the raw clicks and charges each one as it arrives. Those events have not been validated or deduplicated yet, and after a consumer restart Kafka redelivers some of them, so advertisers pay for invalid and repeated clicks. Charge the budget from the committed aggregates, applying each record UUID once.
+# lesson: one-number-for-billing-and-dashboards
+# cards: at-least-once-needs-idempotency, ad-click-aggregator-transactional-sink, idempotent-consumer-crash
+# The budget service reads the raw events topic; the dashboards read the aggregates.
+import "problem.proschi"
+
+lb          "Load Balancer"         [AWS Load Balancer] x2 @edge
+ingest      "Ad Event Ingest"       [Go]                x16 @ingest
+events      "Mobile Ad Events"      [Kafka]             x3 @ingest
+flink       "Aggregation Job"       [Java]              x16 @stream
+checkpoints "Checkpoint Store"      [Object Storage]    x2 @stream
+aggregates  "Ad Aggregates"         [Kafka]             x2 @stream
+pinot       "Apache Pinot"          [Data Warehouse]    x3 @olap
+reports     "Advertiser Report API" [REST API]          x3 @olap
+
+app        -> lb
+advertiser -> lb
+lb         -> ingest
+lb         -> reports
+ingest     -> events
+events     -> flink
+events     -> budget
+flink      -> checkpoints
+flink      -> aggregates
+aggregates -> pinot
+reports    -> pinot
+
+usecase "Record event" {
+  app     -> lb     : POST /ad-events
+  lb      -> ingest : POST /ad-events
+  ingest  -> events : PRODUCE mobile-ad-events
+  events --> ingest : ack
+  ingest --> lb     : 202
+  lb     --> app    : 202
+}
+
+usecase "Aggregate events" {
+  events -> flink : AdEvent
+}
+
+usecase "Publish aggregates" {
+  flink       -> aggregates : PRODUCE ad-aggregates
+  aggregates --> flink      : ack, uncommitted
+}
+
+usecase "Checkpoint" {
+  flink        -> checkpoints : PUT state
+  checkpoints --> flink       : ok
+  flink        -> aggregates  : COMMIT transaction
+}
+
+usecase "Load aggregates" {
+  aggregates -> pinot : UPSERT by recordUuid
+}
+
+usecase "Update budget" {
+  events  -> budget : AdEvent click ad_8812
+  budget  -> ledger : UPDATE spend = spend + cost_per_click
+  ledger --> budget : 1 row
+}
+
+usecase "View report" {
+  advertiser -> lb         : GET /campaigns/c_42/report
+  lb         -> reports    : GET /campaigns/c_42/report
+  reports    -> pinot      : SELECT SUM(clicks) GROUP BY day
+  pinot     --> reports    : rows
+  reports   --> lb         : 200
+  lb        --> advertiser : 200
+}

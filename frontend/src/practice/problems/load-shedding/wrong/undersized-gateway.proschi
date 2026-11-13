@@ -1,0 +1,44 @@
+# expect-fail: p99 of Start playback < 100 ms
+# expect-fail: survive any node failure
+# mistake: A gateway sized for what it forwards, not for what it receives
+# explain: Zuul sheds the right requests, but it still receives all 20k a second, shed ones included, and two instances take 20k at most. A saturated gateway slows every class, playback first among them, and losing one instance makes it worse. Size the shedder for the whole spike, with room to lose a machine.
+# lesson: the-shedder-must-not-fall-over
+# cards: servers-for-peak-load, load-shedding-at-the-gateway
+# The right shedding policy on two Zuul instances: shed requests still cost the gateway a request each.
+import "problem.proschi"
+
+zuul "Zuul" [API Gateway] x2 @edge "Scores every request's priority and sheds the lowest first; sized for the requests it forwards"
+
+device -> zuul : HTTPS
+zuul   -> api  : HTTP, priority score attached
+
+usecase "Start playback" "A member presses play: critical, never shed" {
+  device -> zuul   : POST /playback/start (priority critical)
+  zuul   -> api    : POST /playback/start
+  api   --> zuul   : 200 {"manifest": "..."}
+  zuul  --> device : 200 {"manifest": "..."}
+}
+
+usecase "Save progress" "The app saves a pause or stop marker: degraded experience if lost" {
+  device -> zuul : PUT /progress (priority degraded)
+
+  alt "Served" when "the API service has room for degraded-experience requests" {
+    zuul  -> api    : PUT /progress
+    api  --> zuul   : 204
+    zuul --> device : 204
+  } alt "Shed" when "the priority threshold is above this request's score" {
+    zuul --> device : 503 {"maxRetries": 1, "retryAfterSeconds": 30}
+  }
+}
+
+usecase "Send logs" "The app uploads logs and background data: non-critical" {
+  device -> zuul : POST /logs (priority non-critical)
+
+  alt "Served" when "the API service has room for non-critical requests" {
+    zuul  -> api    : POST /logs
+    api  --> zuul   : 202
+    zuul --> device : 202
+  } alt "Shed" when "the priority threshold is above this request's score" {
+    zuul --> device : 503 {"maxRetries": 0, "retryAfterSeconds": 120}
+  }
+}

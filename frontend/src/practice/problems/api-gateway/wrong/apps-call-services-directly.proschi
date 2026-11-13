@@ -1,0 +1,51 @@
+# expect-fail: Every call enters through the edge
+# expect-fail: The session is checked before the call is routed
+# mistake: The app calls each backend service directly, and each service authenticates for itself
+# explain: With no edge tier, every service re-implements token checks, bans and limits, the app must know the address of every service, and every one of them now calls the auth service on its own.
+# explain: Put one gateway pool behind a load balancer in front of all of them, and run the cross-cutting checks there once.
+# lesson: what-an-api-gateway-does
+# cards: api-gateway-scope, reverse-proxy-roles, authn-vs-authz
+# No edge: the app talks to pricing, trips and users itself, and each service checks the token with the auth service.
+import "problem.proschi"
+
+rider   -> pricing : HTTPS
+rider   -> trips   : HTTPS
+rider   -> users   : HTTPS
+pricing -> auth    : Thrift
+trips   -> auth    : Thrift
+users   -> auth    : Thrift
+
+usecase "Get fare estimate" {
+  rider    -> pricing : GET /v1/fare-estimate
+  pricing  -> auth    : ValidateToken(token)
+
+  alt "Session cached" {
+    pricing --> rider : 200 fare
+  } alt "Session not cached" {
+    pricing --> rider : 200 fare
+  } alt "Blocked" {
+    pricing --> rider : 403 blocked
+  }
+}
+
+usecase "Request trip" {
+  rider  -> trips : POST /v1/trips
+  trips  -> auth  : ValidateToken(token)
+
+  alt "Session cached" {
+    trips --> rider : 201 trip 9001
+  } alt "Session not cached" {
+    trips --> rider : 201 trip 9001
+  }
+}
+
+usecase "Get rider profile" {
+  rider  -> users : GET /v1/me
+  users  -> auth  : ValidateToken(token)
+
+  alt "Session cached" {
+    users --> rider : 200 profile
+  } alt "Session not cached" {
+    users --> rider : 200 profile
+  }
+}

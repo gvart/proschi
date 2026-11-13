@@ -3,6 +3,8 @@ title: Notification Fan-out
 summary: Queue it, check preferences, fail over between providers.
 difficulty: medium
 tags: [queues, async, external-providers, failover]
+version: 2
+strict: true
 hints:
   - Providers take 200 ms and have outages, but the Order Service needs an answer in under 50 ms. What can accept the event right away and keep it until it is sent?
   - "Split the work in two: \"Notify\" only puts the event on a queue; \"Deliver\" starts with the queue handing the event to a worker (events -> worker), which deletes it once it is handled."

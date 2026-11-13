@@ -3,7 +3,7 @@ import { parse } from '../dsl/parser';
 import type { Diagram } from '../dsl/types';
 import { analyze, hopLatency, hopModel, mixtureQuantile, pathQuantile, type PathModel } from './analyze';
 import { selectNodes } from './flow';
-import { runTests, type TestResult } from './tests';
+import { requirementFixes, runTests, type TestResult } from './tests';
 import { diagramOf } from './testDiagram';
 
 /**
@@ -86,6 +86,7 @@ describe('§7.2 reads, writes and single-primary stores', () => {
     // ceil(6k / (5k × 70%)) = 2 shards
     expect(latency.hint).toContain('capacity { db shards 2 }');
     expect(latency.hint).toContain('read replicas do not add write capacity');
+    expect(requirementFixes(d, a).map((f) => f.fix)).toEqual([{ kind: 'shards', node: 'db', shards: 2 }]);
 
     // More replicas add reads only.
     const more = analyze(doc(SHOP('6k rps').replace('db [PostgreSQL] x3', 'db [PostgreSQL] x6')));

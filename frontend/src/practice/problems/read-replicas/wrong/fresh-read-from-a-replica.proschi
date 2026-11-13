@@ -1,0 +1,35 @@
+# expect-fail: Writes and time-sensitive reads go to the primary
+# mistake: Reading what was just written from a replica
+# explain: Replication is asynchronous, so a replica can be seconds behind the primary. A shopper who has just placed an order and opens its status page may be told it does not exist. Send reads that must see the latest write, like this one, to the primary.
+# lesson: replication-lag-and-which-reads-can-tolerate-it
+# cards: read-your-writes, sync-vs-async-replication
+# Every read goes to the replicas, including the status page of the order just placed.
+import "problem.proschi"
+
+replicas "MySQL Replicas" [MySQL] x5 @data "Read-only copies of the primary"
+
+app     -> proxy    : MySQL protocol
+proxy   -> primary  : writes
+proxy   -> replicas : every read
+primary -> replicas : binlog replication
+
+usecase "Read catalog" "A storefront page reads products from a replica" {
+  app       -> proxy    : SELECT products WHERE shop_id = $1
+  proxy     -> replicas : SELECT products WHERE shop_id = $1
+  replicas --> proxy    : 40 rows
+  proxy    --> app      : 40 rows
+}
+
+usecase "Place order" "Checkout writes the order to the primary" {
+  app      -> proxy   : INSERT order
+  proxy    -> primary : INSERT order
+  primary --> proxy   : OK
+  proxy   --> app     : OK
+}
+
+usecase "Check order" "The order status page reads the order from a replica" {
+  app       -> proxy    : SELECT order WHERE id = $1
+  proxy     -> replicas : SELECT order WHERE id = $1
+  replicas --> proxy    : 1 row
+  proxy    --> app      : 1 row
+}

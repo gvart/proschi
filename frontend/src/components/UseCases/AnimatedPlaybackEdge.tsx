@@ -2,7 +2,8 @@ import { useRef, type RefObject } from 'react';
 import { BaseEdge } from 'reactflow';
 import type { EdgeProps } from 'reactflow';
 import { usePlaybackProgress } from './playbackClock';
-import { EdgeHead } from '../Canvas/RoutedEdge';
+import { EdgeCasing, EdgeHead, EdgeLoadLabel } from '../Canvas/RoutedEdge';
+import { edgeLoadOf, showsLoadLabel, withLoad } from '../Canvas/edgeLoad';
 import { hasMarker, useEdgeGeometry } from '../Canvas/useEdgeGeometry';
 
 // The design system's packet (src/design/tokens.css): pink, ink-outlined, red when the answer is an error.
@@ -25,7 +26,7 @@ export function AnimatedPlaybackEdge({
   id,
   source,
   target,
-  style = {},
+  style: own = {},
   markerEnd,
   markerStart,
   data,
@@ -45,15 +46,19 @@ export function AnimatedPlaybackEdge({
   const arrived = usePlaybackProgress((p) => isActive && p >= 100);
   if (!geometry) return null;
   const { path: edgePath, labelX, labelY } = geometry;
+  // Idle with the load overlay on, the edge shows what it carries (see RoutedEdge).
+  const load = edgeLoadOf(data);
+  const style = withLoad(own, load) ?? own;
 
   return (
     <>
+      <EdgeCasing path={edgePath} load={load} />
       <BaseEdge
         path={edgePath}
         markerEnd={markerEnd}
         markerStart={markerStart}
         style={arrived && !failed ? { ...style, ...FLOWING } : style}
-        label={label}
+        label={showsLoadLabel(load) ? undefined : label}
         labelX={labelX}
         labelY={labelY}
         labelStyle={labelStyle}
@@ -64,6 +69,7 @@ export function AnimatedPlaybackEdge({
         interactionWidth={interactionWidth}
       />
       {!hasMarker(markerEnd) && <EdgeHead d={geometry.head} style={style} />}
+      {showsLoadLabel(load) && <EdgeLoadLabel load={load} label={label} x={labelX} y={labelY} />}
       {isActive && (
         <>
           {/* Hidden path the packet's position is measured along */}

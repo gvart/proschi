@@ -17,12 +17,12 @@ requirements {
 }
 
 test "Redirects read the cache first" {
-  "Redirect" calls any cache before any database
+  "Redirect" uses GET on any cache before any database
   "Redirect" scenario "Cache hit" never calls any database
 }
 
 test "Misses fill the cache" {
-  "Redirect" scenario "Cache miss" calls any cache after any database
+  "Redirect" scenario "Cache miss" uses SET on any cache after any database
 }
 
 test "Codes are stored before they are returned" {
@@ -31,5 +31,6 @@ test "Codes are stored before they are returned" {
 }
 
 test "Redirects redirect" {
+  "Redirect" calls any service with GET /{code}
   "Redirect" responds 302
 }

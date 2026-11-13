@@ -1,0 +1,11 @@
+resvg.wasm (and the JavaScript glue bundled into raster.cjs) is @resvg/resvg-wasm 2.6.2,
+copied unmodified from npm by tooling/build.mjs.
+
+  @resvg/resvg-wasm: Mozilla Public License 2.0, https://github.com/thx/resvg-js
+  resvg, tiny-skia and their Rust dependencies: Apache-2.0 OR MIT, https://github.com/linebender/resvg
+
+The source of the covered files is available at https://github.com/thx/resvg-js/tree/v2.6.2.
+The MPL 2.0 text: https://www.mozilla.org/en-US/MPL/2.0/
+
+The fonts in fonts/ (Inter, JetBrains Mono, subset to Latin and common symbols) are under the
+SIL Open Font License 1.1; see fonts/LICENSE-*.txt.

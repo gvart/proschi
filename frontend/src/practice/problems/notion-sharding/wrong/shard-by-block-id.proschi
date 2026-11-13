@@ -18,8 +18,8 @@ pgbouncer -> db        : pooled connections
 usecase "Load page" "A user opens a page; its blocks are spread over every shard" {
   web        -> pgbouncer : SELECT blocks WHERE parent_id = $1
   pgbouncer  -> db        : x32 SELECT blocks WHERE parent_id = $1
-  db        --> pgbouncer : 120 rows from 32 shards
-  pgbouncer --> web       : 120 rows
+  db        --> pgbouncer : the 120 rows from 32 shards
+  pgbouncer --> web       : the 120 rows
 }
 
 usecase "Edit block" "A user types into a block" {

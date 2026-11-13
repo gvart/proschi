@@ -61,6 +61,10 @@ describe('front matter', () => {
     expect((error as FrontMatterError).message).toMatch(message);
   });
 
+  it('reads true and false as booleans', () => {
+    expect(parseFrontMatter('---\na: true\nb: false\nc: "true"\n---\n').data).toEqual({ a: true, b: false, c: 'true' });
+  });
+
   it('writes strings plain only when they read back the same', () => {
     for (const s of ['plain words', 'Fast: yes', 'a #b', '-x', '42', 'true', ' padded', '`code`', 'ends:', "it's"]) {
       expect(parseFrontMatter(`---\nv: ${frontMatterString(s)}\n---\n`).data.v).toBe(s);
@@ -133,6 +137,9 @@ describe('problem folders', () => {
     expect(problemFromFiles('echo', files({ 'problem.md': MD.replace('tags:', 'version: 2\ntags:') })).version).toBe(2);
     expect(p.company).toBeUndefined();
     expect(problemFromFiles('echo', files({ 'problem.md': MD.replace('tags:', 'company: Twitter\ntags:') })).company).toBe('Twitter');
+    expect(p.strict).toBeUndefined();
+    expect(problemFromFiles('echo', files({ 'problem.md': MD.replace('tags:', 'strict: true\ntags:') })).strict).toBe(true);
+    expect(problemFromFiles('echo', files({ 'problem.md': MD.replace('tags:', 'strict: false\ntags:') })).strict).toBeUndefined();
     expect(problemFromFiles('echo', files({ 'problem.md': MD.replace('tags:', 'company: "Example, Inc."\ntags:') })).company).toBe('Example, Inc.');
     expect(p.wrong).toEqual([
       {
@@ -166,6 +173,7 @@ describe('problem folders', () => {
     ['a string order', 'echo', files({ 'problem.md': MD.replace('tags:', 'order: first\ntags:') }), /'order' must be a number/],
     ['a fractional version', 'echo', files({ 'problem.md': MD.replace('tags:', 'version: 1.5\ntags:') }), /'version' must be a whole number from 1/],
     ['a zero version', 'echo', files({ 'problem.md': MD.replace('tags:', 'version: 0\ntags:') }), /'version' must be a whole number from 1/],
+    ['a strict that is not a boolean', 'echo', files({ 'problem.md': MD.replace('tags:', 'strict: "yes"\ntags:') }), /'strict' must be true or false/],
     ['an empty company', 'echo', files({ 'problem.md': MD.replace('tags:', 'company: ""\ntags:') }), /'company' must be a non-empty string/],
     ['a blank company', 'echo', files({ 'problem.md': MD.replace('tags:', 'company: "  "\ntags:') }), /'company' must be a non-empty string/],
     ['a company list', 'echo', files({ 'problem.md': MD.replace('tags:', 'company: [Twitter, Meta]\ntags:') }), /'company' must be a non-empty string/],
@@ -228,6 +236,17 @@ describe('validateProblem', () => {
     expect(messages({ solution: SOLUTION.replace('client -> api\n', 'client  ->  api\n') })).toEqual(['solution.proschi: Not in canonical format; run proschi fmt']);
     expect(messages({ solution: SOLUTION.replace('import "problem.proschi"\n', '') })).toEqual(expect.arrayContaining(['solution.proschi:1: Must start with import "problem.proschi"']));
     expect(messages({ solution: STARTER })).toEqual(expect.arrayContaining([expect.stringMatching(/^solution\.proschi(:\d+)?: Fails "Echo goes through the API"/)]));
+  });
+
+  it('parses every design of a strict problem with strictOps', () => {
+    const wrong = [{ name: 'fetch', source: `# expect-fail: Echo goes through the API\n${MISTAKE}${SOLUTION.replace('GET /echo', 'fetch echo')}`, expectFail: ['Echo goes through the API'] }];
+    // Not strict: the unknown operation is only a warning, and the wrong design is then graded on its tests (it passes this one).
+    expect(messages({ wrong })).toEqual(['wrong/fetch.proschi:1: Expected to fail "Echo goes through the API", but it passes']);
+    expect(messages({ strict: true, wrong })).toEqual([expect.stringMatching(/^wrong\/fetch\.proschi:\d+: error: REST API has no operation 'fetch'/)]);
+    expect(messages({ strict: true, solution: SOLUTION.replace('GET /echo', 'fetch echo') })).toEqual(
+      expect.arrayContaining([expect.stringMatching(/^solution\.proschi:\d+: error: REST API has no operation 'fetch'/)]),
+    );
+    expect(messages({ strict: true })).toEqual([]);
   });
 
   it('reports capacity in the solution', () => {

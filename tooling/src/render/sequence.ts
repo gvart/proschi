@@ -1,16 +1,17 @@
 import { buildSequence, sectionedItems, type Diagram, type DiagramScenario, type DiagramUseCase, type SequenceMessage } from '../proschi';
 import { techIcon, typeColor } from './icons';
-import { card, esc, fit, marker, r, svgDocument, text, textWidth } from './svg';
-import { SKETCH, type RenderTheme } from './theme';
+import { card, currentRenderTheme, esc, fit, marker, r, svgDocument, text, textWidth, withTheme } from './svg';
+import type { RenderTheme } from './theme';
 
 /**
  * One scenario as an SVG sequence diagram: a header box and dashed lifeline
  * per participant, numbered request arrows, dashed responses with their
  * status codes, `par` regions, titled frames for `section` blocks, and
  * error replies and failed calls in red,
- * in the render theme's style (theme.ts): `sketch`, the canvas's ink cards
- * with hard shadows and pink step numbers, or `classic`, rounded grey cards
- * with type-coloured icon tiles and blue requests and step numbers.
+ * in the render theme's style (theme.ts): `sketch-light` / `sketch-dark`, the
+ * canvas's ink cards with hard shadows and pink step numbers, or `classic`,
+ * rounded grey cards with type-coloured icon tiles and blue requests and step
+ * numbers. Without `theme`, the theme being drawn in (svg.ts `withTheme`).
  */
 
 const MARGIN = 24;
@@ -45,8 +46,12 @@ export function scenarioTitle(useCase: DiagramUseCase, scenario: DiagramScenario
   return useCase.scenarios.length > 1 ? `${useCase.name} › ${scenario.name}` : useCase.name;
 }
 
-export function renderSequenceSvg(diagram: Diagram, useCase: DiagramUseCase, scenario: DiagramScenario, idPrefix = '', theme: RenderTheme = SKETCH): string {
-  const th = theme;
+export function renderSequenceSvg(diagram: Diagram, useCase: DiagramUseCase, scenario: DiagramScenario, idPrefix = '', theme?: RenderTheme): string {
+  const th = theme ?? currentRenderTheme();
+  return withTheme(th, () => drawSequence(diagram, useCase, scenario, idPrefix, th));
+}
+
+function drawSequence(diagram: Diagram, useCase: DiagramUseCase, scenario: DiagramScenario, idPrefix: string, th: RenderTheme): string {
   const C = th.colors;
   const seq = buildSequence(useCase, scenario, diagram.nodes);
   const participants = seq.participants;
@@ -195,7 +200,7 @@ export function renderSequenceSvg(diagram: Diagram, useCase: DiagramUseCase, sce
       `<g data-participant="${esc(p.id)}">`,
       `<line x1="${r(x)}" y1="${r(headerTop + HEADER_HEIGHT)}" x2="${r(x)}" y2="${r(bottom)}" stroke="${C.lifeline}"${C.lifelineOpacity !== undefined ? ` stroke-opacity="${C.lifelineOpacity}"` : ''} stroke-width="1.5" stroke-dasharray="5 4"/>`,
       // A small ComponentNode: card, icon tile, name and tech stack.
-      card(x - w / 2, headerTop, w, HEADER_HEIGHT, { stroke: 2, theme: th }),
+      card(x - w / 2, headerTop, w, HEADER_HEIGHT, { stroke: 2 }),
       node
         ? th.iconTile === 'filled'
           ? `<rect x="${r(x - w / 2 + 10)}" y="${r(headerTop + 11)}" width="24" height="24" rx="4" fill="${typeColor(node.type)}"/>`
@@ -226,7 +231,7 @@ export function renderSequenceSvg(diagram: Diagram, useCase: DiagramUseCase, sce
     marker(`${idPrefix}solid-error`, C.error),
     marker(`${idPrefix}open-error`, C.error, true),
   ].join('');
-  return svgDocument(width, height, title, body.filter(Boolean), defs, th);
+  return svgDocument(width, height, title, body.filter(Boolean), defs);
 }
 
 function drawMessage(m: SequenceMessage, x1: number, x2: number, y: number, idPrefix: string, th: RenderTheme): string {

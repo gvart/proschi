@@ -37,7 +37,7 @@ test "Every query goes through the data services" {
 
 test "Concurrent reads of one channel share one query" {
   "Read busy channel" scenario "Joined in-flight read" never calls any database
-  "Read busy channel" scenario "First read" calls hot
+  "Read busy channel" scenario "First read" uses SELECT on hot
   "Read busy channel" never calls messages
 }
 
@@ -48,5 +48,5 @@ test "No message cache to keep in sync" {
 }
 
 test "A message is stored before the sender hears back" {
-  "Send message" writes messages before responding
+  "Send message" uses INSERT on messages before responding
 }

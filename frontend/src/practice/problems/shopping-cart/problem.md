@@ -3,6 +3,8 @@ title: Always-writable Shopping Cart
 summary: "Amazon's Dynamo cart: never reject an add; merge versions on read."
 difficulty: easy
 tags: [availability, consistency, replication, real-world]
+version: 2
+strict: true
 company: Amazon
 hints:
   - "Which is worse for a shop: a cart that is briefly out of date, or an \"Add to cart\" that fails? The store you pick decides which one you get."

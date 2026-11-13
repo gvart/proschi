@@ -3,6 +3,8 @@ title: URL Shortener
 summary: Cache-first redirects that survive losing any single machine.
 difficulty: easy
 tags: [caching, read-heavy, durability]
+version: 2
+strict: true
 hints:
   - Redirects outnumber shortening 100 to 1. What can answer a redirect without touching the database?
   - "On a miss, read the database, then SET the code in the cache (->> is fine), so the next visitor hits. p99 is taken over all redirects, hits and misses mixed by their share: the 5% of misses decide it."

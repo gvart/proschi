@@ -130,6 +130,19 @@ describe('TextMate grammar', () => {
     expect(scopeOf(lines, '#2')).toBe('string.quoted.double.json.proschi');
   });
 
+  it('scopes budgets, retries, drain rates and lag in section blocks', () => {
+    const lines = tokenize(
+      ['requirements {', '  cost @Payments <= 500 usd/month', '  cost .edge <= 5 usd/month', '  cost group checkout <= 5 usd/month', '  lag "Pay" < 30s', '}', 'capacity {', '  pay errors 2% retries 3', '  events drain 5k rps', '}'].join('\n'),
+    );
+    expect(scopeOf([lines[1]], '@Payments')).toBe('entity.other.attribute-name.team.proschi');
+    expect(scopeOf([lines[2]], '.edge')).toBe('entity.other.attribute-name.tag.proschi');
+    expect(scopeOf([lines[3]], 'group')).toBe('keyword.other.proschi');
+    expect(scopeOf([lines[4]], 'lag')).toBe('keyword.other.proschi');
+    expect(scopeOf([lines[7]], 'errors')).toBe('keyword.other.proschi');
+    expect(scopeOf([lines[7]], 'retries')).toBe('keyword.other.proschi');
+    expect(scopeOf([lines[8]], 'drain')).toBe('keyword.other.proschi');
+  });
+
   it('scopes section blocks: header keywords, section words, quantities and operators', () => {
     const lines = tokenize(
       [
@@ -195,6 +208,34 @@ describe('TextMate grammar', () => {
       ['next', 'variable.other.node.proschi'],
       ['[Redis]', 'entity.name.type.tech.proschi'],
     ]);
+  });
+
+  it('scopes whatif blocks', () => {
+    const lines = tokenize('whatif "Peak" {\n  traffic "Read" x1.5\n  fail cache\n  db x4\n}');
+    expect(lines[0][0]).toEqual(['whatif', 'keyword.control.proschi']);
+    expect(lines[1].map(([, s]) => s)).toEqual(['keyword.other.proschi', 'punctuation.definition.string.begin.proschi', 'string.quoted.double.proschi', 'punctuation.definition.string.end.proschi', 'constant.numeric.replicas.proschi']);
+    expect(lines[2]).toEqual([
+      ['fail', 'keyword.other.proschi'],
+      ['cache', 'variable.other.node.proschi'],
+    ]);
+    expect(lines[3]).toEqual([
+      ['db', 'variable.other.node.proschi'],
+      ['x4', 'constant.numeric.replicas.proschi'],
+    ]);
+  });
+
+  it('scopes constants: the let line and each use', () => {
+    const lines = tokenize('let peak = 120k rps # busiest hour\napi [REST API] x$n\ntraffic {\n  "Read" $peak\n}\nwhatif "W" {\n  db x$n\n}');
+    expect(lines[0]).toEqual([
+      ['let', 'keyword.other.let.proschi'],
+      ['peak', 'variable.other.constant.proschi'],
+      ['=', 'keyword.operator.assignment.proschi'],
+      ['120k rps', 'constant.numeric.proschi'],
+      ['# busiest hour', 'comment.line.number-sign.proschi'],
+    ]);
+    expect(lines[1][2]).toEqual(['x$n', 'variable.other.constant.proschi']);
+    expect(lines[3][3]).toEqual(['$peak', 'variable.other.constant.proschi']);
+    expect(lines[6][1]).toEqual(['x$n', 'variable.other.constant.proschi']);
   });
 
   it('scopes color, critical, tags and the legend block', () => {
@@ -317,6 +358,71 @@ describe('TextMate grammar', () => {
     expect(lines[7]).toEqual([['}', 'punctuation.section.block.end.proschi']]);
     // Outside a system block, from is an ordinary node id.
     expect(lines[9][0]).toEqual(['from', 'variable.other.node.proschi']);
+  });
+
+  it('scopes type blocks: header, body properties, ops and headers', () => {
+    const lines = tokenize(
+      [
+        'abstract type Store extends [REST API] {',
+        '  kind database   # a kind',
+        '  op read  SELECT, Scan latency 8 cost 2',
+        '  header Authorization, Content-Type',
+        '  status 200, 404',
+        '  latencyMs 4',
+        '  durable true',
+        '  doc "Keeps things"',
+        '}',
+        'type LedgerDb extends Store { op write APPEND }',
+        'type = 3',
+        'usecase "U" {',
+        '  web -> api : GET /x header Authorization, Idempotency-Key',
+        '}',
+      ].join('\n'),
+    );
+    expect(lines[0]).toEqual([
+      ['abstract', 'storage.modifier.abstract.proschi'],
+      ['type', 'storage.type.type.proschi'],
+      ['Store', 'entity.name.type.proschi'],
+      ['extends', 'storage.modifier.extends.proschi'],
+      ['[REST API]', 'entity.other.inherited-class.proschi'],
+      ['{', 'punctuation.section.block.begin.proschi'],
+    ]);
+    expect(lines[1]).toEqual([
+      ['kind', 'keyword.other.type-property.proschi'],
+      ['database', 'constant.language.kind.proschi'],
+      ['# a kind', 'comment.line.number-sign.proschi'],
+    ]);
+    expect(lines[2].slice(0, 5)).toEqual([
+      ['op', 'keyword.other.type-property.proschi'],
+      ['read', 'storage.modifier.access.proschi'],
+      ['SELECT', 'entity.name.function.operation.proschi'],
+      [',', 'punctuation.separator.comma.proschi'],
+      ['Scan', 'entity.name.function.operation.proschi'],
+    ]);
+    expect(scopeOf([lines[2]], 'latency')).toBe('keyword.other.multiplier.proschi');
+    expect(scopeOf([lines[2]], '8')).toBe('constant.numeric.proschi');
+    expect(scopeOf([lines[2]], 'cost')).toBe('keyword.other.multiplier.proschi');
+    expect(scopeOf([lines[3]], 'Content-Type')).toBe('support.type.property-name.header.proschi');
+    expect(lines[4].slice(0, 2)).toEqual([
+      ['status', 'keyword.other.type-property.proschi'],
+      ['200', 'constant.numeric.proschi'],
+    ]);
+    expect(lines[5][0]).toEqual(['latencyMs', 'keyword.other.type-property.proschi']);
+    expect(lines[6][1]).toEqual(['true', 'constant.language.proschi']);
+    expect(scopeOf([lines[7]], 'doc')).toBe('keyword.other.type-property.proschi');
+    expect(lines[8]).toEqual([['}', 'punctuation.section.block.end.proschi']]);
+    // A one-line body.
+    expect(lines[9].slice(4)).toEqual([
+      ['{', 'punctuation.section.block.begin.proschi'],
+      ['op', 'keyword.other.type-property.proschi'],
+      ['write', 'storage.modifier.access.proschi'],
+      ['APPEND', 'entity.name.function.operation.proschi'],
+      ['}', 'punctuation.section.block.end.proschi'],
+    ]);
+    // Outside a type header, type is a node id.
+    expect(lines[10][0]).toEqual(['type', 'variable.other.node.proschi']);
+    expect(scopeOf([lines[12]], 'header')).toBe('keyword.other.header.proschi');
+    expect(scopeOf([lines[12]], 'Authorization, Idempotency-Key')).toBe('support.type.property-name.header.proschi');
   });
 
   it.each(examples.map((e) => [e.id, e.source]))('tokenizes the %s example without leaving a block open', (_id, source) => {

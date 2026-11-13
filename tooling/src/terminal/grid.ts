@@ -124,6 +124,24 @@ export class Grid {
     return base64(new Uint8Array(words.buffer));
   }
 
+  /** The cells `columns` × `rows` from (x, y): a viewport over a drawing wider than the room. */
+  crop(x: number, y: number, columns: number, rows: number): Grid {
+    const out = new Grid(columns, rows);
+    for (let r = 0; r < rows; r++) {
+      if (y + r < 0 || y + r >= this.rows) continue;
+      for (let c = 0; c < columns; c++) {
+        if (!this.inside(x + c, y + r)) continue;
+        const from = (y + r) * this.columns + x + c;
+        const to = r * columns + c;
+        out.glyphs[to] = this.glyphs[from];
+        out.fg[to] = this.fg[from];
+        out.bg[to] = this.bg[from];
+        out.lines[to] = this.lines[from];
+      }
+    }
+    return out;
+  }
+
   /** The glyphs alone, trailing spaces trimmed: for tests. */
   toText(): string {
     const out: string[] = [];

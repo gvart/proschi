@@ -1,0 +1,36 @@
+# expect-fail: Shed requests never reach the API service
+# expect-fail: cost ≤ $1,600/month
+# mistake: Buying capacity for the worst spike instead of shedding
+# explain: A second pool for progress markers and logs, sized to serve every one of them at the peak, keeps playback safe but costs more than the API service itself, every hour of the month, for a spike that lasts minutes. Keep the capacity you have and shed the least important requests while the spike lasts.
+# lesson: why-not-just-add-capacity
+# cards: servers-for-peak-load, bulkheads, load-shedding
+# A separate overflow pool takes progress markers and logs, sized to serve all 14k of them a second.
+import "problem.proschi"
+
+zuul     "Zuul"         [API Gateway] x4 @edge "Routes playback to the API service and the rest to the overflow pool"
+overflow "Overflow API" [REST API]    x10 @api "Serves every progress marker and log at the peak"
+
+device -> zuul     : HTTPS
+zuul   -> api      : HTTP
+zuul   -> overflow : HTTP
+
+usecase "Start playback" "A member presses play" {
+  device -> zuul   : POST /playback/start
+  zuul   -> api    : POST /playback/start
+  api   --> zuul   : 200 {"manifest": "..."}
+  zuul  --> device : 200 {"manifest": "..."}
+}
+
+usecase "Save progress" "The app saves a pause or stop marker" {
+  device    -> zuul     : PUT /progress
+  zuul      -> overflow : PUT /progress
+  overflow --> zuul     : 204
+  zuul     --> device   : 204
+}
+
+usecase "Send logs" "The app uploads logs and background data" {
+  device    -> zuul     : POST /logs
+  zuul      -> overflow : POST /logs
+  overflow --> zuul     : 202
+  zuul     --> device   : 202
+}

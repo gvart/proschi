@@ -1,3 +1,7 @@
+---
+updated: 2026-11-12
+---
+
 # Why architecture diagrams as text
 
 Proschi is a small text language for architecture diagrams and high-level
@@ -54,6 +58,8 @@ system. It is not a free-form drawing tool: every box is a node the
 simulation counts. And the simulation estimates from default numbers per
 tech stack, so it compares designs rather than measuring yours. [How the simulation works](https://proschi.app/docs/model/)
 says how far to trust its numbers.
+For how it differs from Mermaid, PlantUML, Structurizr and D2, see
+[Proschi vs other diagram tools](COMPARE.md).
 
 Start with the [Quickstart](QUICKSTART.md). Proschi is free and open source
 under the MIT license, on [GitHub](https://github.com/gvart/proschi). The

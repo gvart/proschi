@@ -27,6 +27,8 @@ export interface SharedDiagram {
   title: string;
   source: string;
   imports?: Record<string, string>;
+  /** false: the owner's embeds leave Proschi's branding out (Pro, pro_exports; backend/src/shares.ts getShare). */
+  branding?: false;
 }
 
 export interface ShareListing {
@@ -52,7 +54,7 @@ export async function fetchShare(id: string): Promise<SharedDiagram> {
   const share = await api<SharedDiagram>(`/api/shares/${id}`);
   if (typeof share.source !== 'string') throw new Error('The short link answered no diagram');
   const imports = fileMap(share.imports);
-  return { id: share.id, title: share.title, source: share.source, ...(imports ? { imports } : {}) };
+  return { id: share.id, title: share.title, source: share.source, ...(imports ? { imports } : {}), ...(share.branding === false ? { branding: false as const } : {}) };
 }
 
 export const listShares = (): Promise<ShareListing> => api<ShareListing>('/api/me/shares');

@@ -112,13 +112,22 @@ the generic tech of its kind, product in the name (`"TigerBeetle" [Database]`).
 | external | `Third Party API`, `Payment Gateway`, `Email Service`, `SMS Service`, `Push Service`, `Auth Service`, `Stripe`, `PayPal`, `Adyen`, `Twilio`, `SendGrid`, `Mailgun`, `Auth0`, `Okta`, `AWS Cognito`, `AWS SES`, `APNs`, `FCM`, `OpenAI`, `Google Maps` |
 | other (text) | `Text Note`, `Sticky Note`, `Comment` |
 
+## Types: `[abstract] type Name [extends Parent] { … }` (top level)
+```proschi
+type LedgerDb extends PostgreSQL { op write APPEND latency 2 }
+api    "API"    [REST API]
+ledger "Ledger" [LedgerDb]
+api -> ledger : APPEND
+```
+`[Tech]` names a type. Body lines: `kind`, `op read|write|forward A, B [latency x] [cost y]`, `status`, `header`, `doc "…"`. A step label starts with an op of the target's type, which decides read or write: `INSERT` to PostgreSQL, `PUBLISH X` to Kafka, `SEND X` to SQS, an HTTP method to a REST API, `MESSAGE` through a WebSocket load balancer (it forwards; the next step's op decides). An unknown op warns. Generic types have their family's ops, which products inherit: `GET`, `PUT`, `DELETE`, `SCAN` on `[Key-Value Store]`, `GET`, `SET` on `Cache`, `GET`, `PUT`, `LIST` on `Object Storage`. Types without ops (Service, Worker, gRPC, Function) take any label. Headers follow the path: `GET /x header Authorization, If-None-Match`.
+
 ## Use cases
 
 ```proschi fragment
 usecase "Place order" "Checkout from the cart" {
   user -> api : POST /orders {"sku": "A1"}
   alt "Paid" {
-    api ->> events : OrderPlaced {"id": "o-1"}
+    api ->> events : PUBLISH OrderPlaced {"id": "o-1"}
     api --> user   : 201 {"id": "o-1"}
   } alt "DB down" when "primary unreachable" {
     api  -x db   : INSERT order

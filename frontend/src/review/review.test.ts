@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { defaultEngine, nullEngine } from '../hld/engine';
 import { findProblem } from '../practice/catalog';
 import { mapResolver, parse } from '../dsl';
+import { analyze } from '../sim/analyze';
 import { MAX_REVIEW_IMPORTS, MAX_REVIEW_SOURCE, parseDesignReview, reviewRequestProblem, type DesignReview } from './contract';
 import { editorReviewInput } from './editor';
 import { practiceReviewInput } from './practice';
@@ -86,6 +87,38 @@ describe('review request', () => {
     expect(reviewRequestProblem(JSON.parse(JSON.stringify(request)))).toBeUndefined();
     // No imports, no field.
     expect(buildReviewRequest(editorReviewInput('', parse(''), defaultEngine.analyze(parse('').diagram)!, [], { imports: {} }))).not.toHaveProperty('imports');
+  });
+});
+
+describe('review load by use case', () => {
+  it('uses the simulation\'s rates: peak traffic and cache misses included', () => {
+    const source = `
+user  [Browser]
+api   [REST API] x4
+cache [Redis]
+db    [PostgreSQL]
+user -> api
+api -> cache
+api -> db
+usecase "Read" {
+  user -> api : GET /item
+  api -> cache : GET item
+  api -> db : SELECT item
+  api --> user : 200
+}
+traffic {
+  "Read" 1k rps peak x3
+}
+capacity {
+  cache hit 90%
+}`;
+    const parsed = parse(source);
+    const analysis = analyze(parsed.diagram);
+    const request = buildReviewRequest(editorReviewInput(source, parsed, analysis, []));
+    const loadOf = (id: string) => request.metrics!.nodes!.find((n) => n.id === id)!.loadBy;
+    expect(loadOf('cache')).toEqual([{ useCase: 'Read', rps: 3000 }]);
+    expect(loadOf('db')[0].rps).toBeCloseTo(300, 6);
+    expect(loadOf('db')[0].rps).toBeCloseTo(analysis.nodes.find((n) => n.id === 'db')!.loadRps, 6);
   });
 });
 

@@ -9,7 +9,7 @@ api  -> search
 
 usecase "Suggest" {
   user    -> api    : GET /suggest?q=ipho
-  api     -> search : prefix query "ipho*"
+  api     -> search : _search prefix "ipho*"
   search --> api    : hits
   api    --> user   : 200 ["iphone 15", "iphone case"]
 }

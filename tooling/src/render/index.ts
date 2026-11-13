@@ -13,11 +13,11 @@ import { renderSequenceSvg, scenarioTitle } from './sequence';
 import { renderHldHtml, renderHldMarkdown } from './hld';
 import { descriptionHtml } from './description';
 import { esc } from './svg';
-import { SKETCH, type RenderTheme } from './theme';
+import { SKETCH, asRenderTheme, type RenderTheme } from './theme';
 
 export { renderArchitectureSvg } from './architecture';
 export { renderSequenceSvg, scenarioTitle } from './sequence';
-export { DEFAULT_THEME, THEME_NAMES, getTheme, isThemeName, type RenderTheme, type ThemeName } from './theme';
+export { DEFAULT_THEME, THEME_ALIASES, THEME_CHOICES, THEME_NAMES, getTheme, isThemeName, type RenderTheme, type ThemeName } from './theme';
 
 export const FORMATS = ['svg', 'md', 'html', 'preview-html', 'hld-md', 'hld-html'] as const;
 export type RenderFormat = (typeof FORMATS)[number];
@@ -47,11 +47,12 @@ export function scenarioSlug(useCase: DiagramUseCase, scenario: DiagramScenario)
 
 /**
  * Every SVG of a diagram. With `inline`, ids inside each SVG get a unique
- * prefix so several can share one HTML page. `options.theme` (default sketch)
+ * prefix so several can share one HTML page. `options.theme` (default sketch-light)
  * styles the architecture and every sequence diagram.
  */
 export async function renderSvgs(diagram: Diagram, inline = false, options: ArchitectureOptions = {}): Promise<RenderedDiagram> {
   const architecture = await renderArchitectureSvg(diagram, options);
+  const theme = asRenderTheme(options.theme) ?? SKETCH;
   let n = 0;
   const scenarios = diagram.useCases.flatMap((useCase) =>
     useCase.scenarios.map((scenario) => ({
@@ -59,7 +60,7 @@ export async function renderSvgs(diagram: Diagram, inline = false, options: Arch
       scenario,
       title: scenarioTitle(useCase, scenario),
       slug: scenarioSlug(useCase, scenario),
-      svg: renderSequenceSvg(diagram, useCase, scenario, inline ? `s${++n}-` : '', options.theme),
+      svg: renderSequenceSvg(diagram, useCase, scenario, inline ? `s${++n}-` : '', theme),
     })),
   );
   return { architecture, scenarios };
@@ -451,8 +452,8 @@ export function renderPreviewHtml(diagram: Diagram, rendered: RenderedDiagram, t
 /** The files `proschi render` writes for `format`; `baseName` names the single md/html file. */
 export async function renderFiles(diagram: Diagram, format: RenderFormat, baseName: string, options: ArchitectureOptions = {}): Promise<RenderedFile[]> {
   if (format === 'md') return [{ name: `${baseName}.md`, content: renderMarkdown(diagram) }];
-  if (format === 'html') return [{ name: `${baseName}.html`, content: renderHtml(diagram, await renderSvgs(diagram, true, options), options.theme) }];
-  if (format === 'preview-html') return [{ name: `${baseName}.preview.html`, content: renderPreviewHtml(diagram, await renderSvgs(diagram, true, options), options.theme) }];
+  if (format === 'html') return [{ name: `${baseName}.html`, content: renderHtml(diagram, await renderSvgs(diagram, true, options), asRenderTheme(options.theme)) }];
+  if (format === 'preview-html') return [{ name: `${baseName}.preview.html`, content: renderPreviewHtml(diagram, await renderSvgs(diagram, true, options), asRenderTheme(options.theme)) }];
   if (format === 'hld-md') return [{ name: `${baseName}.hld.md`, content: renderHldMarkdown(diagram) }];
   if (format === 'hld-html') return [{ name: `${baseName}.hld.html`, content: renderHldHtml(diagram, await renderSvgs(diagram, true, options)) }];
   const { architecture, scenarios } = await renderSvgs(diagram, false, options);

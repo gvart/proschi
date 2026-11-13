@@ -36,6 +36,10 @@ function paperColor(): string {
   return channels ? `rgb(${channels})` : '#ffffff';
 }
 
+/** A PNG's pixel ratio: 2× on every plan, 3× on Pro (pro_exports, ExportMenu.tsx). */
+export type PngScale = 2 | 3;
+const PNG_SCALE: PngScale = 2;
+
 /** Space between the diagram and the legend in an exported image. */
 const LEGEND_GAP = 32;
 
@@ -43,15 +47,16 @@ const LEGEND_GAP = 32;
  * Renders the whole diagram (not just the visible part) to PNG or SVG.
  * `nodes` must be React Flow's internal nodes so nested positions are absolute.
  * A `legend` element (the canvas's legend panel) is copied to the right of the
- * diagram, aligned with its bottom.
+ * diagram, aligned with its bottom. A PNG at another `scale` than 2× is
+ * named `<name>@<scale>x.png`.
  */
-export async function exportImage(format: 'png' | 'svg', nodes: Node[], viewport: HTMLElement, fileName: string, legend?: HTMLElement) {
+export async function exportImage(format: 'png' | 'svg', nodes: Node[], viewport: HTMLElement, fileName: string, legend?: HTMLElement, scale: PngScale = PNG_SCALE) {
   // html-to-image is only needed here, so it loads on the first export.
   const { toPng, toSvg } = await import('html-to-image');
   const bounds = { ...getRectOfNodes(nodes) };
   const copy = legend ? placeLegend(legend, viewport, bounds) : undefined;
   try {
-    await renderImage(format, viewport, bounds, fileName, toPng, toSvg);
+    await renderImage(format, viewport, bounds, fileName, toPng, toSvg, scale);
   } finally {
     copy?.remove();
   }
@@ -83,6 +88,7 @@ async function renderImage(
   fileName: string,
   toPng: typeof import('html-to-image').toPng,
   toSvg: typeof import('html-to-image').toSvg,
+  scale: PngScale,
 ) {
   const width = Math.ceil(bounds.width + PADDING * 2);
   const height = Math.ceil(bounds.height + PADDING * 2);
@@ -97,8 +103,8 @@ async function renderImage(
       transform: `translate(${PADDING - bounds.x}px, ${PADDING - bounds.y}px) scale(1)`,
     },
   };
-  const url = format === 'png' ? await toPng(viewport, { ...options, pixelRatio: 2 }) : await toSvg(viewport, options);
-  downloadUrl(url, fileName);
+  const url = format === 'png' ? await toPng(viewport, { ...options, pixelRatio: scale }) : await toSvg(viewport, options);
+  downloadUrl(url, format === 'png' && scale !== PNG_SCALE ? fileName.replace(/\.png$/, `@${scale}x.png`) : fileName);
 }
 
 /** The size link previews show (Open Graph's 1.91:1). */

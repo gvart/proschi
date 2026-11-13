@@ -209,7 +209,7 @@ test.describe('editor tour on a phone', () => {
     await tour.getByRole('button', { name: 'Show me' }).click();
     // The next step brings the diagram back, with the edit drawn.
     await expect(tour).toHaveAccessibleName('Quick tour: Play a use case');
-    await expect(panes.getByRole('tab', { name: /Diagram/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(panes.getByRole('tab', { name: /Preview/ })).toHaveAttribute('aria-selected', 'true');
     await expect(canvasNodes(page).filter({ hasText: 'My Notes API' })).toBeVisible();
     // The diagram is fitted into the part of the canvas the docked card leaves free.
     const card = (await tour.boundingBox())!;

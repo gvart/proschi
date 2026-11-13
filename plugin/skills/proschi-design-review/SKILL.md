@@ -134,7 +134,7 @@ Findings:
 2. **[High] SPOF.** `api` x1 on every path (analyze: availability 99.39%).
    Fix: `x2`+ and `survive any node failure`.
 3. **[Medium] Email on the request path** adds ~210 ms at p50 and
-   SendGrid's 99.9% to checkout. Fix: `api ->> rabbit : OrderPlaced`, a
+   SendGrid's 99.9% to checkout. Fix: `api ->> rabbit : PUBLISH OrderPlaced`, a
    worker that sends it, and `test "…" { "Place order" never waits for sendgrid }`.
 
 After the edits, the design under review looks like:
@@ -162,7 +162,7 @@ usecase "Place order" {
   api  -> stripe : CHARGE card
   alt "Paid" {
     api     -> db       : INSERT order
-    api    ->> rabbit   : OrderPlaced {"id": "o-1"}
+    api    ->> rabbit   : PUBLISH OrderPlaced {"id": "o-1"}
     api    --> user     : 201 {"id": "o-1"}
     rabbit ->> worker   : OrderPlaced
     worker  -> sendgrid : SEND receipt

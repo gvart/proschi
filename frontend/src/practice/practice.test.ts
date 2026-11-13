@@ -15,7 +15,7 @@ const cardIds = new Set(Object.keys(import.meta.glob('./cards/*/*.md')).map((pat
 describe('problem catalog', () => {
   it('reads every problem folder', () => {
     expect(catalogErrors.map((e) => e.message)).toEqual([]);
-    expect(problems.length).toBeGreaterThanOrEqual(29);
+    expect(problems.length).toBeGreaterThanOrEqual(40);
   });
 
   it('has unique ids and finds problems by id', () => {
@@ -38,16 +38,24 @@ describe('problem catalog', () => {
       'rate-limiter',
       'snowflake-ids',
       'url-shortener',
+      'ad-click-aggregator',
+      'api-gateway',
       'chat',
+      'config-push',
+      'distributed-cron',
       'job-queue',
+      'media-processing',
       'file-storage',
       'news-feed',
       'notification-fanout',
       'notion-sharding',
+      'load-shedding',
       'push-gateway',
+      'read-replicas',
       'github-repo-replication',
       'ride-matching',
       'search-autocomplete',
+      'search-indexing',
       'cdn-tiered-cache',
       'trending-topics',
       'view-counting',
@@ -55,8 +63,11 @@ describe('problem catalog', () => {
       'collaborative-docs',
       'discord-messages',
       'distributed-kv',
+      'recommendations',
       'flash-sale',
       'metrics-ingest',
+      'multi-region-active-active',
+      'nearby-search',
       'payments',
       'social-graph-cache',
       'ticket-booking',

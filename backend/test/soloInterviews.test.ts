@@ -94,4 +94,38 @@ describe('mock interviews in progress', () => {
     const estimation = (a: AchievementsAnswer) => a.skills.topics.find((t) => t.topic === 'estimation')!.mastery;
     expect(estimation(after)).toBeGreaterThan(estimation(before));
   });
+
+  it('keeps what each did and answers it to Pro only, newest first, filling in a session kept without it', async () => {
+    const { id, token } = await signedInUser();
+    const results = {
+      phases: { clarify: 4 * MIN, estimate: 3 * MIN, design: 20 * MIN, wrapup: 2 * MIN },
+      questions: { asked: 5, good: 3, weak: 2, goodTotal: 4 },
+      estimates: { answered: 2, correct: 1, total: 2 },
+      tests: { passed: 5, total: 6 },
+      checklist: { checked: 4, total: 4 },
+    };
+    for (const bad of [{ ...results, phases: { clarify: 1 } }, { ...results, questions: { asked: -1, good: 0, weak: 0, goodTotal: 3 } }, { ...results, tests: { passed: 'all' } }, 'yes']) {
+      expect((await send(token, { sessions: [session({ results: bad })] })).status).toBe(400);
+    }
+    // Kept first without results (sent before they were), then filled in; a later send changes nothing.
+    expect(await (await send(token, { sessions: [session()] })).json()).toEqual({ added: 1 });
+    expect(await (await send(token, { sessions: [session({ results }), session({ startedAt: START + MIN, results: { ...results, tests: undefined } })] })).json()).toEqual({ added: 2 });
+    expect(await (await send(token, { sessions: [session({ results: { ...results, checklist: { checked: 0, total: 4 } } })] })).json()).toEqual({ added: 0 });
+
+    const history = () => call('/api/me/interviews/solo', { token });
+    expect((await call('/api/me/interviews/solo', {})).status).toBe(401);
+    const free = await history();
+    expect(free.status).toBe(402);
+    expect(await free.json()).toMatchObject({ error: 'plan_required', feature: 'interview_history' });
+
+    await env.DB.prepare("UPDATE users SET plan = 'pro' WHERE id = ?").bind(id).run();
+    const pro = await history();
+    expect(pro.status).toBe(200);
+    const { sessions } = (await pro.json()) as { sessions: { startedAt: number; results?: typeof results }[] };
+    expect(sessions.map((s) => s.startedAt)).toEqual([START + MIN, START]);
+    expect(sessions[1]).toEqual({ problem: 'url-shortener', startedAt: START, durationMin: 45, totalMs: 12 * MIN, reachedDesign: false, drew: false, solved: false, results });
+    expect(sessions[0].results).not.toHaveProperty('tests');
+    const exported = (await (await call('/api/me/export', { token })).json()) as { soloInterviews: { results?: unknown }[] };
+    expect(exported.soloInterviews[0].results).toEqual(results);
+  });
 });

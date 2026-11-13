@@ -2,7 +2,7 @@ import { viewDiagram, type ViewOptions } from '../../../frontend/src/dsl/view';
 import type { Diagram, DiagramSystem } from '../../../frontend/src/dsl/types';
 import type { Analysis } from '../../../frontend/src/sim/analyze';
 import { formatMs, formatRps } from '../../../frontend/src/sim/format';
-import { analysisOverlay, type NodeOverlay, type SimOverlay } from '../../../frontend/src/sim/overlay';
+import { analysisOverlay, type CriticalPathOverlay, type FlowOverlay, type NodeOverlay, type SimOverlay } from '../../../frontend/src/sim/overlay';
 import { contractOf, type SystemAnalysis } from '../../../frontend/src/sim/systems';
 import { runTests } from '../../../frontend/src/sim/tests';
 
@@ -47,6 +47,10 @@ export interface SystemNote {
 export interface ViewOverlay {
   /** Load per drawn node, by its id in the view. */
   nodes: Record<string, NodeOverlay>;
+  /** Requests along the drawn connections, by the ids in the view. */
+  flows: FlowOverlay[];
+  /** The p99 path of the busiest use case of the scope drawn (the root, or the system focused into). */
+  critical?: CriticalPathOverlay;
   /** Per system box or expanded frame, by its id in the view. */
   systems: Record<string, SystemBadge>;
   notes: SystemNote[];
@@ -106,7 +110,7 @@ export const idList = (value: string) => value.split(',').map((s) => s.trim()).f
  * root document has none).
  */
 export function viewOverlay(diagram: Diagram, analysis: Analysis | undefined, view: SystemsView = {}): ViewOverlay {
-  const out: ViewOverlay = { nodes: {}, systems: {}, notes: [] };
+  const out: ViewOverlay = { nodes: {}, flows: [], systems: {}, notes: [] };
   const { expanded } = viewOptions(view);
   let scope = diagram;
   let scoped = analysis;
@@ -125,7 +129,7 @@ export function viewOverlay(diagram: Diagram, analysis: Analysis | undefined, vi
     }
   }
   collect(scope, scoped, load, '', path, expanded!, out);
-  return out;
+  return load?.critical ? { ...out, critical: load.critical } : out;
 }
 
 function teamAnalysis(system: DiagramSystem, result: SystemAnalysis | undefined): Analysis | undefined {
@@ -139,6 +143,7 @@ function teamLoad(system: DiagramSystem, result: SystemAnalysis | undefined, ana
 
 function collect(diagram: Diagram, analysis: Analysis | undefined, load: SimOverlay | undefined, at: string, path: string, expanded: ReadonlySet<string>, out: ViewOverlay): void {
   for (const [id, o] of Object.entries(load?.nodes ?? {})) out.nodes[at + id] = o;
+  for (const f of load?.flows ?? []) out.flows.push({ ...f, from: at + f.from, to: at + f.to });
   for (const system of diagram.systems ?? []) {
     const result = analysis?.systems?.find((s) => s.id === system.id);
     out.systems[at + system.id] = badgeOf(diagram, system, result);

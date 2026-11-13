@@ -8,8 +8,8 @@
 # and a push acknowledged by the primary alone dies with it.
 import "problem.proschi"
 
-proxy "Spokes Proxy"     [Go]             x16 @git
-fs    "Git File Servers" [NoSQL Database] x3 @git
+proxy "Spokes Proxy"     [Go]            x16 @git
+fs    "Git File Servers" [GitFileServer] x3 @git
 
 capacity {
   fs shards 2

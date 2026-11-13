@@ -31,16 +31,31 @@ const SECTION_CLASSES: TokenClass[] = ['string', 'tech', 'comment', 'number', 'k
 const SECTION_HEADER =
   /^\s*(?:(?:traffic|requirements|capacity)\s*\{|entity\s+[A-Za-z_]\w*\b.*\{|(?:decision|test)\s+"(?:[^"\\]|\\.)*".*\{|decision\s+"(?:[^"\\]|\\.)*"\s+because\b)/;
 
-/** Highlights one line; `inSection` for a line inside a section block. */
-export function highlightLine(line: string, inSection = false): Segment[] {
-  const section = inSection || SECTION_HEADER.test(line);
+/**
+ * Lines of a `type` block (docs/TYPES.md): the header's words and the
+ * property names are keywords, numbers and status codes are numbers.
+ * Keywords match in lower case only, so an op named READ stays plain.
+ */
+const TYPE_TOKEN =
+  /("(?:[^"\\]|\\.)*")|(\[[A-Za-z][^\]"]*\])|((?:^|\s)#.*$)|(\b\d+(?:\.\d+)?(?:%|ms\b|[kmb]\b)?)|(\b(?:abstract|type|extends|kind|rps|readRps|writeRps|latencyMs|availability|costUsd|bandwidthMBps|egressUsdPerGb|durable|consistency|writeScaling|protocol|op|read|write|forward|latency|cost|status|header|icon|doc)\b)/g;
+
+const TYPE_CLASSES: TokenClass[] = ['string', 'tech', 'comment', 'number', 'keyword'];
+
+/** `type Name extends Parent {`, `abstract type [Two Words] {`: a line that opens a type block. */
+const TYPE_HEADER = /^\s*(?:abstract\s+)?type\s+(?:[A-Za-z_]\w*|\[[^\]]*\])\s*(?:extends\b|\{)/;
+
+/** Highlights one line; `inSection` for a line inside a section block, `inType` inside a type block. */
+export function highlightLine(line: string, inSection = false, inType = false): Segment[] {
+  const type = inType || TYPE_HEADER.test(line);
+  const section = !type && (inSection || SECTION_HEADER.test(line));
+  const [pattern, classes] = type ? [TYPE_TOKEN, TYPE_CLASSES] : section ? [SECTION_TOKEN, SECTION_CLASSES] : [TOKEN, CLASSES];
   const out: Segment[] = [];
   let last = 0;
-  for (const m of line.matchAll(section ? SECTION_TOKEN : TOKEN)) {
+  for (const m of line.matchAll(pattern)) {
     const index = m.index ?? 0;
     const group = m.slice(1).findIndex((g) => g !== undefined);
     if (index > last) out.push({ text: line.slice(last, index) });
-    out.push({ text: m[0], cls: (section ? SECTION_CLASSES : CLASSES)[group] });
+    out.push({ text: m[0], cls: classes[group] });
     last = index + m[0].length;
   }
   if (last < line.length) out.push({ text: line.slice(last) });
@@ -50,10 +65,13 @@ export function highlightLine(line: string, inSection = false): Segment[] {
 /** Highlights a whole snippet, following section blocks from line to line. */
 export function highlightLines(lines: string[]): Segment[][] {
   let inSection = false;
+  let inType = false;
   return lines.map((line) => {
-    if (/^\s*\}/.test(line)) inSection = false;
-    const segments = highlightLine(line, inSection);
-    if (!inSection && SECTION_HEADER.test(line) && /\{\s*(?:#.*)?$/.test(line)) inSection = true;
+    if (/^\s*\}/.test(line)) inSection = inType = false;
+    const segments = highlightLine(line, inSection, inType);
+    const opens = /\{\s*(?:#.*)?$/.test(line);
+    if (!inType && TYPE_HEADER.test(line) && opens) inType = true;
+    else if (!inSection && !inType && SECTION_HEADER.test(line) && opens) inSection = true;
     return segments;
   });
 }
