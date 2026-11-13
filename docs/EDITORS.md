@@ -1,5 +1,5 @@
 ---
-updated: 2026-11-09
+updated: 2026-11-13
 ---
 
 # Editor support
@@ -86,8 +86,21 @@ same file. The extension bundles the grammar and the language server.
 
 **Proschi: Open Preview to the Side** (the preview button in the editor
 title bar) opens the architecture and a scenario picker with that
-scenario's sequence diagram. It updates as you type. While the document has
+scenario's sequence diagram, with its use case's description above it,
+folded (sentences like `Requests: a (x); b (y)` show as tables). It updates
+as you type and keeps the scenario you picked. While the document has
 errors, it lists them above the last good rendering.
+
+The preview draws in one of two themes, set with `proschi.preview.theme`:
+
+| Value | Look |
+|---|---|
+| `sketch` (default) | Cream paper, ink outlines and hard shadows, as on proschi.app |
+| `classic` | White background, rounded light-grey cards, icon tiles coloured by component type, blue request arrows |
+
+A `"theme"` in the nearest `proschi.json` overrides the setting, the same
+way it picks the theme for `proschi render`. The preview redraws when the
+setting or `proschi.json` changes.
 
 ## IntelliJ IDEA and other JetBrains IDEs
 

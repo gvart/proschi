@@ -62,6 +62,13 @@ hash). Each use case's description sits above it, folded, with
 (`src/render/description.ts`). The page's only script is allowed by its CSP
 hash.
 
+The VS Code extension's preview (`vscode/src/preview.ts`, content from
+`src/render/preview.ts`) shows the same descriptions, built by the shared
+`useCaseBlocksHtml` in `src/render/index.ts`. It draws in the theme of
+`proschi.preview.theme` (`sketch` or `classic`), which a `"theme"` in the
+nearest `proschi.json` overrides (`themeFor`'s `fallback`), and its page
+takes that theme's colours: light or dark after VS Code's colour theme.
+
 `proschi preview` (`src/render/serve.ts`) serves that page for any
 `.proschi` file on disk from a local server on 127.0.0.1. The start page
 lists the files by directory with their titles, and one box filters them or
