@@ -221,7 +221,8 @@ if (select) {
     show(select.value);
   };
   select.addEventListener('change', () => {
-    history.replaceState(null, '', '#' + encodeURIComponent(select.value));
+    // Pages loaded from a string (an IDE's embedded browser) may refuse to change their URL.
+    try { history.replaceState(null, '', '#' + encodeURIComponent(select.value)); } catch {}
     show(select.value);
   });
   window.addEventListener('hashchange', fromHash);
