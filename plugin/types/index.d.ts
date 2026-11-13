@@ -23,6 +23,9 @@ export type Player = {
 /** A document the pane draws when it shows no file: a fenced block focused from a reply, with its imports. */
 export type PaneSource = { source: string; path?: string; imports?: Record<string, string> }
 
+/** What a row placed in the transcript (↓ Inline, `/proschi view --inline`) draws, a file read on every draw or a block with its imports, and how many prompts had been submitted when it was placed. */
+export type PlacedRow = { file?: string; source?: string; path?: string; imports?: Record<string, string>; prompt?: number }
+
 /**
  * The pane's tabs (src/views/tabs.tsx), as the editor's views. Older
  * versions stored `whatif`, `sequence` and `tests` too: `tabOf` reads the
@@ -52,6 +55,10 @@ declare module 'claude-code' {
       paneTab: PaneTab
       /** Whether the terminal shows pictures, once asked; read through `probeOf`. */
       graphics: GraphicsProbe
+      /** One per row placed in the transcript, by its id (`inline-…`). */
+      placed: StateFamily<PlacedRow>
+      /** How many prompts were submitted this session. */
+      prompts: number
     }
   }
 }

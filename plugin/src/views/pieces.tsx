@@ -18,7 +18,7 @@ import { PINK } from './view'
 export const INLINE_WARNINGS = 2
 
 /** A control's icon as text cells draw it, before its label. */
-const GLYPH: Partial<Record<Icon, string>> = { copy: '⧉', open: '↗', focus: '⛶', cycle: '⇥', collapse: '⊟', expand: '⊞', enter: '⤢', leave: '↑', explore: '≡' }
+const GLYPH: Partial<Record<Icon, string>> = { copy: '⧉', open: '↗', focus: '⛶', cycle: '⇥', collapse: '⊟', expand: '⊞', enter: '⤢', leave: '↑', explore: '≡', inline: '↓' }
 
 /** A control's label in text cells: its icon's glyph, then its label. */
 export const textLabel = (c: Control) => [c.icon && GLYPH[c.icon], c.label].filter(Boolean).join(' ')
@@ -82,13 +82,17 @@ export function verdictText(ui: Ui, v: NonNullable<NoticesPanel['verdict']>, wid
   )
 }
 
-/** The links under a drawing: copy its source and its share link, open it in the editor, and in the transcript open it in the pane. */
+/**
+ * The links under a drawing: copy its source and its share link, open it in
+ * the editor; in the transcript open it in the pane (Focus), in the pane move
+ * it into the transcript (Inline, `i`).
+ */
 export function linkControls(inPane: boolean, roomy: boolean): Control[] {
   return [
     { id: 'src', icon: 'copy', label: roomy ? 'Copy source' : 'Source' },
     { id: 'lnk', icon: 'copy', label: roomy ? 'Copy share link' : 'Link' },
     { id: 'open', icon: 'open', label: roomy ? 'Open in Proschi' : 'Open', variant: 'primary' },
-    ...(inPane ? [] : [{ id: 'focus', icon: 'focus' as const, label: 'Focus' }]),
+    ...(inPane ? [{ id: 'inline', icon: 'inline' as const, label: 'Inline', hotkey: 'i' }] : [{ id: 'focus', icon: 'focus' as const, label: 'Focus' }]),
   ]
 }
 

@@ -390,6 +390,7 @@ const ICONS: Record<Icon, { d: string; fill?: boolean; extra?: string }> = {
   check: { d: 'M3 8.5 L6.5 12 L13 4.5' },
   warn: { d: 'M8 2 L14.6 13.6 H1.4 Z', extra: 'M8 6.3 V9.6 M8 11.6 V11.7' },
   bolt: { d: 'M9.2 1.5 L3.5 9 H8 L6.8 14.5 L12.5 7 H8 Z', fill: true },
+  inline: { d: 'M8 2.5 V10 M4.5 6.5 L8 10 L11.5 6.5 M2.5 13.5 H13.5' },
 };
 
 /** An icon `size` px square at (x, y) in `color`. */

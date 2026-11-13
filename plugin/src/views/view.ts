@@ -1,5 +1,6 @@
 import type { DiagramScenario, DiagramUseCase } from '../../../frontend/src/dsl/types'
 import type { Scene } from '../../../tooling/src/terminal/scene'
+import type { SequenceScene } from '../../../tooling/src/terminal/sequence'
 import type { Document } from '../../../tooling/src/terminal/document'
 import type { Ui } from './render'
 
@@ -32,6 +33,8 @@ export interface View {
   edges: Document['edges']
   /** Drawn in the pane, whose Buttons take hotkeys and whose body scrolls under the plugin. */
   inPane: boolean
+  /** The sequence diagram (text cells) of the scenario a player's pick names (the first where it names none): what the animation paints under the diagram. */
+  sequence?: (pick: string) => SequenceScene | undefined
 }
 
 /** The canvas's tokens (design/tokens.css): the pink of playback, the ink on it, the yellow of the primary control. */

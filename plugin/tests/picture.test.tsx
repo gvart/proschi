@@ -440,6 +440,30 @@ test('pictures shown: Play blits only the tiles a frame changes, asked for once 
   await ui.unmount()
 })
 
+test('pictures: a scenario playing draws its sequence diagram under the diagram, the player\'s step lit, each step\'s asked for ahead', SLOW, async ($, on) => {
+  const clock = mock.clock(on)
+  const h = host(on, clock)
+  let ui = await settle($, clock)
+  type Figure = { type: string; of?: { useCase: string; scenario?: string; step?: number } }
+  const figures = () =>
+    h.requests.flatMap(r => ((r.input.panels ?? []) as { panel: { kind: string; blocks?: Figure[]; source?: unknown } }[]).filter(p => p.panel.kind === 'page' && p.panel.source).flatMap(p => (p.panel.blocks ?? []).filter(b => b.type === 'figure')))
+  // Before Play: the architecture alone, the first step's sequence asked for ahead.
+  expect(await ui.find({ key: 'p-m1:0-sequence' })).toBeUndefined()
+  expect(figures().map(f => f.of)).toContainEqual({ useCase: 'place-order', scenario: 'main', step: 0 })
+  await click(ui, 'm1:0', 'bar/play')
+  await ui.unmount()
+  ui = await settle($, clock, reply, 'm1:0', c => c.some(x => x.id === 'bar/next'))
+  for (let i = 0; i < 8 && !(await ui.find({ key: 'p-m1:0-sequence' })); i++) {
+    await ui.unmount()
+    await clock.advance(250)
+    ui = await $.ui.mount(reply)
+  }
+  // Playing: the sequence under the diagram, the links still last; every step's asked for, so a step shows it at once.
+  expect(await ui.find({ key: 'p-m1:0-sequence' })).toBeDefined()
+  expect([...new Set(figures().map(f => f.of?.step))].sort()).toEqual([0, 1, 2, 3])
+  await ui.unmount()
+})
+
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /** What a control opens: the floats' controls behind it, by the prefix of their ids. */
@@ -614,18 +638,31 @@ for (const where of ['transcript', 'pane'] as const) {
     await ui.unmount()
     ui = await settle($, clock, props, site, hasNo('explorer/'))
     await snap('explorer closed')
-    ui = await step($, clock, ui, props, site, 'bar/play', has('bar/next'))
-    ui = await step($, clock, ui, props, site, 'bar/play', has('bar/next'))
+    // Playing, the scenario's sequence diagram sits under the architecture (the fork's sequence view): one layout of its own from step to step.
+    const playing: typeof shapes = []
+    const snapPlaying = async (name: string) => playing.push([name, await shapeOf(ui, site)])
+    const withSequence = (c: Control[]) => c.some(x => x.id === 'bar/next')
+    ui = await step($, clock, ui, props, site, 'bar/play', withSequence)
+    ui = await step($, clock, ui, props, site, 'bar/play', withSequence)
+    for (let i = 0; i < 8 && !(await ui.find({ key: `p-${site}-sequence` })); i++) {
+      await ui.unmount()
+      await clock.advance(250)
+      ui = await $.ui.mount(props)
+    }
+    await snapPlaying('step 1')
     ui = await step($, clock, ui, props, site, 'bar/next', has('bar/prev'))
-    await snap('step 2')
+    await snapPlaying('step 2')
     ui = await step($, clock, ui, props, site, 'bar/body', has('drawer/close'))
-    await snap('bodies')
+    await snapPlaying('bodies')
     ui = await step($, clock, ui, props, site, 'drawer/close', hasNo('drawer/'))
     ui = await step($, clock, ui, props, site, 'bar/stop', hasNo('bar/next'))
     await snap('stopped')
     await ui.unmount()
     const [first] = shapes
     for (const [name, shape] of shapes) expect([name, shape]).toEqual([name, first![1]])
+    const [played] = playing
+    expect(Object.keys(played![1].tops)).toContain(`p-${site}-sequence`)
+    for (const [name, shape] of playing) expect([name, shape]).toEqual([name, played![1]])
   })
 }
 

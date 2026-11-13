@@ -6723,7 +6723,7 @@ function analyze(diagram, options = {}) {
   }
   for (const s of systems?.systems ?? []) warnings.push(...s.warnings);
   const access = accessIn(diagram);
-  const pathOf = (hopsOfPath) => ({
+  const pathOf2 = (hopsOfPath) => ({
     parts: hopsOfPath.map(
       (part) => part.map((h2) => {
         if (h2.failed) return { fixedMs: timeoutOf(h2.target), tailMs: 0 };
@@ -6743,12 +6743,12 @@ function analyze(diagram, options = {}) {
     };
     const withRetries = (writes2) => (id) => retries.has(id) ? availabilityOf(id, writes2) * retries.get(id).success : availabilityOf(id, writes2);
     if (lookups || retry2) {
-      const { scenarios: scenarios2, percentiles: percentiles2, tailScenario: tailScenario2 } = cachedLatency(u, shares, lookups ?? [], retry2 ? retries : /* @__PURE__ */ new Map(), pathOf, new Set(options.percentiles ?? PERCENTILES2));
+      const { scenarios: scenarios2, percentiles: percentiles2, tailScenario: tailScenario2 } = cachedLatency(u, shares, lookups ?? [], retry2 ? retries : /* @__PURE__ */ new Map(), pathOf2, new Set(options.percentiles ?? PERCENTILES2));
       const writes2 = mainWrites(u, shares, (step) => access(step) === "write");
       const availability3 = useCaseAvailability(u, shares, retries.size ? withRetries(writes2) : (id) => availabilityOf(id, writes2)) * (1 - (stranded ?? 0));
       return { id: u.id, name: u.name, rps, ...average !== void 0 ? { avgRps: rps * average } : {}, scenarios: scenarios2, percentiles: percentiles2, tailScenario: tailScenario2, availability: availability3 };
     }
-    const paths = u.scenarios.map((s) => pathOf(criticalPath(u, s)));
+    const paths = u.scenarios.map((s) => pathOf2(criticalPath(u, s)));
     const scenarios = u.scenarios.map((s, i) => ({
       id: s.id,
       name: s.name,
@@ -6782,10 +6782,10 @@ function analyze(diagram, options = {}) {
     ...systems ? { systems: systems.systems } : {}
   };
 }
-function cachedLatency(u, shares, lookups, retries, pathOf, wanted3) {
+function cachedLatency(u, shares, lookups, retries, pathOf2, wanted3) {
   const variants = u.scenarios.map(
     (s, i) => cacheVariants(criticalPath(u, s), lookups[i] ?? []).flatMap(
-      (v) => retries.size ? retryVariants(v.hops, retries).map((r) => ({ share: v.share * r.share, path: pathOf(r.hops) })) : [{ share: v.share, path: pathOf(v.hops) }]
+      (v) => retries.size ? retryVariants(v.hops, retries).map((r) => ({ share: v.share * r.share, path: pathOf2(r.hops) })) : [{ share: v.share, path: pathOf2(v.hops) }]
     )
   );
   const scenarios = u.scenarios.map((s, i) => ({
@@ -9153,6 +9153,218 @@ function playAt(scene, steps, index, progress, tick = 0) {
   return { active, failing, pathNodes: pathNodes2, pathEdges, edges, packets, tick };
 }
 
+// src/terminal/sequence.ts
+var HEAD_ROWS = 4;
+var BOX_MIN = 12;
+var BOX_MAX = 26;
+var BOX_FLOOR = 8;
+var LABEL_MIN = 8;
+var FAIL_AT2 = 55;
+var cut = (text, room) => room <= 0 ? "" : text.length <= room ? text : `${text.slice(0, Math.max(0, room - 1))}\u2026`;
+function labelOf(m) {
+  if (m.kind === "request") return `${m.number} ${m.label}`.trimEnd();
+  return m.label || "return";
+}
+function buildSequenceScene(diagram, useCase, scenario, columns) {
+  const sequence = buildSequence(useCase, scenario, diagram.nodes);
+  const nodes = new Map(diagram.nodes.map((n) => [n.id, n]));
+  const index = new Map(sequence.participants.map((p, i) => [p.id, i]));
+  const items = sectionedItems(sequence.items);
+  const messages = items.flatMap((i) => i.kind !== "item" ? [] : i.item.kind === "message" ? [i.item.message] : i.item.branches.flat());
+  let deepest = 0;
+  for (const i of items) deepest = Math.max(deepest, i.depth + (i.kind === "item" && i.item.kind === "par" ? 1 : 0));
+  const margin = deepest + 1;
+  const natural = sequence.participants.map((p) => {
+    const node = nodes.get(p.id);
+    const named = p.name.length + (node && node.kind === "component" ? 2 : 0);
+    return Math.max(BOX_MIN, Math.min(BOX_MAX, Math.max(named, p.tech?.length ?? 0) + 4));
+  });
+  let widths = natural;
+  const place = (room2) => {
+    const xs = [];
+    sequence.participants.forEach((_, i) => {
+      const half = Math.ceil(widths[i] / 2);
+      xs.push(i === 0 ? Math.max(half, margin + 1) : xs[i - 1] + Math.ceil(widths[i - 1] / 2) + half + 1);
+    });
+    let right = xs.length ? xs[xs.length - 1] + Math.ceil(widths[widths.length - 1] / 2) : 0;
+    const spans = messages.map((m) => {
+      const a = index.get(m.from);
+      const b = index.get(m.to);
+      return { lo: Math.min(a, b), hi: a === b ? a + 1 : Math.max(a, b), need: Math.min(room2, labelOf(m).length) + 3 };
+    }).sort((p, q) => p.hi - q.hi);
+    for (const { lo, hi, need } of spans) {
+      if (hi >= xs.length) {
+        right = Math.max(right, xs[lo] + need + 3);
+        continue;
+      }
+      const short2 = xs[lo] + need - xs[hi];
+      if (short2 > 0) for (let i = hi; i < xs.length; i++) xs[i] += short2;
+    }
+    right = Math.max(right, xs.length ? xs[xs.length - 1] + Math.ceil(widths[widths.length - 1] / 2) : 0);
+    return { xs, width: right + margin + 1 };
+  };
+  const longest = Math.max(LABEL_MIN, ...messages.map((m) => labelOf(m).length));
+  let room = longest;
+  let placed = place(room);
+  while (placed.width > columns && room > LABEL_MIN) placed = place(--room);
+  for (let box = BOX_MAX - 1; placed.width > columns && box >= BOX_FLOOR; box--) {
+    widths = natural.map((w) => Math.min(w, box));
+    placed = place(room);
+  }
+  while (room < longest && placed.width < columns) {
+    const wider = place(room + 1);
+    if (wider.width > columns) break;
+    placed = wider;
+    room++;
+  }
+  const lifelines = sequence.participants.map((p, i) => ({ ...p, node: nodes.get(p.id), x: placed.xs[i], w: widths[i] }));
+  const width = Math.max(placed.width, 20);
+  const frames = [];
+  const open = [];
+  const rows = [];
+  let y = HEAD_ROWS + 1;
+  const message = (m) => {
+    const a = index.get(m.from);
+    const b = index.get(m.to);
+    rows.push({ y, message: m, label: cut(labelOf(m), room), from: a, to: b });
+    y += a === b ? 3 : 2;
+  };
+  for (const item of items) {
+    if (item.kind === "open") {
+      const frame2 = { title: item.section.name, par: false, depth: item.depth, top: y++, bottom: -1, dividers: [] };
+      frames.push(frame2);
+      open.push(frame2);
+    } else if (item.kind === "close") {
+      open.pop().bottom = y++;
+    } else if (item.item.kind === "message") message(item.item.message);
+    else {
+      const frame2 = { title: "par", par: true, depth: item.depth, top: y++, bottom: -1, dividers: [] };
+      frames.push(frame2);
+      item.item.branches.forEach((branch, i) => {
+        if (i > 0) frame2.dividers.push(y++);
+        branch.forEach(message);
+      });
+      frame2.bottom = y++;
+    }
+  }
+  return { columns: width, rows: y + 1, lifelines, frames, messages: rows, steps: scenario.steps };
+}
+function paintSequence(scene, options = {}) {
+  const grid = new Grid(scene.columns, scene.rows);
+  const { play } = options;
+  const current = play ? new Set(currentStepsOf(scene.steps, play.index)) : void 0;
+  const lookOf2 = (step) => !play ? void 0 : current.has(step) ? "lit" : scene.steps.indexOf(step) < play.index ? "past" : "future";
+  const lit = /* @__PURE__ */ new Set();
+  const failing = /* @__PURE__ */ new Set();
+  for (const step of current ?? []) {
+    lit.add(step.fromServiceId);
+    lit.add(step.toServiceId);
+    if (isErrorStep(step)) failing.add(step.toServiceId);
+  }
+  for (const l of scene.lifelines) for (let y = HEAD_ROWS; y < scene.rows; y++) grid.set(l.x, y, "\u2502", COLOR.fadedMore);
+  for (const f of scene.frames) drawFrame(grid, scene, f);
+  for (const row of scene.messages) drawMessage(grid, scene, row, lookOf2(row.message.step));
+  if (play) for (const step of current) drawPacket(grid, scene, step, play.progress);
+  for (const l of scene.lifelines) drawBox(grid, l, failing.has(l.id) ? COLOR.fail : lit.has(l.id) ? COLOR.pink : play ? COLOR.faded : void 0, options.icons ?? "nerd-font");
+  return grid;
+}
+function drawBox(grid, l, accent, icons2) {
+  const base = l.node ? nodeBaseColor(l.node) : void 0;
+  const color = accent ?? (base ? hex(base) : COLOR.line);
+  const x0 = l.x - Math.floor(l.w / 2);
+  const x1 = x0 + l.w - 1;
+  for (let x = x0 + 1; x < x1; x++) {
+    grid.set(x, 0, "\u2501", color);
+    grid.set(x, HEAD_ROWS - 1, x === l.x ? "\u2533" : "\u2501", color);
+    grid.set(x, 1, " ");
+    grid.set(x, 2, " ");
+  }
+  for (const [x, top, bottom] of [
+    [x0, "\u250F", "\u2517"],
+    [x1, "\u2513", "\u251B"]
+  ]) {
+    grid.set(x, 0, top, color);
+    grid.set(x, 1, "\u2503", color);
+    grid.set(x, 2, "\u2503", color);
+    grid.set(x, HEAD_ROWS - 1, bottom, color);
+  }
+  const icon = l.node ? iconOf(l.node, icons2) : void 0;
+  const room = l.w - 4;
+  const name = icon ? `${icon} ${cut(l.name, room - 2)}` : cut(l.name, room);
+  const centre = (text) => x0 + 2 + Math.max(0, Math.floor((room - [...text].length) / 2));
+  grid.text(centre(name), 1, name, DEFAULT);
+  if (l.tech) grid.text(centre(cut(l.tech, room)), 2, cut(l.tech, room), COLOR.muted);
+}
+function drawFrame(grid, scene, f) {
+  const x0 = f.depth;
+  const x1 = scene.columns - 1 - f.depth;
+  const color = f.par ? COLOR.muted : COLOR.line;
+  for (let x = x0 + 1; x < x1; x++) {
+    grid.set(x, f.top, "\u2500", color);
+    grid.set(x, f.bottom, "\u2500", color);
+    for (const d of f.dividers) grid.set(x, d, "\u254C", color);
+  }
+  grid.set(x0, f.top, "\u256D", color);
+  grid.set(x1, f.top, "\u256E", color);
+  grid.set(x0, f.bottom, "\u2570", color);
+  grid.set(x1, f.bottom, "\u256F", color);
+  for (let y = f.top + 1; y < f.bottom; y++) {
+    const divider = f.dividers.includes(y);
+    grid.set(x0, y, divider ? "\u251C" : "\u2502", color);
+    grid.set(x1, y, divider ? "\u2524" : "\u2502", color);
+  }
+  const title = ` ${cut(f.title, x1 - x0 - 5)} `;
+  grid.text(x0 + 2, f.top, title, f.par ? COLOR.muted : COLOR.note);
+}
+function pathOf(scene, row) {
+  const a = scene.lifelines[row.from].x;
+  if (row.from === row.to) return [a + 1, a + 2, a + 3].map((x) => ({ x, y: row.y + 1 })).concat([{ x: a + 3, y: row.y + 2 }, { x: a + 2, y: row.y + 2 }, { x: a + 1, y: row.y + 2 }]);
+  const b = scene.lifelines[row.to].x;
+  const step = b > a ? 1 : -1;
+  const cells = [];
+  for (let x = a + step; x !== b; x += step) cells.push({ x, y: row.y + 1 });
+  return cells;
+}
+function drawMessage(grid, scene, row, look) {
+  const m = row.message;
+  const color = look === "future" ? COLOR.fadedMore : m.error ? COLOR.fail : look === "lit" ? COLOR.pink : m.kind === "response" ? COLOR.muted : DEFAULT;
+  const heavy = look === "lit";
+  const body = m.kind === "response" ? heavy ? "\u2505" : "\u254C" : heavy ? "\u2501" : "\u2500";
+  const head = m.failed ? "\u2717" : m.async ? m.to === m.from ? "\u25C1" : "" : "";
+  const cells = pathOf(scene, row);
+  const a = scene.lifelines[row.from].x;
+  if (row.from === row.to) {
+    grid.text(a + 1, row.y + 1, `${body}${body}${heavy ? "\u2513" : "\u256E"}`, color);
+    grid.text(a + 1, row.y + 2, `${head || "\u25C4"}${body}${heavy ? "\u251B" : "\u256F"}`, color);
+  } else {
+    const right = scene.lifelines[row.to].x > a;
+    for (const c of cells) grid.set(c.x, c.y, body, color);
+    const last = cells[cells.length - 1];
+    if (last) grid.set(last.x, last.y, head || (m.async ? right ? "\u25B7" : "\u25C1" : right ? "\u25BA" : "\u25C4"), color);
+  }
+  const left = row.from === row.to ? a + 2 : Math.min(a, scene.lifelines[row.to].x) + 2;
+  if (m.kind === "request") {
+    const [number, ...rest] = row.label.split(" ");
+    const chip2 = look === "future" ? COLOR.fadedMore : m.error ? COLOR.fail : COLOR.pink;
+    grid.text(left, row.y, number, look === "lit" ? COLOR.onColor : chip2, Infinity, look === "lit" ? chip2 : void 0);
+    grid.text(left + number.length + 1, row.y, rest.join(" "), look === "future" ? COLOR.fadedMore : DEFAULT);
+  } else grid.text(left, row.y, row.label, look === "future" ? COLOR.fadedMore : m.error ? COLOR.fail : COLOR.muted);
+}
+function drawPacket(grid, scene, step, progress) {
+  if (progress >= 100) return;
+  const request2 = scene.messages.find((r) => r.message.step === step && r.message.kind === "request");
+  if (!request2) return;
+  const response2 = scene.messages.find((r) => r.message.step === step && r.message.kind === "response");
+  const failed = !!step.failed;
+  const roundTrip = !!response2 && !failed;
+  const [row, share2] = failed ? [request2, Math.min(progress, FAIL_AT2) / 100] : roundTrip && progress > 50 ? [response2, (progress - 50) / 50] : [request2, roundTrip ? progress / 50 : progress / 100];
+  const cells = pathOf(scene, row);
+  if (cells.length === 0) return;
+  const at = cells[Math.max(0, Math.min(cells.length - 1, Math.round(share2 * (cells.length - 1))))];
+  const cutOff = failed && progress >= FAIL_AT2;
+  grid.set(at.x, at.y, cutOff ? "\u2717" : "\u25A0", row.message.error || cutOff ? COLOR.fail : COLOR.pink);
+}
+
 // ../frontend/src/hld/hld.ts
 var HOT_UTILIZATION = 0.7;
 function selectorLabel(s) {
@@ -11098,7 +11310,7 @@ var line = (...segs) => ({ segs: segs.map((s) => typeof s === "string" ? { text:
 var blank = () => line("");
 var heading = (text) => line({ text, bold: true });
 var usd3 = (x) => formatUsd(x).replace("/month", "");
-var cut = (text, room) => text.length <= room ? text : room <= 0 ? "" : `${text.slice(0, Math.max(0, room - 1))}\u2026`;
+var cut2 = (text, room) => text.length <= room ? text : room <= 0 ? "" : `${text.slice(0, Math.max(0, room - 1))}\u2026`;
 function table2(cols, rows, width) {
   const seg = (c) => c === void 0 ? { text: "" } : typeof c === "string" ? { text: c } : c;
   let shown2 = cols.map((_, i) => i);
@@ -11114,7 +11326,7 @@ function table2(cols, rows, width) {
   const row = (cells, header = false) => ({
     segs: shown2.flatMap((i, k) => {
       const s = cells[i];
-      const text = cut(s.text, w(i));
+      const text = cut2(s.text, w(i));
       const padded = cols[i].right ? text.padStart(w(i)) : k === shown2.length - 1 ? text : text.padEnd(w(i));
       return [...k > 0 ? [{ text: "  " }] : [], header ? { text: padded, dim: true } : { ...s, text: padded }];
     })
@@ -11323,7 +11535,7 @@ var FLOAT_EDGES = { top: true, bottom: true };
 
 // ../plugin/src/views/pieces.tsx
 var INLINE_WARNINGS = 2;
-var GLYPH = { copy: "\u29C9", open: "\u2197", focus: "\u26F6", cycle: "\u21E5", collapse: "\u229F", expand: "\u229E", enter: "\u2922", leave: "\u2191", explore: "\u2261" };
+var GLYPH = { copy: "\u29C9", open: "\u2197", focus: "\u26F6", cycle: "\u21E5", collapse: "\u229F", expand: "\u229E", enter: "\u2922", leave: "\u2191", explore: "\u2261", inline: "\u2193" };
 var textLabel = (c) => [c.icon && GLYPH[c.icon], c.label].filter(Boolean).join(" ");
 function noticesOf(doc, lost, reasons, inPane, lead = []) {
   const unknown = lost.filter((name) => !reasons.has(name));
@@ -11357,7 +11569,7 @@ function linkControls(inPane, roomy) {
     { id: "src", icon: "copy", label: roomy ? "Copy source" : "Source" },
     { id: "lnk", icon: "copy", label: roomy ? "Copy share link" : "Link" },
     { id: "open", icon: "open", label: roomy ? "Open in Proschi" : "Open", variant: "primary" },
-    ...inPane ? [] : [{ id: "focus", icon: "focus", label: "Focus" }]
+    ...inPane ? [{ id: "inline", icon: "inline", label: "Inline", hotkey: "i" }] : [{ id: "focus", icon: "focus", label: "Focus" }]
   ];
 }
 function controlsText(ui, controls, key, width, act2) {
@@ -11678,9 +11890,13 @@ var paneFile = atom2({ plugin: "proschi", key: "paneFile" }, "");
 var paneSource = atom2({ plugin: "proschi", key: "paneSource" }, NO_SOURCE);
 var players = atom2({ plugin: "proschi", key: "player" }, IDLE);
 var paneTab = atom2({ plugin: "proschi", key: "paneTab" }, "diagram");
+var NO_ROW = {};
+var placedRows = atom2({ plugin: "proschi", key: "placed" }, NO_ROW);
+var prompts = atom2({ plugin: "proschi", key: "prompts" }, 0);
+var INLINE = "inline-";
 var paneAnchor;
-var PANE_KEYS = "1-3 tabs \xB7 p play \xB7 n/b step \xB7 r first \xB7 e last \xB7 d stop \xB7 esc back to the prompt";
-var PICTURE_KEYS = "1-3 tabs \xB7 p play \xB7 n/b step \xB7 r first \xB7 e last \xB7 d stop \xB7 z/x zoom \xB7 0 fit \xB7 esc back to the prompt";
+var PANE_KEYS = "1-3 tabs \xB7 p play \xB7 n/b step \xB7 r first \xB7 e last \xB7 d stop \xB7 i inline \xB7 esc back to the prompt";
+var PICTURE_KEYS = "1-3 tabs \xB7 p play \xB7 n/b step \xB7 r first \xB7 e last \xB7 d stop \xB7 z/x zoom \xB7 0 fit \xB7 i inline \xB7 esc back to the prompt";
 var TAB_KEYS = "1-3 tabs \xB7 \u2191\u2193 scroll \xB7 esc back to the prompt";
 var HLD_KEYS = "1-3 tabs \xB7 \u2191\u2193 scroll \xB7 c copy \xB7 esc back to the prompt";
 var SYSTEM_KEYS = "s next system \xB7 o open/close \xB7 f focus in \xB7 u back out";
@@ -11696,8 +11912,10 @@ var layouts = new Lru(32);
 var pending3 = /* @__PURE__ */ new Set();
 var documents2 = new Lru(32);
 var scenes = new Lru(64);
+var sequences = new Lru(32);
 var timers = /* @__PURE__ */ new Map();
 var SITES2 = 64;
+var drawings = new Lru(SITES2);
 var FENCE = /^```proschi[^\n]*\n([\s\S]*?)\n```[ \t]*$/gm;
 function register(on, options) {
   icons = options.icons === "symbols" || options.icons === "none" ? options.icons : "nerd-font";
@@ -11706,7 +11924,11 @@ function register(on, options) {
   on("session.start", async ($, e, next) => {
     if (refused2) $.ui.log(`proschi: ${refused2}`, { to: "debug" });
     void serveRequests($);
-    await $.command.register({ name: "proschi", description: "Proschi diagrams: /proschi view <file.proschi> shows one in a pane", argumentHint: "view [--expand <id>,\u2026] [--focus <id>] <file>" });
+    await $.command.register({ name: "proschi", description: "Proschi diagrams: /proschi view <file.proschi> shows one in a pane, or with --inline in the transcript", argumentHint: "view [--inline] [--expand <id>,\u2026] [--focus <id>] <file>" });
+    return next(e);
+  });
+  on("prompt.submit", async ($, e, next) => {
+    await update2($, prompts, (n) => n + 1);
     return next(e);
   });
   on("session.end", async ($, e, next) => {
@@ -11726,8 +11948,10 @@ function register(on, options) {
     const [verb, ...rest] = e.args.trim().split(/\s+/);
     const words = [];
     const view = {};
+    let inline2 = false;
     for (let i = 0; i < rest.length; i++) {
-      if (rest[i] === "--expand" || rest[i] === "--focus") {
+      if (rest[i] === "--inline") inline2 = true;
+      else if (rest[i] === "--expand" || rest[i] === "--focus") {
         const value = rest[++i];
         if (!value || idList(value).length === 0) return { text: `Missing system id after ${rest[i - 1]}` };
         if (rest[i - 1] === "--expand") view.expanded = [...view.expanded ?? [], ...idList(value)];
@@ -11743,8 +11967,13 @@ function register(on, options) {
       const refused3 = errors.length ? void 0 : viewError(diagram, view);
       if (refused3) return { text: refused3 };
     }
+    const shown2 = { ...IDLE, expanded: view.expanded ?? [], ...view.focus !== void 0 ? { focus: view.focus } : {} };
+    if (inline2) {
+      await placeInline($, { file }, shown2);
+      return { text: `Showing ${file} in the transcript.` };
+    }
     stop(PANE_VIEW);
-    await update2($, memberOf(players, { requestId: PANE_VIEW }), () => ({ ...IDLE, expanded: view.expanded ?? [], ...view.focus !== void 0 ? { focus: view.focus } : {} }));
+    await update2($, memberOf(players, { requestId: PANE_VIEW }), () => shown2);
     await update2($, paneFile, () => file);
     await markOpened($, PANE_VIEW);
     await $.ui.open({ id: PANE, title: `Proschi \xB7 ${basename(file)}` });
@@ -11790,6 +12019,17 @@ function register(on, options) {
     if (!source) return row;
     const view = await drawDiagram($, { ui, requestId: e.requestId, columns: (e.viewport?.columns ?? 120) - 6 }, `${e.requestId}:0`, source, file);
     return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, row, /* @__PURE__ */ h(ui.Box, { paddingLeft: 2 }, "error" in view ? /* @__PURE__ */ h(ui.Text, { dimColor: true }, view.error) : view.element));
+  });
+  on("ui.render", { component: "Placed" }, async ($, e, next) => {
+    if (e.props.plugin !== "proschi" || !e.props.id.startsWith(INLINE)) return next(e);
+    const ui = $.ui.resolve(e);
+    if (e.surface !== "terminal") return /* @__PURE__ */ h(ui.Text, null, "The Proschi drawing draws in a terminal.");
+    const row = await read2($, memberOf(placedRows, { requestId: e.props.id }));
+    if (!row.file && !row.source) return /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Drawing\u2026");
+    const source = row.file ? await readWithImports($, row.file).catch(() => void 0) : { source: row.source, ...row.path ? { path: row.path } : {}, ...row.imports ? { imports: row.imports } : {} };
+    if (!source) return /* @__PURE__ */ h(ui.Text, { color: "red" }, "Cannot read ", row.file, ".");
+    const view = await drawDiagram($, { ui, requestId: e.requestId, columns: (e.viewport?.columns ?? 120) - 4 }, `${e.props.id}:0`, source, row.file);
+    return "error" in view ? /* @__PURE__ */ h(ui.Text, { color: "red" }, view.error) : view.element;
   });
   on("ui.render", { component: "Pane", requestId: PANE }, async ($, e) => {
     if (e.surface !== "terminal") {
@@ -11925,7 +12165,7 @@ function proschiFile(tool, input) {
   const path = input?.file_path;
   return typeof path === "string" && path.endsWith(".proschi") ? path : void 0;
 }
-var USAGE = "Usage: /proschi view [--expand <system>[,<system>\u2026]] [--focus <system>] <file.proschi>, or /proschi perf [count]";
+var USAGE = "Usage: /proschi view [--inline] [--expand <system>[,<system>\u2026]] [--focus <system>] <file.proschi>, or /proschi perf [count]";
 function perfReport(n) {
   const last = pressTimings().slice(-n);
   if (last.length === 0) return "No presses timed yet: press a tab or a control in the pictures, then run /proschi perf again.";
@@ -12061,6 +12301,7 @@ async function diagramView($, d, viewId, written, file, mode = { kind: "text" },
   const loaded = await documentOf($, viewId, written, file);
   if ("error" in loaded) return loaded;
   const { doc, source, key, player } = loaded;
+  if (d.requestId !== PANE && !drawings.has(viewId)) drawings.set(viewId, { requestId: d.requestId, key: drawnKey(file ? { file } : { source: written.source }) });
   const layout = layouts.get(key);
   if (!layout) {
     requestLayout($, key, source);
@@ -12083,7 +12324,11 @@ async function diagramView($, d, viewId, written, file, mode = { kind: "text" },
   const width = Math.min(Math.max(40, d.columns), Math.max(scene.columns, BARS_WIDTH));
   const systems = selectable(scene, player.focus);
   const selected = systems.find((s) => s.path === player.selected) ?? systems[0];
-  const view = { d, viewId, rasterKey: `d-${viewId}`, anchorKey: `at-${viewId}`, scene, width, overlay: doc.overlay, edges: doc.edges, systems: doc.systems, ...selected ? { selected: selected.id } : {}, inPane: d.requestId === PANE };
+  const sequence = (value) => {
+    const at = picks.find((p2) => p2.value === value) ?? picks[0];
+    return at && sequenceOf(doc, key, at, columns);
+  };
+  const view = { d, viewId, rasterKey: `d-${viewId}`, anchorKey: `at-${viewId}`, scene, width, overlay: doc.overlay, edges: doc.edges, systems: doc.systems, ...selected ? { selected: selected.id } : {}, inPane: d.requestId === PANE, sequence };
   if (playing && player.isPlaying && !timers.has(viewId)) animate($, view, steps);
   const p = {
     doc,
@@ -12200,9 +12445,11 @@ function textView($, p, mode) {
   const sys = systemsOf($, p);
   const links = linksOf($, p);
   const m = pick2 && playerModel(view, doc, pick2, playing, step, p.player.isPlaying, playerCtl($, view, pick2.scenario.steps));
+  const seq2 = playing && view.sequence?.(playing.value);
+  const sequenced = seq2 ? paintSequence(seq2, { icons, ...steps.length > 0 ? { play: { index: step, progress } } : {} }) : void 0;
   return {
     kind: "text",
-    element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, m && playerBarText(view, doc, m), doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, noticesText(ui, noticesOf(doc, p.lost, importReasons, view.inPane, lead), `notice-${viewId}`), pan ? /* @__PURE__ */ h(ui.Box, { key: `${view.rasterKey}-pan`, flexDirection: "column", width: grid.columns, height: grid.rows }, /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), /* @__PURE__ */ h(ui.Box, { position: "absolute", top: 0, left: 0, width: grid.columns, height: grid.rows }, /* @__PURE__ */ h(ui.Client, { key: pan.overlay, module: "./uiOverlay.js", props: { controls: [], drag: "x" }, width: grid.columns, height: grid.rows })), /* @__PURE__ */ h(ui.Box, { display: "none" }, /* @__PURE__ */ h(ui.Button, { key: `pan-h-${viewId}`, label: "h", hotkey: "h", onPress: pan.keys.left }), /* @__PURE__ */ h(ui.Button, { key: `pan-l-${viewId}`, label: "l", hotkey: "l", onPress: pan.keys.right }))) : /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), doc.edges && !playing && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)), verdict && verdictText(ui, verdict, view.width, viewId, view.inPane ? void 0 : () => focus($, view, p.title, p.what, "hld", "requirements")), sys && systemsText(ui, sys.model, viewId, view.width, (id) => sys.actions[id]?.()), controlsText(ui, links.controls, viewId, view.width, (id, surface) => links.actions[id]?.(surface))),
+    element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, m && playerBarText(view, doc, m), doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, noticesText(ui, noticesOf(doc, p.lost, importReasons, view.inPane, lead), `notice-${viewId}`), pan ? /* @__PURE__ */ h(ui.Box, { key: `${view.rasterKey}-pan`, flexDirection: "column", width: grid.columns, height: grid.rows }, /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), /* @__PURE__ */ h(ui.Box, { position: "absolute", top: 0, left: 0, width: grid.columns, height: grid.rows }, /* @__PURE__ */ h(ui.Client, { key: pan.overlay, module: "./uiOverlay.js", props: { controls: [], drag: "x" }, width: grid.columns, height: grid.rows })), /* @__PURE__ */ h(ui.Box, { display: "none" }, /* @__PURE__ */ h(ui.Button, { key: `pan-h-${viewId}`, label: "h", hotkey: "h", onPress: pan.keys.left }), /* @__PURE__ */ h(ui.Button, { key: `pan-l-${viewId}`, label: "l", hotkey: "l", onPress: pan.keys.right }))) : /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), doc.edges && !playing && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)), sequenced && /* @__PURE__ */ h(ui.Raster, { key: sequenceKey(viewId), columns: sequenced.columns, rows: sequenced.rows, cells: sequenced.toBase64() }), verdict && verdictText(ui, verdict, view.width, viewId, view.inPane ? void 0 : () => focus($, view, p.title, p.what, "hld", "requirements")), sys && systemsText(ui, sys.model, viewId, view.width, (id) => sys.actions[id]?.()), controlsText(ui, links.controls, viewId, view.width, (id, surface) => links.actions[id]?.(surface))),
     systems: sys !== void 0
   };
 }
@@ -12261,7 +12508,8 @@ function linksOf($, p) {
       src: (surface) => void copy($, surface, p.source.source, "the Proschi source"),
       lnk: (surface) => void copy($, surface, p.link, "the share link"),
       open: (surface) => void openLink($, surface, p.link),
-      focus: () => focus($, p.view, p.title, p.what)
+      focus: () => focus($, p.view, p.title, p.what),
+      inline: () => void toInline($)
     }
   };
 }
@@ -12309,6 +12557,10 @@ function pictureParts($, p, notices, picture, zoomed) {
   }
   if (notices.length) pieces.push({ id: "warn", panel: { kind: "notices", notices }, columns: W2 });
   pieces.push({ id: "diagram", ...picture ? { picture } : {} });
+  if (playing) {
+    pieces.push({ id: "sequence", panel: sequencePanel(p, playing, step), columns: W2 });
+    for (let i = 0; i < playing.scenario.steps.length; i++) if (i !== step) ahead.push({ panel: sequencePanel(p, playing, i), columns: W2 });
+  } else if (pick2) ahead.push({ panel: sequencePanel(p, pick2, 0), columns: W2 });
   const verdict = verdictOf(doc.tests);
   if (verdict) pieces.push({ id: "below", panel: { kind: "notices", verdict, ...!view.inPane ? { details: DETAILS } : {} }, columns: W2 });
   on("below", "details", () => focus($, view, p.title, p.what, "hld", "requirements"));
@@ -12326,6 +12578,28 @@ function pictureParts($, p, notices, picture, zoomed) {
     for (const dir of [1, -1]) ahead.push({ panel: zoomPanel(stepZoom(zoomed.z, dir)), columns: ZOOM_COLUMNS, edges: FLOAT_EDGES });
   }
   return { pieces, actions, ahead, ...float ? { float } : {}, ...zoom ? { corner: zoom.corner, keys: zoom.keys, onDrag: zoom.onDrag } : {} };
+}
+var SEQUENCE_ROWS = { pane: 30, inline: 20 };
+function sequencePanel(p, pick2, step) {
+  const key = `${keyOf(p.source)}\0${pick2.value}\0${step}\0${p.view.inPane}`;
+  let panel = sequencePanels.get(key);
+  if (!panel) {
+    const of = { useCase: pick2.useCase.id, scenario: pick2.scenario.id, step };
+    panel = { kind: "page", source: p.source, blocks: [{ type: "figure", of, maxRows: p.view.inPane ? SEQUENCE_ROWS.pane : SEQUENCE_ROWS.inline }] };
+    sequencePanels.set(key, panel);
+  }
+  return panel;
+}
+var sequencePanels = new Lru(64);
+var sequenceKey = (viewId) => `q-${viewId}`;
+function sequenceOf(doc, key, pick2, columns) {
+  const at = `${key}#${pick2.value}@${columns}`;
+  let scene = sequences.get(at);
+  if (!scene) {
+    scene = buildSequenceScene(doc.diagram, pick2.useCase, pick2.scenario, columns);
+    sequences.set(at, scene);
+  }
+  return scene;
 }
 var zoomPanel = (z) => ({
   kind: "zoom",
@@ -12488,6 +12762,59 @@ async function scroll($, args) {
   if (moved.deny) $.ui.log(`proschi: scroll to ${JSON.stringify(args.to)} refused: ${moved.deny}`, { to: "debug" });
   return moved;
 }
+var placedCount = 0;
+async function placeInline($, what, player) {
+  const id = `${INLINE}${Date.now().toString(36)}-${++placedCount}`;
+  const placing = $.ui.place({ id });
+  const stands = await player;
+  const { zoom: _zoom, ...rest } = stands;
+  void _zoom;
+  await update2($, memberOf(players, { requestId: `${id}:0` }), () => ({ ...rest, isPlaying: false }));
+  const drawn = { ...await what, prompt: await read2($, prompts) };
+  await update2($, memberOf(placedRows, { requestId: id }), () => drawn);
+  const placed = await placing;
+  if (!placed.isPlaced) $.ui.toast(`The Proschi drawing is in the transcript but not shown: ${placed.reason}`);
+  else await scroll($, { to: { requestId: placed.requestId }, block: "start" });
+}
+var drawnKey = (what) => what.file ? `file:${what.file}` : `source:${(what.source ?? "").trim()}`;
+async function inLastResponse($, key) {
+  const messages = await $.session.messages().catch(() => []);
+  const prompt = messages.findLastIndex((m) => m.role === "user" && !m.toolResults?.length);
+  const replied = messages.slice(prompt + 1).some(
+    (m) => m.role === "assistant" && (m.toolUses.some((t) => {
+      const file = proschiFile(t.tool, t.input);
+      return file !== void 0 && drawnKey({ file }) === key;
+    }) || [...m.text.matchAll(FENCE)].some((f) => drawnKey({ source: f[1] }) === key))
+  );
+  const now = await read2($, prompts);
+  for (const [viewId, d] of [...drawings.entries()].reverse()) {
+    if (d.key !== key) continue;
+    const placed = viewId.startsWith(INLINE) ? await read2($, memberOf(placedRows, { requestId: viewId.slice(0, -":0".length) })) : void 0;
+    if (placed ? placed.prompt === now : replied) return { viewId, requestId: d.requestId };
+  }
+  return void 0;
+}
+function toInline($) {
+  stop(PANE_VIEW);
+  stop(PANE);
+  menus.delete(PANE_VIEW);
+  const what = (async () => {
+    const file = await read2($, paneFile);
+    if (file) return { file };
+    const { source, path, imports } = await read2($, paneSource);
+    return { source, ...path ? { path } : {}, ...imports ? { imports } : {} };
+  })();
+  const player = read2($, memberOf(players, { requestId: PANE_VIEW })).then(normal);
+  return (async () => {
+    const standing = await inLastResponse($, drawnKey(await what));
+    if (!standing) return placeInline($, what, player);
+    stop(standing.viewId);
+    const { zoom: _zoom, ...stands } = await player;
+    void _zoom;
+    await update2($, memberOf(players, { requestId: standing.viewId }), () => ({ ...stands, isPlaying: false }));
+    await scroll($, { to: { requestId: standing.requestId }, block: "start" });
+  })().then(() => $.ui.close({ id: PANE })).catch((error) => $.ui.log(`proschi: Inline failed: ${error instanceof Error ? error.message : String(error)}`, { to: "debug" }));
+}
 function focus($, view, title, what, tab = "diagram", section) {
   const opened = $.ui.open({ id: PANE, title: `Proschi \xB7 ${title}`, focus: true, closeOnEscape: true });
   paneAnchor = section && hldAnchor(section);
@@ -12553,6 +12880,11 @@ function animate($, view, steps) {
       const cells = paint(view.scene, { overlay: view.overlay, edges: view.edges, icons, systems: view.systems, ...view.selected ? { selected: view.selected } : {}, play });
       const vp = textCrops.get(view.viewId);
       await $.ui.blit({ requestId: view.d.requestId, key: view.rasterKey, cells: (vp ? cells.crop(vp.col, 0, vp.columns, cells.rows) : cells).toBase64() });
+      const seq2 = view.sequence?.(player.pick);
+      if (seq2) {
+        const frame2 = paintSequence(seq2, { icons, play: { index: step, progress } });
+        await $.ui.blit({ requestId: view.d.requestId, key: sequenceKey(view.viewId), cells: frame2.toBase64() }).catch(() => void 0);
+      }
     }
     if (!player.isPlaying) {
       if (elapsed >= TRAVEL_MS) stop(view.viewId);

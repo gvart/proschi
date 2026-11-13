@@ -145,6 +145,21 @@ describe('render themes', () => {
     expect(dark).not.toContain('#FFF8E7');
   });
 
+  it('draws a moment of playback: the step lit in the accent, its participants outlined, the later steps faded', () => {
+    const scenario = useCase.scenarios[0];
+    const plain = renderSequenceSvg(diagram, useCase, scenario);
+    const at = renderSequenceSvg(diagram, useCase, scenario, '', SKETCH, { step: 0 });
+    expect(XMLValidator.validate(at)).toBe(true);
+    expect(plain).not.toContain('data-play');
+    // Step 1 (POST /orders, and its 201) lit, step 2 (INSERT order, with its reply) still to come.
+    expect(at).toMatch(/<g data-step="1" data-kind="request" data-play="lit">\n<line [^>]*stroke="#FF5DA2" stroke-width="3.5"[^>]*marker-end="url\(#solid-lit\)"/);
+    expect(at).toMatch(/<g data-step="1" data-kind="response" data-play="lit">\n<line [^>]*stroke="#FF5DA2" stroke-width="3.5" stroke-dasharray="6 4" marker-end="url\(#open-lit\)"/);
+    expect(at).toContain('<g data-step="2" data-kind="request" data-play="future" opacity="0.35">');
+    expect(at).toContain('<marker id="solid-lit"');
+    // The browser and the order API outlined in the accent.
+    expect(at.match(/stroke="#FF5DA2" stroke-width="3"\/>/g)).toHaveLength(2);
+  });
+
   it('styles the HTML export with the theme', async () => {
     const dir = project();
     const classic = await renderIn(dir, ['--format', 'html', '--theme', 'classic']);
