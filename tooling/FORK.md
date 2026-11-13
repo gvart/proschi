@@ -69,6 +69,12 @@ The VS Code extension's preview (`vscode/src/preview.ts`, content from
 nearest `proschi.json` overrides (`themeFor`'s `fallback`), and its page
 takes that theme's colours: light or dark after VS Code's colour theme.
 
+The JetBrains plugin's preview (`jetbrains/…/preview/ProschiPreview.kt`)
+runs `proschi render --format preview-html --default-theme <its setting>`.
+`--default-theme` is the fork's: it applies only when the nearest
+`proschi.json` names no theme, so the setting works like VS Code's. With a CLI
+that lacks either (upstream's), the plugin falls back to `--format html`.
+
 `proschi preview` (`src/render/serve.ts`) serves that page for any
 `.proschi` file on disk from a local server on 127.0.0.1. The start page
 lists the files by directory with their titles, and one box filters them or

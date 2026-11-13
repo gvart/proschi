@@ -1,5 +1,5 @@
 ---
-updated: 2026-11-13
+updated: 2026-11-14
 ---
 
 # Editor support
@@ -112,7 +112,15 @@ under **Settings → Plugins → Marketplace**. It works in JetBrains IDEs
 - the language server through the IDE's LSP client, with **Structure** and
   **Reformat Code**;
 - **Tools → Proschi**: **Check File**, **Run Tests**, **Show Diagram
-  Preview** (redrawn on save) and **Open in Proschi**.
+  Preview** and **Open in Proschi**.
+
+The preview shows the architecture, a scenario picker and each use case's
+description, like the VS Code preview, and is redrawn when you save. Pick
+its theme, `sketch` or `classic`, under **Settings → Languages & Frameworks →
+Proschi → Preview**. A `"theme"` in the nearest `proschi.json` overrides the
+setting. The scenario picker, the descriptions and the theme need a CLI that
+has `--format preview-html` and `--default-theme`. With an older one the
+preview falls back to a plain page with every scenario listed.
 
 It needs Node.js 18 or newer, and runs `proschi` from `PATH`, else through
 `npx`. Set other paths in **Settings → Languages & Frameworks → Proschi**.
