@@ -485,6 +485,28 @@ describe('VS Code preview', () => {
     expect(html).not.toMatch(/https?:\/\//);
   });
 
+  it('draws use case sections as titled frames in the scenario diagram', async () => {
+    const source = [
+      'runner "Runner" [Actor]',
+      'api "Orders API" [REST API]',
+      'runner -> api : HTTPS',
+      'usecase "Create" {',
+      '  section "REQUEST" {',
+      '    section "inner" {',
+      '      runner -> api : POST /orders',
+      '    }',
+      '    api --> runner : 201',
+      '  }',
+      '}',
+      '',
+    ].join('\n');
+    const content = await renderPreviewContent(source);
+    expect(content.ok).toBe(true);
+    expect(content.html.match(/data-kind="section"/g)).toHaveLength(2);
+    expect(content.html).toContain('data-section="REQUEST"');
+    expect(content.html).toContain('data-section="inner"');
+  });
+
   it('renders the architecture and a scenario picker, showing the first scenario', async () => {
     const source = examples.find((e) => e.id === 'ecommerce')!.source;
     const content = await renderPreviewContent(source);
