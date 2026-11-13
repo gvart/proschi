@@ -14,7 +14,8 @@ export { previewCommand } from './serve';
  * `proschi render`: parses `<file>`, refuses on errors, and writes the files
  * of the chosen format. Systems are drawn collapsed unless `--expand` opens
  * them; `--focus` draws one system's team design alone. `--theme` picks the
- * look, else the `"theme"` of the nearest proschi.json, else sketch-light.
+ * look, else the `"theme"` of the nearest proschi.json, else `--default-theme`
+ * (an editor's setting), else sketch-light.
  */
 export async function renderCommand(args: string[], out: (s: string) => void, err: (s: string) => void, usage: string): Promise<number> {
   let dir = '.';
@@ -23,6 +24,7 @@ export async function renderCommand(args: string[], out: (s: string) => void, er
   const expanded: string[] = [];
   let focus: string | undefined;
   let themeFlag: string | undefined;
+  let defaultTheme: string | undefined;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === '--expand' || arg === '--focus') {
@@ -48,6 +50,14 @@ export async function renderCommand(args: string[], out: (s: string) => void, er
       }
       themeFlag = flag.value;
       i = flag.next;
+    } else if (arg === '--default-theme' || arg.startsWith('--default-theme=')) {
+      const flag = themeFlagAt(args, i, '--default-theme');
+      if ('error' in flag) {
+        err(flag.error);
+        return 2;
+      }
+      defaultTheme = flag.value;
+      i = flag.next;
     } else if (arg === '--format') {
       const value = args[++i];
       if (!FORMATS.includes(value as RenderFormat)) {
@@ -68,7 +78,7 @@ export async function renderCommand(args: string[], out: (s: string) => void, er
   const file = files[0];
   let theme: RenderTheme;
   try {
-    theme = themeFor(file, themeFlag);
+    theme = themeFor(file, themeFlag, defaultTheme);
   } catch (e) {
     err(String((e as Error).message));
     return 2;

@@ -254,6 +254,25 @@ describe('render themes', () => {
     expect(background(r.read('architecture.svg'))).toBe('#FFF8E7');
   });
 
+  it('takes --default-theme only when proschi.json names no theme, and --theme over both', async () => {
+    const bare = await renderIn(project(), ['--default-theme', 'classic']);
+    expect(bare.code).toBe(0);
+    expect(background(bare.read('architecture.svg'))).toBe('#ffffff');
+    expect(background((await renderIn(project({ openapi: {} }), ['--default-theme=classic'])).read('architecture.svg'))).toBe('#ffffff');
+    expect(background((await renderIn(project({ theme: 'sketch' }), ['--default-theme', 'classic'])).read('architecture.svg'))).toBe('#FFF8E7');
+    expect(background((await renderIn(project(), ['--default-theme', 'classic', '--theme', 'sketch'])).read('architecture.svg'))).toBe('#FFF8E7');
+    const preview = await renderIn(project(), ['--format', 'preview-html', '--default-theme', 'classic']);
+    expect(preview.code).toBe(0);
+    expect(preview.read('main.preview.html')).toContain('<rect width="100%" height="100%" fill="#ffffff"/>');
+
+    const unknown = await renderIn(project(), ['--default-theme', 'neon']);
+    expect(unknown.code).toBe(2);
+    expect(unknown.err).toBe("Unknown theme 'neon'; use sketch-light, sketch-dark, classic, sketch");
+    const missing = await renderIn(project(), ['--default-theme']);
+    expect(missing.code).toBe(2);
+    expect(missing.err).toContain('Missing theme after --default-theme');
+  });
+
   it('refuses an unknown theme, listing the valid ones', async () => {
     const flag = await renderIn(project(), ['--theme', 'neon']);
     expect(flag.code).toBe(2);

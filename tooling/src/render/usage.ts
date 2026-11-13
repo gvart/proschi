@@ -1,5 +1,5 @@
 // Kept apart from command.ts so the CLI can print its usage without loading the renderer.
-export const RENDER_USAGE = `  proschi render [--out <dir>] [--format svg|md|html|preview-html|hld-md|hld-html] [--expand <id>[,<id>…]] [--focus <id>] [--theme sketch-light|sketch-dark|classic] <file>`;
+export const RENDER_USAGE = `  proschi render [--out <dir>] [--format svg|md|html|preview-html|hld-md|hld-html] [--expand <id>[,<id>…]] [--focus <id>] [--theme sketch-light|sketch-dark|classic] [--default-theme <theme>] <file>`;
 
 export const RENDER_HELP = `render  Writes the diagram as static files into --out (default: the current
         directory). svg (default): architecture.svg and <usecase>--<scenario>.svg
@@ -17,7 +17,8 @@ export const RENDER_HELP = `render  Writes the diagram as static files into --ou
         outlines, pink step numbers), sketch-dark (the same on dark paper) or
         classic (white, rounded grey cards, coloured icon tiles, blue
         arrows); without it, the "theme" key of the nearest proschi.json
-        applies. An unknown theme exits with 2.
+        applies, else --default-theme (for editors: their setting, which
+        proschi.json overrides). An unknown theme exits with 2.
         Refuses (exit 1) when the document has errors.`;
 
 export const PREVIEW_USAGE = `  proschi preview [--port <n>] [--root <dir>] [--theme sketch-light|sketch-dark|classic] [<file>]`;
