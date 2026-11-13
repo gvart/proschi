@@ -7,7 +7,9 @@ import { run } from '../src/cli';
 import { parse } from '../src/proschi';
 import { getTheme, renderArchitectureSvg, renderSequenceSvg, renderSvgs, THEME_NAMES } from '../src/render';
 import { typeColor } from '../src/render/icons';
+import { previewHtml, renderPreviewContent } from '../src/render/preview';
 import { CLASSIC, SKETCH, SKETCH_DARK, SKETCH_LIGHT } from '../src/render/theme';
+import { themeFor } from '../src/render/themeConfig';
 
 async function capture(argv: string[]) {
   const out: string[] = [];
@@ -278,5 +280,53 @@ describe('render themes', () => {
     const { architecture, scenarios } = await renderSvgs(diagram, true, { theme: CLASSIC });
     const ids = [architecture, ...scenarios.map((s) => s.svg)].flatMap((svg) => [...svg.matchAll(/ id="([^"]+)"/g)].map((m) => m[1]));
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe('VS Code preview themes', () => {
+  const backgrounds = (html: string) => [...html.matchAll(/<rect width="100%" height="100%" fill="([^"]+)"\/>/g)].map((m) => m[1]);
+
+  it('draws the preview content in sketch by default, as with the sketch theme', async () => {
+    const plain = await renderPreviewContent(SOURCE);
+    expect(plain.ok).toBe(true);
+    expect(backgrounds(plain.html)).toEqual(['#FFF8E7', '#FFF8E7']);
+    expect((await renderPreviewContent(SOURCE, { theme: SKETCH })).html).toBe(plain.html);
+  });
+
+  it('draws the architecture and every scenario of the preview content in classic', async () => {
+    const content = await renderPreviewContent(SOURCE, { theme: CLASSIC });
+    expect(content.ok).toBe(true);
+    expect(backgrounds(content.html)).toEqual(['#ffffff', '#ffffff']);
+    expect(content.html).not.toContain('#FFF8E7');
+    expect(content.html).not.toMatch(/ style="|<script|<style/);
+  });
+
+  it('gives the preview page the colours of its theme, light and dark', () => {
+    const page = (theme?: 'sketch-light' | 'classic') => previewHtml({ nonce: 'n0', cspSource: 'vscode-resource:', title: 't', body: '', theme });
+    expect(page()).toContain('<body data-theme="sketch-light">');
+    const classic = page('classic');
+    expect(classic).toContain('<body data-theme="classic">');
+    expect(classic).toContain(`body[data-theme="classic"] { ${CLASSIC.page.light} }`);
+    expect(classic).toContain(`body.vscode-dark[data-theme="classic"], body.vscode-high-contrast:not(.vscode-high-contrast-light)[data-theme="classic"] { ${CLASSIC.page.dark} }`);
+    expect(classic).toContain(`body[data-theme="classic"] .figure { ${CLASSIC.page.figure} }`);
+    expect(classic).toContain(`body[data-theme="sketch-light"] { ${SKETCH_LIGHT.page.light} }`);
+    expect(classic).toContain('background: var(--bg); color: var(--fg);');
+    // The page and its cards are white in classic, cream cards in sketch.
+    expect(CLASSIC.page.light).toContain('--card: #ffffff');
+    expect(SKETCH_LIGHT.page.light).toContain('--card: #fff8e7');
+    // The theme switches with an update, so the script reads it from the message.
+    expect(classic).toContain('document.body.dataset.theme = message.theme');
+  });
+
+  it("picks the preview's theme like the CLI: proschi.json, then the setting, then sketch", () => {
+    const bare = project();
+    expect(themeFor(join(bare, 'main.proschi'))).toBe(SKETCH);
+    expect(themeFor(join(bare, 'main.proschi'), undefined, 'classic')).toBe(CLASSIC);
+    expect(themeFor(join(bare, 'main.proschi'), undefined, 'sketch')).toBe(SKETCH);
+    expect(themeFor(join(bare, 'main.proschi'), undefined, '')).toBe(SKETCH);
+    expect(themeFor(join(project({ theme: 'sketch' }), 'main.proschi'), undefined, 'classic')).toBe(SKETCH);
+    expect(themeFor(join(project({ theme: 'classic' }), 'main.proschi'), undefined, 'sketch')).toBe(CLASSIC);
+    expect(themeFor(join(project({ openapi: {} }), 'main.proschi'), undefined, 'classic')).toBe(CLASSIC);
+    expect(() => themeFor(join(bare, 'main.proschi'), undefined, 'neon')).toThrow("Unknown theme 'neon'");
   });
 });

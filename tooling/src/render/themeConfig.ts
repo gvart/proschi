@@ -2,13 +2,17 @@ import { dirname, resolve } from 'node:path';
 import { findConfigFile, readConfig } from '../openapi/config';
 import { THEME_CHOICES, getTheme, isThemeName, type RenderTheme } from './theme';
 
-/** The flag wins; else the `"theme"` of the proschi.json nearest `file`; else sketch-light. Throws on an unknown name in proschi.json. */
-export function themeFor(file: string, flag?: string): RenderTheme {
+/**
+ * The flag wins; else the `"theme"` of the proschi.json nearest `file`; else
+ * `fallback` (an editor setting, which proschi.json overrides); else
+ * sketch-light. Throws on an unknown name in proschi.json or `fallback`.
+ */
+export function themeFor(file: string, flag?: string, fallback?: string): RenderTheme {
   if (flag) return getTheme(flag);
   const configFile = findConfigFile(dirname(resolve(file)));
   const name = configFile ? readConfig(configFile).theme : undefined;
   if (name !== undefined && !isThemeName(name)) throw new Error(`Unknown theme '${name}' in ${configFile}; use ${THEME_CHOICES.join(', ')}`);
-  return getTheme(name);
+  return getTheme(name ?? (fallback || undefined));
 }
 
 /** `--theme <name>` or `--theme=<name>` at `args[i]`: the name and the index of its last argument, or an error. */

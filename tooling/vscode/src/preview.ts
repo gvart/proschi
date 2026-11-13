@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { fileResolver } from '../../src/imports';
 import { makeNonce, previewHtml, renderPreviewContent } from '../../src/render/preview';
+import { getTheme, type RenderTheme } from '../../src/render/theme';
+import { themeFor } from '../../src/render/themeConfig';
 
 const DEBOUNCE_MS = 300;
 
@@ -18,6 +20,8 @@ export class PreviewPanel {
   private lastGood = '';
   /** The content last shown; written into a fresh page when the panel is shown again. */
   private body = '<p>Rendering…</p>';
+  /** The theme of the content last shown. */
+  private theme: RenderTheme['name'] = getTheme().name;
   private loaded = false;
   private readonly disposables: vscode.Disposable[] = [];
 
@@ -55,6 +59,13 @@ export class PreviewPanel {
       null,
       this.disposables,
     );
+    vscode.workspace.onDidChangeConfiguration((e) => e.affectsConfiguration('proschi.preview.theme') && this.update(0), null, this.disposables);
+    // A "theme" in the nearest proschi.json overrides the setting.
+    const configs = vscode.workspace.createFileSystemWatcher('**/proschi.json');
+    configs.onDidChange(() => this.update(0), null, this.disposables);
+    configs.onDidCreate(() => this.update(0), null, this.disposables);
+    configs.onDidDelete(() => this.update(0), null, this.disposables);
+    this.disposables.push(configs);
     vscode.window.onDidChangeActiveTextEditor(
       (editor) => {
         if (editor?.document.languageId === 'proschi' && editor.document !== this.document) this.follow(editor.document);
@@ -66,7 +77,7 @@ export class PreviewPanel {
 
   /** Replaces the whole page; later renders only swap its content (keeping scroll and the picked scenario). */
   private load() {
-    this.panel.webview.html = previewHtml({ nonce: makeNonce(), cspSource: this.panel.webview.cspSource, title: this.title(), body: this.body });
+    this.panel.webview.html = previewHtml({ nonce: makeNonce(), cspSource: this.panel.webview.cspSource, title: this.title(), body: this.body, theme: this.theme });
     this.loaded = true;
   }
 
@@ -90,8 +101,10 @@ export class PreviewPanel {
     const version = ++this.version;
     const document = this.document;
     let html: string;
+    let theme = this.theme;
     try {
-      const content = await renderPreviewContent(document.getText(), parseOptions(document));
+      theme = previewTheme(document).name;
+      const content = await renderPreviewContent(document.getText(), { ...parseOptions(document), theme: getTheme(theme) });
       if (content.ok) this.lastGood = content.html;
       html = content.ok ? content.html : content.html + this.lastGood;
     } catch (error) {
@@ -101,7 +114,8 @@ export class PreviewPanel {
     if (version !== this.version || document !== this.document) return;
     this.panel.title = this.title();
     this.body = html;
-    if (this.loaded) await this.panel.webview.postMessage({ type: 'update', html });
+    this.theme = theme;
+    if (this.loaded) await this.panel.webview.postMessage({ type: 'update', html, theme });
     else this.load();
   }
 
@@ -110,6 +124,12 @@ export class PreviewPanel {
     clearTimeout(this.timer);
     this.disposables.forEach((d) => d.dispose());
   }
+}
+
+/** As the CLI picks it: a `"theme"` in the proschi.json nearest the document, else the `proschi.preview.theme` setting. */
+function previewTheme(document: vscode.TextDocument): RenderTheme {
+  const setting = vscode.workspace.getConfiguration('proschi', document.uri).get<string>('preview.theme');
+  return document.uri.scheme === 'file' ? themeFor(document.uri.fsPath, undefined, setting) : getTheme(setting || undefined);
 }
 
 /** Imports resolve relative to the document, preferring the text of open (possibly unsaved) documents. */

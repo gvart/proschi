@@ -81,6 +81,19 @@
           "type": "boolean",
           "default": true,
           "description": "Show simulation results above use cases (`p99 38 ms ✓`), whatif blocks and requirements blocks."
+        },
+        "proschi.preview.theme": {
+          "type": "string",
+          "enum": [
+            "sketch",
+            "classic"
+          ],
+          "enumDescriptions": [
+            "Cream paper, ink outlines and hard shadows, as on proschi.app.",
+            "White background, rounded light-grey cards, icon tiles coloured by component type and blue request arrows."
+          ],
+          "default": "sketch",
+          "markdownDescription": "The look of the diagrams in the preview. A `\"theme\"` in the nearest `proschi.json` overrides this, as it does for `proschi render`."
         }
       }
     },

@@ -382,6 +382,24 @@ export function pageCsp(style: string, scripts: string[], nav: boolean, images =
 }
 
 /**
+ * One `<div class="usecase">` per use case with scenarios: its description,
+ * folded, with `Label: name (detail); …` sentences as tables (description.ts),
+ * then a figure per scenario drawn by `figure`. Only the first scenario, and
+ * its use case, start shown. A use case without scenarios gives ''.
+ */
+export function useCaseBlocksHtml(diagram: Diagram, rendered: RenderedDiagram, figure: (s: RenderedScenario, hidden: boolean) => string): string[] {
+  return diagram.useCases.map((uc) => {
+    const items = rendered.scenarios.filter((s) => s.useCase === uc);
+    if (!items.length) return '';
+    const first = items[0] === rendered.scenarios[0];
+    const slugs = new Map(items.map((s) => [s.scenario.name, s.slug]));
+    const description = uc.description ? `<details class="description"><summary>Description</summary>${descriptionHtml(uc.description, slugs)}</details>` : '';
+    const figures = items.map((s) => figure(s, s !== rendered.scenarios[0])).join('');
+    return `<div class="usecase"${first ? '' : ' hidden'}>${description}${figures}</div>`;
+  });
+}
+
+/**
  * The page like the VS Code preview: the architecture in a `<details>` (open,
  * fold it to save room) and one scenario at a time, picked from a list. Above
  * the scenario, its use case's description, folded, with lists such as
@@ -409,17 +427,7 @@ export function renderPreviewHtml(diagram: Diagram, rendered: RenderedDiagram, t
     const count = `${rendered.scenarios.length} scenario${rendered.scenarios.length === 1 ? '' : 's'}`;
     body.push(
       `<section><label class="picker">Scenario <select id="scenario">${groups}</select><span class="count">${count}</span></label>`,
-      ...diagram.useCases.map((uc) => {
-        const items = rendered.scenarios.filter((s) => s.useCase === uc);
-        if (!items.length) return '';
-        const first = items[0] === rendered.scenarios[0];
-        const slugs = new Map(items.map((s) => [s.scenario.name, s.slug]));
-        const description = uc.description
-          ? `<details class="description"><summary>Description</summary>${descriptionHtml(uc.description, slugs)}</details>`
-          : '';
-        const figures = items.map((s) => `<figure class="scenario" data-slug="${esc(s.slug)}"${s === rendered.scenarios[0] ? '' : ' hidden'}>${s.svg}</figure>`).join('');
-        return `<div class="usecase"${first ? '' : ' hidden'}>${description}${figures}</div>`;
-      }),
+      ...useCaseBlocksHtml(diagram, rendered, (s, hidden) => `<figure class="scenario" data-slug="${esc(s.slug)}"${hidden ? ' hidden' : ''}>${s.svg}</figure>`),
       '</section>',
     );
   } else {
