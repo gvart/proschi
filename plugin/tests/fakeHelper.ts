@@ -8,6 +8,8 @@ function controlsOf(panel: Record<string, unknown>): { id: string; hotkey?: stri
     for (const c of panel.controls as { id: string; hotkey?: string; disabled?: boolean }[]) out.push({ id: c.id, ...(c.hotkey ? { hotkey: c.hotkey } : {}), ...(c.disabled ? { disabled: true } : {}) })
     const body = panel.body as { id: string; disabled?: boolean } | undefined
     if (body) out.push({ id: body.id, ...(body.disabled ? { disabled: true } : {}) })
+    const view = panel.view as { id: string; hotkey?: string } | undefined
+    if (view) out.push({ id: view.id, ...(view.hotkey ? { hotkey: view.hotkey } : {}) })
     return out
   }
   if (panel.kind === 'menu') {
@@ -47,14 +49,16 @@ export function answer(input: Record<string, unknown>, size = { width: 1600, hei
         ...variants(c),
         control: { id: c.id, kind: 'button', ...(c.hotkey ? { hotkey: c.hotkey } : {}), ...(c.disabled ? { disabled: true } : {}) },
       })
-      // The player bar as the kit lays it: its controls side by side on a row three cells tall, Body at the right end of the two rows under it.
+      // The player bar as the kit lays it: its controls side by side on a row three cells tall, Body and before it the view switch at the right end of the two rows under it.
       if (req.panel.kind === 'playerBar') {
-        const row = controls.filter(c => c.id !== 'body')
+        const row = controls.filter(c => c.id !== 'body' && c.id !== 'view')
         const w = Math.floor(req.columns / (row.length + 1))
         const body = controls.find(c => c.id === 'body')
+        const view = controls.find(c => c.id === 'view')
+        const line = [...(view ? [area(view, req.columns - 23, 14)] : []), ...(body ? [area(body, req.columns - 8, 7)] : [])]
         const tiles = [
           { col: 0, row: 0, columns: req.columns, rows: 3, file: `${name}-row.png`, controls: row.map((c, i) => area(c, 1 + i * w, w)) },
-          { col: 0, row: 3, columns: req.columns, rows: 2, file: `${name}-line.png`, ...(body ? { controls: [area(body, req.columns - 8, 7)] } : {}) },
+          { col: 0, row: 3, columns: req.columns, rows: 2, file: `${name}-line.png`, ...(line.length ? { controls: line } : {}) },
         ]
         return { id: req.id, kind: req.panel.kind, columns: req.columns, rows: 5, cellPx: { width: 16, height: 34 }, tiles }
       }

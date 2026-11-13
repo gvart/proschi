@@ -10,8 +10,8 @@ Most of the fork is in `tooling/`, but it also differs outside it:
 
 - `frontend/src/dsl`: use case `section` blocks (the parser, `sequence.ts`,
   `useCaseSections.test.ts`).
-- `plugin/`: the Claude Code plugin's sequence view and inline switch, its
-  tests, and its version (`plugin/.claude-plugin/plugin.json` and
+- `plugin/`: the Claude Code plugin's sequence view switch and inline
+  switch, its tests (and its fake raster helper), and its version (`plugin/.claude-plugin/plugin.json` and
   `.claude-plugin/marketplace.json`).
 - `docs/`: `GRAMMAR.md` and `USE-CASES.md` (sections), `AGENT-SKILLS.md`
   (the plugin's sequence view and inline switch).
@@ -78,39 +78,45 @@ warns when a response is drawn in other frames than written, and the
 sequence SVGs, the HLD document and the plugin's sequence view draw a titled
 frame per section.
 
-### The Claude Code plugin: a sequence view and an inline switch
+### The Claude Code plugin: a sequence view switch and an inline switch
 
 Upstream's plugin (0.19, `ba9373b`) draws a rendered terminal UI: pictures
 where the terminal shows them (kitty, Ghostty), text cells elsewhere, a
 player bar on top of the drawing, and pane tabs Diagram, Analysis and HLD
 (`docs/design/terminal-mod.md`). The fork adds two things on top of it.
 
-**Sequence view.** While a scenario plays, its sequence diagram is drawn
-under the architecture, at the player's step: the step's calls heavy in the
-accent (red where they err), the participants it involves outlined, the
-calls still to come faded, and a titled frame per `section` and `par`. It is
-driven by upstream's player (the use case and scenario pickers, the step
-controls, Body), so it has no controls of its own, and Stop removes it.
+**Sequence view.** **⇅ Sequence** in the player (`v` in the pane, before
+Body) swaps the architecture for the picked scenario's sequence diagram,
+and **◫ Architecture** swaps it back. Before Play it shows the whole
+scenario. While the scenario plays, the step's calls are heavy in the accent
+(red where they err), the participants it involves are outlined, and the
+calls still to come are faded. Each `section` and `par` gets a titled frame.
+The player's controls work the same in both views, and the switch is kept
+per drawing, across Play, Stop and ↓ Inline. While the sequence shows, the
+systems row and zoom are left out, because they act on the architecture.
+The architecture is the default, so a drawing that is never switched is
+upstream's.
 
-Why under the architecture, not a tab or a toggle: upstream removed a
-Sequence tab in its Round 6 (D9 in terminal-mod.md) and made playing a
-scenario the Diagram tab's; a tab exists only in the pane, while scenarios
-also play in the transcript; and with both on screen, the architecture
-shows where each call goes and the sequence shows the order of the calls,
-for the same step. The fork's earlier toggle between the two (`v`) is gone.
+Why a switch: upstream removed its own Sequence tab (D9 in
+`docs/design/terminal-mod.md`). A tab exists only in the pane, but scenarios
+also play in the transcript, so the switch lives in the player, which is in
+both. An earlier version of this merge drew the sequence under the
+architecture while a scenario played; seeing both at once was too much, so
+it went back to a switch.
 
 It follows upstream's view conventions in both modes:
 
-- Text cells: a second Raster (`q-<view>`) under the diagram, painted by
-  `tooling/src/terminal/sequence.ts`. The animation blits it with the
-  architecture on every frame, so the packet travels both.
-- Pictures: a `sequence` piece after the diagram, a page panel with one
-  `figure` block (`{ useCase, scenario, step }`, `render/ui/contract.ts`),
+- Text cells: the sequence is a Raster (`q-<view>`) in the architecture's
+  place, painted by `tooling/src/terminal/sequence.ts`. While a scenario
+  plays, the animation blits the packet along it frame by frame.
+- Pictures: a `sequence` piece in the diagram's place, a page panel with one
+  `figure` block (`{ useCase, scenario, step? }`, `render/ui/contract.ts`),
   which the raster helper draws with `renderSequenceSvg(…, { step })`
-  (`terminal/panelHost.ts`). Each step is a panel of its own. Every step's
-  is asked for ahead while a scenario plays, and the first step's before
-  Play, so a step shows its sequence at once. The packet animates on the
-  architecture only.
+  (`terminal/panelHost.ts`). Each step is a panel of its own. The panel for
+  the current moment is fetched ahead in the architecture view, and every
+  step's while the sequence plays, so the switch and each step show at once.
+  The switch is the bar's `view` control (`PlayerBarPanel.view`, drawn by
+  `render/ui/panels.ts` just before Body).
 
 **Inline switch.** `/proschi view --inline <file>` draws a file in a row at
 the end of the transcript instead of the pane. In the pane, **↓ Inline**
@@ -173,8 +179,11 @@ Where conflicts usually land:
   both CLIs and diff them).
 - `frontend/src/dsl/parser.ts`, `tooling/src/schema.ts`, `docs/GRAMMAR.md`:
   both sides add next to each other; keep both.
-- `plugin/src/register.tsx`: start from upstream's and re-apply the
-  sequence view and the inline switch (above).
+- `plugin/src/register.tsx` and `src/views/player.tsx`: start from
+  upstream's and re-apply the sequence view switch and the inline switch
+  (above). The switch also touches `PlayerBarPanel` in
+  `tooling/src/render/ui/contract.ts`, `panels.ts` and the plugin's
+  `tests/fakeHelper.ts`.
 - Generated files: don't hand-merge `plugin/hooks/*.js`/`*.cjs` or
   `tooling/schema/proschi-diagram.schema.json`. Take upstream's, then run
   `node build.mjs` in `tooling/` once the sources are merged.

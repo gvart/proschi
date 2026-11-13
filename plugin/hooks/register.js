@@ -11596,7 +11596,7 @@ var scenarioName = (u, s) => {
   const status = s.outcome === "error" ? s.steps.find(isErrorStep)?.statusCode : void 0;
   return `${u.scenarios.length > 1 ? s.name : "Main flow"}${status ? ` \xB7 ${status}` : ""}`;
 };
-function playerModel(view, doc, pick2, playing, step, isPlaying, ctl) {
+function playerModel(view, doc, pick2, playing, step, isPlaying, ctl, sequence = false) {
   const total = pick2.scenario.steps.length;
   const actions = {
     uc: () => ctl.toggle("uc"),
@@ -11604,6 +11604,10 @@ function playerModel(view, doc, pick2, playing, step, isPlaying, ctl) {
     body: () => playing ? ctl.toggle("body") : void 0,
     explore: () => ctl.toggle("explore"),
     close: () => ctl.close(),
+    view: () => {
+      ctl.close();
+      ctl.toggleView();
+    },
     play: () => {
       ctl.close();
       if (!playing) ctl.start(pick2);
@@ -11634,7 +11638,7 @@ function playerModel(view, doc, pick2, playing, step, isPlaying, ctl) {
   actions[`uc=${EXPLORE_ALL}`] = () => ctl.openMenu("explore");
   for (const s of pick2.useCase.scenarios) actions[`sc=${s.id}`] = () => choose(pickOf(pick2.useCase, s));
   const open = ctl.open;
-  return { pick: pick2, ...playing ? { playing } : {}, step, total, isPlaying, ...open && (open !== "body" || playing) ? { open } : {}, actions, line: stepLine(view, pick2, playing ? step : void 0) };
+  return { pick: pick2, ...playing ? { playing } : {}, step, total, isPlaying, sequence, ...open && (open !== "body" || playing) ? { open } : {}, actions, line: stepLine(view, pick2, playing ? step : void 0) };
 }
 function stepLine(view, pick2, at) {
   const steps = pick2.scenario.steps;
@@ -11681,9 +11685,12 @@ function barPanel(view, doc, m, at, isPlaying) {
     ],
     step: { ...on ? { at: at + 1 } : {}, total },
     line: { ...line2.number !== void 0 ? { number: line2.number } : {}, ...line2.error ? { error: true } : {}, text: line2.spans },
-    body: { id: "body", label: "Body", ...on ? {} : { disabled: true }, ...m.open === "body" ? { active: true } : {} }
+    body: { id: "body", label: "Body", ...on ? {} : { disabled: true }, ...m.open === "body" ? { active: true } : {} },
+    view: { id: "view", label: VIEW_LABELS.picture[m.sequence ? 1 : 0], variant: "quiet", columns: VIEW_COLUMNS, ...key("v") }
   };
 }
+var VIEW_LABELS = { text: ["\u21C5 Sequence", "\u25EB Architecture"], picture: ["Sequence", "Architecture"] };
+var VIEW_COLUMNS = 14;
 var drawerPanel = (view, pick2, at) => ({
   kind: "drawer",
   ...pick2.scenario.condition ? { condition: pick2.scenario.condition } : {},
@@ -11731,7 +11738,7 @@ function playerBarText(view, doc, m) {
   const bar = Math.max(0, Math.min(30, view.width - 4 - used));
   const filled = on && total ? Math.round(bar * (at + 1) / total) : 0;
   const line2 = m.line;
-  return /* @__PURE__ */ h(ui.Box, { key: `bar-${id}`, flexDirection: "column", borderStyle: "round", borderColor: PINK, paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true, color: PINK }, "Use case"), /* @__PURE__ */ h(ui.Select, { key: `uc-${id}`, value: m.pick.useCase.id, options: useCaseOptions(doc).map((o) => ({ value: o.value, label: o.value === EXPLORE_ALL ? "\u2261 Explore all\u2026" : o.label })), onSelect: (v) => m.actions[`uc=${v}`]?.() }), /* @__PURE__ */ h(ui.Select, { key: `sc-${id}`, value: m.pick.scenario.id, options: m.pick.useCase.scenarios.map((s) => ({ value: s.id, label: `${s.outcome === "error" ? "\u2717" : "\u2713"} ${scenarioName(m.pick.useCase, s)}` })), onSelect: (v) => m.actions[`sc=${v}`]?.() }), step("r", "\u21E4", "first", on && at > 0), step("b", "\u2039", "prev", on && at > 0), /* @__PURE__ */ h(ui.Button, { key: `play-${id}`, label: m.isPlaying ? "\u275A\u275A" : " \u25B6", variant: "primary", ...key("p"), onPress: () => m.actions.play() }), step("n", "\u203A", "next", on && at < total - 1), step("e", "\u21E5", "last", on && at < total - 1), step("d", "\u2715", "stop", on), /* @__PURE__ */ h(ui.Text, { bold: on, dimColor: !on }, counter), bar > 0 && /* @__PURE__ */ h(ui.Text, null, /* @__PURE__ */ h(ui.Text, { color: YELLOW }, "\u2501".repeat(filled)), /* @__PURE__ */ h(ui.Text, { dimColor: true }, "\u2501".repeat(bar - filled)))), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1 }, /* @__PURE__ */ h(ui.Box, { flexGrow: 1 }, /* @__PURE__ */ h(ui.Text, { wrap: "truncate-end" }, line2.number !== void 0 && chip(ui, String(line2.number), line2.error ? "#ff3b30" : PINK), line2.number !== void 0 ? " " : "", line2.spans.map((s) => /* @__PURE__ */ h(ui.Text, { bold: s.bold === true, dimColor: s.tone === "muted", color: s.tone === "bad" ? "red" : s.tone === "good" ? "green" : s.tone === "warn" ? "yellow" : s.tone === "info" ? "magenta" : void 0 }, s.text)))), /* @__PURE__ */ h(ui.Button, { key: `body-${id}`, label: m.open === "body" ? "Body \u25B4" : "Body \u25BE", dimColor: !on, onPress: () => m.actions.body() })), m.open === "body" && m.playing && stepRows(ui, view, m.playing.scenario.steps, at).nodes, m.open === "explore" && groupByEndpoint(doc.diagram.useCases).map((g) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, g.label && /* @__PURE__ */ h(ui.Text, { bold: true, color: "cyan" }, g.label), g.useCases.map((u) => /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap", paddingLeft: g.label ? 2 : 0 }, /* @__PURE__ */ h(ui.Text, { bold: u.id === m.pick.useCase.id }, u.name), u.scenarios.map((s) => /* @__PURE__ */ h(ui.Button, { key: `x-${id}-${u.id}-${s.id}`, onPress: () => m.actions[`x-${u.id}-${s.id}`]() }, /* @__PURE__ */ h(ui.Text, { color: s.outcome === "error" ? "red" : "green" }, s.outcome === "error" ? "\u2717" : "\u2713", " ", u.scenarios.length > 1 ? scenarioName(u, s) : "Play"))))))));
+  return /* @__PURE__ */ h(ui.Box, { key: `bar-${id}`, flexDirection: "column", borderStyle: "round", borderColor: PINK, paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true, color: PINK }, "Use case"), /* @__PURE__ */ h(ui.Select, { key: `uc-${id}`, value: m.pick.useCase.id, options: useCaseOptions(doc).map((o) => ({ value: o.value, label: o.value === EXPLORE_ALL ? "\u2261 Explore all\u2026" : o.label })), onSelect: (v) => m.actions[`uc=${v}`]?.() }), /* @__PURE__ */ h(ui.Select, { key: `sc-${id}`, value: m.pick.scenario.id, options: m.pick.useCase.scenarios.map((s) => ({ value: s.id, label: `${s.outcome === "error" ? "\u2717" : "\u2713"} ${scenarioName(m.pick.useCase, s)}` })), onSelect: (v) => m.actions[`sc=${v}`]?.() }), step("r", "\u21E4", "first", on && at > 0), step("b", "\u2039", "prev", on && at > 0), /* @__PURE__ */ h(ui.Button, { key: `play-${id}`, label: m.isPlaying ? "\u275A\u275A" : " \u25B6", variant: "primary", ...key("p"), onPress: () => m.actions.play() }), step("n", "\u203A", "next", on && at < total - 1), step("e", "\u21E5", "last", on && at < total - 1), step("d", "\u2715", "stop", on), /* @__PURE__ */ h(ui.Text, { bold: on, dimColor: !on }, counter), bar > 0 && /* @__PURE__ */ h(ui.Text, null, /* @__PURE__ */ h(ui.Text, { color: YELLOW }, "\u2501".repeat(filled)), /* @__PURE__ */ h(ui.Text, { dimColor: true }, "\u2501".repeat(bar - filled)))), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1 }, /* @__PURE__ */ h(ui.Box, { flexGrow: 1 }, /* @__PURE__ */ h(ui.Text, { wrap: "truncate-end" }, line2.number !== void 0 && chip(ui, String(line2.number), line2.error ? "#ff3b30" : PINK), line2.number !== void 0 ? " " : "", line2.spans.map((s) => /* @__PURE__ */ h(ui.Text, { bold: s.bold === true, dimColor: s.tone === "muted", color: s.tone === "bad" ? "red" : s.tone === "good" ? "green" : s.tone === "warn" ? "yellow" : s.tone === "info" ? "magenta" : void 0 }, s.text)))), /* @__PURE__ */ h(ui.Button, { key: `view-${id}`, label: VIEW_LABELS.text[m.sequence ? 1 : 0].padEnd(Math.max(...VIEW_LABELS.text.map((l) => l.length))), ...key("v"), onPress: () => m.actions.view() }), /* @__PURE__ */ h(ui.Button, { key: `body-${id}`, label: m.open === "body" ? "Body \u25B4" : "Body \u25BE", dimColor: !on, onPress: () => m.actions.body() })), m.open === "body" && m.playing && stepRows(ui, view, m.playing.scenario.steps, at).nodes, m.open === "explore" && groupByEndpoint(doc.diagram.useCases).map((g) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, g.label && /* @__PURE__ */ h(ui.Text, { bold: true, color: "cyan" }, g.label), g.useCases.map((u) => /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap", paddingLeft: g.label ? 2 : 0 }, /* @__PURE__ */ h(ui.Text, { bold: u.id === m.pick.useCase.id }, u.name), u.scenarios.map((s) => /* @__PURE__ */ h(ui.Button, { key: `x-${id}-${u.id}-${s.id}`, onPress: () => m.actions[`x-${u.id}-${s.id}`]() }, /* @__PURE__ */ h(ui.Text, { color: s.outcome === "error" ? "red" : "green" }, s.outcome === "error" ? "\u2717" : "\u2713", " ", u.scenarios.length > 1 ? scenarioName(u, s) : "Play"))))))));
 }
 var FORMAT2 = { JSON: "JSON", XML: "XML", FREE_TEXT: "Text" };
 var LANGUAGE = { JSON: "json", XML: "xml", FREE_TEXT: void 0 };
@@ -11895,8 +11902,8 @@ var placedRows = atom2({ plugin: "proschi", key: "placed" }, NO_ROW);
 var prompts = atom2({ plugin: "proschi", key: "prompts" }, 0);
 var INLINE = "inline-";
 var paneAnchor;
-var PANE_KEYS = "1-3 tabs \xB7 p play \xB7 n/b step \xB7 r first \xB7 e last \xB7 d stop \xB7 i inline \xB7 esc back to the prompt";
-var PICTURE_KEYS = "1-3 tabs \xB7 p play \xB7 n/b step \xB7 r first \xB7 e last \xB7 d stop \xB7 z/x zoom \xB7 0 fit \xB7 i inline \xB7 esc back to the prompt";
+var PANE_KEYS = "1-3 tabs \xB7 p play \xB7 n/b step \xB7 r first \xB7 e last \xB7 d stop \xB7 v sequence/architecture \xB7 i inline \xB7 esc back to the prompt";
+var PICTURE_KEYS = "1-3 tabs \xB7 p play \xB7 n/b step \xB7 r first \xB7 e last \xB7 d stop \xB7 v sequence/architecture \xB7 z/x zoom \xB7 0 fit \xB7 i inline \xB7 esc back to the prompt";
 var TAB_KEYS = "1-3 tabs \xB7 \u2191\u2193 scroll \xB7 esc back to the prompt";
 var HLD_KEYS = "1-3 tabs \xB7 \u2191\u2193 scroll \xB7 c copy \xB7 esc back to the prompt";
 var SYSTEM_KEYS = "s next system \xB7 o open/close \xB7 f focus in \xB7 u back out";
@@ -12264,7 +12271,8 @@ function normal(p) {
     expanded: Array.isArray(p?.expanded) ? p.expanded.filter((id) => typeof id === "string") : [],
     ...typeof p?.focus === "string" ? { focus: p.focus } : {},
     ...typeof p?.selected === "string" ? { selected: p.selected } : {},
-    ...isMoved(zoomOf(p?.zoom)) ? { zoom: zoomOf(p?.zoom) } : {}
+    ...isMoved(zoomOf(p?.zoom)) ? { zoom: zoomOf(p?.zoom) } : {},
+    ...p?.sequence === true ? { sequence: true } : {}
   };
 }
 var BARS_WIDTH = 80;
@@ -12352,6 +12360,7 @@ async function diagramView($, d, viewId, written, file, mode = { kind: "text" },
   if (mode.kind === "text") return textView($, p, mode);
   return await pictureView($, p, mode, priority) ?? textView($, p, { kind: "text" });
 }
+var sequenceShown = (p) => p.player.sequence === true && p.pick !== void 0;
 var isWide = (p) => p.view.scene.columns > p.view.d.columns;
 function wideNotice(p, z) {
   if (!isWide(p) || z.level > 1) return [];
@@ -12364,6 +12373,13 @@ async function pictureView($, p, mode, priority) {
   const { d, viewId } = view;
   const hasSystems = p.systems.length > 0 || p.player.focus !== void 0;
   const z = view.inPane ? zoomOf(p.player.zoom) : FIT;
+  if (sequenceShown(p)) {
+    images.delete(viewId);
+    const rows2 = (d.rows ?? INLINE_ROWS) + 16;
+    if (mode.kind === "loading") return { kind: "loading", rows: rows2 };
+    const built2 = pictureParts($, p, noticesOf(doc, p.lost, importReasons, view.inPane, []), void 0);
+    return { kind: "picture", ...built2, rows: rows2, systems: hasSystems };
+  }
   const notices = noticesOf(doc, p.lost, importReasons, view.inPane, wideNotice(p, z));
   const theme2 = await themeOf($);
   const optionsFor = (play, zoomed) => ({
@@ -12427,14 +12443,17 @@ function textView($, p, mode) {
   const { ui } = d;
   const scene = view.scene;
   const steps = playing?.scenario.steps ?? [];
-  const painted = paint(scene, { overlay: doc.overlay, edges: doc.edges, icons, systems: doc.systems, ...view.selected ? { selected: view.selected } : {}, ...steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {} });
-  const wide = view.inPane && painted.columns > d.columns;
+  const seq2 = sequenceShown(p) ? view.sequence?.(pick2.value) : void 0;
+  if (seq2) textCrops.set(viewId, void 0);
+  const sequenced = seq2 ? paintSequence(seq2, { icons, ...steps.length > 0 ? { play: { index: step, progress } } : {} }) : void 0;
+  const painted = sequenced ?? paint(scene, { overlay: doc.overlay, edges: doc.edges, icons, systems: doc.systems, ...view.selected ? { selected: view.selected } : {}, ...steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {} });
+  const wide = !sequenced && view.inPane && painted.columns > d.columns;
   const pan = wide ? textPan($, view, painted, zoomOf(p.player.zoom)) : void 0;
   textCrops.set(viewId, pan ? pan.vp : void 0);
   const grid = pan ? painted.crop(pan.vp.col, 0, pan.vp.columns, painted.rows) : painted;
   const lead = [
     ...mode.hint ? [{ text: TMUX_HINT, tone: "muted" }] : [],
-    ...painted.columns > d.columns ? [
+    ...!sequenced && painted.columns > d.columns ? [
       {
         text: pan ? `\u2194 ${painted.columns} columns wide, wider than the ${d.columns} here: columns ${pan.vp.col + 1}\u2013${pan.vp.col + pan.vp.columns} shown. Drag it, or h and l (\u2190 \u2192 after a click on it), to pan.` : `\u2194 ${painted.columns} columns wide, wider than the ${d.columns} here: \u26F6 Focus opens it in the pane, where it pans.`,
         tone: "muted"
@@ -12442,14 +12461,12 @@ function textView($, p, mode) {
     ] : []
   ];
   const verdict = verdictOf(doc.tests);
-  const sys = systemsOf($, p);
+  const sys = sequenced ? void 0 : systemsOf($, p);
   const links = linksOf($, p);
-  const m = pick2 && playerModel(view, doc, pick2, playing, step, p.player.isPlaying, playerCtl($, view, pick2.scenario.steps));
-  const seq2 = playing && view.sequence?.(playing.value);
-  const sequenced = seq2 ? paintSequence(seq2, { icons, ...steps.length > 0 ? { play: { index: step, progress } } : {} }) : void 0;
+  const m = pick2 && playerModel(view, doc, pick2, playing, step, p.player.isPlaying, playerCtl($, view, pick2.scenario.steps), p.player.sequence === true);
   return {
     kind: "text",
-    element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, m && playerBarText(view, doc, m), doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, noticesText(ui, noticesOf(doc, p.lost, importReasons, view.inPane, lead), `notice-${viewId}`), pan ? /* @__PURE__ */ h(ui.Box, { key: `${view.rasterKey}-pan`, flexDirection: "column", width: grid.columns, height: grid.rows }, /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), /* @__PURE__ */ h(ui.Box, { position: "absolute", top: 0, left: 0, width: grid.columns, height: grid.rows }, /* @__PURE__ */ h(ui.Client, { key: pan.overlay, module: "./uiOverlay.js", props: { controls: [], drag: "x" }, width: grid.columns, height: grid.rows })), /* @__PURE__ */ h(ui.Box, { display: "none" }, /* @__PURE__ */ h(ui.Button, { key: `pan-h-${viewId}`, label: "h", hotkey: "h", onPress: pan.keys.left }), /* @__PURE__ */ h(ui.Button, { key: `pan-l-${viewId}`, label: "l", hotkey: "l", onPress: pan.keys.right }))) : /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), doc.edges && !playing && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)), sequenced && /* @__PURE__ */ h(ui.Raster, { key: sequenceKey(viewId), columns: sequenced.columns, rows: sequenced.rows, cells: sequenced.toBase64() }), verdict && verdictText(ui, verdict, view.width, viewId, view.inPane ? void 0 : () => focus($, view, p.title, p.what, "hld", "requirements")), sys && systemsText(ui, sys.model, viewId, view.width, (id) => sys.actions[id]?.()), controlsText(ui, links.controls, viewId, view.width, (id, surface) => links.actions[id]?.(surface))),
+    element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, m && playerBarText(view, doc, m), doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, noticesText(ui, noticesOf(doc, p.lost, importReasons, view.inPane, lead), `notice-${viewId}`), sequenced ? /* @__PURE__ */ h(ui.Raster, { key: sequenceKey(viewId), columns: sequenced.columns, rows: sequenced.rows, cells: sequenced.toBase64() }) : pan ? /* @__PURE__ */ h(ui.Box, { key: `${view.rasterKey}-pan`, flexDirection: "column", width: grid.columns, height: grid.rows }, /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), /* @__PURE__ */ h(ui.Box, { position: "absolute", top: 0, left: 0, width: grid.columns, height: grid.rows }, /* @__PURE__ */ h(ui.Client, { key: pan.overlay, module: "./uiOverlay.js", props: { controls: [], drag: "x" }, width: grid.columns, height: grid.rows })), /* @__PURE__ */ h(ui.Box, { display: "none" }, /* @__PURE__ */ h(ui.Button, { key: `pan-h-${viewId}`, label: "h", hotkey: "h", onPress: pan.keys.left }), /* @__PURE__ */ h(ui.Button, { key: `pan-l-${viewId}`, label: "l", hotkey: "l", onPress: pan.keys.right }))) : /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), doc.edges && !playing && !sequenced && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)), verdict && verdictText(ui, verdict, view.width, viewId, view.inPane ? void 0 : () => focus($, view, p.title, p.what, "hld", "requirements")), sys && systemsText(ui, sys.model, viewId, view.width, (id) => sys.actions[id]?.()), controlsText(ui, links.controls, viewId, view.width, (id, surface) => links.actions[id]?.(surface))),
     systems: sys !== void 0
   };
 }
@@ -12498,7 +12515,11 @@ function playerCtl($, view, steps) {
     go: (to, isPlaying = false) => goTo($, view, steps, to, isPlaying),
     pause: () => void setPlayer($, view, (p) => ({ ...p, isPlaying: false })),
     stop: () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })),
-    pick: (pick2) => void setPlayer($, view, (p) => ({ ...p, pick: pick2.value }))
+    pick: (pick2) => void setPlayer($, view, (p) => ({ ...p, pick: pick2.value })),
+    toggleView: () => void setPlayer($, view, (p) => {
+      const { sequence, ...rest } = p;
+      return sequence ? rest : { ...rest, sequence: true };
+    })
   };
 }
 function linksOf($, p) {
@@ -12536,7 +12557,7 @@ function pictureParts($, p, notices, picture, zoomed) {
   const on = (piece, id, fn) => actions[`${piece}/${id}`] = fn;
   let float;
   if (pick2) {
-    const m = playerModel(view, doc, pick2, playing, step, player.isPlaying, playerCtl($, view, pick2.scenario.steps));
+    const m = playerModel(view, doc, pick2, playing, step, player.isPlaying, playerCtl($, view, pick2.scenario.steps), player.sequence === true);
     const bar = barPanel(view, doc, m, playing ? step : void 0, player.isPlaying);
     pieces.push({ id: "bar", panel: bar, columns: W2 });
     for (const [id, fn] of Object.entries(m.actions)) on("bar", id, () => fn());
@@ -12556,15 +12577,20 @@ function pictureParts($, p, notices, picture, zoomed) {
     pieces.push({ id: "title", panel: { kind: "page", blocks: [{ type: "heading", level: 3, text: doc.diagram.title }, ...doc.diagram.summary ? [{ type: "paragraph", small: true, text: doc.diagram.summary }] : []] }, columns: W2 });
   }
   if (notices.length) pieces.push({ id: "warn", panel: { kind: "notices", notices }, columns: W2 });
-  pieces.push({ id: "diagram", ...picture ? { picture } : {} });
-  if (playing) {
-    pieces.push({ id: "sequence", panel: sequencePanel(p, playing, step), columns: W2 });
-    for (let i = 0; i < playing.scenario.steps.length; i++) if (i !== step) ahead.push({ panel: sequencePanel(p, playing, i), columns: W2 });
-  } else if (pick2) ahead.push({ panel: sequencePanel(p, pick2, 0), columns: W2 });
+  const sequenced = sequenceShown(p);
+  if (sequenced) {
+    pieces.push({ id: "sequence", panel: sequencePanel(p, pick2, playing ? step : void 0), columns: W2 });
+    if (playing) {
+      for (let i = 0; i < playing.scenario.steps.length; i++) if (i !== step) ahead.push({ panel: sequencePanel(p, playing, i), columns: W2 });
+    }
+  } else {
+    pieces.push({ id: "diagram", ...picture ? { picture } : {} });
+    if (pick2) ahead.push({ panel: sequencePanel(p, pick2, playing ? step : void 0), columns: W2 });
+  }
   const verdict = verdictOf(doc.tests);
   if (verdict) pieces.push({ id: "below", panel: { kind: "notices", verdict, ...!view.inPane ? { details: DETAILS } : {} }, columns: W2 });
   on("below", "details", () => focus($, view, p.title, p.what, "hld", "requirements"));
-  const sys = systemsOf($, p);
+  const sys = sequenced ? void 0 : systemsOf($, p);
   if (sys) {
     pieces.push({ id: "systems", panel: { kind: "systemBar", ...sys.model }, columns: W2 });
     for (const [id, fn] of Object.entries(sys.actions)) on("systems", id, fn);
@@ -12579,13 +12605,13 @@ function pictureParts($, p, notices, picture, zoomed) {
   }
   return { pieces, actions, ahead, ...float ? { float } : {}, ...zoom ? { corner: zoom.corner, keys: zoom.keys, onDrag: zoom.onDrag } : {} };
 }
-var SEQUENCE_ROWS = { pane: 30, inline: 20 };
 function sequencePanel(p, pick2, step) {
-  const key = `${keyOf(p.source)}\0${pick2.value}\0${step}\0${p.view.inPane}`;
+  const maxRows = p.view.d.rows ?? INLINE_ROWS;
+  const key = `${keyOf(p.source)}\0${pick2.value}\0${step ?? "-"}\0${maxRows}`;
   let panel = sequencePanels.get(key);
   if (!panel) {
-    const of = { useCase: pick2.useCase.id, scenario: pick2.scenario.id, step };
-    panel = { kind: "page", source: p.source, blocks: [{ type: "figure", of, maxRows: p.view.inPane ? SEQUENCE_ROWS.pane : SEQUENCE_ROWS.inline }] };
+    const of = { useCase: pick2.useCase.id, scenario: pick2.scenario.id, ...step !== void 0 ? { step } : {} };
+    panel = { kind: "page", source: p.source, blocks: [{ type: "figure", of, maxRows }] };
     sequencePanels.set(key, panel);
   }
   return panel;
@@ -12875,16 +12901,17 @@ function animate($, view, steps) {
         sent = file;
         await $.ui.blit({ requestId: view.d.requestId, key: image.key, source: await sourceOf($, file, image.form) });
       }
-    } else {
-      const play = playAt(view.scene, steps, step, progress, tick++);
-      const cells = paint(view.scene, { overlay: view.overlay, edges: view.edges, icons, systems: view.systems, ...view.selected ? { selected: view.selected } : {}, play });
-      const vp = textCrops.get(view.viewId);
-      await $.ui.blit({ requestId: view.d.requestId, key: view.rasterKey, cells: (vp ? cells.crop(vp.col, 0, vp.columns, cells.rows) : cells).toBase64() });
+    } else if (player.sequence) {
       const seq2 = view.sequence?.(player.pick);
       if (seq2) {
         const frame2 = paintSequence(seq2, { icons, play: { index: step, progress } });
         await $.ui.blit({ requestId: view.d.requestId, key: sequenceKey(view.viewId), cells: frame2.toBase64() }).catch(() => void 0);
       }
+    } else {
+      const play = playAt(view.scene, steps, step, progress, tick++);
+      const cells = paint(view.scene, { overlay: view.overlay, edges: view.edges, icons, systems: view.systems, ...view.selected ? { selected: view.selected } : {}, play });
+      const vp = textCrops.get(view.viewId);
+      await $.ui.blit({ requestId: view.d.requestId, key: view.rasterKey, cells: (vp ? cells.crop(vp.col, 0, vp.columns, cells.rows) : cells).toBase64() });
     }
     if (!player.isPlaying) {
       if (elapsed >= TRAVEL_MS) stop(view.viewId);

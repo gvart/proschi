@@ -167,6 +167,12 @@ describe('UI panels: the cell grid', () => {
     expect(surface.controls.map((c) => [c.control.id, c.control.hotkey, c.control.kind])).toEqual([...['diagram', 'analysis', 'hld'].map((id, i) => [id, String(i + 1), 'tab']), ['open', undefined, 'button']]);
     const bar = drawPanel(PANELS.playerBar, 120, 'dark').surface.controls.map((c) => [c.control.id, c.control.hotkey]);
     expect(bar).toEqual([['uc', undefined], ['sc', undefined], ['first', 'r'], ['prev', 'b'], ['play', 'p'], ['next', 'n'], ['last', 'e'], ['stop', 'd'], ['body', undefined]]);
+    // The fork's view switch: on the second line, just before Body, its hotkey on the tile.
+    const withView = drawPanel({ ...(PANELS.playerBar as Extract<Panel, { kind: 'playerBar' }>), view: { id: 'view', label: 'Sequence', variant: 'quiet', hotkey: 'v', keycap: false, columns: 14 } }, 120, 'dark').surface.controls;
+    expect(withView.map((c) => [c.control.id, c.control.hotkey])).toEqual([...bar, ['view', 'v']]);
+    const [body, view] = ['body', 'view'].map((id) => withView.find((c) => c.control.id === id)!.box);
+    expect(view.y).toBe(body.y);
+    expect(view.x + view.w).toBeLessThan(body.x);
     const menu = drawPanel(PANELS.menu, 40, 'dark').surface.controls.filter((c) => c.control.kind === 'option');
     expect(menu.map((c) => c.control.id)).toEqual([...redirect.scenarios.map((s) => `sc=${s.id}`), 'sc=__explore']);
   });

@@ -13,6 +13,8 @@ export type Player = {
   step: number
   isPlaying: boolean
   mode: 'diagram' | 'play'
+  /** The drawing is the picked scenario's sequence diagram instead of the architecture (the fork's view switch, `v`). */
+  sequence?: true
   explorer: boolean
   expanded: string[]
   focus?: string

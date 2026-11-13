@@ -36,9 +36,9 @@ import { FLOAT_EDGES, hotkey, panelColumns, pickOf, type Draw, type Pick, type V
  * in a pane. Each drawing is the browser's layout in character cells, with
  * the simulation's numbers on the cards and edges and a player for the use
  * cases; the pane adds the editor's other views as tabs (src/views,
- * docs/design/terminal-mod.md). A scenario playing is drawn twice: over the
- * architecture, and as its sequence diagram under it, both at the player's
- * step. A drawing moves between the pane and the transcript (↓ Inline,
+ * docs/design/terminal-mod.md). The player's view switch (`v`) draws the
+ * picked scenario as its sequence diagram in place of the architecture, at
+ * the player's step. A drawing moves between the pane and the transcript (↓ Inline,
  * ⛶ Focus, `/proschi view --inline`).
  *
  * Built from plugin/src by tooling/build.mjs into hooks/register.js (this
@@ -75,9 +75,9 @@ const INLINE = 'inline-'
 let paneAnchor: string | undefined
 
 /** The pane's keys, as its Buttons' hotkeys name them; the system keys where the diagram has systems. */
-const PANE_KEYS = '1-3 tabs · p play · n/b step · r first · e last · d stop · i inline · esc back to the prompt'
+const PANE_KEYS = '1-3 tabs · p play · n/b step · r first · e last · d stop · v sequence/architecture · i inline · esc back to the prompt'
 /** In pictures the diagram zooms too. */
-const PICTURE_KEYS = '1-3 tabs · p play · n/b step · r first · e last · d stop · z/x zoom · 0 fit · i inline · esc back to the prompt'
+const PICTURE_KEYS = '1-3 tabs · p play · n/b step · r first · e last · d stop · v sequence/architecture · z/x zoom · 0 fit · i inline · esc back to the prompt'
 const TAB_KEYS = '1-3 tabs · ↑↓ scroll · esc back to the prompt'
 const HLD_KEYS = '1-3 tabs · ↑↓ scroll · c copy · esc back to the prompt'
 const SYSTEM_KEYS = 's next system · o open/close · f focus in · u back out'
@@ -575,6 +575,7 @@ function normal(p: Partial<Player> | undefined): Player {
     ...(typeof p?.focus === 'string' ? { focus: p.focus } : {}),
     ...(typeof p?.selected === 'string' ? { selected: p.selected } : {}),
     ...(isMoved(zoomOf(p?.zoom)) ? { zoom: zoomOf(p?.zoom) } : {}),
+    ...(p?.sequence === true ? { sequence: true as const } : {}),
   }
 }
 
@@ -712,6 +713,9 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
   return (await pictureView($, p, mode, priority)) ?? textView($, p, { kind: 'text' })
 }
 
+/** Whether the drawing is switched to the sequence view (`v`) with a scenario to draw: its sequence diagram stands in place of the architecture. */
+const sequenceShown = (p: Prepared) => p.player.sequence === true && p.pick !== undefined
+
 /** Whether a diagram is wider than its room drawn as text cells, so its picture at fit is too small to read. */
 const isWide = (p: Prepared) => p.view.scene.columns > p.view.d.columns
 
@@ -735,6 +739,14 @@ async function pictureView($: EngineInterface, p: Prepared, mode: Exclude<Mode, 
   const { d, viewId } = view
   const hasSystems = p.systems.length > 0 || p.player.focus !== undefined
   const z = view.inPane ? zoomOf(p.player.zoom) : FIT
+  // Switched to the sequence view: no architecture picture, its sequence diagram's panel in its place (pictureParts), nothing to zoom.
+  if (sequenceShown(p)) {
+    images.delete(viewId)
+    const rows = (d.rows ?? INLINE_ROWS) + 16
+    if (mode.kind === 'loading') return { kind: 'loading', rows }
+    const built = pictureParts($, p, noticesOf(doc, p.lost, importReasons, view.inPane, []), undefined)
+    return { kind: 'picture', ...built, rows, systems: hasSystems }
+  }
   const notices = noticesOf(doc, p.lost, importReasons, view.inPane, wideNotice(p, z))
   const theme = await themeOf($)
   // The same drawing as a picture: what the cells would show, playback's frames included.
@@ -805,15 +817,19 @@ function textView($: EngineInterface, p: Prepared, mode: Extract<Mode, { kind: '
   const { ui } = d
   const scene = view.scene
   const steps = playing?.scenario.steps ?? []
-  const painted = paint(scene, { overlay: doc.overlay, edges: doc.edges, icons, systems: doc.systems, ...(view.selected ? { selected: view.selected } : {}), ...(steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {}) })
+  // Switched to the sequence view: the picked scenario's sequence diagram in place of the architecture, the step lit while it plays.
+  const seq = sequenceShown(p) ? view.sequence?.(pick!.value) : undefined
+  if (seq) textCrops.set(viewId, undefined)
+  const sequenced = seq ? paintSequence(seq, { icons, ...(steps.length > 0 ? { play: { index: step, progress } } : {}) }) : undefined
+  const painted = sequenced ?? paint(scene, { overlay: doc.overlay, edges: doc.edges, icons, systems: doc.systems, ...(view.selected ? { selected: view.selected } : {}), ...(steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {}) })
   // In the pane, a drawing wider than it shows a viewport of it, panned by a drag, h and l, and ← → with the focus on it.
-  const wide = view.inPane && painted.columns > d.columns
+  const wide = !sequenced && view.inPane && painted.columns > d.columns
   const pan = wide ? textPan($, view, painted, zoomOf(p.player.zoom)) : undefined
   textCrops.set(viewId, pan ? pan.vp : undefined)
   const grid = pan ? painted.crop(pan.vp.col, 0, pan.vp.columns, painted.rows) : painted
   const lead: Notice[] = [
     ...(mode.hint ? [{ text: TMUX_HINT, tone: 'muted' as const }] : []),
-    ...(painted.columns > d.columns
+    ...(!sequenced && painted.columns > d.columns
       ? [
           {
             text: pan
@@ -825,11 +841,9 @@ function textView($: EngineInterface, p: Prepared, mode: Extract<Mode, { kind: '
       : []),
   ]
   const verdict = verdictOf(doc.tests)
-  const sys = systemsOf($, p)
+  const sys = sequenced ? undefined : systemsOf($, p)
   const links = linksOf($, p)
-  const m = pick && playerModel(view, doc, pick, playing, step, p.player.isPlaying, playerCtl($, view, pick.scenario.steps))
-  const seq = playing && view.sequence?.(playing.value)
-  const sequenced = seq ? paintSequence(seq, { icons, ...(steps.length > 0 ? { play: { index: step, progress } } : {}) }) : undefined
+  const m = pick && playerModel(view, doc, pick, playing, step, p.player.isPlaying, playerCtl($, view, pick.scenario.steps), p.player.sequence === true)
   return {
     kind: 'text',
     element: (
@@ -843,7 +857,9 @@ function textView($: EngineInterface, p: Prepared, mode: Extract<Mode, { kind: '
         )}
         <ui.Box key={view.anchorKey} flexDirection="column">
           {noticesText(ui, noticesOf(doc, p.lost, importReasons, view.inPane, lead), `notice-${viewId}`)}
-          {pan ? (
+          {sequenced ? (
+            <ui.Raster key={sequenceKey(viewId)} columns={sequenced.columns} rows={sequenced.rows} cells={sequenced.toBase64()} />
+          ) : pan ? (
             <ui.Box key={`${view.rasterKey}-pan`} flexDirection="column" width={grid.columns} height={grid.rows}>
               <ui.Raster key={view.rasterKey} columns={grid.columns} rows={grid.rows} cells={grid.toBase64()} />
               <ui.Box position="absolute" top={0} left={0} width={grid.columns} height={grid.rows}>
@@ -858,10 +874,8 @@ function textView($: EngineInterface, p: Prepared, mode: Extract<Mode, { kind: '
             <ui.Raster key={view.rasterKey} columns={grid.columns} rows={grid.rows} cells={grid.toBase64()} />
           )}
           {/* The load legend, as the picture's badge: on a still, not while a scenario plays. */}
-          {doc.edges && !playing && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)}
+          {doc.edges && !playing && !sequenced && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)}
         </ui.Box>
-        {/* The scenario playing as its sequence diagram, at the same step: the order of the calls the diagram shows the route of. */}
-        {sequenced && <ui.Raster key={sequenceKey(viewId)} columns={sequenced.columns} rows={sequenced.rows} cells={sequenced.toBase64()} />}
         {verdict && verdictText(ui, verdict, view.width, viewId, view.inPane ? undefined : () => focus($, view, p.title, p.what, 'hld', 'requirements'))}
         {sys && systemsText(ui, sys.model, viewId, view.width, id => sys.actions[id]?.())}
         {controlsText(ui, links.controls, viewId, view.width, (id, surface) => links.actions[id]?.(surface))}
@@ -930,6 +944,11 @@ function playerCtl($: EngineInterface, view: View, steps: FlowStep[]): PlayerCtl
     pause: () => void setPlayer($, view, p => ({ ...p, isPlaying: false })),
     stop: () => void setPlayer($, view, p => ({ ...p, mode: 'diagram', isPlaying: false })),
     pick: pick => void setPlayer($, view, p => ({ ...p, pick: pick.value })),
+    toggleView: () =>
+      void setPlayer($, view, p => {
+        const { sequence, ...rest } = p
+        return sequence ? rest : { ...rest, sequence: true }
+      }),
   }
 }
 
@@ -982,7 +1001,7 @@ function pictureParts($: EngineInterface, p: Prepared, notices: Notice[], pictur
 
   // The player on top, one size whether a scenario plays or not; what it opens floats over the drawing.
   if (pick) {
-    const m = playerModel(view, doc, pick, playing, step, player.isPlaying, playerCtl($, view, pick.scenario.steps))
+    const m = playerModel(view, doc, pick, playing, step, player.isPlaying, playerCtl($, view, pick.scenario.steps), player.sequence === true)
     const bar = barPanel(view, doc, m, playing ? step : undefined, player.isPlaying)
     pieces.push({ id: 'bar', panel: bar, columns: W })
     for (const [id, fn] of Object.entries(m.actions)) on('bar', id, () => fn())
@@ -1006,21 +1025,25 @@ function pictureParts($: EngineInterface, p: Prepared, notices: Notice[], pictur
 
   if (notices.length) pieces.push({ id: 'warn', panel: { kind: 'notices', notices }, columns: W })
 
-  pieces.push({ id: 'diagram', ...(picture ? { picture } : {}) })
-
-  // The scenario playing as its sequence diagram under the architecture, its step lit as the player moves.
-  if (playing) {
-    pieces.push({ id: 'sequence', panel: sequencePanel(p, playing, step), columns: W })
-    // Ahead: every other step's.
-    for (let i = 0; i < playing.scenario.steps.length; i++) if (i !== step) ahead.push({ panel: sequencePanel(p, playing, i), columns: W })
-  } else if (pick) ahead.push({ panel: sequencePanel(p, pick, 0), columns: W })
+  // The architecture, or switched to the sequence view (`v`), the picked scenario's sequence diagram in its place, its step lit as the player moves.
+  const sequenced = sequenceShown(p)
+  if (sequenced) {
+    pieces.push({ id: 'sequence', panel: sequencePanel(p, pick!, playing ? step : undefined), columns: W })
+    // Ahead: every other step's, so a step shows at once.
+    if (playing) for (let i = 0; i < playing.scenario.steps.length; i++) if (i !== step) ahead.push({ panel: sequencePanel(p, playing, i), columns: W })
+  } else {
+    pieces.push({ id: 'diagram', ...(picture ? { picture } : {}) })
+    // Ahead: the sequence view of the moment, so the switch shows it at once.
+    if (pick) ahead.push({ panel: sequencePanel(p, pick, playing ? step : undefined), columns: W })
+  }
 
   // The verdict only when a check fails (the HLD tab's badge says how many), the legend in the diagram's corner.
   const verdict = verdictOf(doc.tests)
   if (verdict) pieces.push({ id: 'below', panel: { kind: 'notices', verdict, ...(!view.inPane ? { details: DETAILS } : {}) }, columns: W })
   on('below', 'details', () => focus($, view, p.title, p.what, 'hld', 'requirements'))
 
-  const sys = systemsOf($, p)
+  // The systems row acts on the architecture: not under the sequence diagram.
+  const sys = sequenced ? undefined : systemsOf($, p)
   if (sys) {
     pieces.push({ id: 'systems', panel: { kind: 'systemBar', ...sys.model }, columns: W })
     for (const [id, fn] of Object.entries(sys.actions)) on('systems', id, fn)
@@ -1039,17 +1062,19 @@ function pictureParts($: EngineInterface, p: Prepared, notices: Notice[], pictur
   return { pieces, actions, ahead, ...(float ? { float } : {}), ...(zoom ? { corner: zoom.corner, keys: zoom.keys, onDrag: zoom.onDrag } : {}) }
 }
 
-/** Rows the sequence diagram's figure takes at most: in the pane, more of its room. */
-const SEQUENCE_ROWS = { pane: 30, inline: 20 }
-
-/** The sequence diagram of `pick` at `step` as a page with one figure (the helper draws it from the source: panelHost.ts withFigures). */
-function sequencePanel(p: Prepared, pick: Pick, step: number): Panel {
+/**
+ * The sequence diagram of `pick` as a page with one figure (the helper draws
+ * it from the source: panelHost.ts withFigures), `step` lit, none before
+ * Play; as many rows at most as the architecture it stands in for.
+ */
+function sequencePanel(p: Prepared, pick: Pick, step: number | undefined): Panel {
+  const maxRows = p.view.d.rows ?? INLINE_ROWS
   // The same object each render, as pageOf keeps the tabs' pages, in a cache of its own: a scenario has a panel a step.
-  const key = `${keyOf(p.source)}\0${pick.value}\0${step}\0${p.view.inPane}`
+  const key = `${keyOf(p.source)}\0${pick.value}\0${step ?? '-'}\0${maxRows}`
   let panel = sequencePanels.get(key)
   if (!panel) {
-    const of = { useCase: pick.useCase.id, scenario: pick.scenario.id, step }
-    panel = { kind: 'page', source: p.source, blocks: [{ type: 'figure', of, maxRows: p.view.inPane ? SEQUENCE_ROWS.pane : SEQUENCE_ROWS.inline }] }
+    const of = { useCase: pick.useCase.id, scenario: pick.scenario.id, ...(step !== undefined ? { step } : {}) }
+    panel = { kind: 'page', source: p.source, blocks: [{ type: 'figure', of, maxRows }] }
     sequencePanels.set(key, panel)
   }
   return panel
@@ -1459,18 +1484,19 @@ function animate($: EngineInterface, view: View, steps: FlowStep[]): void {
         sent = file
         await $.ui.blit({ requestId: view.d.requestId, key: image.key, source: await sourceOf($, file, image.form) })
       }
+    } else if (player.sequence) {
+      // Switched to the sequence view: the packet travels the sequence diagram, in its Raster (text cells; in pictures it is a panel a step, and there is no Raster to blit).
+      const seq = view.sequence?.(player.pick)
+      if (seq) {
+        const frame = paintSequence(seq, { icons, play: { index: step, progress } })
+        await $.ui.blit({ requestId: view.d.requestId, key: sequenceKey(view.viewId), cells: frame.toBase64() }).catch(() => undefined)
+      }
     } else {
       const play = playAt(view.scene, steps, step, progress, tick++)
       const cells = paint(view.scene, { overlay: view.overlay, edges: view.edges, icons, systems: view.systems, ...(view.selected ? { selected: view.selected } : {}), play })
       // Panned (a drawing wider than the pane): the frame cropped as the drawing is.
       const vp = textCrops.get(view.viewId)
       await $.ui.blit({ requestId: view.d.requestId, key: view.rasterKey, cells: (vp ? cells.crop(vp.col, 0, vp.columns, cells.rows) : cells).toBase64() })
-      // The sequence diagram under it, the same moment; not there yet on the first frames after Play (the redraw mounts it).
-      const seq = view.sequence?.(player.pick)
-      if (seq) {
-        const frame = paintSequence(seq, { icons, play: { index: step, progress } })
-        await $.ui.blit({ requestId: view.d.requestId, key: sequenceKey(view.viewId), cells: frame.toBase64() }).catch(() => undefined)
-      }
     }
     if (!player.isPlaying) {
       if (elapsed >= TRAVEL_MS) stop(view.viewId)

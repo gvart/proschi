@@ -105,10 +105,10 @@ tab says so.
 Over the drawing, a player like the editor's: a use case picker (its last
 entry, **≡ Explore all…**, lists every use case and scenario), a scenario
 picker, the step buttons and the step being played, with **Body ▾** to show
-that step's request and response. While a scenario plays, its sequence
-diagram sits under the architecture, with its
-[sections](USE-CASES.md#sections) framed and the step being played lit, so
-you see the route and the order of the calls at once. Under it, buttons copy
+that step's request and response. **⇅ Sequence** in the player swaps the
+architecture for the picked scenario's sequence diagram, with its
+[sections](USE-CASES.md#sections) framed and, while it plays, the step being
+played lit; **◫ Architecture** swaps it back, at the same step. Under it, buttons copy
 the source or a share link, open the diagram in Proschi, or, with
 **⛶ Focus**, move it into a pane you drive from the keyboard. **↓ Inline**
 in the pane moves it back into the transcript where the player stood. The pane
@@ -133,6 +133,7 @@ where you can also explore what-ifs live.
 | `n` / `b` | Next or previous step |
 | `r` / `e` | Restart, or jump to the end |
 | `d` | Back to the diagram |
+| `v` | Switch between the architecture and the sequence diagram |
 | `i` | Move the drawing into the transcript (↓ Inline) |
 | `z` or `+` / `x` or `-` | Pictures: zoom in or out (125% to 300%) |
 | `0` | Pictures: back to fit |

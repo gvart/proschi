@@ -162,6 +162,8 @@ export interface PlayerBarPanel {
   line: { number?: number; error?: boolean; text: Rich };
   /** Body ▾ at the second line's end: the request and response drawer. */
   body?: Control;
+  /** Before Body: the switch between the architecture and the scenario's sequence diagram (the fork's), labelled with the view it switches to. */
+  view?: Control;
 }
 
 /** A select's menu floating over the drawing under its select: an option per row, each a control `${id}=${value}`. */
