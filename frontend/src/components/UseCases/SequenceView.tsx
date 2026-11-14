@@ -3,7 +3,23 @@ import type { SequenceMessage } from '../../dsl/sequence';
 import type { DiagramNode, DiagramScenario, DiagramUseCase } from '../../dsl/types';
 import { getTechStackIcon } from '../../utils/iconMapping';
 import { ZoomControls } from '../Diagram/ZoomControls';
-import { SEQ, ZOOM, clampZoom, fitZoom, layoutSequence, litParticipants, lookAt, type SeqBox, type SeqLook, type SeqMessageRow } from './sequenceLayout';
+import { CutOffMark, PacketMark } from './AnimatedPlaybackEdge';
+import { FAIL_AT, usePlaybackProgress } from './playbackClock';
+import {
+  SEQ,
+  ZOOM,
+  arrowPoints,
+  clampZoom,
+  fitZoom,
+  layoutSequence,
+  litParticipants,
+  lookAt,
+  packetWindows,
+  pointAlong,
+  type SeqBox,
+  type SeqLook,
+  type SeqMessageRow,
+} from './sequenceLayout';
 import '../Canvas/canvas.css';
 import './sequence.css';
 
@@ -36,7 +52,8 @@ type Anchor = { x: number; y: number; cx: number; cy: number } | 'origin';
  * participants as small cards on the dotted paper, dashed lifelines, numbered
  * calls in ink, answers dashed, failures in red, `par` regions and titled
  * `section` frames. The current step is drawn in the accent like the canvas's
- * active nodes; steps still to come are faded. The cards stay at the top while
+ * active nodes, and its packets ride its arrows on the playback clock
+ * (PlaybackClockContext) as the canvas's ride its edges; steps still to come are faded. The cards stay at the top while
  * the messages scroll, and the view follows playback.
  *
  * It opens fitted to the pane's width. The controls (bottom left, like the
@@ -244,6 +261,7 @@ function SequenceView({ useCase, scenario, nodes, frame, onSelectFrame, classNam
           {layout.rows.map((row) => (
             <Message key={row.index} row={row} look={lookAt(row, frame)} ids={ids} name={name} onSelect={onSelectFrame} />
           ))}
+          <Packets rows={layout.rows} frame={frame} />
           {layout.rows.length === 0 && (
             <text className="pc-seq__label" x={SEQ.margin} y={30}>
               No steps
@@ -312,7 +330,37 @@ function SectionTab({ name, x, y }: { name: string; x: number; y: number }) {
   );
 }
 
-const ARROW_WORD = (m: SequenceMessage) => (m.kind === 'response' ? 'answers' : m.failed ? 'calls, and gets no answer from' : m.async ? 'sends to' : 'calls');
+/**
+ * The packets of the step playing, riding their arrows as the canvas's ride its
+ * edges, on the playback clock. The only part of the view that re-renders on
+ * every tick. A failed call stops short and is marked where it was cut off.
+ */
+function Packets({ rows, frame }: { rows: SeqMessageRow[]; frame: number }) {
+  const progress = usePlaybackProgress();
+  const windows = useMemo(() => packetWindows(rows, frame), [rows, frame]);
+  return (
+    <g className="pc-seq__packets">
+      {rows.map((row) => {
+        const window = windows.get(row.index);
+        if (!window) return null;
+        const points = arrowPoints(row);
+        const m = row.message;
+        if (m.failed) {
+          // Over the arrow's own cross, just past where it stops.
+          const last = points.at(-1)!;
+          const cross = row.x1 === row.x2 ? last : { x: last.x + Math.sign(row.x2 - row.x1) * 7, y: last.y };
+          if (progress >= FAIL_AT) return <CutOffMark key={row.index} at={cross} />;
+          return <PacketMark key={row.index} at={pointAlong(points, progress / FAIL_AT)} progress={progress} />;
+        }
+        const [start, end] = window;
+        if (progress < start || progress >= end) return null;
+        return <PacketMark key={row.index} at={pointAlong(points, (progress - start) / (end - start))} progress={progress} error={m.error} />;
+      })}
+    </g>
+  );
+}
+
+const ARROW_WORD =(m: SequenceMessage) => (m.kind === 'response' ? 'answers' : m.failed ? 'calls, and gets no answer from' : m.async ? 'sends to' : 'calls');
 
 interface MessageProps {
   row: SeqMessageRow;
@@ -335,7 +383,8 @@ function Message({ row, look, ids, name, onSelect }: MessageProps) {
   const labelY = self ? y + 13 : y - 9;
   const status = m.kind === 'response' && m.status !== undefined && label.startsWith(String(m.status)) ? String(m.status) : undefined;
   const dir = Math.sign(x2 - x1);
-  const end = m.failed ? x2 - dir * 16 : x2 - dir * 3;
+  const points = arrowPoints(row);
+  const end = points[1].x;
   const hitLeft = self ? x1 - 8 : Math.min(x1, x2) - 8;
   const hitRight = self ? Math.max(x1 + 52 + labelWidth, x1 + 48) : Math.max(x1, x2) + 8;
   const select = () => onSelect?.(row.frame);
@@ -358,7 +407,7 @@ function Message({ row, look, ids, name, onSelect }: MessageProps) {
       <title>{m.label || (request ? `Step ${m.number}` : `Answer to step ${m.number}`)}</title>
       <rect className="pc-seq__hit" x={hitLeft} y={y - 30} width={hitRight - hitLeft} height={self ? 54 : 42} rx={4} />
       {self ? (
-        <path className="pc-seq__line" d={`M${x1},${y} H${x1 + 38} V${y + 20} H${x1 + 3}`} markerEnd={head} />
+        <path className="pc-seq__line" d={`M${points.map((p) => `${p.x},${p.y}`).join(' L')}`} markerEnd={head} />
       ) : (
         <line className="pc-seq__line" x1={x1} y1={y} x2={end} y2={y} markerEnd={m.failed ? undefined : head} />
       )}

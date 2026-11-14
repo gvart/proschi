@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { ReactFlowProvider } from 'reactflow';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { parse } from '../../dsl/parser';
+import { PlaybackClockContext, type PlaybackClock } from './playbackClock';
 import SequenceView from './SequenceView';
 import { UseCasePlayback } from './UseCasePlayback';
 
@@ -33,6 +34,27 @@ describe('SequenceView', () => {
     expect(container.querySelector('.pc-seq__head[data-lit="active"]')).not.toBeNull();
     const looks = [...container.querySelectorAll('.pc-seq__msg')].map((g) => g.getAttribute('data-look'));
     expect(looks).toEqual(['past', 'lit', 'lit', 'future']);
+  });
+
+  it('rides the packet along the step playing on the playback clock: out, then back', () => {
+    const packetAt = (progress: number) => {
+      const clock = { subscribe: () => () => {}, get: () => progress } as unknown as PlaybackClock;
+      const { container, unmount } = render(
+        <PlaybackClockContext.Provider value={clock}>
+          <SequenceView {...sequence} frame={1} />
+        </PlaybackClockContext.Provider>,
+      );
+      const packets = [...container.querySelectorAll('.pc-seq__packets > g')].map((g) => g.getAttribute('transform'));
+      unmount();
+      return packets;
+    };
+    // Frame 1 is api -> db and its 1 row back: one packet at a time, none once it has arrived.
+    const out = packetAt(20);
+    const back = packetAt(70);
+    expect(out).toHaveLength(1);
+    expect(back).toHaveLength(1);
+    expect(out[0]).not.toEqual(back[0]);
+    expect(packetAt(100)).toEqual([]);
   });
 
   it('jumps to the step of a message that is clicked', () => {

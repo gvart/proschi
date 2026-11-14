@@ -286,16 +286,18 @@ export function UseCasePlayback({
           <PlaybackClockContext.Provider value={clock}>{children(view)}</PlaybackClockContext.Provider>
         </div>
         {showSequence && sequence && (
-          <SequenceView
-            {...sequence}
-            frame={currentStepIndex}
-            onSelectFrame={(index) => {
-              handlePause();
-              setCurrentStepIndex(index);
-              clock.start();
-            }}
-            className="absolute inset-0"
-          />
+          <PlaybackClockContext.Provider value={clock}>
+            <SequenceView
+              {...sequence}
+              frame={currentStepIndex}
+              onSelectFrame={(index) => {
+                handlePause();
+                setCurrentStepIndex(index);
+                clock.start();
+              }}
+              className="absolute inset-0"
+            />
+          </PlaybackClockContext.Provider>
         )}
       </div>
 

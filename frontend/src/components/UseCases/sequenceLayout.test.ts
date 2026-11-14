@@ -1,7 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { parse } from '../../dsl/parser';
 import { framesOf } from './playbackView';
-import { SEQ, ZOOM, clampZoom, cutLabel, fitZoom, layoutSequence, litParticipants, lookAt } from './sequenceLayout';
+import {
+  SEQ,
+  ZOOM,
+  arrowPoints,
+  clampZoom,
+  cutLabel,
+  fitZoom,
+  layoutSequence,
+  litParticipants,
+  lookAt,
+  packetWindows,
+  pointAlong,
+  type SeqMessageRow,
+} from './sequenceLayout';
 
 const source = `user [Actor]
 api [REST API]
@@ -110,6 +123,51 @@ describe('layoutSequence', () => {
     expect(litParticipants(l.rows, failed.frame).get('db')).toBe('failing');
     const answer = l.rows.find((r) => r.message.kind === 'response')!;
     expect(answer.message).toMatchObject({ status: 503, error: true });
+  });
+
+  it('sends the packet out and back in one step for a call answered with it, like the canvas', () => {
+    const { layout: l } = layout('Place order');
+    // The insert goes out in the first half and its 1 row comes back in the second.
+    expect([...packetWindows(l.rows, 1)]).toEqual([
+      [1, [0, 50]],
+      [2, [50, 100]],
+    ]);
+    // The par group's calls travel side by side, and the 201 written after them takes its step alone.
+    expect([...packetWindows(l.rows, 2)]).toEqual([
+      [3, [0, 100]],
+      [4, [0, 100]],
+    ]);
+    expect([...packetWindows(l.rows, 3)]).toEqual([[5, [0, 100]]]);
+    // A call answered later takes its whole step too.
+    expect([...packetWindows(l.rows, 0)]).toEqual([[0, [0, 100]]]);
+  });
+
+  it('gives a failed call the whole step, though it never arrives', () => {
+    const { layout: l } = layout('Down');
+    const failed = l.rows.find((r) => r.message.failed)!;
+    expect(packetWindows(l.rows, failed.frame).get(failed.index)).toEqual([0, 100]);
+  });
+
+  it('runs the packet along the arrow, stopping short of the lifeline', () => {
+    const { layout: l } = layout('Place order');
+    const answer = l.rows[2]; // db --> api, right to left
+    const points = arrowPoints(answer);
+    expect(points).toEqual([
+      { x: answer.x1, y: answer.y },
+      { x: answer.x2 + 3, y: answer.y },
+    ]);
+    expect(pointAlong(points, 0)).toEqual(points[0]);
+    expect(pointAlong(points, 0.5).x).toBeCloseTo((answer.x1 + answer.x2 + 3) / 2);
+    expect(pointAlong(points, 1)).toEqual(points[1]);
+    expect(pointAlong(points, 2)).toEqual(points[1]);
+  });
+
+  it('runs the packet round the loop of a message to itself', () => {
+    const points = arrowPoints({ message: { failed: false } as SeqMessageRow['message'], x1: 100, x2: 100, y: 50 });
+    // 38 out, 20 down, 35 back: 93 in all.
+    expect(pointAlong(points, 38 / 93)).toEqual({ x: 138, y: 50 });
+    expect(pointAlong(points, 48 / 93)).toEqual({ x: 138, y: 60 });
+    expect(pointAlong(points, 1)).toEqual({ x: 103, y: 70 });
   });
 
   it('widens the gap between lifelines for a long label', () => {

@@ -1,7 +1,7 @@
 import { useRef, type RefObject } from 'react';
 import { BaseEdge } from 'reactflow';
 import type { EdgeProps } from 'reactflow';
-import { usePlaybackProgress } from './playbackClock';
+import { FAIL_AT, usePlaybackProgress } from './playbackClock';
 import { EdgeCasing, EdgeHead, EdgeLoadLabel } from '../Canvas/RoutedEdge';
 import { edgeLoadOf, showsLoadLabel, withLoad } from '../Canvas/edgeLoad';
 import { hasMarker, useEdgeGeometry } from '../Canvas/useEdgeGeometry';
@@ -12,8 +12,6 @@ const PACKET_COLOR = 'rgb(var(--c-pink))';
 const ERROR_COLOR = 'rgb(var(--c-fail))';
 const INK = 'rgb(var(--c-ink))';
 const SHADOW = 'rgb(var(--c-shadow))';
-/** How far along the edge (in %) a failed call gets before it is cut off. */
-const FAIL_AT = 55;
 /** React Flow's own `animated` look (reactflow/dist/style.css), for an edge whose packet has arrived. */
 const FLOWING = { strokeDasharray: 5, animation: 'dashdraw 0.5s linear infinite' };
 
@@ -119,27 +117,36 @@ function Packet({ pathRef, from, isRequestResponse, reverse, isError, failed }: 
     at = { x: point.x, y: point.y };
   }
 
-  if (failed && progress >= FAIL_AT) {
-    return (
-      <g transform={`translate(${at.x} ${at.y})`} strokeLinecap="round">
-        <circle r="13" strokeWidth="2.5" style={{ fill: 'rgb(var(--c-surface))', stroke: INK }} />
-        <g strokeWidth="3.5" style={{ stroke: ERROR_COLOR }}>
-          <line x1={-5.5} y1={-5.5} x2={5.5} y2={5.5} />
-          <line x1={-5.5} y1={5.5} x2={5.5} y2={-5.5} />
-        </g>
-      </g>
-    );
-  }
+  if (failed && progress >= FAIL_AT) return <CutOffMark at={at} />;
   if (progress >= 100) return null;
 
   const replying = isRequestResponse && progress > 50;
-  const color = isError && (replying || !isRequestResponse) ? ERROR_COLOR : PACKET_COLOR;
-  // The packet tumbles a little as it travels, and turns around for the reply.
+  return <PacketMark at={at} progress={progress} error={isError && (replying || !isRequestResponse)} />;
+}
+
+/**
+ * The packet itself, also ridden along the sequence view's arrows. It tumbles a
+ * little as the step plays (half a turn over the step, so it turns around for a reply).
+ */
+export function PacketMark({ at, progress, error = false }: { at: { x: number; y: number }; progress: number; error?: boolean }) {
   const spin = (progress / 100) * 180;
   return (
-    <g transform={`translate(${at.x} ${at.y})`}>
+    <g transform={`translate(${at.x} ${at.y})`} pointerEvents="none">
       <rect x="-6" y="-4" width="16" height="16" rx="3" transform={`rotate(${spin})`} style={{ fill: SHADOW }} />
-      <rect x="-8" y="-8" width="16" height="16" rx="3" strokeWidth="2.5" transform={`rotate(${spin})`} style={{ fill: color, stroke: INK }} />
+      <rect x="-8" y="-8" width="16" height="16" rx="3" strokeWidth="2.5" transform={`rotate(${spin})`} style={{ fill: error ? ERROR_COLOR : PACKET_COLOR, stroke: INK }} />
+    </g>
+  );
+}
+
+/** Where a failed call was cut off: a red cross in a ring. */
+export function CutOffMark({ at }: { at: { x: number; y: number } }) {
+  return (
+    <g transform={`translate(${at.x} ${at.y})`} strokeLinecap="round" pointerEvents="none">
+      <circle r="13" strokeWidth="2.5" style={{ fill: 'rgb(var(--c-surface))', stroke: INK }} />
+      <g strokeWidth="3.5" style={{ stroke: ERROR_COLOR }}>
+        <line x1={-5.5} y1={-5.5} x2={5.5} y2={5.5} />
+        <line x1={-5.5} y1={5.5} x2={5.5} y2={-5.5} />
+      </g>
     </g>
   );
 }

@@ -223,6 +223,54 @@ export function litParticipants(rows: SeqMessageRow[], frame: number): Map<strin
   return lit;
 }
 
+type Point = { x: number; y: number };
+
+/**
+ * The points a message's arrow is drawn through, from sender to receiver: a
+ * straight line that stops short of the lifeline (further for a call that
+ * never arrives), or a loop out and back for a message to itself.
+ */
+export function arrowPoints(row: Pick<SeqMessageRow, 'message' | 'x1' | 'x2' | 'y'>): Point[] {
+  const { x1, x2, y } = row;
+  if (x1 === x2) return [{ x: x1, y }, { x: x1 + 38, y }, { x: x1 + 38, y: y + 20 }, { x: x1 + 3, y: y + 20 }];
+  const dir = Math.sign(x2 - x1);
+  return [{ x: x1, y }, { x: row.message.failed ? x2 - dir * 16 : x2 - dir * 3, y }];
+}
+
+/** The point `share` (0–1) of the way along an arrow. */
+export function pointAlong(points: Point[], share: number): Point {
+  const lengths = points.slice(1).map((p, i) => Math.hypot(p.x - points[i].x, p.y - points[i].y));
+  let left = Math.min(Math.max(share, 0), 1) * lengths.reduce((s, l) => s + l, 0);
+  for (let i = 0; i < lengths.length; i++) {
+    if (left <= lengths[i] || i === lengths.length - 1) {
+      const t = lengths[i] === 0 ? 0 : Math.min(left / lengths[i], 1);
+      return { x: points[i].x + (points[i + 1].x - points[i].x) * t, y: points[i].y + (points[i + 1].y - points[i].y) * t };
+    }
+    left -= lengths[i];
+  }
+  return points[0];
+}
+
+/**
+ * When, in the frame's progress (0–100, the playback clock), the packet of
+ * each message playing in `frame` rides its arrow, by row index. As on the
+ * canvas: a call answered in the same frame goes out in the first half and its
+ * answer comes back in the second; anything else (an async send, a call
+ * answered later, an answer on its own) takes the whole step.
+ */
+export function packetWindows(rows: SeqMessageRow[], frame: number): Map<number, [number, number]> {
+  const playing = rows.filter((r) => r.frame === frame);
+  const has = (kind: SequenceMessage['kind'], row: SeqMessageRow) => playing.some((r) => r.message.step === row.message.step && r.message.kind === kind);
+  return new Map(
+    playing.map((row): [number, [number, number]] => {
+      const { kind, failed } = row.message;
+      if (kind === 'request' && !failed && has('response', row)) return [row.index, [0, 50]];
+      if (kind === 'response' && has('request', row)) return [row.index, [50, 100]];
+      return [row.index, [0, 100]];
+    }),
+  );
+}
+
 /** How far the sequence view zooms, and the step of its + and − buttons. */
 export const ZOOM = { min: 0.25, max: 2, step: 1.2, /** Fitting the width shrinks no further than this; past it, the view scrolls sideways. */ widthFloor: 0.6 } as const;
 
