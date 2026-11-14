@@ -1,4 +1,4 @@
-import ReactFlow, { Background, BackgroundVariant, Controls, Panel, ReactFlowProvider } from 'reactflow';
+import ReactFlow, { Background, BackgroundVariant, Panel, ReactFlowProvider } from 'reactflow';
 import type { Edge, EdgeTypes, Node } from 'reactflow';
 import 'reactflow/dist/style.css';
 import ComponentNode from '../Canvas/ComponentNode';
@@ -9,6 +9,7 @@ import RoutedEdge from '../Canvas/RoutedEdge';
 import Legend from '../Canvas/Legend';
 import type { LegendEntry } from '../../dsl/types';
 import { FIT_VIEW_OPTIONS, useFitOnChange } from './useFitOnChange';
+import { CanvasControls } from './ZoomControls';
 
 /**
  * A read-only canvas of a parsed diagram, for pages that show a design without
@@ -60,7 +61,7 @@ function Canvas({ nodes, edges, compact, fitKey, still, fitDuration, edgeTypes, 
       proOptions={{ hideAttribution: true }}
     >
       <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-      {!compact && !still && <Controls showInteractive={false} />}
+      {!compact && !still && <CanvasControls />}
       {legend && (
         <Panel position="top-right">
           <Legend entries={legend} />

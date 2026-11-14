@@ -11,7 +11,6 @@ import {
 } from 'lucide-react';
 import ReactFlow, {
   Background,
-  Controls,
   MiniMap,
   BackgroundVariant,
   ReactFlowProvider,
@@ -28,6 +27,7 @@ import GroupNode from '../Canvas/GroupNode';
 import SystemNode from '../Canvas/SystemNode';
 import { PlaybackClock, PlaybackClockContext, usePlaybackProgress } from './playbackClock';
 import { PLAYBACK_EDGE_TYPES, framesOf, isErrorStep, playbackView, stepIndexOf, type PlaybackView, type PlayedUseCase } from './playbackView';
+import { CanvasControls } from '../Diagram/ZoomControls';
 
 const nodeTypes = {
   componentNode: ComponentNode,
@@ -503,7 +503,7 @@ function PlayerCanvas({ view, bare }: { view: PlaybackView; bare: boolean }) {
       preventScrolling={false}
     >
       <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-      {!bare && <Controls showInteractive={false} />}
+      {!bare && <CanvasControls />}
       {!bare && <PlaybackMiniMap view={view} />}
     </ReactFlow>
   );

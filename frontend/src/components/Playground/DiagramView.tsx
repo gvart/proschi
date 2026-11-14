@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import ReactFlow, { Background, BackgroundVariant, Controls, Panel, applyEdgeChanges, applyNodeChanges, getNodesBounds, getViewportForBounds, useReactFlow, useStoreApi } from 'reactflow';
+import ReactFlow, { Background, BackgroundVariant, Panel, applyEdgeChanges, applyNodeChanges, getNodesBounds, getViewportForBounds, useReactFlow, useStoreApi } from 'reactflow';
 import type { Edge, EdgeChange, Node, NodeChange } from 'reactflow';
 import { ArrowLeft, ChevronRight, Pencil, Trash2 } from 'lucide-react';
 import { notify, prompt } from '../../design/dialogs';
@@ -27,6 +27,7 @@ import { PLAYBACK_EDGE_TYPES, type PlaybackView } from '../UseCases/playbackView
 import { exportImage, fileNameFor, type PngScale } from './exportDiagram';
 import { iconButton } from './ui';
 import type { Crumb } from './useSystemView';
+import { CanvasControls } from '../Diagram/ZoomControls';
 
 const nodeTypes = {
   componentNode: ComponentNode,
@@ -668,10 +669,10 @@ export default function DiagramView({
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
         {overlay && !playing && <FlowParticles flows={overlay.flows} nodes={overlay.nodes} />}
-        <Controls showInteractive={false}>
+        <CanvasControls>
           {/* The minimap is for wide screens; on a phone it would cover the diagram. */}
           {!playing && !phone && <MiniMapButton shown={miniMap} onToggle={() => setMiniMap(!miniMap)} />}
-        </Controls>
+        </CanvasControls>
         {playing && <PlaybackMiniMap view={playback} />}
         {!playing && !phone && miniMap && <CanvasMiniMap />}
         <CanvasTopBar
