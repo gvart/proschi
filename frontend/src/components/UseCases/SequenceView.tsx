@@ -74,11 +74,11 @@ function SequenceView({ useCase, scenario, nodes, frame, onSelectFrame, classNam
 
   const [zoom, setZoom] = useState(1);
   const [fit, setFit] = useState<FitMode>('width');
+  /** The zoom last asked for, ahead of React: wheel events come faster than renders and each builds on the one before. */
   const zoomRef = useRef(zoom);
+  /** The zoom the pane is drawn at, which its scroll offsets are in until the next render. */
+  const drawnZoomRef = useRef(zoom);
   const anchorRef = useRef<Anchor | null>(null);
-  useEffect(() => {
-    zoomRef.current = zoom;
-  }, [zoom]);
 
   /** Where the diagram starts in the scrolled content, in screen pixels: it is centred while narrower than the pane. */
   const originX = () => {
@@ -90,7 +90,10 @@ function SequenceView({ useCase, scenario, nodes, frame, onSelectFrame, classNam
   useEffect(() => {
     const box = scrollRef.current;
     if (!box || !fit) return;
-    const apply = () => setZoom(fitZoom(layout, box.clientWidth, box.clientHeight, fit));
+    const apply = () => {
+      zoomRef.current = fitZoom(layout, box.clientWidth, box.clientHeight, fit);
+      setZoom(zoomRef.current);
+    };
     apply();
     if (typeof ResizeObserver === 'undefined') return;
     const observer = new ResizeObserver(apply);
@@ -105,7 +108,9 @@ function SequenceView({ useCase, scenario, nodes, frame, onSelectFrame, classNam
     if (!box || z === zoomRef.current) return;
     const cx = at?.cx ?? box.clientWidth / 2;
     const cy = at?.cy ?? box.clientHeight / 2;
-    anchorRef.current = { x: (box.scrollLeft + cx - originX()) / zoomRef.current, y: (box.scrollTop + cy) / zoomRef.current, cx, cy };
+    // The scroll offsets are still those of the zoom drawn, which may be behind the one asked for.
+    anchorRef.current = { x: (box.scrollLeft + cx - originX()) / drawnZoomRef.current, y: (box.scrollTop + cy) / drawnZoomRef.current, cx, cy };
+    zoomRef.current = z;
     setFit(null);
     setZoom(z);
   }, []);
@@ -119,6 +124,7 @@ function SequenceView({ useCase, scenario, nodes, frame, onSelectFrame, classNam
   useLayoutEffect(() => {
     const box = scrollRef.current;
     const anchor = anchorRef.current;
+    drawnZoomRef.current = zoom;
     if (!box || !anchor) return;
     anchorRef.current = null;
     if (anchor === 'origin') {
@@ -139,8 +145,7 @@ function SequenceView({ useCase, scenario, nodes, frame, onSelectFrame, classNam
       if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
       const rect = box.getBoundingClientRect();
-      const delta = Math.max(-50, Math.min(50, e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY));
-      zoomTo(zoomRef.current * Math.exp(-delta * 0.005), { cx: e.clientX - rect.left, cy: e.clientY - rect.top });
+      zoomTo(zoomRef.current * 2 ** wheelZoom(e), { cx: e.clientX - rect.left, cy: e.clientY - rect.top });
     };
     box.addEventListener('wheel', onWheel, { passive: false });
     return () => box.removeEventListener('wheel', onWheel);
@@ -190,7 +195,7 @@ function SequenceView({ useCase, scenario, nodes, frame, onSelectFrame, classNam
     const box = scrollRef.current;
     const rows = layout.rows.filter((r) => r.frame === frame);
     if (!box || !innerRef.current || rows.length === 0) return;
-    const z = zoomRef.current;
+    const z = drawnZoomRef.current;
     const involved = layout.columns.filter((c) => rows.some((r) => r.message.from === c.id || r.message.to === c.id));
     const top = (SEQ.header + rows[0].y - 36) * z;
     const bottom = (SEQ.header + rows.at(-1)!.y + 20) * z;
@@ -285,6 +290,14 @@ function SequenceView({ useCase, scenario, nodes, frame, onSelectFrame, classNam
 }
 
 export default memo(SequenceView);
+
+const IS_MAC = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform || navigator.userAgent);
+
+/** How many doublings a wheel event zooms by: React Flow's own rate, so both views zoom alike (a Mac pinch is ten times finer). */
+function wheelZoom(e: WheelEvent) {
+  const perUnit = e.deltaMode === 1 ? 0.05 : e.deltaMode ? 1 : 0.002;
+  return -e.deltaY * perUnit * (e.ctrlKey && IS_MAC ? 10 : 1);
+}
 
 function Marker({ id, tone, open = false }: { id: string; tone: 'ink' | 'muted' | 'pink' | 'fail'; open?: boolean }) {
   const color = `rgb(var(--c-${tone}))`;
