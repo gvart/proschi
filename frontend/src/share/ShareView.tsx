@@ -120,7 +120,7 @@ function Shared({ doc }: { doc: SharedDocument }) {
       diagram.useCases.flatMap((u) =>
         u.scenarios
           .filter((s) => s.steps.length > 0)
-          .map((s) => ({ key: `${u.id}/${s.id}`, label: u.scenarios.length > 1 ? `${u.name} › ${s.name}` : u.name, played: { id: `${u.id}/${s.id}`, name: u.name, steps: s.steps, condition: s.condition } })),
+          .map((s) => ({ key: `${u.id}/${s.id}`, label: u.scenarios.length > 1 ? `${u.name} › ${s.name}` : u.name, played: { id: `${u.id}/${s.id}`, name: u.name, steps: s.steps, condition: s.condition }, sequence: { useCase: u, scenario: s, nodes: diagram.nodes } })),
       ),
     [diagram],
   );
@@ -191,7 +191,7 @@ function Shared({ doc }: { doc: SharedDocument }) {
               ) : view === 'hld' ? (
                 <HldView diagram={diagram} nodes={nodes} edges={edges} analysis={simulation.analysis} results={simulation.results} onOpenResults={() => setView('results')} />
               ) : (
-                <UseCasePlayback useCase={played} nodes={nodes} edges={edges} onBack={() => setRun(0)} showHeader={false} autoPlay>
+                <UseCasePlayback useCase={played} nodes={nodes} edges={edges} onBack={() => setRun(0)} showHeader={false} autoPlay sequence={played ? current?.sequence : undefined}>
                   {(pv) => <DiagramCanvas nodes={pv.nodes} edges={pv.edges} edgeTypes={PLAYBACK_EDGE_TYPES} fitKey={`${pane}:${settled}`} legend={diagram.legend} compact={phone} />}
                 </UseCasePlayback>
               )}
