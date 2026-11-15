@@ -120,7 +120,7 @@ describe('UseCasePlayback layout switch', () => {
     fireEvent.click(sequenceButton);
     expect(sequenceButton.getAttribute('aria-pressed')).toBe('true');
     expect(container.querySelector('.pc-seq')).not.toBeNull();
-    expect(screen.getByTestId('canvas', { hidden: true })).toBeDefined();
+    expect(screen.getByTestId('canvas')).toBeDefined();
 
     fireEvent.keyDown(window, { key: 'v' });
     expect(container.querySelector('.pc-seq')).toBeNull();
