@@ -3,6 +3,9 @@ import { createContext, useContext, useSyncExternalStore } from 'react';
 /** How long the packet takes to travel one step's edge. */
 export const TRAVEL_MS = 1500;
 
+/** How far through the step (in %) a failed call gets before it is cut off. */
+export const FAIL_AT = 55;
+
 /**
  * The packet's progress along the current step's edge, 0–100, ticked by
  * requestAnimationFrame. It lives outside React state so that a tick re-renders

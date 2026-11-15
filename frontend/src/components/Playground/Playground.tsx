@@ -394,6 +394,8 @@ export default function Playground() {
     () => (useCase && scenario ? { id: `${useCase.id}/${scenario.id}`, name: useCase.name, steps: scenario.steps, condition: scenario.condition } : undefined),
     [useCase, scenario],
   );
+  /** The same scenario for the player's sequence view. */
+  const playedSequence = useMemo(() => (useCase && scenario ? { useCase, scenario, nodes: shown.nodes } : undefined), [useCase, scenario, shown.nodes]);
 
   // A short link (/s/<id>) sends people here with ?s=<id>: open its diagram, then drop the parameter.
   useEffect(() => {
@@ -1424,6 +1426,7 @@ export default function Playground() {
                     initialStep={initialStep}
                     onStepChange={setPlayStep}
                     showHeader={false}
+                    sequence={playing ? playedSequence : undefined}
                   >
                     {(pv) => (
                       <ReactFlowProvider>

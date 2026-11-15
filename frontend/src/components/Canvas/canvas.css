@@ -28,23 +28,44 @@
   stroke: rgb(var(--c-muted)) !important;
   fill: rgb(var(--c-muted)) !important;
 }
-.react-flow .react-flow__controls {
+/* The zoom controls (Diagram/ZoomControls), which also work outside React Flow: hence `.pc-zoom`. */
+.react-flow .react-flow__controls,
+.pc-zoom.react-flow__controls {
   box-shadow: var(--sh-sm);
   border: var(--bw-1) solid rgb(var(--c-ink));
   border-radius: var(--r-sm);
   overflow: hidden;
 }
-.react-flow .react-flow__controls-button {
+.react-flow .react-flow__controls-button,
+.pc-zoom .react-flow__controls-button {
   background: rgb(var(--c-surface));
   border-bottom: 1px solid rgb(var(--c-ink) / 0.2);
   color: rgb(var(--c-ink));
 }
-.react-flow .react-flow__controls-button:hover {
+.react-flow .react-flow__controls-button:hover:not(:disabled),
+.pc-zoom .react-flow__controls-button:hover:not(:disabled),
+.pc-zoom .react-flow__controls-fitview[aria-pressed='true'] {
   background: rgb(var(--c-yellow));
   color: rgb(var(--c-on-accent));
 }
 .react-flow__controls-button svg {
   fill: currentColor;
+}
+.pc-zoom .react-flow__controls-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.pc-zoom .react-flow__controls-button:focus-visible {
+  outline: 2px solid rgb(var(--c-pink));
+  outline-offset: -2px;
+}
+/* The zoom level: as wide as the icon buttons, in the mono font. */
+.pc-zoom .pc-zoom__pct {
+  width: 22px;
+  padding: 5px 2px;
+  font: 600 8px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 .react-flow .react-flow__minimap {
   background: rgb(var(--c-surface));

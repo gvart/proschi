@@ -1,0 +1,241 @@
+/* The sequence view of playback (SequenceView): the canvas's look on the design
+   tokens. Dotted paper, ink cards with hard shadows, one accent (pink) for the
+   step playing and red for what fails. */
+
+.pc-seq {
+  overflow: auto;
+  background-color: rgb(var(--c-paper));
+  background-image: radial-gradient(rgb(var(--c-ink) / 0.16) 1px, transparent 1px);
+  background-size: 16px 16px;
+  font-family: var(--font-sans);
+  color: rgb(var(--c-ink));
+}
+.pc-seq__inner {
+  position: relative;
+  margin: 0 auto;
+  padding-bottom: 24px;
+}
+
+/* ---------- participants ---------- */
+
+.pc-seq__heads {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: linear-gradient(rgb(var(--c-paper)) 82%, rgb(var(--c-paper) / 0));
+}
+.pc-seq__head {
+  position: absolute;
+  top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 54px;
+  padding: 8px 10px;
+  background: rgb(var(--c-surface));
+  border: var(--bw-2) solid rgb(var(--c-ink));
+  border-radius: var(--r-sm);
+  box-shadow: var(--sh-sm);
+  transition:
+    box-shadow var(--d-2) var(--e-out),
+    border-color var(--d-1) linear,
+    transform var(--d-2) var(--e-out);
+}
+.pc-seq__head .pc-node__icon {
+  width: 30px;
+  height: 30px;
+}
+.pc-seq__head .pc-node__name {
+  font-size: 13px;
+}
+.pc-seq__head[data-lit='active'] {
+  box-shadow: 5px 5px 0 rgb(var(--c-pink));
+  transform: translate(-2px, -2px);
+}
+.pc-seq__head[data-lit='active'] .pc-node__icon {
+  background: rgb(var(--c-pink));
+  color: rgb(var(--c-on-accent));
+}
+.pc-seq__head[data-lit='failing'] {
+  border-color: rgb(var(--c-fail));
+  box-shadow: 5px 5px 0 rgb(var(--c-fail));
+  transform: translate(-2px, -2px);
+}
+.pc-seq__head[data-lit='failing'] .pc-node__icon {
+  background: rgb(var(--c-fail));
+  border-color: rgb(var(--c-fail));
+  color: rgb(var(--c-on-accent));
+}
+
+/* ---------- body ---------- */
+
+.pc-seq__body {
+  display: block;
+  overflow: visible;
+}
+.pc-seq__lifeline {
+  stroke: rgb(var(--c-ink) / 0.35);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 5;
+  transition: stroke var(--d-1) linear;
+}
+.pc-seq__lifeline[data-lit='active'] {
+  stroke: rgb(var(--c-pink) / 0.8);
+}
+.pc-seq__lifeline[data-lit='failing'] {
+  stroke: rgb(var(--c-fail) / 0.8);
+}
+
+.pc-seq__section {
+  fill: rgb(var(--c-ink) / 0.03);
+  stroke: rgb(var(--c-ink) / 0.45);
+  stroke-width: 1.2;
+}
+.pc-seq__tab path {
+  fill: rgb(var(--c-surface));
+  stroke: rgb(var(--c-ink) / 0.45);
+  stroke-width: 1.2;
+}
+.pc-seq__tab text {
+  fill: rgb(var(--c-ink));
+  font: 700 11px var(--font-sans);
+}
+.pc-seq__par rect {
+  fill: rgb(var(--c-blue) / 0.05);
+  stroke: rgb(var(--c-blue));
+  stroke-width: 1.2;
+}
+.pc-seq__par-tab {
+  fill: none;
+  stroke: rgb(var(--c-blue));
+  stroke-width: 1.2;
+}
+.pc-seq__par text {
+  fill: rgb(var(--c-blue));
+  font: 700 11px var(--font-mono);
+}
+.pc-seq__par-and {
+  stroke: rgb(var(--c-blue));
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+
+/* The row of the step playing. */
+.pc-seq__band {
+  fill: rgb(var(--c-pink) / 0.1);
+}
+
+/* ---------- messages ---------- */
+
+.pc-seq__msg {
+  transition: opacity var(--d-2) var(--e-out);
+  outline: none;
+}
+.pc-seq__msg[data-look='future'] {
+  opacity: 0.3;
+}
+.pc-seq__msg[role='button'] {
+  cursor: pointer;
+}
+.pc-seq__hit {
+  fill: transparent;
+  stroke: none;
+}
+.pc-seq__msg[role='button']:hover .pc-seq__hit {
+  fill: rgb(var(--c-ink) / 0.05);
+}
+.pc-seq__msg:focus-visible .pc-seq__hit {
+  stroke: rgb(var(--c-pink));
+  stroke-width: 2;
+}
+.pc-seq__msg[data-look='future']:hover {
+  opacity: 0.6;
+}
+
+.pc-seq__line {
+  fill: none;
+  stroke: rgb(var(--c-ink));
+  stroke-width: 2;
+  transition:
+    stroke var(--d-1) linear,
+    stroke-width var(--d-1) linear;
+}
+.pc-seq__msg[data-kind='response'] .pc-seq__line {
+  stroke: rgb(var(--c-muted));
+  stroke-dasharray: 6 4;
+}
+.pc-seq__msg[data-look='lit'] .pc-seq__line {
+  stroke: rgb(var(--c-pink));
+  stroke-width: 3.5;
+}
+.pc-seq__msg[data-error] .pc-seq__line {
+  stroke: rgb(var(--c-fail));
+}
+.pc-seq__msg[data-kind='failed'] .pc-seq__line {
+  stroke-dasharray: 6 4;
+}
+.pc-seq__cross {
+  fill: none;
+  stroke: rgb(var(--c-fail));
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+
+.pc-seq__label {
+  fill: rgb(var(--c-ink));
+  font: 500 11px var(--font-mono);
+}
+.pc-seq__msg[data-kind='response'] .pc-seq__label {
+  fill: rgb(var(--c-ink) / 0.75);
+}
+.pc-seq__msg[data-look='lit'] .pc-seq__label {
+  font-weight: 700;
+  fill: rgb(var(--c-ink));
+}
+.pc-seq__msg[data-error] .pc-seq__label {
+  fill: rgb(var(--c-fail));
+}
+
+.pc-seq__badge circle {
+  fill: rgb(var(--c-surface));
+  stroke: rgb(var(--c-ink));
+  stroke-width: 1.5;
+}
+.pc-seq__badge text {
+  fill: rgb(var(--c-ink));
+  font: 700 10px var(--font-sans);
+}
+.pc-seq__msg[data-look='lit'] .pc-seq__badge circle {
+  fill: rgb(var(--c-pink));
+}
+.pc-seq__msg[data-error] .pc-seq__badge circle {
+  fill: rgb(var(--c-fail));
+  stroke: rgb(var(--c-fail));
+}
+.pc-seq__msg[data-look='lit'] .pc-seq__badge text,
+.pc-seq__msg[data-error] .pc-seq__badge text {
+  fill: rgb(var(--c-on-accent));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pc-seq__head,
+  .pc-seq__msg,
+  .pc-seq__line,
+  .pc-seq__lifeline {
+    transition: none;
+  }
+}
+
+/* ---------- zoom and pan ---------- */
+
+.pc-seq-view > .pc-seq {
+  height: 100%;
+  width: 100%;
+  cursor: grab;
+  /* Dragging pans; it should not select the labels on its way. */
+  user-select: none;
+}
+.pc-seq[data-panning] {
+  cursor: grabbing;
+  user-select: none;
+}
