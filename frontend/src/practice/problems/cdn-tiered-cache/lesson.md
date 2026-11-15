@@ -26,7 +26,7 @@ Non-functional requirements: 50k requests per second, p99 under 150 ms, 99.99% a
 
 **What is given.** `given.proschi` fixes the `visitor`, the `owner` and the `origin`: four servers that take 1k rps each, answer in 50 ms and cost $500 a month each. You cannot add origin servers: that is the point. A real origin is a customer's app in one cloud region, which the CDN must protect.
 
-**What the tests check**: an edge miss asks the upper tier, and only an upper-tier miss reaches the origin; no path at all leads from the visitor or the edge to the origin; a purge clears the upper tier before the edge and never touches the origin. The requirements add latency, availability, failure survival and cost.
+**What the tests check**: an edge miss asks the upper tier, and only an upper-tier miss reaches the origin; no path at all leads from the visitor or the edge to the origin; a purge sends `PURGE` to the upper tier before the edge and never touches the origin. The requirements add latency, availability, failure survival and cost.
 
 The model's simplifications, from the statement: each tier is one node whose replicas stand for its data centers; hit rates are the given mix, not an outcome of the topology; and traffic between your nodes is free, so the origin's egress bill (what the cloud charges for data sent out) shows up as origin load instead.
 

@@ -1,3 +1,7 @@
+---
+updated: 2026-11-09
+---
+
 # Writing game scenarios
 
 **Scale or Fail** is the system design game in the practice page's More practice menu (Arcade)

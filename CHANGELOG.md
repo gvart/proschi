@@ -9,6 +9,44 @@ deployed from `main` and ships with the same changes. From 0.12.0 on,
 [release-please](https://github.com/googleapis/release-please) writes each
 section from the conventional commit titles of the merged pull requests.
 
+## [0.19.0](https://github.com/gvart/proschi/compare/tooling-v0.18.0...tooling-v0.19.0) (2026-11-12)
+
+
+### Added
+
+* **plugin:** a rendered terminal UI with zoom and pan, and parity with the editor ([#208](https://github.com/gvart/proschi/issues/208)) ([ba9373b](https://github.com/gvart/proschi/commit/ba9373be28e6bebe3568dbd1eabfda983913346a))
+
+## [0.18.0](https://github.com/gvart/proschi/compare/tooling-v0.17.0...tooling-v0.18.0) (2026-11-10)
+
+
+### Added
+
+* **docs:** show when each docs page was last updated ([#203](https://github.com/gvart/proschi/issues/203)) ([afe1a37](https://github.com/gvart/proschi/commit/afe1a3796b2a9ab272f8f04332216eedc020350c))
+* more value per plan, what-if simulation, model upgrades and visual editor improvements ([#196](https://github.com/gvart/proschi/issues/196)) ([c48996a](https://github.com/gvart/proschi/commit/c48996a4cb5258809ba24ea738a72d317a997276))
+* typed component hierarchy with predefined operations per technology ([#202](https://github.com/gvart/proschi/issues/202)) ([5a09ada](https://github.com/gvart/proschi/commit/5a09ada96d2ba2bfd485066cc752fd07a8d05325))
+
+
+### Fixed
+
+* complete imported types and make transaction ops consistent ([#206](https://github.com/gvart/proschi/issues/206)) ([2ecee26](https://github.com/gvart/proschi/commit/2ecee2621b61183e7fd15557c7cacbbd51f213c0))
+* **editor:** leave room between layers for the load overlay's edge chips ([#201](https://github.com/gvart/proschi/issues/201)) ([476e230](https://github.com/gvart/proschi/commit/476e2304312577bcda90a591d6c94e5ae2c3c553))
+* manual testing round — flows select, estimate layout, certificates, mistakes sync, workspace rename ([#198](https://github.com/gvart/proschi/issues/198)) ([394cbfc](https://github.com/gvart/proschi/commit/394cbfcbb62c896512abada2d327962d1f63ecb0))
+* **practice:** Finish on the Wrap-up, and a new roadmap problem opens on its lesson ([#200](https://github.com/gvart/proschi/issues/200)) ([bab8da8](https://github.com/gvart/proschi/commit/bab8da87fbef6b94468faf1834c4899aad99b9fb))
+* **practice:** next steps only on the roadmap, and problem steps open the mock interview ([#199](https://github.com/gvart/proschi/issues/199)) ([8fcc03f](https://github.com/gvart/proschi/commit/8fcc03f57641561fa3a2f797048de7312be19568))
+
+## [0.17.0](https://github.com/gvart/proschi/compare/tooling-v0.16.1...tooling-v0.17.0) (2026-11-09)
+
+
+### Added
+
+* **practice:** add 11 problems based on company engineering blogs ([#194](https://github.com/gvart/proschi/issues/194)) ([43cff1e](https://github.com/gvart/proschi/commit/43cff1e80553c71d30faafc37fcf95e054de981a))
+
+
+### Fixed
+
+* **billing:** hide credit-metered features until paid plans launch ([#193](https://github.com/gvart/proschi/issues/193)) ([b62181c](https://github.com/gvart/proschi/commit/b62181cb576a8d1ead999abe8919823e5e1a92d2))
+* **practice:** steps not stages, a one-row phone header, readable skill map labels ([#191](https://github.com/gvart/proschi/issues/191)) ([84869a2](https://github.com/gvart/proschi/commit/84869a285d3897f357fe551ca0746c7729c11e7d))
+
 ## [0.16.1](https://github.com/gvart/proschi/compare/tooling-v0.16.0...tooling-v0.16.1) (2026-11-09)
 
 

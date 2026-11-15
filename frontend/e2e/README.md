@@ -29,7 +29,7 @@ npm run e2e          # or: npm run e2e:build (both builds, then test)
 
 | File | Covers |
 |---|---|
-| `landing.e2e.ts` | Hero, hero player, practice list (29 problems), example links into the editor |
+| `landing.e2e.ts` | Hero, hero player, practice list (40 problems), example links into the editor |
 | `editor.e2e.ts` | Canvas, typing updates the diagram, diagnostics, Play and stepping, scenario tabs, share link round trip, Format code, Diagram / Results / HLD tabs and old `?view=` names, the Export menu (PNG from any tab, SVG, Mermaid, .proschi), phone Code/Diagram tabs, the compact header at 375 and 320px |
 | `onboarding.e2e.ts` | First-run tours: shown on a first visit, Esc/X skip, interactive steps, not over share links (hint only), `?tour=` params, replay from Help, phone layout, storage blocked; cheat-sheet; starter for new diagrams |
 | `practice.e2e.ts` | Problem list and its "Contribute a problem" links, url-shortener: starter fails, reference solution solves it, progress survives a reload, phone tab layout |
@@ -43,6 +43,7 @@ npm run e2e          # or: npm run e2e:build (both builds, then test)
 | `email.accounts.e2e.ts` | Signed in (API mocked): opting in to email reminders on `#/me` (address and browser time zone sent, waiting for the confirmation), a confirmed address's per-type switches, resuming after a pause, removing the address |
 | `header.accounts.e2e.ts` | Signed in (API mocked): the header with the account and help menus fits a 320px and 390px phone on every practice page, and their panels open inside the screen; the desktop header keeps the account name and the editor button |
 | `shell.e2e.ts` | Shared header and footer on every page, theme toggle persists and follows the system, phone menu |
+| `exports.accounts.e2e.ts`, `exports.free.e2e.ts` | Export and proof (P56, API mocked): Settings › Exports & certificate on Free (the way to each plan), Pro (JSON and CSV progress downloads, the embed branding switch) and Max (the certificate switch, LinkedIn and share links); the certificate page on desktop, phone and in print; the 3× PNG and the HLD's PDF on Pro and their teasers on Free; an embed without branding; and the build without paid plans (left out on Free, there on Pro) |
 | `focus.e2e.ts` | Editor focus theme (dark by default, light when chosen, kept after a reload), zen mode (Ctrl+., Escape, button, practice), the solve celebration and its absence under reduced motion |
 
 ## Conventions

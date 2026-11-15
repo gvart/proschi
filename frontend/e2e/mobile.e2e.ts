@@ -318,7 +318,7 @@ test.describe('editor diagram on a phone', () => {
   async function selectNode(page: Page): Promise<void> {
     await page.goto('./');
     await page.goto((await page.locator('a[data-example="url-shortener"]').getAttribute('href'))!);
-    await page.getByRole('tab', { name: 'Diagram' }).first().click();
+    await page.getByRole('tab', { name: 'Preview' }).click();
     await page.locator('.react-flow__node').first().click();
     await expect(page.getByRole('region', { name: /settings$/ })).toBeVisible();
   }

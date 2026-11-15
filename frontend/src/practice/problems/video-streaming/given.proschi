@@ -38,6 +38,7 @@ test "Transcoding is queued, never in the request path" {
   "Transcode video" starts at any queue
   "Transcode video" calls transcoder
   "Transcode video" calls any database after any storage
+  "Transcode video" uses PUT on any storage before any database
 }
 
 test "Segments are served by a CDN, with storage as its origin" {
@@ -48,6 +49,6 @@ test "Segments are served by a CDN, with storage as its origin" {
 }
 
 test "Video pages read metadata from a cache" {
-  "Open video" calls any cache before any database
+  "Open video" uses GET on any cache before any database
   "Open video" scenario "Cache hit" never calls any database
 }

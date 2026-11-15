@@ -29,7 +29,7 @@ Most problems on this roadmap use a store like DynamoDB or Cassandra as a box; t
 
 - *Clients reach the storage nodes through the coordinators*: both use cases start at the application servers, which have no path to the storage nodes.
 - *A write survives a replica that is down*: Put has a `"Replica down"` scenario with a failed call to a storage node, and it still answers `2xx`.
-- *A read repairs a stale replica*: in `"Stale replica"`, Get writes to the storage nodes before it answers.
+- *A read repairs a stale replica*: in `"Stale replica"`, Get `PUT`s the newer version to the storage nodes before it answers.
 - *Reads come from the replicas, not a cache*: Get never calls a cache.
 
 ## Back-of-the-envelope

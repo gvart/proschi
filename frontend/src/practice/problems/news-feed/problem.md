@@ -3,6 +3,8 @@ title: News Feed
 summary: Fan out on write through a queue into feed caches.
 difficulty: medium
 tags: [fan-out, queues, caching, read-heavy]
+version: 2
+strict: true
 hints:
   - Feeds are read 20 times more often than posts are written. Could each feed be ready before anyone asks for it?
   - Precompute feeds into a cache when a post is published (fan-out on write); then a read is a lookup of post ids plus the posts themselves, also from a cache.

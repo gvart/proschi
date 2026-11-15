@@ -62,7 +62,7 @@ usecase "Start upload" "Record a pending file and hand out a pre-signed PUT URL"
 usecase "Upload" "Put the bytes straight into the bucket" {
   user     -> blobs    : ~1MB PUT /9a1?sig=…
   blobs   --> user     : 200
-  blobs   ->> events   : ObjectCreated 9a1
+  blobs   ->> events   : SEND ObjectCreated 9a1
   events  ->> finisher : ObjectCreated 9a1
   finisher -> meta     : UPDATE File status=ready
   meta    --> finisher : ok

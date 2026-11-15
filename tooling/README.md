@@ -13,6 +13,8 @@ proschi fmt docs/                   # format files in place (--check: only repor
 proschi render checkout.proschi --out diagrams   # SVG diagrams (also --format md|html|hld-md|hld-html)
 proschi test docs/                  # run requirements and tests (exit 1 on a failure)
 proschi analyze shortener.proschi   # load, latency, availability and cost per node
+proschi analyze --sweep "Redirect" 10k..500k shortener.proschi   # where it saturates, how far requirements hold
+proschi diff before.proschi after.proschi   # what changed, and what it does to cost, p99 and the checks
 proschi import mermaid arch.mmd     # Mermaid flowchart/sequence diagram to Proschi (also: import openapi spec.yaml)
 proschi problem check               # validate practice problem folders (see docs/PRACTICE.md)
 proschi problem new seat-map        # scaffold a practice problem
@@ -34,10 +36,29 @@ JSON payloads), mapped in a `proschi.json` or with `--openapi`: see
 
 `test` runs the `requirements { … }` and `test "…" { … }` blocks of each file
 against a capacity model of its `traffic { … }` (`--format text|github|json`);
-`analyze` prints that model as a table (`--format text|json`). The language
+`analyze` prints that model as a table (`--format text|json`), runs the
+file's `whatif` blocks (`--whatif "Name"|all`) and sweeps a use case's
+traffic over a range (`--sweep "Use case" 10k..500k [--steps n]`). The language
 server reports failing requirements and tests as warnings and adds load to
 node hovers. The model and its default numbers:
 [Simulation and tests](https://github.com/gvart/proschi/blob/main/docs/EDITORS.md#simulation-and-tests).
+
+Components are typed: every tech has a built-in type with its operations,
+statuses and headers, and you declare your own with `extends`. `check` warns
+about a step whose operation the target's type doesn't know, and the
+language server completes types and operations and shows them on hover.
+[Component types](https://proschi.app/docs/types/):
+
+```proschi
+type LedgerDb extends PostgreSQL { op write APPEND }
+
+api    "Payments API" [REST API]
+ledger "Ledger"       [LedgerDb]
+
+usecase "Pay" {
+  api -> ledger : APPEND entry
+}
+```
 
 `problem check [--format text|github|json] [dir]` validates the practice
 problems, one folder each (front matter, given, starter, reference solution
@@ -76,14 +97,15 @@ the sign-in.
 `proschi versions diff <name> <base-tag> [<target-tag>|<file.proschi>]` what
 changed from one to another (default: latest) or to a local file: nodes,
 edges, use cases, scenarios, requirements, traffic, capacity and systems,
-with `--json` for scripts. They only read the account. `--base <url>` points
+then the simulation deltas that `proschi diff` prints, with `--json` for
+scripts. They only read the account. `--base <url>` points
 `login`, `logout`, `whoami`, `versions` and `imports sync` at another site
 (https, or http://localhost for development).
 
 ## Rendering
 
 ```
-proschi render [--out <dir>] [--format svg|md|html|preview-html|hld-md|hld-html] [--theme sketch|classic] <file>
+proschi render [--out <dir>] [--format svg|md|html|preview-html|hld-md|hld-html] [--theme sketch-light|sketch-dark|classic] <file>
 ```
 
 - `svg` (default): `architecture.svg`, plus `<usecase>--<scenario>.svg` with a
@@ -109,7 +131,7 @@ separate bundle (`dist/render.cjs`), loaded only by `proschi render`.
 ### Preview server
 
 ```
-proschi preview [--port <n>] [--root <dir>] [--theme sketch|classic] [<file>]
+proschi preview [--port <n>] [--root <dir>] [--theme sketch-light|sketch-dark|classic] [<file>]
 ```
 
 Serves the `preview-html` page of any `.proschi` file at
@@ -130,8 +152,11 @@ addressed to `127.0.0.1` or `localhost` (no DNS rebinding), and opens only
 `--theme` picks the look of the SVGs (and of the `html`, `preview-html` and `hld-html` pages
 that embed them):
 
-- `sketch` (default): the canvas look, with cream paper, ink outlines, hard
-  shadows and pink step numbers
+- `sketch-light` (default; `sketch` is an alias): the canvas look, with
+  cream paper, ink outlines, hard shadows and pink step numbers
+- `sketch-dark`: the same look in the canvas's dark colourway, as the Claude
+  Code plugin draws its pictures on a dark terminal: dark paper, light ink,
+  purple shadows
 - `classic`: the earlier look, with a white background, rounded light-grey
   cards, icon tiles coloured by component type, blue request arrows and step
   numbers, and grey dashed lifelines

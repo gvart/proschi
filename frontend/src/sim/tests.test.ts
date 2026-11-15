@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Assertion, Requirement, Selector } from '../dsl/types';
-import { runTests } from './tests';
+import { requirementFixes, runTests } from './tests';
 import { at, diagramOf, type Extras } from './testDiagram';
 
 type Loose<T> = T extends unknown ? Omit<T, 'loc'> : never;
@@ -272,6 +272,9 @@ describe('survive requirement (failure injection)', () => {
     expect(r.passed).toBe(false);
     expect(r.message).toBe('Losing api (REST API) breaks "Read" (and 1 more)');
     expect(r.hint).toContain('Add a replica (x2 on api) or a fallback scenario in "Read"');
+    const diagram = diagramOf(READ, { requirements: [{ kind: 'survive', target: 'any', loc: at(7) }] });
+    expect(requirementFixes(diagram)).toEqual([{ id: 'req:1', loc: at(7), fix: { kind: 'replicas', node: 'api', replicas: 2 } }]);
+    expect(runTests(diagram)[0]).not.toHaveProperty('fix');
   });
 
   it('passes when every needed node has spare replicas', () => {

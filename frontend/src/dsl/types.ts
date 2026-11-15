@@ -1,4 +1,5 @@
 import type { ComponentType, TechName } from '../types/canvas';
+import type { ResolvedType, TypeOp } from './typesys/types';
 
 // Use case steps, as the parser produces them and the player animates them.
 export type ExecutionType = 'SYNC_REQUEST_RESPONSE' | 'ASYNC_FIRE_AND_FORGET' | 'ASYNC_REQUEST_RESPONSE';
@@ -49,7 +50,8 @@ export interface SourceLoc {
   file?: string;
 }
 
-export type Severity = 'error' | 'warning';
+/** `info` explains a choice the parser or simulation made, such as which of two cache models applies. */
+export type Severity = 'error' | 'warning' | 'info';
 
 export interface Diagnostic extends SourceLoc {
   severity: Severity;
@@ -70,6 +72,10 @@ export type DiagramStep = FlowStep & {
   toPort?: string;
   /** `orders.api -> …`: the entry point of the sending system. */
   fromPort?: string;
+  /** The target type's operation the label names (`INSERT`, `GET`), when the target is typed and lists it. */
+  op?: TypeOp;
+  /** `GET /x header Authorization, If-None-Match`: request headers named in the label. */
+  headers?: string[];
 };
 
 /** A `section "Name" { … }` block of a use case; `loc` (its name) tells two sections of the same name apart. */
@@ -111,6 +117,13 @@ export interface DiagramNode {
    * nothing matches). The parser warns about such a node.
    */
   inferredKind?: Kind;
+  /**
+   * The type `[Tech]` names, built in (src/dsl/stdlib) or declared with
+   * `type` (docs/design/typed-components.md). For a declared type,
+   * `techStack` and `type` are those of its icon, its nearest built-in
+   * ancestor; the type's own name is `resolvedType.name`.
+   */
+  resolvedType?: ResolvedType;
   ownerTeam?: string;
   description?: string;
   /** Id of the enclosing `group`, if any. */
@@ -234,6 +247,48 @@ export interface Diagram {
   layout?: LayoutHints;
   /** `system` blocks, each a node of kind `system` too; absent when there are none. */
   systems?: DiagramSystem[];
+  /** `whatif "Name" { … }` blocks, in order; absent when there are none. */
+  whatifs?: WhatIf[];
+  /** `let name = value` constants, in order; absent when there are none. Their uses are already replaced by their values. */
+  constants?: Constant[];
+  /** `type` blocks of the document and its imports, resolved, in order; absent when there are none. Built-in types are not listed. */
+  types?: ResolvedType[];
+}
+
+/**
+ * `let peak = 120k rps`: a named quantity, used as `$peak` wherever a
+ * quantity of its kind goes, or as `x$n` for replicas and multipliers.
+ */
+export interface Constant {
+  name: string;
+  /** The value after unit normalisation, like any quantity (`2s` is 2000). */
+  value: number;
+  /** Absent for a plain number (`let n = 3`). */
+  unit?: Quantity['unit'];
+  /** The value as written, e.g. `120k rps`. */
+  text: string;
+  /** The name in its `let` line. */
+  loc: SourceLoc;
+}
+
+/** One line of a `whatif` block. */
+export type WhatIfChange =
+  /** `traffic "Use case" x3` (`multiply`) or `traffic "Use case" 50k rps` (`rps`). */
+  | { kind: 'traffic'; useCase: string; multiply?: number; rps?: number; loc: SourceLoc }
+  /** `fail db`: the node is down. */
+  | { kind: 'fail'; node: string; loc: SourceLoc }
+  /** `db x4`: the node runs this many replicas. */
+  | { kind: 'replicas'; node: string; replicas: number; loc: SourceLoc }
+  /** `cache hit 40%`: the cache's hit rate (0..100), e.g. a cold cache. */
+  | { kind: 'hit'; node: string; percent: number; loc: SourceLoc }
+  /** `pay errors 20%`: the node's error rate (0..100), e.g. a bad deploy. */
+  | { kind: 'errors'; node: string; percent: number; loc: SourceLoc };
+
+/** `whatif "Black Friday" { traffic "Checkout" x3; fail cache; db x4 }`: a variant of the design to simulate. */
+export interface WhatIf {
+  name: string;
+  changes: WhatIfChange[];
+  loc: SourceLoc;
 }
 
 /** `expose api "Orders API" -> "Place order"`: an entry point of a system. */
@@ -321,7 +376,14 @@ export type Selector =
 /** `"Redirect" 100k rps mix "Cache hit" 90%, "Cache miss" 10%`; shares are fractions 0..1. */
 export interface TrafficEntry {
   useCase: string;
+  /** The rate the design is loaded with: the peak when `peak` is written, else the one rate. */
   rps: number;
+  /**
+   * `"Read" 20k rps peak x3` (or `peak 60k rps`): the average rate, 20k, while
+   * `rps` is the peak, 60k. Capacity, latency and requirements are taken at
+   * the peak, egress cost at the average. Absent for a flat rate.
+   */
+  avgRps?: number;
   mix?: { scenario: string; share: number }[];
   loc: SourceLoc;
 }
@@ -334,7 +396,17 @@ export type Requirement =
   | { kind: 'availability'; useCase?: string; minPercent: number; loc: SourceLoc }
   | { kind: 'durable'; useCase: string; loc: SourceLoc }
   | { kind: 'survive'; target: Selector | 'any'; loc: SourceLoc }
-  | { kind: 'cost'; maxUsdPerMonth: number; loc: SourceLoc };
+  /** `cost <= 3000 usd/month`, or with `scope` a budget for part of the design: `cost @Payments <= 500 usd/month`. */
+  | { kind: 'cost'; maxUsdPerMonth: number; scope?: CostScope; loc: SourceLoc }
+  /** `lag "Use case" < 30s`: how long the use case's messages wait in the queues it sends to (those with a `drain` rate). */
+  | { kind: 'lag'; useCase: string; maxMs: number; loc: SourceLoc };
+
+/**
+ * Whose cost a scoped budget covers: the nodes a team owns (`@Payments`),
+ * the nodes with a legend tag (`.edge`, or inside a group with it), or the
+ * nodes inside a group (`group checkout`, nested groups included).
+ */
+export type CostScope = { team: string } | { tag: string } | { group: string };
 
 /** One line of `capacity { … }`: per-replica overrides of the default profile. */
 export interface CapacityOverride {
@@ -359,6 +431,26 @@ export interface CapacityOverride {
   timeoutMs?: number;
   /** `size S|M|L`: an instance size that scales the tech's default capacity and cost (sim/profiles.ts `SIZES`). */
   size?: InstanceSize;
+  /**
+   * `hit 90%`, 0..100: the share of reads a cache answers itself. Steps after
+   * a read of it that go on to a backing store take (1 − hit) of the load,
+   * unless the use case splits hits and misses with a traffic `mix`.
+   */
+  hitPercent?: number;
+  /**
+   * `errors 2%`, 0..100: the share of calls to the node that fail with an
+   * error (a partial failure, not an outage). With `retries`, each failure is
+   * tried again, which adds load and latency and makes the call succeed more often.
+   */
+  errorPercent?: number;
+  /** `retries 3`: how many times a caller tries a failed call again, 0..5. */
+  retries?: number;
+  /**
+   * `drain 5k rps` on a queue or broker: how fast its consumers take
+   * messages off it. More inflow than that grows a backlog; less waits a
+   * queueing delay, the consumer lag.
+   */
+  drainRps?: number;
   loc: SourceLoc;
 }
 
@@ -387,10 +479,27 @@ export interface Decision {
   loc: SourceLoc;
 }
 
+/**
+ * What a step must be, besides going to the selected nodes (docs/TESTS.md,
+ * "Typed assertions"): `calls X with GET /urls/{code}` sets `method` and
+ * `path`, `uses INSERT on X` sets `op` (the canonical name of the step's
+ * resolved operation), `sends header Authorization to X` sets `header`.
+ */
+export interface StepMatch {
+  method?: string;
+  path?: string;
+  op?: string;
+  header?: string;
+}
+
 /** One assertion line inside `test "…" { … }` (docs/design/hld-and-practice.md §1.9). */
 export type Assertion =
-  | { kind: 'calls'; useCase: string; scenario?: string; target: Selector; quantifier: 'some' | 'every' | 'never'; loc: SourceLoc }
-  | { kind: 'before'; useCase: string; scenario?: string; first: Selector; then: Selector; loc: SourceLoc }
+  /** `match`: only steps to the target that are that request, operation or header count. */
+  | { kind: 'calls'; useCase: string; scenario?: string; target: Selector; match?: StepMatch; quantifier: 'some' | 'every' | 'never'; loc: SourceLoc }
+  /** `match` applies to the steps to `first`. */
+  | { kind: 'before'; useCase: string; scenario?: string; first: Selector; match?: StepMatch; then: Selector; loc: SourceLoc }
+  /** `U uses INSERT on db before responding`: every success scenario sends a matching synchronous, successful step to the target before the answer. */
+  | { kind: 'beforeResponding'; useCase: string; scenario?: string; target: Selector; match: StepMatch; loc: SourceLoc }
   | { kind: 'writesBeforeResponding'; useCase: string; scenario?: string; target: Selector; loc: SourceLoc }
   | { kind: 'responds'; useCase: string; scenario?: string; status: string; loc: SourceLoc }
   | { kind: 'hasScenario'; useCase: string; scenario: string; loc: SourceLoc }
@@ -401,7 +510,7 @@ export type Assertion =
   /** `U [scenario S] never waits for X`: no synchronous call to X before U's entry response. */
   | { kind: 'neverWaits'; useCase: string; scenario?: string; target: Selector; loc: SourceLoc }
   /** `U [scenario S] calls Y after X`: in every scenario calling both, the last call to Y follows the first call to X. */
-  | { kind: 'after'; useCase: string; scenario?: string; target: Selector; after: Selector; loc: SourceLoc }
+  | { kind: 'after'; useCase: string; scenario?: string; target: Selector; match?: StepMatch; after: Selector; loc: SourceLoc }
   /** `[in U] X calls Y` / `[in U] X never calls Y`: steps sent by X (not just reached). */
   | { kind: 'senderCalls'; useCase?: string; from: Selector; to: Selector; quantifier: 'some' | 'never'; loc: SourceLoc }
   /** `U starts at X`: U's entry request is sent by a node matching X. */
@@ -424,7 +533,7 @@ export interface DiagramImport {
 
 /** Where a top-level section block of the root document starts and ends (1-based lines, the `}` line included). */
 export interface BlockSpan {
-  kind: 'traffic' | 'requirements' | 'capacity' | 'entity' | 'decision' | 'test' | 'legend';
+  kind: 'traffic' | 'requirements' | 'capacity' | 'entity' | 'decision' | 'test' | 'legend' | 'whatif';
   start: number;
   end: number;
 }
@@ -453,4 +562,11 @@ export interface ParseOptions {
   path?: string;
   /** Loads imported files and the team files of `system … { from "…" }`; without it, they only produce a warning. */
   resolve?: ImportResolver;
+  /**
+   * Report a step label that names no operation of its target's type, a
+   * status the responder's type does not list, or a header the target's type
+   * does not list, as an error instead of a warning (problem front matter
+   * `strict: true`).
+   */
+  strictOps?: boolean;
 }

@@ -13,11 +13,11 @@ import { renderSequenceSvg, scenarioTitle } from './sequence';
 import { renderHldHtml, renderHldMarkdown } from './hld';
 import { descriptionHtml } from './description';
 import { esc } from './svg';
-import { SKETCH, type RenderTheme } from './theme';
+import { SKETCH, asRenderTheme, type RenderTheme } from './theme';
 
 export { renderArchitectureSvg } from './architecture';
 export { renderSequenceSvg, scenarioTitle } from './sequence';
-export { DEFAULT_THEME, THEME_NAMES, getTheme, isThemeName, type RenderTheme, type ThemeName } from './theme';
+export { DEFAULT_THEME, THEME_ALIASES, THEME_CHOICES, THEME_NAMES, getTheme, isThemeName, type RenderTheme, type ThemeName } from './theme';
 
 export const FORMATS = ['svg', 'md', 'html', 'preview-html', 'hld-md', 'hld-html'] as const;
 export type RenderFormat = (typeof FORMATS)[number];
@@ -47,11 +47,12 @@ export function scenarioSlug(useCase: DiagramUseCase, scenario: DiagramScenario)
 
 /**
  * Every SVG of a diagram. With `inline`, ids inside each SVG get a unique
- * prefix so several can share one HTML page. `options.theme` (default sketch)
+ * prefix so several can share one HTML page. `options.theme` (default sketch-light)
  * styles the architecture and every sequence diagram.
  */
 export async function renderSvgs(diagram: Diagram, inline = false, options: ArchitectureOptions = {}): Promise<RenderedDiagram> {
   const architecture = await renderArchitectureSvg(diagram, options);
+  const theme = asRenderTheme(options.theme) ?? SKETCH;
   let n = 0;
   const scenarios = diagram.useCases.flatMap((useCase) =>
     useCase.scenarios.map((scenario) => ({
@@ -59,7 +60,7 @@ export async function renderSvgs(diagram: Diagram, inline = false, options: Arch
       scenario,
       title: scenarioTitle(useCase, scenario),
       slug: scenarioSlug(useCase, scenario),
-      svg: renderSequenceSvg(diagram, useCase, scenario, inline ? `s${++n}-` : '', options.theme),
+      svg: renderSequenceSvg(diagram, useCase, scenario, inline ? `s${++n}-` : '', theme),
     })),
   );
   return { architecture, scenarios };
@@ -220,7 +221,8 @@ if (select) {
     show(select.value);
   };
   select.addEventListener('change', () => {
-    history.replaceState(null, '', '#' + encodeURIComponent(select.value));
+    // Pages loaded from a string (an IDE's embedded browser) may refuse to change their URL.
+    try { history.replaceState(null, '', '#' + encodeURIComponent(select.value)); } catch {}
     show(select.value);
   });
   window.addEventListener('hashchange', fromHash);
@@ -381,6 +383,24 @@ export function pageCsp(style: string, scripts: string[], nav: boolean, images =
 }
 
 /**
+ * One `<div class="usecase">` per use case with scenarios: its description,
+ * folded, with `Label: name (detail); …` sentences as tables (description.ts),
+ * then a figure per scenario drawn by `figure`. Only the first scenario, and
+ * its use case, start shown. A use case without scenarios gives ''.
+ */
+export function useCaseBlocksHtml(diagram: Diagram, rendered: RenderedDiagram, figure: (s: RenderedScenario, hidden: boolean) => string): string[] {
+  return diagram.useCases.map((uc) => {
+    const items = rendered.scenarios.filter((s) => s.useCase === uc);
+    if (!items.length) return '';
+    const first = items[0] === rendered.scenarios[0];
+    const slugs = new Map(items.map((s) => [s.scenario.name, s.slug]));
+    const description = uc.description ? `<details class="description"><summary>Description</summary>${descriptionHtml(uc.description, slugs)}</details>` : '';
+    const figures = items.map((s) => figure(s, s !== rendered.scenarios[0])).join('');
+    return `<div class="usecase"${first ? '' : ' hidden'}>${description}${figures}</div>`;
+  });
+}
+
+/**
  * The page like the VS Code preview: the architecture in a `<details>` (open,
  * fold it to save room) and one scenario at a time, picked from a list. Above
  * the scenario, its use case's description, folded, with lists such as
@@ -408,17 +428,7 @@ export function renderPreviewHtml(diagram: Diagram, rendered: RenderedDiagram, t
     const count = `${rendered.scenarios.length} scenario${rendered.scenarios.length === 1 ? '' : 's'}`;
     body.push(
       `<section><label class="picker">Scenario <select id="scenario">${groups}</select><span class="count">${count}</span></label>`,
-      ...diagram.useCases.map((uc) => {
-        const items = rendered.scenarios.filter((s) => s.useCase === uc);
-        if (!items.length) return '';
-        const first = items[0] === rendered.scenarios[0];
-        const slugs = new Map(items.map((s) => [s.scenario.name, s.slug]));
-        const description = uc.description
-          ? `<details class="description"><summary>Description</summary>${descriptionHtml(uc.description, slugs)}</details>`
-          : '';
-        const figures = items.map((s) => `<figure class="scenario" data-slug="${esc(s.slug)}"${s === rendered.scenarios[0] ? '' : ' hidden'}>${s.svg}</figure>`).join('');
-        return `<div class="usecase"${first ? '' : ' hidden'}>${description}${figures}</div>`;
-      }),
+      ...useCaseBlocksHtml(diagram, rendered, (s, hidden) => `<figure class="scenario" data-slug="${esc(s.slug)}"${hidden ? ' hidden' : ''}>${s.svg}</figure>`),
       '</section>',
     );
   } else {
@@ -451,8 +461,8 @@ export function renderPreviewHtml(diagram: Diagram, rendered: RenderedDiagram, t
 /** The files `proschi render` writes for `format`; `baseName` names the single md/html file. */
 export async function renderFiles(diagram: Diagram, format: RenderFormat, baseName: string, options: ArchitectureOptions = {}): Promise<RenderedFile[]> {
   if (format === 'md') return [{ name: `${baseName}.md`, content: renderMarkdown(diagram) }];
-  if (format === 'html') return [{ name: `${baseName}.html`, content: renderHtml(diagram, await renderSvgs(diagram, true, options), options.theme) }];
-  if (format === 'preview-html') return [{ name: `${baseName}.preview.html`, content: renderPreviewHtml(diagram, await renderSvgs(diagram, true, options), options.theme) }];
+  if (format === 'html') return [{ name: `${baseName}.html`, content: renderHtml(diagram, await renderSvgs(diagram, true, options), asRenderTheme(options.theme)) }];
+  if (format === 'preview-html') return [{ name: `${baseName}.preview.html`, content: renderPreviewHtml(diagram, await renderSvgs(diagram, true, options), asRenderTheme(options.theme)) }];
   if (format === 'hld-md') return [{ name: `${baseName}.hld.md`, content: renderHldMarkdown(diagram) }];
   if (format === 'hld-html') return [{ name: `${baseName}.hld.html`, content: renderHldHtml(diagram, await renderSvgs(diagram, true, options)) }];
   const { architecture, scenarios } = await renderSvgs(diagram, false, options);

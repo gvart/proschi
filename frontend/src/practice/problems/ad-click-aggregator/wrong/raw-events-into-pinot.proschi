@@ -1,0 +1,75 @@
+# expect-fail: Events are aggregated in the stream, in memory
+# expect-fail: cost ≤ $9,000/month
+# mistake: Storing every raw event in the OLAP store
+# explain: The stream job cleans each event and inserts it into Pinot, and the dashboards sum the rows at query time. Pinot then takes 20k writes a second instead of about 500, so it needs four times the nodes, and every report scans millions of rows. Count each ad's events in one-minute windows in the stream and store one record per ad and minute.
+# lesson: pre-aggregate-in-windows
+# cards: pre-aggregate-counts, tumbling-window, oltp-vs-olap
+# The aggregation job writes every cleaned event to Pinot; Pinot is sized for 20k writes a second.
+import "problem.proschi"
+
+lb          "Load Balancer"         [AWS Load Balancer] x2 @edge
+ingest      "Ad Event Ingest"       [Go]                x16 @ingest
+events      "Mobile Ad Events"      [Kafka]             x3 @ingest
+flink       "Aggregation Job"       [Java]              x16 @stream "Cleans each event and inserts it into Pinot"
+checkpoints "Checkpoint Store"      [Object Storage]    x2 @stream
+aggregates  "Ad Aggregates"         [Kafka]             x2 @stream
+pinot       "Apache Pinot"          [Data Warehouse]    x12 @olap "One row per raw event"
+reports     "Advertiser Report API" [REST API]          x3 @olap
+
+app        -> lb
+advertiser -> lb
+lb         -> ingest
+lb         -> reports
+ingest     -> events
+events     -> flink
+flink      -> pinot
+flink      -> checkpoints
+flink      -> aggregates
+aggregates -> pinot
+aggregates -> budget
+reports    -> pinot
+
+usecase "Record event" {
+  app     -> lb     : POST /ad-events
+  lb      -> ingest : POST /ad-events
+  ingest  -> events : PRODUCE mobile-ad-events
+  events --> ingest : ack
+  ingest --> lb     : 202
+  lb     --> app    : 202
+}
+
+usecase "Aggregate events" {
+  events -> flink : AdEvent
+  flink  -> pinot : INSERT ad_events
+  pinot --> flink : ok
+}
+
+usecase "Publish aggregates" {
+  flink       -> aggregates : PRODUCE ad-aggregates
+  aggregates --> flink      : ack, uncommitted
+}
+
+usecase "Checkpoint" {
+  flink        -> checkpoints : PUT state
+  checkpoints --> flink       : ok
+  flink        -> aggregates  : COMMIT transaction
+}
+
+usecase "Load aggregates" {
+  aggregates -> pinot : UPSERT by recordUuid
+}
+
+usecase "Update budget" {
+  aggregates -> budget : AdAggregate
+  budget     -> ledger : INSERT ON CONFLICT DO NOTHING
+  ledger    --> budget : 1 row
+}
+
+usecase "View report" {
+  advertiser -> lb         : GET /campaigns/c_42/report
+  lb         -> reports    : GET /campaigns/c_42/report
+  reports    -> pinot      : SELECT COUNT(*) FROM ad_events GROUP BY day, type
+  pinot     --> reports    : rows
+  reports   --> lb         : 200
+  lb        --> advertiser : 200
+}

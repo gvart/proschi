@@ -1,15 +1,17 @@
 package app.proschi.jetbrains.settings
 
 import app.proschi.jetbrains.lsp.ProschiLanguageServer
+import app.proschi.jetbrains.preview.ProschiPreview
 import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory
 import com.intellij.openapi.options.BoundConfigurable
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.ui.dsl.builder.AlignX
+import com.intellij.ui.dsl.builder.bindItem
 import com.intellij.ui.dsl.builder.bindSelected
 import com.intellij.ui.dsl.builder.bindText
 import com.intellij.ui.dsl.builder.panel
 
-/** Settings | Languages & Frameworks | Proschi. Applying restarts the language server in every open project. */
+/** Settings | Languages & Frameworks | Proschi. Applying restarts the language server and redraws the preview in every open project. */
 class ProschiConfigurable : BoundConfigurable("Proschi") {
     override fun createPanel(): DialogPanel {
         val options = ProschiSettings.options
@@ -43,6 +45,16 @@ class ProschiConfigurable : BoundConfigurable("Proschi") {
                         )
                 }
             }
+            group("Preview") {
+                row("Theme:") {
+                    comboBox(ProschiSettings.PREVIEW_THEMES)
+                        .bindItem({ options.previewTheme }, { options.previewTheme = it ?: ProschiSettings.PREVIEW_THEMES.first() })
+                        .comment(
+                            "<code>sketch</code>: cream paper, ink outlines, hard shadows. <code>classic</code>: white, rounded grey cards, " +
+                                "coloured icon tiles, blue arrows. A <code>\"theme\"</code> in the nearest <code>proschi.json</code> overrides it.",
+                        )
+                }
+            }
             group("Node.js") {
                 row("Node:") {
                     textFieldWithBrowseButton(file("Node.js Executable"))
@@ -57,5 +69,6 @@ class ProschiConfigurable : BoundConfigurable("Proschi") {
     override fun apply() {
         super.apply()
         ProschiLanguageServer.restartAll()
+        ProschiPreview.refreshAll()
     }
 }

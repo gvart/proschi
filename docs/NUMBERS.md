@@ -1,3 +1,7 @@
+---
+updated: 2026-10-05
+---
+
 # Numbers to know
 
 A one-page cheat sheet of the round numbers a system design interview runs

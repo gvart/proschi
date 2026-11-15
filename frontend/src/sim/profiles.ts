@@ -127,10 +127,20 @@ export const SIZES: Record<InstanceSize, { capacity: number; cost: number }> = {
   L: { capacity: 4, cost: 3.5 },
 };
 
-/** The node's per-replica profile: tech table, else kind table, then the `capacity` override (an explicit rate or cost wins over a size). */
+/**
+ * The node's per-replica profile: tech table, else kind table, then the
+ * numbers its type sets (docs/design/typed-components.md), then the
+ * `capacity` override (an explicit rate or cost wins over a size).
+ */
 export function profileOf(node: DiagramNode, override?: CapacityOverride): Profile {
   const kind = kindOf(node);
-  const base = (Object.hasOwn(TECH_PROFILES, node.techStack) ? TECH_PROFILES[node.techStack] : undefined) ?? KIND_PROFILES[kind];
+  const type = node.resolvedType;
+  // The tech's own row applies only while the type keeps the tech's kind (a type may change it).
+  const techRow = Object.hasOwn(TECH_PROFILES, node.techStack) && (!type || kindOf({ ...node, resolvedType: undefined }) === kind) ? TECH_PROFILES[node.techStack] : undefined;
+  const props = type?.props ?? {};
+  // A type's `rps` sets both sides, as a capacity override does, unless it sets them itself.
+  const sides = props.rps !== undefined ? { readRps: props.readRps ?? props.rps, writeRps: props.writeRps ?? props.rps } : {};
+  const base: Row = { ...(techRow ?? KIND_PROFILES[kind]), ...props, ...sides };
   const size = SIZES[override?.size ?? 'S'];
   const baseRead = (base.readRps ?? base.rps) * size.capacity;
   const baseWrite = (base.writeRps ?? base.rps) * size.capacity;

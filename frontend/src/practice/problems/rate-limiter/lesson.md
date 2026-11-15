@@ -175,7 +175,7 @@ gate    -> backend
 
 usecase "Request" {
   caller -> gate    : GET /items
-  gate   -> limiter : check
+  gate   -> limiter : POST /checks
   alt "Counted" {
     limiter  -> counts  : INCR rate:c1
     counts  --> limiter : 12

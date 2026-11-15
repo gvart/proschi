@@ -12,10 +12,12 @@ interface HelpMenuProps {
   onTour: () => void;
   tourLabel?: string;
   className?: string;
+  /** The page's keyboard shortcuts (the editor's `?`), offered when given. */
+  onShortcuts?: () => void;
 }
 
 /** The "?" menu: replay the tour, the syntax cheat-sheet, the language reference and how the simulation works. */
-export default function HelpMenu({ onTour, tourLabel = 'Take the tour', className = '' }: HelpMenuProps) {
+export default function HelpMenu({ onTour, tourLabel = 'Take the tour', className = '', onShortcuts }: HelpMenuProps) {
   const [sheet, setSheet] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -36,6 +38,13 @@ export default function HelpMenu({ onTour, tourLabel = 'Take the tour', classNam
                 setSheet(true);
               }}
               onFeedback={close}
+              onShortcuts={
+                onShortcuts &&
+                (() => {
+                  close();
+                  onShortcuts();
+                })
+              }
             />
           </Suspense>
         )}

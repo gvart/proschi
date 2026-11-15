@@ -1,0 +1,71 @@
+# expect-fail: Searches never touch the source of truth
+# mistake: Answering searches from the source-of-truth database
+# explain: Text and location search over every store and menu is not what a relational database is built for, and every query now competes with merchant writes on the primary system. The index exists so that reads never touch the database.
+# explain: Send searches to the search cluster only, and keep the database for writes and for the indexers.
+# lesson: separate-read-and-write-paths
+# cards: inverted-index, oltp-vs-olap
+# The Search API runs ILIKE queries on PostgreSQL; the index is built but nobody reads it.
+import "problem.proschi"
+
+menuapi   "Menu API"       [REST API]      x3 @write "Saves merchant edits and publishes a change event for each"
+changes   "Change Events"  [Kafka]         x3 @write "Store and menu changes by id, and the ETL's rows"
+indexer   "Indexer"        [Worker]        x10 @write "Flink jobs: assemble, buffer and flush bulk requests"
+search    "Search Cluster" [Elasticsearch] x3 @read "3 shards, each with a primary and 2 replicas"
+searchapi "Search API"     [REST API]      x8 @read "Queries the database"
+
+capacity {
+  search shards 3
+}
+
+merchant  -> menuapi   : HTTPS
+menuapi   -> db        : SQL
+menuapi   -> changes   : produce
+changes   -> indexer   : consume
+indexer   -> db        : SQL, read-only
+indexer   -> search    : _bulk
+loader    -> changes   : produce
+diner     -> searchapi : HTTPS
+searchapi -> db        : SQL
+
+usecase "Search" "A diner searches for stores and dishes, straight from PostgreSQL" {
+  diner      -> searchapi : GET /search?q=tacos
+  searchapi  -> db        : SELECT stores JOIN items WHERE name ILIKE '%tacos%'
+  db        --> searchapi : rows
+  searchapi --> diner     : 200 results
+}
+
+usecase "Edit menu" "A merchant changes a menu item" {
+  merchant -> menuapi  : PUT /stores/812/items/5510 {"price": 11.5}
+  menuapi  -> db       : UPDATE item 5510 of store 812
+  db      --> menuapi  : committed
+  menuapi ->> changes  : PUBLISH StoreChanged store 812
+  menuapi --> merchant : 200
+}
+
+usecase "Index change" "The indexer turns one change event into a fresh search document" {
+  changes -> indexer : StoreChanged store 812
+  indexer -> db      : SELECT store 812 with its menu and items
+  db     --> indexer : current rows
+
+  alt "Buffered" when "the bulk buffer has room" {
+    indexer --> changes : document added to the bulk buffer
+  } alt "Flush" when "the buffer is full" {
+    indexer  -> search  : UPSERT 100 documents with one _bulk request
+    search  --> indexer : per-document results
+    indexer --> changes : commit offsets
+  }
+}
+
+usecase "Backfill" "The nightly ETL's scores and tags reach the index, throttled" {
+  loader   -> changes : PUBLISH ScoreUpdated item 5510
+  changes --> loader  : ack
+  changes  -> indexer : ScoreUpdated item 5510, with its new score
+
+  alt "Buffered" when "the bulk buffer has room" {
+    indexer --> changes : document added to the bulk buffer
+  } alt "Flush" when "the buffer is full" {
+    indexer  -> search  : UPSERT 100 partial documents with one _bulk request
+    search  --> indexer : per-document results
+    indexer --> changes : commit offsets
+  }
+}

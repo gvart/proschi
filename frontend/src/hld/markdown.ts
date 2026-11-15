@@ -8,6 +8,7 @@ import {
   formatMs,
   formatPercent,
   formatRps,
+  formatTraffic,
   formatUsd,
   overviewFacts,
   responseText,
@@ -68,7 +69,7 @@ function renderSection(doc: HldDocument, s: HldSection): string[] {
     }
     case 'capacity': {
       if (s.traffic.length) {
-        out.push('### Traffic', '', ...table(['Use case', 'Rate', 'Mix'], s.traffic.map((t) => [t.useCase, formatRps(t.rps), t.mix.map((m) => `${m.scenario} ${formatPercent(m.share)}`).join(', ')])));
+        out.push('### Traffic', '', ...table(['Use case', 'Rate', 'Mix'], s.traffic.map((t) => [t.useCase, formatTraffic(t.rps, t.avgRps), t.mix.map((m) => `${m.scenario} ${formatPercent(m.share)}`).join(', ')])));
       }
       if (s.load.length) {
         out.push(

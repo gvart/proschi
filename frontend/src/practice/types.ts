@@ -46,6 +46,12 @@ export interface Problem {
   interview?: string;
   /** guided.md (Markdown): guided mode's steps and checkpoints (modes/guidedFile.ts reads it). */
   guided?: string;
+  /**
+   * Front matter `strict: true`: designs are parsed with `strictOps`, so a
+   * step label that names no operation of its target's type, or a status or
+   * header the type does not list, is an error and blocks the tests.
+   */
+  strict?: boolean;
   /** Plausible wrong designs from wrong/*.proschi, each failing the tests it names. */
   wrong?: WrongDesign[];
 }

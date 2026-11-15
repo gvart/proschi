@@ -270,7 +270,7 @@ describe('capacity', () => {
     ['db latency', 'Expected a duration, e.g. 50ms or 1.5s'],
     ['db latency 4', "'4' needs a unit: expected a duration, e.g. 50ms or 1.5s"],
     ['db cost 4ms', "Expected a monthly cost, e.g. 400 usd/month, not '4ms'"],
-    ['db fast', "Unexpected 'fast'; expected a rate, reads, writes, shards, size, latency, availability, cost, durable or volatile, consistency, bandwidth, egress or timeout"],
+    ['db fast', "Unexpected 'fast'; expected a rate, reads, writes, shards, size, latency, availability, cost, durable or volatile, consistency, bandwidth, egress, timeout, hit, errors, retries or drain"],
     ['"db" 1k rps', 'Expected a node id and its overrides, e.g. db 20k rps latency 4ms'],
   ])('reports %s', (line, message) => {
     expect(bodyProblems(`capacity {\n  ${line}\n}`)).toEqual([['error', message]]);
@@ -279,7 +279,7 @@ describe('capacity', () => {
   it('reports duplicate lines and lines that override nothing', () => {
     expect(bodyProblems('capacity {\n  db 1k rps\n  db latency 2ms\n}')).toEqual([['error', "Duplicate capacity for 'db' (first on line 24)"]]);
     expect(bodyProblems('capacity {\n  db\n}')).toEqual([
-      ['warning', "Capacity line for 'db' overrides nothing; add a rate, reads, writes, shards, size, latency, availability, cost, durable or volatile, consistency, bandwidth, egress or timeout"],
+      ['warning', "Capacity line for 'db' overrides nothing; add a rate, reads, writes, shards, size, latency, availability, cost, durable or volatile, consistency, bandwidth, egress, timeout, hit, errors, retries or drain"],
     ]);
   });
 });
@@ -427,8 +427,8 @@ describe('test', () => {
   });
 
   it.each([
-    ['"Redirect"', 'Expected calls, every scenario calls, never calls, never waits for, writes, responds, starts at, has scenario or handles failure of after "Redirect"'],
-    ['"Redirect" invokes api', 'Expected calls, every scenario calls, never calls, never waits for, writes, responds, starts at, has scenario or handles failure of after "Redirect"'],
+    ['"Redirect"', 'Expected calls, uses, sends header, every scenario calls, never calls, never waits for, writes, responds, starts at, has scenario or handles failure of after "Redirect"'],
+    ['"Redirect" invokes api', 'Expected calls, uses, sends header, every scenario calls, never calls, never waits for, writes, responds, starts at, has scenario or handles failure of after "Redirect"'],
     ['"Redirect" calls', 'Expected a node id, [Tech] or any <kind>'],
     ['"Redirect" calls "api"', 'Expected a node id, [Tech] or any <kind>, not string "api"'],
     ['"Redirect" calls any', `Expected a kind after any: ${KINDS.join(', ')}, or strong store / eventual store`],
@@ -446,7 +446,7 @@ describe('test', () => {
     ['in "Redirect"', 'Expected a node id, [Tech] or any <kind>'],
     ['api never db', "Expected 'calls' here, e.g. any service never calls any storage"],
     ['"Redirect" every calls api', `Expected 'scenario' here, e.g. "Redirect" every scenario calls any cache`],
-    ['"Redirect" never api', `Expected 'calls' here, e.g. "Redirect" never calls any database`],
+    ['"Redirect" never api', 'Expected calls, uses or sends header here, e.g. "Redirect" never calls any database'],
     ['"Shorten" writes db', `Expected 'before' here, e.g. "Shorten" writes db before responding`],
     ['"Shorten" writes db before', `Expected 'responding' here, e.g. "Shorten" writes db before responding`],
     ['"Shorten" responds', 'Expected a status code or class after responds, e.g. 201 or 4xx'],

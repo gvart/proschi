@@ -300,3 +300,109 @@ test "Reads go to the db" {
     expect(r.out).toContain('✓ Reads go to the db');
   });
 });
+
+describe('proschi analyze with whatifs', () => {
+  const WHATIF_SOURCE = `${SOURCE}
+traffic {
+  "Read" 1k rps
+}
+requirements {
+  p99 "Read" < 100ms
+}
+whatif "Double" {
+  traffic "Read" x1.5
+  api x2
+}
+whatif "Spike" {
+  traffic "Read" 3k rps
+}
+whatif "DB down" {
+  fail db
+}
+`;
+  const whatifFile = join(mkdtempSync(join(tmpdir(), 'proschi-whatif-')), 'whatif.proschi');
+  writeFileSync(whatifFile, WHATIF_SOURCE);
+  const analyzeRun = (...args: string[]) => capture((out, err) => run(['analyze', ...args], out, err) as number);
+
+  it('adds a summary of the whatifs to the capacity table', () => {
+    const r = analyzeRun(whatifFile);
+    expect(r.code).toBe(0);
+    const summary = r.out.slice(r.out.indexOf('What-if '));
+    expect(summary.split('\n').map((l) => l.split(/\s{2,}/).slice(0, 2))).toEqual([
+      ['What-if', 'Requirements'],
+      ['(as designed)', 'all 1 pass'],
+      ['Double', 'all 1 pass'],
+      ['Spike', '1 of 1 fail'],
+      ['DB down', 'all 1 pass'],
+      [''],
+      ['Failing:'],
+      ['', 'Spike: p99 of Read < 100 ms: p99 of Read: api is saturated (3k rps of 2k rps, 150%) (limit 100 ms)'],
+    ]);
+    // Without whatif blocks, nothing is added.
+    expect(analyzeRun(file).out).not.toContain('What-if');
+  });
+
+  it('prints one what-if, or the summary of all', () => {
+    const one = analyzeRun('--whatif', 'Double', whatifFile);
+    expect(one.code).toBe(0);
+    expect(one.out.split('\n')[0]).toBe('What-if "Double": traffic "Read" x1.5, api x2');
+    expect(one.out).toMatch(/^api +service +2 +1.5k\/4k rps 38%/m);
+    expect(one.out).toContain('Requirements hold under "Double".');
+
+    const down = analyzeRun('--whatif', 'DB down', whatifFile);
+    expect(down.code).toBe(0);
+    // A requested what-if that fails its requirements fails the command.
+    expect(analyzeRun('--whatif', 'Spike', whatifFile).code).toBe(1);
+    expect(down.out).toMatch(/^Read +1k rps .* 0%$/m);
+
+    const all = analyzeRun('--whatif', 'all', whatifFile);
+    expect(all.code).toBe(1);
+    expect(all.out.split('\n')[2]).toMatch(/^What-if +Requirements/);
+    expect(all.out).not.toContain('Node ');
+
+    const json = JSON.parse(analyzeRun('--format', 'json', '--whatif', 'all', whatifFile).out);
+    expect(json.whatifs.map((w: { name: string; passed: boolean }) => [w.name, w.passed])).toEqual([
+      ['Double', true],
+      ['Spike', false],
+      ['DB down', true],
+    ]);
+    expect(json.whatifs[0].headline).toEqual({ p99Ms: expect.any(Number), availability: expect.any(Number), costUsd: 600 });
+  });
+
+  it('sweeps a use case: per step, where nodes saturate, and the highest passing rate', () => {
+    const r = analyzeRun('--sweep', 'Read', '500..5k', '--steps', '4', whatifFile);
+    expect(r.code).toBe(0);
+    const lines = r.out.split('\n');
+    expect(lines[0]).toMatch(/^Sweep of "Read" from 500 rps to 5k rps \(/);
+    expect(lines.slice(2, 7).map((l) => l.split(/\s{2,}/))).toEqual([
+      ['Traffic', 'Worst p99', 'Availability', 'Cost/month', 'Requirements', 'Saturated'],
+      ['500 rps', '58 ms', '99.45%', '$500', 'pass', '-'],
+      ['2k rps', '920 ms', '99.45%', '$500', 'FAIL', 'api'],
+      ['3.5k rps', '922 ms', '99.45%', '$500', 'FAIL', 'api'],
+      ['5k rps', '925 ms', '99.45%', '$500', 'FAIL', 'api'],
+    ]);
+    expect(r.out).toContain('Saturates at:\n  api: 2k rps');
+    expect(r.out).toMatch(/Requirements hold up to 1\.\d+k rps; past it: p99 of Read < 100 ms/);
+
+    const under = analyzeRun('--sweep', 'Read', '500..5k', '--whatif', 'Double', whatifFile);
+    expect(under.out.split('\n')[0]).toContain('under what-if "Double"');
+    const json = JSON.parse(analyzeRun('--format', 'json', '--sweep', 'Read', '1k rps..2k rps', whatifFile).out);
+    expect(json.sweep).toMatchObject({ useCase: 'Read', from: 1000, to: 2000 });
+    expect(json.sweep.steps).toHaveLength(10);
+  });
+
+  it('rejects bad what-if and sweep usage', () => {
+    const missing = analyzeRun('--whatif', 'Nope', whatifFile);
+    expect(missing.code).toBe(2);
+    expect(missing.err).toBe('No what-if named "Nope"; the file has "Double", "Spike", "DB down"');
+    expect(analyzeRun('--whatif', 'Nope', file).err).toContain('the file has no whatif blocks');
+    expect(analyzeRun('--sweep', 'Nope', '1k..2k', whatifFile)).toMatchObject({ code: 2, err: 'No use case named "Nope"' });
+    expect(analyzeRun('--sweep', 'Read', '2k..1k', whatifFile)).toMatchObject({ code: 2, err: 'The range 2k..1k must go up' });
+    expect(analyzeRun('--sweep', 'Read', '2ms..5ms', whatifFile).err).toContain('Expected a range of rates');
+    expect(analyzeRun('--sweep', 'Read', whatifFile).code).toBe(2);
+    expect(analyzeRun('--steps', '3', whatifFile).code).toBe(2);
+    expect(analyzeRun('--sweep', 'Read', '1k..2k', '--steps', '1', whatifFile).code).toBe(2);
+    expect(analyzeRun('--sweep', 'Read', '1k..2k', '--whatif', 'all', whatifFile).code).toBe(2);
+    expect(analyzeRun('--whatif').code).toBe(2);
+  });
+});

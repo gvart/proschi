@@ -6,8 +6,8 @@
 # Writes update the caller's follower only: every other follower keeps serving the old list until it expires.
 import "problem.proschi"
 
-followers "TAO Followers" [Cache] x16 @tao "Answer the web tier; forward misses and writes to the shard's leader"
-leaders   "TAO Leaders"   [Cache] x2 @tao "One per shard: the only tier that reads and writes MySQL"
+followers "TAO Followers" [TAO] x16 @tao "Answer the web tier; forward misses and writes to the shard's leader"
+leaders   "TAO Leaders"   [TAO] x2 @tao "One per shard: the only tier that reads and writes MySQL"
 
 capacity {
   db shards 3

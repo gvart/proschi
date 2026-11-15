@@ -18,6 +18,7 @@ test "Limits are checked before the Orders API" {
   "Call API" has scenario "Allowed"
   "Call API" has scenario "Limited"
   "Call API" calls any cache before orders
+  "Call API" scenario "Allowed" calls orders with GET /orders
 }
 
 test "Rejected calls never reach the Orders API" {

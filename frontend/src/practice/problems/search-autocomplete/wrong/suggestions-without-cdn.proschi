@@ -70,9 +70,9 @@ usecase "Suggest" "Top ten completions from the index" {
 usecase "Search" "Run a submitted query and log it" {
   user    -> lb       : GET /search?q=iphone+case
   lb      -> api      : GET /search?q=iphone+case
-  api     -> search   : match "iphone case"
+  api     -> search   : _search match "iphone case"
   search --> api      : hits
-  api    ->> querylog : Query "iphone case"
+  api    ->> querylog : PUBLISH Query "iphone case"
   api    --> lb       : 200 {"results": []}
   lb     --> user     : 200 {"results": []}
 }

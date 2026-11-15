@@ -35,7 +35,7 @@ The tests check:
 
 - Page-cache hits never call a service or database, and the edge is called before any service.
 - The `"Queued"` scenario exists, never calls a service or database, and answers `429`.
-- Checkout never calls an eventually consistent store (a cache or Redis), `"Order placed"` writes the pod before answering `201`, and `"Sold out"` asks the pod and answers `409`.
+- Checkout never calls an eventually consistent store (a cache or Redis), `"Order placed"` runs an `UPDATE` and an `INSERT` on the pod before answering `201`, and `"Sold out"` runs the `UPDATE` and answers `409`.
 
 This is the sibling of Ticket Booking with one big difference: buyers do not pick a seat. Everybody wants the same thing, which turns a set of rows into one hot counter and the crowd into the main enemy.
 

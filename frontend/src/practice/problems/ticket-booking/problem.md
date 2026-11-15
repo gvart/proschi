@@ -3,6 +3,8 @@ title: Ticket Booking without Double-Booking
 summary: The database decides holds; the cache only shows seat maps.
 difficulty: hard
 tags: [consistency, concurrency, caching, sharding, external-api]
+version: 2
+strict: true
 hints:
   - Two fans can read "free" from the seat map cache at the same moment. Which store can decide atomically, and consistently, that only one of them wins? Keep every eventually consistent store off the hold path.
   - "Make the hold a single conditional write: UPDATE the seat only WHERE it is free or its hold has expired. One row updated means held, zero rows means taken. Expiry is then just a timestamp in the row."

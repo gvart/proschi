@@ -1,0 +1,81 @@
+# expect-fail: Blocked riders never reach a backend
+# mistake: Letting each backend service check the ban list
+# explain: A blocked rider's call is routed to the pricing service before anyone looks at the ban list, so abusive traffic still loads the backends, and every service must remember to check it.
+# explain: Check bans in the gateway's middleware, next to the session, and answer 403 there without routing the call.
+# lesson: middleware-that-short-circuits
+# cards: api-gateway-scope, load-shedding, authn-vs-authz
+# The gateway routes every authenticated call; the pricing service reads the ban list and answers 403 itself.
+import "problem.proschi"
+
+lb       "Load Balancer" [AWS Load Balancer] x2
+gateway  "Edge Gateway"  [API Gateway]       x7
+sessions "Edge Cache"    [Redis]             x2
+
+rider   -> lb       : HTTPS
+lb      -> gateway  : HTTP
+gateway -> sessions : RESP
+gateway -> auth     : Thrift
+gateway -> pricing  : Thrift
+gateway -> trips    : Thrift
+gateway -> users    : Thrift
+pricing -> sessions : RESP
+
+usecase "Get fare estimate" {
+  rider     -> lb       : GET /v1/fare-estimate
+  lb        -> gateway  : GET /v1/fare-estimate
+  gateway   -> sessions : GET session:{token}
+
+  alt "Session cached" {
+    gateway  -> pricing : EstimateFare(pickup, dropoff)
+    gateway --> lb      : 200 fare
+    lb      --> rider   : 200 fare
+  } alt "Session not cached" {
+    gateway  -> auth     : ValidateToken(token)
+    gateway  -> sessions : SET session:{token} EX 300
+    gateway  -> pricing  : EstimateFare(pickup, dropoff)
+    gateway --> lb       : 200 fare
+    lb      --> rider    : 200 fare
+  } alt "Blocked" {
+    gateway  -> pricing  : EstimateFare(pickup, dropoff)
+    pricing  -> sessions : GET ban:{user}
+    pricing --> gateway  : 403 blocked
+    gateway --> lb       : 403 blocked
+    lb      --> rider    : 403 blocked
+  }
+}
+
+usecase "Request trip" {
+  rider     -> lb       : POST /v1/trips
+  lb        -> gateway  : POST /v1/trips
+  gateway   -> sessions : GET session:{token}
+
+  alt "Session cached" {
+    gateway  -> trips : CreateTrip(user 42, pickup, dropoff)
+    gateway --> lb    : 201 trip 9001
+    lb      --> rider : 201 trip 9001
+  } alt "Session not cached" {
+    gateway  -> auth     : ValidateToken(token)
+    gateway  -> sessions : SET session:{token} EX 300
+    gateway  -> trips    : CreateTrip(user 42, pickup, dropoff)
+    gateway --> lb       : 201 trip 9001
+    lb      --> rider    : 201 trip 9001
+  }
+}
+
+usecase "Get rider profile" {
+  rider     -> lb       : GET /v1/me
+  lb        -> gateway  : GET /v1/me
+  gateway   -> sessions : GET session:{token}
+
+  alt "Session cached" {
+    gateway  -> users : GetProfile(user 42)
+    gateway --> lb    : 200 profile
+    lb      --> rider : 200 profile
+  } alt "Session not cached" {
+    gateway  -> auth     : ValidateToken(token)
+    gateway  -> sessions : SET session:{token} EX 300
+    gateway  -> users    : GetProfile(user 42)
+    gateway --> lb       : 200 profile
+    lb      --> rider    : 200 profile
+  }
+}

@@ -1,0 +1,59 @@
+import "problem.proschi"
+
+replicas "MySQL Replicas" [MySQL] x5 @data "Read-only copies of the primary, kept up to date by asynchronous replication"
+
+app     -> proxy    : MySQL protocol
+proxy   -> primary  : writes and time-sensitive reads
+proxy   -> replicas : reads that tolerate lag
+primary -> replicas : binlog replication
+
+entity Product in primary "Written on the primary, read from the replicas" {
+  id      uuid key
+  shop_id uuid index
+  title   string
+  price   int
+}
+entity Order in primary "Written at checkout; read back from the primary right after" {
+  id         uuid key
+  shop_id    uuid index
+  total      int
+  status     string
+  created_at time
+}
+
+decision "Read replicas for the catalog" {
+  because "60k reads a second against 3k writes: the writes fit on one primary at 60%, so only read capacity is missing, and a replica adds a full server's worth of it without any change to the data model"
+  rejected "Send every read to the primary" "A primary and its standby serve about 40k reads a second; the catalog alone needs 60k"
+  rejected "Shard the primary" "Four primaries when the writes need one, each with its own standby, and every query must now name its shard"
+}
+decision "Five replicas" {
+  because "60k reads at 20k per replica need three at full load; four run at 75%, and five keep the pool at 75% after losing one"
+  rejected "Four replicas" "Losing one leaves three at 100%: the pool saturates during the very failure it should absorb"
+  rejected "Six or more" "More headroom than a single failure needs, and over the budget"
+}
+decision "Fresh reads go to the primary" {
+  because "Replicas apply the primary's changes asynchronously and can be seconds behind; the order status page opened right after checkout must find the order"
+  rejected "Read the order from a replica" "If the replica has not applied the INSERT yet, the shopper is told the order does not exist"
+}
+decision "Route in ProxySQL" because "The app sends every query to the proxy, which picks a server from a group of interchangeable ones; adding or removing a replica changes the proxy's configuration, not the application"
+
+usecase "Read catalog" "A storefront page reads products; a few seconds of lag is fine" {
+  app       -> proxy    : SELECT products WHERE shop_id = $1
+  proxy     -> replicas : SELECT products WHERE shop_id = $1
+  replicas --> proxy    : 40 rows
+  proxy    --> app      : 40 rows
+}
+
+usecase "Place order" "Checkout writes the order to the primary" {
+  app      -> proxy   : INSERT order
+  proxy    -> primary : INSERT order
+  primary --> proxy   : OK
+  proxy   --> app     : OK
+}
+
+usecase "Check order" "The order status page must show the order just placed" {
+  app      -> proxy   : SELECT order WHERE id = $1
+  proxy    -> primary : SELECT order WHERE id = $1
+  primary --> proxy   : 1 row
+  proxy   --> app     : 1 row
+}

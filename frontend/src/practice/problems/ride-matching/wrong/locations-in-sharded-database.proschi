@@ -55,7 +55,7 @@ decision "The trip row is the driver's lock" {
 }
 
 usecase "Update location" "A driver's app reports where it is" {
-  driver   -> lb      : location {"lat": 52.52, "lng": 13.40, "heading": 90}
+  driver   -> lb      : MESSAGE location {"lat": 52.52, "lng": 13.40, "heading": 90}
   lb       -> gateway : location
   gateway  -> trips   : UPDATE drivers SET lat, lng
   trips   --> gateway : ok
@@ -72,7 +72,7 @@ usecase "Request ride" "Match a rider with the nearest free driver" {
     geo     --> match   : [d7, d12]
     match    -> trips   : INSERT Trip driver=d7
     trips   --> match   : ok
-    match   ->> offers  : RideOffered d7
+    match   ->> offers  : PUBLISH RideOffered d7
     offers  ->> gateway : RideOffered d7
     gateway ->> driver  : ride offer
     match   --> lb      : 201 {"tripId": "t91", "driverId": "d7", "etaMinutes": 4}

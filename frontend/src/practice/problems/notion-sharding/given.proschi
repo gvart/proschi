@@ -30,6 +30,6 @@ test "Queries go through PgBouncer" {
 }
 
 test "Blocks stay in Postgres" {
-  "Load page" calls [PostgreSQL]
+  "Load page" uses SELECT on [PostgreSQL]
   "Edit block" writes [PostgreSQL] before responding
 }

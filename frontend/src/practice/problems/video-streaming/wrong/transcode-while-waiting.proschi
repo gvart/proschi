@@ -64,17 +64,17 @@ decision "Serve segments from a CDN with S3 as origin" {
 decision "Metadata in PostgreSQL, cached in Redis" because "Video pages are thousands of times more frequent than uploads and mostly for popular videos; the cache keeps page loads fast and the database small"
 
 usecase "Upload video" "A creator registers a video and uploads the file straight to storage" {
-  creator -> lb      : POST /videos json {"title": "My trip", "size": 2000000000}
-  lb      -> api     : POST /videos
-  api     -> db      : INSERT video v-9 status uploading
-  db     --> api     : ok
-  api     -> transcoder : transcode v-9
-  transcoder --> api : renditions
-  api    --> lb      : 201 {"videoId": "v-9", "uploadUrl": "https://bucket.s3.amazonaws.com/originals/v-9.mp4?X-Amz-Signature=…"}
-  lb     --> creator : 201 {"videoId": "v-9", "uploadUrl": "https://bucket.s3.amazonaws.com/originals/v-9.mp4?X-Amz-Signature=…"}
-  creator -> bucket  : ~2GB PUT /originals/v-9.mp4
-  bucket ->> jobs    : ObjectCreated {"key": "originals/v-9.mp4"}
-  bucket --> creator : 200
+  creator     -> lb         : POST /videos json {"title": "My trip", "size": 2000000000}
+  lb          -> api        : POST /videos
+  api         -> db         : INSERT video v-9 status uploading
+  db         --> api        : ok
+  api         -> transcoder : transcode v-9
+  transcoder --> api        : renditions
+  api        --> lb         : 201 {"videoId": "v-9", "uploadUrl": "https://bucket.s3.amazonaws.com/originals/v-9.mp4?X-Amz-Signature=…"}
+  lb         --> creator    : 201 {"videoId": "v-9", "uploadUrl": "https://bucket.s3.amazonaws.com/originals/v-9.mp4?X-Amz-Signature=…"}
+  creator     -> bucket     : ~2GB PUT /originals/v-9.mp4
+  bucket     ->> jobs       : SEND ObjectCreated {"key": "originals/v-9.mp4"}
+  bucket     --> creator    : 200
 }
 
 usecase "Transcode video" "The queue hands a transcoder one original; the video is ready once its renditions are stored" {

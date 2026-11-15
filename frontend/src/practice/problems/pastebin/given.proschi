@@ -19,7 +19,7 @@ requirements {
 
 test "Paste text lives in object storage" {
   "Create paste" writes any storage before responding
-  "Read paste" scenario "Not cached" calls any storage
+  "Read paste" scenario "Not cached" uses GET on any storage
 }
 
 test "Metadata lives in a database" {
@@ -28,13 +28,14 @@ test "Metadata lives in a database" {
 }
 
 test "Popular pastes are served by the CDN" {
+  "Read paste" calls any cdn with GET /{id}
   "Read paste" scenario "Cached" calls any cdn
   "Read paste" scenario "Cached" never calls any service or any database or any storage
 }
 
 test "Expiry is checked before the text is fetched" {
   "Read paste" calls any database before any storage
-  "Read paste" scenario "Not cached" calls any storage after any database
+  "Read paste" scenario "Not cached" uses GET on any storage after any database
   "Read paste" scenario "Expired" never calls any storage
   "Read paste" scenario "Expired" responds 404
 }

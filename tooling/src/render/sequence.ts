@@ -1,17 +1,34 @@
 import { buildSequence, sectionedItems, type Diagram, type DiagramScenario, type DiagramUseCase, type SequenceMessage } from '../proschi';
+import { currentStepsOf, isErrorStep } from '../terminal/playback';
 import { techIcon, typeColor } from './icons';
-import { card, esc, fit, marker, r, svgDocument, text, textWidth } from './svg';
-import { SKETCH, type RenderTheme } from './theme';
+import { card, currentRenderTheme, esc, fit, marker, r, svgDocument, text, textWidth, withTheme } from './svg';
+import type { RenderTheme } from './theme';
 
 /**
  * One scenario as an SVG sequence diagram: a header box and dashed lifeline
  * per participant, numbered request arrows, dashed responses with their
  * status codes, `par` regions, titled frames for `section` blocks, and
  * error replies and failed calls in red,
- * in the render theme's style (theme.ts): `sketch`, the canvas's ink cards
- * with hard shadows and pink step numbers, or `classic`, rounded grey cards
- * with type-coloured icon tiles and blue requests and step numbers.
+ * in the render theme's style (theme.ts): `sketch-light` / `sketch-dark`, the
+ * canvas's ink cards with hard shadows and pink step numbers, or `classic`,
+ * rounded grey cards with type-coloured icon tiles and blue requests and step
+ * numbers. Without `theme`, the theme being drawn in (svg.ts `withTheme`).
+ *
+ * With `play`, one moment of the scenario's playback (the Claude Code
+ * plugin's sequence view): the step at `play.step` (0-based, with the earlier
+ * steps of its `par` group) is drawn heavy in the accent, its participants'
+ * boxes outlined in it (red where the call errs), the steps still to come faded.
  */
+
+/** A moment of playback the sequence is drawn at: the step shown, 0-based in the scenario's steps. */
+export interface SequenceMoment {
+  step: number;
+}
+
+/** How a message is drawn at a moment of playback: the current step's, one played before it, one still to come. */
+type Look = 'lit' | 'past' | 'future' | undefined;
+/** Opacity of the messages still to come while a scenario plays. */
+const FUTURE_OPACITY = 0.35;
 
 const MARGIN = 24;
 const HEADER_HEIGHT = 46;
@@ -45,9 +62,23 @@ export function scenarioTitle(useCase: DiagramUseCase, scenario: DiagramScenario
   return useCase.scenarios.length > 1 ? `${useCase.name} › ${scenario.name}` : useCase.name;
 }
 
-export function renderSequenceSvg(diagram: Diagram, useCase: DiagramUseCase, scenario: DiagramScenario, idPrefix = '', theme: RenderTheme = SKETCH): string {
-  const th = theme;
+export function renderSequenceSvg(diagram: Diagram, useCase: DiagramUseCase, scenario: DiagramScenario, idPrefix = '', theme?: RenderTheme, play?: SequenceMoment): string {
+  const th = theme ?? currentRenderTheme();
+  return withTheme(th, () => drawSequence(diagram, useCase, scenario, idPrefix, th, play));
+}
+
+function drawSequence(diagram: Diagram, useCase: DiagramUseCase, scenario: DiagramScenario, idPrefix: string, th: RenderTheme, play: SequenceMoment | undefined): string {
   const C = th.colors;
+  // Playback: the current step's messages and their participants lit, what comes later faded.
+  const steps: unknown[] = scenario.steps;
+  const current = play ? new Set<unknown>(currentStepsOf(scenario.steps, play.step)) : undefined;
+  const lookOf = (m: SequenceMessage): Look => (!play ? undefined : current!.has(m.step) ? 'lit' : steps.indexOf(m.step) < play.step ? 'past' : 'future');
+  const litNodes = new Map<string, string>();
+  for (const step of current ? currentStepsOf(scenario.steps, play!.step) : []) {
+    const color = isErrorStep(step) ? C.error : C.active;
+    if (!litNodes.has(step.fromServiceId)) litNodes.set(step.fromServiceId, C.active);
+    litNodes.set(step.toServiceId, color);
+  }
   const seq = buildSequence(useCase, scenario, diagram.nodes);
   const participants = seq.participants;
   const index = new Map(participants.map((p, i) => [p.id, i]));
@@ -195,7 +226,7 @@ export function renderSequenceSvg(diagram: Diagram, useCase: DiagramUseCase, sce
       `<g data-participant="${esc(p.id)}">`,
       `<line x1="${r(x)}" y1="${r(headerTop + HEADER_HEIGHT)}" x2="${r(x)}" y2="${r(bottom)}" stroke="${C.lifeline}"${C.lifelineOpacity !== undefined ? ` stroke-opacity="${C.lifelineOpacity}"` : ''} stroke-width="1.5" stroke-dasharray="5 4"/>`,
       // A small ComponentNode: card, icon tile, name and tech stack.
-      card(x - w / 2, headerTop, w, HEADER_HEIGHT, { stroke: 2, theme: th }),
+      card(x - w / 2, headerTop, w, HEADER_HEIGHT, litNodes.has(p.id) ? { stroke: 3, line: litNodes.get(p.id)! } : { stroke: 2 }),
       node
         ? th.iconTile === 'filled'
           ? `<rect x="${r(x - w / 2 + 10)}" y="${r(headerTop + 11)}" width="24" height="24" rx="4" fill="${typeColor(node.type)}"/>`
@@ -216,7 +247,7 @@ export function renderSequenceSvg(diagram: Diagram, useCase: DiagramUseCase, sce
   if (messages.length === 0) body.push(text(MARGIN, headerTop + 16, 'No steps', { fill: C.muted }));
   for (const row of rows) {
     if (row.kind !== 'message') continue;
-    body.push(drawMessage(row.message, xs[index.get(row.message.from)!], xs[index.get(row.message.to)!], row.y, idPrefix, th));
+    body.push(drawMessage(row.message, xs[index.get(row.message.from)!], xs[index.get(row.message.to)!], row.y, idPrefix, th, lookOf(row.message)));
   }
 
   const defs = [
@@ -225,18 +256,30 @@ export function renderSequenceSvg(diagram: Diagram, useCase: DiagramUseCase, sce
     marker(`${idPrefix}reply`, C.line, true),
     marker(`${idPrefix}solid-error`, C.error),
     marker(`${idPrefix}open-error`, C.error, true),
+    ...(play ? [marker(`${idPrefix}solid-lit`, C.active), marker(`${idPrefix}open-lit`, C.active, true)] : []),
   ].join('');
-  return svgDocument(width, height, title, body.filter(Boolean), defs, th);
+  return svgDocument(width, height, title, body.filter(Boolean), defs);
 }
 
-function drawMessage(m: SequenceMessage, x1: number, x2: number, y: number, idPrefix: string, th: RenderTheme): string {
+function drawMessage(m: SequenceMessage, x1: number, x2: number, y: number, idPrefix: string, th: RenderTheme, look: Look): string {
   const C = th.colors;
-  // Requests in ink (sketch) or blue (classic), replies grey and dashed, errors red.
-  const color = m.error ? C.error : m.kind === 'response' ? C.line : C.request;
+  const lit = look === 'lit';
+  // Requests in ink (sketch) or blue (classic), replies grey and dashed, errors red; the step playing in the accent, heavier.
+  const color = m.error ? C.error : lit ? C.active : m.kind === 'response' ? C.line : C.request;
   const dash = m.kind === 'response' ? ' stroke-dasharray="6 4"' : '';
-  const head = m.error ? `${m.kind === 'response' || m.async ? 'open' : 'solid'}-error` : m.kind === 'response' ? 'reply' : m.async ? 'open' : 'solid';
+  const head = m.error
+    ? `${m.kind === 'response' || m.async ? 'open' : 'solid'}-error`
+    : lit
+      ? `${m.kind === 'response' || m.async ? 'open' : 'solid'}-lit`
+      : m.kind === 'response'
+        ? 'reply'
+        : m.async
+          ? 'open'
+          : 'solid';
+  const width = lit ? th.stroke + 1.5 : th.stroke;
   const label = labelText(m);
-  const out = [`<g data-step="${m.number}" data-kind="${m.failed ? 'failed' : m.kind}"${m.error ? ' data-error="true"' : ''}>`];
+  const playing = look ? ` data-play="${look}"${look === 'future' ? ` opacity="${FUTURE_OPACITY}"` : ''}` : '';
+  const out = [`<g data-step="${m.number}" data-kind="${m.failed ? 'failed' : m.kind}"${m.error ? ' data-error="true"' : ''}${playing}>`];
 
   // The label: a number badge for requests, the status code in bold for responses.
   const labelContent = (l: string) => {
@@ -256,20 +299,20 @@ function drawMessage(m: SequenceMessage, x1: number, x2: number, y: number, idPr
       tx += 22;
     }
     if (label.trim()) {
-      out.push(`<text x="${r(tx)}" y="${r(ly)}" font-size="${LABEL_SIZE}" fill="${m.error ? C.error : C.text}">${labelContent(label)}</text>`);
+      out.push(`<text x="${r(tx)}" y="${r(ly)}" font-size="${LABEL_SIZE}"${lit ? ' font-weight="700"' : ''} fill="${m.error ? C.error : C.text}">${labelContent(label)}</text>`);
     }
   };
 
   if (x1 === x2) {
     // A call to itself: a small loop to the right of the lifeline.
     const d = `M${r(x1)},${r(y)} H${r(x1 + 36)} V${r(y + 18)} H${r(x1 + 2)}`;
-    out.push(`<path d="${d}" fill="none" stroke="${color}" stroke-width="${th.stroke}"${dash} marker-end="url(#${idPrefix}${head})"/>`);
+    out.push(`<path d="${d}" fill="none" stroke="${color}" stroke-width="${width}"${dash} marker-end="url(#${idPrefix}${head})"/>`);
     drawLabel(x1 + 44, y + 13);
   } else {
     const dir = Math.sign(x2 - x1);
     const end = m.failed ? x2 - dir * 14 : x2 - dir * 2;
     out.push(
-      `<line x1="${r(x1)}" y1="${r(y)}" x2="${r(end)}" y2="${r(y)}" stroke="${color}" stroke-width="${th.stroke}"${dash}${m.failed ? '' : ` marker-end="url(#${idPrefix}${head})"`}/>`,
+      `<line x1="${r(x1)}" y1="${r(y)}" x2="${r(end)}" y2="${r(y)}" stroke="${color}" stroke-width="${width}"${dash}${m.failed ? '' : ` marker-end="url(#${idPrefix}${head})"`}/>`,
     );
     if (m.failed) {
       // ✕: the request never arrives.

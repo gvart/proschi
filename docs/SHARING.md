@@ -1,3 +1,7 @@
+---
+updated: 2026-11-09
+---
+
 # Sharing and embedding
 
 A diagram in the [editor](https://proschi.app/app/) leaves it three ways,
@@ -110,6 +114,10 @@ editor in a new tab. It has no code editor, so it loads fast.
   (`/embed/?s=Ab3dEf9hIj&theme=dark`, or `/embed/?theme=dark#code=…`).
   Without it, the embed follows the reader's system theme.
 - A `height` of 480 to 600 pixels leaves room to play a use case.
+- On Pro, Settings › Exports & certificate › **Embeds without Proschi
+  branding** leaves **Open in Proschi** out of your short links' embeds (and
+  "· Proschi" out of their title). It applies to every embed of yours at
+  once, and only while your plan has it.
 
 Only `/embed/` may be framed by other sites. Every other page of proschi.app
 refuses it.

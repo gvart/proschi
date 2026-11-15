@@ -21,9 +21,14 @@ object ProschiColors {
     @JvmField val TECH: TextAttributesKey = createTextAttributesKey("PROSCHI_TECH", DefaultLanguageHighlighterColors.METADATA)
     @JvmField val TEAM: TextAttributesKey = createTextAttributesKey("PROSCHI_TEAM", DefaultLanguageHighlighterColors.METADATA)
     @JvmField val TAG: TextAttributesKey = createTextAttributesKey("PROSCHI_TAG", DefaultLanguageHighlighterColors.CONSTANT)
+    @JvmField val CONSTANT: TextAttributesKey = createTextAttributesKey("PROSCHI_CONSTANT", DefaultLanguageHighlighterColors.PARAMETER)
 }
 
-/** The server's token types (tooling/src/server.ts): `variable` node ids, `type` tech stacks, `decorator` teams, `enumMember` legend tags. */
+/**
+ * The server's token types (TOKEN_TYPE in tooling/src/server.ts): `variable` node ids, `type` tech stacks and
+ * component types (the name and parent of a `type` header too), `decorator` teams, `enumMember` legend tags,
+ * `parameter` constants (`${'$'}peak`, `let peak = …`).
+ */
 class ProschiSemanticTokensSupport : LspSemanticTokensSupport() {
     override fun getTextAttributesKey(tokenType: String, modifiers: List<String>): TextAttributesKey? =
         when (tokenType) {
@@ -31,6 +36,7 @@ class ProschiSemanticTokensSupport : LspSemanticTokensSupport() {
             "type" -> ProschiColors.TECH
             "decorator" -> ProschiColors.TEAM
             "enumMember" -> ProschiColors.TAG
+            "parameter" -> ProschiColors.CONSTANT
             else -> super.getTextAttributesKey(tokenType, modifiers)
         }
 }
@@ -48,22 +54,53 @@ class ProschiColorSettingsPage : ColorSettingsPage {
         legend {
           <tag>owned</tag> "Owned by us" green
         }
+        let <const>peak</const> = 2k rps
 
+        abstract type <tech>Ledger</tech> extends <tech>[PostgreSQL]</tech> {
+          op write APPEND latency 2
+        }
+        type <tech>LedgerDb</tech> extends <tech>Ledger</tech> { op read BALANCE }
+
+        <node>web</node> "Shop"      <tech>[Browser]</tech>
         <node>api</node> "Order API" <tech>[REST API]</tech> <team>@orders</team> <tag>.owned</tag>
-        <node>db</node>  "Orders DB" <tech>[PostgreSQL]</tech> <team>@orders</team>
+        <node>db</node>  "Orders DB" <tech>[LedgerDb]</tech> <team>@orders</team>
 
+        <node>web</node> -> <node>api</node> : HTTPS
         <node>api</node> -> <node>db</node> <tag>.owned</tag> : SQL
+
+        usecase "Pay" {
+          <node>web</node>  -> <node>api</node> : POST /charges header Idempotency-Key
+          <node>api</node>  -> <node>db</node>  : APPEND entry
+          <node>api</node> --> <node>web</node> : 201
+        }
+
+        traffic {
+          "Pay" ${'$'}<const>peak</const>
+        }
+
+        test "Every payment appends once" {
+          "Pay" calls <node>api</node> with POST /charges
+          "Pay" sends header Idempotency-Key to <node>api</node>
+          "Pay" uses APPEND on <node>db</node>
+        }
         """.trimIndent()
 
     override fun getAdditionalHighlightingTagToDescriptorMap(): Map<String, TextAttributesKey> =
-        mapOf("node" to ProschiColors.NODE, "tech" to ProschiColors.TECH, "team" to ProschiColors.TEAM, "tag" to ProschiColors.TAG)
+        mapOf(
+            "node" to ProschiColors.NODE,
+            "tech" to ProschiColors.TECH,
+            "team" to ProschiColors.TEAM,
+            "tag" to ProschiColors.TAG,
+            "const" to ProschiColors.CONSTANT,
+        )
 
     override fun getAttributeDescriptors(): Array<AttributesDescriptor> =
         arrayOf(
             AttributesDescriptor("Node id", ProschiColors.NODE),
-            AttributesDescriptor("Tech stack", ProschiColors.TECH),
+            AttributesDescriptor("Tech stack or component type", ProschiColors.TECH),
             AttributesDescriptor("Team", ProschiColors.TEAM),
             AttributesDescriptor("Legend tag", ProschiColors.TAG),
+            AttributesDescriptor("Constant", ProschiColors.CONSTANT),
         )
 
     override fun getColorDescriptors(): Array<ColorDescriptor> = ColorDescriptor.EMPTY_ARRAY

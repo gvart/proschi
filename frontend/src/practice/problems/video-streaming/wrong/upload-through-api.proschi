@@ -72,7 +72,7 @@ usecase "Upload video" "A creator registers a video and uploads the file straigh
   db     --> api     : ok
   api    --> lb      : 201 {"videoId": "v-9", "uploadUrl": "https://bucket.s3.amazonaws.com/originals/v-9.mp4?X-Amz-Signature=…"}
   lb     --> creator : 201 {"videoId": "v-9", "uploadUrl": "https://bucket.s3.amazonaws.com/originals/v-9.mp4?X-Amz-Signature=…"}
-  api ->> jobs : ObjectCreated {"key": "originals/v-9.mp4"}
+  api    ->> jobs    : SEND ObjectCreated {"key": "originals/v-9.mp4"}
 }
 
 usecase "Transcode video" "The queue hands a transcoder one original; the video is ready once its renditions are stored" {

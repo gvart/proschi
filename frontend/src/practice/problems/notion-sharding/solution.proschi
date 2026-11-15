@@ -42,8 +42,8 @@ decision "Route in the application, pool in PgBouncer" because "The API computes
 usecase "Load page" "A user opens a page; its blocks are read from the workspace's shard" {
   web        -> pgbouncer : SELECT blocks WHERE space_id = $1 AND parent_id = $2
   pgbouncer  -> db        : SELECT blocks WHERE space_id = $1 AND parent_id = $2
-  db        --> pgbouncer : 120 rows
-  pgbouncer --> web       : 120 rows
+  db        --> pgbouncer : the 120 rows
+  pgbouncer --> web       : the 120 rows
 }
 
 usecase "Edit block" "A user types into a block; the change is saved to the workspace's shard" {

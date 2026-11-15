@@ -98,9 +98,81 @@ export const OG_WIDTH = 1200;
 export const OG_HEIGHT = 630;
 
 /** A public profile's card, as PNG bytes. */
-export async function renderProfileCard(card: ProfileCard): Promise<Uint8Array> {
+export function renderProfileCard(card: ProfileCard): Promise<Uint8Array> {
+  return render(profileTree(card));
+}
+
+/** What a mastery certificate's card shows (src/certificates.ts): stored progress only. */
+export interface CertificateCard {
+  displayName: string;
+  level: number;
+  solved: number;
+  problems: number;
+  readiness: number;
+  /** The strongest skills, at most four, best first. */
+  skills: { title: string; mastery: number }[];
+  /** "November 2026". */
+  issued: string;
+  /** Where it can be checked, without the scheme: "proschi.app/c/<id>". */
+  address: string;
+}
+
+const skillBar = (skill: { title: string; mastery: number }): Node =>
+  h(
+    'div',
+    { display: 'flex', flexDirection: 'column', width: '48%', marginTop: 18 },
+    h(
+      'div',
+      { display: 'flex', justifyContent: 'space-between', fontSize: 26, color: INK },
+      h('div', { display: 'flex' }, clip(skill.title, 26)),
+      h('div', { display: 'flex', fontWeight: 800 }, `${Math.round(skill.mastery * 100)}%`),
+    ),
+    h(
+      'div',
+      { display: 'flex', height: 14, marginTop: 8, border: `2px solid ${RULE}`, background: '#FFFDF8' },
+      h('div', { display: 'flex', width: `${Math.max(0, Math.min(100, Math.round(skill.mastery * 100)))}%`, background: ACCENT }, ''),
+    ),
+  );
+
+function certificateTree(card: CertificateCard): Node {
+  return h(
+    'div',
+    { display: 'flex', flexDirection: 'column', width: '100%', height: '100%', background: PAPER, padding: '48px 64px', fontFamily: 'Archivo, "Archivo Ext"', border: `12px solid ${INK}` },
+    h(
+      'div',
+      { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
+      h('div', { display: 'flex', fontSize: 26, color: ACCENT, fontWeight: 800, letterSpacing: 3, textTransform: 'uppercase' }, 'Proschi · Mastery certificate'),
+      h(
+        'div',
+        { display: 'flex', alignItems: 'baseline', padding: '6px 18px', border: `2px solid ${RULE}`, background: '#FFFDF8' },
+        h('div', { display: 'flex', fontSize: 22, color: MUTED, textTransform: 'uppercase', letterSpacing: 2, marginRight: 10 }, 'Level'),
+        h('div', { display: 'flex', fontSize: 44, fontWeight: 800, color: INK, lineHeight: 1 }, `${card.level}`),
+      ),
+    ),
+    h('div', { display: 'flex', fontSize: 76, fontWeight: 800, color: INK, marginTop: 24, lineHeight: 1.05 }, clip(card.displayName)),
+    h(
+      'div',
+      { display: 'flex', fontSize: 30, color: MUTED, marginTop: 14 },
+      `System design: ${card.solved} of ${card.problems} problems solved · ${Math.round(card.readiness * 100)}% interview ready`,
+    ),
+    h('div', { display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', marginTop: 12 }, ...card.skills.slice(0, 4).map(skillBar)),
+    h(
+      'div',
+      { display: 'flex', justifyContent: 'space-between', marginTop: 'auto', fontSize: 22, color: MUTED },
+      h('div', { display: 'flex' }, `Issued ${card.issued}`),
+      h('div', { display: 'flex' }, `Verify at ${card.address}`),
+    ),
+  );
+}
+
+/** A mastery certificate's card, as PNG bytes. */
+export function renderCertificateCard(card: CertificateCard): Promise<Uint8Array> {
+  return render(certificateTree(card));
+}
+
+async function render(tree: Node): Promise<Uint8Array> {
   await start();
-  const svg = await satori(profileTree(card) as never, {
+  const svg = await satori(tree as never, {
     width: OG_WIDTH,
     height: OG_HEIGHT,
     fonts: [

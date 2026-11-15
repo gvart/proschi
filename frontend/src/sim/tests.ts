@@ -1,4 +1,4 @@
-import type { Assertion, Diagram, DiagramScenario, DiagramStep, DiagramUseCase, FlowTest, Percentile, Requirement, Selector, SourceLoc } from '../dsl/types';
+import type { Assertion, CostScope, Diagram, DiagramScenario, DiagramStep, DiagramUseCase, FlowTest, Percentile, Requirement, Selector, SourceLoc, StepMatch } from '../dsl/types';
 import { editDistance } from '../catalog/componentCatalog';
 import { requestLabel } from '../dsl/sequence';
 import { accessIn } from './access';
@@ -14,7 +14,7 @@ import {
   mainWrites,
   profilesOf,
   replicasOf,
-  resolveTraffic,
+  trafficFor,
   bandwidthBound,
   usageText,
   writeBound,
@@ -25,6 +25,7 @@ import {
   type UseCaseAnalysis,
 } from './analyze';
 import {
+  callText,
   criticalPath,
   fallbacksFor,
   findScenario,
@@ -35,9 +36,11 @@ import {
   requestOrder,
   selectNodes,
   selectorText,
+  stepMatches,
   writesBeforeResponse,
 } from './flow';
-import { formatAvailability, formatMs, formatPercent, formatRps, formatUsd } from './format';
+import { scopedCost } from './cost';
+import { formatAvailability, formatCount, formatDuration, formatMs, formatPercent, formatRps, formatUsd } from './format';
 import type { Profile } from './profiles';
 
 /**
@@ -70,16 +73,20 @@ export interface AssertionResult {
   loc: SourceLoc;
 }
 
+/** A change to the source that fixes a failed check: `x3` on a node, or `shards 4` in its capacity line. */
+export type TestFix = { kind: 'replicas'; node: string; replicas: number } | { kind: 'shards'; node: string; shards: number };
+
 interface Check {
   passed: boolean;
   message: string;
   hint?: string;
+  fix?: TestFix;
   /** Set when the check could not run because a use case or scenario is missing; a test reports each once (§7.1). */
   missing?: string;
 }
 
 const pass = (message: string): Check => ({ passed: true, message });
-const fail = (message: string, hint?: string): Check => ({ passed: false, message, hint });
+const fail = (message: string, hint?: string, fix?: TestFix): Check => ({ passed: false, message, hint, ...(fix ? { fix } : {}) });
 
 /** Context shared by the checks of one run. */
 interface Run {
@@ -101,7 +108,7 @@ function makeRun(diagram: Diagram, analysis: Analysis, options: AnalyzeOptions =
     analysis,
     nodes: new Map(analysis.nodes.map((n) => [n.id, n])),
     useCases: new Map(analysis.useCases.map((u) => [u.id, u])),
-    shares: new Map([...resolveTraffic(diagram)].map(([id, t]) => [id, t.shares])),
+    shares: new Map([...trafficFor(diagram, options)].map(([id, t]) => [id, t.shares])),
     profiles: profilesOf(diagram),
     isWrite: (step) => access(step) === 'write',
     options,
@@ -123,6 +130,19 @@ export function runTests(diagram: Diagram, analysis: Analysis = analyze(diagram)
     results.push({ id: n === 1 ? `test:${test.name}` : `test:${test.name}#${n}`, name: test.name, category: 'flow', ...flowTest(run, test), loc: test.loc });
   }
   return results.map(({ hint, ...r }) => (r.passed || !hint ? r : { ...r, hint }));
+}
+
+/**
+ * The source change each failed requirement's hint suggests, when it is one
+ * (`x2` on a node, `shards N` in its capacity line), with the result id
+ * runTests gives it; editors offer these as quick fixes.
+ */
+export function requirementFixes(diagram: Diagram, analysis: Analysis = analyze(diagram), options: AnalyzeOptions = {}): { id: string; loc: SourceLoc; fix: TestFix }[] {
+  const run = makeRun(diagram, analysis, options);
+  return (diagram.requirements ?? []).flatMap((r, i) => {
+    const { passed, fix } = requirement(run, r);
+    return !passed && fix ? [{ id: `req:${i + 1}`, loc: r.loc, fix }] : [];
+  });
 }
 
 /**
@@ -160,6 +180,7 @@ const CATEGORY: Record<Requirement['kind'], TestResult['category']> = {
   durable: 'durability',
   survive: 'resilience',
   cost: 'cost',
+  lag: 'latency',
 };
 
 const percentileName = (q: Percentile) => PERCENTILE_KEYS[q];
@@ -186,7 +207,9 @@ export function requirementName(r: Requirement): string {
     case 'survive':
       return r.target === 'any' ? 'survive any node failure' : `survive failure of ${selectorText(r.target)}`;
     case 'cost':
-      return `cost ≤ ${formatUsd(r.maxUsdPerMonth)}`;
+      return `cost${r.scope ? ` of ${scopeText(r.scope)}` : ''} ≤ ${formatUsd(r.maxUsdPerMonth)}`;
+    case 'lag':
+      return `lag of ${r.useCase} < ${formatDuration(r.maxMs)}`;
   }
 }
 
@@ -202,7 +225,9 @@ function requirement(run: Run, r: Requirement): Check {
     case 'survive':
       return survive(run, r.target);
     case 'cost':
-      return cost(run, r.maxUsdPerMonth);
+      return r.scope ? budget(run, r.scope, r.maxUsdPerMonth) : cost(run, r.maxUsdPerMonth);
+    case 'lag':
+      return lag(run, r.useCase, r.maxMs);
   }
 }
 
@@ -223,7 +248,7 @@ function overUseCases(run: Run, name: string | undefined, check: (u: DiagramUseC
   if (failed.length === 0) {
     return pass(checks.length === 1 ? checks[0].message : `All ${checks.length} use cases hold; ${checks.map((c) => c.value).join(', ')} ${limit}`);
   }
-  return fail(failed.length === 1 ? failed[0].message : `${failed.map((c) => c.value ?? c.message).join('; ')} ${limit}`, failed[0].hint);
+  return fail(failed.length === 1 ? failed[0].message : `${failed.map((c) => c.value ?? c.message).join('; ')} ${limit}`, failed[0].hint, failed[0].fix);
 }
 
 /**
@@ -243,7 +268,8 @@ function saturatedOn(run: Run, ids: Iterable<string>, value: (n: NodeAnalysis) =
   const n = [...new Set(ids)].map((id) => run.nodes.get(id)).find((x): x is NodeAnalysis => !!x?.saturated);
   if (!n) return undefined;
   const v = value(n);
-  return { ...fail(`${v} (limit ${formatMs(maxMs)})`, saturationHint(run, n)), value: v };
+  const { hint, fix } = saturationLever(run, n);
+  return { ...fail(`${v} (limit ${formatMs(maxMs)})`, hint, fix), value: v };
 }
 
 function latency(run: Run, u: DiagramUseCase, q: Percentile, maxMs: number): Check & { value?: string } {
@@ -279,23 +305,27 @@ function scenarioLatency(run: Run, useCase: string, scenario: string, q: Percent
   return ms < maxMs ? pass(message) : fail(message, latencyHint(run, sc.u, s));
 }
 
-function saturationHint(run: Run, n: NodeAnalysis): string {
+function saturationLever(run: Run, n: NodeAnalysis): { hint: string; fix: TestFix } {
   const label = nodeLabel(run.diagram, n.id);
   if (bandwidthBound(n)) {
     const replicas = Math.ceil((n.bandwidthUtilization * n.replicas) / HOT);
-    return `${label} moves more payload bytes than its network carries. Send the bytes around it (clients upload to and download from object storage or a CDN directly, with presigned URLs), or add replicas: x${replicas} keeps its bandwidth under ${formatPercent(HOT)}`;
+    const hint = `${label} moves more payload bytes than its network carries. Send the bytes around it (clients upload to and download from object storage or a CDN directly, with presigned URLs), or add replicas: x${replicas} keeps its bandwidth under ${formatPercent(HOT)}`;
+    return { hint, fix: { kind: 'replicas', node: n.id, replicas } };
   }
   if (writeBound(n)) {
     const perShard = n.writeCapacityRps / n.shards;
     const shards = Math.ceil(n.writeLoadRps / (perShard * HOT));
-    return (
+    const hint =
       `Writes to ${label} need ${formatRps(n.writeLoadRps)} and each primary takes ${formatRps(perShard)}; read replicas do not add write capacity. ` +
-      `Add shards (capacity { ${n.id} shards ${shards} } keeps writes under ${formatPercent(HOT)}), move the data to a partitioned store (DynamoDB, Cassandra), or batch writes through a queue`
-    );
+      `Add shards (capacity { ${n.id} shards ${shards} } keeps writes under ${formatPercent(HOT)}), move the data to a partitioned store (DynamoDB, Cassandra), or batch writes through a queue`;
+    return { hint, fix: { kind: 'shards', node: n.id, shards } };
   }
   const rho = n.writeScaling === 'shards' ? n.readUtilization : n.utilization;
   const replicas = Math.ceil((rho * n.replicas) / HOT);
-  return `Add replicas to ${label}: x${replicas} keeps it under ${formatPercent(HOT)}, or take load off it (a cache in front, or async work)`;
+  return {
+    hint: `Add replicas to ${label}: x${replicas} keeps it under ${formatPercent(HOT)}, or take load off it (a cache in front, or async work)`,
+    fix: { kind: 'replicas', node: n.id, replicas },
+  };
 }
 
 /** Names the slowest hop of the scenario and the lever for it. */
@@ -334,17 +364,19 @@ function availability(run: Run, u: DiagramUseCase, minPercent: number): Check & 
     ? 'Add replicas to the nodes on the main path, or fallback scenarios that complete without them'
     : primaryBound
       ? `The weakest link is writing to ${nodeLabel(run.diagram, weakest.id)}: writes need its primary, ${formatAvailability(weakest.writeAvailability)} with failover${weakest.replicas < 2 ? ' (none without a second replica; add one)' : ` (a replica takes over, but about ${formatPercent(FAILOVER_SHARE)} of each outage is lost)`}. Move the writes to a partitioned store, or add a fallback scenario that calls it with -x and still completes`
-      : `The weakest link is ${nodeLabel(run.diagram, weakest.id)} at ${formatAvailability(effective(weakest))}: add a replica (x${weakest.replicas + 1}) or a fallback scenario that calls it with -x and still completes`;
+      : weakest.failed
+        ? `${nodeLabel(run.diagram, weakest.id)} is down in this what-if: add a fallback scenario in "${u.name}" that calls ${weakest.id} with -x and still completes`
+        : `The weakest link is ${nodeLabel(run.diagram, weakest.id)} at ${formatAvailability(effective(weakest))}: add a replica (x${weakest.replicas + 1}) or a fallback scenario that calls it with -x and still completes`;
   return { ...fail(message, hint), value };
 }
 
 type WriteGap = { kind: 'async' | 'after' | 'read'; step: DiagramStep } | { kind: 'none' };
 
 /** Why a scenario does not write to an accepted node synchronously before responding, with the step that comes closest. */
-function writeGap(run: Run, u: DiagramUseCase, s: DiagramScenario, accept: (id: string) => boolean): WriteGap {
+function writeGap(run: Run, u: DiagramUseCase, s: DiagramScenario, accept: (id: string) => boolean, isWrite = run.isWrite): WriteGap {
   const { requests, beforeResponse } = requestOrder(u, s);
   const hits = requests.map((m, i) => ({ m, i })).filter(({ m }) => !m.failed && accept(m.to));
-  const writes = hits.filter(({ m }) => run.isWrite(m.step));
+  const writes = hits.filter(({ m }) => isWrite(m.step));
   const early = writes.find(({ m, i }) => m.async && i < beforeResponse);
   if (early) return { kind: 'async', step: early.m.step };
   const late = writes.find(({ i }) => i >= beforeResponse);
@@ -434,12 +466,10 @@ function survive(run: Run, target: Selector | 'any'): Check {
           : n.shards > 1
             ? `leaves that shard ${formatRps(left.capacityRps / n.shards)} for ${formatRps(n.loadRps / n.shards)}`
             : `leaves ${formatRps(left.capacityRps)} for ${formatRps(n.loadRps)}`;
-        failures.push(
-          fail(
-            `Losing ${lost} ${leaves}${bandwidthBound(left) ? '' : ` (${formatPercent(left.utilization)})`}`,
-            writeBound(left) ? saturationHint(run, { ...n, ...left }) : `Add a replica to ${label} (x${replicas + 1}) so the rest carry the load`,
-          ),
-        );
+        const lever = writeBound(left)
+          ? saturationLever(run, { ...n, ...left })
+          : { hint: `Add a replica to ${label} (x${replicas + 1}) so the rest carry the load`, fix: { kind: 'replicas' as const, node: node.id, replicas: replicas + 1 } };
+        failures.push(fail(`Losing ${lost} ${leaves}${bandwidthBound(left) ? '' : ` (${formatPercent(left.utilization)})`}`, lever.hint, lever.fix));
         continue;
       }
       const broken = latencies.map((r) => requirement(degraded, r)).find((c) => !c.passed);
@@ -448,6 +478,7 @@ function survive(run: Run, target: Selector | 'any'): Check {
           fail(
             `Losing ${lost} breaks a latency limit: ${broken.message}`,
             `Add a replica to ${label} (x${replicas + 1}) so the rest keep it under ${formatPercent(HOT)}, or take load off it`,
+            { kind: 'replicas', node: node.id, replicas: replicas + 1 },
           ),
         );
       }
@@ -459,6 +490,7 @@ function survive(run: Run, target: Selector | 'any'): Check {
           fail(
             `Losing ${label} breaks "${u.name}"`,
             `Add a replica (x2 on ${node.id}) or a fallback scenario in "${u.name}" that calls ${node.id} with -x and still completes`,
+            { kind: 'replicas', node: node.id, replicas: 2 },
           ),
         );
       }
@@ -469,7 +501,7 @@ function survive(run: Run, target: Selector | 'any'): Check {
     return pass(`Every use case keeps working after losing ${count}`);
   }
   const more = failures.length > 1 ? ` (and ${failures.length - 1} more)` : '';
-  return fail(`${failures[0].message}${more}`, failures[0].hint);
+  return fail(`${failures[0].message}${more}`, failures[0].hint, failures[0].fix);
 }
 
 function cost(run: Run, max: number): Check {
@@ -489,6 +521,51 @@ function cost(run: Run, max: number): Check {
   const egressHint =
     egress > total / 2 ? ' Most of it is egress: serve repeated downloads from a CDN ($0.02/GB) instead of storage ($0.09/GB), or send fewer bytes.' : '';
   return fail(message, `Biggest items: ${top.join(', ')}. Drop replicas on nodes with low utilisation or pick cheaper techs.${egressHint}`);
+}
+
+/**
+ * `lag "U" < 30s`: the consumer lag of the queues U sends to, the slowest of
+ * them. A queue whose backlog grows fails, and so does a use case that sends
+ * to no queue with a `drain` rate.
+ */
+function lag(run: Run, name: string, maxMs: number): Check {
+  const u = findUseCase(run.diagram, name);
+  if (!u) return unknownUseCase(run, name);
+  const ids = [...new Set(u.scenarios.flatMap((s) => s.steps.filter((step) => !step.failed).map((step) => step.toServiceId)))];
+  const queues = ids.map((id) => run.nodes.get(id)).filter((n): n is NodeAnalysis => !!n?.queue);
+  if (queues.length === 0) {
+    const plain = ids.find((id) => ['queue', 'broker'].includes(run.nodes.get(id)?.kind ?? ''));
+    return fail(
+      `"${u.name}" sends to no queue with a drain rate, so it has no lag to measure`,
+      plain ? `Say how fast its consumers take messages: capacity { ${plain} drain 1k rps }` : 'Send its slow work to a queue (->> queue) and give the queue a drain rate in capacity',
+    );
+  }
+  const slowest = queues.reduce((worst, n) => (n.queue!.lagMs > worst.queue!.lagMs ? n : worst));
+  const q = slowest.queue!;
+  if (q.backlogPerHour > 0) {
+    return fail(
+      `"${u.name}" falls behind at ${slowest.id}: ${formatRps(q.inflowRps)} flows in, its consumers drain ${formatRps(q.drainRps)}, and the backlog grows by ${formatCount(q.backlogPerHour)} messages an hour (limit ${formatDuration(maxMs)})`,
+      `Drain ${slowest.id} faster than ${formatRps(q.inflowRps)}: more consumers, or capacity { ${slowest.id} drain ${formatRps(Math.ceil((q.inflowRps / 0.7) / 100) * 100)} }`,
+    );
+  }
+  const message = `Lag of "${u.name}" is ${formatDuration(q.lagMs)} at ${slowest.id}, its consumers ${formatPercent(q.utilization)} busy (limit ${formatDuration(maxMs)})`;
+  return q.lagMs < maxMs ? pass(message) : fail(message, `Drain ${slowest.id} faster, so its consumers run below ${formatPercent(HOT)}`);
+}
+
+/** `@Payments`, `.edge`, `group checkout`. */
+const scopeText = (scope: CostScope) => ('team' in scope ? `@${scope.team}` : 'tag' in scope ? `.${scope.tag}` : `group ${scope.group}`);
+
+/** A scoped budget: the cost of the team's, tag's or group's nodes against its limit. */
+function budget(run: Run, scope: CostScope, max: number): Check {
+  const share = scopedCost(run.diagram, run.analysis, scope);
+  const what = scopeText(scope);
+  if (share.nodes.length === 0) return fail(`No node is covered by ${what}`, 'team' in scope ? `Give nodes the team with ${what} after their name` : 'tag' in scope ? `Tag nodes or groups with ${what}` : `Add nodes inside ${what}`);
+  const ofWhich = share.egressUsd > 0 ? `, ${formatUsd(share.egressUsd)} of it egress` : '';
+  const message = `${what} costs ${formatUsd(share.costUsd)}${ofWhich} (limit ${formatUsd(max)})`;
+  if (share.costUsd <= max) return pass(message);
+  const nodes = new Map(run.analysis.nodes.map((n) => [n.id, n]));
+  const top = share.nodes.slice(0, 3).map((id) => `${id} ${formatUsd(nodes.get(id)!.costUsd)}`);
+  return fail(message, `Biggest items: ${top.join(', ')}. Drop replicas on nodes with low utilisation, pick cheaper techs, or move work to another team's budget.`);
 }
 
 // ---------------------------------------------------------------- test blocks
@@ -550,6 +627,8 @@ function assertion(run: Run, a: Assertion): Check {
       if (ids.size === 0) return noMatch(a.target);
       return writesCheck(run, sc.u, sc.scenarios, (id) => ids.has(id), selectorText(a.target));
     }
+    case 'beforeResponding':
+      return beforeResponding(run, a);
     case 'responds':
       return responds(run, a);
     case 'hasScenario': {
@@ -597,33 +676,97 @@ function noMatch(selector: Selector): Check {
   return fail(`No node matches ${selectorText(selector)}`, 'Use a node id, [Tech] or any <kind> (any cache, any database, …)');
 }
 
+/** `INSERT on db`, `GET /urls/{code} to api`, `header Authorization to api`, or just `db`: the call as a noun. */
+function callNoun(selector: Selector, match: StepMatch | undefined): string {
+  const target = selectorText(selector);
+  if (match?.op !== undefined) return `${match.op} on ${target}`;
+  if (match?.header !== undefined) return `header ${match.header} to ${target}`;
+  if (match?.method !== undefined) return `${match.method} ${match.path ?? ''} to ${target}`;
+  return target;
+}
+
+/** `calls db` → `call db`, for "does not call …". */
+const baseForm = (phrase: string) => phrase.replace(/^(\w+?)s\b/, '$1');
+
+/**
+ * A typed assertion that can never hold, because no selected node's type has
+ * the operation it names, or every selected node's type lists headers but not
+ * that one. Catches a misspelt `never uses Scna on …`, which would hold.
+ */
+function vocabularyGap(run: Run, ids: Set<string>, selector: Selector, match: StepMatch | undefined): Check | undefined {
+  if (match?.op === undefined && match?.header === undefined) return undefined;
+  const nodes = run.diagram.nodes.filter((n) => ids.has(n.id));
+  // A system's entry point takes the type of the node behind it, which its box does not carry.
+  if (nodes.some((n) => n.kind === 'system')) return undefined;
+  const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+  const what = selectorText(selector);
+  const types = nodes.map((n) => n.resolvedType);
+  const listed = (names: string[]) => `${names.slice(0, 8).join(', ')}${names.length > 8 ? ', …' : ''}`;
+  const { op, header } = match;
+  if (op !== undefined && !types.some((t) => t?.ops.some((o) => same(o.name, op)))) {
+    const ops = [...new Set(types.flatMap((t) => t?.ops.map((o) => o.name) ?? []))];
+    return fail(
+      `No node matching ${what} has an operation '${op}'`,
+      ops.length ? `Its operations are ${listed(ops)}` : `${what} has no typed operations; give it a type with op lines, or assert calls ${what} instead`,
+    );
+  }
+  if (header !== undefined && types.every((t) => t && t.headers.length > 0 && !t.headers.some((h) => same(h, header)))) {
+    const headers = [...new Set(types.flatMap((t) => t?.headers ?? []))];
+    return fail(`No node matching ${what} takes the header '${header}'`, `Its headers are ${listed(headers)}`);
+  }
+  return undefined;
+}
+
+/** How to make a step match: what to put in its label. */
+function matchHint(selector: Selector, match: StepMatch | undefined): string {
+  const what = selectorText(selector);
+  if (match?.op !== undefined) return `Add a step to ${what} whose label starts with ${match.op}`;
+  if (match?.header !== undefined) return `Name the header in a request to ${what}: GET /path header ${match.header}`;
+  if (match?.method !== undefined) return `Add a step to ${what} labelled ${match.method} ${match.path ?? ''}`.trimEnd();
+  return `Add a step to ${what}`;
+}
+
+/** `; its steps there are GetItem Url, …`: what the scenarios send to the target instead, when a typed assertion finds no match. */
+function otherSteps(scenarios: DiagramScenario[], ids: Set<string>, match: StepMatch | undefined): string {
+  if (!match) return '';
+  const steps = scenarios.flatMap((s) => s.steps.filter((step) => ids.has(step.toServiceId)));
+  const labels = [...new Set(steps.map((step) => requestLabel(step) || '(no label)'))];
+  return labels.length ? `; its steps there are ${labels.slice(0, 3).join(', ')}${labels.length > 3 ? ', …' : ''}` : '';
+}
+
 function calls(run: Run, a: Extract<Assertion, { kind: 'calls' }>): Check {
   const sc = scope(run, a.useCase, a.scenario);
   if (isCheck(sc)) return sc;
   const what = selectorText(a.target);
+  const phrase = callText(a.target, a.match);
   const ids = idsOf(run, a.target);
-  const called = (s: DiagramScenario) => s.steps.filter((step) => ids.has(step.toServiceId));
+  const called = (s: DiagramScenario) => s.steps.filter((step) => ids.has(step.toServiceId) && stepMatches(step, a.match));
   const calling = sc.scenarios.filter((s) => called(s).length > 0);
   const names = (list: DiagramScenario[]) => list.map((s) => quote(s.name)).join(', ');
   const multi = sc.scenarios.length > 1;
+  const gap = vocabularyGap(run, ids, a.target, a.match);
+  if (gap) return gap;
 
   if (a.quantifier === 'never') {
-    if (calling.length === 0) return pass(`${sc.label} never calls ${what}`);
+    if (calling.length === 0) return pass(`${sc.label} never ${phrase}`);
     const first = calling[0];
     const step = called(first)[0];
     return fail(
-      `${multi ? quote(first.name) : sc.label} calls ${nodeLabel(run.diagram, step.toServiceId)}: ${stepText(step)}`,
-      `Take the call to ${step.toServiceId} out of ${quote(first.name)}, e.g. serve it from a cache`,
+      `${multi ? quote(first.name) : sc.label} ${a.match ? phrase : `calls ${nodeLabel(run.diagram, step.toServiceId)}`}: ${stepText(step)}`,
+      a.match ? `Change or remove the step to ${step.toServiceId} in ${quote(first.name)}` : `Take the call to ${step.toServiceId} out of ${quote(first.name)}, e.g. serve it from a cache`,
     );
   }
   if (ids.size === 0) return noMatch(a.target);
   if (a.quantifier === 'some') {
-    if (calling.length) return pass(`${sc.label} calls ${what}${multi ? ` in ${names(calling)}` : ''}`);
-    return fail(`${sc.label} never calls ${what}`, `Add a step to ${what}`);
+    if (calling.length) return pass(`${sc.label} ${phrase}${multi ? ` in ${names(calling)}` : ''}`);
+    return fail(`${sc.label} never ${phrase}${otherSteps(sc.scenarios, ids, a.match)}`, matchHint(a.target, a.match));
   }
   const missing = sc.scenarios.filter((s) => !calling.includes(s));
-  if (missing.length === 0 && sc.scenarios.length) return pass(`Every scenario of ${sc.label} calls ${what}`);
-  return fail(`${sc.label} does not call ${what} in ${names(missing) || 'any scenario'}`, `Add a step to ${what} in ${names(missing) || 'a scenario'}`);
+  if (missing.length === 0 && sc.scenarios.length) return pass(`Every scenario of ${sc.label} ${phrase}`);
+  return fail(
+    `${sc.label} does not ${baseForm(phrase)} in ${names(missing) || 'any scenario'}${otherSteps(missing, ids, a.match)}`,
+    a.match ? `${matchHint(a.target, a.match)} in ${names(missing) || 'a scenario'}` : `Add a step to ${what} in ${names(missing) || 'a scenario'}`,
+  );
 }
 
 function before(run: Run, a: Extract<Assertion, { kind: 'before' }>): Check {
@@ -631,16 +774,18 @@ function before(run: Run, a: Extract<Assertion, { kind: 'before' }>): Check {
   if (isCheck(sc)) return sc;
   const first = idsOf(run, a.first);
   const then = idsOf(run, a.then);
-  const [x, y] = [selectorText(a.first), selectorText(a.then)];
+  const [x, y] = [callNoun(a.first, a.match), selectorText(a.then)];
   if (first.size === 0) return noMatch(a.first);
   if (then.size === 0) return noMatch(a.then);
+  const gap = vocabularyGap(run, first, a.first, a.match);
+  if (gap) return gap;
   let checked = 0;
   for (const s of sc.scenarios) {
     const order = requestOrder(sc.u, s).requests;
     const iy = order.findIndex((m) => then.has(m.to));
     if (iy < 0) continue;
     checked++;
-    const ix = order.findIndex((m) => first.has(m.to));
+    const ix = order.findIndex((m) => first.has(m.to) && stepMatches(m.step, a.match));
     if (ix < 0 || ix > iy) {
       const where = sc.scenarios.length > 1 || a.scenario ? `In ${quote(s.name)}` : `In ${quote(sc.u.name)}`;
       return fail(
@@ -652,7 +797,37 @@ function before(run: Run, a: Extract<Assertion, { kind: 'before' }>): Check {
     }
   }
   if (checked === 0) return fail(`${sc.label} never calls ${y}`, `Add a step to ${y} after the call to ${x}`);
-  return pass(`${sc.label} calls ${x} before ${y}${checked > 1 ? ` in all ${checked} scenarios that call ${y}` : ''}`);
+  return pass(`${sc.label} ${callText(a.first, a.match)} before ${y}${checked > 1 ? ` in all ${checked} scenarios that call ${y}` : ''}`);
+}
+
+/**
+ * `U uses INSERT on db before responding` (and `calls X [with …] before
+ * responding`, `sends header H to X before responding`): every success
+ * scenario sends a matching synchronous, successful step to X before the
+ * entry request is answered.
+ */
+function beforeResponding(run: Run, a: Extract<Assertion, { kind: 'beforeResponding' }>): Check {
+  const sc = scope(run, a.useCase, a.scenario);
+  if (isCheck(sc)) return sc;
+  const ids = idsOf(run, a.target);
+  if (ids.size === 0) return noMatch(a.target);
+  const gap = vocabularyGap(run, ids, a.target, a.match);
+  if (gap) return gap;
+  const phrase = callText(a.target, a.match);
+  const success = sc.scenarios.filter((s) => s.outcome === 'success');
+  if (success.length === 0) return fail(`${sc.label} has no success scenario to check`, 'Add a scenario whose entry request is answered with a 2xx');
+  const accept = (id: string) => ids.has(id);
+  const isMatch = (step: DiagramStep) => stepMatches(step, a.match);
+  const gaps = success.filter((s) => !writesBeforeResponse(sc.u, s, accept, isMatch));
+  if (gaps.length === 0) return pass(`${success.length === 1 ? sc.label : `Every success scenario of ${sc.label}`} ${phrase} before responding`);
+  const where = (s: DiagramScenario) => (sc.u.scenarios.length > 1 ? quote(s.name) : quote(sc.u.name));
+  const text = (s: DiagramScenario) => {
+    const g = writeGap(run, sc.u, s, accept, isMatch);
+    if (g.kind === 'async') return `${where(s)} ${phrase} only asynchronously: ${stepText(g.step)}`;
+    if (g.kind === 'after') return `${where(s)} ${phrase} only after responding: ${stepText(g.step)}`;
+    return `${where(s)} never ${phrase} before responding${otherSteps([s], ids, a.match)}`;
+  };
+  return fail(gaps.map(text).join('; '), `${matchHint(a.target, a.match)}, sent with -> before the line that answers the entry request`);
 }
 
 /**
@@ -689,14 +864,17 @@ function after(run: Run, a: Extract<Assertion, { kind: 'after' }>): Check {
   if (isCheck(sc)) return sc;
   const targets = idsOf(run, a.target);
   const firsts = idsOf(run, a.after);
-  const [y, x] = [selectorText(a.target), selectorText(a.after)];
+  const [y, x] = [callNoun(a.target, a.match), selectorText(a.after)];
   if (targets.size === 0) return noMatch(a.target);
   if (firsts.size === 0) return noMatch(a.after);
+  const gap = vocabularyGap(run, targets, a.target, a.match);
+  if (gap) return gap;
+  const isTarget = (m: { to: string; step: DiagramStep }) => targets.has(m.to) && stepMatches(m.step, a.match);
   let checked = 0;
   for (const s of sc.scenarios) {
     const order = requestOrder(sc.u, s).requests;
     const ix = order.findIndex((m) => firsts.has(m.to));
-    const iy = order.map((m) => targets.has(m.to)).lastIndexOf(true);
+    const iy = order.map(isTarget).lastIndexOf(true);
     if (ix < 0 || iy < 0) continue;
     checked++;
     if (iy < ix) {
@@ -708,12 +886,12 @@ function after(run: Run, a: Extract<Assertion, { kind: 'after' }>): Check {
     }
   }
   if (checked === 0) {
-    const callsY = sc.scenarios.some((s) => s.steps.some((step) => targets.has(step.toServiceId)));
+    const callsY = sc.scenarios.some((s) => s.steps.some((step) => targets.has(step.toServiceId) && stepMatches(step, a.match)));
     const callsX = sc.scenarios.some((s) => s.steps.some((step) => firsts.has(step.toServiceId)));
     const why = !callsY && !callsX ? `calls neither ${x} nor ${y}` : !callsY ? `never calls ${y}` : !callsX ? `never calls ${x}` : `never calls ${x} and ${y} in the same scenario`;
     return fail(`${sc.label} ${why}`, `Add a step to ${y} after the call to ${x}`);
   }
-  return pass(`${sc.label} calls ${y} after ${x}${checked > 1 ? ` in all ${checked} scenarios that call both` : ''}`);
+  return pass(`${sc.label} ${callText(a.target, a.match)} after ${x}${checked > 1 ? ` in all ${checked} scenarios that call both` : ''}`);
 }
 
 /** `[in U] X calls Y` / `[in U] X never calls Y` (§7.1): steps sent by a node matching X to one matching Y. */

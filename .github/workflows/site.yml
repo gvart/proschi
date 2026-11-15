@@ -3,9 +3,9 @@ name: Site
 on:
   push:
     branches: [main]
-    paths: ['frontend/**', 'backend/**', '.github/workflows/site.yml']
+    paths: ['frontend/**', 'backend/**', 'blog/**', 'docs/**', '.github/workflows/site.yml']
   pull_request:
-    paths: ['frontend/**', 'backend/**', '.github/workflows/site.yml']
+    paths: ['frontend/**', 'backend/**', 'blog/**', 'docs/**', '.github/workflows/site.yml']
   workflow_dispatch:
 
 permissions:
@@ -54,9 +54,17 @@ jobs:
       - run: npm run build
 
   # Browser tests against `vite preview` of the production build (frontend/e2e).
+  # Split across two runners: the whole suite on one took 14-15 minutes
+  # (about 11 of them in the tests), at the edge of the timeout.
   e2e:
-    runs-on: ubuntu-latest
+    name: e2e (${{ matrix.shard }}/2)
+    # Pinned: Playwright 1.56 cannot install Chromium on ubuntu-26.04 (1.61+ can).
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     defaults:
       run:
         working-directory: frontend
@@ -74,11 +82,11 @@ jobs:
       # Sign-in without paid plans: e2e/*.free.e2e.ts checks nothing metered shows.
       - run: npm run build:accounts-free
       - run: npx playwright install --with-deps chromium
-      - run: npm run e2e
+      - run: npm run e2e -- --shard=${{ matrix.shard }}/2
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: |
             frontend/playwright-report
             frontend/test-results

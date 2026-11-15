@@ -3,6 +3,8 @@ title: Web Crawler
 summary: A polite crawler with a durable frontier, per-host rate limits and a Bloom filter for seen URLs.
 difficulty: medium
 tags: [queues, rate-limiting, probabilistic, external-api, object-storage, durability]
+version: 2
+strict: true
 hints:
   - "The crawl is a loop of two consumers: fetchers take URLs from a frontier and store pages; parsers read stored pages, extract links and feed the new ones back into the frontier. The frontier must survive a restart: it is weeks of work."
   - "Before every fetch, look up the host: robots.txt rules and the earliest time it may be fetched again, kept in a fast store. If it is not due, put the URL back in the frontier with a due time instead of fetching it."

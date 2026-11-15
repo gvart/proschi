@@ -141,7 +141,7 @@ describe('import', () => {
 
 describe('imports and other checks', () => {
   it('counts connections from imported files for the missing-connection warning', () => {
-    const files = { 'infra.proschi': infra, 'checkout.proschi': `${checkout}usecase "Audit" {\n  gateway -> db : GET /audit\n}\n` };
+    const files = { 'infra.proschi': infra, 'checkout.proschi': `${checkout}usecase "Audit" {\n  gateway -> db : SELECT audit\n}\n` };
     const { diagnostics } = parseWith(files, 'checkout.proschi');
     // gateway -> orders and orders -> db are declared in infra.proschi; gateway -> db is not.
     expect(diagnostics.map((d) => [d.file, d.line, d.message])).toEqual([

@@ -27,6 +27,7 @@ test "Suggestions are served by the CDN, then the cache" {
   "Suggest" has scenario "Edge miss"
   "Suggest" starts at user
   in "Suggest" user calls any cdn
+  "Suggest" calls any cdn with GET /suggest
   "Suggest" calls any cdn before any cache
   "Suggest" scenario "Edge hit" never calls any service
   "Suggest" scenario "Edge miss" calls any cache

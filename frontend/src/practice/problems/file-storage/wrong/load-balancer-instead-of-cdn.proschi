@@ -9,7 +9,7 @@ import "problem.proschi"
 lb       "Load Balancer"   [AWS Load Balancer] x2
 api      "Files API"       [REST API]          x3 @files "Lists folders, records uploads and signs URLs"
 meta     "Metadata DB"     [PostgreSQL]        x2 @files "Folders, files and their upload state"
-cdn      "CDN"             [AWS Load Balancer]    x2 @files "Caches file bytes at the edge; fetches misses from the bucket"
+cdn      "CDN"             [AWS Load Balancer] x2 @files "Caches file bytes at the edge; fetches misses from the bucket"
 events   "Upload Events"   [AWS SQS]           x2 @files "ObjectCreated notifications from the bucket"
 finisher "Upload Finisher" [AWS Lambda]        x2 @files "Marks a file ready once its object is stored"
 
@@ -68,7 +68,7 @@ usecase "Start upload" "Record a pending file and hand out a pre-signed PUT URL"
 usecase "Upload" "Put the bytes straight into the bucket" {
   user     -> blobs    : ~1MB PUT /9a1?sig=…
   blobs   --> user     : 200
-  blobs   ->> events   : ObjectCreated 9a1
+  blobs   ->> events   : SEND ObjectCreated 9a1
   events  ->> finisher : ObjectCreated 9a1
   finisher -> meta     : UPDATE File status=ready
   meta    --> finisher : ok

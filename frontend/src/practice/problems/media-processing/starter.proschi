@@ -1,0 +1,16 @@
+import "problem.proschi"
+
+# Add the queue, the coordinator, the two worker pools (ids thumbnailer and
+# previewer), the derived-output store (id derived), the CDN and the use cases
+# "Pre-warm", "View thumbnail" and "Open preview".
+api "Upload API" [REST API]
+
+user -> api
+api  -> originals
+
+usecase "Upload file" {
+  user       -> api       : POST /files
+  api        -> originals : PUT file
+  originals --> api       : stored
+  api       --> user      : 201
+}

@@ -1,0 +1,37 @@
+# expect-fail: The scheduler only enqueues
+# expect-fail: Scripts run on the worker pool
+# mistake: The scheduler runs the scripts itself
+# explain: The scheduler pods now do the heavy work too: a slow or memory-hungry script competes with firing the next minute, and losing a pod kills the runs on it. Let the scheduler only record and enqueue each due run, and run the scripts on a separate worker pool that reads the queue.
+# lesson: separate-scheduling-from-running
+# cards: queue-load-levelling, competing-consumers, distributed-cron-scheduler-only-enqueues
+# Two scheduler pods behind leader election, but the leader runs every due script in-process: the old cron box, just doubled.
+import "problem.proschi"
+
+scheduler "Cron Scheduler" [Go]    x2 @cron "Fires due scripts and runs them in-process"
+runs      "Script Runs"    [MySQL] x2 @cron "One row per run"
+
+clock     -> scheduler : minute tick
+scheduler -> runs      : SQL
+scheduler -> backend   : the script's work
+
+usecase "Fire" "The leader finds a due script and runs it" {
+  clock     -> scheduler : tick 09:00, nightly-report is due
+  scheduler -> runs      : SELECT active runs WHERE script = 'nightly-report'
+
+  alt "Enqueued" when "no run of the script is in progress" {
+    runs      --> scheduler : none
+    scheduler  -> runs      : INSERT run state = in_progress
+    runs      --> scheduler : run 5521
+    scheduler --> clock     : started
+  } alt "Already running" when "the previous run has not finished yet" {
+    runs      --> scheduler : run 5490 in progress
+    scheduler --> clock     : skipped
+  }
+}
+
+usecase "Run script" "The scheduler executes the script itself" {
+  scheduler -> backend   : run nightly-report
+  backend  --> scheduler : done
+  scheduler -> runs      : UPDATE run 5521 SET state = done
+  runs     --> scheduler : ok
+}

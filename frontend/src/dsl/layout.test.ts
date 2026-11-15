@@ -25,6 +25,21 @@ describe('layoutDiagram', () => {
     boxes.forEach((a, i) => boxes.slice(i + 1).forEach((b) => expect(overlaps(a, b)).toBe(false)));
   });
 
+  it('with the load overlay, lays cards out at their loaded size and keeps room between layers for a chip', async () => {
+    const source = 'a "A" [REST API] x3\nb "B" [PostgreSQL]\nc "C" [Redis]\na -> b\nb -> c : SQL';
+    const gaps = async (overlay: boolean, flow = '') => {
+      const nodes = await layoutDiagram(parse(`${flow}${source}`).diagram, { overlay });
+      const at = Object.fromEntries(nodes.map((n) => [n.id, n.position]));
+      return { down: at.b.y - at.a.y, right: at.b.x - at.a.x };
+    };
+    // Plain: a 60px card and 40px between layers.
+    expect((await gaps(false)).down).toBe(100);
+    // Overlay: a 90px card, and an 18px chip with 19px either side (a replica's stacked cards or a node's tag, and a margin).
+    expect((await gaps(true)).down).toBe(90 + 56);
+    // Flowing right, the chip's width lies between the layers.
+    expect((await gaps(true, 'direction right\n')).right).toBeGreaterThanOrEqual(240 + 146 + 38);
+  });
+
   it('keeps explicit positions', async () => {
     const nodes = await layoutDiagram(parse('a pos 500,40\nb\na -> b').diagram);
     expect(nodes[0].position).toEqual({ x: 500, y: 40 });

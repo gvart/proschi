@@ -1,0 +1,32 @@
+# expect-fail: p99 of Read catalog < 40 ms
+# expect-fail: Catalog reads go to the replicas
+# mistake: Sending every read to the primary
+# explain: 60k catalog reads a second land on a primary and its standby, which serve about 40k between them, so the database saturates and every latency limit breaks. Add a pool of read replicas and route the reads that tolerate a little lag to it, keeping the primary for writes and time-sensitive reads.
+# lesson: replicas-scale-reads-not-writes
+# cards: read-write-ratio-first, read-replicas-pool-size
+# No replicas: the primary answers every query, reads included.
+import "problem.proschi"
+
+app   -> proxy   : MySQL protocol
+proxy -> primary : every query
+
+usecase "Read catalog" "A storefront page reads products from the primary" {
+  app      -> proxy   : SELECT products WHERE shop_id = $1
+  proxy    -> primary : SELECT products WHERE shop_id = $1
+  primary --> proxy   : 40 rows
+  proxy   --> app     : 40 rows
+}
+
+usecase "Place order" "Checkout writes the order to the primary" {
+  app      -> proxy   : INSERT order
+  proxy    -> primary : INSERT order
+  primary --> proxy   : OK
+  proxy   --> app     : OK
+}
+
+usecase "Check order" "The order status page reads the order from the primary" {
+  app      -> proxy   : SELECT order WHERE id = $1
+  proxy    -> primary : SELECT order WHERE id = $1
+  primary --> proxy   : 1 row
+  proxy   --> app     : 1 row
+}

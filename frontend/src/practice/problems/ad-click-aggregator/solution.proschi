@@ -1,0 +1,97 @@
+import "problem.proschi"
+
+lb          "Load Balancer"         [AWS Load Balancer] x2 @edge
+ingest      "Ad Event Ingest"       [Go]                x16 @ingest "Validates the event's shape and appends it to Kafka, keyed by ad"
+events      "Mobile Ad Events"      [Kafka]             x3 @ingest "Raw impressions and clicks, partitioned by ad, kept 3 days"
+flink       "Aggregation Job"       [Java]              x16 @stream "Flink: drops invalid and duplicate events, counts per ad in one-minute tumbling windows"
+checkpoints "Checkpoint Store"      [Object Storage]    x2 @stream "Flink's checkpoints: window state, dedup keys and Kafka offsets"
+aggregates  "Ad Aggregates"         [Kafka]             x2 @stream "One record per ad and minute, written in Kafka transactions"
+pinot       "Apache Pinot"          [Data Warehouse]    x3 @olap "Real-time OLAP tables of the aggregates, upserted by record UUID"
+reports     "Advertiser Report API" [REST API]          x3 @olap "Answers dashboard queries from Pinot"
+
+app        -> lb          : HTTPS
+advertiser -> lb          : HTTPS
+lb         -> ingest      : HTTP
+lb         -> reports     : HTTP
+ingest     -> events      : produce
+events     -> flink       : consume
+flink      -> checkpoints : snapshots
+flink      -> aggregates  : transactional produce
+aggregates -> pinot       : read_committed ingestion
+aggregates -> budget      : read_committed consume
+reports    -> pinot       : SQL
+
+entity AdAggregate in pinot "Clicks and impressions of one ad in one minute" {
+  recordUuid  string key
+  adId        string
+  campaignId  string
+  minute      time
+  impressions int
+  clicks      int
+}
+
+decision "Append to Kafka, aggregate later" {
+  because "The app's request only produces an event; validation, deduplication and counting run in the stream and can fall behind or restart without losing an event or slowing the app"
+  rejected "Increment counters in the request" "20k database writes a second on the app's path, and a crash between the write and the answer double-counts on retry"
+}
+decision "One-minute tumbling windows per ad" {
+  because "20k events a second become one record per ad and minute, about 500 a second: Pinot and the budget service take 40 times fewer writes, and hourly or daily reports roll the minutes up"
+  rejected "Load every raw event into Pinot" "Pinot would take 20k writes a second and every dashboard query would sum millions of rows"
+}
+decision "Commit aggregates with the checkpoint" {
+  because "Flink writes each window's records into a Kafka transaction and commits it only once the checkpoint holding its state and offsets is durable; a crash before that aborts the transaction and the job replays from the last checkpoint, so no record is counted twice"
+  rejected "Publish each window as it closes" "After a crash the job replays events whose aggregates were already published, and advertisers are charged twice"
+}
+decision "Checkpoint every two minutes" because "Readers see aggregates only once committed, so the checkpoint interval is the pipeline's delay: two minutes instead of Flink's default ten, short enough for pacing and dashboards"
+decision "A record UUID on every aggregate" {
+  because "Pinot upserts by it, the budget service applies each one once and Hive deduplicates by it, so a record that is delivered twice is still counted once"
+  rejected "Trust exactly-once delivery alone" "A consumer can still crash after applying a record and before committing its offset"
+}
+decision "Partition by ad, size for the event rate" because "Every event of an ad goes to the same Kafka partition and Flink task, which holds that ad's window and dedup keys; the ingest and aggregation tiers are sized for 20k events a second, the sinks for 500 aggregates"
+
+usecase "Record event" "The app reports an impression or a click" {
+  app     -> lb     : POST /ad-events json {"type": "click", "adId": "ad_8812", "eventId": "e_51f0"}
+  lb      -> ingest : POST /ad-events
+  ingest  -> events : PRODUCE mobile-ad-events key ad_8812
+  events --> ingest : ack
+  ingest --> lb     : 202
+  lb     --> app    : 202
+}
+
+usecase "Aggregate events" "The aggregation job counts an event into its ad's current window" {
+  events -> flink  : AdEvent click ad_8812 e_51f0
+  flink --> events : offset kept in the next checkpoint
+}
+
+usecase "Publish aggregates" "A window closes; its record goes into the open Kafka transaction" {
+  flink       -> aggregates : PRODUCE ad-aggregates {"adId": "ad_8812", "minute": "12:04", "clicks": 37, "impressions": 2210}
+  aggregates --> flink      : ack, uncommitted
+}
+
+usecase "Checkpoint" "Every two minutes: snapshot the state, then commit the transaction" {
+  flink        -> checkpoints : PUT windows, dedup keys and offsets
+  checkpoints --> flink       : ok
+  flink        -> aggregates  : COMMIT transaction
+  aggregates  --> flink       : committed
+}
+
+usecase "Load aggregates" "Pinot ingests committed aggregates" {
+  aggregates -> pinot      : UPSERT ad_aggregates by recordUuid
+  pinot     --> aggregates : offset committed
+}
+
+usecase "Update budget" "The budget service spends a campaign's budget once per record" {
+  aggregates -> budget     : AdAggregate ad_8812 12:04 clicks 37
+  budget     -> ledger     : INSERT applied record ON CONFLICT DO NOTHING, UPDATE spend
+  ledger    --> budget     : 1 row
+  budget    --> aggregates : offset committed
+}
+
+usecase "View report" "An advertiser opens the campaign dashboard" {
+  advertiser -> lb         : GET /campaigns/c_42/report?range=7d
+  lb         -> reports    : GET /campaigns/c_42/report?range=7d
+  reports    -> pinot      : SELECT SUM(clicks), SUM(impressions) GROUP BY day
+  pinot     --> reports    : rows
+  reports   --> lb         : 200 {"clicks": 1840, "impressions": 96112}
+  lb        --> advertiser : 200 {"clicks": 1840, "impressions": 96112}
+}

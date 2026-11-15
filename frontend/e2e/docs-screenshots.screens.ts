@@ -61,7 +61,6 @@ test('Results tab (QUICKSTART)', async ({ page }) => {
 
 test('Overlay: load (STYLING)', async ({ page }) => {
   await openEditor(page, 'app/?example=url-shortener');
-  await page.getByRole('button', { name: 'Overlay: load' }).click();
   await page.waitForTimeout(1500);
   await page.screenshot({ path: out('overlay-load') });
 });
@@ -71,7 +70,6 @@ test('A team opened, with its breadcrumb (SYSTEMS)', async ({ page }) => {
   await page.locator('.react-flow__node-systemNode', { hasText: 'Order Processing' }).getByRole('button', { name: 'Open Order Processing' }).click();
   await expect(page.getByRole('navigation', { name: 'Breadcrumb' })).toBeVisible();
   await page.waitForTimeout(1200);
-  await page.getByRole('button', { name: 'Overlay: load' }).click();
   // A narrower code pane leaves the team's left-to-right design room to read.
   await page.getByRole('separator').first().focus();
   for (let i = 0; i < 2; i++) await page.keyboard.press('ArrowLeft');

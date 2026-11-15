@@ -6,8 +6,8 @@
 # A worker that polls the queue does not start delivery at the queue.
 import "problem.proschi"
 
-events "Notification Queue"  [AWS SQS]  x2 @notify "Accepted events; redelivered until a worker deletes them"
-worker "Notification Worker" [REST API] x3 @notify "Checks preferences and calls the providers"
+events "Notification Queue"  [AWS SQS] x2 @notify "Accepted events; redelivered until a worker deletes them"
+worker "Notification Worker" [Worker]  x3 @notify "Checks preferences and calls the providers"
 
 orders -> events    : SendMessage
 worker -> events    : receive
@@ -42,7 +42,7 @@ usecase "Notify" "Hand an order event over" {
 usecase "Deliver" "Turn an accepted event into a notification on the user's channel" {
   worker  -> events : ReceiveMessage
   events --> worker : OrderShipped {"userId": 42, "orderId": 981}
-  worker -> prefs  : GET /users/42/preferences
+  worker  -> prefs  : GET /users/42/preferences
 
   alt "Email" when "the user prefers email" {
     prefs  --> worker : 200 {"channel": "email"}

@@ -26,7 +26,7 @@ test "The frontier is a durable queue" {
 }
 
 test "A host is asked before it is fetched" {
-  "Crawl page" calls any cache before web
+  "Crawl page" uses GET on any cache before web
   "Crawl page" scenario "Host busy" never calls web
   "Crawl page" scenario "Host busy" writes any queue before responding
 }

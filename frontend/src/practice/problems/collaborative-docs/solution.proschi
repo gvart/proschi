@@ -1,7 +1,7 @@
 import "problem.proschi"
 
 lb        "Load Balancer"   [AWS Load Balancer] x2 @docs
-gateways  "Session Servers" [WebSocket]         x26 @docs "Hold the editors' WebSockets and subscribe to the documents they have open"
+gateways  "Session Servers" [SessionServer]     x26 @docs "Hold the editors' WebSockets and subscribe to the documents they have open"
 collab    "Collab Service"  [Go]                x4 @docs "Owns each open document's revision: transforms concurrent operations and appends them in order"
 oplog     "Operation Log"   [Cassandra]         x3 @docs "Every operation of every document, partitioned by document id, ordered by revision"
 bus       "Document Bus"    [NATS]              x2 @docs "One subject per open document; carries operations and cursors to the session servers"
@@ -52,7 +52,7 @@ decision "Cursors are not operations" because "Cursor moves are twice as frequen
 decision "Snapshots every few hundred operations" because "Opening a document reads one snapshot and the short tail of operations after it, never the whole history"
 
 usecase "Edit" "An editor types; the change is ordered, stored, acknowledged and shown to the others" {
-  editor    -> lb            : OP insert "a" at 120, base revision 41
+  editor    -> lb            : MESSAGE OP insert "a" at 120, base revision 41
   lb        -> gateways      : OP insert "a" at 120, base revision 41
   gateways  -> collab        : APPLY op to doc 42, base revision 41
   collab    -> oplog         : INSERT Operation doc 42 revision 43 (transformed)
@@ -61,17 +61,17 @@ usecase "Edit" "An editor types; the change is ordered, stored, acknowledged and
   gateways --> lb            : ACK revision 43
   lb       --> editor        : ACK revision 43
   collab   ->> bus           : PUBLISH doc.42 revision 43
-  bus      ->> gateways      : x2 doc.42 revision 43
+  bus      ->> gateways      : x2 OP doc.42 revision 43
   gateways ->> collaborators : x2 OP revision 43
 }
 
 usecase "Move cursor" "An editor moves the cursor or selects text; the others see it" {
-  editor    -> lb            : CURSOR doc 42 at 120
+  editor    -> lb            : MESSAGE CURSOR doc 42 at 120
   lb        -> gateways      : CURSOR doc 42 at 120
   gateways ->> bus           : PUBLISH doc.42.presence cursor 120
   gateways --> lb            : ok
   lb       --> editor        : ok
-  bus      ->> gateways      : x2 doc.42.presence cursor 120
+  bus      ->> gateways      : x2 CURSOR doc.42.presence at 120
   gateways ->> collaborators : x2 CURSOR alice at 120
 }
 

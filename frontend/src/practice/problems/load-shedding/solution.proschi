@@ -1,0 +1,52 @@
+import "problem.proschi"
+
+zuul "Zuul" [API Gateway] x4 @edge "Scores every request's priority on the way in and sheds the lowest first when the API service is strained"
+
+device -> zuul : HTTPS
+zuul   -> api  : HTTP, priority score attached
+
+decision "Score every request at the edge" {
+  because "Zuul sees every request first, so it can rank them once, from the request's attributes, before any backend spends work on them"
+  rejected "Let each backend decide" "A backend that rejects a request has already accepted the connection and parsed it; during a spike that work is the overload"
+}
+decision "Shed by priority, not at random" {
+  because "Logs and background requests are a large share of the traffic and nobody notices them missing for a minute; playback errors are what members see"
+  rejected "One concurrency limit for every request" "It drops a play request as readily as a log upload"
+}
+decision "Shed progressively" because "The more strained the backend, the higher the priority threshold: at this spike all but a tenth of the logs and half of the progress markers go, and playback is untouched"
+decision "Tell devices how to retry" because "A shed request answers 503 with how many retries are allowed and after how long, fewer for low priority, so shedding does not turn into a retry storm"
+decision "Size Zuul for the whole spike" {
+  because "Zuul receives every request, shed ones included: 20k a second over 4 instances is 50%, 67% after losing one"
+  rejected "Size Zuul for the traffic it forwards" "Rejecting is cheap but not free; a saturated gateway fails every class at once"
+}
+
+usecase "Start playback" "A member presses play: critical, never shed" {
+  device -> zuul   : POST /playback/start (priority critical)
+  zuul   -> api    : POST /playback/start
+  api   --> zuul   : 200 {"manifest": "..."}
+  zuul  --> device : 200 {"manifest": "..."}
+}
+
+usecase "Save progress" "The app saves a pause or stop marker: degraded experience if lost" {
+  device -> zuul : PUT /progress (priority degraded)
+
+  alt "Served" when "the API service has room for degraded-experience requests" {
+    zuul  -> api    : PUT /progress
+    api  --> zuul   : 204
+    zuul --> device : 204
+  } alt "Shed" when "the priority threshold is above this request's score" {
+    zuul --> device : 503 {"maxRetries": 1, "retryAfterSeconds": 30}
+  }
+}
+
+usecase "Send logs" "The app uploads logs and background data: non-critical" {
+  device -> zuul : POST /logs (priority non-critical)
+
+  alt "Served" when "the API service has room for non-critical requests" {
+    zuul  -> api    : POST /logs
+    api  --> zuul   : 202
+    zuul --> device : 202
+  } alt "Shed" when "the priority threshold is above this request's score" {
+    zuul --> device : 503 {"maxRetries": 0, "retryAfterSeconds": 120}
+  }
+}

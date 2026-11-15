@@ -51,7 +51,7 @@ import { questionRowId } from './interview/stages';
 import { setupHref } from './interview/links';
 import { ChecksSheet } from './interview/Room';
 import { useCodePref } from './interview/prefs';
-import { factsOf, goTo as reachStage, labelOf, loadNotes, nextOf, openingScreen, saveNotes, stageDone, type StageId, type StageNotes, type WorkStage } from './stages/flow';
+import { factsOf, goTo as reachStage, labelOf, loadNotes, nextOf, notesSaved, openingScreen, saveNotes, stageDone, type StageId, type StageNotes, type WorkStage } from './stages/flow';
 import StageBar, { StageFoot, type StageNext } from './stages/StageBar';
 import { ClarifyStage, EstimateStage, WrapupStage } from './stages/Screens';
 import DesignGuide from './stages/DesignGuide';
@@ -101,7 +101,7 @@ interface ProblemPageProps {
   banner?: ReactNode;
   /**
    * Open on the lesson (when the problem has one): `always` (practice/#/<id>/lesson,
-   * practice/#/roadmap/<id>/lesson); otherwise never first (P52).
+   * practice/#/roadmap/<id>/lesson); otherwise only on a first visit to the stages (P52).
    */
   openLesson?: 'always';
   /**
@@ -131,7 +131,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   const hasLesson = problem.lesson !== undefined;
   // The notes of each stage, kept per problem; the screen opens where it was left (the lesson only on its own address).
   const [notes, setNotes] = useState<StageNotes>(() => loadNotes(problem.id));
-  const [screen, setScreen] = useState<StageId>(() => (staged ? openingScreen(hasLesson, openLesson, loadNotes(problem.id)) : 'design'));
+  const [screen, setScreen] = useState<StageId>(() => (staged ? openingScreen(hasLesson, openLesson, loadNotes(problem.id), notesSaved(problem.id)) : 'design'));
   const updateNotes = useCallback(
     (update: (n: StageNotes) => StageNotes) =>
       setNotes((n) => {
@@ -266,7 +266,8 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   const { diagram, diagnostics } = parsed;
   const rootDiagnostics = useMemo(() => diagnostics.filter((d) => d.file === undefined), [diagnostics]);
   const nodeIds = useMemo(() => diagram.nodes.map((n) => n.id), [diagram]);
-  const { nodes, edges, settled } = useDiagramLayout(diagram);
+  // The canvas's load overlay (EditableCanvas) can show once the design has traffic.
+  const { nodes, edges, settled, busy: layoutBusy } = useDiagramLayout(diagram, { overlay: (diagram.traffic?.length ?? 0) > 0 });
 
   const [running, setRunning] = useState(false);
   const runTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -437,7 +438,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
         </div>
       </ZenCollapse>
       <div className="flex-1 min-h-0">
-        <CodeEditor ref={editorRef} value={source} onChange={setSource} diagnostics={rootDiagnostics} nodeIds={nodeIds} />
+        <CodeEditor ref={editorRef} value={source} onChange={setSource} diagnostics={rootDiagnostics} nodeIds={nodeIds} diagram={diagram} />
       </div>
     </EditorZone>
   );
@@ -449,6 +450,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
         nodes={nodes}
         edges={edges}
         fitKey={`${pane}:${settled}:${fitTick}`}
+        layoutBusy={layoutBusy}
         engine={engine}
         onSelect={goTo}
         zen={zen.zen}
@@ -556,7 +558,10 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
       ? { label: notes.reached === 'clarify' ? 'Next: Clarify' : `Continue: ${labelOf(notes.stage)}`, onClick: () => openStage(notes.stage), primary: true }
       : following
         ? { label: `Next: ${labelOf(following)}`, onClick: () => openStage(following), primary: stageDone(notes, work!, questions.length, solved) }
-        : undefined;
+        : // The last stage: Finish goes back where the problem was opened from (the notes are saved as typed).
+          { label: 'Finish', onClick: () => {
+              window.location.hash = back.href;
+            }, primary: true };
 
   // Focus moves to each new stage's heading (not on the first render).
   const main = useRef<HTMLDivElement>(null);
@@ -581,10 +586,12 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
         nodes={nodes}
         edges={edges}
         fitKey={`board:${designTab}:${settled}:${fitTick}:${codeShown}`}
+        layoutBusy={layoutBusy}
         problemCapacity
         paletteKey="proschi.practice.palette"
         flows
         phone={phone}
+        simulate={engine.available ? engine.analyze : undefined}
       />
       {nodes.length === 0 && <EmptyCanvas />}
       {checksOpen && run && (
@@ -695,7 +702,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   else if (screen === 'clarify') body = <ClarifyStage problem={problem} interview={interview} notes={notes} onNotes={updateNotes} onNext={() => openStage('estimate')} />;
   else if (screen === 'estimate') body = <EstimateStage problem={problem} interview={interview} notes={notes} onNotes={updateNotes} onNext={() => openStage('design')} phone={phone} />;
   else if (screen === 'design') body = designStage;
-  else if (screen === 'wrapup') body = <WrapupStage problem={problem} progress={progress} solved={solved} notes={notes} onNotes={updateNotes} tests={testPanel(true)} />;
+  else if (screen === 'wrapup') body = <WrapupStage problem={problem} progress={progress} solved={solved} notes={notes} onNotes={updateNotes} tests={testPanel(true)} finish={back} />;
 
   const zenOn = zen.zen && editorView;
   const designTools =
@@ -966,6 +973,7 @@ interface DiagramPaneProps {
   nodes: ReturnType<typeof useDiagramLayout>['nodes'];
   edges: ReturnType<typeof useDiagramLayout>['edges'];
   fitKey: string;
+  layoutBusy: boolean;
   engine: Engine;
   onSelect: (loc: SourceLoc) => void;
   /** Zen mode folds the tab bar away. */
@@ -979,7 +987,7 @@ interface DiagramPaneProps {
 }
 
 /** The design as a diagram, one scenario played step by step, or its capacity analysis. */
-function DiagramPane({ diagram, nodes, edges, fitKey, engine, onSelect, zen, source, onChange, onUndo, onRedo, phone }: DiagramPaneProps) {
+function DiagramPane({ diagram, nodes, edges, fitKey, layoutBusy, engine, onSelect, zen, source, onChange, onUndo, onRedo, phone }: DiagramPaneProps) {
   const [tab, setTab] = useState<'diagram' | 'playback' | 'analysis'>('diagram');
   const analysis = useMemo(() => (tab === 'analysis' ? engine.analyze(diagram) : undefined), [tab, engine, diagram]);
   const options = useMemo(
@@ -1035,10 +1043,12 @@ function DiagramPane({ diagram, nodes, edges, fitKey, engine, onSelect, zen, sou
             nodes={nodes}
             edges={edges}
             fitKey={fitKey}
+            layoutBusy={layoutBusy}
             problemCapacity
             paletteKey="proschi.practice.palette"
             flows
             phone={phone}
+            simulate={engine.available ? engine.analyze : undefined}
           />
         )}
         {nodes.length === 0 && tab === 'diagram' && <EmptyCanvas />}

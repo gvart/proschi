@@ -1,0 +1,36 @@
+# expect-fail: Catalog reads go to the replicas
+# expect-fail: cost ≤ $3,400/month
+# mistake: Sharding a database whose problem is reads
+# explain: Four shards give four primaries, but the writes fit on one at 60%: the extra primaries and their standbys cost more than a replica pool, and the application must now pick a shard for every query. When reads are the load, add replicas; shard when the writes outgrow one primary.
+# lesson: replicas-or-shards
+# cards: replicas-do-not-scale-writes, shards-for-write-rate
+# Split the primary into four shards to spread the reads, with no replicas.
+import "problem.proschi"
+
+capacity {
+  primary shards 4
+}
+
+app   -> proxy   : MySQL protocol
+proxy -> primary : every query, to the shop's shard
+
+usecase "Read catalog" "A storefront page reads products from the shop's shard" {
+  app      -> proxy   : SELECT products WHERE shop_id = $1
+  proxy    -> primary : SELECT products WHERE shop_id = $1
+  primary --> proxy   : 40 rows
+  proxy   --> app     : 40 rows
+}
+
+usecase "Place order" "Checkout writes the order to the shop's shard" {
+  app      -> proxy   : INSERT order
+  proxy    -> primary : INSERT order
+  primary --> proxy   : OK
+  proxy   --> app     : OK
+}
+
+usecase "Check order" "The order status page reads the order from the shop's shard" {
+  app      -> proxy   : SELECT order WHERE id = $1
+  proxy    -> primary : SELECT order WHERE id = $1
+  primary --> proxy   : 1 row
+  proxy   --> app     : 1 row
+}

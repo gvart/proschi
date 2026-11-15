@@ -1,3 +1,7 @@
+---
+updated: 2026-11-10
+---
+
 # Grammar
 
 The whole Proschi syntax in EBNF, for tool builders and quick lookups. Each
@@ -10,13 +14,31 @@ its brackets balance. Whitespace between tokens is ignored.
 document     = { line } ;
 line         = [ statement ] [ comment ] newline ;
 
-statement    = title | import | node | connection
+statement    = title | import | type | node | connection
              | group-open | system | usecase-open | par-open | alt-open | section-open | close
-             | traffic | requirements | capacity | entity | decision | test | legend
-             | direction | layout ;
+             | traffic | requirements | capacity | entity | decision | test | whatif | legend
+             | direction | layout | let ;
 
 title        = "title" , ( string | id ) , [ string ] ;   (* 2nd string: summary *)
 import       = "import" , string ;                      (* a relative path, git: or https:// source *)
+type         = [ "abstract" ] , "type" , type-name , [ "extends" , type-name ] , "{" ,
+               ( [ type-prop ] , "}"                    (* one line: { op write APPEND } or {} *)
+               | newline , { [ type-prop ] , [ comment ] , newline } , "}" ) ;
+type-name    = id | tech ;                              (* LedgerDb, [REST API]; extends also takes a catalog alias *)
+type-prop    = "kind" , kind
+             | ( "rps" | "readRps" | "writeRps" | "latencyMs" | "availability" | "costUsd"
+               | "bandwidthMBps" | "egressUsdPerGb" ) , quantity
+             | "durable" , ( "true" | "false" ) | "consistency" , ( "strong" | "eventual" )
+             | "writeScaling" , ( "replicas" | "shards" )
+             | "protocol" , ( id | string )
+             | "op" , ( "read" | "write" | "forward" ) , op-name , { "," , op-name } ,
+               { ( "latency" | "cost" ) , number }      (* multipliers, for each name on the line *)
+             | "status" , digit , digit , digit , { "," , digit , digit , digit }   (* 100 to 599 *)
+             | "header" , header-name , { "," , header-name }
+             | "icon" , ( id | tech )                   (* a catalog tech *)
+             | "doc" , string ;
+op-name      = id | string ;                            (* "full scan": several words *)
+header-name  = letter , { letter | digit | "-" } ;      (* Content-Type; quote it in a one-line body *)
 node         = id , { string | tech | team | position | replicas | color | tag | "critical" | rank } ;  (* 1st string: name, 2nd: description *)
 connection   = ref , arrow , ref , [ tag ] , [ ":" , label ] ;
 ref          = id | id , "." , id ;                      (* orders.api: an entry point; one token, no spaces *)
@@ -28,6 +50,8 @@ system       = "system" , id , { string | team | position | color | tag | rank }
 stub-part    = quantity | ( "p99" | "latency" | "availability" ) , quantity ;
 direction    = "direction" , ( "down" | "right" | "up" | "left" ) ;   (* alone on its line *)
 layout       = "layout" , "ordered" ;                   (* alone on its line *)
+let          = "let" , id , "=" , quantity ;            (* top level; a constant, used as constant *)
+constant     = "$" , id ;                               (* one token, e.g. $peak; stands for a quantity of its kind *)
 rank         = "rank" , ( digit , { digit } | "first" | "last" ) ;
 legend       = "legend" , "{" , { id , [ string ] , { color-value | color | "dashed" | "dotted" } } , "}" ;
 color        = "color" , ( color-value | hex ) ;
@@ -40,20 +64,26 @@ alt-open     = "alt" , ( string | id ) , [ "when" , string ] , "{" ;
 section-open = "section" , ( string | id ) , "{" ;     (* labels the steps in it *)
 close        = "}" , [ alt-open ] ;
 
-traffic      = "traffic" , "{" , { string , quantity , [ "mix" , share , { "," , share } ] } , "}" ;
+traffic      = "traffic" , "{" , { string , quantity , [ "peak" , ( replicas | quantity ) ] , [ "mix" , share , { "," , share } ] } , "}" ;
+                                                         (* peak x3: 3× the average; peak 60k rps: the peak itself *)
 share        = string , quantity ;                       (* "Cache hit" 90% *)
 requirements = "requirements" , "{" , { requirement } , "}" ;
 requirement  = percentile , [ string , [ "scenario" , string ] ] , "<" , quantity
              | "availability" , [ string ] , ">=" , quantity
              | "durable" , string
              | "survive" , ( "any" , "node" , "failure" | "failure" , "of" , selector )
-             | "cost" , "<=" , quantity ;
+             | "cost" , [ cost-scope ] , "<=" , quantity
+             | "lag" , string , "<" , quantity ;        (* the consumer lag of the queues the use case sends to *)
+cost-scope   = team | tag | "group" , id ;              (* a budget for a team's, a tag's or a group's nodes *)
 percentile   = "p50" | "p90" | "p95" | "p99" | "p999" ;
 capacity     = "capacity" , "{" , { id , { capacity-part } } , "}" ;
 capacity-part = quantity | "reads" , quantity | "writes" , quantity | "shards" , integer | "size" , ( "S" | "M" | "L" )
              | "latency" , quantity | "availability" , quantity | "cost" , quantity
              | "durable" | "volatile" | "consistency" , ( "strong" | "eventual" )
-             | "bandwidth" , quantity | "egress" , quantity | "timeout" , quantity ;
+             | "bandwidth" , quantity | "egress" , quantity | "timeout" , quantity
+             | "hit" , quantity                         (* hit 90%: a cache's hit rate *)
+             | "errors" , quantity | "retries" , integer   (* errors 2% retries 3: partial failure, 0 to 5 retries *)
+             | "drain" , quantity ;                     (* drain 5k rps: how fast a queue's consumers take messages *)
 entity       = "entity" , id , [ "in" , id ] , [ string ] , "{" , { id , id , { flag } } , "}" ;
 flag         = "key" | "index" | "unique" | "optional" ;
 decision     = "decision" , string , ( "because" , string
@@ -69,6 +99,12 @@ assertion    = string , [ "scenario" , string ] , ( "calls" , selector , [ ( "be
              | [ "in" , string ] , selector , [ "never" ] , "calls" , selector
              | "no" , "path" , "from" , selector , "to" , selector
              | selector , "has" , "replicas" , ">=" , integer ;
+whatif       = "whatif" , string , "{" , { whatif-change } , "}" ;
+whatif-change = "traffic" , string , ( replicas | quantity )   (* x3 or x1.5 multiplies, 50k rps sets *)
+             | "fail" , id
+             | id , replicas
+             | id , "hit" , quantity                    (* cache hit 40%: a cold cache *)
+             | id , "errors" , quantity ;               (* pay errors 20%: a bad deploy *)
 selector     = selector-atom , { "or" , selector-atom } ;
 selector-atom = id | tech | "any" , kind | "any" , ( "strong" | "eventual" ) , "store" ;
 kind         = "client" | "edge" | "cdn" | "loadbalancer" | "gateway" | "dns"
@@ -78,7 +114,8 @@ status       = digit , digit , digit | digit , "xx" ;     (* 201, 4xx *)
 
 arrow        = "->" | "->>" | "-->" | "-x" ;
 position     = "pos" , integer , "," , integer ;
-replicas     = "x" , digit , { digit } ;               (* one token, e.g. x3 *)
+replicas     = "x" , digit , { digit } , [ "." , digit , { digit } ]   (* one token, e.g. x3; a fraction only in a whatif traffic line *)
+             | "x$" , id ;                              (* x$n: a plain-number constant, one token *)
 quantity     = number , [ magnitude ] , [ unit ] ;     (* 50ms, 100k rps, 99.9% *)
 number       = digit , { digit } , [ "." , digit , { digit } ] ;
 magnitude    = "k" | "m" | "b" ;
@@ -90,6 +127,10 @@ team         = "@" , { letter | digit | "_" | "-" } ;
 integer      = [ "-" ] , digit , { digit } ;
 comment      = "#" , { character } ;            (* only where a token can start *)
 label        = [ label-prefix , [ label-prefix ] ] , { character } ;  (* to end of line; see below *)
+http-label   = method , path , [ "header" , header-name , { "," , header-name } ] , { character } ;
+                                                         (* GET /feed header Authorization, If-None-Match json {...} *)
+method       = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" | "HEAD" | "OPTIONS" ;
+path         = "/" , { character - whitespace } ;
 label-prefix = ( "x" , digit , { digit } | "~" , number , size-unit ) , whitespace ;  (* requests only *)
 size-unit    = "B" | "KB" | "MB" | "GB" | "TB" ;
 ```
@@ -100,7 +141,9 @@ size-unit    = "B" | "KB" | "MB" | "GB" | "TB" ;
 | Statement | Top level | In `group` | In `usecase` / `alt` / `section` | In `par` |
 |---|---|---|---|---|
 | `title` | ✓ | | | |
+| `let` | ✓ | | | |
 | `import` | ✓ | | | |
+| `type`, `abstract type` | ✓ | | | |
 | node | ✓ | ✓ | | |
 | `group` | ✓ | ✓ | | |
 | `system` | ✓ | ✓ | | |
@@ -112,19 +155,33 @@ size-unit    = "B" | "KB" | "MB" | "GB" | "TB" ;
 | `par` | | | ✓ | |
 | `alt` | | | ✓ | |
 | `section` | | | ✓ | |
-| `traffic`, `requirements`, `capacity`, `entity`, `decision`, `test` | ✓ | | | |
+| `traffic`, `requirements`, `capacity`, `entity`, `decision`, `test`, `whatif` | ✓ | | | |
 
 ## Notes
 
 - `-x` is only valid as a step.
 - `section` is a keyword only as `section "Name" {` (or `section Name {`);
   elsewhere it is an ordinary id. See [Sections](USE-CASES.md#sections).
+- A `constant` may stand in for any `quantity` and for the integer after
+  `shards`. Its value must be of the kind the place expects: a rate where a
+  rate goes, a duration where a duration goes. `x$n` takes a plain number
+  (`let n = 3`). A `let` line may come after the lines that use it, in the
+  same file; constants from an imported file count after its `import`.
 - A label is read as [Use case steps](USE-CASES.md#use-case-steps)
   describes: optional `x<N>` and `~<size>` prefixes on a request, an
   optional HTTP method and path, an optional `json`, `xml` or `text`
-  payload, and on a response a leading status code.
+  payload, and on a response a leading status code. A request label with
+  a method and path may name headers (`http-label`).
+- A `type` block holds one property per line; its `{` ends the header
+  line, and its `}` stands alone. A request to a node whose type lists
+  operations names one with its method or its first words; see
+  [typed operations](USE-CASES.md#typed-operations) and
+  [component types](TYPES.md).
 - The grammar describes syntax only. The parser also checks meaning:
-  duplicate ids, unknown tech stacks (a warning), responses without a
+  duplicate ids and constants, unknown constants and constants of the
+  wrong kind, unknown tech stacks (a warning), type cycles, unknown parent
+  types, operations, statuses and headers a type does not list (warnings),
+  responses without a
   matching request, steps between nodes the architecture does not connect,
   import cycles, missing files and files outside the project root, edges to
   a system's internal nodes, and unknown use cases, scenarios and nodes in

@@ -1,5 +1,10 @@
 title "Replicated Git Storage" "Keeps every repository on three file servers; a push commits on a quorum, a fetch reads one up-to-date replica"
 
+# Each file server takes part in the replicated update of a repository's refs.
+type GitFileServer extends [NoSQL Database] {
+  op write PREPARE, COMMIT, REPLICATE
+}
+
 dev    "Developer"     [Actor]
 routes "Replica Table" [MySQL] x4 @git "Which file servers hold each repository, and each replica's checksum"
 
@@ -26,7 +31,8 @@ test "Every repository lives on three file servers behind a proxy" {
 }
 
 test "A push commits on a quorum of replicas" {
-  "Push" writes fs before responding
+  "Push" uses PREPARE on fs before responding
+  "Push" uses COMMIT on fs before responding
   "Push" writes routes before responding
   "Push" calls routes after fs
   "Push" handles failure of fs
@@ -34,6 +40,6 @@ test "A push commits on a quorum of replicas" {
 }
 
 test "A fetch reads one replica that is up to date" {
-  "Fetch" calls routes before fs
+  "Fetch" uses SELECT on routes before fs
   "Fetch" responds 2xx
 }

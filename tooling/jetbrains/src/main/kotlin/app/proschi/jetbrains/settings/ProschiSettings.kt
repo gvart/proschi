@@ -22,6 +22,8 @@ class ProschiSettings : PersistentStateComponent<ProschiSettings.Options> {
         var cliPath: String = "",
         /** `node`; its directory is also put first on PATH for `npx`. */
         var nodePath: String = "",
+        /** The preview's theme ([PREVIEW_THEMES]); a `"theme"` in the nearest proschi.json overrides it. */
+        var previewTheme: String = PREVIEW_THEMES.first(),
     )
 
     private var options = Options()
@@ -33,6 +35,9 @@ class ProschiSettings : PersistentStateComponent<ProschiSettings.Options> {
     }
 
     companion object {
+        /** The values of the preview theme setting, the default first. */
+        val PREVIEW_THEMES = listOf("sketch", "classic")
+
         @JvmStatic
         fun getInstance(): ProschiSettings = service()
 

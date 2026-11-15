@@ -31,7 +31,7 @@ test "A write survives a replica that is down" {
 
 test "A read repairs a stale replica" {
   "Get" has scenario "Stale replica"
-  "Get" scenario "Stale replica" writes nodes before responding
+  "Get" scenario "Stale replica" uses PUT on nodes before responding
 }
 
 test "Reads come from the replicas, not a cache" {

@@ -127,4 +127,17 @@ test.describe('docs', () => {
     await expect(open).toBeFocused();
     await context.close();
   });
+
+  test('the component types page leads to the generated type reference, and a type links to its parent', async ({ page }) => {
+    await page.goto('docs/types/');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Component types');
+    await page.getByRole('link', { name: 'Data', exact: true }).first().click();
+    await expect(page).toHaveURL(/\/docs\/types-data\/$/);
+    await expect(sidebar(page).getByRole('link', { name: 'Data', exact: true })).toHaveAttribute('aria-current', 'page');
+    const postgres = page.getByRole('heading', { level: 2, name: /^PostgreSQL/ });
+    await expect(postgres).toBeVisible();
+    await page.locator('#postgresql ~ ul').first().getByRole('link', { name: 'Database', exact: true }).first().click();
+    await expect(page).toHaveURL(/#database$/);
+    await expect(page.getByRole('heading', { level: 2, name: /^Database/ })).toBeInViewport();
+  });
 });

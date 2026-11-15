@@ -37,6 +37,22 @@ object ProschiCommands {
         windows: Boolean = SystemInfo.isWindows,
     ): List<String> = resolve(options.cliPath, CLI_BIN, options.nodePath, find, windows) + args
 
+    /**
+     * `proschi render` for the preview: the `preview-html` page (a scenario picker and
+     * each use case's description) in [theme], which a `"theme"` in the nearest
+     * proschi.json overrides, written into [out].
+     */
+    fun previewArgs(fileName: String, out: String, theme: String): List<String> =
+        listOf("render", "--format", "preview-html", "--default-theme", theme, "--out", out, fileName)
+
+    /** The preview of a CLI without `preview-html` or `--default-theme` (upstream's, from npx): the `html` page. */
+    fun legacyPreviewArgs(fileName: String, out: String): List<String> =
+        listOf("render", "--format", "html", "--out", out, fileName)
+
+    /** True when `proschi render` refused [previewArgs] because the CLI predates them. */
+    fun isOlderCli(exitCode: Int, stderr: String): Boolean =
+        exitCode == 2 && ("Unknown format 'preview-html'" in stderr || "Unknown option --default-theme" in stderr)
+
     internal fun resolve(
         configured: String,
         bin: String,

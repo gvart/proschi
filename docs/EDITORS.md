@@ -1,3 +1,7 @@
+---
+updated: 2026-11-14
+---
+
 # Editor support
 
 Proschi runs in your own editor and in CI as well as in the browser. The
@@ -14,12 +18,42 @@ parser, so they agree on what is valid.
 Every plugin is built on two pieces from the `proschi` package:
 
 - **The language server** (`proschi-language-server`): errors and warnings
-  as you type, quick fixes (add a missing connection, replace an unknown
-  tech stack), completion of keywords, node ids and tech stacks, hover, go
-  to definition, find references, outline, formatting, and failing
-  requirements and tests.
+  as you type; quick fixes (add a missing connection, replace an unknown
+  tech stack, remove a repeated capacity part, add a traffic line for a use
+  case without one, and the `x2` or `shards N` a failing requirement
+  suggests); completion of keywords, node ids, tech stacks, `capacity`
+  parts, and the use case and scenario names in quotes; rename of node ids,
+  use cases and scenarios (see below); hover, go to definition, find
+  references, outline, formatting, failing requirements and tests, and
+  simulation results as inlay hints and code lenses (see below).
+
+Rename (F2 in most editors) changes every use of the name: steps,
+connections, `capacity`, `traffic` and `mix`, requirements, tests,
+`whatif` traffic, and the `expose … -> "Use case"` of a system whose team
+file declares the use case. It also changes the file that declares the name,
+and every `.proschi` file in the workspace that imports it or names it as a
+system's `from` file, open or not. Find references searches the same files.
+Files from git, https and cloud imports are never changed. In a workspace
+with more than 2,000 `.proschi` files, rename and find references search
+only the open documents, and the editor says so.
 - **The command line** (`proschi`): checks, formats, renders and tests files
   in CI and pre-commit hooks.
+
+The language server also shows simulation results in the code, from the
+same simulation as the Results view:
+
+- **Inlay hints** after each node declaration: its utilisation and monthly
+  cost, such as `62% · $400/mo`, or `130% saturated · $400/mo` past
+  capacity. Only in documents with a `traffic` block.
+- **Code lenses**: `p99 38 ms ✓` above each use case, or
+  `p99 120 ms ✗ (req < 100 ms)` when it breaks a latency requirement that
+  names it; the requirements, worst p99, availability and cost above each
+  `whatif` block; and `✓ 3/3 requirements pass` above `requirements`, which
+  also counts the requirements that name no use case.
+
+In VS Code and Open VSX editors, turn them off with the
+`proschi.inlayHints.enabled` and `proschi.codeLens.enabled` settings. In the
+web editor, **Overlay: load** shows the same hint after each node line.
 
 A TextMate grammar for highlighting and a JSON Schema of the parsed diagram
 are in the [Proschi repository](https://github.com/gvart/proschi/tree/main/tooling).
@@ -52,8 +86,21 @@ same file. The extension bundles the grammar and the language server.
 
 **Proschi: Open Preview to the Side** (the preview button in the editor
 title bar) opens the architecture and a scenario picker with that
-scenario's sequence diagram. It updates as you type. While the document has
+scenario's sequence diagram, with its use case's description above it,
+folded (sentences like `Requests: a (x); b (y)` show as tables). It updates
+as you type and keeps the scenario you picked. While the document has
 errors, it lists them above the last good rendering.
+
+The preview draws in one of two themes, set with `proschi.preview.theme`:
+
+| Value | Look |
+|---|---|
+| `sketch` (default) | Cream paper, ink outlines and hard shadows, as on proschi.app |
+| `classic` | White background, rounded light-grey cards, icon tiles coloured by component type, blue request arrows |
+
+A `"theme"` in the nearest `proschi.json` overrides the setting, the same
+way it picks the theme for `proschi render`. The preview redraws when the
+setting or `proschi.json` changes.
 
 ## IntelliJ IDEA and other JetBrains IDEs
 
@@ -65,7 +112,15 @@ under **Settings → Plugins → Marketplace**. It works in JetBrains IDEs
 - the language server through the IDE's LSP client, with **Structure** and
   **Reformat Code**;
 - **Tools → Proschi**: **Check File**, **Run Tests**, **Show Diagram
-  Preview** (redrawn on save) and **Open in Proschi**.
+  Preview** and **Open in Proschi**.
+
+The preview shows the architecture, a scenario picker and each use case's
+description, like the VS Code preview, and is redrawn when you save. Pick
+its theme, `sketch` or `classic`, under **Settings → Languages & Frameworks →
+Proschi → Preview**. A `"theme"` in the nearest `proschi.json` overrides the
+setting. The scenario picker, the descriptions and the theme need a CLI that
+has `--format preview-html` and `--default-theme`. With an older one the
+preview falls back to a plain page with every scenario listed.
 
 It needs Node.js 18 or newer, and runs `proschi` from `PATH`, else through
 `npx`. Set other paths in **Settings → Languages & Frameworks → Proschi**.
@@ -421,6 +476,7 @@ has the syntax.
 ```sh
 proschi test docs/                 # every *.proschi below docs/
 proschi analyze shortener.proschi  # the capacity table
+proschi diff before.proschi after.proschi  # what a change does
 ```
 
 `proschi test` follows imports, prints each result with a hint for failures,
@@ -432,6 +488,35 @@ and `loc` per result.
 (`3k/15k rps 20%`), utilisation, latency, availability, egress and cost,
 then the total cost, latency percentiles per use case and scenario, and
 single points of failure. `--format json` prints the whole analysis.
+A file with [what-ifs](TESTS.md#what-ifs) also gets a summary of them;
+`--whatif "Name"` prints the table under one, and `--whatif all` only the
+summary; both exit with 1 when a what-if fails its requirements. `--sweep "Use case" 10k..500k` analyses that use case across the
+range and prints where each node saturates and the highest rate at which
+the requirements still hold.
+
+`proschi diff before.proschi after.proschi` compares two designs. It prints
+what changed, as [`proschi versions diff`](VERSIONS.md#6-read-versions-from-the-command-line)
+does, then what the change does in the simulation: cost, the worst p99 and
+the lowest availability before and after, each marked `better` or `worse`,
+the same per use case with traffic, the requirements and tests that flipped
+between pass and fail, and the nodes whose utilisation moved by 10 points or
+more:
+
+```text
+Simulation
+  Cost          $600/mo  →  $1,250/mo  +$650/mo  worse
+  Worst p99     59.9 ms  →  38.2 ms              better
+  Availability  99.947%  →  99.89%               worse
+  Checks: 0 of 2 pass → 2 of 2 pass
+
+Checks that changed
+  p99 of Order status < 50 ms  fail  →  pass  ✓ now passes  better
+  survive failure of db        fail  →  pass  ✓ now passes  better
+```
+
+`--json` prints `summary`, `diff` and `delta` (`total`, `useCases`,
+`checks`, `checkChanges` and `utilization`) for scripts. It exits with 0
+whatever changed, and with 2 for a wrong argument.
 
 In the web editor, the **Results** tab lists failing checks first, each with
 its hint, then the analysis and **Review my design**. The review is

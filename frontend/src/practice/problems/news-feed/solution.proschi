@@ -4,7 +4,7 @@ lb        "Load Balancer"  [AWS Load Balancer] x2 @feed
 api       "Feed API"       [REST API]          x9 @feed "Publishes posts and serves feeds"
 posts     "Posts DB"       [Cassandra]         x2 @feed "Every post, partitioned by author"
 events    "Post Events"    [Kafka]             x2 @feed "PostCreated events for the fan-out"
-fanout    "Fan-out Worker" [REST API]          x2 @feed "Pushes each new post into its followers' feeds"
+fanout    "Fan-out Worker" [Worker]            x2 @feed "Pushes each new post into its followers' feeds"
 feeds     "Feed Cache"     [Redis]             x3 @feed "The newest 500 post ids of every active user"
 postCache "Post Cache"     [Redis]             x2 @feed "Recent posts by id, so feeds can be shown without the database"
 
@@ -58,7 +58,7 @@ usecase "Publish post" "Store a post and push it into the followers' feeds" {
   lb      -> api       : POST /posts
   api     -> posts     : INSERT Post p_981
   posts  --> api       : ok
-  api     -> events    : PostCreated p_981
+  api     -> events    : PUBLISH PostCreated p_981
   events --> api       : ack
   api    --> lb        : 201 {"id": "p_981"}
   lb     --> user      : 201 {"id": "p_981"}

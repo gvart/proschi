@@ -1,0 +1,46 @@
+# expect-fail: Shed requests never reach the API service
+# expect-fail: p99 of Start playback < 100 ms
+# mistake: Shedding inside the overloaded backend
+# explain: The API service checks each request's priority and answers 503 to the low ones, but by then it has already received and parsed all 20k requests a second, 125% of what it can take. Rejecting at the backend still spends the backend; shed at Zuul, so a shed request never reaches the API service.
+# lesson: shed-at-the-edge-not-in-the-backend
+# cards: load-shedding-at-the-gateway, load-shedding
+# Zuul forwards every request; the API service decides what to drop, after the work of receiving it.
+import "problem.proschi"
+
+zuul "Zuul" [API Gateway] x4 @edge "Routes every request to the API service"
+
+device -> zuul : HTTPS
+zuul   -> api  : HTTP
+
+usecase "Start playback" "A member presses play" {
+  device -> zuul   : POST /playback/start
+  zuul   -> api    : POST /playback/start
+  api   --> zuul   : 200 {"manifest": "..."}
+  zuul  --> device : 200 {"manifest": "..."}
+}
+
+usecase "Save progress" "The app saves a pause or stop marker" {
+  device -> zuul : PUT /progress
+  zuul   -> api  : PUT /progress
+
+  alt "Served" when "the API service has room" {
+    api  --> zuul   : 204
+    zuul --> device : 204
+  } alt "Shed" when "the API service is over its limit" {
+    api  --> zuul   : 503
+    zuul --> device : 503
+  }
+}
+
+usecase "Send logs" "The app uploads logs and background data" {
+  device -> zuul : POST /logs
+  zuul   -> api  : POST /logs
+
+  alt "Served" when "the API service has room" {
+    api  --> zuul   : 202
+    zuul --> device : 202
+  } alt "Shed" when "the API service is over its limit" {
+    api  --> zuul   : 503
+    zuul --> device : 503
+  }
+}

@@ -3,6 +3,8 @@ title: Search Autocomplete
 summary: Precomputed suggestions at the edge, rebuilt asynchronously.
 difficulty: medium
 tags: [caching, cdn, read-heavy, batch]
+version: 2
+strict: true
 hints:
   - The search cluster handles 9k rps and suggestions come at 100k rps. What could answer a prefix without searching at all?
   - "The top ten of a prefix changes slowly: compute it ahead of time from the query log and keep it in an in-memory store keyed by prefix."

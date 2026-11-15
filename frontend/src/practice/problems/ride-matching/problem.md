@@ -3,6 +3,8 @@ title: Ride Matching
 summary: 100k location updates per second into a geo store, not a database.
 difficulty: medium
 tags: [geo, caching, write-heavy, resilience]
+version: 2
+strict: true
 hints:
   - Only the latest position of a driver matters, and there are 100k of them per second. Which kind of store overwrites a key in a millisecond and can search by distance?
   - Request ride searches that store first, and writes the trip to a strongly consistent, durable database only once a driver is found, before answering 201. The offer to the driver goes through a queue with ->>, so the rider never waits for it.

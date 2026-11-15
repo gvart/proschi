@@ -28,7 +28,7 @@ api -> wh.pick
 usecase "Place order" {
   gateway -> api : POST /orders
   api -> db : INSERT order
-  api -> wh.pick : reserve
+  api -> wh.pick : POST /picks
 }
 `;
 
@@ -40,7 +40,7 @@ system orders "Orders" @Orders {
 }
 web -> orders.api
 usecase "Buy" {
-  web -> orders.api : buy
+  web -> orders.api : POST /orders
 }
 `;
 

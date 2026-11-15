@@ -3,6 +3,8 @@ title: Video Upload and Streaming
 summary: Asynchronous transcoding and a CDN in front of storage.
 difficulty: hard
 tags: [cdn, object-storage, queues, async, bandwidth, cost]
+version: 2
+strict: true
 hints:
   - A minute of transcoding cannot happen while the creator waits. What can hold the work until a transcoder is free, and who knows when the original has actually landed?
   - A 2 GB file over a 10 MB/s connection takes minutes. Let the API only record the video and hand out a presigned URL; the creator PUTs the file to object storage after the API has answered, and storage announces the new object on a queue (bucket ->> jobs). "Transcode video" starts at that queue.

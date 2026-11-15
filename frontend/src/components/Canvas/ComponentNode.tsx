@@ -27,12 +27,18 @@ const ComponentNode = ({ data, selected }: NodeProps<ComponentMetadata>) => {
       data-load={o ? (o.down ? 'down' : o.saturated ? 'over' : u !== undefined && u >= 0.9 ? 'hot' : 'ok') : undefined}
       data-heat={o ? heatText(u, o.down) : undefined}
       data-stack={o?.replicas && o.replicas > 1 ? Math.min(2, o.replicas - 1) : undefined}
+      data-bottleneck={o?.bottleneck || undefined}
       // The load overlay wins over the node's colors while it is on (D4).
       style={o ? { background: heat(u, o.down) } : tintVars(data)}
     >
       {data.critical && (
         <span className="pc-node__critical" role="img" aria-label="Critical" title="Critical">
           <TriangleAlert size={13} strokeWidth={2.5} aria-hidden="true" />
+        </span>
+      )}
+      {o?.bottleneck && (
+        <span className="pc-node__tag" title="The busiest node: the first to give way as traffic grows">
+          Bottleneck
         </span>
       )}
       <NodeResizer color={CANVAS_ACCENT} isVisible={selected && !data.fixedSize} minWidth={180} minHeight={80} />

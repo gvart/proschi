@@ -95,6 +95,7 @@ describe('proschi versions', () => {
     expect(json.base).toMatchObject({ tag: 'v1', seq: 1 });
     expect(json.target).toMatchObject({ tag: '2026-11-01', seq: 2 });
     expect(json.summary.total).toEqual({ added: 2, removed: 2, changed: 4 });
+    expect(json.delta.total.after.costUsd).toBeGreaterThan(json.delta.total.before.costUsd);
   });
 
   it('finds a diagram stored with or without .proschi, and calls both at once ambiguous', async () => {

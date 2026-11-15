@@ -485,7 +485,7 @@ var require_lz_string = __commonJS({
 });
 
 // ../plugin/src/register.tsx
-import { atom, memberOf, read, update } from "claude-code";
+import { atom as atom2, memberOf, read as read2, update as update2 } from "claude-code";
 
 // ../frontend/src/catalog/componentCatalog.ts
 var componentCatalog = [
@@ -794,11 +794,11 @@ var DIGIT = /[0-9]/;
 var LETTER = /[A-Za-z]/;
 var HEX_COLOR = /^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})(?![A-Za-z0-9_])/;
 var SEPARATE_UNIT = /^[ \t]+(rps|rpm|rpd|ms|s|%|usd\/month|usd\/GB|MB\/s|GB\/s)(?![A-Za-z0-9_/])/;
-function tokenizeLine(text, line) {
+function tokenizeLine(text, line2) {
   const tokens = [];
   const diagnostics = [];
   let i = 0;
-  const error = (message, col, length) => diagnostics.push({ severity: "error", message, line, col, length });
+  const error = (message, col, length) => diagnostics.push({ severity: "error", message, line: line2, col, length });
   while (i < text.length) {
     const ch = text[i];
     if (ch === " " || ch === "	" || ch === "\r") {
@@ -813,90 +813,123 @@ function tokenizeLine(text, line) {
       i += hex2[0].length;
       continue;
     }
-    const start2 = i;
+    const start3 = i;
     if (ch === ":") {
       const raw = stripTrailingComment(text.slice(i + 1));
-      tokens.push({ kind: "label", value: raw.trim(), col: start2 + 1, length: text.length - start2 });
+      tokens.push({ kind: "label", value: raw.trim(), col: start3 + 1, length: text.length - start3 });
       break;
     }
     if (ch === '"') {
       const { value, end, closed } = readString(text, i);
-      if (!closed) error("Unterminated string", start2 + 1, text.length - start2);
-      tokens.push({ kind: "string", value, col: start2 + 1, length: end - start2 });
+      if (!closed) error("Unterminated string", start3 + 1, text.length - start3);
+      tokens.push({ kind: "string", value, col: start3 + 1, length: end - start3 });
       i = end;
       continue;
     }
     if (ch === "[") {
       const close = text.indexOf("]", i + 1);
       if (close === -1) {
-        error("Missing ] after tech stack", start2 + 1, text.length - start2);
-        tokens.push({ kind: "tech", value: text.slice(i + 1).trim(), col: start2 + 1, length: text.length - start2 });
+        error("Missing ] after tech stack", start3 + 1, text.length - start3);
+        tokens.push({ kind: "tech", value: text.slice(i + 1).trim(), col: start3 + 1, length: text.length - start3 });
         break;
       }
-      tokens.push({ kind: "tech", value: text.slice(i + 1, close).trim(), col: start2 + 1, length: close + 1 - start2 });
+      tokens.push({ kind: "tech", value: text.slice(i + 1, close).trim(), col: start3 + 1, length: close + 1 - start3 });
       i = close + 1;
       continue;
     }
     if (ch === "-") {
-      const arrow = ["->>", "-->", "->"].find((a) => text.startsWith(a, i));
+      const arrow2 = ["->>", "-->", "->"].find((a) => text.startsWith(a, i));
       const failed = text.startsWith("-x", i) && !IDENT_PART.test(text[i + 2] ?? "");
-      if (arrow || failed) {
-        const value = arrow ?? "-x";
-        tokens.push({ kind: "arrow", value, col: start2 + 1, length: value.length });
+      if (arrow2 || failed) {
+        const value = arrow2 ?? "-x";
+        tokens.push({ kind: "arrow", value, col: start3 + 1, length: value.length });
         i += value.length;
         continue;
       }
       if (DIGIT.test(text[i + 1] ?? "")) {
         i++;
         while (i < text.length && DIGIT.test(text[i])) i++;
-        tokens.push({ kind: "number", value: text.slice(start2, i), col: start2 + 1, length: i - start2 });
+        tokens.push({ kind: "number", value: text.slice(start3, i), col: start3 + 1, length: i - start3 });
         continue;
       }
     }
     if (DIGIT.test(ch)) {
       i = readQuantity(text, i);
-      const value = text.slice(start2, i).replace(/[ \t]+/g, "");
+      const value = text.slice(start3, i).replace(/[ \t]+/g, "");
       const kind = /^\d+$/.test(value) ? "number" : "quantity";
-      tokens.push({ kind, value, col: start2 + 1, length: i - start2 });
+      tokens.push({ kind, value, col: start3 + 1, length: i - start3 });
+      continue;
+    }
+    if (ch === "=") {
+      tokens.push({ kind: "op", value: "=", col: start3 + 1, length: 1 });
+      i++;
+      continue;
+    }
+    if (ch === "$" && IDENT_START.test(text[i + 1] ?? "")) {
+      i++;
+      while (i < text.length && IDENT_PART.test(text[i])) i++;
+      tokens.push({ kind: "const", value: text.slice(start3, i), col: start3 + 1, length: i - start3 });
       continue;
     }
     if (ch === "<" || ch === ">") {
       const value = text[i + 1] === "=" ? ch + "=" : ch;
-      tokens.push({ kind: "op", value, col: start2 + 1, length: value.length });
+      tokens.push({ kind: "op", value, col: start3 + 1, length: value.length });
       i += value.length;
       continue;
     }
     if (ch === "@") {
       i++;
       while (i < text.length && TEAM_PART.test(text[i])) i++;
-      if (i === start2 + 1) error("Expected a team name after @", start2 + 1, 1);
-      tokens.push({ kind: "team", value: text.slice(start2 + 1, i), col: start2 + 1, length: i - start2 });
+      if (i === start3 + 1) error("Expected a team name after @", start3 + 1, 1);
+      tokens.push({ kind: "team", value: text.slice(start3 + 1, i), col: start3 + 1, length: i - start3 });
+      continue;
+    }
+    if (ch === "/") {
+      while (i < text.length && !/\s/.test(text[i])) i++;
+      tokens.push({ kind: "path", value: text.slice(start3, i), col: start3 + 1, length: i - start3 });
       continue;
     }
     if (IDENT_START.test(ch)) {
+      const prev = tokens[tokens.length - 1];
+      const headerName = prev?.kind === "ident" && prev.value === "header" ? /^[A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)+/.exec(text.slice(i)) : null;
+      if (headerName) {
+        i += headerName[0].length;
+        tokens.push({ kind: "ident", value: headerName[0], col: start3 + 1, length: i - start3 });
+        continue;
+      }
       while (i < text.length && IDENT_PART.test(text[i])) i++;
-      tokens.push({ kind: "ident", value: text.slice(start2, i), col: start2 + 1, length: i - start2 });
+      if (i === start3 + 1 && ch === "x" && text[i] === "$" && IDENT_START.test(text[i + 1] ?? "")) {
+        i += 2;
+        while (i < text.length && IDENT_PART.test(text[i])) i++;
+        tokens.push({ kind: "const", value: text.slice(start3, i), col: start3 + 1, length: i - start3 });
+        continue;
+      }
+      if (/^x\d+$/.test(text.slice(start3, i)) && text[i] === "." && DIGIT.test(text[i + 1] ?? "")) {
+        i++;
+        while (i < text.length && DIGIT.test(text[i])) i++;
+      }
+      tokens.push({ kind: "ident", value: text.slice(start3, i), col: start3 + 1, length: i - start3 });
       continue;
     }
     if (ch === "." && IDENT_START.test(text[i + 1] ?? "")) {
       i++;
       while (i < text.length && IDENT_PART.test(text[i])) i++;
-      tokens.push({ kind: "tag", value: text.slice(start2 + 1, i), col: start2 + 1, length: i - start2 });
+      tokens.push({ kind: "tag", value: text.slice(start3 + 1, i), col: start3 + 1, length: i - start3 });
       continue;
     }
     if (ch === "{" || ch === "}" || ch === ",") {
       const kind = ch === "{" ? "lbrace" : ch === "}" ? "rbrace" : "comma";
-      tokens.push({ kind, value: ch, col: start2 + 1, length: 1 });
+      tokens.push({ kind, value: ch, col: start3 + 1, length: 1 });
       i++;
       continue;
     }
-    error(`Unexpected character '${ch}'`, start2 + 1, 1);
+    error(`Unexpected character '${ch}'`, start3 + 1, 1);
     i++;
   }
   return { tokens, diagnostics };
 }
-function readQuantity(text, start2) {
-  let i = start2;
+function readQuantity(text, start3) {
+  let i = start3;
   while (i < text.length && DIGIT.test(text[i])) i++;
   if (text[i] === "." && DIGIT.test(text[i + 1] ?? "")) {
     i++;
@@ -915,9 +948,9 @@ function readQuantity(text, start2) {
   }
   return i;
 }
-function readString(text, start2) {
+function readString(text, start3) {
   let value = "";
-  let i = start2 + 1;
+  let i = start3 + 1;
   while (i < text.length) {
     const ch = text[i];
     if (ch === "\\" && i + 1 < text.length) {
@@ -1039,7 +1072,7 @@ var BY_TYPE = {
 };
 function kindOf(node) {
   if (node.kind !== "component") return "other";
-  return node.inferredKind ?? BY_TECH.get(node.techStack) ?? BY_TYPE[node.type] ?? "other";
+  return node.inferredKind ?? node.resolvedType?.kind ?? BY_TECH.get(node.techStack) ?? BY_TYPE[node.type] ?? "other";
 }
 var TYPE_OF_KIND = {
   client: "shape",
@@ -1089,8 +1122,8 @@ function isDataStore(kind) {
 function isEdge(kind) {
   return EDGE_KINDS.includes(kind);
 }
-function kindMatches(actual, wanted) {
-  return actual === wanted || wanted === "edge" && isEdge(actual) || wanted === "queue" && actual === "broker";
+function kindMatches(actual, wanted3) {
+  return actual === wanted3 || wanted3 === "edge" && isEdge(actual) || wanted3 === "queue" && actual === "broker";
 }
 
 // ../frontend/src/dsl/quantity.ts
@@ -1267,6 +1300,11 @@ function buildSequence(useCase, scenario, nodes = []) {
   }
   return { useCase, scenario, participants, items, condition: scenario.condition || void 0 };
 }
+function findScenario(diagram, useCaseId, scenarioId) {
+  const useCase = diagram.useCases.find((u) => u.id === useCaseId);
+  const scenario = scenarioId ? useCase?.scenarios.find((s) => s.id === scenarioId) : useCase?.scenarios[0];
+  return useCase && scenario ? { useCase, scenario } : void 0;
+}
 function sequenceMessages(items) {
   return items.flatMap((item) => item.kind === "message" ? [item.message] : item.branches.flat());
 }
@@ -1293,6 +1331,12 @@ function sectionedItems(items) {
   while (open.length) out.push({ kind: "close", section: open.pop(), depth: open.length });
   return out;
 }
+
+// ../frontend/src/utils/canvasColors.ts
+var CANVAS_TOKENS = {
+  light: { paper: "#FFF8E7", surface: "#FFFFFF", ink: "#111111", muted: "#5B5B5B", shadow: "#111111", accent: "#FF5DA2", fail: "#FF3B30" },
+  dark: { paper: "#141318", surface: "#1E1D24", ink: "#F4EFE3", muted: "#A9A5B4", shadow: "#605496", accent: "#FF7AB4", fail: "#FF6B61" }
+};
 
 // ../frontend/src/dsl/palette.ts
 var PALETTE = {
@@ -1350,6 +1394,25 @@ function nodeBaseColor(node) {
   const category = categoryOf(kindOf(node));
   return category ? PALETTE[CATEGORY_COLOR[category]] : void 0;
 }
+var MIX = { fill: 0.12, groupFill: 0.06, line: 0.72 };
+function tint(base, theme2) {
+  const { surface, ink } = CANVAS_TOKENS[theme2];
+  return {
+    fill: mix(base, surface, MIX.fill),
+    groupFill: mix(base, surface, MIX.groupFill),
+    line: mix(base, ink, MIX.line),
+    text: ink
+  };
+}
+var DASH_ARRAY = { dashed: "7 5", dotted: "2 4" };
+function mix(a, b, share2) {
+  const [x, y] = [rgb(a), rgb(b)];
+  return "#" + x.map((c, i) => Math.round(c * share2 + y[i] * (1 - share2)).toString(16).padStart(2, "0")).join("");
+}
+function rgb(hex2) {
+  const full = resolveColor(hex2) ?? "#000000";
+  return [1, 3, 5].map((i) => parseInt(full.slice(i, i + 2), 16));
+}
 function suggestColor(text) {
   const word = text.toLowerCase();
   let best;
@@ -1373,7 +1436,847 @@ function editDistance2(a, b) {
   return row[b.length];
 }
 
+// ../frontend/src/dsl/typesys/types.ts
+var ROOT_TYPE = "Component";
+
+// ../frontend/src/dsl/typesys/resolve.ts
+var typeKey = techKey;
+function lookupType(table3, name) {
+  const own = table3.get(typeKey(name));
+  if (own && !own.builtin) return own;
+  const tech = findTech(name);
+  return tech ? table3.get(typeKey(tech.techStack)) : own;
+}
+function techNamed(name) {
+  const tech = findTech(name);
+  return tech && typeKey(tech.techStack) === typeKey(name) ? tech.techStack : void 0;
+}
+function resolveTypes(decls, base = /* @__PURE__ */ new Map()) {
+  const diagnostics = [];
+  const error = (message, loc) => diagnostics.push({ severity: "error", message, ...loc });
+  const warning = (message, loc) => diagnostics.push({ severity: "warning", message, ...loc });
+  const byKey2 = /* @__PURE__ */ new Map();
+  const order = [];
+  for (const decl of decls) {
+    const key = typeKey(decl.name);
+    const builtin = base.get(key);
+    const first = byKey2.get(key);
+    if (builtin) error(`Type '${decl.name}' is built in${builtin.name === decl.name ? "" : ` as '${builtin.name}'`}; extend it under another name`, decl.loc);
+    else if (first) error(`Duplicate type '${decl.name}' (first declared ${where(first.loc, decl.loc)})`, decl.loc);
+    else {
+      byKey2.set(key, decl);
+      order.push(decl);
+    }
+  }
+  const table3 = new Map(base);
+  const resolving = [];
+  const broken = /* @__PURE__ */ new Set();
+  const resolve = (decl) => {
+    const key = typeKey(decl.name);
+    const done = table3.get(key);
+    if (done) return done;
+    let parent;
+    const parentName = decl.parent ?? (typeKey(decl.name) === typeKey(ROOT_TYPE) ? void 0 : ROOT_TYPE);
+    if (parentName !== void 0) {
+      const parentKey = typeKey(parentName);
+      const parentDecl = byKey2.get(parentKey);
+      const cycleStart = !parentDecl ? -1 : parentDecl === decl ? resolving.length : resolving.indexOf(parentDecl);
+      if (cycleStart !== -1) {
+        const names = [...resolving.slice(cycleStart), decl, parentDecl].map((d) => d.name);
+        error(`Type cycle: ${names.join(" \u2192 ")}`, decl.parentLoc ?? decl.loc);
+        parent = table3.get(typeKey(ROOT_TYPE));
+        broken.add(key);
+      } else if (parentDecl) {
+        resolving.push(decl);
+        parent = resolve(parentDecl);
+        resolving.pop();
+        if (broken.has(parentKey)) broken.add(key);
+      } else {
+        parent = base.get(parentKey) ?? lookupType(base, parentName) ?? catalogType(parentName, table3);
+        if (!parent) {
+          broken.add(key);
+          const suggestion = suggestType(parentName, [...table3.values()].map((t) => t.name).concat([...byKey2.values()].map((d) => d.name)));
+          error(`Unknown parent type '${parentName}'${suggestion ? `. Did you mean '${suggestion}'?` : ""}`, decl.parentLoc ?? decl.loc);
+          parent = table3.get(typeKey(ROOT_TYPE));
+        }
+      }
+    }
+    let icon = decl.icon;
+    if (icon !== void 0) {
+      const tech = findTech(icon);
+      if (!tech) {
+        const suggestion = suggestTech(icon);
+        warning(`Unknown icon '${icon}'${suggestion ? ` (did you mean '${suggestion}'?)` : ""}; the type keeps its inherited icon`, decl.loc);
+      }
+      icon = tech?.techStack;
+    }
+    if (icon === void 0 && decl.builtin) icon = techNamed(decl.name);
+    const shadowed = decl.builtin ? void 0 : findTech(decl.name);
+    if (shadowed) warning(`Type '${decl.name}' has the name of the catalog tech '${shadowed.techStack}'; [${decl.name}] now means this type`, decl.loc);
+    icon ??= parent?.icon;
+    const kind = decl.kind ?? parent?.kind;
+    if (!decl.abstract && !kind && !broken.has(key)) error(`Type '${decl.name}' needs a kind: declare one (kind database) or extend a type that has one`, decl.loc);
+    const ownOps = new Set(decl.ops.map((o) => o.name.toLowerCase()));
+    const resolved = {
+      name: decl.name,
+      abstract: decl.abstract,
+      builtin: decl.builtin,
+      parents: parent ? [parent.name, ...parent.parents] : [],
+      ...kind ? { kind } : {},
+      props: { ...parent?.props, ...decl.props },
+      ops: [...parent?.ops.filter((o) => !ownOps.has(o.name.toLowerCase())) ?? [], ...decl.ops].map((o) => ({ ...o })),
+      statuses: union(parent?.statuses ?? [], decl.statuses),
+      headers: union(parent?.headers ?? [], decl.headers, (h2) => h2.toLowerCase()),
+      ...pick("protocol", decl.protocol ?? parent?.protocol),
+      ...pick("icon", icon),
+      ...pick("doc", decl.doc ?? parent?.doc),
+      loc: decl.loc
+    };
+    table3.set(key, resolved);
+    return resolved;
+  };
+  const types = order.map(resolve);
+  return { table: table3, types, diagnostics };
+}
+function catalogType(name, table3) {
+  const tech = findTech(name);
+  if (!tech) return void 0;
+  const root = table3.get(typeKey(ROOT_TYPE));
+  return {
+    name: tech.techStack,
+    abstract: false,
+    builtin: true,
+    parents: root ? [root.name, ...root.parents] : [],
+    kind: kindOf({ kind: "component", type: tech.type, techStack: tech.techStack }),
+    props: {},
+    ops: [],
+    statuses: [],
+    headers: [],
+    icon: tech.techStack,
+    loc: { line: 1, col: 1, length: 0, file: "catalog" }
+  };
+}
+function pick(key, value) {
+  return value === void 0 ? {} : { [key]: value };
+}
+function union(inherited, own, key = (v) => v) {
+  const seen = new Set(inherited.map(key));
+  return [...inherited, ...own.filter((v) => !seen.has(key(v)) && seen.add(key(v)))];
+}
+function where(first, later) {
+  return first.file === later.file ? `on line ${first.line}` : `in ${first.file ?? "the root document"} on line ${first.line}`;
+}
+function suggestType(name, names) {
+  const key = typeKey(name);
+  let best;
+  let bestDistance = Math.max(2, Math.floor(key.length / 3)) + 1;
+  for (const candidate of names) {
+    const d = editDistance(key, typeKey(candidate));
+    if (d < bestDistance) [best, bestDistance] = [candidate, d];
+  }
+  return best;
+}
+
+// ../frontend/src/dsl/stdlib/sources.gen.ts
+var STDLIB_SOURCES = [
+  { path: "stdlib/core.proschi", source: `# Proschi standard library: the root types. Bundled with the parser, so every
+# diagram sees them. The format is in docs/design/typed-components.md.
+#
+# updated: 2026-11-10
+#
+# Rules for stdlib files:
+# - Only \`type\` and \`abstract type\` blocks, blank lines and comments.
+# - A type named after a catalog tech stack (src/catalog/componentCatalog.ts)
+#   is drawn with that tech's icon and must have the kind the catalog gives it
+#   (stdlib.test.ts checks both). Every catalog tech has a type.
+# - An abstract type, or any type the catalog does not know, must not share
+#   a name or an alias with a catalog tech: the catalog name always wins.
+# - Names of the types the catalog does not know, all abstract:
+#   - a top level under Component is one word: a layer of a design (Edge,
+#     Compute, Data, Messaging, External) or a family of drawings (Caller,
+#     Shape, Annotation, Group);
+#   - below it, a type is named in English words like a catalog tech, in
+#     brackets when there are several, with acronyms written as the catalog
+#     writes them (SQL, NoSQL, HTTP): [Coordination Store], Platform;
+#   - a type that narrows another one ends with that type's name:
+#     [HTTP Service] under Service, [Document NoSQL Database] under
+#     [NoSQL Database], [Distributed SQL Database] under Database.
+# - Simulation numbers (latencyMs, rps, \u2026) go here only when they equal what
+#   sim/profiles.ts already gives the tech, so diagrams simulate as before.
+# - An op a practice problem's step already uses must have the access that
+#   step has today (dsl/access.ts); stdlib.test.ts checks it.
+# - Op names are unique along a type's chain, ignoring case: a parent's
+#   upper-case plain words (WRITE, SEND) are not repeated by its children.
+#   A child declares an inherited op again only to change it, as DynamoDB's
+#   Scan gives the key-value SCAN its multipliers.
+# - Transaction control is \`op read\`: an op that only opens, commits, rolls
+#   back or discards a transaction (SQL BEGIN, COMMIT, ROLLBACK; Redis MULTI,
+#   EXEC, DISCARD; Spanner and Firestore BeginTransaction; Kafka
+#   AddPartitionsToTxn, EndTxn) carries no data of its own. The statements
+#   inside the transaction are steps of their own and carry its reads and
+#   writes, so a read-only transaction stays a read and a use case does not
+#   become a write by its BEGIN or COMMIT. An op that carries the
+#   transaction's data has that data's access: DynamoDB TransactWriteItems
+#   and TransactGetItems, Firestore Commit, etcd Txn, ZooKeeper multi, Cosmos
+#   DB TransactionalBatch. stdlib.test.ts checks both.
+# - A generic type (the catalog's [NoSQL Database], Cache, [Message Queue],
+#   [Object Storage], [Search Engine], CDN, \u2026) or an abstract parent declares
+#   its family's standard vocabulary (key-value: GET, PUT, DELETE, SCAN;
+#   queue: SEND, RECEIVE, ACK; objects: GET, PUT, DELETE, LIST), so every
+#   product inherits it and adds its own API's names. Types whose requests
+#   are the design's own API (Service, Worker, gRPC, WebSocket, the
+#   languages, platforms and functions) declare no ops and stay open, and
+#   so does AWS Global Accelerator, which carries any TCP or UDP traffic.
+# - A change to the types in any stdlib file (a type, op, status, header,
+#   doc or parent; not a comment) bumps the \`updated:\` date above to that
+#   day. It is the "Last updated" date of every page of the built-in type
+#   reference (docs/types/, plugins/typeReference.ts).
+# - After editing, run \`npm run gen:stdlib\` to refresh sources.gen.ts.
+#
+# The top levels: Component, then Caller and Shape (clients), Annotation and
+# Group (drawing aids), Edge, Compute, Data, Messaging and External.
+
+abstract type Component {
+  doc "Anything drawn on the diagram: the root of every type."
+}
+
+# Clients: who sends the first request.
+
+abstract type Caller {
+  kind client
+  doc "Whoever sends the first request: a person, a browser or an app."
+}
+
+type Actor extends Caller {
+  doc "A person who uses the system."
+}
+
+type Browser extends Caller {
+  doc "A web browser running the site's pages."
+}
+
+type [Mobile App] extends Caller {
+  doc "An iOS or Android app on the user's phone."
+}
+
+abstract type Shape {
+  kind client
+  doc "A plain shape, drawn without a product icon; it simulates as a client."
+}
+
+type Rectangle extends Shape {
+  doc "A plain rectangle."
+}
+
+type Circle extends Shape {
+  doc "A plain circle."
+}
+
+type Diamond extends Shape {
+  doc "A plain diamond, often used for a decision."
+}
+
+type Cylinder extends Shape {
+  doc "A plain cylinder, the usual sketch of storage."
+}
+
+type Cloud extends Shape {
+  doc "A plain cloud shape, for the internet or a provider you do not detail."
+}
+
+# Drawing aids: they take no part in the simulation.
+
+abstract type Annotation {
+  kind other
+  doc "A note on the diagram that takes no part in the simulation."
+}
+
+type Note extends Annotation {
+  doc "A note shape with text, for remarks next to the components."
+}
+
+type [Text Note] extends Annotation {
+  doc "Free text placed on the canvas."
+}
+
+type [Sticky Note] extends Annotation {
+  doc "A sticky note on the canvas."
+}
+
+type Comment extends Annotation {
+  doc "A review comment on the canvas."
+}
+
+abstract type Group {
+  kind other
+  doc "A box drawn around components that belong together."
+}
+
+type [Logical Group] extends Group {
+  doc "A box around components that form one part of the design."
+}
+
+type [Network Boundary] extends Group {
+  doc "A box around components in one network, such as a VPC or a subnet."
+}
+
+type [Security Zone] extends Group {
+  doc "A box around components that share one trust level."
+}
+
+type [Service Group] extends Group {
+  doc "A box around the components one team or service owns."
+}
+` },
+  { path: "stdlib/cloud-aws.proschi", source: '# Proschi standard library: Amazon Web Services. The rules are in core.proschi.\n\n# Edge\n\ntype [AWS CloudFront] extends CDN {\n  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it\n  op write CreateInvalidation\n  doc "Amazon CloudFront, the CDN of AWS."\n}\n\ntype [AWS Route53] extends DNS {\n  op write ChangeResourceRecordSets\n  doc "Amazon Route 53, the DNS service of AWS, with health checks and latency routing."\n}\n\ntype [AWS Load Balancer] extends [Load Balancer] {\n  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it\n  doc "Elastic Load Balancing: an application (L7) or network (L4) load balancer on AWS."\n}\n\ntype [AWS API Gateway] extends [API Gateway] {\n  doc "Amazon API Gateway, the managed API front door of AWS."\n}\n\ntype [AWS WAF] extends WAF {\n  doc "AWS WAF, the web application firewall in front of CloudFront, load balancers and API Gateway."\n}\n\ntype [AWS Global Accelerator] extends Edge {\n  doc "AWS Global Accelerator: anycast addresses that carry traffic over the AWS network to the nearest healthy region."\n}\n\n# Compute\n\ntype [AWS EC2] extends VM {\n  doc "Amazon EC2, virtual machines on AWS."\n}\n\ntype [AWS ECS] extends Docker {\n  doc "Amazon ECS, which runs containers on AWS."\n}\n\ntype [AWS Fargate] extends Docker {\n  doc "AWS Fargate, containers on AWS without servers to manage."\n}\n\ntype [AWS EKS] extends Kubernetes {\n  doc "Amazon EKS, managed Kubernetes on AWS."\n}\n\ntype [AWS Lambda] extends Function {\n  doc "AWS Lambda, functions that run per request or event on AWS."\n}\n\n# Data\n\ntype [AWS RDS] extends Database {\n  doc "Amazon RDS, managed relational databases on AWS (PostgreSQL, MySQL and others)."\n}\n\ntype [AWS Aurora] extends Database {\n  doc "Amazon Aurora, the AWS relational database compatible with PostgreSQL and MySQL, on shared distributed storage."\n}\n\ntype [AWS DynamoDB] extends DynamoDB {\n  doc "Amazon DynamoDB, the managed key-value and document database of AWS."\n}\n\ntype [AWS DocumentDB] extends MongoDB {\n  doc "Amazon DocumentDB, the AWS document database compatible with MongoDB."\n}\n\ntype [AWS Keyspaces] extends Cassandra {\n  doc "Amazon Keyspaces, the AWS wide-column database compatible with Cassandra."\n}\n\ntype [AWS Neptune] extends [Graph NoSQL Database] {\n  doc "Amazon Neptune, the graph database of AWS."\n}\n\ntype [AWS ElastiCache] extends Redis {\n  doc "Amazon ElastiCache, managed Redis, Valkey or Memcached on AWS."\n}\n\ntype [AWS OpenSearch] extends OpenSearch {\n  doc "Amazon OpenSearch Service, managed OpenSearch on AWS."\n}\n\ntype [AWS Redshift] extends [Data Warehouse] {\n  doc "Amazon Redshift, the data warehouse of AWS."\n}\n\ntype [AWS Athena] extends [Data Warehouse] {\n  op read  StartQueryExecution, GetQueryExecution, GetQueryResults\n  doc "Amazon Athena, SQL queries over files in S3."\n}\n\ntype [AWS S3] extends [Object Storage] {\n  op read  GetObject, HeadObject, ListObjectsV2, ListObjects, GetObjectTagging, GetObjectAcl\n  op read  ListMultipartUploads, ListParts, SelectObjectContent, HeadBucket, ListBuckets\n  op write PutObject, CopyObject, DeleteObject, DeleteObjects, RestoreObject, PutObjectTagging, PutObjectAcl\n  op write CreateMultipartUpload, UploadPart, UploadPartCopy, CompleteMultipartUpload, AbortMultipartUpload\n  op write CreateBucket, DeleteBucket\n  doc "Amazon S3, the object storage of AWS."\n}\n\ntype [AWS EBS] extends [Block Storage] {\n  doc "Amazon EBS, block volumes for EC2 instances."\n}\n\ntype [AWS EFS] extends [Shared File System] {\n  doc "Amazon EFS, a shared NFS file system on AWS."\n}\n\n# Messaging\n\ntype [AWS SQS] extends SQS {\n  doc "Amazon SQS, the managed message queue of AWS."\n}\n\ntype [AWS SNS] extends [Message Broker] {\n  op write PublishBatch, CreateTopic, DeleteTopic\n  doc "Amazon SNS, the pub/sub topics of AWS that fan out to queues, functions and phones."\n}\n\ntype [AWS EventBridge] extends [Message Broker] {\n  op write PutEvents, PutRule, PutTargets\n  doc "Amazon EventBridge, the AWS event bus that routes events by rules."\n}\n\ntype [AWS Kinesis] extends [Message Broker] {\n  op read  GetRecords, GetShardIterator, SubscribeToShard, DescribeStream, ListShards\n  op write PutRecord, PutRecords\n  doc "Amazon Kinesis Data Streams, the partitioned stream of AWS."\n}\n\ntype [AWS MSK] extends Kafka {\n  doc "Amazon MSK, managed Kafka on AWS."\n}\n\n# External\n\ntype [AWS SES] extends [Email Service] {\n  op write SendEmail, SendRawEmail, SendBulkEmail\n  doc "Amazon SES, the email sending service of AWS."\n}\n\ntype [AWS Cognito] extends [Auth Service] {\n  op read  GetUser\n  op write InitiateAuth, RespondToAuthChallenge, SignUp, ConfirmSignUp, GlobalSignOut\n  doc "Amazon Cognito, user sign-up and sign-in on AWS."\n}\n' },
+  { path: "stdlib/cloud-azure.proschi", source: `# Proschi standard library: Microsoft Azure. The rules are in core.proschi.
+
+# Edge
+
+type [Azure CDN] extends CDN {
+  doc "Azure CDN, the content delivery network of Azure."
+}
+
+type [Azure Front Door] extends CDN {
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
+  doc "Azure Front Door, Azure's global entry point: CDN, load balancing and WAF at the edge."
+}
+
+type [Azure DNS] extends DNS {
+  doc "Azure DNS, the DNS service of Azure."
+}
+
+type [Azure Load Balancer] extends [Load Balancer] {
+  doc "Azure Load Balancer, the L4 load balancer of Azure."
+}
+
+type [Azure Application Gateway] extends [Load Balancer] {
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
+  doc "Azure Application Gateway, the L7 load balancer of Azure, with an optional WAF."
+}
+
+type [Azure API Management] extends [API Gateway] {
+  doc "Azure API Management, the API gateway and developer portal of Azure."
+}
+
+# Compute
+
+type [Azure VM] extends VM {
+  doc "Azure Virtual Machines, virtual machines on Azure."
+}
+
+type [Azure AKS] extends Kubernetes {
+  doc "Azure Kubernetes Service, managed Kubernetes on Azure."
+}
+
+type [Azure Container Instances] extends Docker {
+  doc "Azure Container Instances, containers on Azure without servers to manage."
+}
+
+type [Azure App Service] extends Platform {
+  doc "Azure App Service, Azure's managed platform for web apps and APIs."
+}
+
+type [Azure Functions] extends Function {
+  doc "Azure Functions, functions that run per request or event on Azure."
+}
+
+type [Azure Logic Apps] extends Function {
+  doc "Azure Logic Apps, workflows of connectors that run on triggers."
+}
+
+# Data
+
+type [Azure SQL] extends [SQL Server] {
+  doc "Azure SQL Database, managed SQL Server on Azure."
+}
+
+type [Azure Database for PostgreSQL] extends PostgreSQL {
+  doc "Azure Database for PostgreSQL, managed PostgreSQL on Azure."
+}
+
+type [Azure Database for MySQL] extends MySQL {
+  doc "Azure Database for MySQL, managed MySQL on Azure."
+}
+
+type [Azure Cosmos DB] extends [Document NoSQL Database] {
+  op read  ReadItem, ReadMany, QueryItems, ReadChangeFeed
+  op write CreateItem, UpsertItem, ReplaceItem, PatchItem, DeleteItem, TransactionalBatch
+  doc "Azure Cosmos DB, Azure's globally distributed multi-model database."
+}
+
+type [Azure Cache for Redis] extends Redis {
+  doc "Azure Cache for Redis, managed Redis on Azure."
+}
+
+type [Azure AI Search] extends [Search Engine] {
+  doc "Azure AI Search, the managed search service of Azure, with vector search."
+}
+
+type [Azure Blob Storage] extends [Object Storage] {
+  op read  GetBlob, GetBlobProperties, GetBlobMetadata, GetBlockList, ListBlobs, ListContainers
+  op write PutBlob, PutBlock, PutBlockList, PutPage, AppendBlock, CopyBlob, DeleteBlob
+  op write SetBlobMetadata, SetBlobProperties, SnapshotBlob, LeaseBlob, CreateContainer, DeleteContainer
+  doc "Azure Blob Storage, the object storage of Azure."
+}
+
+type [Azure Files] extends [Shared File System] {
+  doc "Azure Files, managed SMB and NFS file shares on Azure."
+}
+
+type [Azure Disk Storage] extends [Block Storage] {
+  doc "Azure Managed Disks, block volumes for Azure virtual machines."
+}
+
+# Messaging
+
+type [Azure Queue Storage] extends [Message Queue] {
+  op read  GetMessages, PeekMessages
+  op write PutMessage, UpdateMessage, DeleteMessage, ClearMessages
+  doc "Azure Queue Storage, simple message queues in an Azure storage account."
+}
+
+type [Azure Service Bus] extends [Message Broker] {
+  op read  ReceiveMessages, PeekMessages
+  op write SendMessages, CompleteMessage, AbandonMessage, DeadLetterMessage, DeferMessage, ScheduleMessages
+  doc "Azure Service Bus, Azure's enterprise broker of queues and topics."
+}
+
+type [Azure Event Hubs] extends [Message Broker] {
+  op read  ReceiveEvents
+  op write SendEvents, UpdateCheckpoint
+  doc "Azure Event Hubs, Azure's partitioned event stream, with a Kafka endpoint."
+}
+
+type [Azure Event Grid] extends [Message Broker] {
+  op write PublishEvents
+  doc "Azure Event Grid, Azure's event routing service."
+}
+` },
+  { path: "stdlib/cloud-cloudflare.proschi", source: `# Proschi standard library: Cloudflare. The rules are in core.proschi.
+
+type Cloudflare extends CDN {
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
+  doc "Cloudflare, the CDN and edge network in front of the origin."
+}
+
+type [Cloudflare Workers] extends Function {
+  doc "Cloudflare Workers, functions that run at Cloudflare's edge locations."
+}
+
+type [Cloudflare R2] extends [AWS S3] {
+  doc "Cloudflare R2, object storage with the S3 API and no egress fees."
+}
+` },
+  { path: "stdlib/cloud-gcp.proschi", source: `# Proschi standard library: Google Cloud. The rules are in core.proschi.
+
+# Edge
+
+type [GCP Cloud CDN] extends CDN {
+  doc "Cloud CDN, the CDN of Google Cloud."
+}
+
+type [GCP Cloud DNS] extends DNS {
+  doc "Cloud DNS, the DNS service of Google Cloud."
+}
+
+type [GCP Load Balancing] extends [Load Balancer] {
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
+  doc "Cloud Load Balancing, Google Cloud's global and regional load balancers."
+}
+
+type [GCP Apigee] extends [API Gateway] {
+  doc "Apigee, Google Cloud's API management platform."
+}
+
+# Compute
+
+type [GCP Compute Engine] extends VM {
+  doc "Compute Engine, virtual machines on Google Cloud."
+}
+
+type [GCP GKE] extends Kubernetes {
+  doc "Google Kubernetes Engine, managed Kubernetes on Google Cloud."
+}
+
+type [GCP Cloud Functions] extends Function {
+  doc "Cloud Functions, functions that run per request or event on Google Cloud."
+}
+
+type [GCP Cloud Run] extends Function {
+  doc "Cloud Run, containers that run per request and scale to zero on Google Cloud."
+}
+
+type [GCP App Engine] extends Function {
+  doc "App Engine, Google Cloud's managed platform for web apps."
+}
+
+# Data
+
+type [GCP Cloud SQL] extends Database {
+  doc "Cloud SQL, managed PostgreSQL, MySQL and SQL Server on Google Cloud."
+}
+
+type [GCP Spanner] extends [Distributed SQL Database] {
+  op read  ExecuteSql, ExecuteStreamingSql, StreamingRead, BeginTransaction
+  op write ExecuteBatchDml
+  doc "Spanner, Google Cloud's globally distributed relational database with external consistency."
+}
+
+type [GCP Firestore] extends [Document NoSQL Database] {
+  op read  GetDocument, ListDocuments, BatchGetDocuments, RunQuery, RunAggregationQuery, Listen, BeginTransaction
+  op write CreateDocument, UpdateDocument, DeleteDocument, BatchWrite, Commit
+  doc "Firestore, Google Cloud's serverless document database."
+}
+
+type [GCP Bigtable] extends [Wide-Column NoSQL Database] {
+  op read  ReadRows, SampleRowKeys
+  op write MutateRow, MutateRows, CheckAndMutateRow, ReadModifyWriteRow
+  doc "Bigtable, Google Cloud's wide-column database for large, low-latency workloads."
+}
+
+type [GCP Memorystore] extends Redis {
+  doc "Memorystore, managed Redis and Memcached on Google Cloud."
+}
+
+type [GCP BigQuery] extends [Data Warehouse] {
+  doc "BigQuery, Google Cloud's serverless data warehouse."
+}
+
+type [GCP Cloud Storage] extends [Object Storage] {
+  op write Insert, Patch, Update, Copy, Compose, Rewrite
+  doc "Cloud Storage, the object storage of Google Cloud."
+}
+
+type [GCP Persistent Disk] extends [Block Storage] {
+  doc "Persistent Disk, block volumes for Compute Engine."
+}
+
+# Messaging
+
+type [GCP Pub/Sub] extends [Message Broker] {
+  op read  Pull, StreamingPull
+  op write Acknowledge, ModifyAckDeadline, CreateTopic, CreateSubscription, Seek
+  doc "Pub/Sub, Google Cloud's global messaging service of topics and subscriptions."
+}
+` },
+  { path: "stdlib/compute.proschi", source: '# Proschi standard library: compute, the code you run. The rules are in\n# core.proschi.\n\nabstract type Compute {\n  kind service\n  protocol HTTP\n  status 100, 101, 102, 103\n  status 200, 201, 202, 203, 204, 205, 206, 207, 208, 226\n  status 300, 301, 302, 303, 304, 307, 308\n  status 400, 401, 402, 403, 404, 405, 406, 407, 408, 409, 410, 411, 412, 413, 414, 415, 416, 417, 418\n  status 421, 422, 423, 424, 425, 426, 428, 429, 431, 451\n  status 500, 501, 502, 503, 504, 505, 506, 507, 508, 510, 511\n  header Accept, Accept-Encoding, Accept-Language, Accept-Ranges, Age, Allow, Authorization\n  header Cache-Control, Connection, Content-Disposition, Content-Encoding, Content-Language\n  header Content-Length, Content-Range, Content-Type, Cookie, Date, ETag, Expires, Host\n  header If-Match, If-Modified-Since, If-None-Match, If-Range, If-Unmodified-Since, Last-Modified\n  header Link, Location, Origin, Range, Referer, Retry-After, Server, Set-Cookie, User-Agent, Vary\n  header Upgrade, WWW-Authenticate, Proxy-Authorization, Strict-Transport-Security, Content-Security-Policy\n  header Access-Control-Allow-Origin, Access-Control-Allow-Methods, Access-Control-Allow-Headers\n  header Access-Control-Allow-Credentials, Access-Control-Max-Age, Access-Control-Request-Method\n  header Forwarded, X-Forwarded-For, X-Forwarded-Host, X-Forwarded-Proto, X-Real-IP\n  header X-Request-Id, X-Correlation-Id, Traceparent, Tracestate, Idempotency-Key\n  header X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset\n  header X-API-Key, X-Content-Type-Options, X-Frame-Options, Sec-WebSocket-Key, Sec-WebSocket-Accept, Sec-WebSocket-Protocol\n  doc "Code you run: a service, a worker, a function or the platform it runs on; its own requests are named freely."\n}\n\ntype Service extends Compute {\n  doc "A program you run that answers requests, whatever it is written in."\n}\n\ntype Worker extends Compute {\n  doc "A background program that takes jobs or events from a queue and processes them."\n}\n\n# Interfaces.\n\nabstract type [HTTP Service] extends Service {\n  op read  GET, HEAD, OPTIONS, TRACE, CONNECT\n  op write POST, PUT, PATCH, DELETE\n  doc "A service whose requests are HTTP methods: GET, HEAD and OPTIONS read, POST, PUT, PATCH and DELETE write."\n}\n\ntype [REST API] extends [HTTP Service] {\n  doc "A service with a REST interface: resources over HTTP methods and status codes."\n}\n\ntype GraphQL extends [HTTP Service] {\n  protocol GraphQL\n  op read  query, subscription\n  op write mutation\n  doc "A service with a GraphQL interface: queries read, mutations write."\n}\n\ntype gRPC extends Service {\n  protocol gRPC\n  doc "A service with a gRPC interface: typed calls over HTTP/2, named by its own .proto file."\n}\n\ntype WebSocket extends Service {\n  protocol WebSocket\n  doc "A service that keeps a WebSocket open to each client and pushes messages both ways, named freely."\n}\n\ntype [SOAP API] extends Service {\n  protocol SOAP\n  doc "A service with a SOAP interface: XML messages over HTTP."\n}\n\n# Languages and frameworks: a service written in it.\n\ntype Java extends Service {\n  doc "A service on the JVM, written in Java."\n}\n\ntype [Spring Boot] extends Java {\n  doc "A service built with Spring Boot."\n}\n\ntype Kotlin extends Service {\n  doc "A service written in Kotlin."\n}\n\ntype Go extends Service {\n  doc "A service written in Go."\n}\n\ntype [Node.js] extends Service {\n  doc "A service on Node.js, written in JavaScript or TypeScript."\n}\n\ntype Python extends Service {\n  doc "A service written in Python."\n}\n\ntype Django extends Python {\n  doc "A service built with Django."\n}\n\ntype FastAPI extends Python {\n  doc "A service built with FastAPI."\n}\n\ntype Flask extends Python {\n  doc "A service built with Flask."\n}\n\ntype [Ruby on Rails] extends Service {\n  doc "A service built with Ruby on Rails."\n}\n\ntype [.NET] extends Service {\n  doc "A service on .NET, written in C#."\n}\n\ntype PHP extends Service {\n  doc "A service written in PHP."\n}\n\ntype Rust extends Service {\n  doc "A service written in Rust."\n}\n\ntype Elixir extends Service {\n  doc "A service written in Elixir, on the Erlang VM."\n}\n\n# Where services run.\n\nabstract type Platform extends Compute {\n  doc "Where a service runs, drawn as the platform: it answers like the service on it."\n}\n\ntype VM extends Platform {\n  doc "A virtual machine running the service."\n}\n\ntype Docker extends Platform {\n  doc "A container running the service."\n}\n\ntype Kubernetes extends Platform {\n  doc "Pods on a Kubernetes cluster running the service."\n}\n\n# Functions.\n\ntype Function extends Compute {\n  kind function\n  doc "A serverless function: runs per request or event and scales to zero."\n}\n' },
+  { path: "stdlib/data.proschi", source: '# Proschi standard library: components that keep data. Queues and brokers\n# are in messaging.proschi. The rules are in core.proschi.\n\nabstract type Data {\n  op read  READ, FETCH, LOOKUP\n  op write WRITE, SAVE, STORE, RECORD, MARK, RESERVE, HOLD, BOOK\n  doc "A component that keeps data: a database, cache, search index, warehouse or bucket."\n}\n\n# Relational databases.\n\ntype Database extends Data {\n  kind database\n  protocol SQL\n  op read  SELECT, WITH, EXPLAIN, SHOW\n  op write INSERT, UPDATE, DELETE, UPSERT, MERGE, TRUNCATE, LOCK\n  # Transaction control: the statements inside carry the reads and writes.\n  op read  BEGIN, COMMIT, ROLLBACK\n  op write CREATE, ALTER, DROP\n  doc "A relational database queried with SQL, whose product does not matter."\n}\n\ntype PostgreSQL extends Database {\n  op read  LISTEN\n  op write NOTIFY, COPY, VACUUM\n  doc "PostgreSQL, the open source relational database."\n}\n\ntype MySQL extends Database {\n  op write REPLACE\n  doc "MySQL, the open source relational database."\n}\n\ntype MariaDB extends MySQL {\n  doc "MariaDB, the community fork of MySQL."\n}\n\ntype SQLite extends Database {\n  doc "SQLite, the embedded relational database in a single file."\n}\n\ntype Oracle extends Database {\n  doc "Oracle Database, the commercial relational database."\n}\n\ntype [SQL Server] extends Database {\n  doc "Microsoft SQL Server, the commercial relational database."\n}\n\ntype TimescaleDB extends PostgreSQL {\n  kind analytics\n  doc "TimescaleDB, PostgreSQL extended for time series."\n}\n\nabstract type [Distributed SQL Database] extends Database {\n  doc "A relational database that shards and replicates itself across nodes, keeping transactions."\n}\n\ntype CockroachDB extends [Distributed SQL Database] {\n  doc "CockroachDB, a distributed SQL database that speaks the PostgreSQL protocol."\n}\n\ntype YugabyteDB extends [Distributed SQL Database] {\n  doc "YugabyteDB, a distributed SQL database compatible with PostgreSQL."\n}\n\ntype TiDB extends [Distributed SQL Database] {\n  doc "TiDB, a distributed SQL database compatible with MySQL."\n}\n\ntype Vitess extends [Distributed SQL Database] {\n  doc "Vitess, which shards MySQL behind one SQL endpoint."\n}\n\n# NoSQL databases.\n\ntype [NoSQL Database] extends Data {\n  kind database\n  # The key-value vocabulary every product has under its own names.\n  op read  GET, SCAN\n  op write PUT, SET, DELETE\n  doc "A non-relational database that partitions data by key, whose product does not matter."\n}\n\ntype DynamoDB extends [NoSQL Database] {\n  op read  GetItem, BatchGetItem, Query, TransactGetItems, DescribeTable\n  op read  Scan latency 10 cost 25 # replaces the key-value SCAN: it reads the whole table\n  op write PutItem, UpdateItem, DeleteItem, BatchWriteItem, TransactWriteItems\n  op write ExecuteStatement, CreateTable, UpdateTable, DeleteTable\n  doc "DynamoDB, the managed key-value and document database: reads by key or partition, a Scan reads the whole table."\n}\n\nabstract type [Document NoSQL Database] extends [NoSQL Database] {\n  doc "A NoSQL database that stores JSON-like documents and queries their fields."\n}\n\ntype MongoDB extends [Document NoSQL Database] {\n  op read  find, findOne, aggregate, countDocuments, estimatedDocumentCount, distinct, watch\n  op write insertOne, insertMany, updateOne, updateMany, replaceOne, deleteOne, deleteMany\n  op write findOneAndUpdate, findOneAndReplace, findOneAndDelete, bulkWrite, createIndex\n  doc "MongoDB, the document database."\n}\n\ntype CouchDB extends [Document NoSQL Database] {\n  doc "Apache CouchDB, a document database with an HTTP API and multi-primary replication."\n}\n\ntype Couchbase extends [Document NoSQL Database] {\n  op read  lookupIn, exists, query\n  op write upsert, insert, replace, remove, mutateIn, touch, increment, decrement\n  doc "Couchbase, a document database with a built-in cache."\n}\n\nabstract type [Wide-Column NoSQL Database] extends [NoSQL Database] {\n  doc "A NoSQL database of rows with many columns, partitioned by key and sorted within a partition."\n}\n\ntype Cassandra extends [Wide-Column NoSQL Database] {\n  protocol CQL\n  op read  SELECT\n  op write INSERT, UPDATE, DELETE, BATCH, TRUNCATE\n  doc "Apache Cassandra, the wide-column database queried with CQL."\n}\n\ntype ScyllaDB extends Cassandra {\n  doc "ScyllaDB, a Cassandra-compatible database written in C++."\n}\n\ntype HBase extends [Wide-Column NoSQL Database] {\n  op read  Exists\n  op read  Scan latency 10 cost 25 # replaces the key-value SCAN: it reads the whole table\n  op write Increment, Append, CheckAndMutate\n  doc "Apache HBase, the wide-column database on HDFS."\n}\n\nabstract type [Graph NoSQL Database] extends [NoSQL Database] {\n  protocol Cypher\n  op read  MATCH, OPTIONAL, RETURN, CALL\n  op write CREATE, MERGE, DELETE, DETACH, SET, REMOVE\n  doc "A graph database: nodes and relationships, queried by pattern."\n}\n\ntype Neo4j extends [Graph NoSQL Database] {\n  doc "Neo4j, the graph database queried with Cypher."\n}\n\nabstract type [Coordination Store] extends Data {\n  kind database\n  op read  GET, WATCH\n  op write PUT, DELETE\n  doc "A small, strongly consistent store for configuration, leader election and locks."\n}\n\ntype etcd extends [Coordination Store] {\n  op read  Range, LeaseTimeToLive\n  op write DeleteRange, Txn, Compact, LeaseGrant, LeaseRevoke, LeaseKeepAlive\n  doc "etcd, the consistent key-value store behind Kubernetes."\n}\n\ntype ZooKeeper extends [Coordination Store] {\n  op read  getData, getChildren, exists, getACL, sync\n  op write create, setData, setACL, multi\n  doc "Apache ZooKeeper, the coordination service of znodes and watches."\n}\n\n# Caches.\n\ntype Cache extends Data {\n  kind cache\n  op read  GET, MGET\n  op write SET, DELETE, EXPIRE\n  doc "An in-memory key-value cache, whose product does not matter."\n}\n\ntype Redis extends Cache {\n  protocol RESP\n  # Strings\n  op read  GETRANGE, STRLEN\n  op write SETNX, SETEX, PSETEX, GETSET, GETDEL, GETEX, MSET, MSETNX, APPEND, SETRANGE\n  op write INCR, INCRBY, INCRBYFLOAT, DECR, DECRBY\n  # Keys\n  op read  EXISTS, TTL, PTTL, TYPE, KEYS, SCAN\n  op write DEL, UNLINK, PEXPIRE, EXPIREAT, PEXPIREAT, PERSIST, RENAME, COPY\n  # Hashes\n  op read  HGET, HMGET, HGETALL, HEXISTS, HKEYS, HVALS, HLEN, HSCAN\n  op write HSET, HSETNX, HMSET, HDEL, HINCRBY, HINCRBYFLOAT\n  # Lists\n  op read  LRANGE, LLEN, LINDEX\n  op write LPUSH, RPUSH, LPUSHX, RPUSHX, LPOP, RPOP, BLPOP, BRPOP, LSET, LREM, LTRIM, LINSERT, LMOVE, BLMOVE\n  # Sets\n  op read  SMEMBERS, SISMEMBER, SMISMEMBER, SCARD, SRANDMEMBER, SINTER, SUNION, SDIFF, SSCAN\n  op write SADD, SREM, SPOP, SMOVE, SINTERSTORE, SUNIONSTORE, SDIFFSTORE\n  # Sorted sets\n  op read  ZRANGE, ZREVRANGE, ZRANGEBYSCORE, ZREVRANGEBYSCORE, ZRANGEBYLEX, ZSCORE, ZMSCORE\n  op read  ZRANK, ZREVRANK, ZCARD, ZCOUNT, ZSCAN\n  op write ZADD, ZREM, ZINCRBY, ZPOPMIN, ZPOPMAX, BZPOPMIN, BZPOPMAX, ZREMRANGEBYSCORE, ZREMRANGEBYRANK\n  op write ZUNIONSTORE, ZINTERSTORE, ZRANGESTORE\n  # Bitmaps and HyperLogLog\n  op read  GETBIT, BITCOUNT, BITPOS, PFCOUNT\n  op write SETBIT, BITOP, PFADD, PFMERGE\n  # Geo\n  op read  GEOSEARCH, GEODIST, GEOPOS, GEOHASH, GEORADIUS, GEORADIUSBYMEMBER\n  op write GEOADD, GEOSEARCHSTORE\n  # Pub/sub\n  op read  SUBSCRIBE, PSUBSCRIBE, UNSUBSCRIBE, PUNSUBSCRIBE, SSUBSCRIBE\n  op write PUBLISH, SPUBLISH\n  # Streams\n  op read  XREAD, XREADGROUP, XRANGE, XREVRANGE, XLEN, XPENDING, XINFO\n  op write XADD, XACK, XCLAIM, XAUTOCLAIM, XDEL, XTRIM, XGROUP\n  # Transactions and scripts\n  op read  MULTI, EXEC, DISCARD, WATCH, UNWATCH, PING\n  op write EVAL, EVALSHA, FCALL\n  doc "Redis, the in-memory data store, used as a cache."\n}\n\ntype Valkey extends Redis {\n  doc "Valkey, the open source fork of Redis."\n}\n\ntype KeyDB extends Redis {\n  doc "KeyDB, a multithreaded fork of Redis."\n}\n\ntype Dragonfly extends Redis {\n  doc "Dragonfly, an in-memory store compatible with Redis."\n}\n\ntype Memcached extends Cache {\n  op read  GETS\n  op write ADD, REPLACE, APPEND, PREPEND, CAS, INCR, DECR, TOUCH, GAT, GATS, FLUSH_ALL\n  doc "Memcached, the simple distributed in-memory cache."\n}\n\ntype Hazelcast extends Cache {\n  doc "Hazelcast, the in-memory data grid."\n}\n\ntype Aerospike extends Cache {\n  doc "Aerospike, the key-value store tuned for memory and flash."\n}\n\n# Search.\n\ntype [Search Engine] extends Data {\n  kind search\n  op read  Search, Get, KNN\n  op write Index, Upsert, Delete\n  doc "A full-text search index, whose product does not matter."\n}\n\ntype Elasticsearch extends [Search Engine] {\n  op read  Mget, Count, MultiSearch, Scroll, Explain, _search, _msearch, _count\n  op write Bulk, Update, Create, UpdateByQuery, DeleteByQuery, Reindex, Refresh, _bulk, _doc, _update\n  doc "Elasticsearch, the distributed search engine on Lucene."\n}\n\ntype OpenSearch extends Elasticsearch {\n  doc "OpenSearch, the open source fork of Elasticsearch."\n}\n\ntype Solr extends [Search Engine] {\n  doc "Apache Solr, the search server on Lucene."\n}\n\ntype Meilisearch extends [Search Engine] {\n  doc "Meilisearch, a fast search engine for search-as-you-type."\n}\n\ntype Typesense extends [Search Engine] {\n  doc "Typesense, an in-memory search engine that tolerates typos."\n}\n\ntype Algolia extends [Search Engine] {\n  doc "Algolia, the hosted search API."\n}\n\n# Analytics.\n\ntype [Data Warehouse] extends Data {\n  kind analytics\n  protocol SQL\n  op read  SELECT, WITH, EXPLAIN, SHOW\n  op write INSERT, UPDATE, DELETE, UPSERT, MERGE, COPY, TRUNCATE, CREATE, DROP\n  doc "A column store for analytical SQL over large data, whose product does not matter."\n}\n\ntype Snowflake extends [Data Warehouse] {\n  doc "Snowflake, the cloud data warehouse."\n}\n\ntype ClickHouse extends [Data Warehouse] {\n  doc "ClickHouse, the column-oriented OLAP database."\n}\n\ntype [Apache Druid] extends [Data Warehouse] {\n  doc "Apache Druid, the real-time analytics database."\n}\n\ntype [Apache Pinot] extends [Data Warehouse] {\n  doc "Apache Pinot, the real-time OLAP store for user-facing analytics."\n}\n\ntype Databricks extends [Data Warehouse] {\n  doc "Databricks, the lakehouse platform on Spark."\n}\n\nabstract type [Time Series Store] extends Data {\n  kind analytics\n  op read  QUERY, SELECT\n  op write INSERT\n  doc "A database of timestamped measurements, queried over time ranges."\n}\n\ntype InfluxDB extends [Time Series Store] {\n  doc "InfluxDB, the time series database."\n}\n\ntype Prometheus extends [Time Series Store] {\n  doc "Prometheus, the monitoring system and its time series store."\n}\n\n# Files and objects.\n\ntype [Object Storage] extends Data {\n  kind storage\n  protocol HTTP\n  op read  GET, HEAD, LIST\n  op write PUT, DELETE, UPLOAD\n  doc "A bucket of objects (files) by key, whose product does not matter."\n}\n\ntype MinIO extends [AWS S3] {\n  doc "MinIO, the self-hosted object storage with the S3 API."\n}\n\ntype Ceph extends [Object Storage] {\n  doc "Ceph, the distributed object, block and file storage."\n}\n\nabstract type [Shared File System] extends Data {\n  kind storage\n  op read  OPEN, LIST\n  op write APPEND\n  doc "A file system many machines mount at once."\n}\n\ntype HDFS extends [Shared File System] {\n  doc "HDFS, the Hadoop distributed file system."\n}\n\nabstract type [Block Storage] extends Data {\n  kind storage\n  doc "A disk attached to one machine."\n}\n' },
+  { path: "stdlib/edge.proschi", source: `# Proschi standard library: the edge, between the clients and the services.
+# The rules are in core.proschi.
+
+abstract type Edge {
+  kind edge
+  doc "What a request passes through before it reaches a service: DNS, a CDN, a load balancer or a gateway."
+}
+
+abstract type [HTTP Edge] extends Edge {
+  protocol HTTP
+  op read  GET, HEAD, OPTIONS, TRACE, CONNECT
+  op write POST, PUT, PATCH, DELETE
+  status 100, 101, 102, 103
+  status 200, 201, 202, 203, 204, 205, 206, 207, 208, 226
+  status 300, 301, 302, 303, 304, 307, 308
+  status 400, 401, 402, 403, 404, 405, 406, 407, 408, 409, 410, 411, 412, 413, 414, 415, 416, 417, 418
+  status 421, 422, 423, 424, 425, 426, 428, 429, 431, 451
+  status 500, 501, 502, 503, 504, 505, 506, 507, 508, 510, 511
+  header Accept, Accept-Encoding, Accept-Language, Accept-Ranges, Age, Allow, Authorization
+  header Cache-Control, Connection, Content-Disposition, Content-Encoding, Content-Language
+  header Content-Length, Content-Range, Content-Type, Cookie, Date, ETag, Expires, Host
+  header If-Match, If-Modified-Since, If-None-Match, If-Range, If-Unmodified-Since, Last-Modified
+  header Link, Location, Origin, Range, Referer, Retry-After, Server, Set-Cookie, User-Agent, Vary
+  header Upgrade, WWW-Authenticate, Proxy-Authorization, Strict-Transport-Security, Content-Security-Policy
+  header Access-Control-Allow-Origin, Access-Control-Allow-Methods, Access-Control-Allow-Headers
+  header Access-Control-Allow-Credentials, Access-Control-Max-Age, Access-Control-Request-Method
+  header Forwarded, X-Forwarded-For, X-Forwarded-Host, X-Forwarded-Proto, X-Real-IP
+  header X-Request-Id, X-Correlation-Id, Traceparent, Tracestate, Idempotency-Key
+  header X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset
+  header X-API-Key, X-Content-Type-Options, X-Frame-Options, Sec-WebSocket-Key, Sec-WebSocket-Accept, Sec-WebSocket-Protocol
+  doc "An edge component that takes HTTP requests and passes them on."
+}
+
+type DNS extends Edge {
+  kind dns
+  protocol DNS
+  op read  QUERY, RESOLVE
+  op write UPDATE
+  doc "A DNS service: turns a host name into the addresses to connect to."
+}
+
+type CDN extends [HTTP Edge] {
+  kind cdn
+  op write PURGE
+  doc "A content delivery network: caches responses at edge locations near the users."
+}
+
+type [Load Balancer] extends [HTTP Edge] {
+  kind loadbalancer
+  doc "Spreads requests over the replicas behind it and stops sending to unhealthy ones."
+}
+
+type [API Gateway] extends [HTTP Edge] {
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
+  kind gateway
+  doc "One entry point for an API: routing, authentication and rate limits before the services."
+}
+
+type WAF extends [HTTP Edge] {
+  doc "A web application firewall: blocks malicious requests at the edge."
+}
+
+# Products.
+
+type Fastly extends CDN {
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
+  doc "Fastly, the programmable CDN."
+}
+
+type Akamai extends CDN {
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
+  doc "Akamai, the CDN and edge security platform."
+}
+
+type nginx extends [Load Balancer] {
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
+  doc "nginx, the web server used as a reverse proxy and load balancer."
+}
+
+type Envoy extends [Load Balancer] {
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
+  doc "Envoy, the L7 proxy behind most service meshes."
+}
+
+type HAProxy extends [Load Balancer] {
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
+  doc "HAProxy, the TCP and HTTP load balancer."
+}
+
+type Traefik extends [Load Balancer] {
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
+  doc "Traefik, the reverse proxy that configures itself from containers."
+}
+
+type [Kubernetes Ingress] extends [Load Balancer] {
+  op forward MESSAGE # a WebSocket frame, read or written by whoever handles it
+  doc "A Kubernetes ingress controller: routes outside HTTP traffic to the cluster's services."
+}
+
+type Kong extends [API Gateway] {
+  doc "Kong, the open source API gateway built on nginx."
+}
+
+type [Spring Cloud Gateway] extends [API Gateway] {
+  doc "Spring Cloud Gateway, an API gateway for Spring services."
+}
+` },
+  { path: "stdlib/external.proschi", source: `# Proschi standard library: systems you call but do not run. The rules are in
+# core.proschi.
+
+abstract type External {
+  kind external
+  protocol HTTP
+  op read  GET, HEAD, OPTIONS, TRACE, CONNECT
+  op write POST, PUT, PATCH, DELETE
+  status 100, 101, 102, 103
+  status 200, 201, 202, 203, 204, 205, 206, 207, 208, 226
+  status 300, 301, 302, 303, 304, 307, 308
+  status 400, 401, 402, 403, 404, 405, 406, 407, 408, 409, 410, 411, 412, 413, 414, 415, 416, 417, 418
+  status 421, 422, 423, 424, 425, 426, 428, 429, 431, 451
+  status 500, 501, 502, 503, 504, 505, 506, 507, 508, 510, 511
+  header Accept, Accept-Encoding, Accept-Language, Accept-Ranges, Age, Allow, Authorization
+  header Cache-Control, Connection, Content-Disposition, Content-Encoding, Content-Language
+  header Content-Length, Content-Range, Content-Type, Cookie, Date, ETag, Expires, Host
+  header If-Match, If-Modified-Since, If-None-Match, If-Range, If-Unmodified-Since, Last-Modified
+  header Link, Location, Origin, Range, Referer, Retry-After, Server, Set-Cookie, User-Agent, Vary
+  header Upgrade, WWW-Authenticate, Proxy-Authorization, Strict-Transport-Security, Content-Security-Policy
+  header Access-Control-Allow-Origin, Access-Control-Allow-Methods, Access-Control-Allow-Headers
+  header Access-Control-Allow-Credentials, Access-Control-Max-Age, Access-Control-Request-Method
+  header Forwarded, X-Forwarded-For, X-Forwarded-Host, X-Forwarded-Proto, X-Real-IP
+  header X-Request-Id, X-Correlation-Id, Traceparent, Tracestate, Idempotency-Key
+  header X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, RateLimit-Limit, RateLimit-Remaining, RateLimit-Reset
+  header X-API-Key, X-Content-Type-Options, X-Frame-Options, Sec-WebSocket-Key, Sec-WebSocket-Accept, Sec-WebSocket-Protocol
+  doc "A system run by someone else that the design calls over its API."
+}
+
+type [Third Party API] extends External {
+  op write SEND, NOTIFY
+  doc "Another company's API, whose product does not matter."
+}
+
+type [Payment Gateway] extends External {
+  op read  RETRIEVE
+  op write CHARGE, AUTHORIZE, CAPTURE, REFUND, VOID, PAYOUT
+  doc "A payment provider: authorizes, captures and refunds card payments."
+}
+
+type Stripe extends [Payment Gateway] {
+  doc "Stripe, the payments API."
+}
+
+type PayPal extends [Payment Gateway] {
+  doc "PayPal, the online payments service."
+}
+
+type Adyen extends [Payment Gateway] {
+  doc "Adyen, the payments platform for cards and local payment methods."
+}
+
+type Braintree extends [Payment Gateway] {
+  doc "Braintree, PayPal's payments API for cards and wallets."
+}
+
+type [Auth Service] extends External {
+  op read  VALIDATE, VERIFY, INTROSPECT, USERINFO, JWKS
+  op write LOGIN, LOGOUT, TOKEN, REFRESH, REVOKE, REGISTER
+  doc "An identity provider: signs users in and issues and checks their tokens."
+}
+
+type Auth0 extends [Auth Service] {
+  doc "Auth0, the hosted identity provider."
+}
+
+type Okta extends [Auth Service] {
+  doc "Okta, the identity and single sign-on provider."
+}
+
+abstract type Notifier extends External {
+  op write SEND, NOTIFY
+  doc "A provider that delivers messages to people: email, SMS or push notifications."
+}
+
+type [Email Service] extends Notifier {
+  doc "An email provider that sends the design's emails."
+}
+
+type SendGrid extends [Email Service] {
+  doc "SendGrid, Twilio's email API."
+}
+
+type Mailgun extends [Email Service] {
+  doc "Mailgun, the email API."
+}
+
+type [SMS Service] extends Notifier {
+  doc "An SMS provider that sends text messages."
+}
+
+type Twilio extends [SMS Service] {
+  doc "Twilio, the API for SMS, voice and messaging."
+}
+
+type [Push Service] extends Notifier {
+  doc "A push notification provider that delivers to phones."
+}
+
+type APNs extends [Push Service] {
+  doc "Apple Push Notification service, which delivers push notifications to Apple devices."
+}
+
+type FCM extends [Push Service] {
+  doc "Firebase Cloud Messaging, which delivers push notifications to Android, iOS and the web."
+}
+
+type [Analytics Service] extends External {
+  op write TRACK, IDENTIFY, PAGE, SCREEN, ALIAS
+  doc "A product analytics provider that receives usage events."
+}
+
+type [Google Maps] extends External {
+  op read  GEOCODE, DIRECTIONS, DISTANCE, PLACES, ROUTES, TILES
+  doc "Google Maps Platform: geocoding, directions, distances and map tiles."
+}
+
+type OpenAI extends External {
+  op read  COMPLETE, CHAT, EMBED, MODERATE, TRANSCRIBE
+  doc "OpenAI's API for language models and embeddings."
+}
+` },
+  { path: "stdlib/messaging.proschi", source: '# Proschi standard library: queues and brokers, which take a message and\n# hand it on later. The rules are in core.proschi.\n\nabstract type Messaging {\n  op read  RECEIVE, SUBSCRIBE, UNSUBSCRIBE, READ\n  op write SEND, PUBLISH, EMIT, ENQUEUE, WRITE, ACK, NACK\n  doc "A component that takes a message and hands it on later: a queue or a broker."\n}\n\ntype [Message Queue] extends Messaging {\n  kind queue\n  op read  DEQUEUE, PEEK, POLL\n  doc "A queue of jobs: each message goes to one consumer, which deletes it when done."\n}\n\ntype [Message Broker] extends Messaging {\n  kind broker\n  op read  CONSUME, FETCH\n  op write PRODUCE\n  doc "A broker of topics or streams: every subscriber gets each message, and the log can be replayed."\n}\n\ntype SQS extends [Message Queue] {\n  op read  ReceiveMessage, GetQueueAttributes, GetQueueUrl, ListQueues\n  op write SendMessage, SendMessageBatch, DeleteMessage, DeleteMessageBatch\n  op write ChangeMessageVisibility, ChangeMessageVisibilityBatch, PurgeQueue\n  op write CreateQueue, DeleteQueue, SetQueueAttributes\n  doc "SQS, the managed message queue of AWS."\n}\n\ntype [Redis Queue] extends [Message Queue] {\n  protocol RESP\n  op read  XREAD, XREADGROUP, XRANGE, XLEN, XPENDING, LRANGE, LLEN, PSUBSCRIBE\n  op write XADD, XACK, XCLAIM, XAUTOCLAIM, XDEL, XTRIM, XGROUP, LPUSH, RPUSH, LPOP, RPOP, BLPOP, BRPOP, LMOVE, BLMOVE\n  doc "A queue on Redis: a list, a stream or pub/sub channels."\n}\n\ntype ZeroMQ extends [Message Queue] {\n  op read  RECV\n  doc "ZeroMQ, the brokerless messaging library of sockets."\n}\n\ntype Kafka extends [Message Broker] {\n  op read  Poll, OffsetFetch, ListOffsets, Metadata, AddPartitionsToTxn, EndTxn\n  op write Commit, OffsetCommit, DeleteRecords\n  op write CreateTopics, DeleteTopics, CreatePartitions\n  doc "Apache Kafka, the distributed log of partitioned topics."\n}\n\ntype Redpanda extends Kafka {\n  doc "Redpanda, a Kafka-compatible streaming platform written in C++."\n}\n\ntype RabbitMQ extends [Message Broker] {\n  protocol AMQP\n  op read  BasicGet, BasicConsume\n  op write BasicPublish, BasicAck, BasicNack, BasicReject, QueueDeclare, ExchangeDeclare, QueueBind, QueuePurge\n  doc "RabbitMQ, the AMQP broker of exchanges and queues."\n}\n\ntype NATS extends [Message Broker] {\n  op read  REQUEST, SUB\n  op write PUB, REPLY\n  doc "NATS, the lightweight messaging system, with JetStream for persistence."\n}\n\ntype [Apache Pulsar] extends [Message Broker] {\n  doc "Apache Pulsar, the broker of topics with tiered storage."\n}\n\ntype ActiveMQ extends [Message Broker] {\n  doc "Apache ActiveMQ, the JMS message broker."\n}\n' }
+];
+
+// ../frontend/src/dsl/typesys/stdlib.ts
+var cached;
+function loadStdlib(read3) {
+  if (!cached) {
+    const files = STDLIB_SOURCES.map(({ source, path }) => read3(source, path));
+    const resolution = resolveTypes(files.flatMap((f) => f.decls.map((d) => ({ ...d, builtin: true }))));
+    cached = { ...resolution, diagnostics: [...files.flatMap((f) => f.diagnostics), ...resolution.diagnostics] };
+  }
+  return cached;
+}
+
+// ../frontend/src/dsl/typesys/ops.ts
+function opNamesMostSpecificFirst(type, table3) {
+  const chain = [type, ...type.parents.flatMap((p) => table3.get(typeKey(p)) ?? [])];
+  const seen = /* @__PURE__ */ new Set();
+  const names = [];
+  chain.forEach((t, i) => {
+    const parent = chain[i + 1];
+    for (const op of t.ops) {
+      const key = op.name.toLowerCase();
+      if (seen.has(key) || parent?.ops.some((o) => o.name.toLowerCase() === key)) continue;
+      seen.add(key);
+      names.push(op.name);
+    }
+  });
+  return names;
+}
+function findOp(type, text) {
+  const t = text.trimStart().replace(/^"/, "").toLowerCase();
+  let best;
+  for (const op of type.ops) {
+    const name = op.name.toLowerCase();
+    if (!t.startsWith(name) || /[A-Za-z0-9_]/.test(t.charAt(name.length))) continue;
+    if (!best || op.name.length > best.name.length) best = op;
+  }
+  return best;
+}
+function opWord(text) {
+  return /^\s*"?([A-Za-z_][A-Za-z0-9_]*)/.exec(text)?.[1];
+}
+function suggestOp(type, word) {
+  const w = word.toLowerCase();
+  let best;
+  let bestDistance = Math.max(1, Math.floor(w.length / 3)) + 1;
+  for (const op of type.ops) {
+    const d = editDistance(w, op.name.toLowerCase());
+    if (d < bestDistance) [best, bestDistance] = [op.name, d];
+  }
+  return best;
+}
+function findHeader(type, name) {
+  const n = name.toLowerCase();
+  return type.headers.find((h2) => h2.toLowerCase() === n);
+}
+function suggestHeader(type, name) {
+  const n = name.toLowerCase();
+  let best;
+  let bestDistance = Math.max(1, Math.floor(n.length / 3)) + 1;
+  for (const h2 of type.headers) {
+    const d = editDistance(n, h2.toLowerCase());
+    if (d < bestDistance) [best, bestDistance] = [h2, d];
+  }
+  return best;
+}
+
 // ../frontend/src/dsl/parser.ts
+var NUMBER_PROPS = {
+  rps: "rps",
+  readRps: "rps",
+  writeRps: "rps",
+  latencyMs: "ms",
+  availability: "%",
+  costUsd: "usd/month",
+  bandwidthMBps: "MBps",
+  egressUsdPerGb: "usd/GB"
+};
+var CHOICE_PROPS = {
+  durable: ["true", "false"],
+  consistency: ["strong", "eventual"],
+  writeScaling: ["replicas", "shards"]
+};
+var TYPE_LINES = "kind, protocol, op, status, header, icon, doc or a profile number (rps, readRps, writeRps, writeScaling, latencyMs, availability, costUsd, durable, consistency, bandwidthMBps, egressUsdPerGb)";
+var HEADER_NAME = /^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/;
 var HTTP_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"];
 var DEFAULT_TECH = "Rectangle";
 var DEFAULT_GROUP_TECH = "Logical Group";
@@ -1383,6 +2286,7 @@ var MAX_SCENARIOS = 32;
 var MAX_ALT_DEPTH = 16;
 var DIRECTIONS = ["down", "right", "up", "left"];
 var REPLICAS = /^x(\d+)$/;
+var MULTIPLIER = /^x(\d+(?:\.\d+)?)$/;
 var PERCENTILES = { p50: 50, p90: 90, p95: 95, p99: 99, p999: 99.9 };
 var FIELD_FLAGS = ["key", "index", "unique", "optional"];
 var UNIT_EXAMPLES = {
@@ -1393,9 +2297,10 @@ var UNIT_EXAMPLES = {
   MBps: "a bandwidth, e.g. 500 MB/s or 1 GB/s",
   "usd/GB": "a price per gigabyte, e.g. 0.05 usd/GB"
 };
-var CAPACITY_PARTS = "a rate, reads, writes, shards, size, latency, availability, cost, durable or volatile, consistency, bandwidth, egress or timeout";
+var CAPACITY_PARTS = "a rate, reads, writes, shards, size, latency, availability, cost, durable or volatile, consistency, bandwidth, egress, timeout, hit, errors, retries or drain";
+var MAX_RETRIES = 5;
 var ASSERTION_HELP = 'Expected an assertion: "Use case" calls <node>, "Use case" writes <node> before responding, <node> calls <node>, no path from <node> to <node>, <node> has replicas >= 2, \u2026';
-var ASSERTION_VERBS = "calls, every scenario calls, never calls, never waits for, writes, responds, starts at, has scenario or handles failure of";
+var ASSERTION_VERBS = "calls, uses, sends header, every scenario calls, never calls, never waits for, writes, responds, starts at, has scenario or handles failure of";
 var GENERIC_TECH = {
   client: "Actor",
   edge: "WAF",
@@ -1421,6 +2326,12 @@ function unknownTechMessage(tech, kind, suggestion) {
 }
 function parse(source, options = {}) {
   return new Parser(source, options).run();
+}
+function parseTypeDecls(source, path) {
+  return new Parser(source, { path }, { chain: [path], teamFiles: /* @__PURE__ */ new Map() }).readTypes();
+}
+function builtinTypes() {
+  return loadStdlib(parseTypeDecls).table;
 }
 var Parser = class _Parser {
   // Per-file state, swapped while an imported file is read.
@@ -1461,6 +2372,9 @@ var Parser = class _Parser {
   entities = [];
   decisions = [];
   tests = [];
+  whatifs = [];
+  /** `let` constants by name, from every file read so far. */
+  constants = /* @__PURE__ */ new Map();
   blocks = [];
   legend = [];
   layout = {};
@@ -1472,6 +2386,14 @@ var Parser = class _Parser {
   deferred = [];
   built = [];
   options;
+  /** `type` blocks of every file read so far, in order. */
+  typeDecls = [];
+  /** Node techs, resolved by `resolveTypes` once every file is read. */
+  techRefs = [];
+  /** Built-in and declared types; set by `resolveTypes`. */
+  typeTable = /* @__PURE__ */ new Map();
+  /** The declared (not built-in) types, resolved. */
+  types = [];
   constructor(source, options, scope2) {
     this.options = options;
     this.lines = source.split("\n");
@@ -1483,6 +2405,7 @@ var Parser = class _Parser {
   }
   run() {
     this.parseFile();
+    this.resolveTypes();
     this.resolvePorts();
     this.createImplicitNodes();
     this.resolveTags();
@@ -1507,7 +2430,10 @@ var Parser = class _Parser {
       ...this.tests.length ? { tests: this.tests } : {},
       ...this.legend.length ? { legend: this.legend } : {},
       ...Object.keys(this.layout).length ? { layout: this.layout } : {},
-      ...this.systems.length ? { systems: this.systems } : {}
+      ...this.systems.length ? { systems: this.systems } : {},
+      ...this.whatifs.length ? { whatifs: this.whatifs } : {},
+      ...this.constants.size ? { constants: [...this.constants.values()] } : {},
+      ...this.types.length ? { types: this.types } : {}
     };
     const order = (d) => this.fileOrder.get(d.file) ?? 0;
     this.diagnostics.sort((a, b) => order(a) - order(b) || a.line - b.line || a.col - b.col);
@@ -1518,27 +2444,45 @@ var Parser = class _Parser {
       ...this.blocks.length ? { blocks: this.blocks } : {}
     };
   }
+  /** For `parseTypeDecls`: the file's type blocks and every problem found reading it. */
+  readTypes() {
+    this.parseFile();
+    return { decls: this.typeDecls, diagnostics: this.diagnostics };
+  }
   /** Reads the current file's lines and reports blocks it leaves open. */
   parseFile() {
+    this.lines.forEach((text, index) => {
+      const { tokens, diagnostics } = tokenizeLine(text, index + 1);
+      if (isLet(tokens) && diagnostics.length === 0) this.defineConstant(tokens, index + 1);
+    });
     for (let i = 0; i < this.lines.length; i++) {
       i = this.parseLine(i);
     }
     for (const frame2 of this.stack) {
-      const what = frame2.kind === "group" ? `group '${frame2.id}'` : frame2.kind === "usecase" ? `usecase '${frame2.useCase.name}'` : frame2.kind === "alt" ? `alt '${frame2.name}'` : frame2.kind === "par" ? "par block" : frame2.kind === "steps" ? `section '${frame2.section.name}'` : frame2.kind === "system" ? `system '${frame2.system.id}'` : frame2.kind === "stub" ? `the capacity of system '${frame2.system.id}'` : sectionName(frame2);
+      const what = frame2.kind === "group" ? `group '${frame2.id}'` : frame2.kind === "usecase" ? `usecase '${frame2.useCase.name}'` : frame2.kind === "alt" ? `alt '${frame2.name}'` : frame2.kind === "par" ? "par block" : frame2.kind === "steps" ? `section '${frame2.section.name}'` : frame2.kind === "system" ? `system '${frame2.system.id}'` : frame2.kind === "stub" ? `the capacity of system '${frame2.system.id}'` : frame2.kind === "type" ? `type '${frame2.decl.name}'` : sectionName(frame2);
       this.error(`Missing } to close ${what}`, frame2.loc);
       if (frame2.kind === "system") this.finishSystem(frame2);
     }
   }
   /** Parses the line at `index` and returns the index of the last line it consumed. */
   parseLine(index) {
-    const line = index + 1;
-    const { tokens: lexed, diagnostics } = tokenizeLine(this.lines[index], line);
+    const line2 = index + 1;
+    const typeFrame = this.top();
+    if (typeFrame?.kind === "type" && /^\s*header(\s|$)/.test(this.lines[index])) {
+      if (!typeFrame.discard) this.parseHeaders(typeFrame.decl, this.lines[index], line2);
+      return index;
+    }
+    const { tokens: lexed, diagnostics } = tokenizeLine(this.lines[index], line2);
     const tokens = qualify(lexed);
     this.diagnostics.push(...diagnostics.map((d) => ({ ...d, ...this.fileField() })));
     if (tokens.length === 0 || diagnostics.some((d) => d.severity === "error")) return index;
     const [first, second, third] = tokens;
-    const loc = (t) => this.locOf(t, line);
+    const loc = (t) => this.locOf(t, line2);
     const top = this.top();
+    if (isLet(tokens) && !(top?.kind === "section" && top.skipped !== void 0)) {
+      if (top) this.error("Define constants at the top level, not inside a block", loc(first));
+      return index;
+    }
     if (top?.kind === "section") {
       if (top.skipped !== void 0) {
         const opens = tokens[tokens.length - 1].kind === "lbrace";
@@ -1546,7 +2490,7 @@ var Parser = class _Parser {
         else if (top.nested) top.nested += opens ? 0 : -1;
         else {
           this.stack.pop();
-          if (second?.kind === "ident" && second.value === "alt") this.parseAlt(tokens.slice(1), line);
+          if (second?.kind === "ident" && second.value === "alt") this.parseAlt(tokens.slice(1), line2);
           else if (second) this.error("Unexpected input after }", loc(second));
         }
         return index;
@@ -1554,21 +2498,30 @@ var Parser = class _Parser {
       if (first.kind === "rbrace") {
         this.stack.pop();
         if (!top.discard) this.closeSection(top);
-        if (!top.discard && this.file === this.rootFile) this.blocks.push({ kind: top.section, start: top.loc.line, end: line });
+        if (!top.discard && this.file === this.rootFile) this.blocks.push({ kind: top.section, start: top.loc.line, end: line2 });
         if (second) this.error("Unexpected input after }", loc(second));
       } else if (!top.discard) {
-        this.parseSectionLine(top, tokens, line);
+        this.parseSectionLine(top, tokens, line2);
       }
       return index;
     }
     if (top?.kind === "system" || top?.kind === "stub") {
-      this.parseSystemLine(top, tokens, line);
+      this.parseSystemLine(top, tokens, line2);
+      return index;
+    }
+    if (top?.kind === "type") {
+      if (first.kind === "rbrace") {
+        this.stack.pop();
+        if (second) this.error("Unexpected input after }", loc(second));
+      } else if (!top.discard) {
+        this.parseTypeLine(top.decl, tokens, line2);
+      }
       return index;
     }
     if (first.kind === "rbrace") {
       if (this.stack.length === 0) this.error("Unmatched }", loc(first));
       else this.closeFrame();
-      if (second?.kind === "ident" && second.value === "alt") this.parseAlt(tokens.slice(1), line);
+      if (second?.kind === "ident" && second.value === "alt") this.parseAlt(tokens.slice(1), line2);
       else if (second) this.error("Unexpected input after }", loc(second));
       return index;
     }
@@ -1581,72 +2534,85 @@ var Parser = class _Parser {
     }
     switch (first.value) {
       case "title":
-        this.parseTitle(tokens, line);
+        this.parseTitle(tokens, line2);
         break;
       case "group":
-        this.parseGroup(tokens, line);
+        this.parseGroup(tokens, line2);
         break;
       // A keyword only as `system id … {`, so a node may still be called system.
       case "system":
-        if (second?.kind === "ident" && tokens[tokens.length - 1].kind === "lbrace") this.parseSystem(tokens, line);
-        else this.parseNode(tokens, line);
+        if (second?.kind === "ident" && tokens[tokens.length - 1].kind === "lbrace") this.parseSystem(tokens, line2);
+        else this.parseNode(tokens, line2);
         break;
       case "usecase":
-        this.parseUseCase(tokens, line);
+        this.parseUseCase(tokens, line2);
+        break;
+      // Keywords only in the shape of a type header, so a node may still be called type or abstract.
+      case "type":
+        if (isTypeHeader(tokens, 1)) this.parseType(tokens, 1, line2);
+        else this.parseNode(tokens, line2);
+        break;
+      case "abstract":
+        if (isWord(second, "type") && isTypeHeader(tokens, 2)) this.parseType(tokens, 2, line2);
+        else this.parseNode(tokens, line2);
         break;
       case "par":
-        this.parsePar(tokens, line);
+        this.parsePar(tokens, line2);
         break;
       case "alt":
-        this.parseAlt(tokens, line);
+        this.parseAlt(tokens, line2);
         break;
       // A keyword only as `section "Name" {`, so a node may still be called section.
       case "section":
-        if ((second?.kind === "string" || second?.kind === "ident") && tokens[tokens.length - 1].kind === "lbrace") this.parseStepSection(tokens, line);
-        else this.parseNode(tokens, line);
+        if ((second?.kind === "string" || second?.kind === "ident") && tokens[tokens.length - 1].kind === "lbrace") this.parseStepSection(tokens, line2);
+        else this.parseNode(tokens, line2);
         break;
       case "import":
-        this.parseImport(tokens, line);
+        this.parseImport(tokens, line2);
         break;
       // These words are keywords only in the shape of their statement, so older documents may still use them as ids.
       case "traffic":
       case "requirements":
       case "capacity":
       case "legend":
-        if (second?.kind === "lbrace") this.openSection(first.value, tokens, line);
-        else this.parseNode(tokens, line);
+        if (second?.kind === "lbrace") this.openSection(first.value, tokens, line2);
+        else this.parseNode(tokens, line2);
         break;
       case "entity":
-        if (second?.kind === "ident" && second.value !== "pos" && !REPLICAS.test(second.value)) this.parseEntity(tokens, line);
-        else this.parseNode(tokens, line);
+        if (second?.kind === "ident" && second.value !== "pos" && !REPLICAS.test(second.value)) this.parseEntity(tokens, line2);
+        else this.parseNode(tokens, line2);
         break;
       case "decision":
         if (second?.kind === "string" && (third?.kind === "lbrace" || third?.kind === "ident" && third.value !== "pos" && !REPLICAS.test(third.value)))
-          this.parseDecision(tokens, line);
-        else this.parseNode(tokens, line);
+          this.parseDecision(tokens, line2);
+        else this.parseNode(tokens, line2);
         break;
       case "test":
-        if (second?.kind === "string" && tokens[tokens.length - 1].kind === "lbrace") this.parseTest(tokens, line);
-        else this.parseNode(tokens, line);
+        if (second?.kind === "string" && tokens[tokens.length - 1].kind === "lbrace") this.parseTest(tokens, line2);
+        else this.parseNode(tokens, line2);
+        break;
+      case "whatif":
+        if (second?.kind === "string" && tokens[tokens.length - 1].kind === "lbrace") this.parseWhatIf(tokens, line2);
+        else this.parseNode(tokens, line2);
         break;
       // Keywords only as `direction <word>` and `layout <word>`, so a node may still be called direction or layout.
       case "direction":
-        if (this.isHint(tokens)) this.parseDirection(tokens, line);
-        else this.parseNode(tokens, line);
+        if (this.isHint(tokens)) this.parseDirection(tokens, line2);
+        else this.parseNode(tokens, line2);
         break;
       case "layout":
-        if (this.isHint(tokens)) this.parseLayoutMode(tokens, line);
-        else this.parseNode(tokens, line);
+        if (this.isHint(tokens)) this.parseLayoutMode(tokens, line2);
+        else this.parseNode(tokens, line2);
         break;
       default:
-        this.parseNode(tokens, line);
+        this.parseNode(tokens, line2);
     }
     return index;
   }
-  parseTitle(tokens, line) {
+  parseTitle(tokens, line2) {
     const value = tokens[1];
     if (!value || value.kind !== "string" && value.kind !== "ident") {
-      this.error('Expected a title, e.g. title "My System"', this.locOf(tokens[0], line));
+      this.error('Expected a title, e.g. title "My System"', this.locOf(tokens[0], line2));
       return;
     }
     const summary = tokens[2]?.kind === "string" ? tokens[2] : void 0;
@@ -1654,7 +2620,7 @@ var Parser = class _Parser {
       this.title = value.value;
       if (summary) this.summary = summary.value;
     }
-    this.expectEnd(tokens, summary ? 3 : 2, line);
+    this.expectEnd(tokens, summary ? 3 : 2, line2);
   }
   /** `direction right`, `layout ordered`: a keyword and one plain word that is not a node part. */
   isHint(tokens) {
@@ -1662,9 +2628,9 @@ var Parser = class _Parser {
     return tokens.length === 2 && second.kind === "ident" && !["pos", "critical", "color", "rank"].includes(second.value) && !REPLICAS.test(second.value);
   }
   /** `direction down|right|up|left`: at the top level for the whole diagram, inside a group for its members. */
-  parseDirection(tokens, line) {
+  parseDirection(tokens, line2) {
     const [keyword, value] = tokens;
-    const loc = this.locOf(value, line);
+    const loc = this.locOf(value, line2);
     if (!DIRECTIONS.includes(value.value)) {
       this.error(`Unknown direction '${value.value}'; use direction down, right, up or left`, loc);
       return;
@@ -1674,37 +2640,37 @@ var Parser = class _Parser {
     if (top?.kind === "group") {
       const group = this.nodes.get(top.id);
       if (!group || group.loc !== top.loc) return;
-      if (group.direction) this.warning(`Group '${group.id}' already has direction ${group.direction}; this one is ignored`, this.locOf(keyword, line));
+      if (group.direction) this.warning(`Group '${group.id}' already has direction ${group.direction}; this one is ignored`, this.locOf(keyword, line2));
       else group.direction = direction;
       return;
     }
     if (top) {
-      this.error("direction is only allowed at the top level or inside a group", this.locOf(keyword, line));
+      this.error("direction is only allowed at the top level or inside a group", this.locOf(keyword, line2));
       return;
     }
     if (this.file !== this.rootFile) return;
     if (this.layoutLocs.direction) {
-      this.warning(`direction is already set ${this.where(this.layoutLocs.direction, loc)}; this one is ignored`, this.locOf(keyword, line));
+      this.warning(`direction is already set ${this.where(this.layoutLocs.direction, loc)}; this one is ignored`, this.locOf(keyword, line2));
       return;
     }
     this.layout.direction = direction;
     this.layoutLocs.direction = loc;
   }
   /** `layout ordered`: lay edges out by declaration order. */
-  parseLayoutMode(tokens, line) {
+  parseLayoutMode(tokens, line2) {
     const [keyword, value] = tokens;
-    const loc = this.locOf(value, line);
+    const loc = this.locOf(value, line2);
     if (value.value !== "ordered") {
       this.error(`Unknown layout mode '${value.value}'; the only one is layout ordered`, loc);
       return;
     }
     if (this.top()) {
-      this.error("layout ordered applies to the whole diagram; write it at the top level", this.locOf(keyword, line));
+      this.error("layout ordered applies to the whole diagram; write it at the top level", this.locOf(keyword, line2));
       return;
     }
     if (this.file !== this.rootFile) return;
     if (this.layoutLocs.ordered) {
-      this.warning(`layout ordered is already set ${this.where(this.layoutLocs.ordered, loc)}`, this.locOf(keyword, line));
+      this.warning(`layout ordered is already set ${this.where(this.layoutLocs.ordered, loc)}`, this.locOf(keyword, line2));
       return;
     }
     this.layout.ordered = true;
@@ -1715,13 +2681,13 @@ var Parser = class _Parser {
    * Returns how many tokens it used (0 when the token is something else), or
    * undefined after reporting an error.
    */
-  readRank(tokens, i, line, current) {
+  readRank(tokens, i, line2, current) {
     const t = tokens[i];
     if (!isWord(t, "rank")) return 0;
     const value = tokens[i + 1];
     const help = "a layer number from 0 (rank 0, rank 1, \u2026), rank first or rank last";
     if (current.rank !== void 0) {
-      this.error(`A node takes one rank; rank ${current.rank} is already set`, this.locOf(t, line));
+      this.error(`A node takes one rank; rank ${current.rank} is already set`, this.locOf(t, line2));
       return void 0;
     }
     if (value?.kind === "number" && /^\d+$/.test(value.value)) {
@@ -1733,23 +2699,23 @@ var Parser = class _Parser {
       return 2;
     }
     const numeric = value?.kind === "number" || value?.kind === "quantity";
-    this.error(numeric ? `'${value.value}' is not a layer number; use ${help}` : `Expected ${help} after rank`, this.locOf(value ?? t, line));
+    this.error(numeric ? `'${value.value}' is not a layer number; use ${help}` : `Expected ${help} after rank`, this.locOf(value ?? t, line2));
     return void 0;
   }
-  parseImport(tokens, line) {
+  parseImport(tokens, line2) {
     const keyword = tokens[0];
     if (this.stack.length > 0) {
-      this.error("import is only allowed at the top level", this.locOf(keyword, line));
+      this.error("import is only allowed at the top level", this.locOf(keyword, line2));
       return;
     }
     const pathToken = tokens[1];
     if (pathToken?.kind !== "string" || !pathToken.value.trim()) {
-      this.error('Expected a file path, e.g. import "infra.proschi"', this.locOf(pathToken ?? keyword, line));
+      this.error('Expected a file path, e.g. import "infra.proschi"', this.locOf(pathToken ?? keyword, line2));
       return;
     }
-    this.expectEnd(tokens, 2, line);
+    this.expectEnd(tokens, 2, line2);
     const path = pathToken.value;
-    const loc = this.locOf(pathToken, line);
+    const loc = this.locOf(pathToken, line2);
     const entry = { path, loc };
     this.imports.push(entry);
     const { resolve } = this.options;
@@ -1797,16 +2763,16 @@ var Parser = class _Parser {
     if (!target) this.error(`Cannot find '${path}'`, loc);
     return target;
   }
-  parseGroup(tokens, line) {
+  parseGroup(tokens, line2) {
     const keyword = tokens[0];
     const top = this.top();
     if (top && top.kind !== "group") {
-      this.error("Groups cannot be declared inside a usecase", this.locOf(keyword, line));
+      this.error("Groups cannot be declared inside a usecase", this.locOf(keyword, line2));
       return;
     }
     const idToken = tokens[1];
     if (idToken?.kind !== "ident") {
-      this.error('Expected a group id, e.g. group vpc "AWS VPC" {', this.locOf(keyword, line));
+      this.error('Expected a group id, e.g. group vpc "AWS VPC" {', this.locOf(keyword, line2));
       return;
     }
     let i = 2;
@@ -1817,13 +2783,13 @@ var Parser = class _Parser {
       const tech = tokens[i++];
       const resolved = findTech(tech.value);
       if (resolved?.type === "group") techStack = resolved.techStack;
-      else this.warning(`'${tech.value}' is not a group style; using ${DEFAULT_GROUP_TECH}`, this.locOf(tech, line));
+      else this.warning(`'${tech.value}' is not a group style; using ${DEFAULT_GROUP_TECH}`, this.locOf(tech, line2));
     }
     let position;
     const style = {};
     const ranked = {};
     while (i < tokens.length && tokens[i].kind !== "lbrace") {
-      const rankUsed = this.readRank(tokens, i, line, ranked);
+      const rankUsed = this.readRank(tokens, i, line2, ranked);
       if (rankUsed === void 0) return;
       if (rankUsed) {
         i += rankUsed;
@@ -1832,24 +2798,24 @@ var Parser = class _Parser {
       if (tokens[i].kind === "ident" && tokens[i].value === "pos") {
         const [x, comma, y] = [tokens[i + 1], tokens[i + 2], tokens[i + 3]];
         if (x?.kind !== "number" || comma?.kind !== "comma" || y?.kind !== "number") {
-          this.error("Expected pos x,y", this.locOf(tokens[i], line));
+          this.error("Expected pos x,y", this.locOf(tokens[i], line2));
           return;
         }
         position = { x: Number(x.value), y: Number(y.value) };
         i += 4;
         continue;
       }
-      const used = this.readStylePart(tokens, i, line, style, false);
+      const used = this.readStylePart(tokens, i, line2, style, false);
       if (used === void 0) return;
       if (used === 0) break;
       i += used;
     }
     if (tokens[i]?.kind !== "lbrace") {
-      this.error("Expected { after group header", this.locOf(tokens[i] ?? tokens[i - 1], line));
+      this.error("Expected { after group header", this.locOf(tokens[i] ?? tokens[i - 1], line2));
       return;
     }
-    this.expectEnd(tokens, i + 1, line);
-    const loc = this.locOf(idToken, line);
+    this.expectEnd(tokens, i + 1, line2);
+    const loc = this.locOf(idToken, line2);
     const group = { id: idToken.value, kind: "group", name, type: "group", techStack, parent: this.currentGroup(), position, loc };
     if (ranked.rank !== void 0) group.rank = ranked.rank;
     this.applyStyle(group, style);
@@ -1858,24 +2824,24 @@ var Parser = class _Parser {
   }
   // ---- Systems: a team's design behind a contract (docs/design/team-systems-and-imports.md) ----
   /** `system id ["Name"] [@team] [pos x,y] [color c] [.tag] [rank N] {` */
-  parseSystem(tokens, line) {
+  parseSystem(tokens, line2) {
     const [keyword, idToken] = tokens;
     const top = this.top();
     if (top && top.kind !== "group") {
-      this.error("A system is declared at the top level or inside a group", this.locOf(keyword, line));
-      this.skipSection("test", tokens, line);
+      this.error("A system is declared at the top level or inside a group", this.locOf(keyword, line2));
+      this.skipSection("test", tokens, line2);
       return;
     }
-    const loc = this.locOf(idToken, line);
+    const loc = this.locOf(idToken, line2);
     const node = { id: idToken.value, kind: "system", name: idToken.value, type: "service", techStack: SYSTEM_TECH, parent: this.currentGroup(), loc };
     const style = {};
     let named = false;
     let i = 2;
     while (i < tokens.length - 1) {
       const t = tokens[i];
-      const styleUsed = this.readStylePart(tokens, i, line, style, false);
-      const used = styleUsed === 0 ? this.readRank(tokens, i, line, node) : styleUsed;
-      if (used === void 0) return this.skipSection("test", tokens, line);
+      const styleUsed = this.readStylePart(tokens, i, line2, style, false);
+      const used = styleUsed === 0 ? this.readRank(tokens, i, line2, node) : styleUsed;
+      if (used === void 0) return this.skipSection("test", tokens, line2);
       if (used > 0) {
         i += used;
         continue;
@@ -1890,14 +2856,14 @@ var Parser = class _Parser {
       } else if (isWord(t, "pos")) {
         const [x, comma, y] = [tokens[i + 1], tokens[i + 2], tokens[i + 3]];
         if (x?.kind !== "number" || comma?.kind !== "comma" || y?.kind !== "number") {
-          this.error("Expected pos x,y", this.locOf(t, line));
-          return this.skipSection("test", tokens, line);
+          this.error("Expected pos x,y", this.locOf(t, line2));
+          return this.skipSection("test", tokens, line2);
         }
         node.position = { x: Number(x.value), y: Number(y.value) };
         i += 3;
       } else {
-        this.error(`Unexpected ${describe(t)} in system header; write system id "Name" @Team {`, this.locOf(t, line));
-        return this.skipSection("test", tokens, line);
+        this.error(`Unexpected ${describe(t)} in system header; write system id "Name" @Team {`, this.locOf(t, line2));
+        return this.skipSection("test", tokens, line2);
       }
       i++;
     }
@@ -1911,71 +2877,71 @@ var Parser = class _Parser {
     this.stack.push({ kind: "system", system, useCaseLocs: /* @__PURE__ */ new Map(), loc });
   }
   /** A line inside `system … { }` or its multi-line `capacity { }`. */
-  parseSystemLine(frame2, tokens, line) {
+  parseSystemLine(frame2, tokens, line2) {
     const [first, second] = tokens;
     const { system } = frame2;
     if (first.kind === "rbrace") {
       this.stack.pop();
       if (frame2.kind === "system") this.finishSystem(frame2);
-      if (second) this.error("Unexpected input after }", this.locOf(second, line));
+      if (second) this.error("Unexpected input after }", this.locOf(second, line2));
       return;
     }
     if (frame2.kind === "stub") {
-      this.readStub(system.stub, tokens, 0, tokens.length, line);
+      this.readStub(system.stub, tokens, 0, tokens.length, line2);
       return;
     }
     if (isWord(first, "from")) {
       if (second?.kind !== "string" || !second.value.trim()) {
-        this.error('Expected the team file, e.g. from "teams/orders.proschi"', this.locOf(second ?? first, line));
+        this.error('Expected the team file, e.g. from "teams/orders.proschi"', this.locOf(second ?? first, line2));
         return;
       }
       if (system.from !== void 0) {
-        this.error(`System '${system.id}' already has from "${system.from}"`, this.locOf(first, line));
+        this.error(`System '${system.id}' already has from "${system.from}"`, this.locOf(first, line2));
         return;
       }
-      this.expectEnd(tokens, 2, line);
+      this.expectEnd(tokens, 2, line2);
       system.from = second.value;
-      frame2.fromLoc = this.locOf(second, line);
+      frame2.fromLoc = this.locOf(second, line2);
       return;
     }
-    if (isWord(first, "expose")) return this.parseExpose(frame2, tokens, line);
+    if (isWord(first, "expose")) return this.parseExpose(frame2, tokens, line2);
     if (isWord(first, "capacity") && second?.kind === "lbrace") {
       const opens = tokens[tokens.length - 1].kind !== "rbrace";
       if (system.stub) {
-        this.error(`System '${system.id}' already has a capacity`, this.locOf(first, line));
-        if (opens) this.stack.push({ kind: "section", section: "capacity", discard: true, loc: this.locOf(first, line) });
+        this.error(`System '${system.id}' already has a capacity`, this.locOf(first, line2));
+        if (opens) this.stack.push({ kind: "section", section: "capacity", discard: true, loc: this.locOf(first, line2) });
         return;
       }
-      const stub = { loc: this.lineLoc(tokens, line) };
+      const stub = { loc: this.lineLoc(tokens, line2) };
       system.stub = stub;
-      this.readStub(stub, tokens, 2, opens ? tokens.length : tokens.length - 1, line);
-      if (opens) this.stack.push({ kind: "stub", system, loc: this.locOf(first, line) });
+      this.readStub(stub, tokens, 2, opens ? tokens.length : tokens.length - 1, line2);
+      if (opens) this.stack.push({ kind: "stub", system, loc: this.locOf(first, line2) });
       return;
     }
-    this.error('Inside a system, write from "file", expose <id> "Name" -> "Use case" or capacity { \u2026 }', this.locOf(first, line));
-    if (tokens[tokens.length - 1].kind === "lbrace") this.stack.push({ kind: "section", section: "test", discard: true, loc: this.locOf(first, line) });
+    this.error('Inside a system, write from "file", expose <id> "Name" -> "Use case" or capacity { \u2026 }', this.locOf(first, line2));
+    if (tokens[tokens.length - 1].kind === "lbrace") this.stack.push({ kind: "section", section: "test", discard: true, loc: this.locOf(first, line2) });
   }
   /** `expose id ["Name"] [-> "Use case"]` */
-  parseExpose(frame2, tokens, line) {
+  parseExpose(frame2, tokens, line2) {
     const [keyword, idToken] = tokens;
     if (idToken?.kind !== "ident") {
-      this.error('Expected an entry point id, e.g. expose api "Orders API" -> "Place order"', this.locOf(idToken ?? keyword, line));
+      this.error('Expected an entry point id, e.g. expose api "Orders API" -> "Place order"', this.locOf(idToken ?? keyword, line2));
       return;
     }
-    const entry = { id: idToken.value, name: idToken.value, loc: this.locOf(idToken, line) };
+    const entry = { id: idToken.value, name: idToken.value, loc: this.locOf(idToken, line2) };
     let i = 2;
     if (tokens[i]?.kind === "string") entry.name = tokens[i++].value;
     if (tokens[i]?.kind === "arrow") {
       const useCase = tokens[i + 1];
       if (tokens[i].value !== "->" || useCase?.kind !== "string" && useCase?.kind !== "ident") {
-        this.error('Expected -> "Use case" after the entry point', this.locOf(useCase ?? tokens[i], line));
+        this.error('Expected -> "Use case" after the entry point', this.locOf(useCase ?? tokens[i], line2));
         return;
       }
       entry.useCase = useCase.value;
-      frame2.useCaseLocs.set(entry, this.locOf(useCase, line));
+      frame2.useCaseLocs.set(entry, this.locOf(useCase, line2));
       i += 2;
     }
-    if (!this.expectEnd(tokens, i, line)) return;
+    if (!this.expectEnd(tokens, i, line2)) return;
     if (frame2.system.entries.some((e) => e.id === entry.id)) {
       this.error(`System '${frame2.system.id}' already exposes '${entry.id}'`, entry.loc);
       return;
@@ -1983,23 +2949,23 @@ var Parser = class _Parser {
     frame2.system.entries.push(entry);
   }
   /** The parts of a system's `capacity { … }` in `tokens[from, to)`. */
-  readStub(stub, tokens, from, to, line) {
+  readStub(stub, tokens, from, to, line2) {
     for (let i = from; i < to; ) {
       const t = tokens[i];
-      if (t.kind === "quantity" || t.kind === "number") {
-        const rps = this.quantityOf(t, "rps", t, line);
+      if (t.kind === "quantity" || t.kind === "number" || isConstUse(t)) {
+        const rps = this.quantityOf(t, "rps", t, line2);
         if (rps === void 0) return;
         stub.rps = rps;
         i++;
       } else if (isWord(t, "p99") || isWord(t, "latency") || isWord(t, "availability")) {
-        const value = this.quantityOf(i + 1 < to ? tokens[i + 1] : void 0, t.value === "availability" ? "%" : "ms", t, line);
+        const value = this.quantityOf(i + 1 < to ? tokens[i + 1] : void 0, t.value === "availability" ? "%" : "ms", t, line2);
         if (value === void 0) return;
         if (t.value === "p99") stub.p99Ms = value;
         else if (t.value === "latency") stub.latencyMs = value;
         else stub.availability = value;
         i += 2;
       } else {
-        this.error(`Expected ${STUB_HELP}`, this.locOf(t, line));
+        this.error(`Expected ${STUB_HELP}`, this.locOf(t, line2));
         return;
       }
     }
@@ -2024,15 +2990,15 @@ var Parser = class _Parser {
     if (!team) return;
     const name = fileName(system.resolved ?? "");
     for (const entry of system.entries) {
-      const wanted = entry.useCase;
-      if (wanted !== void 0) {
-        const u = findUseCaseIn(team, wanted);
+      const wanted3 = entry.useCase;
+      if (wanted3 !== void 0) {
+        const u = findUseCaseIn(team, wanted3);
         if (u) entry.useCaseId = u.id;
         else {
-          const near = team.useCases.find((x) => editDistance2(x.name.toLowerCase(), wanted.toLowerCase()) <= Math.max(1, Math.floor(wanted.length / 4)));
+          const near = team.useCases.find((x) => editDistance2(x.name.toLowerCase(), wanted3.toLowerCase()) <= Math.max(1, Math.floor(wanted3.length / 4)));
           const all = team.useCases.map((x) => `"${x.name}"`).join(", ");
           const help = near ? ` Did you mean "${near.name}"?` : all ? ` Its use cases are ${all}` : "";
-          this.error(`${name} has no use case "${wanted}".${help}`, frame2.useCaseLocs.get(entry) ?? entry.loc);
+          this.error(`${name} has no use case "${wanted3}".${help}`, frame2.useCaseLocs.get(entry) ?? entry.loc);
         }
       } else if (team.useCases.length === 1) {
         entry.useCaseId = team.useCases[0].id;
@@ -2061,7 +3027,7 @@ var Parser = class _Parser {
     let result = this.teamFiles.get(target.path);
     if (!result) {
       const scope2 = { chain: [...this.chain, target.path], teamFiles: this.teamFiles };
-      result = new _Parser(target.source, { path: target.path, resolve: this.options.resolve }, scope2).run();
+      result = new _Parser(target.source, { path: target.path, resolve: this.options.resolve, ...this.options.strictOps ? { strictOps: true } : {} }, scope2).run();
       this.teamFiles.set(target.path, result);
       for (const d of result.diagnostics) {
         if (!this.fileOrder.has(d.file)) this.fileOrder.set(d.file, this.fileOrder.size);
@@ -2123,41 +3089,41 @@ var Parser = class _Parser {
     this.errorOnce(`Say which entry point of '${id}' this step enters: ${system.entries.map((e) => `${id}.${e.id}`).join(" or ")}`, loc);
     return void 0;
   }
-  parseUseCase(tokens, line) {
+  parseUseCase(tokens, line2) {
     const keyword = tokens[0];
     if (this.stack.length > 0) {
-      this.error("A usecase must be declared at the top level", this.locOf(keyword, line));
+      this.error("A usecase must be declared at the top level", this.locOf(keyword, line2));
       return;
     }
     const nameToken = tokens[1];
     if (nameToken?.kind !== "string" && nameToken?.kind !== "ident") {
-      this.error('Expected a usecase name, e.g. usecase "Place order" {', this.locOf(keyword, line));
+      this.error('Expected a usecase name, e.g. usecase "Place order" {', this.locOf(keyword, line2));
       return;
     }
     let i = 2;
     let description;
     if (tokens[i]?.kind === "string") description = tokens[i++].value;
     if (tokens[i]?.kind !== "lbrace") {
-      this.error("Expected { after usecase name", this.locOf(tokens[i] ?? tokens[i - 1], line));
+      this.error("Expected { after usecase name", this.locOf(tokens[i] ?? tokens[i - 1], line2));
       return;
     }
-    this.expectEnd(tokens, i + 1, line);
-    const loc = this.locOf(nameToken, line);
+    this.expectEnd(tokens, i + 1, line2);
+    const loc = this.locOf(nameToken, line2);
     const useCase = { id: this.useCaseId(nameToken.value), name: nameToken.value, description, steps: [], scenarios: [], loc };
     const frame2 = { kind: "usecase", useCase, body: { items: [] }, parCount: 0, loc };
     this.useCases.push({ useCase, body: frame2.body });
     this.stack.push(frame2);
   }
-  parseAlt(tokens, line) {
+  parseAlt(tokens, line2) {
     const keyword = tokens[0];
     const top = this.top();
     if (top?.kind !== "usecase" && top?.kind !== "alt" && top?.kind !== "steps") {
-      this.error(top?.kind === "par" ? "alt blocks cannot be inside a par block" : "alt is only allowed inside a usecase", this.locOf(keyword, line));
+      this.error(top?.kind === "par" ? "alt blocks cannot be inside a par block" : "alt is only allowed inside a usecase", this.locOf(keyword, line2));
       return;
     }
     const nameToken = tokens[1];
     if (nameToken?.kind !== "string" && nameToken?.kind !== "ident") {
-      this.error('Expected a scenario name, e.g. alt "Not found" {', this.locOf(keyword, line));
+      this.error('Expected a scenario name, e.g. alt "Not found" {', this.locOf(keyword, line2));
       return;
     }
     let i = 2;
@@ -2165,19 +3131,19 @@ var Parser = class _Parser {
     if (tokens[i]?.kind === "ident" && tokens[i].value === "when") {
       const conditionToken = tokens[i + 1];
       if (conditionToken?.kind !== "string") {
-        this.error('Expected a condition after when, e.g. alt "Not found" when "the order does not exist" {', this.locOf(conditionToken ?? tokens[i], line));
+        this.error('Expected a condition after when, e.g. alt "Not found" when "the order does not exist" {', this.locOf(conditionToken ?? tokens[i], line2));
         return;
       }
       condition = conditionToken.value.trim() || void 0;
       i += 2;
     }
     if (tokens[i]?.kind !== "lbrace") {
-      this.error(i === 2 ? "Expected { after alt name" : "Expected { after the alt condition", this.locOf(tokens[i] ?? tokens[i - 1], line));
+      this.error(i === 2 ? "Expected { after alt name" : "Expected { after the alt condition", this.locOf(tokens[i] ?? tokens[i - 1], line2));
       return;
     }
-    this.expectEnd(tokens, i + 1, line);
+    this.expectEnd(tokens, i + 1, line2);
     if (this.stack.filter((f) => f.kind === "alt").length >= MAX_ALT_DEPTH) {
-      const loc2 = this.locOf(keyword, line);
+      const loc2 = this.locOf(keyword, line2);
       this.error(`alt blocks can nest at most ${MAX_ALT_DEPTH} deep; this one is skipped`, loc2);
       this.stack.push({ kind: "section", section: "test", discard: true, skipped: `alt '${nameToken.value}'`, loc: loc2 });
       return;
@@ -2188,7 +3154,7 @@ var Parser = class _Parser {
       set = { kind: "alt", branches: [] };
       owner.items.push(set);
     }
-    const loc = this.locOf(nameToken, line);
+    const loc = this.locOf(nameToken, line2);
     if (set.branches.some((b) => b.name === nameToken.value)) this.warning(`Duplicate alt name '${nameToken.value}'`, loc);
     const body = { items: [] };
     set.branches.push({ name: nameToken.value, condition, items: body.items, loc });
@@ -2209,19 +3175,19 @@ var Parser = class _Parser {
    * `alt` blocks; they only label steps, so the steps, their numbers and the
    * scenarios are the same as without them.
    */
-  parseStepSection(tokens, line) {
+  parseStepSection(tokens, line2) {
     const keyword = tokens[0];
     const nameToken = tokens[1];
     const top = this.top();
     const skip = (message, at = keyword) => {
-      const loc2 = this.locOf(at, line);
+      const loc2 = this.locOf(at, line2);
       this.error(message, loc2);
       this.stack.push({ kind: "section", section: "test", discard: true, skipped: `section '${nameToken.value}'`, loc: loc2 });
     };
     if (top?.kind === "par") return skip("section blocks cannot be inside a par block; put the par block inside the section");
     if (top?.kind !== "usecase" && top?.kind !== "alt" && top?.kind !== "steps") return skip("section is only allowed inside a usecase");
     if (tokens.length > 3) return skip(`Unexpected ${describe(tokens[2])}; write section "Name" {`, tokens[2]);
-    const loc = this.locOf(nameToken, line);
+    const loc = this.locOf(nameToken, line2);
     if (!nameToken.value.trim()) return skip('A section needs a name, e.g. section "Auth" {');
     this.currentBody().openAlt = void 0;
     this.stack.push({ kind: "steps", section: { name: nameToken.value.trim(), loc }, steps: 0, loc });
@@ -2230,26 +3196,26 @@ var Parser = class _Parser {
   openSections() {
     return this.stack.flatMap((f) => f.kind === "steps" ? [f.section] : []);
   }
-  parsePar(tokens, line) {
+  parsePar(tokens, line2) {
     const keyword = tokens[0];
     const top = this.top();
     if (top?.kind !== "usecase" && top?.kind !== "alt" && top?.kind !== "steps") {
-      this.error(top?.kind === "par" ? "par blocks cannot be nested" : "par is only allowed inside a usecase", this.locOf(keyword, line));
+      this.error(top?.kind === "par" ? "par blocks cannot be nested" : "par is only allowed inside a usecase", this.locOf(keyword, line2));
       return;
     }
     if (tokens[1]?.kind !== "lbrace") {
-      this.error("Expected { after par", this.locOf(tokens[1] ?? keyword, line));
+      this.error("Expected { after par", this.locOf(tokens[1] ?? keyword, line2));
       return;
     }
-    this.expectEnd(tokens, 2, line);
+    this.expectEnd(tokens, 2, line2);
     this.currentBody().openAlt = void 0;
     const useCase = this.currentUseCase();
     useCase.parCount++;
-    this.stack.push({ kind: "par", group: useCase.parCount, loc: this.locOf(keyword, line) });
+    this.stack.push({ kind: "par", group: useCase.parCount, loc: this.locOf(keyword, line2) });
   }
-  parseNode(tokens, line) {
+  parseNode(tokens, line2) {
     const idToken = tokens[0];
-    const loc = this.locOf(idToken, line);
+    const loc = this.locOf(idToken, line2);
     if (this.inUseCase()) {
       this.error("Declare nodes outside usecase blocks; steps look like a -> b : label", loc);
       return;
@@ -2259,8 +3225,8 @@ var Parser = class _Parser {
     const style = {};
     for (let i = 1; i < tokens.length; i++) {
       const t = tokens[i];
-      const styleUsed = this.readStylePart(tokens, i, line, style, true);
-      const used = styleUsed === 0 ? this.readRank(tokens, i, line, node) : styleUsed;
+      const styleUsed = this.readStylePart(tokens, i, line2, style, true);
+      const used = styleUsed === 0 ? this.readRank(tokens, i, line2, node) : styleUsed;
       if (used === void 0) return;
       if (used > 0) {
         i += used - 1;
@@ -2270,17 +3236,19 @@ var Parser = class _Parser {
         if (strings++ === 0) node.name = t.value;
         else node.description = t.value;
       } else if (t.kind === "tech") {
-        const resolved = this.resolveTech(t, line);
-        node.type = resolved.type;
-        node.techStack = resolved.techStack;
-        if (resolved.inferredKind) node.inferredKind = resolved.inferredKind;
-        node.kind = resolved.type === "text" ? "text" : resolved.type === "group" ? "group" : "component";
+        const found = findTech(t.value);
+        if (found) {
+          node.type = found.type;
+          node.techStack = found.techStack;
+          node.kind = found.type === "text" ? "text" : found.type === "group" ? "group" : "component";
+        }
+        this.techRefs.push({ node, value: t.value, loc: this.locOf(t, line2) });
       } else if (t.kind === "team") {
         node.ownerTeam = t.value;
       } else if (t.kind === "ident" && t.value === "pos") {
         const [x, comma, y] = [tokens[i + 1], tokens[i + 2], tokens[i + 3]];
         if (x?.kind !== "number" || comma?.kind !== "comma" || y?.kind !== "number") {
-          this.error("Expected pos x,y", this.locOf(t, line));
+          this.error("Expected pos x,y", this.locOf(t, line2));
           return;
         }
         node.position = { x: Number(x.value), y: Number(y.value) };
@@ -2288,15 +3256,19 @@ var Parser = class _Parser {
       } else if (t.kind === "ident" && REPLICAS.test(t.value)) {
         const replicas = Number(REPLICAS.exec(t.value)[1]);
         if (replicas < 1) {
-          this.error("A node needs at least one replica: x1, x2, \u2026", this.locOf(t, line));
+          this.error("A node needs at least one replica: x1, x2, \u2026", this.locOf(t, line2));
           return;
         }
         node.replicas = replicas;
+      } else if (t.kind === "const") {
+        const replicas = this.replicasOf(t, line2, "A node needs a whole number of replicas, at least 1: x1, x2, \u2026");
+        if (replicas === void 0) return;
+        node.replicas = replicas;
       } else if (t.kind === "label" || t.kind === "arrow") {
-        this.error(`Expected '${idToken.value} -> target' for a connection`, this.locOf(t, line));
+        this.error(`Expected '${idToken.value} -> target' for a connection`, this.locOf(t, line2));
         return;
       } else {
-        this.error(`Unexpected ${describe(t)} in node declaration`, this.locOf(t, line));
+        this.error(`Unexpected ${describe(t)} in node declaration`, this.locOf(t, line2));
         return;
       }
     }
@@ -2304,20 +3276,20 @@ var Parser = class _Parser {
     this.addNode(node);
   }
   parseConnection(tokens, index) {
-    const line = index + 1;
+    const line2 = index + 1;
     const [fromToken, arrowToken, toToken] = tokens;
     const tagToken = tokens[3]?.kind === "tag" ? tokens[3] : void 0;
     const labelToken = tokens[tagToken ? 4 : 3];
     if (toToken?.kind !== "ident") {
-      this.error("Expected a target id after the arrow", this.locOf(toToken ?? arrowToken, line));
+      this.error("Expected a target id after the arrow", this.locOf(toToken ?? arrowToken, line2));
       return index;
     }
     if (tagToken && tokens[4]?.kind === "tag") {
-      this.error("A connection takes one tag", this.locOf(tokens[4], line));
+      this.error("A connection takes one tag", this.locOf(tokens[4], line2));
       return index;
     }
     if (tokens.length > (tagToken ? 5 : 4) || labelToken && labelToken.kind !== "label") {
-      this.error("Expected : before the connection label", this.locOf(labelToken, line));
+      this.error("Expected : before the connection label", this.locOf(labelToken, line2));
       return index;
     }
     let label = labelToken?.value ?? "";
@@ -2331,30 +3303,30 @@ var Parser = class _Parser {
         label += more;
         depth = brackets.feed(more);
       }
-      if (depth > 0) this.error("Unclosed { or [ in payload", this.locOf(labelToken, line));
+      if (depth > 0) this.error("Unclosed { or [ in payload", this.locOf(labelToken, line2));
       label = label.trimEnd();
     }
     const loc = {
-      line,
+      line: line2,
       col: fromToken.col,
       length: (labelToken ?? toToken).col + (labelToken ?? toToken).length - fromToken.col,
       ...this.fileField()
     };
     const from = fromToken.value;
     const to = toToken.value;
-    const arrow = arrowToken.value;
-    const toRef = { id: to, loc: this.locOf(toToken, line) };
-    this.references.push({ id: from, loc: this.locOf(fromToken, line) }, toRef);
+    const arrow2 = arrowToken.value;
+    const toRef = { id: to, loc: this.locOf(toToken, line2) };
+    this.references.push({ id: from, loc: this.locOf(fromToken, line2) }, toRef);
     const top = this.top();
     const inUseCase = top?.kind === "usecase" || top?.kind === "alt" || top?.kind === "par" || top?.kind === "steps";
     if (tagToken && inUseCase) {
-      this.error("Tags style connections in the architecture, not use case steps", this.locOf(tagToken, line));
+      this.error("Tags style connections in the architecture, not use case steps", this.locOf(tagToken, line2));
       return lastLine;
     }
     if (inUseCase) {
       const body = this.currentBody();
       body.openAlt = void 0;
-      const prefixes = arrow === "-->" ? { rest: label } : this.readLabelPrefixes(label, labelToken, line);
+      const prefixes = arrow2 === "-->" ? { rest: label, col: labelToken && this.labelStart(labelToken, line2) } : this.readLabelPrefixes(label, labelToken, line2);
       const sections = this.openSections();
       for (const frame2 of this.stack) if (frame2.kind === "steps") frame2.steps++;
       body.items.push({
@@ -2362,17 +3334,18 @@ var Parser = class _Parser {
         step: {
           from,
           to,
-          arrow,
+          arrow: arrow2,
           label: prefixes.rest,
           parallelGroup: top.kind === "par" ? top.group : void 0,
           ...sections.length ? { sections } : {},
           ...prefixes.multiplier !== void 0 ? { multiplier: prefixes.multiplier } : {},
           ...prefixes.sizeBytes !== void 0 ? { sizeBytes: prefixes.sizeBytes } : {},
+          ...prefixes.col !== void 0 ? { labelCol: prefixes.col } : {},
           loc
         }
       });
-    } else if (arrow === "-x") {
-      this.error("'-x' marks a failed call and is only allowed in use case steps", this.locOf(arrowToken, line));
+    } else if (arrow2 === "-x") {
+      this.error("'-x' marks a failed call and is only allowed in use case steps", this.locOf(arrowToken, line2));
     } else {
       const base = `${from}->${to}`;
       const count = this.edgeCount.get(base) ?? 0;
@@ -2380,7 +3353,7 @@ var Parser = class _Parser {
       const edge = { id: count ? `${base}#${count + 1}` : base, source: from, target: to, label: unquote(label) || void 0, loc };
       if (tagToken) {
         edge.tag = tagToken.value;
-        this.tagRefs.push({ tag: tagToken.value, loc: this.locOf(tagToken, line), target: edge });
+        this.tagRefs.push({ tag: tagToken.value, loc: this.locOf(tagToken, line2), target: edge });
       }
       if (!tagToken) toRef.edgeTarget = edge;
       this.edges.push(edge);
@@ -2393,15 +3366,14 @@ var Parser = class _Parser {
    * prefix must be followed by whitespace or end the label, so `xml …` and
    * `x-request-id` are ordinary labels. Problems are reported at the prefix.
    */
-  readLabelPrefixes(label, token, line) {
+  readLabelPrefixes(label, token, line2) {
     const out = { rest: label };
     if (!token) return out;
-    const after2 = this.lines[line - 1].slice(token.col);
-    const base = token.col + 1 + (after2.length - after2.trimStart().length);
+    const base = this.labelStart(token, line2);
     let offset = 0;
     for (; ; ) {
       const rest = label.slice(offset);
-      const at = (length) => ({ line, col: base + offset, length, ...this.fileField() });
+      const at = (length) => ({ line: line2, col: base + offset, length, ...this.fileField() });
       const fanOut = /^x(\d+)(?=\s|$)/.exec(rest);
       const size = rest.startsWith("~") ? /^~(\S*)/.exec(rest) : null;
       const match = fanOut ?? size;
@@ -2412,16 +3384,22 @@ var Parser = class _Parser {
         else if (n < 1) this.error("A fan-out needs at least one call per request: x1, x2, \u2026", at(match[0].length));
         else out.multiplier = n;
       } else {
-        const bytes = parseSize(size[1]);
+        const bytes2 = parseSize(size[1]);
         if (out.sizeBytes !== void 0) this.error("The payload size is given twice; write one ~<size>", at(match[0].length));
-        else if ("error" in bytes) this.error(bytes.error, at(match[0].length));
-        else out.sizeBytes = bytes.value;
+        else if ("error" in bytes2) this.error(bytes2.error, at(match[0].length));
+        else out.sizeBytes = bytes2.value;
       }
       offset += match[0].length;
       offset += label.slice(offset).length - label.slice(offset).trimStart().length;
     }
     out.rest = label.slice(offset);
+    out.col = base + offset;
     return out;
+  }
+  /** Column of a label's first character: the label token starts at ':' and its value is trimmed. */
+  labelStart(token, line2) {
+    const after2 = this.lines[line2 - 1].slice(token.col);
+    return token.col + 1 + (after2.length - after2.trimStart().length);
   }
   // ---- HLD sections: traffic, requirements, capacity, entity, decision, test (docs/design/hld-and-practice.md §1) ----
   /**
@@ -2429,44 +3407,47 @@ var Parser = class _Parser {
    * one whose header is broken, still opens a block so that its lines and its
    * `}` are not mistaken for nodes and the end of an enclosing block.
    */
-  openSection(section, tokens, line, fill2 = {}) {
+  openSection(section, tokens, line2, fill2 = {}) {
     const keyword = tokens[0];
-    const loc = this.locOf(keyword, line);
+    const loc = this.locOf(keyword, line2);
     if (this.stack.length > 0) {
       this.error(`${section} is only allowed at the top level`, loc);
-      this.skipSection(section, tokens, line);
+      this.skipSection(section, tokens, line2);
       return false;
     }
-    if (section === "traffic" || section === "requirements" || section === "capacity" || section === "legend") this.expectEnd(tokens, 2, line);
+    if (section === "traffic" || section === "requirements" || section === "capacity" || section === "legend") this.expectEnd(tokens, 2, line2);
     this.stack.push({ kind: "section", section, ...fill2, loc });
     return true;
   }
   /** After an error in a section header: skips the block, if the line opens one. */
-  skipSection(section, tokens, line) {
-    if (tokens[tokens.length - 1].kind === "lbrace") this.stack.push({ kind: "section", section, discard: true, loc: this.locOf(tokens[0], line) });
+  skipSection(section, tokens, line2) {
+    if (tokens[tokens.length - 1].kind === "lbrace") this.stack.push({ kind: "section", section, discard: true, loc: this.locOf(tokens[0], line2) });
   }
   closeSection(frame2) {
     if (frame2.test && frame2.test.assertions.length === 0) this.warning(`Test '${frame2.test.name}' has no assertions`, frame2.test.loc);
+    if (frame2.whatif && frame2.whatif.changes.length === 0) this.warning(`What-if '${frame2.whatif.name}' changes nothing`, frame2.whatif.loc);
   }
-  parseSectionLine(frame2, tokens, line) {
+  parseSectionLine(frame2, tokens, line2) {
     switch (frame2.section) {
       case "traffic":
-        return this.parseTrafficLine(tokens, line);
+        return this.parseTrafficLine(tokens, line2);
       case "requirements":
-        return this.parseRequirement(tokens, line);
+        return this.parseRequirement(tokens, line2);
       case "capacity":
-        return this.parseCapacityLine(tokens, line);
+        return this.parseCapacityLine(tokens, line2);
       case "legend":
-        return this.parseLegendLine(tokens, line);
+        return this.parseLegendLine(tokens, line2);
       case "entity":
-        return this.parseField(frame2.entity, tokens, line);
+        return this.parseField(frame2.entity, tokens, line2);
       case "decision":
-        return this.parseDecisionLine(frame2.decision, tokens, line);
+        return this.parseDecisionLine(frame2.decision, tokens, line2);
       case "test": {
-        const assertion2 = this.parseAssertion(tokens, line);
+        const assertion2 = this.parseAssertion(tokens, line2);
         if (assertion2) frame2.test.assertions.push(assertion2);
         return;
       }
+      case "whatif":
+        return this.parseWhatIfLine(frame2.whatif, tokens, line2);
     }
   }
   /**
@@ -2474,18 +3455,18 @@ var Parser = class _Parser {
    * `.tag` and, on nodes, `critical`. Returns how many tokens it used (0 when
    * the token is something else), or undefined after reporting an error.
    */
-  readStylePart(tokens, i, line, parts, isNode) {
+  readStylePart(tokens, i, line2, parts, isNode) {
     const t = tokens[i];
     if (t.kind === "tag") {
       if (parts.tag) {
-        this.error(`A ${isNode ? "node" : "group"} takes one tag; '.${parts.tag.value}' is already set`, this.locOf(t, line));
+        this.error(`A ${isNode ? "node" : "group"} takes one tag; '.${parts.tag.value}' is already set`, this.locOf(t, line2));
         return void 0;
       }
-      parts.tag = { value: t.value, loc: this.locOf(t, line) };
+      parts.tag = { value: t.value, loc: this.locOf(t, line2) };
       return 1;
     }
     if (isWord(t, "color")) {
-      const value = this.readColor(tokens[i + 1], t, line);
+      const value = this.readColor(tokens[i + 1], t, line2);
       if (value === void 0) return void 0;
       parts.color = value;
       return 2;
@@ -2497,16 +3478,16 @@ var Parser = class _Parser {
     return 0;
   }
   /** The color in `token`, a palette name or `#hex`, or undefined after reporting an error. */
-  readColor(token, after2, line) {
+  readColor(token, after2, line2) {
     const choices = `${COLOR_NAMES.join(", ")}, or a hex value after color, like color #3b82f6`;
     if (token?.kind !== "ident" && token?.kind !== "hex") {
-      this.error(`Expected a color after ${after2.value}: ${choices}`, this.locOf(token ?? after2, line));
+      this.error(`Expected a color after ${after2.value}: ${choices}`, this.locOf(token ?? after2, line2));
       return void 0;
     }
     const hex2 = resolveColor(token.value);
     if (!hex2) {
       const suggestion = suggestColor(token.value);
-      this.error(`Unknown color '${token.value}'.${suggestion ? ` Did you mean '${suggestion}'?` : ""} Use ${choices}`, this.locOf(token, line));
+      this.error(`Unknown color '${token.value}'.${suggestion ? ` Did you mean '${suggestion}'?` : ""} Use ${choices}`, this.locOf(token, line2));
       return void 0;
     }
     return { name: token.value, hex: hex2 };
@@ -2523,13 +3504,13 @@ var Parser = class _Parser {
     }
   }
   /** `owned "Owned by Order Fulfillment" green dashed`: an id, a label, then a color and a dash in any order. */
-  parseLegendLine(tokens, line) {
+  parseLegendLine(tokens, line2) {
     const [idToken] = tokens;
     if (idToken.kind !== "ident") {
-      this.error('Expected a legend entry, e.g. owned "Owned by us" green', this.locOf(idToken, line));
+      this.error('Expected a legend entry, e.g. owned "Owned by us" green', this.locOf(idToken, line2));
       return;
     }
-    const loc = this.locOf(idToken, line);
+    const loc = this.locOf(idToken, line2);
     const entry = { id: idToken.value, label: idToken.value, loc };
     let i = 1;
     if (tokens[i]?.kind === "string") entry.label = tokens[i++].value;
@@ -2541,14 +3522,14 @@ var Parser = class _Parser {
       }
       if (t.kind === "ident") {
         const keyword = t.value === "color";
-        const color = this.readColor(keyword ? tokens[i + 1] : t, t, line);
+        const color = this.readColor(keyword ? tokens[i + 1] : t, t, line2);
         if (!color) return;
         entry.colorName = color.name;
         entry.color = color.hex;
         if (keyword) i++;
         continue;
       }
-      this.error(`Unexpected ${describe(t)} in legend entry; expected a color, dashed or dotted`, this.locOf(t, line));
+      this.error(`Unexpected ${describe(t)} in legend entry; expected a color, dashed or dotted`, this.locOf(t, line2));
       return;
     }
     const existing = this.legend.find((e) => e.id === entry.id);
@@ -2574,56 +3555,79 @@ var Parser = class _Parser {
     }
   }
   /** `"Redirect" 100k rps mix "Cache hit" 90%, "Cache miss" 10%` */
-  parseTrafficLine(tokens, line) {
+  parseTrafficLine(tokens, line2) {
     const [name, rate] = tokens;
     if (name.kind !== "string") {
-      this.error('Expected a use case name in quotes and a rate, e.g. "Redirect" 100k rps', this.locOf(name, line));
+      this.error('Expected a use case name in quotes and a rate, e.g. "Redirect" 100k rps', this.locOf(name, line2));
       return;
     }
-    const rps = this.quantityOf(rate, "rps", name, line);
+    const rps = this.quantityOf(rate, "rps", name, line2);
     if (rps === void 0) return;
-    const entry = { useCase: name.value, rps, loc: this.lineLoc(tokens, line) };
-    const shares = [];
+    const entry = { useCase: name.value, rps, loc: this.lineLoc(tokens, line2) };
     let i = 2;
+    if (isWord(tokens[i], "peak")) {
+      const word = tokens[i];
+      const value = tokens[i + 1];
+      let peak;
+      if (value?.kind === "ident" && MULTIPLIER.test(value.value)) peak = rps * Number(MULTIPLIER.exec(value.value)[1]);
+      else if (value?.kind === "const" && value.value.startsWith("x")) {
+        const factor = this.countOf(value, line2);
+        if (factor === void 0) return;
+        peak = rps * factor;
+      } else if (value?.kind === "quantity" || value?.kind === "number" || isConstUse(value)) peak = this.quantityOf(value, "rps", word, line2);
+      else {
+        this.error(`Expected the peak after peak, as a multiple of the average (peak x3) or a rate (peak 60k rps)${value ? `, not ${describe(value)}` : ""}`, this.locOf(value ?? word, line2));
+        return;
+      }
+      if (peak === void 0) return;
+      if (peak < rps) {
+        this.error(`The peak cannot be below the average, ${rps.toLocaleString("en-US")} rps`, this.locOf(value, line2));
+        return;
+      }
+      entry.avgRps = rps;
+      entry.rps = Number(peak.toPrecision(12));
+      i += 2;
+    }
+    const shares = [];
     if (tokens[i]) {
-      const mix = tokens[i++];
-      if (!isWord(mix, "mix")) {
-        this.error(`Unexpected ${describe(mix)}; expected mix "Scenario" 90%, "Other" 10%`, this.locOf(mix, line));
+      const mix2 = tokens[i++];
+      if (!isWord(mix2, "mix")) {
+        this.error(`Unexpected ${describe(mix2)}; expected mix "Scenario" 90%, "Other" 10%`, this.locOf(mix2, line2));
         return;
       }
       for (; ; ) {
         const scenario = tokens[i];
         if (scenario?.kind !== "string") {
-          this.error('Expected a scenario name in quotes and its share, e.g. "Cache hit" 90%', this.locOf(scenario ?? tokens[i - 1], line));
+          this.error('Expected a scenario name in quotes and its share, e.g. "Cache hit" 90%', this.locOf(scenario ?? tokens[i - 1], line2));
           return;
         }
-        const share = this.quantityOf(tokens[i + 1], "%", scenario, line);
-        if (share === void 0) return;
-        const loc = this.locOf(scenario, line);
+        const share2 = this.quantityOf(tokens[i + 1], "%", scenario, line2);
+        if (share2 === void 0) return;
+        const loc = this.locOf(scenario, line2);
         if (shares.some((s) => s.scenario === scenario.value)) {
           this.error(`Scenario '${scenario.value}' is in the mix twice`, loc);
           return;
         }
-        shares.push({ scenario: scenario.value, share, loc });
+        shares.push({ scenario: scenario.value, share: share2, loc });
         i += 2;
         if (!tokens[i]) break;
         if (tokens[i].kind !== "comma") {
-          this.error(`Expected , between mix shares, not ${describe(tokens[i])}`, this.locOf(tokens[i], line));
+          this.error(`Expected , between mix shares, not ${describe(tokens[i])}`, this.locOf(tokens[i], line2));
           return;
         }
         i++;
       }
       const total = shares.reduce((sum, s) => sum + s.share, 0);
       if (total <= 0) {
-        this.error("Mix shares must add up to more than 0%", this.locOf(mix, line));
+        this.error("Mix shares must add up to more than 0%", this.locOf(mix2, line2));
         return;
       }
       if (Math.abs(total - 100) > 1e-9) {
-        this.warning(`Mix shares add up to ${Number(total.toFixed(3))}%, not 100%; they are scaled to fit`, this.locOf(mix, line));
+        this.warning(`Mix shares add up to ${Number(total.toFixed(3))}%, not 100%; they are scaled to fit`, this.locOf(mix2, line2));
       }
       entry.mix = shares.map((s) => ({ scenario: s.scenario, share: s.share / total }));
     }
-    const nameLoc = this.locOf(name, line);
+    const nameLoc = this.locOf(name, line2);
     const first = this.traffic.find((t) => t.useCase === entry.useCase);
     if (first) {
       this.error(`Duplicate traffic for '${entry.useCase}' (first ${this.where(first.loc, nameLoc)})`, nameLoc);
@@ -2636,12 +3640,12 @@ var Parser = class _Parser {
     });
   }
   /** One line of `requirements { … }`. */
-  parseRequirement(tokens, line) {
+  parseRequirement(tokens, line2) {
     const [first] = tokens;
-    const loc = this.lineLoc(tokens, line);
+    const loc = this.lineLoc(tokens, line2);
     const help = 'Expected a requirement: p99 "Use case" < 50ms, availability >= 99.9%, durable "Use case", survive any node failure, cost <= 3000 usd/month';
     if (first.kind !== "ident") {
-      this.error(help, this.locOf(first, line));
+      this.error(help, this.locOf(first, line2));
       return;
     }
     const word = first.value;
@@ -2649,7 +3653,7 @@ var Parser = class _Parser {
     let useCase;
     const readUseCase = () => {
       if (tokens[i]?.kind !== "string") return;
-      useCase = { name: tokens[i].value, loc: this.locOf(tokens[i], line) };
+      useCase = { name: tokens[i].value, loc: this.locOf(tokens[i], line2) };
       i++;
     };
     const commit = (requirement2, scenario) => {
@@ -2665,7 +3669,7 @@ var Parser = class _Parser {
     if (/^p\d+$/.test(word)) {
       const percentile = PERCENTILES[word];
       if (percentile === void 0) {
-        this.error(`Unknown percentile '${word}'; use p50, p90, p95, p99 or p999`, this.locOf(first, line));
+        this.error(`Unknown percentile '${word}'; use p50, p90, p95, p99 or p999`, this.locOf(first, line2));
         return;
       }
       readUseCase();
@@ -2673,98 +3677,190 @@ var Parser = class _Parser {
       if (isWord(tokens[i], "scenario")) {
         const name = tokens[i + 1];
         if (!useCase) {
-          this.error(`A scenario belongs to a use case; write ${word} "Use case" scenario "Scenario" < 100ms`, this.locOf(tokens[i], line));
+          this.error(`A scenario belongs to a use case; write ${word} "Use case" scenario "Scenario" < 100ms`, this.locOf(tokens[i], line2));
           return;
         }
         if (name?.kind !== "string") {
-          this.error("Expected a scenario name in quotes after scenario", this.locOf(name ?? tokens[i], line));
+          this.error("Expected a scenario name in quotes after scenario", this.locOf(name ?? tokens[i], line2));
           return;
         }
-        scenario = { name: name.value, loc: this.locOf(name, line) };
+        scenario = { name: name.value, loc: this.locOf(name, line2) };
         i += 2;
       }
-      if (!this.expectOp(tokens, i, ["<", "<="], `${word} "Use case" < 50ms`, line)) return;
-      const maxMs = this.quantityOf(tokens[i + 1], "ms", tokens[i], line);
-      if (maxMs === void 0 || !this.expectEnd(tokens, i + 2, line)) return;
+      if (!this.expectOp(tokens, i, ["<", "<="], `${word} "Use case" < 50ms`, line2)) return;
+      const maxMs = this.quantityOf(tokens[i + 1], "ms", tokens[i], line2);
+      if (maxMs === void 0 || !this.expectEnd(tokens, i + 2, line2)) return;
       commit({ kind: "latency", percentile, ...withUseCase(), ...scenario ? { scenario: scenario.name } : {}, maxMs, loc }, scenario);
       return;
     }
     switch (word) {
       case "availability": {
         readUseCase();
-        if (!this.expectOp(tokens, i, [">=", ">"], 'availability "Use case" >= 99.9%', line)) return;
-        const minPercent = this.quantityOf(tokens[i + 1], "%", tokens[i], line);
+        if (!this.expectOp(tokens, i, [">=", ">"], 'availability "Use case" >= 99.9%', line2)) return;
+        const minPercent = this.quantityOf(tokens[i + 1], "%", tokens[i], line2);
         if (minPercent === void 0) return;
         if (minPercent > 100) {
-          this.error("Availability cannot be more than 100%", this.locOf(tokens[i + 1], line));
+          this.error("Availability cannot be more than 100%", this.locOf(tokens[i + 1], line2));
           return;
         }
-        if (!this.expectEnd(tokens, i + 2, line)) return;
+        if (!this.expectEnd(tokens, i + 2, line2)) return;
         commit({ kind: "availability", ...withUseCase(), minPercent, loc });
+        return;
+      }
+      case "lag": {
+        readUseCase();
+        if (!useCase) {
+          this.error('Expected a use case name in quotes, e.g. lag "Place order" < 30s', this.locOf(tokens[1] ?? first, line2));
+          return;
+        }
+        if (!this.expectOp(tokens, i, ["<", "<="], 'lag "Use case" < 30s', line2)) return;
+        const maxMs = this.quantityOf(tokens[i + 1], "ms", tokens[i], line2);
+        if (maxMs === void 0 || !this.expectEnd(tokens, i + 2, line2)) return;
+        commit({ kind: "lag", useCase: useCase.name, maxMs, loc });
         return;
       }
       case "durable":
         readUseCase();
         if (!useCase) {
-          this.error('Expected a use case name in quotes, e.g. durable "Shorten"', this.locOf(tokens[1] ?? first, line));
+          this.error('Expected a use case name in quotes, e.g. durable "Shorten"', this.locOf(tokens[1] ?? first, line2));
           return;
         }
-        if (!this.expectEnd(tokens, i, line)) return;
+        if (!this.expectEnd(tokens, i, line2)) return;
         commit({ kind: "durable", useCase: useCase.name, loc });
         return;
       case "survive": {
         if (isWord(tokens[1], "any") && isWord(tokens[2], "node") && isWord(tokens[3], "failure")) {
-          if (this.expectEnd(tokens, 4, line)) commit({ kind: "survive", target: "any", loc });
+          if (this.expectEnd(tokens, 4, line2)) commit({ kind: "survive", target: "any", loc });
           return;
         }
         if (!isWord(tokens[1], "failure") || !isWord(tokens[2], "of")) {
-          this.error("Expected survive any node failure, or survive failure of <node | [Tech] | any kind>", this.locOf(tokens[1] ?? first, line));
+          this.error("Expected survive any node failure, or survive failure of <node | [Tech] | any kind>", this.locOf(tokens[1] ?? first, line2));
           return;
         }
-        const target = this.parseSelector(tokens, 3, line);
-        if (!target || !this.expectEnd(tokens, target.next, line)) return;
+        const target = this.parseSelector(tokens, 3, line2);
+        if (!target || !this.expectEnd(tokens, target.next, line2)) return;
         commit({ kind: "survive", target: target.selector, loc });
         this.checkSelectorLater(target);
         return;
       }
       case "cost": {
-        if (!this.expectOp(tokens, 1, ["<=", "<"], "cost <= 3000 usd/month", line)) return;
-        const maxUsdPerMonth = this.quantityOf(tokens[2], "usd/month", tokens[1], line);
-        if (maxUsdPerMonth === void 0 || !this.expectEnd(tokens, 3, line)) return;
-        commit({ kind: "cost", maxUsdPerMonth, loc });
+        const scoped = this.parseCostScope(tokens, line2);
+        if (!scoped) return;
+        const at = scoped.next;
+        if (!this.expectOp(tokens, at, ["<=", "<"], scoped.scope ? "cost @Payments <= 500 usd/month" : "cost <= 3000 usd/month", line2)) return;
+        const maxUsdPerMonth = this.quantityOf(tokens[at + 1], "usd/month", tokens[at], line2);
+        if (maxUsdPerMonth === void 0 || !this.expectEnd(tokens, at + 2, line2)) return;
+        commit({ kind: "cost", maxUsdPerMonth, ...scoped.scope ? { scope: scoped.scope } : {}, loc });
+        if (scoped.scope) this.checkCostScope(scoped.scope, this.locOf(tokens[at - 1], line2));
         return;
       }
       default:
-        this.error(`Unknown requirement '${word}'. ${help}`, this.locOf(first, line));
+        this.error(`Unknown requirement '${word}'. ${help}`, this.locOf(first, line2));
     }
   }
+  /** What follows `cost` before its operator: nothing, `@team`, `.tag` or `group <id>`; the index after it. */
+  parseCostScope(tokens, line2) {
+    const t = tokens[1];
+    if (t?.kind === "team") return { scope: { team: t.value }, next: 2 };
+    if (t?.kind === "tag") return { scope: { tag: t.value }, next: 2 };
+    if (isWord(t, "group")) {
+      const id = tokens[2];
+      if (id?.kind !== "ident") {
+        this.error("Expected a group id after group, e.g. cost group checkout <= 500 usd/month", this.locOf(id ?? t, line2));
+        return void 0;
+      }
+      return { scope: { group: id.value }, next: 3 };
+    }
+    if (t?.kind === "string") {
+      const name = t.value.replace(/^@/, "");
+      this.error(`A budget names a team as @${name}, a tag as .${name} or a group as group ${name}, without quotes`, this.locOf(t, line2));
+      return void 0;
+    }
+    return { next: 1 };
+  }
+  /** A scoped budget that covers no node is a warning: an unknown team, tag or group. */
+  checkCostScope(scope2, loc) {
+    this.deferred.push(() => {
+      const nodes = [...this.nodes.values()];
+      if ("team" in scope2) {
+        if (!nodes.some((n) => n.ownerTeam === scope2.team)) this.warning(`No node is owned by @${scope2.team}; give nodes the team with @${scope2.team} after their name`, loc);
+      } else if ("tag" in scope2) {
+        if (!nodes.some((n) => n.tag === scope2.tag)) this.warning(`No node or group has the tag .${scope2.tag}`, loc);
+      } else {
+        const group = this.nodes.get(scope2.group);
+        if (!group) this.warning(`Unknown group '${scope2.group}'`, loc);
+        else if (group.kind !== "group") this.warning(`'${scope2.group}' is not a group; a budget covers a team (@team), a tag (.tag) or a group (group <id>)`, loc);
+      }
+    });
+  }
   /** `db 20k rps latency 4ms availability 99.95% cost 400 usd/month durable`, parts in any order. */
-  parseCapacityLine(tokens, line) {
+  parseCapacityLine(tokens, line2) {
     const [id] = tokens;
     if (id.kind !== "ident") {
-      this.error("Expected a node id and its overrides, e.g. db 20k rps latency 4ms", this.locOf(id, line));
+      this.error("Expected a node id and its overrides, e.g. db 20k rps latency 4ms", this.locOf(id, line2));
       return;
     }
-    const override = { node: id.value, loc: this.lineLoc(tokens, line) };
+    const override = { node: id.value, loc: this.lineLoc(tokens, line2) };
     const seen = /* @__PURE__ */ new Set();
+    let hitLoc;
+    let drainLoc;
     for (let i = 1; i < tokens.length; ) {
       const t = tokens[i];
       let part;
-      if (t.kind === "quantity" || t.kind === "number") {
+      if (t.kind === "quantity" || t.kind === "number" || isConstUse(t)) {
         part = "rate";
-        const rps = this.quantityOf(t, "rps", t, line);
+        const rps = this.quantityOf(t, "rps", t, line2);
         if (rps === void 0) return;
         override.rps = rps;
         i++;
       } else if (isWord(t, "latency") || isWord(t, "availability") || isWord(t, "cost") || isWord(t, "timeout")) {
         part = t.value;
         const unit = part === "latency" || part === "timeout" ? "ms" : part === "availability" ? "%" : "usd/month";
-        const value = this.quantityOf(tokens[i + 1], unit, t, line);
+        const value = this.quantityOf(tokens[i + 1], unit, t, line2);
         if (value === void 0) return;
         if (part === "latency") override.latencyMs = value;
         else if (part === "timeout") override.timeoutMs = value;
         else if (part === "availability") override.availability = value;
         else override.costUsd = value;
+        i += 2;
+      } else if (isWord(t, "hit")) {
+        part = "hit";
+        const value = this.quantityOf(tokens[i + 1], "%", t, line2);
+        if (value === void 0) return;
+        if (value > 100) {
+          this.error("A hit rate cannot be more than 100%", this.locOf(tokens[i + 1], line2));
+          return;
+        }
+        override.hitPercent = value;
+        hitLoc = this.locOf(t, line2);
+        i += 2;
+      } else if (isWord(t, "errors")) {
+        part = "errors";
+        const value = this.quantityOf(tokens[i + 1], "%", t, line2);
+        if (value === void 0) return;
+        if (value > 100) {
+          this.error("An error rate cannot be more than 100%", this.locOf(tokens[i + 1], line2));
+          return;
+        }
+        override.errorPercent = value;
+        i += 2;
+      } else if (isWord(t, "drain")) {
+        part = "drain";
+        const value = this.quantityOf(tokens[i + 1], "rps", t, line2);
+        if (value === void 0) return;
+        override.drainRps = value;
+        drainLoc = this.locOf(t, line2);
+        i += 2;
+      } else if (isWord(t, "retries")) {
+        part = "retries";
+        const n = tokens[i + 1];
+        const retries = isConstUse(n) ? this.countOf(n, line2) : n?.kind === "number" ? Number(n.value) : NaN;
+        if (retries === void 0) return;
+        if (!Number.isInteger(retries) || retries < 0 || retries > MAX_RETRIES) {
+          this.error(`Expected a whole number of retries from 0 to ${MAX_RETRIES}, e.g. retries 3`, this.locOf(n ?? t, line2));
+          return;
+        }
+        override.retries = retries;
         i += 2;
       } else if (isWord(t, "durable") || isWord(t, "volatile")) {
         part = "durable or volatile";
@@ -2772,7 +3868,7 @@ var Parser = class _Parser {
         i++;
       } else if (isWord(t, "reads") || isWord(t, "writes")) {
         part = t.value;
-        const value = this.quantityOf(tokens[i + 1], "rps", t, line);
+        const value = this.quantityOf(tokens[i + 1], "rps", t, line2);
         if (value === void 0) return;
         if (part === "reads") override.readRps = value;
         else override.writeRps = value;
@@ -2780,17 +3876,19 @@ var Parser = class _Parser {
       } else if (isWord(t, "shards")) {
         part = "shards";
         const n = tokens[i + 1];
-        if (n?.kind !== "number" || Number(n.value) < 1) {
-          this.error("Expected a whole number of shards, at least 1, e.g. shards 4", this.locOf(n ?? t, line));
+        const shards = isConstUse(n) ? this.countOf(n, line2) : n?.kind === "number" ? Number(n.value) : NaN;
+        if (shards === void 0) return;
+        if (!Number.isInteger(shards) || shards < 1) {
+          this.error("Expected a whole number of shards, at least 1, e.g. shards 4", this.locOf(n ?? t, line2));
           return;
         }
-        override.shards = Number(n.value);
+        override.shards = shards;
         i += 2;
       } else if (isWord(t, "size")) {
         part = "size";
         const value = tokens[i + 1];
         if (!isWord(value, "S") && !isWord(value, "M") && !isWord(value, "L")) {
-          this.error(`Expected S, M or L after size${value ? `, not ${describe(value)}` : ""}`, this.locOf(value ?? t, line));
+          this.error(`Expected S, M or L after size${value ? `, not ${describe(value)}` : ""}`, this.locOf(value ?? t, line2));
           return;
         }
         override.size = value.value;
@@ -2799,39 +3897,39 @@ var Parser = class _Parser {
         part = "consistency";
         const value = tokens[i + 1];
         if (!isWord(value, "strong") && !isWord(value, "eventual")) {
-          this.error(`Expected strong or eventual after consistency${value ? `, not ${describe(value)}` : ""}`, this.locOf(value ?? t, line));
+          this.error(`Expected strong or eventual after consistency${value ? `, not ${describe(value)}` : ""}`, this.locOf(value ?? t, line2));
           return;
         }
         override.consistency = value.value;
         i += 2;
       } else if (isWord(t, "bandwidth") || isWord(t, "egress")) {
         part = t.value;
-        const value = this.quantityOf(tokens[i + 1], part === "bandwidth" ? "MBps" : "usd/GB", t, line);
+        const value = this.quantityOf(tokens[i + 1], part === "bandwidth" ? "MBps" : "usd/GB", t, line2);
         if (value === void 0) return;
         if (part === "bandwidth") {
           if (value <= 0) {
-            this.error("Bandwidth must be more than 0", this.locOf(tokens[i + 1], line));
+            this.error("Bandwidth must be more than 0", this.locOf(tokens[i + 1], line2));
             return;
           }
           override.bandwidthMBps = value;
         } else override.egressUsdPerGb = value;
         i += 2;
       } else {
-        this.error(`Unexpected ${describe(t)}; expected ${CAPACITY_PARTS}`, this.locOf(t, line));
+        this.error(`Unexpected ${describe(t)}; expected ${CAPACITY_PARTS}`, this.locOf(t, line2));
         return;
       }
       const clash = part === "rate" ? ["reads", "writes"].find((p) => seen.has(p)) : part === "reads" || part === "writes" ? seen.has("rate") ? part : void 0 : void 0;
       if (clash) {
-        this.error(`A rate sets both reads and writes; give either a rate or reads and writes for '${id.value}'`, this.locOf(t, line));
+        this.error(`A rate sets both reads and writes; give either a rate or reads and writes for '${id.value}'`, this.locOf(t, line2));
         return;
       }
       if (seen.has(part)) {
-        this.error(`${part[0].toUpperCase()}${part.slice(1)} is given twice for '${id.value}'`, this.locOf(t, line));
+        this.error(`${part[0].toUpperCase()}${part.slice(1)} is given twice for '${id.value}'`, this.locOf(t, line2));
         return;
       }
       seen.add(part);
     }
-    const idLoc = this.locOf(id, line);
+    const idLoc = this.locOf(id, line2);
     if (seen.size === 0) {
       this.warning(`Capacity line for '${id.value}' overrides nothing; add ${CAPACITY_PARTS}`, idLoc);
       return;
@@ -2851,39 +3949,56 @@ var Parser = class _Parser {
       const storeOnly = ["shards", "consistency"].filter((p) => seen.has(p));
       if (storeOnly.length && !isDataStore(kindOf(node)))
         this.warning(`'${id.value}' is not a data store (${DATA_STORE_KINDS.join(", ")}); ${storeOnly.join(" and ")} only apply to data stores`, idLoc);
+      if (hitLoc) this.checkHitRate(node, override.hitPercent, hitLoc);
+      if (drainLoc && !["queue", "broker"].includes(kindOf(node))) this.warning(`'${id.value}' is not a queue or broker; a drain rate only means something for one`, drainLoc);
     });
   }
+  /**
+   * A hit rate on something that is not a cache is a warning. A use case
+   * whose traffic `mix` splits it into scenarios already models hits and
+   * misses itself: the mix applies to it, and an info says so.
+   */
+  checkHitRate(node, percent, loc) {
+    const kind = kindOf(node);
+    if (kind !== "cache" && kind !== "cdn") this.warning(`'${node.id}' is not a cache or CDN; a hit rate only means something for one`, loc);
+    for (const entry of this.traffic) {
+      if (!entry.mix?.length) continue;
+      const useCase = this.built.find((u) => u.name === entry.useCase);
+      if (!useCase?.scenarios.some((s) => s.steps.some((step) => step.toServiceId === node.id))) continue;
+      this.info(`"${useCase.name}" splits its traffic into scenarios with mix, so its mix decides the hits and misses of '${node.id}', not the ${percent}% hit rate`, loc);
+    }
+  }
   /** `entity Url [in db] ["description"] {` */
-  parseEntity(tokens, line) {
+  parseEntity(tokens, line2) {
     const name = tokens[1];
     let i = 2;
     let store;
     if (isWord(tokens[i], "in")) {
       const id = tokens[i + 1];
       if (id?.kind !== "ident") {
-        this.error("Expected the id of the node that stores the entity after in, e.g. entity Url in db {", this.locOf(id ?? tokens[i], line));
-        this.skipSection("entity", tokens, line);
+        this.error("Expected the id of the node that stores the entity after in, e.g. entity Url in db {", this.locOf(id ?? tokens[i], line2));
+        this.skipSection("entity", tokens, line2);
         return;
       }
-      store = { id: id.value, loc: this.locOf(id, line) };
+      store = { id: id.value, loc: this.locOf(id, line2) };
       i += 2;
     }
     const description = tokens[i]?.kind === "string" ? tokens[i++].value : void 0;
     if (tokens[i]?.kind !== "lbrace") {
-      this.error('Expected { after the entity header, e.g. entity Url in db "Short codes" {', this.locOf(tokens[i] ?? tokens[i - 1], line));
-      this.skipSection("entity", tokens, line);
+      this.error('Expected { after the entity header, e.g. entity Url in db "Short codes" {', this.locOf(tokens[i] ?? tokens[i - 1], line2));
+      this.skipSection("entity", tokens, line2);
       return;
     }
-    this.expectEnd(tokens, i + 1, line);
-    const loc = this.locOf(name, line);
+    this.expectEnd(tokens, i + 1, line2);
+    const loc = this.locOf(name, line2);
     const entity = { name: name.value, ...store ? { store: store.id } : {}, ...description !== void 0 ? { description } : {}, fields: [], loc };
     const first = this.entities.find((e) => e.name === entity.name);
     if (first) {
       this.error(`Duplicate entity '${entity.name}' (first ${this.where(first.loc, loc)})`, loc);
-      this.skipSection("entity", tokens, line);
+      this.skipSection("entity", tokens, line2);
       return;
     }
-    if (!this.openSection("entity", tokens, line, { entity })) return;
+    if (!this.openSection("entity", tokens, line2, { entity })) return;
     this.entities.push(entity);
     if (store) {
       const { id, loc: storeLoc } = store;
@@ -2896,126 +4011,250 @@ var Parser = class _Parser {
     }
   }
   /** `code string key`: a field name, a type and flags. */
-  parseField(entity, tokens, line) {
+  parseField(entity, tokens, line2) {
     const [name, type] = tokens;
     if (name.kind !== "ident") {
-      this.error("Expected a field: name type [key] [index] [unique] [optional], e.g. code string key", this.locOf(name, line));
+      this.error("Expected a field: name type [key] [index] [unique] [optional], e.g. code string key", this.locOf(name, line2));
       return;
     }
     if (type?.kind !== "ident") {
-      this.error(`Expected a type after '${name.value}', e.g. ${name.value} string`, this.locOf(type ?? name, line));
+      this.error(`Expected a type after '${name.value}', e.g. ${name.value} string`, this.locOf(type ?? name, line2));
       return;
     }
     const flags = [];
     for (const t of tokens.slice(2)) {
       if (t.kind !== "ident" || !FIELD_FLAGS.includes(t.value)) {
-        this.error(`Unknown field flag ${describe(t)}; use key, index, unique or optional`, this.locOf(t, line));
+        this.error(`Unknown field flag ${describe(t)}; use key, index, unique or optional`, this.locOf(t, line2));
         return;
       }
       if (flags.includes(t.value)) {
-        this.error(`Flag '${t.value}' is given twice`, this.locOf(t, line));
+        this.error(`Flag '${t.value}' is given twice`, this.locOf(t, line2));
         return;
       }
       flags.push(t.value);
     }
     if (entity.fields.some((f) => f.name === name.value)) {
-      this.error(`Duplicate field '${name.value}' in entity '${entity.name}'`, this.locOf(name, line));
+      this.error(`Duplicate field '${name.value}' in entity '${entity.name}'`, this.locOf(name, line2));
       return;
     }
     entity.fields.push({ name: name.value, type: type.value, flags });
   }
   /** `decision "Title" because "Reason"`, or `decision "Title" {` with because / rejected lines. */
-  parseDecision(tokens, line) {
+  parseDecision(tokens, line2) {
     const title = tokens[1];
-    const decision = { title: title.value, rejected: [], loc: this.locOf(title, line) };
+    const decision = { title: title.value, rejected: [], loc: this.locOf(title, line2) };
     const third = tokens[2];
     if (third.kind === "lbrace") {
-      this.expectEnd(tokens, 3, line);
-      if (this.openSection("decision", tokens, line, { decision })) this.decisions.push(decision);
+      this.expectEnd(tokens, 3, line2);
+      if (this.openSection("decision", tokens, line2, { decision })) this.decisions.push(decision);
       return;
     }
     if (!isWord(third, "because")) {
-      this.error(`Expected because "reason" or { after the decision title, not ${describe(third)}`, this.locOf(third, line));
-      this.skipSection("decision", tokens, line);
+      this.error(`Expected because "reason" or { after the decision title, not ${describe(third)}`, this.locOf(third, line2));
+      this.skipSection("decision", tokens, line2);
       return;
     }
     if (this.stack.length > 0) {
-      this.error("decision is only allowed at the top level", this.locOf(tokens[0], line));
+      this.error("decision is only allowed at the top level", this.locOf(tokens[0], line2));
       return;
     }
     const reason = tokens[3];
     if (reason?.kind !== "string") {
-      this.error("Expected the reason in quotes after because", this.locOf(reason ?? third, line));
+      this.error("Expected the reason in quotes after because", this.locOf(reason ?? third, line2));
       return;
     }
-    if (!this.expectEnd(tokens, 4, line)) return;
+    if (!this.expectEnd(tokens, 4, line2)) return;
     decision.because = reason.value;
     this.decisions.push(decision);
   }
-  parseDecisionLine(decision, tokens, line) {
+  parseDecisionLine(decision, tokens, line2) {
     const [word] = tokens;
     if (isWord(word, "because")) {
       if (tokens[1]?.kind !== "string") {
-        this.error("Expected the reason in quotes after because", this.locOf(tokens[1] ?? word, line));
+        this.error("Expected the reason in quotes after because", this.locOf(tokens[1] ?? word, line2));
         return;
       }
       if (decision.because !== void 0) {
-        this.error('A decision has one because; list the other options with rejected "option" "reason"', this.locOf(word, line));
+        this.error('A decision has one because; list the other options with rejected "option" "reason"', this.locOf(word, line2));
         return;
       }
-      if (this.expectEnd(tokens, 2, line)) decision.because = tokens[1].value;
+      if (this.expectEnd(tokens, 2, line2)) decision.because = tokens[1].value;
       return;
     }
     if (isWord(word, "rejected")) {
       const [, option, reason] = tokens;
       if (option?.kind !== "string" || reason?.kind !== "string") {
         const bad = option?.kind !== "string" ? option : reason;
-        this.error('Expected rejected "option" "reason"', this.locOf(bad ?? tokens[tokens.length - 1], line));
+        this.error('Expected rejected "option" "reason"', this.locOf(bad ?? tokens[tokens.length - 1], line2));
         return;
       }
-      if (this.expectEnd(tokens, 3, line)) decision.rejected.push({ option: option.value, reason: reason.value });
+      if (this.expectEnd(tokens, 3, line2)) decision.rejected.push({ option: option.value, reason: reason.value });
       return;
     }
-    this.error('Expected because "reason" or rejected "option" "reason"', this.locOf(word, line));
+    this.error('Expected because "reason" or rejected "option" "reason"', this.locOf(word, line2));
   }
   /** `test "Name" {` */
-  parseTest(tokens, line) {
+  parseTest(tokens, line2) {
     const name = tokens[1];
-    const loc = this.locOf(name, line);
+    const loc = this.locOf(name, line2);
     if (tokens[2].kind !== "lbrace") {
-      this.error(`Expected { after the test name, not ${describe(tokens[2])}`, this.locOf(tokens[2], line));
-      this.skipSection("test", tokens, line);
+      this.error(`Expected { after the test name, not ${describe(tokens[2])}`, this.locOf(tokens[2], line2));
+      this.skipSection("test", tokens, line2);
       return;
     }
-    this.expectEnd(tokens, 3, line);
+    this.expectEnd(tokens, 3, line2);
     const first = this.tests.find((t) => t.name === name.value);
     if (first) {
       this.error(`Duplicate test '${name.value}' (first ${this.where(first.loc, loc)})`, loc);
-      this.skipSection("test", tokens, line);
+      this.skipSection("test", tokens, line2);
       return;
     }
     const test = { name: name.value, assertions: [], loc };
-    if (this.openSection("test", tokens, line, { test })) this.tests.push(test);
+    if (this.openSection("test", tokens, line2, { test })) this.tests.push(test);
+  }
+  /** `whatif "Name" {` */
+  parseWhatIf(tokens, line2) {
+    const name = tokens[1];
+    const loc = this.locOf(name, line2);
+    if (tokens[2].kind !== "lbrace") {
+      this.error(`Expected { after the what-if name, not ${describe(tokens[2])}`, this.locOf(tokens[2], line2));
+      this.skipSection("whatif", tokens, line2);
+      return;
+    }
+    this.expectEnd(tokens, 3, line2);
+    const first = this.whatifs.find((w) => w.name === name.value);
+    if (first) {
+      this.error(`Duplicate what-if '${name.value}' (first ${this.where(first.loc, loc)})`, loc);
+      this.skipSection("whatif", tokens, line2);
+      return;
+    }
+    const whatif = { name: name.value, changes: [], loc };
+    if (this.openSection("whatif", tokens, line2, { whatif })) this.whatifs.push(whatif);
+  }
+  /** One line of a what-if: `traffic "Use case" x3`, `traffic "Use case" 50k rps`, `fail <node>` or `<node> x4`. */
+  parseWhatIfLine(whatif, tokens, line2) {
+    const [first, second, third] = tokens;
+    const loc = this.lineLoc(tokens, line2);
+    const help = 'Expected a what-if change: traffic "Use case" x3, traffic "Use case" 50k rps, fail <node>, <node> x4, <node> hit 40% or <node> errors 20%';
+    const checkNode = (id) => {
+      const idLoc = this.locOf(id, line2);
+      this.deferred.push(() => {
+        if (!this.nodes.has(id.value)) this.warning(`Unknown node '${id.value}' in what-if`, idLoc);
+      });
+    };
+    if (first.kind === "ident" && (second?.kind === "ident" && REPLICAS.test(second.value) || second?.kind === "const")) {
+      if (!this.expectEnd(tokens, 2, line2)) return;
+      const replicas = second.kind === "const" ? this.replicasOf(second, line2, "A what-if needs a whole number of replicas, at least x1; to take a node down, write fail <node>") : Number(REPLICAS.exec(second.value)[1]);
+      if (replicas === void 0) return;
+      if (replicas < 1) {
+        this.error("A what-if needs at least one replica, x1; to take a node down, write fail <node>", this.locOf(second, line2));
+        return;
+      }
+      if (whatif.changes.some((c) => c.kind === "replicas" && c.node === first.value)) {
+        this.error(`Replicas of '${first.value}' are set twice in this what-if`, this.locOf(first, line2));
+        return;
+      }
+      checkNode(first);
+      whatif.changes.push({ kind: "replicas", node: first.value, replicas, loc });
+      return;
+    }
+    if (first.kind === "ident" && second?.kind === "ident" && MULTIPLIER.test(second.value)) {
+      this.error(`Replicas are a whole number, e.g. ${first.value} x4`, this.locOf(second, line2));
+      return;
+    }
+    if (first.kind === "ident" && isWord(second, "hit") && tokens.length > 2) {
+      const percent = this.quantityOf(third, "%", second, line2);
+      if (percent === void 0 || !this.expectEnd(tokens, 3, line2)) return;
+      if (percent > 100) {
+        this.error("A hit rate cannot be more than 100%", this.locOf(third, line2));
+        return;
+      }
+      if (whatif.changes.some((c) => c.kind === "hit" && c.node === first.value)) {
+        this.error(`The hit rate of '${first.value}' is set twice in this what-if`, this.locOf(first, line2));
+        return;
+      }
+      checkNode(first);
+      whatif.changes.push({ kind: "hit", node: first.value, percent, loc });
+      return;
+    }
+    if (first.kind === "ident" && isWord(second, "errors") && tokens.length > 2) {
+      const percent = this.quantityOf(third, "%", second, line2);
+      if (percent === void 0 || !this.expectEnd(tokens, 3, line2)) return;
+      if (percent > 100) {
+        this.error("An error rate cannot be more than 100%", this.locOf(third, line2));
+        return;
+      }
+      if (whatif.changes.some((c) => c.kind === "errors" && c.node === first.value)) {
+        this.error(`The error rate of '${first.value}' is set twice in this what-if`, this.locOf(first, line2));
+        return;
+      }
+      checkNode(first);
+      whatif.changes.push({ kind: "errors", node: first.value, percent, loc });
+      return;
+    }
+    if (isWord(first, "fail")) {
+      if (second?.kind !== "ident") {
+        this.error("Expected the node that fails, e.g. fail cache", this.locOf(second ?? first, line2));
+        return;
+      }
+      if (!this.expectEnd(tokens, 2, line2)) return;
+      if (whatif.changes.some((c) => c.kind === "fail" && c.node === second.value)) {
+        this.error(`'${second.value}' fails twice in this what-if`, this.locOf(second, line2));
+        return;
+      }
+      checkNode(second);
+      whatif.changes.push({ kind: "fail", node: second.value, loc });
+      return;
+    }
+    if (isWord(first, "traffic")) {
+      if (second?.kind !== "string") {
+        this.error('Expected a use case name in quotes, e.g. traffic "Checkout" x3 or traffic "Checkout" 50k rps', this.locOf(second ?? first, line2));
+        return;
+      }
+      let change;
+      if (third?.kind === "ident" && MULTIPLIER.test(third.value)) {
+        const multiply = Number(MULTIPLIER.exec(third.value)[1]);
+        change = { kind: "traffic", useCase: second.value, multiply, loc };
+      } else if (third?.kind === "const" && third.value.startsWith("x")) {
+        const multiply = this.countOf(third, line2);
+        if (multiply === void 0) return;
+        change = { kind: "traffic", useCase: second.value, multiply, loc };
+      } else {
+        const rps = this.quantityOf(third, "rps", second, line2);
+        if (rps === void 0) return;
+        change = { kind: "traffic", useCase: second.value, rps, loc };
+      }
+      if (!this.expectEnd(tokens, 3, line2)) return;
+      if (whatif.changes.some((c) => c.kind === "traffic" && c.useCase === second.value)) {
+        this.error(`Traffic of '${second.value}' is changed twice in this what-if`, this.locOf(second, line2));
+        return;
+      }
+      const nameLoc = this.locOf(second, line2);
+      this.deferred.push(() => this.checkUseCase(second.value, nameLoc));
+      whatif.changes.push(change);
+      return;
+    }
+    this.error(help, this.locOf(first, line2));
   }
   /** One assertion line of a test (docs/design/hld-and-practice.md §1.9). */
-  parseAssertion(tokens, line) {
-    const loc = this.lineLoc(tokens, line);
+  parseAssertion(tokens, line2) {
+    const loc = this.lineLoc(tokens, line2);
     const [first] = tokens;
     const selectors = [];
     const selector = (i2) => {
-      const s = this.parseSelector(tokens, i2, line);
+      const s = this.parseSelector(tokens, i2, line2);
       if (s) selectors.push(s);
       return s;
     };
     const done = (assertion3, end) => {
-      if (!this.expectEnd(tokens, end, line)) return void 0;
+      if (!this.expectEnd(tokens, end, line2)) return void 0;
       selectors.forEach((s) => this.checkSelectorLater(s));
       return assertion3;
     };
     const expectWords = (i2, words, example) => {
       for (const [k, w] of words.entries()) {
         if (!isWord(tokens[i2 + k], w)) {
-          this.error(`Expected '${w}' here, e.g. ${example}`, this.locOf(tokens[i2 + k] ?? tokens[tokens.length - 1], line));
+          this.error(`Expected '${w}' here, e.g. ${example}`, this.locOf(tokens[i2 + k] ?? tokens[tokens.length - 1], line2));
           return false;
         }
       }
@@ -3032,10 +4271,10 @@ var Parser = class _Parser {
     }
     if (first.kind !== "string") {
       if (first.kind !== "ident" && first.kind !== "tech") {
-        this.error(ASSERTION_HELP, this.locOf(first, line));
+        this.error(ASSERTION_HELP, this.locOf(first, line2));
         return;
       }
-      const inUseCase = isWord(first, "in") && tokens[1]?.kind === "string" ? { name: tokens[1].value, loc: this.locOf(tokens[1], line) } : void 0;
+      const inUseCase = isWord(first, "in") && tokens[1]?.kind === "string" ? { name: tokens[1].value, loc: this.locOf(tokens[1], line2) } : void 0;
       const target = selector(inUseCase ? 2 : 0);
       if (!target) return;
       const word = tokens[target.next];
@@ -3052,34 +4291,34 @@ var Parser = class _Parser {
         return assertion3;
       }
       if (inUseCase) {
-        this.error(`Expected calls or never calls here, e.g. in "${inUseCase.name}" api calls db`, this.locOf(word ?? tokens[tokens.length - 1], line));
+        this.error(`Expected calls or never calls here, e.g. in "${inUseCase.name}" api calls db`, this.locOf(word ?? tokens[tokens.length - 1], line2));
         return;
       }
       if (!isWord(word, "has")) {
-        this.error(ASSERTION_HELP, this.locOf(word ?? first, line));
+        this.error(ASSERTION_HELP, this.locOf(word ?? first, line2));
         return;
       }
       const i2 = target.next + 1;
       const example = "api has replicas >= 2";
-      if (!expectWords(i2, ["replicas"], example) || !this.expectOp(tokens, i2 + 1, [">="], example, line)) return;
+      if (!expectWords(i2, ["replicas"], example) || !this.expectOp(tokens, i2 + 1, [">="], example, line2)) return;
       const n = tokens[i2 + 2];
       if (n?.kind !== "number" || Number(n.value) < 1) {
-        this.error("Expected a whole number of replicas, at least 1", this.locOf(n ?? tokens[i2 + 1], line));
+        this.error("Expected a whole number of replicas, at least 1", this.locOf(n ?? tokens[i2 + 1], line2));
         return;
       }
       return done({ kind: "replicas", target: target.selector, min: Number(n.value), loc }, i2 + 3);
     }
     const useCase = first.value;
-    const useCaseLoc = this.locOf(first, line);
+    const useCaseLoc = this.locOf(first, line2);
     let i = 1;
     let scenario;
     if (isWord(tokens[i], "scenario")) {
       const s = tokens[i + 1];
       if (s?.kind !== "string") {
-        this.error("Expected a scenario name in quotes after scenario", this.locOf(s ?? tokens[i], line));
+        this.error("Expected a scenario name in quotes after scenario", this.locOf(s ?? tokens[i], line2));
         return;
       }
-      scenario = { name: s.value, loc: this.locOf(s, line) };
+      scenario = { name: s.value, loc: this.locOf(s, line2) };
       i += 2;
     }
     const withScenario = scenario ? { scenario: scenario.name } : {};
@@ -3089,26 +4328,72 @@ var Parser = class _Parser {
       this.error(`${what} is about the whole use case; leave out scenario "\u2026"`, scenario.loc);
       return false;
     };
-    let assertion2;
-    if (isWord(verb, "calls")) {
-      const target = selector(i + 1);
+    const call = (j) => {
+      const word = tokens[j];
+      const nameAt = (k, what, example2) => {
+        const t = tokens[k];
+        if (t?.kind === "ident" || t?.kind === "string") return t.value;
+        this.error(`Expected ${what} here, e.g. ${example2}`, this.locOf(t ?? tokens[tokens.length - 1], line2));
+        return void 0;
+      };
+      if (isWord(word, "uses")) {
+        const example2 = `"${useCase}" uses INSERT on db`;
+        const op = nameAt(j + 1, "an operation", example2);
+        if (op === void 0 || !expectWords(j + 2, ["on"], example2)) return;
+        const target2 = selector(j + 3);
+        return target2 && { target: target2, match: { op }, next: target2.next };
+      }
+      if (isWord(word, "sends")) {
+        const example2 = `"${useCase}" sends header Authorization to api`;
+        if (!expectWords(j + 1, ["header"], example2)) return;
+        const header = nameAt(j + 2, "a header name", example2);
+        if (header === void 0 || !expectWords(j + 3, ["to"], example2)) return;
+        const target2 = selector(j + 4);
+        return target2 && { target: target2, match: { header }, next: target2.next };
+      }
+      if (!isWord(word, "calls")) {
+        this.error(`Expected calls, uses or sends header here, e.g. "${useCase}" never calls any database`, this.locOf(word ?? tokens[tokens.length - 1], line2));
+        return;
+      }
+      const target = selector(j + 1);
       if (!target) return;
-      if (isWord(tokens[target.next], "before")) {
-        const then = selector(target.next + 1);
+      if (!isWord(tokens[target.next], "with")) return { target, next: target.next };
+      const [method, path] = [tokens[target.next + 1], tokens[target.next + 2]];
+      const example = `"${useCase}" calls api with GET /urls/{code}`;
+      if (method?.kind !== "ident" || !HTTP_METHODS.includes(method.value.toUpperCase())) {
+        this.error(`Expected an HTTP method after with (${HTTP_METHODS.join(", ")}), e.g. ${example}`, this.locOf(method ?? tokens[target.next], line2));
+        return;
+      }
+      if (path?.kind !== "path") {
+        this.error(`Expected a path starting with / after ${method.value}, e.g. ${example}`, this.locOf(path ?? method, line2));
+        return;
+      }
+      return { target, match: { method: method.value.toUpperCase(), path: path.value }, next: target.next + 3 };
+    };
+    const matchOf = (c) => c.match ? { match: c.match } : {};
+    let assertion2;
+    if (isWord(verb, "calls") || isWord(verb, "uses") || isWord(verb, "sends")) {
+      const c = call(i);
+      if (!c) return;
+      const word = tokens[c.next];
+      if (isWord(word, "before") && isWord(tokens[c.next + 1], "responding")) {
+        assertion2 = done({ kind: "beforeResponding", useCase, ...withScenario, target: c.target.selector, match: c.match ?? {}, loc }, c.next + 2);
+      } else if (isWord(word, "before")) {
+        const then = selector(c.next + 1);
         if (!then) return;
-        assertion2 = done({ kind: "before", useCase, ...withScenario, first: target.selector, then: then.selector, loc }, then.next);
-      } else if (isWord(tokens[target.next], "after")) {
-        const after2 = selector(target.next + 1);
+        assertion2 = done({ kind: "before", useCase, ...withScenario, first: c.target.selector, ...matchOf(c), then: then.selector, loc }, then.next);
+      } else if (isWord(word, "after")) {
+        const after2 = selector(c.next + 1);
         if (!after2) return;
-        assertion2 = done({ kind: "after", useCase, ...withScenario, target: target.selector, after: after2.selector, loc }, after2.next);
+        assertion2 = done({ kind: "after", useCase, ...withScenario, target: c.target.selector, ...matchOf(c), after: after2.selector, loc }, after2.next);
       } else {
-        assertion2 = done({ kind: "calls", useCase, ...withScenario, target: target.selector, quantifier: "some", loc }, target.next);
+        assertion2 = done({ kind: "calls", useCase, ...withScenario, target: c.target.selector, ...matchOf(c), quantifier: "some", loc }, c.next);
       }
     } else if (isWord(verb, "every")) {
-      if (!expectWords(i + 1, ["scenario", "calls"], `"${useCase}" every scenario calls any cache`)) return;
-      const target = selector(i + 3);
-      if (!target) return;
-      assertion2 = done({ kind: "calls", useCase, ...withScenario, target: target.selector, quantifier: "every", loc }, target.next);
+      if (!expectWords(i + 1, ["scenario"], `"${useCase}" every scenario calls any cache`)) return;
+      const c = call(i + 2);
+      if (!c) return;
+      assertion2 = done({ kind: "calls", useCase, ...withScenario, target: c.target.selector, ...matchOf(c), quantifier: "every", loc }, c.next);
     } else if (isWord(verb, "never") && isWord(tokens[i + 1], "waits")) {
       if (!expectWords(i + 2, ["for"], `"${useCase}" never waits for any queue`)) return;
       const target = selector(i + 3);
@@ -3120,10 +4405,9 @@ var Parser = class _Parser {
       if (!target) return;
       assertion2 = done({ kind: "startsAt", useCase, target: target.selector, loc }, target.next);
     } else if (isWord(verb, "never")) {
-      if (!expectWords(i + 1, ["calls"], `"${useCase}" never calls any database`)) return;
-      const target = selector(i + 2);
-      if (!target) return;
-      assertion2 = done({ kind: "calls", useCase, ...withScenario, target: target.selector, quantifier: "never", loc }, target.next);
+      const c = call(i + 1);
+      if (!c) return;
+      assertion2 = done({ kind: "calls", useCase, ...withScenario, target: c.target.selector, ...matchOf(c), quantifier: "never", loc }, c.next);
     } else if (isWord(verb, "writes")) {
       const target = selector(i + 1);
       if (!target || !expectWords(target.next, ["before", "responding"], `"${useCase}" writes db before responding`)) return;
@@ -3131,7 +4415,7 @@ var Parser = class _Parser {
     } else if (isWord(verb, "responds")) {
       const status = tokens[i + 1];
       if (!status || status.kind !== "number" && status.kind !== "quantity" || !/^[1-5](\d\d|xx)$/.test(status.value)) {
-        this.error("Expected a status code or class after responds, e.g. 201 or 4xx", this.locOf(status ?? verb, line));
+        this.error("Expected a status code or class after responds, e.g. 201 or 4xx", this.locOf(status ?? verb, line2));
         return;
       }
       assertion2 = done({ kind: "responds", useCase, ...withScenario, status: status.value, loc }, i + 2);
@@ -3139,7 +4423,7 @@ var Parser = class _Parser {
       if (!wholeUseCase("has scenario") || !expectWords(i + 1, ["scenario"], `"${useCase}" has scenario "Not found"`)) return;
       const name = tokens[i + 2];
       if (name?.kind !== "string") {
-        this.error("Expected a scenario name in quotes after has scenario", this.locOf(name ?? tokens[i + 1], line));
+        this.error("Expected a scenario name in quotes after has scenario", this.locOf(name ?? tokens[i + 1], line2));
         return;
       }
       assertion2 = done({ kind: "hasScenario", useCase, scenario: name.value, loc }, i + 3);
@@ -3149,7 +4433,7 @@ var Parser = class _Parser {
       if (!target) return;
       assertion2 = done({ kind: "handlesFailure", useCase, target: target.selector, loc }, target.next);
     } else {
-      this.error(`Expected ${ASSERTION_VERBS} after "${useCase}"`, this.locOf(verb ?? first, line));
+      this.error(`Expected ${ASSERTION_VERBS} after "${useCase}"`, this.locOf(verb ?? first, line2));
       return;
     }
     if (assertion2) {
@@ -3161,14 +4445,14 @@ var Parser = class _Parser {
     return assertion2;
   }
   /** A selector starting at `tokens[i]`: one or more of node id, `[Tech]`, `any <kind>`, `any strong store`, joined by `or`. */
-  parseSelector(tokens, i, line) {
+  parseSelector(tokens, i, line2) {
     const atoms = [];
     let next = i;
     for (; ; ) {
-      const atom2 = this.parseSelectorAtom(tokens, next, line);
-      if (!atom2) return void 0;
-      atoms.push(atom2);
-      next = atom2.next;
+      const atom3 = this.parseSelectorAtom(tokens, next, line2);
+      if (!atom3) return void 0;
+      atoms.push(atom3);
+      next = atom3.next;
       if (!isWord(tokens[next], "or")) break;
       next++;
     }
@@ -3176,37 +4460,40 @@ var Parser = class _Parser {
     return { selector, next, atoms };
   }
   /** One node id, `[Tech]`, `any <kind>` or `any strong|eventual store` at `tokens[i]`. */
-  parseSelectorAtom(tokens, i, line) {
+  parseSelectorAtom(tokens, i, line2) {
     const t = tokens[i];
     if (t?.kind === "tech") {
       const tech = findTech(t.value)?.techStack ?? t.value;
-      return { selector: { tech }, next: i + 1, token: t, loc: this.locOf(t, line) };
+      return { selector: { tech }, next: i + 1, token: t, loc: this.locOf(t, line2) };
     }
     if (isWord(t, "any")) {
       const kind = tokens[i + 1];
       if (isWord(kind, "strong") || isWord(kind, "eventual")) {
         if (!isWord(tokens[i + 2], "store")) {
-          this.error(`Expected 'store' here, e.g. any ${kind.value} store`, this.locOf(tokens[i + 2] ?? kind, line));
+          this.error(`Expected 'store' here, e.g. any ${kind.value} store`, this.locOf(tokens[i + 2] ?? kind, line2));
           return void 0;
         }
-        return { selector: { consistency: kind.value }, next: i + 3, token: t, loc: this.locOf(t, line) };
+        return { selector: { consistency: kind.value }, next: i + 3, token: t, loc: this.locOf(t, line2) };
       }
       if (kind?.kind !== "ident" || !isKind(kind.value)) {
-        this.error(`Expected a kind after any: ${KINDS.join(", ")}, or strong store / eventual store`, this.locOf(kind ?? t, line));
+        this.error(`Expected a kind after any: ${KINDS.join(", ")}, or strong store / eventual store`, this.locOf(kind ?? t, line2));
         return void 0;
       }
-      return { selector: { kind: kind.value }, next: i + 2, token: t, loc: this.locOf(t, line) };
+      return { selector: { kind: kind.value }, next: i + 2, token: t, loc: this.locOf(t, line2) };
     }
-    if (t?.kind === "ident") return { selector: { node: t.value }, next: i + 1, token: t, loc: this.locOf(t, line) };
-    this.error(`Expected a node id, [Tech] or any <kind>${t ? `, not ${describe(t)}` : ""}`, this.locOf(t ?? tokens[tokens.length - 1], line));
+    if (t?.kind === "ident") return { selector: { node: t.value }, next: i + 1, token: t, loc: this.locOf(t, line2) };
+    this.error(`Expected a node id, [Tech] or any <kind>${t ? `, not ${describe(t)}` : ""}`, this.locOf(t ?? tokens[tokens.length - 1], line2));
     return void 0;
   }
   /** Warns about a selector naming a tech stack that does not exist, and (once every file is read) a node that does not. */
   checkSelectorLater({ atoms }) {
     for (const { selector, token, loc } of atoms) {
       if ("tech" in selector && !findTech(token.value)) {
-        const suggestion = suggestTech(token.value);
-        this.warning(`Unknown tech stack '${token.value}'${suggestion ? `. Did you mean '${suggestion}'?` : ""}`, loc);
+        this.deferred.push(() => {
+          if (lookupType(this.typeTable, token.value)) return;
+          const suggestion = suggestTech(token.value);
+          this.warning(`Unknown tech stack '${token.value}'${suggestion ? `. Did you mean '${suggestion}'?` : ""}`, loc);
+        });
       }
       if ("node" in selector) {
         this.deferred.push(() => {
@@ -3226,14 +4513,23 @@ var Parser = class _Parser {
     this.warning(`Use case '${useCase.name}' has no scenario '${name}'; its scenarios are ${names}`, loc);
   }
   /** The value of a quantity token in `unit`, or undefined after reporting what is wrong. `after` locates a missing token. */
-  quantityOf(token, unit, after2, line) {
+  quantityOf(token, unit, after2, line2) {
     const expected = UNIT_EXAMPLES[unit];
+    if (isConstUse(token)) {
+      const c = this.constantOf(token, line2);
+      if (!c) return void 0;
+      if (c.unit !== unit) {
+        this.error(`'${token.value}' is ${c.text}, ${kindName(c.unit)}; expected ${expected}`, this.locOf(token, line2));
+        return void 0;
+      }
+      return c.value;
+    }
     if (token?.kind !== "quantity" && token?.kind !== "number") {
-      this.error(`Expected ${expected}${token ? `, not ${describe(token)}` : ""}`, this.locOf(token ?? after2, line));
+      this.error(`Expected ${expected}${token ? `, not ${describe(token)}` : ""}`, this.locOf(token ?? after2, line2));
       return void 0;
     }
-    const loc = this.locOf(token, line);
-    const written = this.lines[line - 1].slice(token.col - 1, token.col - 1 + token.length);
+    const loc = this.locOf(token, line2);
+    const written = this.lines[line2 - 1].slice(token.col - 1, token.col - 1 + token.length);
     const q = parseQuantity(written);
     if ("error" in q) {
       this.error(q.error, loc);
@@ -3245,10 +4541,65 @@ var Parser = class _Parser {
     }
     return q.value;
   }
-  expectOp(tokens, i, ops, example, line) {
+  /** `let name = value`, read before the rest of its file. */
+  defineConstant(tokens, line2) {
+    const [, name, eq, value] = tokens;
+    if (value?.kind !== "quantity" && value?.kind !== "number") {
+      this.error(`Expected a number or quantity after =, e.g. let ${name.value} = 120k rps${value ? `, not ${describe(value)}` : ""}`, this.locOf(value ?? eq, line2));
+      return;
+    }
+    if (!this.expectEnd(tokens, 4, line2)) return;
+    const text = this.lines[line2 - 1].slice(value.col - 1, value.col - 1 + value.length);
+    const q = parseQuantity(text);
+    if ("error" in q) {
+      this.error(q.error, this.locOf(value, line2));
+      return;
+    }
+    const loc = this.locOf(name, line2);
+    const first = this.constants.get(name.value);
+    if (first) {
+      this.error(`Constant '${name.value}' is defined twice (first ${this.where(first.loc, loc)})`, loc);
+      return;
+    }
+    this.constants.set(name.value, { name: name.value, value: q.value, ...q.unit ? { unit: q.unit } : {}, text: text.replace(/[ \t]+/g, " "), loc });
+  }
+  /** The constant `$name` or `x$name` names, or undefined after reporting that there is none. */
+  constantOf(token, line2) {
+    const name = token.value.replace(/^x?\$/, "");
+    const found = this.constants.get(name);
+    if (found) return found;
+    const near = [...this.constants.keys()].find((k) => editDistance2(k, name) <= 2);
+    this.error(`Unknown constant '$${name}'${near ? `; did you mean '$${near}'?` : `; define it with let ${name} = \u2026`}`, this.locOf(token, line2));
+    return void 0;
+  }
+  /** The value of a constant used as a count (`x$n`, `shards $n`): a plain number. */
+  countOf(token, line2) {
+    const c = this.constantOf(token, line2);
+    if (!c) return void 0;
+    if (c.unit !== void 0) {
+      this.error(`'${token.value}' needs a plain number, as in let ${c.name} = 3; '$${c.name}' is ${c.text}, ${kindName(c.unit)}`, this.locOf(token, line2));
+      return void 0;
+    }
+    return c.value;
+  }
+  /** `x$n` after a node: its replicas, a whole number of at least 1. */
+  replicasOf(token, line2, wrong) {
+    if (!token.value.startsWith("x")) {
+      this.error(`Write x${token.value} for replicas`, this.locOf(token, line2));
+      return void 0;
+    }
+    const n = this.countOf(token, line2);
+    if (n === void 0) return void 0;
+    if (!Number.isInteger(n) || n < 1) {
+      this.error(`${wrong} ('${token.value}' is ${n})`, this.locOf(token, line2));
+      return void 0;
+    }
+    return n;
+  }
+  expectOp(tokens, i, ops, example, line2) {
     const t = tokens[i];
     if (t?.kind === "op" && ops.includes(t.value)) return true;
-    this.error(`Expected ${ops[0]} here, e.g. ${example}`, this.locOf(t ?? tokens[tokens.length - 1], line));
+    this.error(`Expected ${ops[0]} here, e.g. ${example}`, this.locOf(t ?? tokens[tokens.length - 1], line2));
     return false;
   }
   buildUseCase(useCase, body) {
@@ -3289,26 +4640,30 @@ var Parser = class _Parser {
   }
   buildSteps(useCaseId, scenarioId, raw) {
     const steps = [];
-    const answered = /* @__PURE__ */ new Set();
+    const answered2 = /* @__PURE__ */ new Set();
     const prefix = scenarioId === "main" ? useCaseId : `${useCaseId}-${scenarioId}`;
     for (const step of raw) {
       this.checkConnection(step);
       if (step.arrow === "-->") {
         const [respFrom] = this.splitRef(step.from);
         const [respTo] = this.splitRef(step.to);
-        const request2 = [...steps].reverse().find((s) => s.fromServiceId === respTo && s.toServiceId === respFrom && !answered.has(s) && !s.failed);
+        const request2 = [...steps].reverse().find((s) => s.fromServiceId === respTo && s.toServiceId === respFrom && !answered2.has(s) && !s.failed);
         if (!request2) {
           this.warning(`Response has no matching request from '${step.to}' to '${step.from}'`, step.loc);
           continue;
         }
-        answered.add(request2);
+        answered2.add(request2);
         request2.responseLoc = step.loc;
         if (!sameSections(step.sections, request2.sections)) request2.responseSections = step.sections ?? [];
         if (steps.length > steps.indexOf(request2) + 1 && !(step.parallelGroup !== void 0 && step.parallelGroup === request2.parallelGroup)) {
           request2.deferredResponse = { after: steps.length, ...step.parallelGroup !== void 0 ? { group: step.parallelGroup } : {} };
         }
         const status = step.label.match(/^(\d{3})\b\s*([\s\S]*)$/);
-        if (status) request2.statusCode = Number(status[1]);
+        if (status) {
+          request2.statusCode = Number(status[1]);
+          const responder = request2.toPort !== void 0 ? this.portType(request2.toServiceId, request2.toPort) : this.nodes.get(respFrom)?.resolvedType;
+          this.checkStatus(responder, request2.statusCode, this.labelLoc(step, 0, 3));
+        }
         const payload = splitPayload(status ? status[2] : step.label);
         const body = payload.body ?? payload.text;
         if (body) {
@@ -3324,6 +4679,9 @@ var Parser = class _Parser {
       const port = toPort ?? this.onlyEntry(to, step.loc);
       const target = this.nodes.get(to);
       const isAsync = step.arrow === "->>";
+      const type = port !== void 0 ? this.portType(to, port) : target?.resolvedType;
+      const typed = this.typedOp(type, label.method, step);
+      if (label.headers) this.checkHeaders(type, label.headers, step);
       steps.push({
         id: `${prefix}-${steps.length + 1}`,
         stepOrder: steps.length,
@@ -3345,13 +4703,74 @@ var Parser = class _Parser {
         loc: step.loc,
         ...step.multiplier !== void 0 ? { multiplier: step.multiplier } : {},
         ...step.sizeBytes !== void 0 ? { sizeBytes: step.sizeBytes } : {},
-        access: accessOf(label.method, step.label),
+        access: typed.access,
+        ...typed.op ? { op: typed.op } : {},
+        ...label.headers ? { headers: label.headers } : {},
         ...port !== void 0 ? { toPort: port } : {},
         ...fromPort !== void 0 ? { fromPort } : {},
         ...step.sections ? { sections: step.sections } : {}
       });
     }
+    resolveForwards(steps);
     return steps;
+  }
+  /** The type behind entry point `port` of system `id` (see entryType). */
+  portType(id, port) {
+    const system = this.systemById.get(id);
+    return system && entryType(system, port);
+  }
+  /**
+   * The access of a request step and the operation of its target's type it
+   * names (docs/design/typed-components.md, "Typed operations in steps"). A
+   * typed target with operations looks up the HTTP method or the label's first
+   * words; a match decides the access. Otherwise the step reads as before
+   * (`accessOf`), with a warning when the target is typed: the label is a
+   * comment, unless its verb was already a write, which it stays.
+   */
+  typedOp(type, method, step) {
+    const access = accessOf(method, step.label);
+    if (!type || type.ops.length === 0) return { access };
+    const word = method ?? opWord(step.label);
+    if (!word) return { access };
+    const op = method ? type.ops.find((o) => o.name.toUpperCase() === method) : findOp(type, step.label);
+    if (op) return { access: op.access === "forward" ? access : op.access, op: { ...op } };
+    const suggestion = suggestOp(type, word);
+    const ops = opNamesMostSpecificFirst(type, this.typeTable);
+    const hint = suggestion ? `Did you mean ${suggestion}?` : `Its operations are ${ops.slice(0, 8).join(", ")}${ops.length > 8 ? ", \u2026" : ""}.`;
+    const effect = access === "write" ? "Treated as a write, as before." : "Treated as a comment.";
+    const lead = step.label.length - step.label.trimStart().length + (!method && /^\s*"/.test(step.label) ? 1 : 0);
+    this.typeProblem(`${type.name} has no operation '${word}'. ${hint} ${effect}`, this.labelLoc(step, lead, word.length));
+    return { access };
+  }
+  /** `200` on a response: one of the responder's type's statuses, when it lists any. */
+  checkStatus(type, code2, loc) {
+    if (!type || type.statuses.length === 0 || type.statuses.includes(code2)) return;
+    const listed = type.statuses.length > 12 ? `${type.statuses.slice(0, 12).join(", ")}, \u2026` : type.statuses.join(", ");
+    this.typeProblem(`${type.name} has no status ${code2}; it answers ${listed}`, loc);
+  }
+  /** `header A, B` in a label: each one of the target's type's headers, when it lists any. */
+  checkHeaders(type, headers, step) {
+    if (!type || type.headers.length === 0) return;
+    const clause = step.label.search(/\sheader\s/);
+    for (const h2 of headers) {
+      if (findHeader(type, h2)) continue;
+      const suggestion = suggestHeader(type, h2);
+      const at = step.label.indexOf(h2, clause + 1);
+      this.typeProblem(
+        `${type.name} has no header '${h2}'. ${suggestion ? `Did you mean ${suggestion}?` : `Its headers are ${type.headers.join(", ")}.`}`,
+        this.labelLoc(step, Math.max(0, at), h2.length)
+      );
+    }
+  }
+  /** `length` characters at `offset` in a step's label; the whole step when the label's column is unknown. */
+  labelLoc(step, offset, length) {
+    if (step.labelCol === void 0) return step.loc;
+    return { line: step.loc.line, col: step.labelCol + offset, length, ...step.loc.file !== void 0 ? { file: step.loc.file } : {} };
+  }
+  /** A typed-step problem: a warning, or an error with `strictOps`. */
+  typeProblem(message, loc) {
+    if (this.options.strictOps) this.errorOnce(message, loc);
+    else this.warning(message, loc);
   }
   /**
    * Warns when a step talks between two nodes the architecture never connects.
@@ -3442,19 +4861,271 @@ ${r.loc.col}`;
    * (`Postgress`: database), else a service; never a free, infinitely fast
    * client.
    */
-  resolveTech(token, line) {
-    const found = findTech(token.value);
+  resolveTech(value, loc) {
+    const found = findTech(value);
     if (found) return { type: found.type, techStack: found.techStack };
-    const text = token.value.trim();
+    const text = value.trim();
     if (!text) {
-      this.warning(`Empty tech stack; drawing a ${DEFAULT_TECH}`, this.locOf(token, line));
+      this.warning(`Empty tech stack; drawing a ${DEFAULT_TECH}`, loc);
       return { type: "shape", techStack: DEFAULT_TECH };
     }
     const suggestion = suggestTech(text);
     const closest = suggestion && findTech(suggestion);
     const kind = kindFromName(text) ?? (closest ? kindOf({ kind: "component", type: closest.type, techStack: closest.techStack }) : void 0) ?? "service";
-    this.warning(unknownTechMessage(text, kind, suggestion), this.locOf(token, line));
+    this.warning(unknownTechMessage(text, kind, suggestion), loc);
     return { type: TYPE_OF_KIND[kind], techStack: text, inferredKind: kind };
+  }
+  /**
+   * Resolves the type blocks of every file against the stdlib, then each
+   * node's `[Tech]`: a type gives the node its kind and the icon of its
+   * nearest built-in ancestor (D5); anything else is resolved as before.
+   */
+  resolveTypes() {
+    const resolution = resolveTypes(this.typeDecls, builtinTypes());
+    this.diagnostics.push(...resolution.diagnostics);
+    this.typeTable = resolution.table;
+    this.types = resolution.types;
+    for (const ref of this.techRefs) this.applyTech(ref);
+  }
+  applyTech({ node, value, loc }) {
+    const type = lookupType(this.typeTable, value);
+    if (!type) {
+      if (findTech(value)) return;
+      const resolved = this.resolveTech(value, loc);
+      node.type = resolved.type;
+      node.techStack = resolved.techStack;
+      if (resolved.inferredKind) node.inferredKind = resolved.inferredKind;
+      return;
+    }
+    node.resolvedType = type;
+    if (type.abstract) {
+      const concrete = [...this.typeTable.values()].find((t) => !t.abstract && t.parents[0] === type.name);
+      this.warning(`'${type.name}' is an abstract type; use a type that extends it${concrete ? `, like [${concrete.name}]` : ""}`, loc);
+    }
+    const kind = type.kind ?? kindFromName(type.name) ?? "service";
+    const icon = findTech(type.icon ?? GENERIC_TECH[kind]);
+    if (icon) {
+      node.type = icon.type;
+      node.techStack = icon.techStack;
+      node.kind = icon.type === "text" ? "text" : icon.type === "group" ? "group" : "component";
+    }
+    if (type.kind) delete node.inferredKind;
+    else node.inferredKind = kind;
+  }
+  /** `[abstract] type Name [extends Parent] {`, or a whole one-line block `… { op write APPEND }`; `at` is the name's index. */
+  parseType(tokens, at, line2) {
+    const nameToken = tokens[at];
+    const extendsAt = isWord(tokens[at + 1], "extends") ? at + 1 : -1;
+    const parentToken = extendsAt === -1 ? void 0 : tokens[extendsAt + 1];
+    const decl = {
+      name: nameToken.value,
+      abstract: at === 2,
+      ...parentToken && (parentToken.kind === "ident" || parentToken.kind === "tech") ? { parent: parentToken.value, parentLoc: this.locOf(parentToken, line2) } : {},
+      props: {},
+      ops: [],
+      statuses: [],
+      headers: [],
+      builtin: false,
+      loc: this.locOf(nameToken, line2)
+    };
+    const braceAt = extendsAt === -1 ? at + 1 : extendsAt + 2;
+    const skip = () => {
+      if (tokens[tokens.length - 1].kind === "lbrace") this.stack.push({ kind: "type", decl, discard: true, loc: decl.loc });
+    };
+    if (extendsAt !== -1 && decl.parent === void 0) {
+      this.error("Expected the parent type after extends, e.g. type LedgerDb extends PostgreSQL {", this.locOf(parentToken ?? tokens[extendsAt], line2));
+      return skip();
+    }
+    if (tokens[braceAt]?.kind !== "lbrace") {
+      this.error("Expected { after the type header, e.g. type LedgerDb extends PostgreSQL {", this.locOf(tokens[braceAt] ?? tokens[braceAt - 1], line2));
+      return skip();
+    }
+    if (!decl.name.trim()) {
+      this.error("Expected a type name, e.g. type LedgerDb extends PostgreSQL {", decl.loc);
+      return skip();
+    }
+    if (this.stack.length > 0) {
+      this.error("Declare types at the top level, not inside a block", this.locOf(tokens[0], line2));
+      return skip();
+    }
+    const last = tokens[tokens.length - 1];
+    if (last.kind === "rbrace" && tokens.length > braceAt + 1) {
+      const body = tokens.slice(braceAt + 1, -1);
+      if (body.length) this.parseTypeLine(decl, body, line2);
+    } else if (tokens.length > braceAt + 1) {
+      this.error("Expected the type body on the next lines, or on this one closed with }", this.locOf(tokens[braceAt + 1], line2));
+      return skip();
+    } else {
+      this.stack.push({ kind: "type", decl, loc: decl.loc });
+    }
+    this.typeDecls.push(decl);
+  }
+  /** One line of a type block: `kind database`, `op read SELECT`, `latencyMs 4`, … */
+  parseTypeLine(decl, tokens, line2) {
+    const [key, value] = tokens;
+    const loc = (t) => this.locOf(t ?? tokens[tokens.length - 1], line2);
+    if (key.kind !== "ident") {
+      this.error(`Expected a type property: ${TYPE_LINES}`, loc(key));
+      return;
+    }
+    const word = key.value;
+    const single = (kinds, example) => {
+      if (!value || !kinds.includes(value.kind)) {
+        this.error(`Expected ${example}`, loc(value ?? key));
+        return void 0;
+      }
+      this.expectEnd(tokens, 2, line2);
+      return value.value;
+    };
+    switch (word) {
+      case "kind": {
+        const kind = single(["ident"], `a kind after kind: ${KINDS.join(", ")}`);
+        if (kind === void 0) return;
+        if (!isKind(kind)) this.error(`Unknown kind '${kind}'; use one of ${KINDS.join(", ")}`, loc(value));
+        else decl.kind = kind;
+        return;
+      }
+      case "protocol": {
+        const protocol = single(["ident", "string"], "a protocol after protocol, e.g. protocol SQL");
+        if (protocol !== void 0) decl.protocol = protocol;
+        return;
+      }
+      case "icon": {
+        const icon = single(["ident", "tech", "string"], "a catalog tech after icon, e.g. icon PostgreSQL or icon [REST API]");
+        if (icon !== void 0) decl.icon = icon;
+        return;
+      }
+      case "doc": {
+        const doc = single(["string"], 'a quoted description after doc, e.g. doc "Keeps the ledger"');
+        if (doc !== void 0) decl.doc = doc;
+        return;
+      }
+      case "op":
+        this.parseTypeOp(decl, tokens, line2);
+        return;
+      case "status": {
+        const codes = this.readList(tokens, 1, line2, ["number"], "status codes, e.g. status 200, 201, 404");
+        for (const code2 of codes ?? []) {
+          const n = Number(code2.value);
+          if (n < 100 || n > 599) this.error(`'${code2.value}' is not an HTTP status code (100 to 599)`, loc(code2));
+          else if (!decl.statuses.includes(n)) decl.statuses.push(n);
+        }
+        return;
+      }
+      case "header": {
+        const names = this.readList(tokens, 1, line2, ["ident", "string"], 'header names, e.g. header Authorization, "Content-Type"');
+        for (const name of names ?? []) if (!decl.headers.some((h2) => h2.toLowerCase() === name.value.toLowerCase())) decl.headers.push(name.value);
+        return;
+      }
+    }
+    if (Object.hasOwn(CHOICE_PROPS, word)) {
+      const prop = word;
+      const choices = CHOICE_PROPS[prop];
+      const choice = single(["ident"], `${choices.join(" or ")} after ${prop}`);
+      if (choice === void 0) return;
+      if (!choices.includes(choice)) this.error(`Expected ${choices.join(" or ")} after ${prop}, not '${choice}'`, loc(value));
+      else if (prop === "durable") decl.props.durable = choice === "true";
+      else if (prop === "consistency") decl.props.consistency = choice;
+      else decl.props.writeScaling = choice;
+      return;
+    }
+    if (Object.hasOwn(NUMBER_PROPS, word)) {
+      const prop = word;
+      const unit = NUMBER_PROPS[prop];
+      const example = prop === "availability" ? "a percentage after availability, e.g. availability 99.95%" : `a number after ${prop}, e.g. ${prop} ${unit === "rps" ? "20k" : "4"}`;
+      if (!value || value.kind !== "number" && value.kind !== "quantity") {
+        this.error(`Expected ${example}`, loc(value ?? key));
+        return;
+      }
+      this.expectEnd(tokens, 2, line2);
+      const q = parseQuantity(value.value);
+      if ("error" in q) {
+        this.error(q.error, loc(value));
+        return;
+      }
+      if (q.unit !== void 0 && q.unit !== unit) {
+        this.error(`Expected ${example}, not ${kindName(q.unit)}`, loc(value));
+        return;
+      }
+      if (prop !== "availability") decl.props[prop] = q.value;
+      else if (q.unit === "%" && q.value > 0 && q.value <= 100) decl.props.availability = Number((q.value / 100).toPrecision(12));
+      else this.error(`Expected ${example}`, loc(value));
+      return;
+    }
+    this.error(`Unknown type property '${word}'; use ${TYPE_LINES}`, loc(key));
+  }
+  /** `op read SELECT, Scan latency 8 cost 2`: operations with their access (read, write or forward) and optional multipliers. */
+  parseTypeOp(decl, tokens, line2) {
+    const access = tokens[1];
+    if (!isWord(access, "read") && !isWord(access, "write") && !isWord(access, "forward")) {
+      this.error("Expected read, write or forward after op, e.g. op read SELECT", this.locOf(access ?? tokens[0], line2));
+      return;
+    }
+    let end = 2;
+    while (end < tokens.length && !isWord(tokens[end], "latency") && !isWord(tokens[end], "cost")) end++;
+    const example = `operation names after op ${access.value}, e.g. op ${access.value} ${access.value === "read" ? "SELECT" : access.value === "forward" ? "MESSAGE" : "INSERT, UPDATE"}`;
+    const names = this.readList(tokens.slice(0, end), 2, line2, ["ident", "string"], example);
+    if (!names) return;
+    const multipliers = {};
+    for (let i = end; i < tokens.length; i += 2) {
+      const [word, number] = [tokens[i], tokens[i + 1]];
+      if (!isWord(word, "latency") && !isWord(word, "cost")) {
+        this.error(`Unexpected ${describe(word)}; an op ends with latency <n> and cost <n>`, this.locOf(word, line2));
+        return;
+      }
+      const q = number && (number.kind === "number" || number.kind === "quantity") ? parseQuantity(number.value) : void 0;
+      if (!q || "error" in q || q.unit !== void 0 || q.value <= 0) {
+        this.error(`Expected a multiplier after ${word.value}, e.g. ${word.value} 2 or ${word.value} 0.5`, this.locOf(number ?? word, line2));
+        return;
+      }
+      multipliers[word.value] = q.value;
+    }
+    for (const name of names) {
+      const op = { name: name.value, access: access.value, ...multipliers };
+      const at = decl.ops.findIndex((o) => o.name === op.name);
+      if (at === -1) decl.ops.push(op);
+      else decl.ops[at] = op;
+    }
+  }
+  /** `header Authorization, Content-Type`, read from the line's text. */
+  parseHeaders(decl, text, line2) {
+    const keyword = text.indexOf("header");
+    const start3 = keyword + "header".length;
+    const body = stripTrailingComment(text.slice(start3));
+    if (!body.trim()) {
+      this.error("Expected header names, e.g. header Authorization, Content-Type", { line: line2, col: keyword + 1, length: 6, ...this.fileField() });
+      return;
+    }
+    let col = start3 + 1;
+    for (const part of body.split(",")) {
+      const raw = part.trim();
+      const name = raw.length > 1 && raw.startsWith('"') && raw.endsWith('"') ? raw.slice(1, -1) : raw;
+      const loc = { line: line2, col: col + part.indexOf(raw), length: Math.max(1, raw.length), ...this.fileField() };
+      col += part.length + 1;
+      if (!HEADER_NAME.test(name)) this.error(`Expected a header name, e.g. Content-Type${raw ? `, not '${raw}'` : ""}`, loc);
+      else if (!decl.headers.some((h2) => h2.toLowerCase() === name.toLowerCase())) decl.headers.push(name);
+    }
+  }
+  /** Comma-separated tokens of `kinds` from `tokens[from]` to the end; undefined (after an error) when malformed. */
+  readList(tokens, from, line2, kinds, example) {
+    const items = [];
+    for (let i = from; i < tokens.length; i += 2) {
+      const [item, sep] = [tokens[i], tokens[i + 1]];
+      if (!kinds.includes(item.kind)) {
+        this.error(`Expected ${example}`, this.locOf(item, line2));
+        return void 0;
+      }
+      items.push(item);
+      if (sep && (sep.kind !== "comma" || i + 2 >= tokens.length)) {
+        this.error(sep.kind === "comma" ? "Expected another name after ," : `Expected , or the end of the line, not ${describe(sep)}`, this.locOf(sep, line2));
+        return void 0;
+      }
+    }
+    if (!items.length) {
+      this.error(`Expected ${example}`, this.locOf(tokens[from - 1], line2));
+      return void 0;
+    }
+    return items;
   }
   useCaseId(name) {
     const base = slug(name) || "usecase";
@@ -3488,19 +5159,19 @@ ${r.loc.col}`;
     return this.currentUseCase() !== void 0;
   }
   /** Reports the first token from `from` on; true when there is none. */
-  expectEnd(tokens, from, line) {
+  expectEnd(tokens, from, line2) {
     if (tokens.length <= from) return true;
-    this.error(`Unexpected ${describe(tokens[from])}`, this.locOf(tokens[from], line));
+    this.error(`Unexpected ${describe(tokens[from])}`, this.locOf(tokens[from], line2));
     return false;
   }
   /** From the first token of a line to the end of its last one. */
-  lineLoc(tokens, line) {
+  lineLoc(tokens, line2) {
     const first = tokens[0];
     const last = tokens[tokens.length - 1];
-    return { line, col: first.col, length: last.col + last.length - first.col, ...this.fileField() };
+    return { line: line2, col: first.col, length: last.col + last.length - first.col, ...this.fileField() };
   }
-  locOf(token, line) {
-    return token ? { line, col: token.col, length: token.length, ...this.fileField() } : { line, col: 1, length: 1, ...this.fileField() };
+  locOf(token, line2) {
+    return token ? { line: line2, col: token.col, length: token.length, ...this.fileField() } : { line: line2, col: 1, length: 1, ...this.fileField() };
   }
   /** `{ file }` inside an imported file; nothing for the root document, whose locations stay as they were. */
   fileField() {
@@ -3519,6 +5190,16 @@ ${message}`;
     if (this.warned.has(key)) return;
     this.warned.add(key);
     this.error(message, loc);
+  }
+  info(message, loc) {
+    const key = `info
+${loc.file ?? ""}
+${loc.line}
+${loc.col}
+${message}`;
+    if (this.warned.has(key)) return;
+    this.warned.add(key);
+    this.diagnostics.push({ severity: "info", message, ...loc });
   }
   warning(message, loc) {
     const key = `${loc.file ?? ""}
@@ -3562,6 +5243,27 @@ function findUseCaseIn(diagram, name) {
   const lower = name.toLowerCase();
   return diagram.useCases.find((u) => u.name === name) ?? diagram.useCases.find((u) => u.name.toLowerCase() === lower) ?? diagram.useCases.find((u) => u.id === name);
 }
+function isLet(tokens) {
+  return isWord(tokens[0], "let") && tokens[1]?.kind === "ident" && tokens[2]?.kind === "op" && tokens[2].value === "=";
+}
+function isConstUse(token) {
+  return token?.kind === "const" && token.value.startsWith("$");
+}
+var KIND_NAMES = {
+  rps: "a rate",
+  ms: "a duration",
+  "%": "a percentage",
+  "usd/month": "a monthly cost",
+  MBps: "a bandwidth",
+  "usd/GB": "an egress price"
+};
+function kindName(unit) {
+  return unit ? KIND_NAMES[unit] : "a plain number";
+}
+function isTypeHeader(tokens, at) {
+  const [name, next] = [tokens[at], tokens[at + 1]];
+  return (name?.kind === "ident" || name?.kind === "tech") && (next?.kind === "lbrace" || isWord(next, "extends"));
+}
 function isWord(token, word) {
   return token?.kind === "ident" && token.value === word;
 }
@@ -3570,6 +5272,7 @@ function sectionName(frame2) {
   if (frame2.entity) return `entity '${frame2.entity.name}'`;
   if (frame2.decision) return `decision '${frame2.decision.title}'`;
   if (frame2.test) return `test '${frame2.test.name}'`;
+  if (frame2.whatif) return `what-if '${frame2.whatif.name}'`;
   return `${frame2.section} block`;
 }
 function fileName(path) {
@@ -3585,18 +5288,21 @@ function splitPayload(input) {
   if (leading) return { text: "", format: formats[leading[1].toLowerCase()], body: leading[2].trim() };
   const keyed = text.match(/^([\s\S]*?)\s+(json|xml)\s+([{[<][\s\S]*)$/i);
   if (keyed) return { text: keyed[1].trim(), format: formats[keyed[2].toLowerCase()], body: keyed[3].trim() };
-  const bare = text.search(/(^|\s)[{[<]/);
-  if (bare !== -1) {
-    const body = text.slice(bare).trim();
-    return { text: text.slice(0, bare).trim(), format: body.startsWith("<") ? "XML" : "JSON", body };
+  const bare2 = text.search(/(^|\s)[{[<]/);
+  if (bare2 !== -1) {
+    const body = text.slice(bare2).trim();
+    return { text: text.slice(0, bare2).trim(), format: body.startsWith("<") ? "XML" : "JSON", body };
   }
   return { text: unquote(text), format: "JSON" };
 }
+var HEADER_CLAUSE = /^header\s+([A-Za-z0-9-]+(?:\s*,\s*[A-Za-z0-9-]+)*)(?=\s|$)\s*([\s\S]*)$/;
 function parseStepLabel(input) {
   const http = input.trim().match(/^([A-Z]+)\s+(\S+)\s*([\s\S]*)$/);
   if (http && HTTP_METHODS.includes(http[1])) {
-    const payload2 = splitPayload(http[3]);
+    const clause = HEADER_CLAUSE.exec(http[3]);
+    const payload2 = splitPayload(clause ? clause[2] : http[3]);
     return {
+      ...clause ? { headers: clause[1].split(",").map((h2) => h2.trim()) } : {},
       name: `${http[1]} ${http[2]}`,
       method: http[1],
       endpoint: http[2],
@@ -3607,6 +5313,36 @@ function parseStepLabel(input) {
   }
   const payload = splitPayload(input);
   return { name: payload.text, format: payload.body ? payload.format : void 0, body: payload.body };
+}
+function entryType(system, port) {
+  const useCaseId = system.entries.find((e) => e.id === port)?.useCaseId;
+  const team = system.diagram;
+  const first = team?.useCases.find((u) => u.id === useCaseId)?.steps[0];
+  if (!team || !first) return void 0;
+  const sender = team.nodes.find((n) => n.id === first.fromServiceId);
+  if (sender && kindOf(sender) !== "client") return sender.resolvedType;
+  if (first.toPort !== void 0) {
+    const nested = team.systems?.find((s) => s.id === first.toServiceId);
+    return nested && entryType(nested, first.toPort);
+  }
+  return team.nodes.find((n) => n.id === first.toServiceId)?.resolvedType;
+}
+function resolveForwards(steps) {
+  const handler = (i, seen) => {
+    const step = steps[i];
+    for (let j = i + 1; j < steps.length; j++) {
+      if (steps[j].fromServiceId !== step.toServiceId) continue;
+      if (steps[j].op?.access !== "forward" || seen.has(j)) return steps[j];
+      seen.add(j);
+      return handler(j, seen) ?? steps[j];
+    }
+    return void 0;
+  };
+  steps.forEach((step, i) => {
+    if (step.op?.access !== "forward") return;
+    const next = handler(i, /* @__PURE__ */ new Set([i]));
+    if (next && next.op?.access !== "forward" && next.access) step.access = next.access;
+  });
 }
 var SIZE_UNITS = { B: 1, KB: 1e3, MB: 1e6, GB: 1e9, TB: 1e12 };
 function parseSize(text) {
@@ -3824,16 +5560,17 @@ var VALUE = new Map([...ALPHABET].map((c, i) => [c, i]));
 // ../frontend/src/playground/share.ts
 var PREFIX = "#code=";
 function encodeShareHash(source, playback, imports) {
-  let code = PREFIX + (0, import_lz_string.compressToEncodedURIComponent)(source);
-  if (imports && Object.keys(imports).length) code += `&imports=${(0, import_lz_string.compressToEncodedURIComponent)(JSON.stringify(imports))}`;
-  if (!playback) return code;
+  let code2 = PREFIX + (0, import_lz_string.compressToEncodedURIComponent)(source);
+  if (imports && Object.keys(imports).length) code2 += `&imports=${(0, import_lz_string.compressToEncodedURIComponent)(JSON.stringify(imports))}`;
+  if (!playback) return code2;
   const scenario = playback.scenario ? `&alt=${encodeURIComponent(playback.scenario)}` : "";
-  return `${code}&uc=${encodeURIComponent(playback.useCase)}${scenario}&step=${playback.step}`;
+  return `${code2}&uc=${encodeURIComponent(playback.useCase)}${scenario}&step=${playback.step}`;
 }
 
 // ../frontend/src/sim/access.ts
 function stepAccess(step) {
-  return step.access ?? accessOf(step.httpMethod, step.stepName ?? "");
+  const op = step.op?.access;
+  return step.access ?? (op === "read" || op === "write" ? op : void 0) ?? accessOf(step.httpMethod, step.stepName ?? "");
 }
 function accessIn(diagram) {
   const queues = new Set(diagram.nodes.filter((n) => kindMatches(kindOf(n), "queue")).map((n) => n.id));
@@ -3902,7 +5639,11 @@ var SIZES = {
 };
 function profileOf(node, override) {
   const kind = kindOf(node);
-  const base = (Object.hasOwn(TECH_PROFILES, node.techStack) ? TECH_PROFILES[node.techStack] : void 0) ?? KIND_PROFILES[kind];
+  const type = node.resolvedType;
+  const techRow = Object.hasOwn(TECH_PROFILES, node.techStack) && (!type || kindOf({ ...node, resolvedType: void 0 }) === kind) ? TECH_PROFILES[node.techStack] : void 0;
+  const props = type?.props ?? {};
+  const sides = props.rps !== void 0 ? { readRps: props.readRps ?? props.rps, writeRps: props.writeRps ?? props.rps } : {};
+  const base = { ...techRow ?? KIND_PROFILES[kind], ...props, ...sides };
   const size = SIZES[override?.size ?? "S"];
   const baseRead = (base.readRps ?? base.rps) * size.capacity;
   const baseWrite = (base.writeRps ?? base.rps) * size.capacity;
@@ -3941,10 +5682,10 @@ function findUseCase(diagram, name) {
   const lower = name.toLowerCase();
   return diagram.useCases.find((u) => u.name === name) ?? diagram.useCases.find((u) => u.name.toLowerCase() === lower) ?? diagram.useCases.find((u) => u.id === name);
 }
-function findScenario(useCase, name) {
+function findScenario2(useCase, name) {
   const norm = (s) => s.replace(/\s*(›|>)\s*/g, " \u203A ").trim().toLowerCase();
-  const wanted = norm(name);
-  return useCase.scenarios.find((s) => s.name === name) ?? useCase.scenarios.find((s) => norm(s.name) === wanted || s.id === name);
+  const wanted3 = norm(name);
+  return useCase.scenarios.find((s) => s.name === name) ?? useCase.scenarios.find((s) => norm(s.name) === wanted3 || s.id === name);
 }
 function afterEntryResponse(entry, step) {
   const r = entry.responseLoc;
@@ -3957,16 +5698,16 @@ function criticalPath(useCase, scenario) {
   const { items } = buildSequence(useCase, scenario);
   const working = /* @__PURE__ */ new Map([[entry.fromServiceId, 1]]);
   const opened = /* @__PURE__ */ new Set();
-  let answered = false;
+  let answered2 = false;
   const parts = [];
   const visit = (m, hops) => {
     if (m.kind === "response") {
       if (opened.delete(m.step)) working.set(m.step.toServiceId, (working.get(m.step.toServiceId) ?? 1) - 1);
-      if (m.step === entry) answered = true;
+      if (m.step === entry) answered2 = true;
       return;
     }
-    if (afterEntryResponse(entry, m.step)) answered = true;
-    if (answered || !working.get(m.from)) return;
+    if (afterEntryResponse(entry, m.step)) answered2 = true;
+    if (answered2 || !working.get(m.from)) return;
     hops.push({ step: m.step, target: m.to, failed: m.failed, async: m.async });
     if (!m.async && !m.failed) {
       opened.add(m.step);
@@ -4032,13 +5773,38 @@ function selectNodes(diagram, selector) {
 function matches(node, selector, diagram) {
   if (node.kind !== "component") return false;
   if ("node" in selector) return node.id === selector.node;
-  if ("tech" in selector) return node.techStack.toLowerCase() === selector.tech.toLowerCase();
+  if ("tech" in selector) {
+    const wanted3 = typeKey(selector.tech);
+    return [node.techStack, node.resolvedType?.name, ...node.resolvedType?.parents ?? []].some((t) => t !== void 0 && typeKey(t) === wanted3);
+  }
   if ("anyOf" in selector) return selector.anyOf.some((s) => matches(node, s, diagram));
   if ("consistency" in selector) {
     const override = diagram?.capacity?.find((o) => o.node === node.id);
     return profileOf(node, override).consistency === selector.consistency;
   }
   return kindMatches(kindOf(node), selector.kind);
+}
+var isParam = (segment2) => /^\{[^}]*\}$/.test(segment2) || /^:\w+$/.test(segment2);
+var segments2 = (path) => path.replace(/[?#].*$/, "").replace(/(.)\/+$/, "$1").split("/");
+function pathMatches(pattern, endpoint) {
+  const [a, b] = [segments2(pattern), segments2(endpoint)];
+  return a.length === b.length && a.every((s, i) => s === b[i] || isParam(s) || isParam(b[i]));
+}
+function stepMatches(step, match) {
+  if (!match) return true;
+  const same = (a, b) => a.toLowerCase() === b.toLowerCase();
+  if (match.method !== void 0 && !same(step.httpMethod, match.method)) return false;
+  if (match.path !== void 0 && !pathMatches(match.path, step.endpoint)) return false;
+  if (match.op !== void 0 && !(step.op && same(step.op.name, match.op))) return false;
+  if (match.header !== void 0 && !step.headers?.some((h2) => same(h2, match.header))) return false;
+  return true;
+}
+function callText(selector, match) {
+  const target = selectorText(selector);
+  if (match?.op !== void 0) return `uses ${match.op} on ${target}`;
+  if (match?.header !== void 0) return `sends header ${match.header} to ${target}`;
+  if (match?.method !== void 0) return `calls ${target} with ${match.method} ${match.path ?? ""}`.trimEnd();
+  return `calls ${target}`;
 }
 function techOf(node) {
   return node && !node.implicit ? node.techStack : void 0;
@@ -4056,20 +5822,37 @@ function formatRps(rps) {
   if (rps >= 1e3) return `${trim(rps / 1e3, 1)}k rps`;
   return `${trim(rps, rps < 10 ? 2 : 0)} rps`;
 }
+function formatTraffic(rps, avgRps) {
+  if (avgRps === void 0 || avgRps === rps) return formatRps(rps);
+  return `avg ${formatRps(avgRps).replace(/ rps$/, "")} \xB7 peak ${formatRps(rps)}`;
+}
 function formatMs(ms) {
   return `${trim(ms, ms < 100 ? 1 : 0)} ms`;
 }
-function formatAvailability(fraction) {
-  if (fraction >= 1) return "100%";
-  const down = (1 - fraction) * 100;
+function formatAvailability(fraction2) {
+  if (fraction2 >= 1) return "100%";
+  const down = (1 - fraction2) * 100;
   const digits = Math.min(6, Math.max(1, Math.ceil(-Math.log10(down)) + 1));
-  return `${trim(Math.floor(fraction * 100 * 10 ** digits + 1e-6) / 10 ** digits, digits)}%`;
+  return `${trim(Math.floor(fraction2 * 100 * 10 ** digits + 1e-6) / 10 ** digits, digits)}%`;
 }
-function formatPercent(fraction) {
-  return `${Math.round(fraction * 100)}%`;
+function formatPercent(fraction2) {
+  return `${Math.round(fraction2 * 100)}%`;
 }
-function formatUsd(usd) {
-  return `$${Math.round(usd).toLocaleString("en-US")}/month`;
+function formatDuration(ms) {
+  if (!Number.isFinite(ms)) return "\u221E";
+  if (ms < 1e3) return formatMs(ms);
+  if (ms < 6e4) return `${trim(ms / 1e3, ms < 1e4 ? 1 : 0)} s`;
+  if (ms < 36e5) return `${trim(ms / 6e4, 1)} min`;
+  return `${trim(ms / 36e5, 1)} h`;
+}
+function formatCount(n) {
+  if (n >= 1e9) return `${trim(n / 1e9, 1)}B`;
+  if (n >= 1e6) return `${trim(n / 1e6, 1)}M`;
+  if (n >= 1e3) return `${trim(n / 1e3, 1)}k`;
+  return trim(n, 0);
+}
+function formatUsd(usd4) {
+  return `$${Math.round(usd4).toLocaleString("en-US")}/month`;
 }
 
 // ../frontend/src/sim/overlay.ts
@@ -4079,30 +5862,100 @@ function flowsOf(diagram, traffic) {
     const u = findUseCase(diagram, t.useCase);
     if (!u || t.rps <= 0) continue;
     for (const sc of u.scenarios) {
-      const share = t.mix ? t.mix.find((m) => m.scenario === sc.name)?.share ?? 0 : sc === u.scenarios[0] ? 1 : 0;
-      if (share <= 0) continue;
+      const share2 = t.mix ? t.mix.find((m) => m.scenario === sc.name)?.share ?? 0 : sc === u.scenarios[0] ? 1 : 0;
+      if (share2 <= 0) continue;
       for (const step of sc.steps) {
         if (step.failed) continue;
         const key = `${step.fromServiceId}>${step.toServiceId}`;
         const f = flows.get(key) ?? { from: step.fromServiceId, to: step.toServiceId, rps: 0, async: step.executionType !== "SYNC_REQUEST_RESPONSE" };
-        f.rps += t.rps * share * (step.multiplier ?? 1);
+        f.rps += t.rps * share2 * (step.multiplier ?? 1);
         flows.set(key, f);
       }
     }
   }
   return [...flows.values()];
 }
+var works = (n) => Number.isFinite(n.capacityRps) && n.kind !== "client";
+function analysedTraffic(diagram, analysis, failed) {
+  const declared = resolveTraffic(diagram);
+  const rates = new Map(analysis.useCases.map((u) => [u.id, u.rps]));
+  const changed = failed.size > 0 || [...declared].some(([id, t]) => rates.has(id) && rates.get(id) !== t.rps);
+  if (!changed) return diagram.traffic ?? [];
+  const loc = { line: 0, col: 0, length: 0 };
+  return [...trafficFor(diagram, { trafficRps: rates, failed })].flatMap(([id, t]) => {
+    const u = diagram.useCases.find((c) => c.id === id);
+    if (!u || !(t.rps > 0)) return [];
+    return [{ useCase: u.name, rps: t.rps, mix: u.scenarios.map((s, i) => ({ scenario: s.name, share: t.shares[i] ?? 0 })), loc }];
+  });
+}
 function analysisOverlay(diagram, analysis) {
   const nodes = {};
+  const bottlenecks = new Set(bottlenecksOf(analysis));
+  const latency2 = /* @__PURE__ */ new Map();
+  const failed = /* @__PURE__ */ new Set();
   for (const n of analysis.nodes) {
-    const works = Number.isFinite(n.capacityRps) && n.kind !== "client";
+    latency2.set(n.id, n.latencyMs);
+    if (n.failed) failed.add(n.id);
+    const busy = n.queue ? Math.max(n.utilization, Math.min(n.queue.utilization, 9.99)) : n.utilization;
     nodes[n.id] = {
-      ...works ? { utilization: n.utilization, saturated: n.saturated } : {},
+      ...works(n) ? { utilization: busy, saturated: n.saturated || busy >= 1 } : {},
+      ...n.queue ? n.queue.backlogPerHour > 0 ? { backlogPerHour: n.queue.backlogPerHour } : { lagMs: n.queue.lagMs } : {},
       ...n.replicas > 1 ? { replicas: n.replicas } : {},
-      ...n.shards > 1 ? { shards: n.shards } : {}
+      ...n.shards > 1 ? { shards: n.shards } : {},
+      ...bottlenecks.has(n.id) ? { bottleneck: true } : {},
+      ...n.failed ? { down: true } : {}
     };
   }
-  return { nodes, flows: flowsOf(diagram, diagram.traffic ?? []) };
+  const flows = flowsOf(diagram, analysedTraffic(diagram, analysis, failed)).filter((f) => !failed.has(f.from) && !failed.has(f.to)).map((f) => latency2.has(f.to) ? { ...f, latencyMs: latency2.get(f.to) } : f);
+  const critical = criticalPathOf(diagram, analysis);
+  return { nodes, flows, ...critical ? { critical } : {} };
+}
+var BOTTLENECK_FROM = 0.7;
+function busiestOf(analysis) {
+  return analysis.nodes.filter((n) => works(n) && n.utilization > 0).reduce((best, n) => !best || n.utilization > best.utilization ? n : best, void 0);
+}
+function bottlenecksOf(analysis) {
+  return analysis.nodes.filter((n) => works(n) && (n.saturated || n.utilization >= BOTTLENECK_FROM)).map((n) => n.id);
+}
+function criticalPathOf(diagram, analysis, useCase) {
+  const live2 = analysis.useCases.filter((u2) => u2.rps > 0);
+  const picked = useCase === void 0 ? void 0 : live2.find((u2) => u2.id === useCase || u2.name === useCase);
+  const result = picked ?? live2.reduce((best, u2) => !best || u2.rps > best.rps ? u2 : best, void 0);
+  if (!result) return void 0;
+  const u = diagram.useCases.find((d) => d.id === result.id) ?? findUseCase(diagram, result.name);
+  const scenario = u?.scenarios[result.tailScenario.p99] ?? u?.scenarios[0];
+  const entry = scenario?.steps[0];
+  if (!u || !scenario || !entry) return void 0;
+  const hops = criticalPath(u, scenario).flat();
+  const nodes = [entry.fromServiceId];
+  for (const h2 of hops) if (!nodes.includes(h2.target)) nodes.push(h2.target);
+  return {
+    useCase: u.name,
+    scenario: scenario.name,
+    p99Ms: result.percentiles.p99,
+    nodes,
+    links: hops.map((h2) => ({ from: h2.step.fromServiceId, to: h2.step.toServiceId }))
+  };
+}
+var joins = (a, b, from, to) => a === from && b === to || a === to && b === from;
+function edgeOverlays(edges, overlay) {
+  const result = {};
+  for (const e of edges) {
+    const flows = overlay.flows.filter((f) => f.rps > 0 && joins(e.source, e.target, f.from, f.to));
+    const critical = overlay.critical?.links.some((l) => joins(e.source, e.target, l.from, l.to)) ?? false;
+    if (flows.length === 0 && !critical) continue;
+    const busiest = flows.reduce((best, f) => !best || f.rps > best.rps ? f : best, void 0);
+    const target = busiest ? overlay.nodes[busiest.to] : void 0;
+    result[e.id] = {
+      rps: flows.reduce((sum, f) => sum + f.rps, 0),
+      async: flows.length > 0 && flows.every((f) => f.async),
+      ...busiest?.latencyMs !== void 0 ? { latencyMs: busiest.latencyMs } : {},
+      ...target?.utilization !== void 0 ? { utilization: target.utilization } : {},
+      ...target?.saturated ? { saturated: true } : {},
+      ...critical ? { critical: true } : {}
+    };
+  }
+  return result;
 }
 
 // ../frontend/src/sim/systems.ts
@@ -4260,7 +6113,7 @@ function sharedLoad(root, rootInbound) {
     }
   };
   visit(root, "");
-  const send = (d, prefix, inbound) => {
+  const send2 = (d, prefix, inbound) => {
     for (const s of d.systems ?? []) {
       if (!s.diagram) continue;
       const key = teamKey(s);
@@ -4270,12 +6123,12 @@ function sharedLoad(root, rootInbound) {
       if (rps > 0) load.callers.push({ path: prefix ? `${prefix}.${s.id}` : s.id, ...d.title !== void 0 ? { from: d.title } : {}, rps });
     }
   };
-  send(root, "", rootInbound);
+  send2(root, "", rootInbound);
   for (const key of order.reverse()) {
     const { diagram, path, loc } = designs.get(key);
     if (!diagram.systems?.length) continue;
     const combined = withExtraTraffic(diagram, byFile.get(key)?.useCases ?? /* @__PURE__ */ new Map(), loc);
-    send(diagram, path, inboundLoad(combined, resolveTraffic(combined)));
+    send2(diagram, path, inboundLoad(combined, resolveTraffic(combined)));
   }
   return { byFile, analyses: /* @__PURE__ */ new Map() };
 }
@@ -4321,16 +6174,16 @@ function analyzeSystem(system, sent, options) {
   const sharedInboundRps = [...sentToTeam.values()].reduce((sum, rps) => sum + rps, 0);
   result.callers = shared?.callers ?? (totalInboundRps > 0 ? [{ path: system.id, rps: totalInboundRps }] : []);
   result.sharedInboundRps = sharedInboundRps;
-  let cached = options.sharedSystems?.analyses.get(key);
-  if (!cached) {
+  let cached2 = options.sharedSystems?.analyses.get(key);
+  if (!cached2) {
     const combined = sharedInboundRps > 0 ? withExtraTraffic(team, sentToTeam, system.loc) : team;
     const nested = { timeoutMs: options.timeoutMs, ...options.sharedSystems ? { sharedSystems: options.sharedSystems } : {} };
-    cached = { combined, analysis: sharedInboundRps > 0 ? analyze(combined, nested) : contract.baseline };
-    options.sharedSystems?.analyses.set(key, cached);
+    cached2 = { combined, analysis: sharedInboundRps > 0 ? analyze(combined, nested) : contract.baseline };
+    options.sharedSystems?.analyses.set(key, cached2);
   }
-  const { analysis } = cached;
+  const { analysis } = cached2;
   result.analysis = analysis;
-  result.overlay = analysisOverlay(cached.combined, analysis);
+  result.overlay = analysisOverlay(cached2.combined, analysis);
   const busiest = analysis.nodes.reduce((best, n) => !best || n.utilization > best.utilization ? n : best, void 0);
   result.utilization = busiest?.utilization ?? 0;
   result.busiest = busiest?.id;
@@ -4389,7 +6242,7 @@ function breachesOf(team, sent, analysis) {
         continue;
       }
       const key = PERCENTILE_KEYS[r.percentile];
-      const scenario = r.scenario !== void 0 ? findScenario(u, r.scenario) : void 0;
+      const scenario = r.scenario !== void 0 ? findScenario2(u, r.scenario) : void 0;
       if (r.scenario !== void 0 && !scenario) continue;
       const what = `${key} of "${u.name}"${scenario ? ` scenario "${scenario.name}"` : ""}`;
       const name = `${what} < ${formatMs(r.maxMs)}`;
@@ -4407,6 +6260,11 @@ function breachesOf(team, sent, analysis) {
 }
 
 // ../frontend/src/sim/analyze.ts
+function queueOf(inflow, drain) {
+  const utilization = drain > 0 ? inflow / drain : inflow > 0 ? Infinity : 0;
+  if (inflow >= drain && inflow > 0) return { inflowRps: inflow, drainRps: drain, utilization, backlogPerHour: (inflow - drain) * 3600, lagMs: Infinity };
+  return { inflowRps: inflow, drainRps: drain, utilization, backlogPerHour: 0, lagMs: drain > 0 ? utilization / (drain - inflow) * 1e3 : 0 };
+}
 var DEFAULT_TIMEOUT_MS = 1e3;
 var HOT = 0.7;
 var QUEUE_CAP = 0.95;
@@ -4434,9 +6292,9 @@ function resolveTraffic(diagram, warnings = []) {
     if (seen.has(useCase.id)) continue;
     seen.add(useCase.id);
     const shares = useCase.scenarios.map(() => 0);
-    for (const { scenario, share } of entry.mix ?? []) {
-      const found = findScenario(useCase, scenario);
-      if (found) shares[useCase.scenarios.indexOf(found)] += share;
+    for (const { scenario, share: share2 } of entry.mix ?? []) {
+      const found = findScenario2(useCase, scenario);
+      if (found) shares[useCase.scenarios.indexOf(found)] += share2;
       else warnings.push(`"${useCase.name}" has no scenario "${scenario}"; its traffic share is ignored`);
     }
     const total = shares.reduce((a, b) => a + b, 0);
@@ -4445,18 +6303,174 @@ function resolveTraffic(diagram, warnings = []) {
       if (Math.abs(total - 1) > 1e-6) warnings.push(`Traffic mix of "${useCase.name}" adds up to ${formatPercent(total)}; shares are scaled to 100%`);
       for (let i = 0; i < shares.length; i++) shares[i] /= total;
     }
-    result.set(useCase.id, { rps: entry.rps, shares: useCase.scenarios.length ? shares : [] });
+    const average = entry.avgRps === void 0 ? void 0 : entry.rps > 0 ? entry.avgRps / entry.rps : 1;
+    result.set(useCase.id, { rps: entry.rps, shares: useCase.scenarios.length ? shares : [], ...average !== void 0 ? { average } : {} });
   }
   return result;
 }
+function trafficFor(diagram, options = {}, warnings = []) {
+  const traffic = resolveTraffic(diagram, warnings);
+  for (const [id, rps] of options.trafficRps ?? []) {
+    const t = traffic.get(id);
+    if (t) t.rps = Math.max(0, rps);
+  }
+  const hits = hitRatesOf(diagram, options);
+  if (hits.size) {
+    const kinds = new Map(diagram.nodes.map((n) => [n.id, kindOf(n)]));
+    const access = accessIn(diagram);
+    for (const u of diagram.useCases) {
+      if (diagram.traffic?.some((e) => e.mix?.length && findUseCase(diagram, e.useCase) === u)) continue;
+      const lookups = cacheLookups(u, hits, (id) => kinds.get(id), (step) => access(step) === "read");
+      const miss = missFactors(lookups);
+      if (miss.size) traffic.set(u.id, { ...traffic.get(u.id), miss, lookups });
+    }
+  }
+  const retries = retriesOf(diagram, options);
+  if (retries.size) {
+    for (const u of diagram.useCases) {
+      const retry2 = /* @__PURE__ */ new Map();
+      for (const s of u.scenarios) for (const step of s.steps) if (!step.failed && retries.has(step.toServiceId)) retry2.set(step, retries.get(step.toServiceId).attempts);
+      if (retry2.size) traffic.set(u.id, { ...traffic.get(u.id), retry: retry2 });
+    }
+  }
+  const failed = options.failed;
+  if (!failed?.size) return traffic;
+  for (const u of diagram.useCases) {
+    const t = traffic.get(u.id);
+    const down = (s) => pathNodes(u, s).filter((id) => failed.has(id));
+    const shares = [...t.shares];
+    let stranded = 0;
+    u.scenarios.forEach((s, i) => {
+      if (!(shares[i] > 0)) return;
+      const ids = down(s);
+      if (ids.length === 0) return;
+      const targets = u.scenarios.filter((f) => f.outcome === "success" && down(f).length === 0 && ids.every((id) => fallbacksFor(u, id).includes(f)));
+      if (targets.length === 0) {
+        stranded += shares[i];
+        return;
+      }
+      const indexes = targets.map((f) => u.scenarios.indexOf(f));
+      const weight = indexes.reduce((sum, j) => sum + t.shares[j], 0);
+      for (const j of indexes) shares[j] += shares[i] * (weight > 0 ? t.shares[j] / weight : 1 / indexes.length);
+      shares[i] = 0;
+    });
+    traffic.set(u.id, { ...t, shares, stranded: Math.min(1, stranded) });
+  }
+  return traffic;
+}
+function hitRatesOf(diagram, options) {
+  const hits = /* @__PURE__ */ new Map();
+  for (const o of diagram.capacity ?? []) if (o.hitPercent !== void 0) hits.set(o.node, o.hitPercent);
+  for (const [id, percent] of options.hitRates ?? []) hits.set(id, percent);
+  return hits;
+}
+var expectedAttempts = (e, retries) => {
+  let sum = 0;
+  for (let k = 0; k <= retries; k++) sum += e ** k;
+  return sum;
+};
+function retriesOf(diagram, options = {}) {
+  const out = /* @__PURE__ */ new Map();
+  const set = (id, percent, retries) => {
+    const e = Math.min(100, Math.max(0, percent)) / 100;
+    out.set(id, { errorRate: e, retries, attempts: expectedAttempts(e, retries), success: 1 - e ** (retries + 1) });
+  };
+  const declared = new Map((diagram.capacity ?? []).map((o) => [o.node, o]));
+  for (const o of diagram.capacity ?? []) if (o.errorPercent !== void 0) set(o.node, o.errorPercent, o.retries ?? 0);
+  for (const [id, percent] of options.errorRates ?? []) set(id, percent, declared.get(id)?.retries ?? 0);
+  return out;
+}
+function retryVariants(hops, retries) {
+  let out = [{ share: 1, hops }];
+  hops.forEach(
+    (part, p) => part.forEach((h2, i) => {
+      const r = retries.get(h2.target);
+      if (!r || h2.failed || r.retries === 0 || r.errorRate <= 0) return;
+      const next = [];
+      for (const v of out) {
+        for (let k = 0; k <= r.retries; k++) {
+          const share2 = v.share * (k < r.retries ? r.errorRate ** k * (1 - r.errorRate) : r.errorRate ** k);
+          if (share2 <= 0) continue;
+          if (k === 0) {
+            next.push({ share: share2, hops: v.hops });
+            continue;
+          }
+          const changed = v.hops.map((q, j) => j === p ? q.map((x, n) => n === i ? { ...x, attempts: k + 1 } : x) : q);
+          next.push({ share: share2, hops: changed });
+        }
+      }
+      out = next;
+      if (out.length > MAX_RETRY_VARIANTS) {
+        out = out.map((v, n) => ({ v, n })).sort((a, b) => b.v.share - a.v.share || a.n - b.n).slice(0, MAX_RETRY_VARIANTS).map(({ v }) => v);
+        const total = out.reduce((sum, v) => sum + v.share, 0);
+        out = out.map((v) => ({ ...v, share: v.share / total }));
+      }
+    })
+  );
+  return out;
+}
+var MAX_RETRY_VARIANTS = 256;
+var BACKING_STORES = ["database", "search", "analytics", "storage"];
+function cacheLookups(useCase, hits, kindOf2, isRead) {
+  return useCase.scenarios.map((s) => {
+    const lookups = [];
+    s.steps.forEach((lookup, i) => {
+      const hit = hits.get(lookup.toServiceId);
+      if (hit === void 0 || lookup.failed || !isRead(lookup)) return;
+      const caller = lookup.fromServiceId;
+      const reached = /* @__PURE__ */ new Set([lookup.toServiceId]);
+      const miss = /* @__PURE__ */ new Set();
+      for (const step of s.steps.slice(i + 1)) {
+        const fill2 = miss.size > 0 && step.fromServiceId === caller && step.toServiceId === lookup.toServiceId && !isRead(step);
+        const fallsThrough = reached.has(step.fromServiceId) || step.fromServiceId === caller && isRead(step) && BACKING_STORES.includes(kindOf2(step.toServiceId));
+        if (fill2) miss.add(step);
+        if (!fallsThrough || step.toServiceId === caller) continue;
+        reached.add(step.toServiceId);
+        miss.add(step);
+      }
+      if (miss.size) lookups.push({ hit: Math.min(100, Math.max(0, hit)) / 100, miss });
+    });
+    return lookups;
+  });
+}
+function missFactors(lookups) {
+  const factors = /* @__PURE__ */ new Map();
+  for (const l of lookups.flat()) for (const step of l.miss) factors.set(step, (factors.get(step) ?? 1) * (1 - l.hit));
+  return factors;
+}
+function cacheVariants(hops, lookups) {
+  const out = [];
+  const n = Math.min(lookups.length, 10);
+  for (let mask = 0; mask < 1 << n; mask++) {
+    let share2 = 1;
+    const skipped = /* @__PURE__ */ new Set();
+    for (let k = 0; k < n; k++) {
+      const hit = mask >> k & 1;
+      share2 *= hit ? lookups[k].hit : 1 - lookups[k].hit;
+      if (hit) for (const step of lookups[k].miss) skipped.add(step);
+    }
+    if (share2 <= 0) continue;
+    out.push({ share: share2, hops: hops.map((part) => part.filter((h2) => !skipped.has(h2.step))).filter((part) => part.length) });
+  }
+  return out;
+}
+function averageTraffic(traffic) {
+  if (![...traffic.values()].some((t) => t.average !== void 0)) return traffic;
+  return new Map([...traffic].map(([id, t]) => [id, t.average === void 0 ? t : { ...t, rps: t.rps * t.average }]));
+}
 var multiplierOf = (step) => step.multiplier !== void 0 && step.multiplier > 0 ? step.multiplier : 1;
+var opLatencyOf = (step) => step.op?.latency !== void 0 && step.op.latency > 0 ? step.op.latency : 1;
+var opCostOf = (step) => step.op?.cost !== void 0 && step.op.cost > 0 ? step.op.cost : 1;
 function forEachStepRate(diagram, traffic, visit) {
   for (const u of diagram.useCases) {
-    const { rps, shares } = traffic.get(u.id) ?? { rps: 0, shares: [] };
+    const { rps, shares, miss, retry: retry2 } = traffic.get(u.id) ?? { rps: 0, shares: [] };
     u.scenarios.forEach((s, i) => {
       const rate = rps * (shares[i] ?? 0);
-      if (rate > 0) {
-        for (const step of s.steps) if (!step.failed) visit(step, rate);
+      if (!(rate > 0)) return;
+      for (const step of s.steps) {
+        if (step.failed) continue;
+        const r = miss?.has(step) ? rate * miss.get(step) : rate;
+        visit(step, retry2?.has(step) ? r * retry2.get(step) : r, u);
       }
     });
   }
@@ -4466,7 +6480,7 @@ function computeLoad(diagram, traffic) {
   const access = accessIn(diagram);
   forEachStepRate(diagram, traffic, (step, rate) => {
     const entry = load.get(step.toServiceId) ?? { read: 0, write: 0 };
-    entry[access(step)] += rate * multiplierOf(step);
+    entry[access(step)] += rate * multiplierOf(step) * opCostOf(step);
     load.set(step.toServiceId, entry);
   });
   return load;
@@ -4486,13 +6500,13 @@ function computeEgressGb(diagram, traffic, kindOf2 = (id) => profileOfId(diagram
 }
 var BANDWIDTH_BOUND = (kind) => !["client", "external", "dns", "other", "storage", "cdn"].includes(kind);
 function computeBytesPerSecond(diagram, traffic) {
-  const bytes = /* @__PURE__ */ new Map();
+  const bytes2 = /* @__PURE__ */ new Map();
   forEachStepRate(diagram, traffic, (step, rate) => {
     if (!step.sizeBytes || step.sizeBytes <= 0) return;
     const b = rate * multiplierOf(step) * step.sizeBytes;
-    for (const id of /* @__PURE__ */ new Set([step.fromServiceId, step.toServiceId])) bytes.set(id, (bytes.get(id) ?? 0) + b);
+    for (const id of /* @__PURE__ */ new Set([step.fromServiceId, step.toServiceId])) bytes2.set(id, (bytes2.get(id) ?? 0) + b);
   });
-  return bytes;
+  return bytes2;
 }
 function profileOfId(diagram, id) {
   const node = diagram.nodes.find((n) => n.id === id);
@@ -4611,13 +6625,13 @@ function pathCdf(path, t) {
   return 1 - Math.exp(-lo);
 }
 function mixtureQuantile(paths, q) {
-  const live = paths.filter((s) => s.share > 0);
-  if (live.length === 0) return 0;
-  if (live.length === 1) return pathQuantile(live[0].path, q);
-  const total = live.reduce((sum, s) => sum + s.share, 0);
-  const cdf = (t) => live.reduce((sum, s) => sum + s.share * pathCdf(s.path, t), 0) / total;
-  let lo = Math.min(...live.map((s) => pathQuantile(s.path, 0)));
-  let hi = Math.max(...live.map((s) => pathQuantile(s.path, q)));
+  const live2 = paths.filter((s) => s.share > 0);
+  if (live2.length === 0) return 0;
+  if (live2.length === 1) return pathQuantile(live2[0].path, q);
+  const total = live2.reduce((sum, s) => sum + s.share, 0);
+  const cdf = (t) => live2.reduce((sum, s) => sum + s.share * pathCdf(s.path, t), 0) / total;
+  let lo = Math.min(...live2.map((s) => pathQuantile(s.path, 0)));
+  let hi = Math.max(...live2.map((s) => pathQuantile(s.path, q)));
   for (let i = 0; i < 60 && hi - lo > 1e-9 * Math.max(1, hi); i++) {
     const mid = (lo + hi) / 2;
     if (cdf(mid) >= q) hi = mid;
@@ -4627,8 +6641,8 @@ function mixtureQuantile(paths, q) {
 }
 function mainScenarioIndex(shares) {
   let best = 0;
-  shares.forEach((share, i) => {
-    if (share > shares[best]) best = i;
+  shares.forEach((share2, i) => {
+    if (share2 > shares[best]) best = i;
   });
   return best;
 }
@@ -4645,23 +6659,26 @@ function analyze(diagram, options = {}) {
   const nodes = components(diagram);
   const profiles = profilesOf(diagram, warnings);
   const kindOf2 = (id) => profiles.get(id)?.kind ?? "client";
-  const traffic = resolveTraffic(diagram, warnings);
+  const traffic = trafficFor(diagram, options, warnings);
+  const retries = retriesOf(diagram, options);
+  const drains = new Map((diagram.capacity ?? []).flatMap((o) => o.drainRps !== void 0 ? [[o.node, o.drainRps]] : []));
   const load = computeLoad(diagram, traffic);
-  const egress = computeEgressGb(diagram, traffic, kindOf2);
-  const bytes = computeBytesPerSecond(diagram, traffic);
+  const egress = computeEgressGb(diagram, averageTraffic(traffic), kindOf2);
+  const bytes2 = computeBytesPerSecond(diagram, traffic);
   const systems = diagram.systems?.length ? analyzeSystems(diagram, traffic, options) : void 0;
   const hops = /* @__PURE__ */ new Map();
   const nodeResults = nodes.map((n) => {
     const p = profiles.get(n.id);
     const replicas = Math.max(1, options.replicas?.get(n.id) ?? replicasOf(n));
-    const { read: read2, write } = load.get(n.id) ?? { read: 0, write: 0 };
-    const usage = usageOf(p, replicas, read2, write, bytes.get(n.id) ?? 0);
+    const { read: read3, write } = load.get(n.id) ?? { read: 0, write: 0 };
+    const usage = usageOf(p, replicas, read3, write, bytes2.get(n.id) ?? 0);
     const servers = serversOf(usage, replicas);
     const hop = hopModel(p.latencyMs, usage.utilization, servers);
     hops.set(n.id, hop);
     const egressGbPerMonth = egress.get(n.id) ?? 0;
     const egressUsd = egressGbPerMonth * p.egressUsdPerGb;
-    const availability2 = replicatedAvailability(p.availability, replicas);
+    const down = options.failed?.has(n.id) ?? false;
+    const availability2 = down ? 0 : replicatedAvailability(p.availability, replicas);
     return {
       id: n.id,
       kind: p.kind,
@@ -4673,11 +6690,14 @@ function analyze(diagram, options = {}) {
       waitProbability: hop.waitProbability,
       latencyMs: hopMean(hop),
       availability: availability2,
-      writeAvailability: p.writeScaling === "shards" ? primaryAvailability(p.availability, replicas) : availability2,
+      writeAvailability: down ? 0 : p.writeScaling === "shards" ? primaryAvailability(p.availability, replicas) : availability2,
       costUsd: replicas * p.shards * p.costUsd + egressUsd,
       egressGbPerMonth,
       egressUsd,
-      durable: p.durable
+      durable: p.durable,
+      ...down ? { failed: true } : {},
+      ...drains.has(n.id) ? { queue: queueOf(read3 + write, drains.get(n.id)) } : {},
+      ...retries.has(n.id) ? { retry: { ...retries.get(n.id), stormRisk: usage.utilization >= HOT && retries.get(n.id).retries > 0 && retries.get(n.id).errorRate > 0 } } : {}
     };
   });
   const nodeById = new Map(nodeResults.map((n) => [n.id, n]));
@@ -4688,6 +6708,19 @@ function analyze(diagram, options = {}) {
     if (n.saturated) warnings.push(`'${n.id}' is saturated: ${usage}. ${writeBound(n) ? "Add shards for writes" : "Add replicas"} or take load off it.`);
     else if (n.utilization > HOT) warnings.push(`'${n.id}' runs hot: ${usage}.`);
   }
+  for (const n of nodeResults) {
+    if (!n.queue || n.queue.backlogPerHour <= 0) continue;
+    warnings.push(
+      `'${n.id}' falls behind: ${formatRps(n.queue.inflowRps)} flows in and its consumers drain ${formatRps(n.queue.drainRps)}, so the backlog grows by ${formatCount(n.queue.backlogPerHour)} messages an hour. Drain faster or send it less.`
+    );
+  }
+  for (const n of nodeResults) {
+    if (!n.retry?.stormRisk) continue;
+    const { errorRate, retries: r } = n.retry;
+    warnings.push(
+      `'${n.id}' risks a retry storm: it runs at ${formatPercent(n.utilization)} with ${formatPercent(errorRate)} errors and ${r} ${r === 1 ? "retry" : "retries"}. Once it saturates, more calls fail and each comes back up to ${r} more times, up to ${formatRps(n.loadRps / n.retry.attempts * (r + 1))}. Add capacity, retry less, or back off.`
+    );
+  }
   for (const s of systems?.systems ?? []) warnings.push(...s.warnings);
   const access = accessIn(diagram);
   const pathOf2 = (hopsOfPath) => ({
@@ -4695,12 +6728,26 @@ function analyze(diagram, options = {}) {
       (part) => part.map((h2) => {
         if (h2.failed) return { fixedMs: timeoutOf(h2.target), tailMs: 0 };
         const hop = systems?.hop(h2.target, h2.step.toPort) ?? hops.get(h2.target) ?? { fixedMs: 0, tailMs: 0 };
-        return { fixedMs: transferMs(h2.step, bandwidthOf) + hop.fixedMs, tailMs: hop.tailMs };
+        const op = opLatencyOf(h2.step);
+        const item = { fixedMs: transferMs(h2.step, bandwidthOf) + hop.fixedMs * op, tailMs: hop.tailMs * op };
+        return h2.attempts === void 0 ? item : { fixedMs: item.fixedMs * h2.attempts, tailMs: item.tailMs * h2.attempts };
       })
     )
   });
   const useCases = diagram.useCases.map((u) => {
-    const { rps, shares } = traffic.get(u.id);
+    const { rps, shares, stranded, average, lookups, retry: retry2 } = traffic.get(u.id);
+    const availabilityOf = (id, writes2) => {
+      const n = nodeById.get(id);
+      if (!n && systems) return systemAvailability(u, id, systems.availability);
+      return !n ? 1 : writes2.has(id) ? n.writeAvailability : n.availability;
+    };
+    const withRetries = (writes2) => (id) => retries.has(id) ? availabilityOf(id, writes2) * retries.get(id).success : availabilityOf(id, writes2);
+    if (lookups || retry2) {
+      const { scenarios: scenarios2, percentiles: percentiles2, tailScenario: tailScenario2 } = cachedLatency(u, shares, lookups ?? [], retry2 ? retries : /* @__PURE__ */ new Map(), pathOf2, new Set(options.percentiles ?? PERCENTILES2));
+      const writes2 = mainWrites(u, shares, (step) => access(step) === "write");
+      const availability3 = useCaseAvailability(u, shares, retries.size ? withRetries(writes2) : (id) => availabilityOf(id, writes2)) * (1 - (stranded ?? 0));
+      return { id: u.id, name: u.name, rps, ...average !== void 0 ? { avgRps: rps * average } : {}, scenarios: scenarios2, percentiles: percentiles2, tailScenario: tailScenario2, availability: availability3 };
+    }
     const paths = u.scenarios.map((s) => pathOf2(criticalPath(u, s)));
     const scenarios = u.scenarios.map((s, i) => ({
       id: s.id,
@@ -4710,11 +6757,11 @@ function analyze(diagram, options = {}) {
       percentiles: Object.fromEntries(PERCENTILES2.map((q) => [PERCENTILE_KEYS[q], pathQuantile(paths[i], q / 100)]))
     }));
     const weighted = paths.map((path, i) => ({ share: shares[i] ?? 0, path }));
-    const wanted = new Set(options.percentiles ?? PERCENTILES2);
-    const percentiles = Object.fromEntries(PERCENTILES2.map((q) => [PERCENTILE_KEYS[q], wanted.has(q) ? mixtureQuantile(weighted, q / 100) : NaN]));
+    const wanted3 = new Set(options.percentiles ?? PERCENTILES2);
+    const percentiles = Object.fromEntries(PERCENTILES2.map((q) => [PERCENTILE_KEYS[q], wanted3.has(q) ? mixtureQuantile(weighted, q / 100) : NaN]));
     const tailScenario = Object.fromEntries(
       PERCENTILES2.map((q) => {
-        if (!wanted.has(q)) return [PERCENTILE_KEYS[q], 0];
+        if (!wanted3.has(q)) return [PERCENTILE_KEYS[q], 0];
         const t = percentiles[PERCENTILE_KEYS[q]];
         const above = weighted.map((s) => s.share > 0 ? s.share * (1 - pathCdf(s.path, t * (1 - 1e-9))) : -1);
         return [PERCENTILE_KEYS[q], Math.max(0, above.indexOf(Math.max(...above)))];
@@ -4722,12 +6769,8 @@ function analyze(diagram, options = {}) {
     );
     if (rps > 0 && u.scenarios.length === 0) warnings.push(`"${u.name}" has traffic but no steps`);
     const writes = mainWrites(u, shares, (step) => access(step) === "write");
-    const availabilityOf = (id) => {
-      const n = nodeById.get(id);
-      if (!n && systems) return systemAvailability(u, id, systems.availability);
-      return !n ? 1 : writes.has(id) ? n.writeAvailability : n.availability;
-    };
-    return { id: u.id, name: u.name, rps, scenarios, percentiles, tailScenario, availability: useCaseAvailability(u, shares, availabilityOf) };
+    const availability2 = useCaseAvailability(u, shares, retries.size ? withRetries(writes) : (id) => availabilityOf(id, writes)) * (1 - (stranded ?? 0));
+    return { id: u.id, name: u.name, rps, ...average !== void 0 ? { avgRps: rps * average } : {}, scenarios, percentiles, tailScenario, availability: availability2 };
   });
   return {
     nodes: nodeResults,
@@ -4738,6 +6781,31 @@ function analyze(diagram, options = {}) {
     warnings,
     ...systems ? { systems: systems.systems } : {}
   };
+}
+function cachedLatency(u, shares, lookups, retries, pathOf2, wanted3) {
+  const variants = u.scenarios.map(
+    (s, i) => cacheVariants(criticalPath(u, s), lookups[i] ?? []).flatMap(
+      (v) => retries.size ? retryVariants(v.hops, retries).map((r) => ({ share: v.share * r.share, path: pathOf2(r.hops) })) : [{ share: v.share, path: pathOf2(v.hops) }]
+    )
+  );
+  const scenarios = u.scenarios.map((s, i) => ({
+    id: s.id,
+    name: s.name,
+    share: shares[i] ?? 0,
+    meanMs: variants[i].reduce((sum, v) => sum + v.share * pathMean(v.path), 0),
+    percentiles: Object.fromEntries(PERCENTILES2.map((q) => [PERCENTILE_KEYS[q], mixtureQuantile(variants[i], q / 100)]))
+  }));
+  const weighted = variants.flatMap((vs, i) => vs.map((v) => ({ share: (shares[i] ?? 0) * v.share, path: v.path })));
+  const percentiles = Object.fromEntries(PERCENTILES2.map((q) => [PERCENTILE_KEYS[q], wanted3.has(q) ? mixtureQuantile(weighted, q / 100) : NaN]));
+  const tailScenario = Object.fromEntries(
+    PERCENTILES2.map((q) => {
+      if (!wanted3.has(q)) return [PERCENTILE_KEYS[q], 0];
+      const t = percentiles[PERCENTILE_KEYS[q]];
+      const above = variants.map((vs, i) => (shares[i] ?? 0) > 0 ? vs.reduce((sum, v) => sum + (shares[i] ?? 0) * v.share * (1 - pathCdf(v.path, t * (1 - 1e-9))), 0) : -1);
+      return [PERCENTILE_KEYS[q], Math.max(0, above.indexOf(Math.max(...above)))];
+    })
+  );
+  return { scenarios, percentiles, tailScenario };
 }
 function systemAvailability(u, id, availability2) {
   let result = 1;
@@ -4771,9 +6839,58 @@ function singlePointsOfFailure(diagram) {
   return components(diagram).filter((n) => replicasOf(n) === 1 && DEPLOYED(profileOf(n).kind)).filter((n) => diagram.useCases.some((u) => needs(u, n.id) && fallbacksFor(u, n.id).length === 0)).map((n) => n.id);
 }
 
+// ../frontend/src/sim/cost.ts
+function ancestors(byId, node) {
+  const out = [];
+  for (let p = node.parent ? byId.get(node.parent) : void 0; p && !out.includes(p); p = p.parent ? byId.get(p.parent) : void 0) out.push(p);
+  return out;
+}
+function covers(byId, node, scope2) {
+  if ("team" in scope2) return node.ownerTeam === scope2.team;
+  const outer = ancestors(byId, node);
+  if ("tag" in scope2) return node.tag === scope2.tag || outer.some((g) => g.tag === scope2.tag);
+  return outer.some((g) => g.id === scope2.group);
+}
+function scopedCost(diagram, analysis, scope2) {
+  const byId = new Map(diagram.nodes.map((n) => [n.id, n]));
+  const nodes = analysis.nodes.filter((n) => {
+    const node = byId.get(n.id);
+    return node !== void 0 && covers(byId, node, scope2);
+  });
+  const id = "team" in scope2 ? `@${scope2.team}` : "tag" in scope2 ? `.${scope2.tag}` : scope2.group;
+  const label = "team" in scope2 ? id : "tag" in scope2 ? diagram.legend?.find((e) => e.id === scope2.tag)?.label ?? id : byId.get(scope2.group)?.name ?? id;
+  return share(id, label, nodes);
+}
+function share(id, label, nodes) {
+  const sorted = [...nodes].sort((a, b) => b.costUsd - a.costUsd || a.id.localeCompare(b.id));
+  return {
+    id,
+    label,
+    costUsd: sorted.reduce((sum, n) => sum + n.costUsd, 0),
+    egressUsd: sorted.reduce((sum, n) => sum + n.egressUsd, 0),
+    nodes: sorted.map((n) => n.id)
+  };
+}
+var byCost = (a, b) => b.costUsd - a.costUsd || a.id.localeCompare(b.id);
+function costBreakdown(diagram, analysis) {
+  const byId = new Map(diagram.nodes.map((n) => [n.id, n]));
+  const costed = analysis.nodes.filter((n) => byId.has(n.id));
+  const teams = [...new Set(costed.map((n) => byId.get(n.id).ownerTeam).filter((t) => t !== void 0))];
+  const groups = diagram.nodes.filter((n) => n.kind === "group");
+  const tags = [...new Set(diagram.nodes.map((n) => n.tag).filter((t) => t !== void 0))];
+  const unowned = costed.filter((n) => byId.get(n.id).ownerTeam === void 0 && n.costUsd > 0);
+  return {
+    teams: teams.map((team) => scopedCost(diagram, analysis, { team })).sort(byCost),
+    groups: groups.map((g) => scopedCost(diagram, analysis, { group: g.id })).filter((s) => s.nodes.length > 0).sort(byCost),
+    tags: tags.map((tag) => scopedCost(diagram, analysis, { tag })).filter((s) => s.nodes.length > 0).sort(byCost),
+    ...teams.length && unowned.length ? { unowned: share("no team", "No team", unowned) } : {},
+    totalCostUsd: analysis.totalCostUsd
+  };
+}
+
 // ../frontend/src/sim/tests.ts
 var pass = (message) => ({ passed: true, message });
-var fail = (message, hint) => ({ passed: false, message, hint });
+var fail = (message, hint, fix) => ({ passed: false, message, hint, ...fix ? { fix } : {} });
 function makeRun(diagram, analysis, options = {}) {
   const access = accessIn(diagram);
   return {
@@ -4781,7 +6898,7 @@ function makeRun(diagram, analysis, options = {}) {
     analysis,
     nodes: new Map(analysis.nodes.map((n) => [n.id, n])),
     useCases: new Map(analysis.useCases.map((u) => [u.id, u])),
-    shares: new Map([...resolveTraffic(diagram)].map(([id, t]) => [id, t.shares])),
+    shares: new Map([...trafficFor(diagram, options)].map(([id, t]) => [id, t.shares])),
     profiles: profilesOf(diagram),
     isWrite: (step) => access(step) === "write",
     options
@@ -4827,14 +6944,15 @@ var CATEGORY = {
   availability: "availability",
   durable: "durability",
   survive: "resilience",
-  cost: "cost"
+  cost: "cost",
+  lag: "latency"
 };
 var percentileName = (q) => PERCENTILE_KEYS[q];
 var lineOf = (loc) => `${loc.file ? `${loc.file}:` : "line "}${loc.line}`;
 function stepText(step) {
-  const arrow = step.failed ? "-x" : step.executionType === "SYNC_REQUEST_RESPONSE" ? "->" : "->>";
+  const arrow2 = step.failed ? "-x" : step.executionType === "SYNC_REQUEST_RESPONSE" ? "->" : "->>";
   const label = requestLabel(step);
-  return `${step.fromServiceId} ${arrow} ${step.toServiceId}${label ? ` : ${label}` : ""} at ${lineOf(step.loc)}`;
+  return `${step.fromServiceId} ${arrow2} ${step.toServiceId}${label ? ` : ${label}` : ""} at ${lineOf(step.loc)}`;
 }
 function requirementName(r) {
   switch (r.kind) {
@@ -4847,7 +6965,9 @@ function requirementName(r) {
     case "survive":
       return r.target === "any" ? "survive any node failure" : `survive failure of ${selectorText(r.target)}`;
     case "cost":
-      return `cost \u2264 ${formatUsd(r.maxUsdPerMonth)}`;
+      return `cost${r.scope ? ` of ${scopeText(r.scope)}` : ""} \u2264 ${formatUsd(r.maxUsdPerMonth)}`;
+    case "lag":
+      return `lag of ${r.useCase} < ${formatDuration(r.maxMs)}`;
   }
 }
 function requirement(run, r) {
@@ -4862,7 +6982,9 @@ function requirement(run, r) {
     case "survive":
       return survive(run, r.target);
     case "cost":
-      return cost(run, r.maxUsdPerMonth);
+      return r.scope ? budget(run, r.scope, r.maxUsdPerMonth) : cost(run, r.maxUsdPerMonth);
+    case "lag":
+      return lag(run, r.useCase, r.maxMs);
   }
 }
 function overUseCases(run, name, check, limit, anyWithoutTraffic = false) {
@@ -4878,7 +7000,7 @@ function overUseCases(run, name, check, limit, anyWithoutTraffic = false) {
   if (failed.length === 0) {
     return pass(checks.length === 1 ? checks[0].message : `All ${checks.length} use cases hold; ${checks.map((c) => c.value).join(", ")} ${limit}`);
   }
-  return fail(failed.length === 1 ? failed[0].message : `${failed.map((c) => c.value ?? c.message).join("; ")} ${limit}`, failed[0].hint);
+  return fail(failed.length === 1 ? failed[0].message : `${failed.map((c) => c.value ?? c.message).join("; ")} ${limit}`, failed[0].hint, failed[0].fix);
 }
 function unknownUseCase(run, name) {
   const lower = name.toLowerCase();
@@ -4890,7 +7012,8 @@ function saturatedOn(run, ids, value, maxMs) {
   const n = [...new Set(ids)].map((id) => run.nodes.get(id)).find((x) => !!x?.saturated);
   if (!n) return void 0;
   const v = value(n);
-  return { ...fail(`${v} (limit ${formatMs(maxMs)})`, saturationHint(run, n)), value: v };
+  const { hint, fix } = saturationLever(run, n);
+  return { ...fail(`${v} (limit ${formatMs(maxMs)})`, hint, fix), value: v };
 }
 function latency(run, u, q, maxMs) {
   const result = run.useCases.get(u.id);
@@ -4920,20 +7043,25 @@ function scenarioLatency(run, useCase, scenario, q, maxMs) {
   const message = `${what} is ${formatMs(ms)} (limit ${formatMs(maxMs)})`;
   return ms < maxMs ? pass(message) : fail(message, latencyHint(run, sc.u, s));
 }
-function saturationHint(run, n) {
+function saturationLever(run, n) {
   const label = nodeLabel(run.diagram, n.id);
   if (bandwidthBound(n)) {
     const replicas2 = Math.ceil(n.bandwidthUtilization * n.replicas / HOT);
-    return `${label} moves more payload bytes than its network carries. Send the bytes around it (clients upload to and download from object storage or a CDN directly, with presigned URLs), or add replicas: x${replicas2} keeps its bandwidth under ${formatPercent(HOT)}`;
+    const hint = `${label} moves more payload bytes than its network carries. Send the bytes around it (clients upload to and download from object storage or a CDN directly, with presigned URLs), or add replicas: x${replicas2} keeps its bandwidth under ${formatPercent(HOT)}`;
+    return { hint, fix: { kind: "replicas", node: n.id, replicas: replicas2 } };
   }
   if (writeBound(n)) {
     const perShard = n.writeCapacityRps / n.shards;
     const shards = Math.ceil(n.writeLoadRps / (perShard * HOT));
-    return `Writes to ${label} need ${formatRps(n.writeLoadRps)} and each primary takes ${formatRps(perShard)}; read replicas do not add write capacity. Add shards (capacity { ${n.id} shards ${shards} } keeps writes under ${formatPercent(HOT)}), move the data to a partitioned store (DynamoDB, Cassandra), or batch writes through a queue`;
+    const hint = `Writes to ${label} need ${formatRps(n.writeLoadRps)} and each primary takes ${formatRps(perShard)}; read replicas do not add write capacity. Add shards (capacity { ${n.id} shards ${shards} } keeps writes under ${formatPercent(HOT)}), move the data to a partitioned store (DynamoDB, Cassandra), or batch writes through a queue`;
+    return { hint, fix: { kind: "shards", node: n.id, shards } };
   }
   const rho = n.writeScaling === "shards" ? n.readUtilization : n.utilization;
   const replicas = Math.ceil(rho * n.replicas / HOT);
-  return `Add replicas to ${label}: x${replicas} keeps it under ${formatPercent(HOT)}, or take load off it (a cache in front, or async work)`;
+  return {
+    hint: `Add replicas to ${label}: x${replicas} keeps it under ${formatPercent(HOT)}, or take load off it (a cache in front, or async work)`,
+    fix: { kind: "replicas", node: n.id, replicas }
+  };
 }
 function latencyHint(run, u, scenario) {
   const hops = criticalPath(u, scenario).flat();
@@ -4960,19 +7088,19 @@ function availability(run, u, minPercent) {
   const effective = (n) => writes.has(n.id) ? n.writeAvailability : n.availability;
   const weakest = main.filter((id) => fallbacksFor(u, id).length === 0).map((id) => run.nodes.get(id)).filter((n) => !!n && effective(n) < 1).sort((a, b) => effective(a) - effective(b))[0];
   const primaryBound = weakest && writes.has(weakest.id) && weakest.writeAvailability < weakest.availability;
-  const hint = !weakest ? "Add replicas to the nodes on the main path, or fallback scenarios that complete without them" : primaryBound ? `The weakest link is writing to ${nodeLabel(run.diagram, weakest.id)}: writes need its primary, ${formatAvailability(weakest.writeAvailability)} with failover${weakest.replicas < 2 ? " (none without a second replica; add one)" : ` (a replica takes over, but about ${formatPercent(FAILOVER_SHARE)} of each outage is lost)`}. Move the writes to a partitioned store, or add a fallback scenario that calls it with -x and still completes` : `The weakest link is ${nodeLabel(run.diagram, weakest.id)} at ${formatAvailability(effective(weakest))}: add a replica (x${weakest.replicas + 1}) or a fallback scenario that calls it with -x and still completes`;
+  const hint = !weakest ? "Add replicas to the nodes on the main path, or fallback scenarios that complete without them" : primaryBound ? `The weakest link is writing to ${nodeLabel(run.diagram, weakest.id)}: writes need its primary, ${formatAvailability(weakest.writeAvailability)} with failover${weakest.replicas < 2 ? " (none without a second replica; add one)" : ` (a replica takes over, but about ${formatPercent(FAILOVER_SHARE)} of each outage is lost)`}. Move the writes to a partitioned store, or add a fallback scenario that calls it with -x and still completes` : weakest.failed ? `${nodeLabel(run.diagram, weakest.id)} is down in this what-if: add a fallback scenario in "${u.name}" that calls ${weakest.id} with -x and still completes` : `The weakest link is ${nodeLabel(run.diagram, weakest.id)} at ${formatAvailability(effective(weakest))}: add a replica (x${weakest.replicas + 1}) or a fallback scenario that calls it with -x and still completes`;
   return { ...fail(message, hint), value };
 }
-function writeGap(run, u, s, accept) {
+function writeGap(run, u, s, accept, isWrite = run.isWrite) {
   const { requests, beforeResponse } = requestOrder(u, s);
   const hits = requests.map((m, i) => ({ m, i })).filter(({ m }) => !m.failed && accept(m.to));
-  const writes = hits.filter(({ m }) => run.isWrite(m.step));
+  const writes = hits.filter(({ m }) => isWrite(m.step));
   const early = writes.find(({ m, i }) => m.async && i < beforeResponse);
   if (early) return { kind: "async", step: early.m.step };
   const late = writes.find(({ i }) => i >= beforeResponse);
   if (late) return { kind: "after", step: late.m.step };
-  const read2 = hits.find(({ m, i }) => i < beforeResponse && !m.async);
-  if (read2) return { kind: "read", step: read2.m.step };
+  const read3 = hits.find(({ m, i }) => i < beforeResponse && !m.async);
+  if (read3) return { kind: "read", step: read3.m.step };
   return { kind: "none" };
 }
 function writesCheck(run, u, scenarios, accept, what) {
@@ -4984,17 +7112,17 @@ function writesCheck(run, u, scenarios, accept, what) {
     return pass(`${label} writes to ${what} before responding`);
   }
   const details = gaps.map((s) => ({ s, gap: writeGap(run, u, s, accept) }));
-  const where = (s) => u.scenarios.length > 1 ? `"${s.name}"` : `"${u.name}"`;
+  const where2 = (s) => u.scenarios.length > 1 ? `"${s.name}"` : `"${u.name}"`;
   const text = (s, gap) => {
     switch (gap.kind) {
       case "async":
-        return `${where(s)} writes to ${what} only asynchronously: ${stepText(gap.step)}`;
+        return `${where2(s)} writes to ${what} only asynchronously: ${stepText(gap.step)}`;
       case "after":
-        return `${where(s)} writes to ${what} only after responding: ${stepText(gap.step)}`;
+        return `${where2(s)} writes to ${what} only after responding: ${stepText(gap.step)}`;
       case "read":
-        return `${where(s)} only reads from ${what} before responding: ${stepText(gap.step)} is a read`;
+        return `${where2(s)} only reads from ${what} before responding: ${stepText(gap.step)} is a read`;
       case "none":
-        return `${where(s)} never writes to ${what} before responding`;
+        return `${where2(s)} never writes to ${what} before responding`;
     }
   };
   const message = details.map(({ s, gap }) => text(s, gap)).join("; ");
@@ -5019,7 +7147,7 @@ function survive(run, target) {
     return target === "any" ? pass("No nodes to lose") : fail(`No node matches ${what}`, "Use a node id, [Tech] or any <kind>");
   }
   const latencies = (run.diagram.requirements ?? []).filter((r) => r.kind === "latency" && requirement(run, r).passed);
-  const failures = [];
+  const failures2 = [];
   for (const node of selected) {
     const n = run.nodes.get(node.id);
     const label = nodeLabel(run.diagram, node.id);
@@ -5031,20 +7159,17 @@ function survive(run, target) {
       const lost = n.shards > 1 ? `one of the ${replicas} replicas of a ${node.id} shard` : `one of ${replicas} ${node.id} replicas`;
       if (left.saturated) {
         const leaves = bandwidthBound(left) ? `leaves ${usageText(left)}` : n.shards > 1 ? `leaves that shard ${formatRps(left.capacityRps / n.shards)} for ${formatRps(n.loadRps / n.shards)}` : `leaves ${formatRps(left.capacityRps)} for ${formatRps(n.loadRps)}`;
-        failures.push(
-          fail(
-            `Losing ${lost} ${leaves}${bandwidthBound(left) ? "" : ` (${formatPercent(left.utilization)})`}`,
-            writeBound(left) ? saturationHint(run, { ...n, ...left }) : `Add a replica to ${label} (x${replicas + 1}) so the rest carry the load`
-          )
-        );
+        const lever = writeBound(left) ? saturationLever(run, { ...n, ...left }) : { hint: `Add a replica to ${label} (x${replicas + 1}) so the rest carry the load`, fix: { kind: "replicas", node: node.id, replicas: replicas + 1 } };
+        failures2.push(fail(`Losing ${lost} ${leaves}${bandwidthBound(left) ? "" : ` (${formatPercent(left.utilization)})`}`, lever.hint, lever.fix));
         continue;
       }
       const broken = latencies.map((r) => requirement(degraded, r)).find((c) => !c.passed);
       if (broken) {
-        failures.push(
+        failures2.push(
           fail(
             `Losing ${lost} breaks a latency limit: ${broken.message}`,
-            `Add a replica to ${label} (x${replicas + 1}) so the rest keep it under ${formatPercent(HOT)}, or take load off it`
+            `Add a replica to ${label} (x${replicas + 1}) so the rest keep it under ${formatPercent(HOT)}, or take load off it`,
+            { kind: "replicas", node: node.id, replicas: replicas + 1 }
           )
         );
       }
@@ -5052,34 +7177,70 @@ function survive(run, target) {
     }
     for (const u of run.diagram.useCases) {
       if (needs(u, node.id) && fallbacksFor(u, node.id).length === 0) {
-        failures.push(
+        failures2.push(
           fail(
             `Losing ${label} breaks "${u.name}"`,
-            `Add a replica (x2 on ${node.id}) or a fallback scenario in "${u.name}" that calls ${node.id} with -x and still completes`
+            `Add a replica (x2 on ${node.id}) or a fallback scenario in "${u.name}" that calls ${node.id} with -x and still completes`,
+            { kind: "replicas", node: node.id, replicas: 2 }
           )
         );
       }
     }
   }
-  if (failures.length === 0) {
+  if (failures2.length === 0) {
     const count = selected.length === 1 ? selected[0].id : `any of ${selected.length} nodes`;
     return pass(`Every use case keeps working after losing ${count}`);
   }
-  const more = failures.length > 1 ? ` (and ${failures.length - 1} more)` : "";
-  return fail(`${failures[0].message}${more}`, failures[0].hint);
+  const more = failures2.length > 1 ? ` (and ${failures2.length - 1} more)` : "";
+  return fail(`${failures2[0].message}${more}`, failures2[0].hint, failures2[0].fix);
 }
 function cost(run, max) {
   const { totalCostUsd: total, totalEgressUsd: egress } = run.analysis;
   const ofWhich = egress > 0 ? `, ${formatUsd(egress)} of it egress` : "";
   const message = `Total cost is ${formatUsd(total)}${ofWhich} (limit ${formatUsd(max)})`;
   if (total <= max) return pass(message);
-  const usd = (x) => formatUsd(x).replace("/month", "");
+  const usd4 = (x) => formatUsd(x).replace("/month", "");
   const top = [...run.analysis.nodes].filter((n) => n.costUsd > 0).sort((a, b) => b.costUsd - a.costUsd).slice(0, 3).map((n) => {
-    const notes = [n.replicas > 1 ? `${n.replicas} replicas` : "", n.shards > 1 ? `${n.shards} shards` : "", n.egressUsd > 0 ? `${usd(n.egressUsd)} of it egress` : ""].filter(Boolean);
+    const notes = [n.replicas > 1 ? `${n.replicas} replicas` : "", n.shards > 1 ? `${n.shards} shards` : "", n.egressUsd > 0 ? `${usd4(n.egressUsd)} of it egress` : ""].filter(Boolean);
     return `${n.id} ${formatUsd(n.costUsd)}${notes.length ? ` (${notes.join(", ")})` : ""}`;
   });
   const egressHint = egress > total / 2 ? " Most of it is egress: serve repeated downloads from a CDN ($0.02/GB) instead of storage ($0.09/GB), or send fewer bytes." : "";
   return fail(message, `Biggest items: ${top.join(", ")}. Drop replicas on nodes with low utilisation or pick cheaper techs.${egressHint}`);
+}
+function lag(run, name, maxMs) {
+  const u = findUseCase(run.diagram, name);
+  if (!u) return unknownUseCase(run, name);
+  const ids = [...new Set(u.scenarios.flatMap((s) => s.steps.filter((step) => !step.failed).map((step) => step.toServiceId)))];
+  const queues = ids.map((id) => run.nodes.get(id)).filter((n) => !!n?.queue);
+  if (queues.length === 0) {
+    const plain = ids.find((id) => ["queue", "broker"].includes(run.nodes.get(id)?.kind ?? ""));
+    return fail(
+      `"${u.name}" sends to no queue with a drain rate, so it has no lag to measure`,
+      plain ? `Say how fast its consumers take messages: capacity { ${plain} drain 1k rps }` : "Send its slow work to a queue (->> queue) and give the queue a drain rate in capacity"
+    );
+  }
+  const slowest = queues.reduce((worst, n) => n.queue.lagMs > worst.queue.lagMs ? n : worst);
+  const q = slowest.queue;
+  if (q.backlogPerHour > 0) {
+    return fail(
+      `"${u.name}" falls behind at ${slowest.id}: ${formatRps(q.inflowRps)} flows in, its consumers drain ${formatRps(q.drainRps)}, and the backlog grows by ${formatCount(q.backlogPerHour)} messages an hour (limit ${formatDuration(maxMs)})`,
+      `Drain ${slowest.id} faster than ${formatRps(q.inflowRps)}: more consumers, or capacity { ${slowest.id} drain ${formatRps(Math.ceil(q.inflowRps / 0.7 / 100) * 100)} }`
+    );
+  }
+  const message = `Lag of "${u.name}" is ${formatDuration(q.lagMs)} at ${slowest.id}, its consumers ${formatPercent(q.utilization)} busy (limit ${formatDuration(maxMs)})`;
+  return q.lagMs < maxMs ? pass(message) : fail(message, `Drain ${slowest.id} faster, so its consumers run below ${formatPercent(HOT)}`);
+}
+var scopeText = (scope2) => "team" in scope2 ? `@${scope2.team}` : "tag" in scope2 ? `.${scope2.tag}` : `group ${scope2.group}`;
+function budget(run, scope2, max) {
+  const share2 = scopedCost(run.diagram, run.analysis, scope2);
+  const what = scopeText(scope2);
+  if (share2.nodes.length === 0) return fail(`No node is covered by ${what}`, "team" in scope2 ? `Give nodes the team with ${what} after their name` : "tag" in scope2 ? `Tag nodes or groups with ${what}` : `Add nodes inside ${what}`);
+  const ofWhich = share2.egressUsd > 0 ? `, ${formatUsd(share2.egressUsd)} of it egress` : "";
+  const message = `${what} costs ${formatUsd(share2.costUsd)}${ofWhich} (limit ${formatUsd(max)})`;
+  if (share2.costUsd <= max) return pass(message);
+  const nodes = new Map(run.analysis.nodes.map((n) => [n.id, n]));
+  const top = share2.nodes.slice(0, 3).map((id) => `${id} ${formatUsd(nodes.get(id).costUsd)}`);
+  return fail(message, `Biggest items: ${top.join(", ")}. Drop replicas on nodes with low utilisation, pick cheaper techs, or move work to another team's budget.`);
 }
 function flowTest(run, test) {
   const checks = test.assertions.map((a) => ({ ...assertion(run, a), loc: a.loc }));
@@ -5103,7 +7264,7 @@ function scope(run, useCase, scenario) {
   const u = findUseCase(run.diagram, useCase);
   if (!u) return unknownUseCase(run, useCase);
   if (scenario === void 0) return { u, scenarios: u.scenarios, label: quote(u.name) };
-  const s = findScenario(u, scenario);
+  const s = findScenario2(u, scenario);
   if (!s) return missingScenario(u, scenario);
   return { u, scenarios: [s], label: `${quote(u.name)} scenario ${quote(s.name)}` };
 }
@@ -5129,12 +7290,14 @@ function assertion(run, a) {
       if (ids.size === 0) return noMatch(a.target);
       return writesCheck(run, sc.u, sc.scenarios, (id) => ids.has(id), selectorText(a.target));
     }
+    case "beforeResponding":
+      return beforeResponding(run, a);
     case "responds":
       return responds(run, a);
     case "hasScenario": {
       const u = findUseCase(run.diagram, a.useCase);
       if (!u) return unknownUseCase(run, a.useCase);
-      const s = findScenario(u, a.scenario);
+      const s = findScenario2(u, a.scenario);
       return s ? pass(`${quote(u.name)} has scenario ${quote(s.name)}`) : missingScenario(u, a.scenario);
     }
     case "handlesFailure": {
@@ -5154,10 +7317,10 @@ function assertion(run, a) {
     case "replicas": {
       const nodes = selectNodes(run.diagram, a.target);
       if (nodes.length === 0) return noMatch(a.target);
-      const short = nodes.filter((n) => replicasOf(n) < a.min);
+      const short2 = nodes.filter((n) => replicasOf(n) < a.min);
       const has = (n) => `${n.id} has ${replicasOf(n)} replica${replicasOf(n) === 1 ? "" : "s"}`;
-      if (short.length === 0) return pass(`${nodes.map(has).join(", ")} (minimum ${a.min})`);
-      return fail(`${short.map(has).join(", ")} (minimum ${a.min})`, `Declare ${short[0].id} with x${a.min}`);
+      if (short2.length === 0) return pass(`${nodes.map(has).join(", ")} (minimum ${a.min})`);
+      return fail(`${short2.map(has).join(", ")} (minimum ${a.min})`, `Declare ${short2[0].id} with x${a.min}`);
     }
     case "neverWaits":
       return neverWaits(run, a);
@@ -5172,58 +7335,132 @@ function assertion(run, a) {
 function noMatch(selector) {
   return fail(`No node matches ${selectorText(selector)}`, "Use a node id, [Tech] or any <kind> (any cache, any database, \u2026)");
 }
+function callNoun(selector, match) {
+  const target = selectorText(selector);
+  if (match?.op !== void 0) return `${match.op} on ${target}`;
+  if (match?.header !== void 0) return `header ${match.header} to ${target}`;
+  if (match?.method !== void 0) return `${match.method} ${match.path ?? ""} to ${target}`;
+  return target;
+}
+var baseForm = (phrase) => phrase.replace(/^(\w+?)s\b/, "$1");
+function vocabularyGap(run, ids, selector, match) {
+  if (match?.op === void 0 && match?.header === void 0) return void 0;
+  const nodes = run.diagram.nodes.filter((n) => ids.has(n.id));
+  if (nodes.some((n) => n.kind === "system")) return void 0;
+  const same = (a, b) => a.toLowerCase() === b.toLowerCase();
+  const what = selectorText(selector);
+  const types = nodes.map((n) => n.resolvedType);
+  const listed = (names) => `${names.slice(0, 8).join(", ")}${names.length > 8 ? ", \u2026" : ""}`;
+  const { op, header } = match;
+  if (op !== void 0 && !types.some((t) => t?.ops.some((o) => same(o.name, op)))) {
+    const ops = [...new Set(types.flatMap((t) => t?.ops.map((o) => o.name) ?? []))];
+    return fail(
+      `No node matching ${what} has an operation '${op}'`,
+      ops.length ? `Its operations are ${listed(ops)}` : `${what} has no typed operations; give it a type with op lines, or assert calls ${what} instead`
+    );
+  }
+  if (header !== void 0 && types.every((t) => t && t.headers.length > 0 && !t.headers.some((h2) => same(h2, header)))) {
+    const headers = [...new Set(types.flatMap((t) => t?.headers ?? []))];
+    return fail(`No node matching ${what} takes the header '${header}'`, `Its headers are ${listed(headers)}`);
+  }
+  return void 0;
+}
+function matchHint(selector, match) {
+  const what = selectorText(selector);
+  if (match?.op !== void 0) return `Add a step to ${what} whose label starts with ${match.op}`;
+  if (match?.header !== void 0) return `Name the header in a request to ${what}: GET /path header ${match.header}`;
+  if (match?.method !== void 0) return `Add a step to ${what} labelled ${match.method} ${match.path ?? ""}`.trimEnd();
+  return `Add a step to ${what}`;
+}
+function otherSteps(scenarios, ids, match) {
+  if (!match) return "";
+  const steps = scenarios.flatMap((s) => s.steps.filter((step) => ids.has(step.toServiceId)));
+  const labels = [...new Set(steps.map((step) => requestLabel(step) || "(no label)"))];
+  return labels.length ? `; its steps there are ${labels.slice(0, 3).join(", ")}${labels.length > 3 ? ", \u2026" : ""}` : "";
+}
 function calls(run, a) {
   const sc = scope(run, a.useCase, a.scenario);
   if (isCheck(sc)) return sc;
   const what = selectorText(a.target);
+  const phrase = callText(a.target, a.match);
   const ids = idsOf(run, a.target);
-  const called = (s) => s.steps.filter((step) => ids.has(step.toServiceId));
+  const called = (s) => s.steps.filter((step) => ids.has(step.toServiceId) && stepMatches(step, a.match));
   const calling = sc.scenarios.filter((s) => called(s).length > 0);
   const names = (list) => list.map((s) => quote(s.name)).join(", ");
   const multi = sc.scenarios.length > 1;
+  const gap = vocabularyGap(run, ids, a.target, a.match);
+  if (gap) return gap;
   if (a.quantifier === "never") {
-    if (calling.length === 0) return pass(`${sc.label} never calls ${what}`);
+    if (calling.length === 0) return pass(`${sc.label} never ${phrase}`);
     const first = calling[0];
     const step = called(first)[0];
     return fail(
-      `${multi ? quote(first.name) : sc.label} calls ${nodeLabel(run.diagram, step.toServiceId)}: ${stepText(step)}`,
-      `Take the call to ${step.toServiceId} out of ${quote(first.name)}, e.g. serve it from a cache`
+      `${multi ? quote(first.name) : sc.label} ${a.match ? phrase : `calls ${nodeLabel(run.diagram, step.toServiceId)}`}: ${stepText(step)}`,
+      a.match ? `Change or remove the step to ${step.toServiceId} in ${quote(first.name)}` : `Take the call to ${step.toServiceId} out of ${quote(first.name)}, e.g. serve it from a cache`
     );
   }
   if (ids.size === 0) return noMatch(a.target);
   if (a.quantifier === "some") {
-    if (calling.length) return pass(`${sc.label} calls ${what}${multi ? ` in ${names(calling)}` : ""}`);
-    return fail(`${sc.label} never calls ${what}`, `Add a step to ${what}`);
+    if (calling.length) return pass(`${sc.label} ${phrase}${multi ? ` in ${names(calling)}` : ""}`);
+    return fail(`${sc.label} never ${phrase}${otherSteps(sc.scenarios, ids, a.match)}`, matchHint(a.target, a.match));
   }
   const missing = sc.scenarios.filter((s) => !calling.includes(s));
-  if (missing.length === 0 && sc.scenarios.length) return pass(`Every scenario of ${sc.label} calls ${what}`);
-  return fail(`${sc.label} does not call ${what} in ${names(missing) || "any scenario"}`, `Add a step to ${what} in ${names(missing) || "a scenario"}`);
+  if (missing.length === 0 && sc.scenarios.length) return pass(`Every scenario of ${sc.label} ${phrase}`);
+  return fail(
+    `${sc.label} does not ${baseForm(phrase)} in ${names(missing) || "any scenario"}${otherSteps(missing, ids, a.match)}`,
+    a.match ? `${matchHint(a.target, a.match)} in ${names(missing) || "a scenario"}` : `Add a step to ${what} in ${names(missing) || "a scenario"}`
+  );
 }
 function before(run, a) {
   const sc = scope(run, a.useCase, a.scenario);
   if (isCheck(sc)) return sc;
   const first = idsOf(run, a.first);
   const then = idsOf(run, a.then);
-  const [x, y] = [selectorText(a.first), selectorText(a.then)];
+  const [x, y] = [callNoun(a.first, a.match), selectorText(a.then)];
   if (first.size === 0) return noMatch(a.first);
   if (then.size === 0) return noMatch(a.then);
+  const gap = vocabularyGap(run, first, a.first, a.match);
+  if (gap) return gap;
   let checked = 0;
   for (const s of sc.scenarios) {
     const order = requestOrder(sc.u, s).requests;
     const iy = order.findIndex((m) => then.has(m.to));
     if (iy < 0) continue;
     checked++;
-    const ix = order.findIndex((m) => first.has(m.to));
+    const ix = order.findIndex((m) => first.has(m.to) && stepMatches(m.step, a.match));
     if (ix < 0 || ix > iy) {
-      const where = sc.scenarios.length > 1 || a.scenario ? `In ${quote(s.name)}` : `In ${quote(sc.u.name)}`;
+      const where2 = sc.scenarios.length > 1 || a.scenario ? `In ${quote(s.name)}` : `In ${quote(sc.u.name)}`;
       return fail(
-        ix < 0 ? `${where}, ${order[iy].to} is called (${stepText(order[iy].step)}) but ${x} never is` : `${where}, ${order[iy].to} is called (${stepText(order[iy].step)}) before ${order[ix].to} (${stepText(order[ix].step)})`,
+        ix < 0 ? `${where2}, ${order[iy].to} is called (${stepText(order[iy].step)}) but ${x} never is` : `${where2}, ${order[iy].to} is called (${stepText(order[iy].step)}) before ${order[ix].to} (${stepText(order[ix].step)})`,
         `Call ${x} before the first call to ${y}`
       );
     }
   }
   if (checked === 0) return fail(`${sc.label} never calls ${y}`, `Add a step to ${y} after the call to ${x}`);
-  return pass(`${sc.label} calls ${x} before ${y}${checked > 1 ? ` in all ${checked} scenarios that call ${y}` : ""}`);
+  return pass(`${sc.label} ${callText(a.first, a.match)} before ${y}${checked > 1 ? ` in all ${checked} scenarios that call ${y}` : ""}`);
+}
+function beforeResponding(run, a) {
+  const sc = scope(run, a.useCase, a.scenario);
+  if (isCheck(sc)) return sc;
+  const ids = idsOf(run, a.target);
+  if (ids.size === 0) return noMatch(a.target);
+  const gap = vocabularyGap(run, ids, a.target, a.match);
+  if (gap) return gap;
+  const phrase = callText(a.target, a.match);
+  const success = sc.scenarios.filter((s) => s.outcome === "success");
+  if (success.length === 0) return fail(`${sc.label} has no success scenario to check`, "Add a scenario whose entry request is answered with a 2xx");
+  const accept = (id) => ids.has(id);
+  const isMatch = (step) => stepMatches(step, a.match);
+  const gaps = success.filter((s) => !writesBeforeResponse(sc.u, s, accept, isMatch));
+  if (gaps.length === 0) return pass(`${success.length === 1 ? sc.label : `Every success scenario of ${sc.label}`} ${phrase} before responding`);
+  const where2 = (s) => sc.u.scenarios.length > 1 ? quote(s.name) : quote(sc.u.name);
+  const text = (s) => {
+    const g = writeGap(run, sc.u, s, accept, isMatch);
+    if (g.kind === "async") return `${where2(s)} ${phrase} only asynchronously: ${stepText(g.step)}`;
+    if (g.kind === "after") return `${where2(s)} ${phrase} only after responding: ${stepText(g.step)}`;
+    return `${where2(s)} never ${phrase} before responding${otherSteps([s], ids, a.match)}`;
+  };
+  return fail(gaps.map(text).join("; "), `${matchHint(a.target, a.match)}, sent with -> before the line that answers the entry request`);
 }
 function neverWaits(run, a) {
   const sc = scope(run, a.useCase, a.scenario);
@@ -5233,9 +7470,9 @@ function neverWaits(run, a) {
   for (const s of sc.scenarios) {
     const hop = criticalPath(sc.u, s).flat().find((h2) => !h2.async && ids.has(h2.target));
     if (hop) {
-      const where = sc.scenarios.length > 1 ? quote(s.name) : sc.label;
+      const where2 = sc.scenarios.length > 1 ? quote(s.name) : sc.label;
       return fail(
-        `${where} waits for ${nodeLabel(run.diagram, hop.target)} before responding: ${stepText(hop.step)}${hop.failed ? " times out on the request path" : " is synchronous"}`,
+        `${where2} waits for ${nodeLabel(run.diagram, hop.target)} before responding: ${stepText(hop.step)}${hop.failed ? " times out on the request path" : " is synchronous"}`,
         `Send it with ->> (through a queue if it must not be lost), or move it after the line that answers the entry request`
       );
     }
@@ -5248,31 +7485,34 @@ function after(run, a) {
   if (isCheck(sc)) return sc;
   const targets = idsOf(run, a.target);
   const firsts = idsOf(run, a.after);
-  const [y, x] = [selectorText(a.target), selectorText(a.after)];
+  const [y, x] = [callNoun(a.target, a.match), selectorText(a.after)];
   if (targets.size === 0) return noMatch(a.target);
   if (firsts.size === 0) return noMatch(a.after);
+  const gap = vocabularyGap(run, targets, a.target, a.match);
+  if (gap) return gap;
+  const isTarget = (m) => targets.has(m.to) && stepMatches(m.step, a.match);
   let checked = 0;
   for (const s of sc.scenarios) {
     const order = requestOrder(sc.u, s).requests;
     const ix = order.findIndex((m) => firsts.has(m.to));
-    const iy = order.map((m) => targets.has(m.to)).lastIndexOf(true);
+    const iy = order.map(isTarget).lastIndexOf(true);
     if (ix < 0 || iy < 0) continue;
     checked++;
     if (iy < ix) {
-      const where = sc.scenarios.length > 1 || a.scenario ? `In ${quote(s.name)}` : `In ${quote(sc.u.name)}`;
+      const where2 = sc.scenarios.length > 1 || a.scenario ? `In ${quote(s.name)}` : `In ${quote(sc.u.name)}`;
       return fail(
-        `${where}, the last call to ${y} (${stepText(order[iy].step)}) comes before the first call to ${x} (${stepText(order[ix].step)})`,
+        `${where2}, the last call to ${y} (${stepText(order[iy].step)}) comes before the first call to ${x} (${stepText(order[ix].step)})`,
         `Call ${y} after ${x}: move the step to ${order[iy].to} below the call to ${order[ix].to}`
       );
     }
   }
   if (checked === 0) {
-    const callsY = sc.scenarios.some((s) => s.steps.some((step) => targets.has(step.toServiceId)));
+    const callsY = sc.scenarios.some((s) => s.steps.some((step) => targets.has(step.toServiceId) && stepMatches(step, a.match)));
     const callsX = sc.scenarios.some((s) => s.steps.some((step) => firsts.has(step.toServiceId)));
     const why = !callsY && !callsX ? `calls neither ${x} nor ${y}` : !callsY ? `never calls ${y}` : !callsX ? `never calls ${x}` : `never calls ${x} and ${y} in the same scenario`;
     return fail(`${sc.label} ${why}`, `Add a step to ${y} after the call to ${x}`);
   }
-  return pass(`${sc.label} calls ${y} after ${x}${checked > 1 ? ` in all ${checked} scenarios that call both` : ""}`);
+  return pass(`${sc.label} ${callText(a.target, a.match)} after ${x}${checked > 1 ? ` in all ${checked} scenarios that call both` : ""}`);
 }
 function senderCalls(run, a) {
   let useCases = run.diagram.useCases;
@@ -5289,10 +7529,10 @@ function senderCalls(run, a) {
     for (const s of u.scenarios) {
       const step = s.steps.find((st) => from.has(st.fromServiceId) && to.has(st.toServiceId));
       if (!step) continue;
-      const where = u.scenarios.length > 1 ? `${quote(u.name)} scenario ${quote(s.name)}` : quote(u.name);
-      if (a.quantifier === "some") return pass(`${x} calls ${y}${within}: ${stepText(step)} in ${where}`);
+      const where2 = u.scenarios.length > 1 ? `${quote(u.name)} scenario ${quote(s.name)}` : quote(u.name);
+      if (a.quantifier === "some") return pass(`${x} calls ${y}${within}: ${stepText(step)} in ${where2}`);
       return fail(
-        `${x} calls ${y}${within}: ${stepText(step)} in ${where}`,
+        `${x} calls ${y}${within}: ${stepText(step)} in ${where2}`,
         `Let another node make this call (e.g. the client uploads to storage with a presigned URL), or remove the step`
       );
     }
@@ -5319,10 +7559,10 @@ function startsAt(run, a) {
   }
   return pass(`${quote(u.name)} starts at ${nodeLabel(run.diagram, entries2[0].fromServiceId)}`);
 }
-function statusMatches(status, wanted) {
+function statusMatches(status, wanted3) {
   if (status === void 0) return false;
-  const cls = /^([1-5])xx$/i.exec(wanted);
-  return cls ? Math.floor(status / 100) === Number(cls[1]) : String(status) === wanted;
+  const cls = /^([1-5])xx$/i.exec(wanted3);
+  return cls ? Math.floor(status / 100) === Number(cls[1]) : String(status) === wanted3;
 }
 function responds(run, a) {
   const sc = scope(run, a.useCase, a.scenario);
@@ -5343,12 +7583,114 @@ function noPath(run, from, to) {
     for (const s of u.scenarios) {
       const step = s.steps.find((st) => sources.has(st.fromServiceId) && targets.has(st.toServiceId));
       if (step) {
-        const where = u.scenarios.length > 1 ? `${quote(u.name)} scenario ${quote(s.name)}` : quote(u.name);
-        return fail(`The step ${step.fromServiceId} -> ${step.toServiceId} in ${where} (${lineOf(step.loc)}) goes directly from ${x} to ${y}`, hint);
+        const where2 = u.scenarios.length > 1 ? `${quote(u.name)} scenario ${quote(s.name)}` : quote(u.name);
+        return fail(`The step ${step.fromServiceId} -> ${step.toServiceId} in ${where2} (${lineOf(step.loc)}) goes directly from ${x} to ${y}`, hint);
       }
     }
   }
   return pass(`No connection or step goes directly from ${x} to ${y}`);
+}
+
+// ../frontend/src/sim/whatif.ts
+function headlineOf(analysis) {
+  const loaded = analysis.useCases.filter((u) => u.rps > 0);
+  const p99s = (loaded.length ? loaded : analysis.useCases).map((u) => u.percentiles.p99).filter((x) => Number.isFinite(x));
+  return {
+    p99Ms: p99s.length ? Math.max(...p99s) : 0,
+    availability: loaded.length ? Math.min(...loaded.map((u) => u.availability)) : 1,
+    costUsd: analysis.totalCostUsd
+  };
+}
+var requirementsPass = (results) => results.every((r) => r.passed || r.id.startsWith("test:"));
+function whatIfOptions(diagram, whatif, base = {}) {
+  const warnings = [];
+  const traffic = resolveTraffic(diagram);
+  const ids = new Set(components(diagram).map((n) => n.id));
+  const rps = new Map(base.trafficRps ?? []);
+  const replicas = new Map(base.replicas ?? []);
+  const failed = new Set(base.failed ?? []);
+  const hitRates = new Map(base.hitRates ?? []);
+  const errorRates = new Map(base.errorRates ?? []);
+  for (const change of whatif.changes) {
+    if (change.kind === "traffic") {
+      const u = findUseCase(diagram, change.useCase);
+      if (!u) {
+        warnings.push(`What-if "${whatif.name}": no use case named "${change.useCase}"; its traffic change is ignored`);
+        continue;
+      }
+      const current = rps.get(u.id) ?? traffic.get(u.id)?.rps ?? 0;
+      rps.set(u.id, change.rps ?? current * (change.multiply ?? 1));
+      continue;
+    }
+    if (!ids.has(change.node)) {
+      warnings.push(`What-if "${whatif.name}": no node '${change.node}'; ${change.kind === "fail" ? "fail" : change.kind === "hit" ? "its hit rate" : change.kind === "errors" ? "its error rate" : "its replicas"} ignored`);
+      continue;
+    }
+    if (change.kind === "fail") failed.add(change.node);
+    else if (change.kind === "hit") hitRates.set(change.node, change.percent);
+    else if (change.kind === "errors") errorRates.set(change.node, change.percent);
+    else replicas.set(change.node, change.replicas);
+  }
+  return {
+    options: {
+      ...base,
+      ...rps.size ? { trafficRps: rps } : {},
+      ...replicas.size ? { replicas } : {},
+      ...failed.size ? { failed } : {},
+      ...hitRates.size ? { hitRates } : {},
+      ...errorRates.size ? { errorRates } : {}
+    },
+    warnings
+  };
+}
+function runWhatIf(diagram, whatif, base = {}) {
+  const { options, warnings } = whatIfOptions(diagram, whatif, base);
+  const analysis = analyze(diagram, options);
+  const results = runTests(diagram, analysis, options);
+  return { name: whatif.name, loc: whatif.loc, options, analysis, results, passed: requirementsPass(results), headline: headlineOf(analysis), warnings };
+}
+function runWhatIfs(diagram, base = {}) {
+  return (diagram.whatifs ?? []).map((w) => runWhatIf(diagram, w, base));
+}
+
+// ../frontend/src/sim/delta.ts
+var MINUS = "\u2212";
+var usd = (n) => `$${Math.round(Math.abs(n)).toLocaleString("en-US")}`;
+var short = (ms) => formatMs(ms).replace(/ ms$/, "");
+var none = "\u2014";
+function tone(before2, after2, lowerIsBetter, epsilon) {
+  if (before2 === void 0 || after2 === void 0 || Math.abs(after2 - before2) < epsilon) return "same";
+  return after2 < before2 === lowerIsBetter ? "better" : "worse";
+}
+function costRow(before2, after2) {
+  const d = Math.round(after2) - Math.round(before2);
+  return {
+    label: "Cost",
+    before: `${usd(before2)}/mo`,
+    after: `${usd(after2)}/mo`,
+    change: d === 0 ? "same" : `${d > 0 ? "+" : MINUS}${usd(d)}/mo`,
+    tone: tone(Math.round(before2), Math.round(after2), true, 1)
+  };
+}
+function p99Row(label, before2, after2) {
+  const same = before2 !== void 0 && after2 !== void 0 && formatMs(before2) === formatMs(after2);
+  return {
+    label,
+    before: before2 === void 0 ? none : formatMs(before2),
+    after: after2 === void 0 ? none : formatMs(after2),
+    change: before2 === void 0 || after2 === void 0 ? after2 === void 0 ? "removed" : "new" : same ? "same" : `p99 ${short(before2)}\u2192${short(after2)} ms`,
+    tone: same ? "same" : tone(before2, after2, true, 0.05)
+  };
+}
+function availabilityRow(label, before2, after2) {
+  const same = before2 !== void 0 && after2 !== void 0 && formatAvailability(before2) === formatAvailability(after2);
+  return {
+    label,
+    before: before2 === void 0 ? none : formatAvailability(before2),
+    after: after2 === void 0 ? none : formatAvailability(after2),
+    change: before2 === void 0 || after2 === void 0 ? after2 === void 0 ? "removed" : "new" : same ? "same" : `${formatAvailability(before2)}\u2192${formatAvailability(after2)}`,
+    tone: same ? "same" : tone(before2, after2, false, 1e-12)
+  };
 }
 
 // ../frontend/src/dsl/view.ts
@@ -5489,7 +7831,7 @@ function applyView(diagram, view = {}) {
 }
 var idList = (value) => value.split(",").map((s) => s.trim()).filter(Boolean);
 function viewOverlay(diagram, analysis, view = {}) {
-  const out = { nodes: {}, systems: {}, notes: [] };
+  const out = { nodes: {}, flows: [], systems: {}, notes: [] };
   const { expanded } = viewOptions(view);
   let scope2 = diagram;
   let scoped = analysis;
@@ -5507,7 +7849,7 @@ function viewOverlay(diagram, analysis, view = {}) {
     }
   }
   collect(scope2, scoped, load, "", path, expanded, out);
-  return out;
+  return load?.critical ? { ...out, critical: load.critical } : out;
 }
 function teamAnalysis(system, result) {
   return result?.analysis ?? (system.diagram ? contractOf(system).baseline : void 0);
@@ -5517,6 +7859,7 @@ function teamLoad(system, result, analysis) {
 }
 function collect(diagram, analysis, load, at, path, expanded, out) {
   for (const [id, o] of Object.entries(load?.nodes ?? {})) out.nodes[at + id] = o;
+  for (const f of load?.flows ?? []) out.flows.push({ ...f, from: at + f.from, to: at + f.to });
   for (const system of diagram.systems ?? []) {
     const result = analysis?.systems?.find((s) => s.id === system.id);
     out.systems[at + system.id] = badgeOf(diagram, system, result);
@@ -5572,16 +7915,30 @@ function loadDocument(input) {
     for (const c of diagram.capacity ?? []) if (c.size && sim.nodes[c.node]) sim.nodes[c.node].size = c.size;
   }
   const overlay = sim && Object.keys(sim.nodes).length ? sim.nodes : void 0;
+  const shown2 = errors.length ? diagram : applyView(diagram, view);
+  const edges = sim && overlay ? edgeOverlays(shown2.edges.map((e) => ({ id: e.id, ...flowEnds(e.source, e.target) })), { nodes: sim.nodes, flows: sim.flows, ...sim.critical ? { critical: sim.critical } : {} }) : {};
+  const noted = new Set(sim?.notes.map((n) => n.text));
   return {
-    diagram: errors.length ? diagram : applyView(diagram, view),
+    diagram: shown2,
     root: diagram,
     errors,
     ...overlay ? { overlay } : {},
+    ...Object.keys(edges).length ? { edges } : {},
+    ...overlay && sim?.critical ? { critical: sim.critical } : {},
+    ...analysis ? { analysis } : {},
+    warnings: (analysis?.warnings ?? []).filter((w) => !noted.has(w)),
     systems: sim?.systems ?? {},
     notes: sim?.notes ?? [],
     tests: analysis ? runTests(diagram, analysis) : [],
     link: (playback) => EDITOR + encodeShareHash(input.source, playback, imports)
   };
+}
+function flowEnds(source, target) {
+  const a = source.split(".");
+  const b = target.split(".");
+  let shared = 0;
+  while (shared < a.length - 1 && shared < b.length - 1 && a[shared] === b[shared]) shared++;
+  return { source: a.slice(0, shared + 1).join("."), target: b.slice(0, shared + 1).join(".") };
 }
 function missingImports(input) {
   const missing = /* @__PURE__ */ new Set();
@@ -5638,17 +7995,17 @@ var remoteError = {
 var isRecord = (v) => !!v && typeof v === "object" && !Array.isArray(v);
 function parseLock(text) {
   const invalid = (why) => new ImportError(`Invalid ${LOCK_FILE}: ${why}; delete it and run proschi imports sync`);
-  let json;
+  let json2;
   try {
-    json = JSON.parse(text);
+    json2 = JSON.parse(text);
   } catch (e) {
     throw invalid(e.message);
   }
-  if (!isRecord(json) || json.version !== 1) throw invalid('expected {"version": 1, \u2026}');
+  if (!isRecord(json2) || json2.version !== 1) throw invalid('expected {"version": 1, \u2026}');
   const lock = emptyLock();
-  const git = json.git ?? {};
-  const https = json.https ?? {};
-  const cloud = json.cloud ?? {};
+  const git = json2.git ?? {};
+  const https = json2.https ?? {};
+  const cloud = json2.cloud ?? {};
   if (!isRecord(git) || !isRecord(https) || !isRecord(cloud)) throw invalid('"git", "https" and "cloud" must be objects');
   for (const [key, entry] of Object.entries(git)) {
     const at = key.lastIndexOf("@");
@@ -5740,7 +8097,7 @@ var HEAVY_GLYPH = {
   [N | E | W]: "\u253B",
   [N | E | S | W]: "\u254B"
 };
-var Grid = class {
+var Grid = class _Grid {
   constructor(columns, rows) {
     this.columns = columns;
     this.rows = rows;
@@ -5791,10 +8148,10 @@ var Grid = class {
   line(x, y, dirs, fg, heavy = false) {
     if (!this.inside(x, y)) return;
     const i = y * this.columns + x;
-    const merged = this.lines[i] | dirs;
-    this.glyphs[i] = (heavy ? HEAVY_GLYPH : LINE_GLYPH)[merged].codePointAt(0);
+    const merged2 = this.lines[i] | dirs;
+    this.glyphs[i] = (heavy ? HEAVY_GLYPH : LINE_GLYPH)[merged2].codePointAt(0);
     this.fg[i] = fg;
-    this.lines[i] = merged;
+    this.lines[i] = merged2;
   }
   /** The cells as `Raster` takes them: base64 of little-endian u32 triplets. */
   toBase64() {
@@ -5805,6 +8162,23 @@ var Grid = class {
       words[i * 3 + 2] = this.bg[i];
     }
     return base64(new Uint8Array(words.buffer));
+  }
+  /** The cells `columns` × `rows` from (x, y): a viewport over a drawing wider than the room. */
+  crop(x, y, columns, rows) {
+    const out = new _Grid(columns, rows);
+    for (let r = 0; r < rows; r++) {
+      if (y + r < 0 || y + r >= this.rows) continue;
+      for (let c = 0; c < columns; c++) {
+        if (!this.inside(x + c, y + r)) continue;
+        const from = (y + r) * this.columns + x + c;
+        const to = r * columns + c;
+        out.glyphs[to] = this.glyphs[from];
+        out.fg[to] = this.fg[from];
+        out.bg[to] = this.bg[from];
+        out.lines[to] = this.lines[from];
+      }
+    }
+    return out;
   }
   /** The glyphs alone, trailing spaces trimmed: for tests. */
   toText() {
@@ -5818,19 +8192,19 @@ var Grid = class {
   }
 };
 var ALPHABET2 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-function base64(bytes) {
+function base64(bytes2) {
   let out = "";
   let i = 0;
-  for (; i + 2 < bytes.length; i += 3) {
-    const n = bytes[i] << 16 | bytes[i + 1] << 8 | bytes[i + 2];
+  for (; i + 2 < bytes2.length; i += 3) {
+    const n = bytes2[i] << 16 | bytes2[i + 1] << 8 | bytes2[i + 2];
     out += ALPHABET2[n >> 18] + ALPHABET2[n >> 12 & 63] + ALPHABET2[n >> 6 & 63] + ALPHABET2[n & 63];
   }
-  const rest = bytes.length - i;
+  const rest = bytes2.length - i;
   if (rest === 1) {
-    const n = bytes[i] << 16;
+    const n = bytes2[i] << 16;
     out += ALPHABET2[n >> 18] + ALPHABET2[n >> 12 & 63] + "==";
   } else if (rest === 2) {
-    const n = bytes[i] << 16 | bytes[i + 1] << 8;
+    const n = bytes2[i] << 16 | bytes2[i + 1] << 8;
     out += ALPHABET2[n >> 18] + ALPHABET2[n >> 12 & 63] + ALPHABET2[n >> 6 & 63] + "=";
   }
   return out;
@@ -6147,13 +8521,13 @@ function routePath(points, from, to) {
     if (last2 && last2.x === c.x && last2.y === c.y) continue;
     run.push(c);
   }
-  let start2 = 0;
-  while (start2 < run.length && contains(from, run[start2])) start2++;
+  let start3 = 0;
+  while (start3 < run.length && contains(from, run[start3])) start3++;
   let end = run.length - 1;
-  while (end >= start2 && contains(to, run[end])) end--;
-  const cells = run.slice(start2, end + 1);
+  while (end >= start3 && contains(to, run[end])) end--;
+  const cells = run.slice(start3, end + 1);
   if (cells.length === 0) return void 0;
-  const before2 = run[start2 - 1] ?? void 0;
+  const before2 = run[start3 - 1] ?? void 0;
   const after2 = run[end + 1] ?? void 0;
   const dirs = cells.map((c, i) => {
     let d = 0;
@@ -6277,7 +8651,7 @@ var COLOR = {
   good: 2278750,
   warn: 15381256,
   bad: 15680580,
-  /** The canvas's load overlay (utils/heat.ts): a busy card's fill, from yellow through pink to red. */
+  /** The canvas's load overlay (utils/heat.ts): a busy card's border and bar in yellow, then its fill in yellow, pink and red. */
   heatWarm: 16765503,
   heatHot: 16743092,
   heatOver: 16739169
@@ -6294,14 +8668,17 @@ function paint(scene, options = {}) {
   const grid = new Grid(scene.columns, scene.rows);
   const { play } = options;
   const all = [...scene.nodes.values()];
-  const frameOf3 = (n) => isFrame(n.node) ? { badge: options.systems?.[n.node.id], selected: options.selected === n.node.id } : void 0;
-  for (const g of all.filter((n) => n.node.kind === "group").sort((a, b) => a.depth - b.depth)) drawGroup(grid, g, play ? "path" : void 0, frameOf3(g));
+  const frameOf2 = (n) => isFrame(n.node) ? { badge: options.systems?.[n.node.id], selected: options.selected === n.node.id } : void 0;
+  for (const g of all.filter((n) => n.node.kind === "group").sort((a, b) => a.depth - b.depth)) drawGroup(grid, g, play ? "path" : void 0, frameOf2(g));
   for (const n of all) drawStack(grid, scene, n, options.overlay?.[n.node.id], lookOf(play, n.node.id));
-  for (const { edge, path } of scene.edges) {
+  const loadOf = (id) => play ? void 0 : options.edges?.[id];
+  const edges = [...scene.edges].sort((a, b) => Number(!!loadOf(a.edge.id)?.critical) - Number(!!loadOf(b.edge.id)?.critical));
+  for (const { edge, path } of edges) {
     const own = edge.style?.color ? hex(edge.style.color) : COLOR.line;
     const off = !!play && !play.pathEdges.has(edge.id);
-    const color = play ? off ? COLOR.fadedMore : COLOR.faded : own;
-    drawPath(grid, path, color, off ? "dotted" : edge.style?.dash);
+    const load = loadOf(edge.id);
+    const color = play ? off ? COLOR.fadedMore : COLOR.faded : edgeHeat(load) ?? (load?.critical ? DEFAULT : own);
+    drawPath(grid, path, color, off ? "dotted" : load?.critical ? void 0 : edge.style?.dash, !!load?.critical);
   }
   for (const active of play?.edges ?? []) {
     const color = active.error ? COLOR.fail : DEFAULT;
@@ -6316,19 +8693,51 @@ function paint(scene, options = {}) {
     grid.set(last.x, last.y, HEAD[head], color);
   }
   const taken = /* @__PURE__ */ new Set();
-  for (const { edge, label } of scene.edges) {
-    if (!label || !edge.label) continue;
-    const text = ` ${edge.label} `;
-    const x = label.x - Math.floor(text.length / 2);
-    const free = (y2) => y2 >= 0 && y2 < grid.rows && Array.from(text, (_, i) => `${x + i},${y2}`).every((k) => !taken.has(k));
-    const y = [0, -1, 1, -2, 2].map((d) => label.y + d).find(free) ?? label.y;
-    const color = play && !play.pathEdges.has(edge.id) ? COLOR.fadedMore : COLOR.muted;
-    for (let i = 0; i < text.length; i++) {
-      taken.add(`${x + i},${y}`);
-      if (!onCard(scene, x + i, y)) grid.set(x + i, y, text[i], color);
+  const owner = /* @__PURE__ */ new Map();
+  scene.edges.forEach(({ path }, i) => path.cells.forEach(({ x, y }) => owner.set(`${x},${y}`, (owner.get(`${x},${y}`) ?? i) === i ? i : -1)));
+  for (const { path } of scene.edges) owner.set(`${path.cells[path.cells.length - 1].x},${path.cells[path.cells.length - 1].y}`, -1);
+  const blocked = blockedCells(grid, scene);
+  const take = (spots) => spots.forEach(({ text, x, y }) => Array.from(text).forEach((_, i) => taken.add(`${x + i},${y}`)));
+  scene.edges.forEach(({ edge, path, label }, index) => {
+    const load = loadOf(edge.id);
+    const chip2 = loadChip(load);
+    const free = (x, y, alone) => x >= 0 && x < grid.columns && y >= 0 && y < grid.rows && !taken.has(`${x},${y}`) && (!alone || (owner.get(`${x},${y}`) ?? index) === index && !blocked[y * grid.columns + x]);
+    const fits = (spots2, alone) => spots2.every(({ text, x, y }) => Array.from(text).every((_, i) => free(x + i, y, alone)));
+    const stack = (words, at) => {
+      const texts = words.map((w) => ` ${w} `);
+      const wide = Math.max(...texts.map((t) => t.length));
+      return texts.map((text, i) => ({
+        text,
+        x: at.side === "right" ? at.x + 1 : at.side === "left" ? at.x - text.length : Math.max(0, Math.min(grid.columns - wide, at.x - Math.floor(text.length / 2))),
+        y: at.y + i
+      }));
+    };
+    const near = anchorsOf(path, label);
+    const far = clearOf(path);
+    const plain = (words, at) => {
+      const tries = [0, -1, 1, -2, 2].map((dy) => stack([words], { x: at.x, y: at.y + dy })[0]);
+      return tries.find((s) => fits([s], false)) ?? tries[0];
+    };
+    const name = edge.label ?? "";
+    let spots;
+    for (const anchors of chip2 ? [near, far] : []) {
+      const first = (words) => anchors.map((at) => stack(words, at)).find((s) => fits(s, true));
+      spots = first([[name, chip2].filter(Boolean).join(" \xB7 ")]) ?? (name ? first([name, chip2]) : void 0);
+      for (let room = name.length - 1; !spots && room >= 4; room--) spots = first([`${fit(name, room)} \xB7 ${chip2}`]);
+      const numbers = spots ? void 0 : first([chip2]);
+      if (numbers) {
+        take(numbers);
+        spots = label && name ? [...numbers, plain(name, label)] : numbers;
+      }
+      if (spots) break;
     }
-  }
-  for (const g of all) if (g.node.kind === "group") drawGroupHeading(grid, g, play ? "path" : void 0, frameOf3(g));
+    spots ??= label && name ? [plain(name, label)] : void 0;
+    if (!spots) return;
+    take(spots);
+    const color = play && !play.pathEdges.has(edge.id) ? COLOR.fadedMore : load?.critical ? DEFAULT : COLOR.muted;
+    for (const at of spots) for (let i = 0; i < at.text.length; i++) if (!onCard(scene, at.x + i, at.y)) grid.set(at.x + i, at.y, at.text[i], color);
+  });
+  for (const g of all) if (g.node.kind === "group") drawGroupHeading(grid, g, play ? "path" : void 0, frameOf2(g));
   for (const n of all) drawStackCount(grid, scene, n, options.overlay?.[n.node.id], lookOf(play, n.node.id));
   for (const packet of play?.packets ?? []) grid.set(packet.at.x, packet.at.y, packet.cut ? "\u2717" : "\u25A0", packet.error ? COLOR.fail : COLOR.pink);
   for (const n of all) {
@@ -6348,17 +8757,83 @@ function onCard(scene, x, y) {
   }
   return false;
 }
-function drawPath(grid, path, color, dash) {
+function drawPath(grid, path, color, dash2, heavy = false) {
   const { cells, dirs, head } = path;
-  const g = dash ? LINES[dash] : void 0;
+  const g = dash2 ? LINES[dash2] : void 0;
   for (let i = 0; i < cells.length - 1; i++) {
     const { x, y } = cells[i];
     const straight = dirs[i] === (N | S) || dirs[i] === (E | W);
     if (g && straight) grid.set(x, y, dirs[i] === (N | S) ? g.v : g.h, color);
-    else grid.line(x, y, dirs[i], color);
+    else grid.line(x, y, dirs[i], color, heavy);
   }
   const last = cells[cells.length - 1];
   grid.set(last.x, last.y, HEAD[head], color);
+}
+function edgeHeat(load) {
+  const u = load?.utilization;
+  if (load?.saturated || u !== void 0 && u >= 1) return COLOR.heatOver;
+  if (u === void 0 || u < 0.4) return void 0;
+  return u < 0.9 ? COLOR.heatWarm : COLOR.heatHot;
+}
+function loadChip(load) {
+  if (!load || !(load.rps > 0)) return "";
+  return load.latencyMs !== void 0 ? `${formatRps(load.rps)} \xB7 +${formatMs(load.latencyMs)}` : formatRps(load.rps);
+}
+function anchorsOf(path, label) {
+  const { cells, dirs } = path;
+  const runs = [];
+  for (let i = 0; i < cells.length - 1; ) {
+    let j = i;
+    while (j + 1 < cells.length - 1 && dirs[j + 1] === dirs[i]) j++;
+    runs.push({ from: i, length: j - i + 1, vertical: dirs[i] === (N | S) });
+    i = j + 1;
+  }
+  runs.sort((a, b) => b.length - a.length);
+  const rows = (at) => [0, -1, 1].map((dy) => ({ x: at.x, y: at.y + dy }));
+  const out = label ? rows(label) : [];
+  for (const r of runs) out.push(...rows(cells[r.from + Math.floor(r.length / 2)]));
+  if (runs.length === 0) out.push(...rows(cells[0]));
+  for (const r of runs) {
+    const mid = Math.floor(r.length / 2);
+    const order = Array.from({ length: r.length }, (_, k) => k).sort((a, b) => Math.abs(a - mid) - Math.abs(b - mid));
+    for (const k of order) {
+      const at = cells[r.from + k];
+      if (r.vertical) out.push(at, { ...at, y: at.y - 1 }, { ...at, side: "right" }, { ...at, side: "left" });
+      else if (k !== mid) out.push(...rows(at));
+    }
+  }
+  return out;
+}
+function clearOf({ cells, dirs }) {
+  const out = [];
+  for (let i = 0; i < cells.length - 1; ) {
+    let j = i;
+    while (j + 1 < cells.length - 1 && dirs[j + 1] === dirs[i]) j++;
+    if (dirs[i] === (E | W)) out.push(cells[i + Math.floor((j - i) / 2)]);
+    i = j + 1;
+  }
+  return out.flatMap((at) => [-2, -3, -4, -5, 2, 3, 4, 5].map((dy) => ({ x: at.x, y: at.y + dy })));
+}
+function blockedCells(grid, scene) {
+  const out = new Uint8Array(grid.columns * grid.rows);
+  const mark = (x, y) => {
+    if (grid.inside(x, y)) out[y * grid.columns + x] = 1;
+  };
+  for (const { node, rect } of scene.nodes.values()) {
+    if (node.kind !== "group") {
+      for (let y = rect.y; y < rect.y + rect.h; y++) for (let x = rect.x; x < rect.x + rect.w; x++) mark(x, y);
+      continue;
+    }
+    for (let x = rect.x; x < rect.x + rect.w; x++) {
+      mark(x, rect.y);
+      mark(x, rect.y + rect.h - 1);
+    }
+    for (let y = rect.y; y < rect.y + rect.h; y++) {
+      mark(rect.x, y);
+      mark(rect.x + rect.w - 1, y);
+    }
+  }
+  return out;
 }
 function baseColor(node, fallback) {
   const base = nodeBaseColor(node);
@@ -6374,10 +8849,10 @@ var HEAVY_LINES = {
   dashed: { h: "\u254D", v: "\u254F" },
   dotted: { h: "\u2505", v: "\u2507" }
 };
-function frame(grid, r, color, dash = "solid", heavy = false) {
+function frame(grid, r, color, dash2 = "solid", heavy = false) {
   const right = r.x + r.w - 1;
   const bottom = r.y + r.h - 1;
-  const { h: h2, v } = (heavy ? HEAVY_LINES : LINES)[dash];
+  const { h: h2, v } = (heavy ? HEAVY_LINES : LINES)[dash2];
   const [tl, tr, bl, br] = heavy ? "\u250F\u2513\u2517\u251B" : "\u256D\u256E\u2570\u256F";
   for (let x = r.x + 1; x < right; x++) {
     grid.set(x, r.y, h2, color);
@@ -6446,7 +8921,9 @@ function drawSystem(grid, { node, rect }, badge, look, selected) {
   const accent = look === "failing" ? COLOR.fail : look === "lit" || selected ? COLOR.pink : void 0;
   const status = badge?.status;
   const color = accent ?? fade(look, statusColor(status, baseColor(node, COLOR.line)));
-  const heat = look || !badge || badge.utilization === void 0 ? void 0 : heatOf({ utilization: badge.utilization, saturated: status === "saturated" });
+  const busy = look || !badge || badge.utilization === void 0 ? void 0 : { utilization: badge.utilization, saturated: status === "saturated" };
+  const heat = heatOf(busy);
+  const tint2 = tintOf(busy);
   const ink = heat !== void 0 ? COLOR.onColor : look === "off" ? COLOR.fadedMore : DEFAULT;
   const muted = heat !== void 0 ? COLOR.onColor : look === "off" ? COLOR.fadedMore : COLOR.muted;
   fill(grid, rect, DEFAULT, DEFAULT);
@@ -6468,11 +8945,11 @@ function drawSystem(grid, { node, rect }, badge, look, selected) {
   grid.text(left, rect.y + 4, text, ink, Infinity, heat);
   const bar = room - text.length - 1;
   if (bar < 4 || !Number.isFinite(badge.headroomRps) || badge.headroomRps <= 0) return;
-  const share = badge.sentRps / badge.headroomRps;
-  const filled = Math.max(share > 0 ? 1 : 0, Math.min(bar, Math.round(share * bar)));
+  const share2 = badge.sentRps / badge.headroomRps;
+  const filled = Math.max(share2 > 0 ? 1 : 0, Math.min(bar, Math.round(share2 * bar)));
   for (let i = 0; i < bar; i++) {
     const full = i < filled;
-    grid.set(left + text.length + 1 + i, rect.y + 4, full ? "\u2501" : "\u2500", heat !== void 0 ? COLOR.onColor : full ? ink : COLOR.muted, heat);
+    grid.set(left + text.length + 1 + i, rect.y + 4, full ? "\u2501" : "\u2500", heat !== void 0 ? COLOR.onColor : full ? tint2 ?? ink : COLOR.muted, heat);
   }
 }
 var TILE = { w: 5, h: 3 };
@@ -6482,6 +8959,11 @@ function heatOf(overlay) {
   if (overlay.saturated || u >= 1) return COLOR.heatOver;
   if (u >= 0.9) return COLOR.heatHot;
   return u >= 0.7 ? COLOR.heatWarm : void 0;
+}
+function tintOf(overlay) {
+  const u = overlay?.utilization;
+  if (!overlay || overlay.down || overlay.saturated || u === void 0) return void 0;
+  return u >= 0.4 && u < 0.7 ? COLOR.heatWarm : void 0;
 }
 var replicasOf2 = (node, overlay) => overlay?.replicas ?? node.replicas ?? 1;
 function stackRoom(grid, scene, { node, rect }) {
@@ -6522,6 +9004,7 @@ function drawCard(grid, scene, n, overlay, look, icons2) {
   const down = !!overlay?.down;
   const over = !down && !!overlay && (!!overlay.saturated || (overlay.utilization ?? 0) >= 1);
   const heat = look ? void 0 : heatOf(overlay);
+  const tint2 = look ? void 0 : tintOf(overlay);
   const accent = look === "failing" ? COLOR.fail : look === "lit" ? COLOR.pink : void 0;
   const color = accent ?? (down && !look ? COLOR.muted : over && !look ? COLOR.fail : fade(look, baseColor(node, COLOR.line)));
   const faded = look === "path" || look === "off" || down;
@@ -6529,7 +9012,7 @@ function drawCard(grid, scene, n, overlay, look, icons2) {
   const muted = heat !== void 0 ? COLOR.onColor : look === "off" ? COLOR.fadedMore : COLOR.muted;
   fill(grid, rect, DEFAULT, DEFAULT);
   if (heat !== void 0) fill(grid, { x: rect.x + 1, y: rect.y + 1, w: rect.w - 2, h: rect.h - 2 }, COLOR.onColor, heat);
-  frame(grid, rect, color, look === "off" || down ? "dotted" : accent ? "solid" : node.style?.dash ?? "solid", true);
+  frame(grid, rect, accent ?? tint2 ?? color, look === "off" || down ? "dotted" : accent ? "solid" : node.style?.dash ?? "solid", true);
   const icon = iconOf(node, icons2);
   const tiled = icon !== void 0 && rect.w >= 22;
   if (tiled) {
@@ -6544,11 +9027,12 @@ function drawCard(grid, scene, n, overlay, look, icons2) {
   const room = rect.x + rect.w - 2 - left;
   grid.text(left, rect.y + 1, fit(node.name, room), ink, Infinity, heat);
   grid.text(left, rect.y + 2, fit(node.techStack, room), muted, Infinity, heat);
-  const load = overlay ? loadRow(grid, { x: left, y: rect.y + 3, room }, node, overlay, look, heat, stackShown(grid, scene, n, overlay)) : false;
+  const load = overlay ? loadRow(grid, { x: left, y: rect.y + 3, room }, node, overlay, look, heat, tint2, stackShown(grid, scene, n, overlay)) : false;
   if (!load && node.ownerTeam) grid.text(left, rect.y + 3, fit(`Team: ${node.ownerTeam}`, room), muted, Infinity, heat);
   if (node.critical) grid.text(rect.x + rect.w - 4, rect.y, " ! ", look === "off" ? muted : COLOR.critical);
+  if (overlay?.bottleneck && !look && !down && rect.w >= 10) grid.text(rect.x + 2, rect.y, fit(" BOTTLENECK ", rect.w - (node.critical ? 8 : 4)), COLOR.onColor, Infinity, COLOR.heatOver);
 }
-function loadRow(grid, at, node, o, look, heat, stack) {
+function loadRow(grid, at, node, o, look, heat, tint2, stack) {
   const u = o.utilization;
   const replicas = replicasOf2(node, o);
   const parts = [
@@ -6567,7 +9051,7 @@ function loadRow(grid, at, node, o, look, heat, stack) {
   const filled = Math.max(u > 0 ? 1 : 0, Math.min(bar, Math.round(u * bar)));
   for (let i = 0; i < bar; i++) {
     const full = i < filled;
-    grid.set(at.x + text.length + 1 + i, at.y, full ? "\u2501" : "\u2500", on ? COLOR.onColor : full ? ink : COLOR.muted, heat);
+    grid.set(at.x + text.length + 1 + i, at.y, full ? "\u2501" : "\u2500", on ? COLOR.onColor : full ? tint2 ?? ink : COLOR.muted, heat);
   }
   return true;
 }
@@ -6579,16 +9063,16 @@ function drawNote(grid, { node, rect }, look) {
   grid.text(rect.x + 2, rect.y + 1, fit(node.name, room), look === "off" ? COLOR.fadedMore : DEFAULT);
   const words = (node.description ?? "").split(/\s+/).filter(Boolean);
   let y = rect.y + 2;
-  let line = "";
+  let line2 = "";
   for (const word of words) {
     if (y >= rect.y + rect.h - 1) break;
-    if (line && line.length + 1 + word.length > room) {
-      grid.text(rect.x + 2, y++, line, muted);
-      line = "";
+    if (line2 && line2.length + 1 + word.length > room) {
+      grid.text(rect.x + 2, y++, line2, muted);
+      line2 = "";
     }
-    line = line ? `${line} ${word}` : fit(word, room);
+    line2 = line2 ? `${line2} ${word}` : fit(word, room);
   }
-  if (line && y < rect.y + rect.h - 1) grid.text(rect.x + 2, y, line, muted);
+  if (line2 && y < rect.y + rect.h - 1) grid.text(rect.x + 2, y, line2, muted);
 }
 function drawLegend(grid, scene) {
   const legend = scene.diagram.legend;
@@ -6660,9 +9144,9 @@ function playAt(scene, steps, index, progress, tick = 0) {
     const error = isErrorStep(step);
     const roundTrip = step.executionType === "SYNC_REQUEST_RESPONSE" && !failed;
     edges.push({ path, error, failed, flowing: progress >= 100 && !failed });
-    const share = failed ? Math.min(progress, FAIL_AT) / 100 : roundTrip ? progress <= 50 ? progress / 50 : 1 - (progress - 50) / 50 : progress / 100;
+    const share2 = failed ? Math.min(progress, FAIL_AT) / 100 : roundTrip ? progress <= 50 ? progress / 50 : 1 - (progress - 50) / 50 : progress / 100;
     const last = path.cells.length - 1;
-    const at = path.cells[Math.max(0, Math.min(last, Math.round(share * last)))];
+    const at = path.cells[Math.max(0, Math.min(last, Math.round(share2 * last)))];
     if (failed && progress >= FAIL_AT) packets.push({ at, error: true, cut: true });
     else if (progress < 100) packets.push({ at, error: error && (!roundTrip || progress > 50), cut: false });
   }
@@ -6713,8 +9197,8 @@ function buildSequenceScene(diagram, useCase, scenario, columns) {
         right = Math.max(right, xs[lo] + need + 3);
         continue;
       }
-      const short = xs[lo] + need - xs[hi];
-      if (short > 0) for (let i = hi; i < xs.length; i++) xs[i] += short;
+      const short2 = xs[lo] + need - xs[hi];
+      if (short2 > 0) for (let i = hi; i < xs.length; i++) xs[i] += short2;
     }
     right = Math.max(right, xs.length ? xs[xs.length - 1] + Math.ceil(widths[widths.length - 1] / 2) : 0);
     return { xs, width: right + margin + 1 };
@@ -6873,12 +9357,2226 @@ function drawPacket(grid, scene, step, progress) {
   const response2 = scene.messages.find((r) => r.message.step === step && r.message.kind === "response");
   const failed = !!step.failed;
   const roundTrip = !!response2 && !failed;
-  const [row, share] = failed ? [request2, Math.min(progress, FAIL_AT2) / 100] : roundTrip && progress > 50 ? [response2, (progress - 50) / 50] : [request2, roundTrip ? progress / 50 : progress / 100];
+  const [row, share2] = failed ? [request2, Math.min(progress, FAIL_AT2) / 100] : roundTrip && progress > 50 ? [response2, (progress - 50) / 50] : [request2, roundTrip ? progress / 50 : progress / 100];
   const cells = pathOf(scene, row);
   if (cells.length === 0) return;
-  const at = cells[Math.max(0, Math.min(cells.length - 1, Math.round(share * (cells.length - 1))))];
+  const at = cells[Math.max(0, Math.min(cells.length - 1, Math.round(share2 * (cells.length - 1))))];
   const cutOff = failed && progress >= FAIL_AT2;
   grid.set(at.x, at.y, cutOff ? "\u2717" : "\u25A0", row.message.error || cutOff ? COLOR.fail : COLOR.pink);
+}
+
+// ../frontend/src/hld/hld.ts
+var HOT_UTILIZATION = 0.7;
+function selectorLabel(s) {
+  if ("node" in s) return s.node;
+  if ("tech" in s) return `[${s.tech}]`;
+  if ("anyOf" in s) return s.anyOf.map(selectorLabel).join(" or ");
+  if ("consistency" in s) return `any ${s.consistency} store`;
+  return `any ${s.kind}`;
+}
+var formatNumber = (n) => Number.isInteger(n) ? String(n) : String(Number(n.toFixed(3)));
+var requirementLabel = requirementName;
+var REQUIREMENT_CATEGORY = {
+  latency: "latency",
+  availability: "availability",
+  durable: "durability",
+  survive: "resilience",
+  cost: "cost",
+  lag: "latency"
+};
+function callLabel(target, match) {
+  if (match?.op !== void 0) return `uses ${match.op} on ${selectorLabel(target)}`;
+  if (match?.header !== void 0) return `sends header ${match.header} to ${selectorLabel(target)}`;
+  if (match?.method !== void 0) return `calls ${selectorLabel(target)} with ${match.method} ${match.path ?? ""}`.trimEnd();
+  return `calls ${selectorLabel(target)}`;
+}
+function assertionLabel(a) {
+  const uc = "useCase" in a ? `"${a.useCase}"${"scenario" in a && a.scenario && a.kind !== "hasScenario" ? ` scenario "${a.scenario}"` : ""}` : "";
+  switch (a.kind) {
+    case "calls":
+      return `${uc} ${a.quantifier === "every" ? "every scenario " : a.quantifier === "never" ? "never " : ""}${callLabel(a.target, a.match)}`;
+    case "before":
+      return `${uc} ${callLabel(a.first, a.match)} before ${selectorLabel(a.then)}`;
+    case "beforeResponding":
+      return `${uc} ${callLabel(a.target, a.match)} before responding`;
+    case "writesBeforeResponding":
+      return `${uc} writes ${selectorLabel(a.target)} before responding`;
+    case "responds":
+      return `${uc} responds ${a.status}`;
+    case "hasScenario":
+      return `${uc} has scenario "${a.scenario}"`;
+    case "handlesFailure":
+      return `${uc} handles failure of ${selectorLabel(a.target)}`;
+    case "noPath":
+      return `no path from ${selectorLabel(a.from)} to ${selectorLabel(a.to)}`;
+    case "replicas":
+      return `${selectorLabel(a.target)} has replicas >= ${a.min}`;
+    case "neverWaits":
+      return `${uc} never waits for ${selectorLabel(a.target)}`;
+    case "after":
+      return `${uc} ${callLabel(a.target, a.match)} after ${selectorLabel(a.after)}`;
+    case "senderCalls":
+      return `${a.useCase ? `in "${a.useCase}" ` : ""}${selectorLabel(a.from)} ${a.quantifier === "never" ? "never calls" : "calls"} ${selectorLabel(a.to)}`;
+    case "startsAt":
+      return `${uc} starts at ${selectorLabel(a.target)}`;
+  }
+}
+var sameLoc = (a, b) => !!a && a.line === b.line && a.file === b.file;
+function resultFor(tests, loc, name) {
+  return tests.find((t) => sameLoc(t.loc, loc)) ?? tests.find((t) => t.name === name);
+}
+var statusOf = (result) => result ? result.passed ? "pass" : "fail" : "unchecked";
+var components2 = (d) => d.nodes.filter((n) => n.kind === "component");
+function scenarioShares(useCase, diagram) {
+  const entry = diagram.traffic?.find((t) => t.useCase === useCase.name);
+  if (!entry) return void 0;
+  const shares = /* @__PURE__ */ new Map();
+  const mix2 = (entry.mix ?? []).filter((m) => useCase.scenarios.some((s) => s.name === m.scenario));
+  const total = mix2.reduce((sum, m) => sum + m.share, 0);
+  if (total > 0) for (const m of mix2) shares.set(m.scenario, m.share / total);
+  else if (useCase.scenarios[0]) shares.set(useCase.scenarios[0].name, 1);
+  return shares;
+}
+function entryResponse(scenario) {
+  const first = scenario.steps[0];
+  if (!first) return {};
+  if (first.failed) return { status: "failed" };
+  return { status: first.statusCode !== void 0 ? String(first.statusCode) : void 0, body: first.responseBody || void 0 };
+}
+function buildApis(diagram, name) {
+  const groups = /* @__PURE__ */ new Map();
+  for (const useCase of diagram.useCases) {
+    if (!useCase.endpoint) continue;
+    const key = useCase.endpointGroup ?? useCase.endpoint;
+    let group = groups.get(key);
+    if (!group) {
+      const [method, ...path] = key.split(" ");
+      const first = useCase.steps[0];
+      group = { endpoint: key, method, path: path.join(" "), service: first ? name(first.toServiceId) : void 0, operations: [] };
+      groups.set(key, group);
+    }
+    group.operations.push({
+      useCaseId: useCase.id,
+      useCase: useCase.name,
+      endpoint: useCase.endpoint,
+      request: useCase.steps[0]?.requestBody || void 0,
+      responses: useCase.scenarios.map((s) => ({ scenario: s.name, outcome: s.outcome, ...entryResponse(s) }))
+    });
+  }
+  return [...groups.values()];
+}
+function lacksErrorHandling(useCase) {
+  return useCase.scenarios.length > 0 && useCase.scenarios.every((s) => s.outcome === "success" && !s.steps.some((st) => st.failed));
+}
+function hld(diagram, analysis, tests = []) {
+  const byId = new Map(diagram.nodes.map((n) => [n.id, n]));
+  const name = (id) => byId.get(id)?.name ?? id;
+  const nodes = components2(diagram);
+  const nodeAnalysis = new Map(analysis?.nodes.map((n) => [n.id, n]));
+  const sections = [];
+  const teams = [...new Set(nodes.map((n) => n.ownerTeam).filter((t) => !!t))];
+  if (nodes.length > 0 || diagram.summary) {
+    sections.push({ kind: "overview", title: "Overview", summary: diagram.summary, components: nodes.length, useCases: diagram.useCases.length, teams });
+  }
+  const functional = diagram.useCases.map((u) => ({
+    useCaseId: u.id,
+    name: u.name,
+    description: u.description,
+    scenarios: u.scenarios.map((s) => ({ id: s.id, name: s.name, outcome: s.outcome, condition: s.condition }))
+  }));
+  const nonFunctional = (diagram.requirements ?? []).map((r) => {
+    const label = requirementLabel(r);
+    const result = resultFor(tests, r.loc, label);
+    return { label, category: REQUIREMENT_CATEGORY[r.kind], status: statusOf(result), measured: result?.message, hint: result?.passed ? void 0 : result?.hint, loc: r.loc };
+  });
+  const flowTests = (diagram.tests ?? []).map((t) => {
+    const result = resultFor(tests, t.loc, t.name);
+    return { name: t.name, assertions: t.assertions.map(assertionLabel), status: statusOf(result), measured: result?.message, hint: result?.passed ? void 0 : result?.hint, loc: t.loc };
+  });
+  if (functional.length || nonFunctional.length || flowTests.length) {
+    sections.push({ kind: "requirements", title: "Requirements", functional, nonFunctional, flowTests });
+  }
+  const traffic = (diagram.traffic ?? []).map((t) => ({ useCase: t.useCase, rps: t.rps, ...t.avgRps !== void 0 ? { avgRps: t.avgRps } : {}, mix: t.mix ?? [] }));
+  const load = (analysis?.nodes ?? []).filter((n) => n.kind !== "client").map((n) => ({
+    id: n.id,
+    name: name(n.id),
+    loadRps: n.loadRps,
+    capacityRps: n.capacityRps,
+    utilization: n.utilization,
+    saturated: n.saturated,
+    replicas: n.replicas,
+    shards: n.shards,
+    readLoadRps: n.readLoadRps,
+    readCapacityRps: n.readCapacityRps,
+    readUtilization: n.readUtilization,
+    writeLoadRps: n.writeLoadRps,
+    writeCapacityRps: n.writeCapacityRps,
+    writeUtilization: n.writeUtilization,
+    writeScaling: n.writeScaling,
+    bandwidthLoadMBps: n.bandwidthLoadMBps,
+    bandwidthCapacityMBps: n.bandwidthCapacityMBps,
+    bandwidthUtilization: n.bandwidthUtilization,
+    egressGbPerMonth: n.egressGbPerMonth,
+    egressUsd: n.egressUsd,
+    costUsd: n.costUsd
+  }));
+  if (traffic.length || load.length) {
+    sections.push({ kind: "capacity", title: "Capacity estimates", traffic, load, totalCostUsd: analysis?.totalCostUsd, totalEgressUsd: analysis?.totalEgressUsd });
+  }
+  const entities = diagram.entities ?? [];
+  const group = (n) => n.parent ? byId.get(n.parent)?.name : void 0;
+  const componentRows = nodes.map((n) => ({
+    id: n.id,
+    name: n.name,
+    tech: n.implicit ? void 0 : n.techStack,
+    kind: nodeAnalysis.get(n.id)?.kind ?? kindOf(n),
+    team: n.ownerTeam,
+    replicas: nodeAnalysis.get(n.id)?.replicas ?? n.replicas ?? 1,
+    responsibility: n.description,
+    group: group(n),
+    entities: entities.filter((e) => e.store === n.id).map((e) => e.name)
+  }));
+  if (componentRows.length) sections.push({ kind: "components", title: "Components", components: componentRows });
+  if (entities.length) {
+    sections.push({ kind: "dataModel", title: "Data model", entities: entities.map((e) => ({ ...e, storeName: e.store ? name(e.store) : void 0 })) });
+  }
+  const endpoints = buildApis(diagram, name);
+  if (endpoints.length) sections.push({ kind: "apis", title: "APIs", endpoints });
+  const useCaseAnalysis = new Map(analysis?.useCases.map((u) => [u.id, u]));
+  const scenarioUseCases = diagram.useCases.map((u) => {
+    const ua = useCaseAnalysis.get(u.id);
+    const shares = scenarioShares(u, diagram);
+    return {
+      useCaseId: u.id,
+      name: u.name,
+      description: u.description,
+      endpoint: u.endpoint,
+      rps: ua?.rps ?? diagram.traffic?.find((t) => t.useCase === u.name)?.rps,
+      scenarios: u.scenarios.map((s) => {
+        const sa = ua?.scenarios.find((x) => x.id === s.id);
+        return {
+          id: s.id,
+          name: s.name,
+          outcome: s.outcome,
+          condition: s.condition,
+          share: sa?.share ?? (shares ? shares.get(s.name) ?? 0 : void 0),
+          latency: sa?.percentiles,
+          meanMs: sa?.meanMs,
+          steps: s.steps.length
+        };
+      })
+    };
+  });
+  if (scenarioUseCases.length) sections.push({ kind: "scenarios", title: "Scenarios", useCases: scenarioUseCases });
+  if (diagram.decisions?.length) sections.push({ kind: "decisions", title: "Decisions", decisions: diagram.decisions });
+  const risks = [];
+  for (const r of nonFunctional.filter((r2) => r2.status === "fail")) {
+    risks.push({ severity: "high", kind: "requirement", title: `Requirement not met: ${r.label}`, detail: r.measured, hint: r.hint });
+  }
+  for (const t of flowTests.filter((t2) => t2.status === "fail")) {
+    risks.push({ severity: "high", kind: "test", title: `Test failing: ${t.name}`, detail: t.measured, hint: t.hint });
+  }
+  for (const n of load) {
+    const pct = `${Math.round(n.utilization * 100)}%`;
+    if (n.saturated) {
+      const bandwidth = n.bandwidthUtilization >= n.utilization && n.bandwidthUtilization > 0;
+      risks.push({
+        severity: "high",
+        kind: "saturated",
+        title: `${n.name} is saturated`,
+        detail: bandwidth ? `${Math.round(n.bandwidthLoadMBps).toLocaleString("en-US")} MB/s of payloads against ${Math.round(n.bandwidthCapacityMBps).toLocaleString("en-US")} MB/s of bandwidth (${pct})` : `${formatRps2(n.loadRps)} against a capacity of ${formatRps2(n.capacityRps)} (${pct})`,
+        hint: bandwidth ? "Send the bytes around it (presigned URLs to storage, a CDN), or add replicas." : "Add replicas, cache in front of it, or move work async."
+      });
+    } else if (n.utilization > HOT_UTILIZATION) {
+      risks.push({ severity: "medium", kind: "hot", title: `${n.name} runs hot`, detail: `${pct} utilisation; latency climbs steeply near saturation`, hint: "Add headroom with another replica." });
+    }
+  }
+  for (const id of analysis?.singlePointsOfFailure ?? []) {
+    const node = byId.get(id);
+    risks.push({ severity: "medium", kind: "spof", title: `Single point of failure: ${name(id)}${node && !node.implicit ? ` (${node.techStack})` : ""}`, hint: "Add a replica or a fallback scenario." });
+  }
+  for (const u of diagram.useCases.filter(lacksErrorHandling)) {
+    risks.push({ severity: "low", kind: "no-error-handling", title: `${u.name} has no error scenario`, detail: "Nothing describes what happens when a call fails or is rejected.", hint: "Add an alt branch with a -x call or a 4xx/5xx response." });
+  }
+  for (const w of analysis?.warnings ?? []) risks.push({ severity: "low", kind: "warning", title: w });
+  if (risks.length) sections.push({ kind: "risks", title: "Risks", risks });
+  return { title: diagram.title ?? "Architecture", summary: diagram.summary, checked: !!analysis || tests.length > 0, sections, diagram };
+}
+function formatRps2(rps) {
+  if (rps >= 1e6) return `${formatNumber(Number((rps / 1e6).toFixed(2)))}M rps`;
+  if (rps >= 1e3) return `${formatNumber(Number((rps / 1e3).toFixed(2)))}k rps`;
+  return `${formatNumber(Number(rps.toFixed(2)))} rps`;
+}
+function formatTraffic2(rps, avgRps) {
+  if (avgRps === void 0 || avgRps === rps) return formatRps2(rps);
+  return `avg ${formatRps2(avgRps).replace(/ rps$/, "")} \xB7 peak ${formatRps2(rps)}`;
+}
+var formatMs2 = (ms) => `${ms >= 100 ? Math.round(ms) : formatNumber(Number(ms.toFixed(1)))} ms`;
+var formatPercent2 = (fraction2) => `${formatNumber(Number((fraction2 * 100).toFixed(1)))}%`;
+var formatUsd2 = (usd4) => `$${Math.round(usd4).toLocaleString("en-US")}`;
+function formatGb(gb) {
+  const n = (x, digits) => Number(x.toFixed(digits)).toLocaleString("en-US");
+  return gb >= 1e3 ? `${n(gb / 1e3, 1)} TB` : `${n(gb, gb < 10 ? 1 : 0)} GB`;
+}
+function accessText(n, access) {
+  const [load, capacity, utilization] = access === "read" ? [n.readLoadRps, n.readCapacityRps, n.readUtilization] : [n.writeLoadRps, n.writeCapacityRps, n.writeUtilization];
+  return load > 0 ? `${formatRps2(load)} of ${formatRps2(capacity)} (${formatPercent2(utilization)})` : "\u2014";
+}
+var replicasText = (n) => n.shards > 1 ? `${n.replicas} \xD7 ${n.shards} shards` : String(n.replicas);
+var egressText = (n) => n.egressGbPerMonth > 0 ? `${formatGb(n.egressGbPerMonth)}, ${formatUsd2(n.egressUsd)}` : "\u2014";
+var LOAD_HEADINGS = ["Component", "Reads", "Writes", "Utilisation", "Replicas", "Egress / month", "Cost / month"];
+var totalCostText = (totalUsd, egressUsd = 0) => `${formatUsd2(totalUsd)} / month${egressUsd > 0 ? ` (${formatUsd2(egressUsd)} of it egress)` : ""}`;
+var plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+function overviewFacts(s) {
+  return [plural(s.components, "component"), plural(s.useCases, "use case"), s.teams.length ? `teams: ${s.teams.join(", ")}` : ""].filter(Boolean).join(" \xB7 ");
+}
+function responseText(r) {
+  return [r.status, r.body].filter(Boolean).join(" ") || "\u2014";
+}
+
+// src/render/ui/data.ts
+var usd2 = (x) => formatUsd(x).replace("/month", "");
+function tabBarPanel(active, failing) {
+  const tabs = [
+    ["diagram", "Diagram"],
+    ["analysis", "Analysis"],
+    ["hld", "HLD"]
+  ];
+  return {
+    kind: "tabs",
+    active,
+    tabs: tabs.map(([id, label], i) => ({ id, label, hotkey: String(i + 1), ...id === "hld" && failing > 0 ? { badge: { text: `\u2717 ${failing}`, tone: "bad" } } : {} })),
+    open: { id: "open", icon: "open", label: "Open in Proschi", variant: "quiet" }
+  };
+}
+var FORMAT = { JSON: "JSON", XML: "XML", FREE_TEXT: "Text" };
+function card(s, steps, name) {
+  const call = `${s.httpMethod} ${s.endpoint}`.trim();
+  const error = isErrorStep(s);
+  const exec = s.executionType === "ASYNC_FIRE_AND_FORGET" ? "fire" : s.executionType === "ASYNC_REQUEST_RESPONSE" ? "async" : "sync";
+  return {
+    number: steps.indexOf(s) + 1,
+    name: s.stepName,
+    from: name(s.fromServiceId),
+    to: name(s.toServiceId),
+    ...call && call !== s.stepName ? { call } : {},
+    ...s.description ? { description: s.description } : {},
+    exec,
+    ...s.failed ? { failed: true } : {},
+    ...(s.statusCode ?? 0) >= 400 ? { status: s.statusCode } : {},
+    ...error ? { error: true } : {},
+    ...s.requestBody ? { request: { format: FORMAT[s.requestFormat], text: s.requestBody } } : {},
+    ...s.responseBody && exec !== "fire" ? { response: { format: FORMAT[s.responseFormat], text: s.responseBody, ...s.statusCode !== void 0 ? { status: s.statusCode } : {}, ...error ? { error: true } : {} } } : {}
+  };
+}
+function stepCardsOf(scenario, name) {
+  const steps = scenario.steps;
+  return steps.map((_, i) => currentStepsOf(steps, i).map((s) => card(s, steps, name)));
+}
+var splits = (n) => n.writeLoadRps > 0 && (n.writeScaling === "shards" || n.readCapacityRps !== n.writeCapacityRps);
+var bare = (rps) => formatRps(rps).replace(" rps", "");
+var exampleUseCase = (d) => JSON.stringify(d.useCases[0]?.name ?? "Checkout");
+function trafficExample(d) {
+  const s = d.useCases[0]?.scenarios ?? [];
+  const mix2 = s.length > 1 && !s.some((x) => x.name.includes(" \u203A ")) ? `  mix ${JSON.stringify(s[0].name)} 90%, ${JSON.stringify(s[1].name)} 10%` : "";
+  return `traffic {
+  ${exampleUseCase(d)} 1k rps${mix2}
+}`;
+}
+var whatIfExample = (d) => `whatif "Launch day" {
+  traffic ${exampleUseCase(d)} x3
+}`;
+function analysisPage(doc, whatIfs) {
+  const analysis = doc.analysis;
+  if (!analysis) {
+    return {
+      kind: "page",
+      blocks: [
+        { type: "paragraph", text: "No traffic yet: add a traffic { \u2026 } block and Proschi estimates load, latency, availability and cost for every node, e.g." },
+        { type: "code", text: trafficExample(doc.diagram) }
+      ]
+    };
+  }
+  const blocks = [];
+  const nodes = analysis.nodes.filter((n) => n.kind !== "client" && n.kind !== "other");
+  const saturated = nodes.filter((n) => n.saturated || n.queue !== void 0 && n.queue.utilization >= 1).length;
+  const spofs = analysis.singlePointsOfFailure;
+  blocks.push({
+    type: "stats",
+    items: [
+      { label: analysis.totalEgressUsd > 0 ? `Total cost (incl. ${usd2(analysis.totalEgressUsd)} egress)` : "Total cost", value: formatUsd(analysis.totalCostUsd) },
+      { label: "Saturated nodes", value: String(saturated), tone: saturated ? "bad" : "good" },
+      { label: "Single points of failure", value: String(spofs.length), tone: spofs.length ? "warn" : "good" },
+      { label: "Use cases with traffic", value: String(analysis.useCases.filter((u) => u.rps > 0).length) }
+    ]
+  });
+  const busiest = busiestOf(analysis);
+  if (busiest) {
+    const u = busiest.utilization;
+    const bottleneck = busiest.saturated || u >= BOTTLENECK_FROM;
+    const headroom = u >= 1 ? "past its capacity: requests are dropped" : `${(Math.floor(1 / u * 10) / 10).toFixed(1)}\xD7 headroom before it saturates`;
+    blocks.push({ type: "callout", tone: bottleneck ? "bad" : "info", chip: bottleneck ? "BOTTLENECK" : "BUSIEST", text: [{ text: busiest.id, bold: true }, { text: ` at ${formatPercent(u)}: ${headroom}.` }] });
+  }
+  for (const w of analysis.warnings) blocks.push({ type: "callout", tone: "warn", text: w });
+  blocks.push({ type: "heading", text: "Nodes" });
+  const rows = [];
+  for (const n of nodes) {
+    const tone2 = n.saturated ? "bad" : n.utilization > HOT ? "warn" : void 0;
+    rows.push({
+      cells: [
+        [{ text: n.id, bold: true }, ...n.replicas > 1 ? [{ text: ` \xD7${n.replicas}`, tone: "muted" }] : []],
+        splits(n) ? [{ text: "R ", tone: "muted" }, { text: bare(n.readLoadRps) }, { text: ` / ${formatRps(n.readCapacityRps)}`, tone: "muted" }] : [{ text: bare(n.loadRps) }, { text: ` / ${formatRps(n.capacityRps)}`, tone: "muted" }],
+        { bar: n.utilization, text: formatPercent(n.utilization), ...tone2 ? { tone: tone2 } : {} },
+        formatMs(n.latencyMs),
+        formatAvailability(n.availability),
+        `${usd2(n.costUsd)}${n.egressUsd > 0 ? ` +${usd2(n.egressUsd)}` : ""}`
+      ]
+    });
+    if (splits(n)) {
+      rows.push({ sub: true, cells: [n.shards > 1 ? `${n.shards} shards` : "", [{ text: "W " }, { text: bare(n.writeLoadRps) }, { text: ` / ${formatRps(n.writeCapacityRps)}` }], `R ${formatPercent(n.readUtilization)} \xB7 W ${formatPercent(n.writeUtilization)}`] });
+    }
+  }
+  blocks.push({
+    type: "table",
+    columns: [{ title: "Node" }, { title: "Load / capacity" }, { title: "Utilisation", drop: 1 }, { title: "Latency", align: "right", drop: 2 }, { title: "Availability", align: "right", drop: 3 }, { title: "Cost", align: "right", drop: 4 }],
+    rows
+  });
+  const queues = analysis.nodes.filter((n) => n.queue);
+  if (queues.length) {
+    blocks.push({ type: "heading", text: "Queues" });
+    blocks.push({
+      type: "table",
+      columns: [{ title: "Queue" }, { title: "In / drain" }, { title: "Consumers", align: "right", drop: 1 }, { title: "Backlog or lag", align: "right" }],
+      rows: queues.map((n) => {
+        const q = n.queue;
+        return {
+          cells: [
+            [{ text: n.id, bold: true }],
+            `${bare(q.inflowRps)} / ${formatRps(q.drainRps)}`,
+            Number.isFinite(q.utilization) ? formatPercent(q.utilization) : "\u2014",
+            q.backlogPerHour > 0 ? [{ text: `+${formatCount(q.backlogPerHour)} msgs/h`, tone: "bad" }] : `lag ${formatDuration(q.lagMs)}`
+          ]
+        };
+      })
+    });
+  }
+  if (analysis.useCases.length) {
+    blocks.push({ type: "heading", text: "Use cases" });
+    const rows2 = [];
+    for (const u of analysis.useCases) {
+      rows2.push({ cells: [[{ text: u.name, bold: true }], u.rps > 0 ? formatTraffic(u.rps, u.avgRps) : [{ text: "no traffic", tone: "muted" }], ...["p50", "p95", "p99", "p999"].map((p) => formatMs(u.percentiles[p])), formatAvailability(u.availability)] });
+      if (u.scenarios.length > 1) {
+        for (const s of u.scenarios) rows2.push({ sub: true, dim: !(s.share > 0), cells: [s.name, `${formatPercent(s.share)} \xB7 mean ${formatMs(s.meanMs)}`, ...["p50", "p95", "p99", "p999"].map((p) => formatMs(s.percentiles[p])), ""] });
+      }
+    }
+    blocks.push({
+      type: "table",
+      columns: [{ title: "Use case" }, { title: "Traffic", drop: 1 }, { title: "p50", align: "right", drop: 4 }, { title: "p95", align: "right", drop: 5 }, { title: "p99", align: "right" }, { title: "p99.9", align: "right", drop: 3 }, { title: "Avail", align: "right", drop: 2 }],
+      rows: rows2
+    });
+  }
+  const b = costBreakdown(doc.root, analysis);
+  const sections = [
+    ["Team", b.unowned ? [...b.teams, b.unowned] : b.teams],
+    ["Group", b.groups],
+    ["Tag", b.tags]
+  ];
+  if (sections.some(([, r]) => r.length > 0)) {
+    const budgets = /* @__PURE__ */ new Map();
+    for (const r of doc.root.requirements ?? []) {
+      if (r.kind !== "cost" || !r.scope) continue;
+      budgets.set("team" in r.scope ? `@${r.scope.team}` : "tag" in r.scope ? `.${r.scope.tag}` : r.scope.group, r.maxUsdPerMonth);
+    }
+    blocks.push({ type: "heading", text: "Cost breakdown" });
+    blocks.push({
+      type: "table",
+      columns: [{ title: "By", drop: 2 }, { title: "Name" }, { title: "Cost", align: "right" }, { title: "Share", align: "right", drop: 3 }, { title: "Budget", align: "right", drop: 1 }, { title: "Nodes", drop: 4 }],
+      rows: sections.flatMap(
+        ([by, shares]) => shares.map((s, i) => {
+          const budget2 = budgets.get(s.id);
+          const over = budget2 !== void 0 && s.costUsd > budget2;
+          return {
+            cells: [
+              [{ text: i === 0 ? by : "", tone: "muted" }],
+              [{ text: s.label, bold: true }],
+              usd2(s.costUsd),
+              b.totalCostUsd > 0 ? formatPercent(s.costUsd / b.totalCostUsd) : "\u2014",
+              budget2 === void 0 ? [{ text: "\u2014", tone: "muted" }] : [{ text: `${usd2(budget2)}${over ? " over" : ""}`, tone: over ? "bad" : "good" }],
+              [{ text: s.nodes.join(", "), tone: "muted" }]
+            ]
+          };
+        })
+      )
+    });
+  }
+  if (spofs.length) {
+    blocks.push({ type: "heading", text: "Single points of failure" });
+    blocks.push({ type: "callout", tone: "warn", text: [{ text: spofs.join(", "), bold: true }, { text: ": one replica, and a use case cannot do without it. Add x2, or a fallback scenario that calls it with -x and still completes." }] });
+  }
+  blocks.push({ type: "paragraph", small: true, text: "Teaching numbers from default profiles per technology and a simple queueing model; override them with capacity { \u2026 }." });
+  blocks.push(...whatIfBlocks(doc, whatIfs ?? runWhatIfs(doc.root)));
+  return { kind: "page", blocks };
+}
+var deltaTone = (r) => r.tone === "better" ? "good" : r.tone === "worse" ? "bad" : void 0;
+function whatIfBlocks(doc, results) {
+  const a = headlineOf(doc.analysis);
+  const blocks = [{ type: "heading", text: "What-ifs" }];
+  if (results.length === 0) {
+    blocks.push({ type: "paragraph", small: true, text: "None saved yet: a whatif block runs the design again with more traffic or nodes down, e.g." });
+    blocks.push({ type: "code", text: whatIfExample(doc.diagram) });
+  } else {
+    const arrow2 = (r, up, down) => {
+      const tone2 = deltaTone(r);
+      const changed = r.change !== "same" && r.before !== r.after;
+      return [{ text: changed && r.tone !== "same" ? `${r.after} ${r.tone === "better" ? up : down}` : r.after, ...tone2 ? { tone: tone2 } : changed ? {} : { tone: "muted" } }];
+    };
+    blocks.push({
+      type: "table",
+      columns: [{ title: "What-if" }, { title: "Result" }, { title: "Worst p99", align: "right" }, { title: "Avail", align: "right", drop: 2 }, { title: "Cost", align: "right", drop: 1 }],
+      rows: results.map(
+        (r) => ({
+          cells: [
+            [{ text: r.name, bold: true }],
+            [{ text: r.passed ? "pass" : "fail", chip: r.passed ? "good" : "bad" }],
+            arrow2(p99Row("", a.p99Ms, r.headline.p99Ms), "\u2193", "\u2191"),
+            arrow2(availabilityRow("", a.availability, r.headline.availability), "\u2191", "\u2193"),
+            arrow2(costRow(a.costUsd, r.headline.costUsd), "\u2193", "\u2191")
+          ]
+        })
+      )
+    });
+    for (const text of results.flatMap((r) => r.warnings)) blocks.push({ type: "callout", tone: "warn", text });
+  }
+  blocks.push({ type: "controls", items: [{ control: { id: "explore-whatifs", icon: "open", label: "Explore what-ifs in Proschi" } }] });
+  return blocks;
+}
+var STATUS2 = {
+  pass: [{ text: "pass", chip: "good" }],
+  fail: [{ text: "fail", chip: "bad" }],
+  unchecked: [{ text: "not checked", tone: "muted" }]
+};
+var measured = (text, hint) => [...text ? [{ text }] : [{ text: "\u2014", tone: "muted" }], ...hint ? [{ text: `  Fix: ${hint}`, tone: "warn" }] : []];
+var dash = (text) => text === void 0 || text === "" ? [{ text: "\u2014", tone: "muted" }] : [{ text: String(text) }];
+var RISK_TONE = { high: "bad", medium: "warn", low: "info" };
+var playsCaption = (others = 0) => `The Diagram tab's player plays it${others > 0 ? ` and the other ${others === 1 ? "scenario" : `${others} scenarios`}` : ""}.`;
+var HLD_SUBTITLE = "High-level design, generated from the model and its simulation";
+function hldVerdict(doc) {
+  const out = [];
+  const checks = doc.sections.flatMap((s) => s.kind === "requirements" ? [...s.nonFunctional, ...s.flowTests] : []);
+  const failing = checks.filter((r) => r.status === "fail").length;
+  const checked = checks.filter((r) => r.status !== "unchecked").length;
+  if (checked) out.push(failing ? { tone: "bad", text: [{ text: `${failing} of ${checked} checks fail`, bold: true }, { text: `: section ${doc.sections.findIndex((s) => s.kind === "requirements") + 1}, Requirements, has the measured values and their fixes.` }] } : { tone: "good", text: [{ text: `All ${checked} checks pass`, bold: true }, { text: " against the simulation." }] });
+  if (!doc.checked && doc.sections.some((s) => s.kind === "requirements" && (s.nonFunctional.length || s.flowTests.length))) out.push({ tone: "warn", text: [{ text: "The simulation did not run, so requirements and tests are listed but not checked." }] });
+  return out;
+}
+var hldAnchor = (kind) => `hld-${kind}`;
+function hldSection(doc, s) {
+  const out = [];
+  const h3 = (text) => ({ type: "heading", level: 3, text });
+  switch (s.kind) {
+    case "overview":
+      if (s.summary) out.push({ type: "paragraph", text: s.summary });
+      if (s.teams.length > 1) out.push({ type: "paragraph", small: true, text: [{ text: "Teams  ", tone: "muted" }, { text: s.teams.join(", ") }] });
+      out.push({
+        type: "stats",
+        items: [
+          { label: "Components", value: String(s.components) },
+          { label: "Use cases", value: String(s.useCases) },
+          ...s.teams.length ? [{ label: s.teams.length === 1 ? "Team" : "Teams", value: s.teams.length === 1 ? s.teams[0] : String(s.teams.length) }] : [],
+          ...doc.sections.flatMap((c) => c.kind === "capacity" && c.totalCostUsd !== void 0 ? [{ label: "Cost / month", value: formatUsd2(c.totalCostUsd) }] : [])
+        ]
+      });
+      if (s.components) out.push({ type: "figure", of: { architecture: true }, maxRows: 22 });
+      break;
+    case "requirements": {
+      if (s.functional.length) {
+        out.push(h3("Functional"));
+        out.push({ type: "list", items: s.functional.map((f) => [{ text: f.name, bold: true }, ...f.description ? [{ text: ` \u2014 ${f.description}`, tone: "muted" }] : []]) });
+        const alts = s.functional.filter((f) => f.scenarios.length > 1 || f.scenarios[0]?.condition);
+        if (alts.length) {
+          out.push({
+            type: "table",
+            columns: [{ title: "Use case" }, { title: "Scenario" }, { title: "When", drop: 1 }],
+            rows: alts.flatMap((f) => f.scenarios.map((sc, i) => ({ cells: [i === 0 ? [{ text: f.name, bold: true }] : "", [{ text: sc.name, ...sc.outcome === "error" ? { tone: "bad" } : {} }], dash(sc.condition)] })))
+          });
+        }
+      }
+      if (s.nonFunctional.length) {
+        out.push(h3("Non-functional"));
+        out.push({ type: "table", columns: [{ title: "Requirement" }, { title: "Status" }, { title: "Measured" }], rows: s.nonFunctional.map((r) => ({ cells: [r.label, STATUS2[r.status], measured(r.measured, r.hint)] })) });
+      }
+      if (s.flowTests.length) {
+        out.push(h3("Flow tests"));
+        out.push({
+          type: "table",
+          columns: [{ title: "Test" }, { title: "Status" }, { title: "Asserts", drop: 1 }, { title: "Result" }],
+          rows: s.flowTests.map((t) => ({ cells: [[{ text: t.name, bold: true }], STATUS2[t.status], [{ text: t.assertions.join("; "), mono: true }], measured(t.measured, t.hint)] }))
+        });
+      }
+      break;
+    }
+    case "capacity":
+      if (s.traffic.length) {
+        out.push(h3("Traffic"));
+        out.push({ type: "table", columns: [{ title: "Use case" }, { title: "Rate", align: "right" }, { title: "Mix", drop: 1 }], rows: s.traffic.map((t) => ({ cells: [[{ text: t.useCase, bold: true }], formatTraffic2(t.rps, t.avgRps), [{ text: t.mix.map((m) => `${m.scenario} ${formatPercent2(m.share)}`).join(", ") || "\u2014", tone: "muted" }]] })) });
+      }
+      if (s.load.length) {
+        out.push(h3("Load per component"));
+        out.push({
+          type: "table",
+          columns: [{ title: LOAD_HEADINGS[0] }, { title: LOAD_HEADINGS[1], drop: 2 }, { title: LOAD_HEADINGS[2], drop: 3 }, { title: LOAD_HEADINGS[3] }, { title: LOAD_HEADINGS[4], align: "right", drop: 4 }, { title: LOAD_HEADINGS[5], align: "right", drop: 1 }, { title: LOAD_HEADINGS[6], align: "right" }],
+          rows: s.load.map((n) => ({ cells: [[{ text: n.name, bold: true }], accessText(n, "read"), accessText(n, "write"), { bar: n.utilization, text: formatPercent2(n.utilization), ...n.saturated ? { tone: "bad" } : {} }, replicasText(n), dash(egressText(n) === "\u2014" ? void 0 : egressText(n)), formatUsd2(n.costUsd)] }))
+        });
+      }
+      if (s.totalCostUsd !== void 0) out.push({ type: "paragraph", text: [{ text: "Total cost  ", tone: "muted" }, { text: totalCostText(s.totalCostUsd, s.totalEgressUsd), bold: true }] });
+      break;
+    case "components":
+      out.push({
+        type: "table",
+        columns: [{ title: "Component" }, { title: "Tech" }, { title: "Kind", drop: 3 }, { title: "Team", drop: 4 }, { title: "Replicas", align: "right", drop: 2 }, { title: "Responsibility", drop: 1 }, { title: "Stores", drop: 5 }],
+        rows: s.components.map((c) => ({
+          cells: [
+            [{ text: c.name, bold: true }, ...c.group ? [{ text: `  in ${c.group}`, tone: "muted" }] : []],
+            dash(c.tech),
+            dash(c.kind),
+            dash(c.team),
+            String(c.replicas),
+            dash(c.responsibility),
+            dash(c.entities.join(", "))
+          ]
+        }))
+      });
+      break;
+    case "dataModel":
+      for (const e of s.entities) {
+        out.push(h3([{ text: e.name }, ...e.storeName ? [{ text: `  in ${e.storeName}`, tone: "muted" }] : []]));
+        if (e.description) out.push({ type: "paragraph", small: true, text: e.description });
+        out.push({ type: "table", columns: [{ title: "Field" }, { title: "Type" }, { title: "Flags" }], rows: e.fields.map((f) => ({ cells: [[{ text: f.name, mono: true }], f.type, dash(f.flags.join(", "))] })) });
+      }
+      break;
+    case "apis":
+      for (const ep of s.endpoints) {
+        out.push(h3([{ text: ep.endpoint, mono: true }, ...ep.service ? [{ text: `  served by ${ep.service}`, tone: "muted" }] : []]));
+        for (const op of ep.operations) {
+          out.push({ type: "paragraph", text: [{ text: op.useCase, bold: true }, ...op.endpoint !== ep.endpoint ? [{ text: `  ${op.endpoint}`, mono: true, tone: "muted" }] : []] });
+          if (op.request) out.push({ type: "code", text: op.request, language: "json", maxLines: 12 });
+          out.push({ type: "table", columns: [{ title: "Scenario" }, { title: "Response" }], rows: op.responses.map((r) => ({ cells: [[{ text: r.scenario, ...r.outcome === "error" ? { tone: "bad" } : {} }], [{ text: responseText(r), mono: true }]] })) });
+        }
+      }
+      break;
+    case "scenarios":
+      for (const u of s.useCases) {
+        out.push(h3(u.name));
+        const about = [u.endpoint, u.rps !== void 0 ? formatRps2(u.rps) : "", u.description].filter(Boolean).join(" \xB7 ");
+        if (about) out.push({ type: "paragraph", small: true, text: about });
+        out.push({
+          type: "table",
+          columns: [{ title: "Scenario" }, { title: "When", drop: 2 }, { title: "Share", align: "right", drop: 1 }, { title: "p50", align: "right", drop: 3 }, { title: "p99", align: "right" }],
+          rows: u.scenarios.map((sc) => ({
+            cells: [[{ text: sc.outcome === "error" ? "\u2717 " : "\u2713 ", tone: sc.outcome === "error" ? "bad" : "good", bold: true }, { text: sc.name, bold: true }], dash(sc.condition), dash(sc.share !== void 0 ? formatPercent2(sc.share) : void 0), dash(sc.latency ? formatMs2(sc.latency.p50) : void 0), dash(sc.latency ? formatMs2(sc.latency.p99) : void 0)]
+          }))
+        });
+        const first = u.scenarios.find((sc) => sc.steps > 0);
+        if (first) out.push({ type: "figure", of: { useCase: u.useCaseId, scenario: first.id }, caption: playsCaption(u.scenarios.length - 1), maxRows: 24 });
+      }
+      break;
+    case "decisions":
+      for (const d of s.decisions) {
+        out.push(h3(d.title));
+        if (d.because) out.push({ type: "paragraph", text: [{ text: "Because ", bold: true }, { text: d.because }] });
+        if (d.rejected.length) out.push({ type: "list", items: d.rejected.map((r) => [{ text: "Rejected ", tone: "muted" }, { text: r.option, bold: true }, { text: ` \u2014 ${r.reason}`, tone: "muted" }]) });
+      }
+      break;
+    case "risks":
+      for (const r of s.risks) out.push({ type: "callout", tone: RISK_TONE[r.severity], chip: r.severity.toUpperCase(), text: [{ text: r.title, bold: true }, ...r.detail ? [{ text: ` \u2014 ${r.detail}` }] : [], ...r.hint ? [{ text: `  Fix: ${r.hint}`, tone: "muted" }] : []] });
+      break;
+  }
+  return out;
+}
+function hldPage(doc, source) {
+  const blocks = [{ type: "heading", level: 1, text: doc.title }, { type: "paragraph", small: true, text: HLD_SUBTITLE }];
+  for (const v of hldVerdict(doc)) blocks.push({ type: "callout", tone: v.tone, text: v.text });
+  blocks.push({ type: "controls", items: [{ control: { id: "hld-copy", icon: "copy", label: "Copy HLD markdown", hotkey: "c", variant: "primary" } }, { text: [{ text: "with Mermaid diagrams, for a README or a wiki", tone: "muted" }] }] });
+  if (doc.sections.length === 0) return { kind: "page", blocks: [...blocks, { type: "paragraph", text: "Add components and use cases to generate a design document." }] };
+  blocks.push({ type: "heading", level: 3, text: [{ text: "CONTENTS", tone: "muted" }] });
+  blocks.push({ type: "controls", items: doc.sections.map((s, i) => ({ control: { id: `toc=${s.kind}`, label: `${i + 1}  ${s.title}`, variant: "quiet" } })) });
+  doc.sections.forEach((s, i) => {
+    blocks.push({ type: "heading", level: 2, anchor: hldAnchor(s.kind), text: [{ text: `${i + 1}`, tone: "accent" }, { text: `  ${s.title}` }] });
+    blocks.push(...hldSection(doc, s));
+  });
+  return { kind: "page", source, blocks };
+}
+
+// src/render/ui/contract.ts
+var ZOOM_COLUMNS = 20;
+var CELL_ASPECT = 17 / 8;
+
+// ../plugin/src/graphics.ts
+import { atom, read, update } from "claude-code";
+
+// ../plugin/src/lru.ts
+var Lru = class extends Map {
+  constructor(max) {
+    super();
+    this.max = max;
+  }
+  max;
+  get(key) {
+    if (!super.has(key)) return void 0;
+    const value = super.get(key);
+    super.delete(key);
+    super.set(key, value);
+    return value;
+  }
+  set(key, value) {
+    super.delete(key);
+    super.set(key, value);
+    if (this.size > this.max) super.delete(this.keys().next().value);
+    return this;
+  }
+};
+
+// ../plugin/src/helper.ts
+var RANK = { now: "a", first: "b", later: "c", mount: "c" };
+var worker;
+var refused = false;
+var seq = 0;
+var cache;
+var cellAspect = CELL_ASPECT;
+function setCellAspect(value) {
+  const n = typeof value === "number" ? value : Number.parseFloat(String(value ?? ""));
+  cellAspect = Number.isFinite(n) && n >= 1.5 && n <= 3 ? n : CELL_ASPECT;
+  return cellAspect === n || value === void 0 || value === "" ? void 0 : `the cellAspect setting ${JSON.stringify(value)} is not a number from 1.5 to 3: pictures are drawn for ${CELL_ASPECT}`;
+}
+var cellAspectOf = () => cellAspect;
+var pruned = false;
+var jobs = [];
+var wake;
+var serving = false;
+async function serveRequests($) {
+  serving = true;
+  try {
+    for (; ; ) {
+      const job = jobs.shift();
+      if (!job) {
+        await new Promise((resolve) => wake = resolve);
+        continue;
+      }
+      if (job === "redraw") $.ui.invalidate("ui.render");
+      else send($, job.input, job.priority).then(job.resolve, job.reject);
+    }
+  } finally {
+    serving = false;
+  }
+}
+function enqueue(job) {
+  jobs.push(job);
+  const w = wake;
+  wake = void 0;
+  w?.();
+}
+function redraw($) {
+  if (serving) enqueue("redraw");
+  else $.ui.invalidate("ui.render");
+}
+function isAborted(error) {
+  const e = error;
+  return e?.name === "AbortError" || /\baborted\b/i.test(typeof e?.message === "string" ? e.message : String(error));
+}
+function didNotStart(error) {
+  return /\b(ENOENT|EACCES|EPERM)\b|cannot start|could not start|not found|spawn/i.test(error instanceof Error ? error.message : String(error));
+}
+var Transient = class extends Error {
+  transient = true;
+};
+function isRetryable(error) {
+  return isAborted(error) || error?.transient === true;
+}
+var failures = new Lru(256);
+var MAX_RETRIES2 = 3;
+function retry(key) {
+  const n = (failures.get(key) ?? 0) + 1;
+  failures.set(key, n);
+  return n <= MAX_RETRIES2;
+}
+var answered = (key) => void failures.delete(key);
+var TIMEOUT_MS = { now: 1e4, first: 1e4, later: 6e4, mount: 6e4 };
+async function cacheDir($) {
+  if (cache) return cache;
+  const dir = await $.env.get("TMPDIR").catch((error) => isAborted(error) ? null : void 0);
+  const at = `${(dir || "/tmp").replace(/\/+$/, "")}/proschi-raster`;
+  if (dir !== null) cache = at;
+  return at;
+}
+function withPrune(input) {
+  if (pruned) return input;
+  pruned = true;
+  return { ...input, prune: true };
+}
+function helper($) {
+  return `${$.plugin.root}/hooks/raster.cjs`;
+}
+async function oneShot($, input) {
+  const { exitCode, stdout, stderr } = await $.process.run(["node", helper($)], { stdin: JSON.stringify(input), timeoutMs: TIMEOUT_MS.later }).catch((error) => {
+    throw isAborted(error) || didNotStart(error) ? error : new Transient(error instanceof Error ? error.message : String(error));
+  });
+  if (exitCode !== 0) throw stderr.trim() ? new Error(stderr.trim()) : new Transient(`raster exited with ${exitCode}`);
+  return JSON.parse(stdout);
+}
+function start($, root) {
+  const w = { dir: `${root}/serve-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`, waiting: /* @__PURE__ */ new Map() };
+  worker = w;
+  void (async () => {
+    let buffered = "";
+    let started = false;
+    try {
+      const stream = $.process.spawn({ argv: ["node", helper($), "--serve", w.dir] });
+      w.stop = () => void stream.return?.(void 0);
+      for await (const chunk of stream) {
+        started = true;
+        if (chunk.stream !== "stdout") continue;
+        buffered += chunk.text;
+        let at;
+        while ((at = buffered.indexOf("\n")) >= 0) {
+          const line2 = buffered.slice(0, at);
+          buffered = buffered.slice(at + 1);
+          settle(w, line2);
+        }
+      }
+    } catch (error) {
+      if (!started && !isAborted(error)) refused = true;
+      $.ui.log(`proschi: the raster worker ${started ? "failed" : "did not start"}: ${String(error)}`, { to: "debug" });
+    }
+    if (worker === w) worker = void 0;
+    for (const [id, waiter] of w.waiting) {
+      w.waiting.delete(id);
+      oneShot($, waiter.input).then(waiter.resolve, (error) => waiter.reject(error instanceof Error ? error : new Error(String(error))));
+    }
+  })();
+  return w;
+}
+function stopWorker() {
+  const w = worker;
+  worker = void 0;
+  w?.stop?.();
+}
+function settle(w, line2) {
+  let reply;
+  try {
+    reply = JSON.parse(line2);
+  } catch {
+    return;
+  }
+  if (typeof reply.id !== "string") return;
+  const waiter = w.waiting.get(reply.id);
+  if (!waiter) return;
+  w.waiting.delete(reply.id);
+  if (typeof reply.error === "string") waiter.reject(new Error(reply.error));
+  else waiter.resolve(reply.output);
+}
+function ask($, input, priority = "now") {
+  if (!serving) return send($, input, priority);
+  return new Promise((resolve, reject) => enqueue({ input, priority, resolve, reject }));
+}
+async function send($, input, priority) {
+  if (refused) return oneShot($, input);
+  const root = await cacheDir($);
+  const w = worker ?? start($, root);
+  const id = `${RANK[priority]}${String(seq++).padStart(9, "0")}`;
+  const ms = TIMEOUT_MS[priority];
+  return new Promise((resolve, reject) => {
+    const timer = $.clock.after(ms, () => {
+      if (!w.waiting.delete(id)) return;
+      reject(new Transient(`the raster worker did not answer in ${ms / 1e3} s`));
+    });
+    w.waiting.set(id, {
+      input,
+      resolve: (v) => {
+        timer.cancel();
+        resolve(v);
+      },
+      reject: (e) => {
+        timer.cancel();
+        reject(e);
+      }
+    });
+    $.fs.write(`${w.dir}/${id}.req.json`, JSON.stringify(input)).catch((error) => {
+      if (!w.waiting.delete(id)) return;
+      timer.cancel();
+      oneShot($, input).then(resolve, reject);
+      $.ui.log(`proschi: could not hand the raster worker a request: ${String(error)}`, { to: "debug" });
+    });
+  });
+}
+var panels = new Lru(512);
+var drawing = /* @__PURE__ */ new Set();
+var wanted = /* @__PURE__ */ new Set();
+var batch;
+var json = /* @__PURE__ */ new WeakMap();
+function digest(text) {
+  let h1 = 3735928559;
+  let h2 = 1103547991;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 2654435761);
+    h2 = Math.imul(h2 ^ c, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ h1 >>> 16, 2246822507) ^ Math.imul(h2 ^ h2 >>> 13, 3266489909);
+  h2 = Math.imul(h2 ^ h2 >>> 16, 2246822507) ^ Math.imul(h1 ^ h1 >>> 13, 3266489909);
+  return `${(4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36)}.${text.length}`;
+}
+function panelKey(p) {
+  let text = json.get(p.panel);
+  if (text === void 0) json.set(p.panel, text = digest(JSON.stringify(p.panel)));
+  return `${p.theme}\0${p.columns}\0${p.edges?.top === true}\0${p.edges?.bottom === true}\0${p.variants === true}\0${text}`;
+}
+function panelOf($, p, priority = "now") {
+  const rich = panels.get(panelKey({ ...p, variants: true }));
+  if (rich && !("error" in rich)) return rich;
+  const key = panelKey(p);
+  const done = panels.get(key);
+  if (done) return done;
+  if (priority !== "later") wanted.add(key);
+  if (drawing.has(key)) return void 0;
+  drawing.add(key);
+  if (!batch) {
+    batch = { now: /* @__PURE__ */ new Map(), first: /* @__PURE__ */ new Map(), later: /* @__PURE__ */ new Map() };
+    void Promise.resolve().then(() => flush($));
+  }
+  batch[priority === "mount" ? "later" : priority].set(key, p);
+  return void 0;
+}
+function variantsOf($, p) {
+  const rich = { ...p, variants: true };
+  const key = panelKey(rich);
+  const done = panels.get(key);
+  if (done) return Promise.resolve(done);
+  let going2 = hovering.get(key);
+  if (!going2) {
+    going2 = (async () => {
+      const input = { kind: "panels", outDir: await cacheDir($), theme: p.theme, cellAspect, panels: [requestOf(key, rich)] };
+      const out = await ask($, input, "now").then(
+        (o) => o.panels?.[0] ?? { error: "the helper answered no panel" },
+        (error) => ({ error: error instanceof Error ? error.message : String(error) })
+      );
+      if (!("error" in out)) panels.set(key, out);
+      hovering.delete(key);
+      return out;
+    })();
+    hovering.set(key, going2);
+  }
+  return going2;
+}
+var hovering = /* @__PURE__ */ new Map();
+var requestOf = (id, p) => ({ id, panel: p.panel, columns: p.columns, variants: p.variants ? ["hover", "pressed"] : [], ...p.edges?.top || p.edges?.bottom ? { edges: p.edges } : {} });
+function prefetch($, asks) {
+  for (const p of asks) panelOf($, p, "later");
+}
+async function flush($) {
+  const b = batch;
+  batch = void 0;
+  const outDir = await cacheDir($);
+  for (const priority of ["now", "first", "later"]) {
+    const asks = [...b[priority].entries()];
+    if (asks.length === 0) continue;
+    const groups = priority === "later" ? asks.map((a) => [a]) : [...new Set(asks.map(([, p]) => p.theme))].map((theme2) => asks.filter(([, p]) => p.theme === theme2));
+    for (const mine of groups) {
+      const theme2 = mine[0][1].theme;
+      const input = withPrune({ kind: "panels", outDir, theme: theme2, cellAspect, panels: mine.map(([key, p]) => requestOf(key, p)) });
+      void ask($, input, priority).then(
+        (out) => {
+          const answers = out.panels ?? [];
+          for (const [key] of mine) {
+            panels.set(key, answers.find((a) => a.id === key) ?? { error: "the helper answered no panel" });
+            answered(key);
+          }
+        },
+        (error) => {
+          for (const [key] of mine) if (!isRetryable(error) || !retry(key)) panels.set(key, { error: error instanceof Error ? error.message : String(error) });
+        }
+      ).finally(() => {
+        for (const [key] of mine) drawing.delete(key);
+        for (const [key] of mine) {
+          const a = panels.get(key);
+          if (a && "error" in a) $.ui.log(`proschi: a panel was not drawn: ${a.error}`, { to: "debug" });
+        }
+        const again = priority === "now" || mine.some(([key]) => wanted.has(key));
+        for (const [key] of mine) wanted.delete(key);
+        if (again) redraw($);
+      });
+    }
+  }
+}
+
+// ../plugin/src/graphics.ts
+var graphicsMode = (value) => value === "on" || value === "off" ? value : "auto";
+var UNKNOWN = { status: "unknown" };
+var probed = atom({ plugin: "proschi", key: "graphics" }, UNKNOWN);
+var TMUX_HINT = "tmux: set allow-passthrough on and focus-events on for pixel diagrams";
+var PX_PER_COLUMN = 16;
+var MAX_PNG_BYTES = 2 * 1024 * 1024;
+var PROBE_PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNgAAIAAAUAAen63NgAAAAASUVORK5CYII=";
+var PROBE_TRIES = 6;
+var PROBE_MS = 150;
+var cellPx = () => ({ width: 16, height: Math.round(16 * cellAspectOf()) });
+var merged = /* @__PURE__ */ new Map();
+var mergeKey = (request2) => {
+  const { window: _window, ...grid } = request2.options.grid ?? {};
+  void _window;
+  return `${keyOf(request2.source)}\0${JSON.stringify({ ...request2.options, grid })}`;
+};
+function merge(request2, g) {
+  const key = mergeKey(request2);
+  const was = merged.get(key);
+  if (!was || was.columns !== g.columns || was.rows !== g.rows || (was.steps?.length ?? 0) !== (g.steps?.length ?? 0)) {
+    merged.delete(key);
+    merged.set(key, { ...g, base: [...g.base], ...g.steps ? { steps: g.steps.map((s) => ({ behind: [...s.behind], frames: s.frames.map((f) => ({ ...f })) })) } : {} });
+    if (merged.size > 12) merged.delete(merged.keys().next().value);
+    return;
+  }
+  g.base.forEach((f, i) => was.base[i] ||= f);
+  g.steps?.forEach((s, k) => {
+    const into = was.steps[k];
+    s.behind.forEach((f, i) => into.behind[i] ||= f);
+    s.frames.forEach((f, j) => Object.assign(into.frames[j] ??= {}, f));
+  });
+}
+var mergedGrid = (request2) => merged.get(mergeKey(request2));
+function gridFrame(g, step, k = 0) {
+  const s = step === void 0 ? void 0 : g.steps?.[step];
+  if (!s) return g.base;
+  const over = s.frames[Math.max(0, Math.min(k, s.frames.length - 1))] ?? {};
+  return s.behind.map((file, i) => over[i] ?? file);
+}
+var rasters = new Lru(256);
+var pending = /* @__PURE__ */ new Set();
+var wanted2 = /* @__PURE__ */ new Set();
+var bytes = /* @__PURE__ */ new Map();
+var theme;
+var probing = false;
+async function themeOf($) {
+  if (theme) return theme;
+  const rows = await $.config.list().catch(() => []);
+  theme = /light/i.test(String(rows.find((row) => row.key === "theme")?.value ?? "")) ? "light" : "dark";
+  return theme;
+}
+function themeChanged() {
+  theme = void 0;
+}
+function rasterOf($, request2, priority = "now") {
+  const key = `${keyOf(request2.source)}\0${JSON.stringify(request2.options)}`;
+  const done = rasters.get(key);
+  if (done) return done;
+  if (pending.has(key)) {
+    if (priority === "now" || priority === "first") wanted2.add(key);
+    return void 0;
+  }
+  pending.add(key);
+  void (async () => {
+    const { source, path, imports, view } = request2.source;
+    const input = withPrune({ source, path, imports, view, outDir: await cacheDir($), options: request2.options });
+    const answer = await ask($, input, priority).then(
+      (out) => {
+        answered(key);
+        const o = out;
+        return typeof o.base === "string" && o.width > 0 && o.height > 0 ? o : { error: "raster answered no picture" };
+      },
+      // Aborted (a redraw, a new view), timed out, the worker gone: not an answer; the next draw asks again.
+      (error) => isRetryable(error) && retry(key) ? void 0 : { error: error instanceof Error ? error.message : String(error) }
+    );
+    if (answer && "error" in answer) $.ui.log(`proschi: no picture: ${answer.error}`, { to: "debug" });
+    if (answer) rasters.set(key, answer);
+    if (answer && !("error" in answer) && answer.grid && request2.options.grid?.window) merge(request2, answer.grid);
+    pending.delete(key);
+    if (priority === "now" || priority === "first" || wanted2.delete(key)) redraw($);
+  })();
+  return void 0;
+}
+var maxWidthPx = (columns) => Math.max(1, Math.min(255, columns)) * PX_PER_COLUMN;
+function imageSize(out, room, maxRows) {
+  let columns = Math.max(1, Math.min(255, room, out.cellHint.columns));
+  let rows = Math.max(1, Math.round(columns * out.height / out.width / cellAspectOf()));
+  const cap = Math.max(1, Math.min(255, maxRows));
+  if (rows > cap) {
+    rows = cap;
+    columns = Math.max(1, Math.min(columns, Math.round(rows * cellAspectOf() * out.width / out.height)));
+  }
+  return { columns, rows };
+}
+async function sourceOf($, file, form) {
+  if (form !== "png") return { file, format: "png" };
+  const png = await pngOf($, file);
+  return png ? { png } : { file, format: "png" };
+}
+async function pngOf($, file) {
+  const known = bytes.get(file);
+  if (known) return known;
+  const read3 = await $.fs.read(file, { as: "bytes" }).catch(() => void 0);
+  if (!read3 || read3.base64.length * 3 / 4 > MAX_PNG_BYTES) return void 0;
+  if (bytes.size >= 48) bytes.delete(bytes.keys().next().value);
+  bytes.set(file, read3.base64);
+  return read3.base64;
+}
+var headless = false;
+async function probeOf($) {
+  if (headless) return { status: "no" };
+  const p = await read($, probed);
+  return p && (p.status === "yes" || p.status === "no" || p.status === "tmux") ? p : UNKNOWN;
+}
+var probeKey = (viewId) => `probe-${viewId}`;
+function probeSource($) {
+  return { file: `${$.plugin.root}/hooks/probe.png`, format: "png" };
+}
+function probe($, requestId, key) {
+  if (probing) return;
+  probing = true;
+  let tries = 0;
+  const settle2 = async (answer) => {
+    timer.cancel();
+    probing = false;
+    if (!answer) {
+      redraw($);
+      return;
+    }
+    await update($, probed, () => answer);
+    redraw($);
+  };
+  const timer = $.clock.every(PROBE_MS, async () => {
+    if (tries++ >= PROBE_TRIES) return settle2({ status: "no" });
+    const byName = await $.ui.blit({ requestId, key, source: probeSource($) }).catch((error) => ({ deny: String(error), fix: void 0 }));
+    if (!byName.deny) return settle2({ status: "yes", form: "file" });
+    if (isAborted(byName.deny)) return settle2(void 0);
+    if (byName.fix === "tmux-passthrough") return settle2({ status: "tmux" });
+    if (/no-surface/.test(byName.deny)) {
+      headless = true;
+      return settle2(void 0);
+    }
+    const asBytes = await $.ui.blit({ requestId, key, source: { png: PROBE_PNG } }).catch((error) => ({ deny: String(error), fix: void 0 }));
+    if (!asBytes.deny) return settle2({ status: "yes", form: "png" });
+    if (isAborted(asBytes.deny)) return settle2(void 0);
+    if (asBytes.fix === "tmux-passthrough") return settle2({ status: "tmux" });
+  });
+}
+
+// ../plugin/src/picture.tsx
+var SITES = 64;
+var shown = new Lru(SITES);
+var live = new Lru(SITES);
+var overlaySites = new Lru(SITES * 64);
+var tileKey = (site, piece, i) => `t-${site}-${piece}-${i}`;
+var overlayKey = (strip) => `ov-${strip}`;
+var PERF_KEEP = 40;
+var perf = [];
+var pressTimings = () => perf;
+var opening = new Lru(SITES);
+async function markOpened($, site) {
+  try {
+    opening.set(site, { at: await $.clock.now() });
+  } catch {
+    opening.delete(site);
+  }
+}
+function timed($, t) {
+  perf.push(t);
+  if (perf.length > PERF_KEEP) perf.shift();
+  $.ui.log(`proschi: ${t.control} drew in ${t.toShown} ms (render after ${t.toRender} ms, built in ${t.build} ms, ${t.sent} of ${t.images} pictures new)`, { to: "debug" });
+}
+function loading(ui, key, rows, probe2) {
+  return /* @__PURE__ */ h(ui.Box, { key: `load-${key}`, flexDirection: "column", height: Math.max(1, rows) }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row" }, /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Rendering diagram\u2026"), probe2));
+}
+async function pictureSite($, ui, s) {
+  const started = await $.clock.now();
+  const was = live.get(s.site);
+  if (was?.pressedAt !== void 0 && was.renderedAt === void 0) was.renderedAt = started;
+  const resolved = [];
+  let waiting = false;
+  const last = !s.paged && s.pages?.some((p) => p.shown) ? -1 : s.pieces.length - 1;
+  const pagedAt = s.paged ? s.pieces.findIndex((p) => p.id === s.paged.from) : -1;
+  for (const [i, p] of s.pieces.entries()) {
+    const hidden = pagedAt >= 0 && i >= pagedAt && !s.paged.shown;
+    if (!("panel" in p)) {
+      if (p.picture) resolved.push({ id: p.id, picture: p.picture });
+      else if (!hidden) waiting = true;
+      continue;
+    }
+    const ask2 = { panel: p.panel, columns: p.columns, theme: s.theme, edges: { ...i === 0 ? { top: true } : {}, ...i === last ? { bottom: true } : {} } };
+    const out = panelOf($, ask2, hidden ? "first" : "now");
+    if (out && "error" in out) {
+      if (hidden) continue;
+      return { error: out.error };
+    }
+    if (!out) {
+      if (!hidden) waiting = true;
+    } else resolved.push({ id: p.id, out, ask: ask2 });
+  }
+  const pages2 = [];
+  for (const page of s.pages ?? []) {
+    const ask2 = { panel: page.panel, columns: page.columns, theme: s.theme, edges: { bottom: true } };
+    const out = panelOf($, ask2, page.shown ? "now" : "mount");
+    if (out && "error" in out) {
+      if (page.shown) return { error: out.error };
+      continue;
+    }
+    if (out) pages2.push({ id: page.id, out, ask: ask2, shown: page.shown });
+    else if (page.shown) waiting = true;
+  }
+  let float;
+  if (s.float) {
+    const ask2 = { panel: s.float.panel, columns: s.float.columns, theme: s.theme, edges: { top: true, bottom: true } };
+    const out = panelOf($, ask2);
+    if (out && "error" in out) return { error: out.error };
+    if (!out) waiting = true;
+    else float = { def: s.float, out, ask: ask2 };
+  }
+  let corner;
+  if (s.corner) {
+    const ask2 = { panel: s.corner.panel, columns: s.corner.columns, theme: s.theme, edges: { top: true, bottom: true } };
+    const out = panelOf($, ask2);
+    if (out && "error" in out) return { error: out.error };
+    if (!out) waiting = true;
+    else corner = { def: s.corner, out, ask: ask2 };
+  }
+  const onTop = (a) => a.panel.kind === "tabs" || a.panel.kind === "playerBar" && !s.pieces.some((p) => "panel" in p && p.panel.kind === "tabs");
+  if (s.ahead?.length) prefetch($, s.ahead.map((a) => ({ panel: a.panel, columns: a.columns, theme: s.theme, edges: a.edges ?? (onTop(a) ? { top: true } : {}) })));
+  let now;
+  if (!waiting) {
+    now = { pieces: resolved, pages: pages2, actions: { ...s.actions, ...s.float?.actions ?? {} }, ...float ? { float } : {}, ...corner ? { corner } : {}, ...s.paged ? { paged: s.paged } : {} };
+    shown.set(s.site, now);
+  } else now = shown.get(s.site);
+  if (!now) return { element: loading(ui, s.site, s.rows) };
+  const built = await build($, ui, s, now);
+  const want = pending2.get(s.site);
+  if (want && !waiting && live.get(s.site)?.page?.anchors[want] !== void 0) {
+    pending2.delete(s.site);
+    $.clock.after(0, () => void scrollToAnchor($, s.site, want));
+  }
+  const done = await $.clock.now();
+  const l = live.get(s.site);
+  if (!waiting && l?.pressedAt !== void 0) {
+    timed($, { at: l.pressedAt, site: s.site, control: l.pressed ?? "", toRender: (l.renderedAt ?? started) - l.pressedAt, toShown: done - l.pressedAt, build: done - started, images: built.images, sent: built.sent });
+    l.pressedAt = void 0;
+    l.renderedAt = void 0;
+  }
+  const o = opening.get(s.site);
+  if (o) {
+    const at = (control) => ({ at: o.at, site: s.site, control, toRender: started - o.at, toShown: done - o.at, build: done - started, images: built.images, sent: built.sent });
+    if (!waiting && !o.drawn) {
+      o.drawn = true;
+      timed($, at("open"));
+    }
+    if (!o.paged && now.paged && now.pieces.some((p) => "picture" in p)) {
+      o.paged = true;
+      timed($, at("open: diagram"));
+    }
+    if (o.drawn && (o.paged || !s.paged)) opening.delete(s.site);
+  }
+  return { element: built.element };
+}
+async function strips(ui, s, piece, out, ask2, source, into) {
+  const rows = [];
+  for (const [i, tile] of out.tiles.entries()) {
+    const key = tileKey(s.site, piece, i);
+    const file = tile.file;
+    const image = file ? /* @__PURE__ */ h(ui.Image, { key, source: await source(key, file), columns: tile.columns, rows: tile.rows, alt: " " }) : /* @__PURE__ */ h(ui.Box, { key, width: tile.columns, height: tile.rows });
+    const areas = file ? (tile.controls ?? []).filter((a) => !a.control.disabled) : [];
+    if (!file || areas.length === 0) {
+      rows.push(image);
+      continue;
+    }
+    const overlay = overlayKey(key);
+    const controls = [];
+    if (into) {
+      for (const a of areas) {
+        const id = `${piece}/${a.control.id}`;
+        into.tiles.set(id, { key, file, ...a.hoverFile ? { hoverFile: a.hoverFile } : {}, ...a.pressedFile ? { pressedFile: a.pressedFile } : {}, ask: ask2, tile: i, control: a.control.id });
+        controls.push({ id, col: tile.col + a.col, row: 0, columns: a.columns, rows: tile.rows });
+        if (a.control.hotkey && s.hotkeys && s.actions[id]) into.hotkeys.set(a.control.hotkey, id);
+      }
+      into.overlays.set(overlay, controls.map((c) => c.id));
+      overlaySites.set(overlay, s.site);
+    }
+    rows.push(
+      /* @__PURE__ */ h(ui.Box, { key: `${key}-s`, flexDirection: "column", width: tile.columns, height: tile.rows, overflow: "hidden" }, image, into && /* @__PURE__ */ h(ui.Box, { position: "absolute", top: 0, left: 0, width: tile.columns, height: tile.rows }, /* @__PURE__ */ h(ui.Client, { key: overlay, module: "./uiOverlay.js", props: { controls }, width: tile.columns, height: tile.rows })))
+    );
+  }
+  return rows;
+}
+async function floatOver(ui, s, f, anchor, rows, width, source, into, $) {
+  const tile = f.def.anchor.control ? anchor.out.tiles.find((t) => t.controls?.some((a) => a.control.id === f.def.anchor.control)) : void 0;
+  const area = tile?.controls?.find((a) => a.control.id === f.def.anchor.control);
+  const below = anchor.row + (tile ? tile.row + tile.rows : anchor.out.rows);
+  const at = Math.max(0, Math.min(below, rows - f.out.rows));
+  const left = Math.max(0, Math.min((tile?.col ?? 0) + (area?.col ?? 0), width - f.out.columns));
+  if (f.out.rows > rows) $.ui.log(`proschi: the ${f.def.id} is ${f.out.rows} rows, over the ${rows} it floats over: its foot is cut`, { to: "debug" });
+  const scrim = `ov-scrim-${s.site}`;
+  into.overlays.set(scrim, [`${f.def.id}/close`]);
+  overlaySites.set(scrim, s.site);
+  const elements = [
+    /* @__PURE__ */ h(ui.Box, { key: `scrim-${s.site}`, position: "absolute", top: 0, left: 0, width, height: rows }, /* @__PURE__ */ h(ui.Client, { key: scrim, module: "./uiOverlay.js", props: { controls: [{ id: `${f.def.id}/close`, col: 0, row: 0, columns: width, rows }] }, width, height: rows }))
+  ];
+  const floated = await strips(ui, s, f.def.id, f.out, f.ask, source, into);
+  f.out.tiles.forEach(
+    (t, i) => elements.push(
+      /* @__PURE__ */ h(ui.Box, { key: `fl-${s.site}-${i}`, position: "absolute", top: at + t.row, left, width: t.columns, height: t.rows }, floated[i])
+    )
+  );
+  return { elements, top: at };
+}
+async function build($, ui, s, d) {
+  const was = live.get(s.site);
+  const before2 = was?.sources ?? /* @__PURE__ */ new Map();
+  const sources = /* @__PURE__ */ new Map();
+  const source = (key, file) => {
+    sources.set(key, file);
+    return sourceOf($, file, s.form);
+  };
+  const into = { tiles: /* @__PURE__ */ new Map(), overlays: /* @__PURE__ */ new Map(), hotkeys: /* @__PURE__ */ new Map() };
+  const parts = [];
+  const paged = [];
+  const pagedAt = d.paged ? d.pieces.findIndex((p) => p.id === d.paged.from) : -1;
+  const pagedShown = d.paged?.shown !== false;
+  let top = 0;
+  let width = 1;
+  const layerAt = s.layer ? d.pieces.findIndex((p) => p.id === s.layer) : -1;
+  const layered = [];
+  let layerTop = 0;
+  let layerRows = 0;
+  const anchors = /* @__PURE__ */ new Map();
+  let cornerAt;
+  for (const [i, p] of d.pieces.entries()) {
+    const hidden = pagedAt >= 0 && i >= pagedAt && !pagedShown;
+    if (i === layerAt) layerTop = top;
+    const target = layerAt >= 0 && i >= layerAt ? layered : pagedAt >= 0 && i >= pagedAt ? paged : parts;
+    let rows;
+    let columns;
+    if ("picture" in p) {
+      const pic = p.picture;
+      let body;
+      if (pic.tiles) {
+        const lines = [];
+        for (const row of [...new Set(pic.tiles.map((t) => t.row))]) {
+          const line2 = pic.tiles.filter((t) => t.row === row);
+          const images2 = [];
+          for (const t of line2) images2.push(/* @__PURE__ */ h(ui.Image, { key: t.key, source: await source(t.key, t.file), columns: t.columns, rows: t.rows, alt: t === pic.tiles[0] ? pic.alt : " " }));
+          lines.push(
+            /* @__PURE__ */ h(ui.Box, { key: `${pic.key}-r${row}`, flexDirection: "row", height: line2[0].rows, flexShrink: 0 }, images2)
+          );
+        }
+        body = lines;
+        const v = pic.view;
+        if (v && pic.tiles.length) {
+          const left = Math.min(...pic.tiles.map((t) => t.col));
+          const up = Math.min(...pic.tiles.map((t) => t.row));
+          body = [
+            /* @__PURE__ */ h(ui.Box, { key: `${pic.key}-pan`, flexDirection: "column", flexShrink: 0, marginLeft: left - v.col, marginTop: up - v.row }, lines)
+          ];
+        }
+        if (pic.drag && !hidden) {
+          const ov = `ov-drag-${s.site}`;
+          overlaySites.set(ov, s.site);
+          into.overlays.set(ov, []);
+          body.push(
+            /* @__PURE__ */ h(ui.Box, { key: `${pic.key}-drag`, position: "absolute", top: 0, left: 0, width: pic.columns, height: pic.rows }, /* @__PURE__ */ h(ui.Client, { key: ov, module: "./uiOverlay.js", props: { controls: [], drag: true }, width: pic.columns, height: pic.rows }))
+          );
+        }
+        const c = d.corner;
+        if (c && c.def.piece === p.id && !hidden) {
+          const at = top + pic.rows - c.out.rows;
+          const scrolled = (windows.get(s.requestId)?.offset ?? 0) > at;
+          cornerAt = { top: at, hidden: scrolled };
+          if (!scrolled) {
+            const placed = await strips(ui, s, c.def.id, c.out, c.ask, source, into);
+            c.out.tiles.forEach(
+              (t, i2) => body.push(
+                /* @__PURE__ */ h(ui.Box, { key: `${pic.key}-corner-${i2}`, position: "absolute", top: pic.rows - c.out.rows + t.row, left: Math.max(0, pic.columns - c.out.columns - 1), width: t.columns, height: t.rows }, placed[i2])
+              )
+            );
+          }
+        }
+      } else body = [/* @__PURE__ */ h(ui.Image, { key: pic.key, source: await source(pic.key, pic.file), columns: pic.columns, rows: pic.rows, alt: pic.alt })];
+      target.push(
+        /* @__PURE__ */ h(ui.Box, { key: pic.anchorKey ?? `pic-${s.site}-${p.id}`, flexDirection: "column", height: pic.rows, ...pic.view ? { width: pic.columns, overflow: "hidden" } : {} }, body)
+      );
+      rows = pic.rows;
+      columns = pic.columns;
+    } else {
+      const { out } = p;
+      if (!hidden) anchors.set(p.id, { row: top - layerTop, out });
+      target.push(
+        /* @__PURE__ */ h(ui.Box, { key: `p-${s.site}-${p.id}`, flexDirection: "column", height: out.rows }, await strips(ui, s, p.id, out, p.ask, source, hidden ? void 0 : into))
+      );
+      rows = out.rows;
+      columns = out.columns;
+    }
+    if (layerAt >= 0 && i >= layerAt) layerRows += rows;
+    if (hidden) continue;
+    top += rows;
+    width = Math.max(width, columns);
+  }
+  let floatTop;
+  if (layerAt >= 0) {
+    const over = [];
+    const f = d.float;
+    const anchor = f && pagedShown && anchors.get(f.def.anchor.piece);
+    if (f && anchor) {
+      const laid = await floatOver(ui, s, f, anchor, layerRows, width, source, into, $);
+      over.push(...laid.elements);
+      floatTop = layerTop + laid.top;
+    }
+    ;
+    (pagedAt >= 0 && layerAt >= pagedAt ? paged : parts).push(
+      /* @__PURE__ */ h(ui.Box, { key: `ly-${s.site}`, flexDirection: "column", height: layerRows, overflow: "hidden" }, layered, over)
+    );
+  }
+  if (pagedAt >= 0) {
+    parts.push(
+      /* @__PURE__ */ h(ui.Box, { key: `dg-${s.site}`, flexDirection: "column", display: pagedShown ? "flex" : "none" }, paged)
+    );
+  }
+  let page;
+  if (d.pages.length) {
+    const pages2 = [];
+    for (const pg of d.pages) {
+      const rows = await strips(ui, s, pg.id, pg.out, pg.ask, source, pg.shown ? into : void 0);
+      pages2.push(
+        /* @__PURE__ */ h(ui.Box, { key: `pg-${s.site}-${pg.id}`, flexDirection: "column", height: pg.out.rows, display: pg.shown ? "flex" : "none" }, rows)
+      );
+      if (pg.shown) {
+        page = { top, anchors: pg.out.anchors ?? {} };
+        top += pg.out.rows;
+        width = Math.max(width, pg.out.columns);
+      }
+    }
+    parts.push(
+      /* @__PURE__ */ h(ui.Box, { key: `pages-${s.site}`, flexDirection: "column" }, pages2)
+    );
+  }
+  for (const [key, id] of Object.entries(s.keys ?? {})) if (d.actions[id] && !into.hotkeys.has(key)) into.hotkeys.set(key, id);
+  const { tiles, overlays, hotkeys } = into;
+  live.set(s.site, {
+    requestId: s.requestId,
+    tiles,
+    overlays,
+    actions: d.actions,
+    hotkeys,
+    sources,
+    ...floatTop !== void 0 && d.float ? { float: { top: floatTop, close: d.float.def.close } } : {},
+    ...page ? { page } : {},
+    ...cornerAt ? { corner: cornerAt } : {},
+    ...s.onDrag ? { onDrag: s.onDrag } : {},
+    ...s.form ? { form: s.form } : {},
+    ...was?.pressedAt !== void 0 ? { pressedAt: was.pressedAt, ...was.pressed ? { pressed: was.pressed } : {}, ...was.renderedAt !== void 0 ? { renderedAt: was.renderedAt } : {} } : {}
+  });
+  let sent = 0;
+  for (const [key, file] of sources) if (before2.get(key) !== file) sent++;
+  const element = /* @__PURE__ */ h(ui.Box, { key: `site-${s.site}`, flexDirection: "column", width, height: top }, parts, hotkeys.size > 0 && /* @__PURE__ */ h(ui.Box, { key: `keys-${s.site}`, display: "none" }, [...hotkeys].filter(([key]) => /^[a-z0-9]$/.test(key)).map(([key, id]) => /* @__PURE__ */ h(ui.Button, { key: `hk-${s.site}-${key}`, label: key, hotkey: key, onPress: (press) => void act($, s.site, id, press.surface) }))));
+  return { element, images: sources.size, sent };
+}
+async function blit($, l, ref, file) {
+  if (!ref || !file) return;
+  const r = await $.ui.blit({ requestId: l.requestId, key: ref.key, source: await sourceOf($, file, l.form) }).catch((error) => ({ deny: String(error) }));
+  if (r.deny) $.ui.log(`proschi: blit refused: ${r.deny}`, { to: "debug" });
+}
+async function hoverLater($, site, id, ref) {
+  const key = panelKey(ref.ask);
+  const out = await variantsOf($, ref.ask);
+  if ("error" in out) return $.ui.log(`proschi: no hover pictures: ${out.error}`, { to: "debug" });
+  const l = live.get(site);
+  if (!l) return;
+  for (const t of l.tiles.values()) {
+    if (panelKey(t.ask) !== key) continue;
+    const area = out.tiles[t.tile]?.controls?.find((a) => a.control.id === t.control);
+    if (area?.hoverFile) t.hoverFile = area.hoverFile;
+    if (area?.pressedFile) t.pressedFile = area.pressedFile;
+  }
+  if (l.hovered === id) await blit($, l, l.tiles.get(id), l.tiles.get(id)?.hoverFile);
+}
+async function act($, site, id, surface) {
+  const l = live.get(site);
+  const action = l?.actions[id];
+  if (!l || !action) return;
+  $.ui.log(`proschi: press ${id}`, { to: "debug" });
+  l.pressedAt = await $.clock.now();
+  l.pressed = id;
+  l.renderedAt = void 0;
+  action(surface);
+}
+var otherOverlays = /* @__PURE__ */ new Map();
+function registerPicture(on) {
+  on("ui.message", async ($, e, next) => {
+    const other = otherOverlays.get(e.element);
+    if (other) {
+      other(e.data ?? {});
+      return {};
+    }
+    const site = overlaySites.get(e.element);
+    const l = site !== void 0 ? live.get(site) : void 0;
+    if (!site || !l) return next(e);
+    const data = e.data ?? {};
+    const id = typeof data.id === "string" ? data.id : "";
+    if (data.type === "hover") {
+      if (!id && l.hovered && !l.overlays.get(e.element)?.includes(l.hovered)) return {};
+      if (l.hovered && l.hovered !== id) await blit($, l, l.tiles.get(l.hovered), l.tiles.get(l.hovered)?.file);
+      l.hovered = id || void 0;
+      const ref = id ? l.tiles.get(id) : void 0;
+      if (ref?.hoverFile) await blit($, l, ref, ref.hoverFile);
+      else if (ref) await hoverLater($, site, id, ref);
+    } else if (data.type === "down") {
+      await blit($, l, l.tiles.get(id), l.tiles.get(id)?.pressedFile);
+    } else if (data.type === "press") {
+      const ref = l.tiles.get(id);
+      await blit($, l, ref, ref?.hoverFile ?? ref?.file);
+      await act($, site, id, e.surface);
+    } else if (data.type === "key" && typeof data.key === "string") {
+      const target = l.hotkeys.get(data.key);
+      if (target) await act($, site, target, e.surface);
+    } else if (data.type === "drag" && l.onDrag) {
+      const d = e.data;
+      if ([d.n, d.sx, d.sy, d.x, d.y].every((v) => typeof v === "number")) l.onDrag(d);
+    } else if (data.type === "scroll" && typeof data.key === "string") {
+      await scrollKey($, l.requestId, data.key);
+    }
+    return {};
+  });
+  on("ui.scroll", { component: "Pane" }, async ($, e, next) => {
+    const to = going.get(e.requestId);
+    if (to !== void 0 && e.origin?.kind === "plugin") {
+      going.delete(e.requestId);
+      const offset = Math.max(0, Math.min(to, e.contentRows - e.bodyRows));
+      windows.set(e.requestId, { offset, bodyRows: e.bodyRows });
+      return next({ ...e, offset });
+    }
+    if (windows.has(e.requestId)) windows.set(e.requestId, { offset: e.offset, bodyRows: e.bodyRows });
+    for (const l of live.values()) if (l.requestId === e.requestId && l.float && e.offset > l.float.top) l.float.close();
+    if ([...live.values()].some((l) => l.requestId === e.requestId && l.corner && e.offset > l.corner.top !== l.corner.hidden)) $.ui.invalidate("ui.render");
+    return next(e);
+  });
+}
+var windows = /* @__PURE__ */ new Map();
+var going = /* @__PURE__ */ new Map();
+function paneWindow(id, offset, bodyRows2) {
+  windows.set(id, { offset, bodyRows: bodyRows2 });
+}
+async function scrollKey($, id, key) {
+  const w = windows.get(id);
+  if (!w) return;
+  const args = key === "home" || key === "end" ? { to: key === "home" ? "start" : "end", in: id } : { to: "start", in: id };
+  const to = key === "home" ? 0 : key === "end" ? Infinity : Math.max(0, w.offset + (key === "up" ? -1 : key === "down" ? 1 : key === "pageup" ? -w.bodyRows : w.bodyRows));
+  if (key !== "home" && key !== "end") going.set(id, to);
+  $.ui.log(`proschi: scroll key ${key} moves ${id} to row ${to}`, { to: "debug" });
+  const moved = await $.ui.scroll(args).catch((error) => ({ deny: String(error) }));
+  going.delete(id);
+  if (moved.deny) $.ui.log(`proschi: scroll key ${key} refused: ${moved.deny}`, { to: "debug" });
+}
+async function scrollToAnchor($, site, anchor) {
+  const l = live.get(site);
+  const row = l?.page?.anchors[anchor];
+  if (!l?.page || row === void 0) return;
+  const to = l.page.top + row;
+  going.set(l.requestId, to);
+  $.ui.log(`proschi: ${anchor} scrolls ${l.requestId} to row ${to}`, { to: "debug" });
+  const moved = await $.ui.scroll({ to: "start", in: l.requestId }).catch((error) => ({ deny: String(error) }));
+  going.delete(l.requestId);
+  if (moved.deny) $.ui.log(`proschi: scroll to ${anchor} refused: ${moved.deny}`, { to: "debug" });
+}
+var pending2 = /* @__PURE__ */ new Map();
+function scrollToAnchorOnceShown($, site, anchor) {
+  if (live.get(site)?.page?.anchors[anchor] === void 0) pending2.set(site, anchor);
+  else $.clock.after(0, () => void scrollToAnchor($, site, anchor));
+}
+
+// ../plugin/src/zoom.ts
+var ZOOMS = [1, 1.25, 1.5, 2, 3];
+var FIT = { level: 1, x: 0.5, y: 0.5 };
+var PAN_STEP = { columns: 8, rows: 4 };
+var clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+var fraction = (v) => typeof v === "number" && Number.isFinite(v) ? clamp(v, 0, 1) : 0.5;
+function zoomOf(v) {
+  const z = v;
+  if (!z || typeof z !== "object" || typeof z.level !== "number" || !Number.isFinite(z.level)) return FIT;
+  const level = ZOOMS.reduce((best, l) => Math.abs(l - z.level) < Math.abs(best - z.level) ? l : best, 1);
+  return { level, x: fraction(z.x), y: fraction(z.y) };
+}
+var isMoved = (z) => z.level > 1 || z.x !== 0.5 || z.y !== 0.5;
+function stepZoom(z, dir) {
+  const at = ZOOMS.indexOf(z.level);
+  const level = ZOOMS[clamp((at < 0 ? 0 : at) + dir, 0, ZOOMS.length - 1)];
+  return level === 1 ? FIT : { ...z, level };
+}
+var zoomLabel = (level) => `${Math.round(level * 100)}%`;
+function viewportOf(grid, room, z) {
+  const columns = Math.max(1, Math.min(grid.columns, room.columns));
+  const rows = Math.max(1, Math.min(grid.rows, room.rows));
+  return {
+    col: clamp(Math.round(z.x * grid.columns - columns / 2), 0, grid.columns - columns),
+    row: clamp(Math.round(z.y * grid.rows - rows / 2), 0, grid.rows - rows),
+    columns,
+    rows
+  };
+}
+function panTo(z, grid, vp, col, row) {
+  const c = clamp(Math.round(col), 0, grid.columns - vp.columns);
+  const r = clamp(Math.round(row), 0, grid.rows - vp.rows);
+  return { level: z.level, x: (c + vp.columns / 2) / grid.columns, y: (r + vp.rows / 2) / grid.rows };
+}
+var around = (vp, ring = { columns: 16, rows: 8 }) => ({ col: vp.col - ring.columns, row: vp.row - ring.rows, columns: vp.columns + 2 * ring.columns, rows: vp.rows + 2 * ring.rows });
+var meets = (t, w) => t.col < w.col + w.columns && t.col + t.columns > w.col && t.row < w.row + w.rows && t.row + t.rows > w.row;
+
+// ../frontend/src/dsl/mermaid.ts
+var RESERVED = new Set(
+  [
+    "end",
+    "graph",
+    "flowchart",
+    "subgraph",
+    "style",
+    "class",
+    "classdef",
+    "click",
+    "linkstyle",
+    "direction",
+    "default",
+    "participant",
+    "actor",
+    "as",
+    "note",
+    "over",
+    "left",
+    "right",
+    "of",
+    "loop",
+    "alt",
+    "else",
+    "opt",
+    "par",
+    "and",
+    "rect",
+    "critical",
+    "break",
+    "option",
+    "activate",
+    "deactivate",
+    "autonumber",
+    "title",
+    "box",
+    "create",
+    "destroy",
+    "link",
+    "links",
+    "properties",
+    "details",
+    "sequencediagram",
+    "accTitle",
+    "accDescr"
+  ].map((w) => w.toLowerCase())
+);
+function escapeMermaid(text, quoted = false) {
+  return text.replace(/\s*\r?\n\s*/g, " ").replace(quoted ? /[#;%<>"]/g : /[#;%<>]/g, (c) => `#${c.charCodeAt(0)};`).trim();
+}
+function idMapper() {
+  const ids = /* @__PURE__ */ new Map();
+  const taken = /* @__PURE__ */ new Set();
+  return (id) => {
+    let safe = ids.get(id);
+    if (safe) return safe;
+    safe = /^[A-Za-z_][A-Za-z0-9_]*$/.test(id) && !RESERVED.has(id.toLowerCase()) ? id : `${id.replace(/\W/g, "_")}_`;
+    while (taken.has(safe)) safe += "_";
+    ids.set(id, safe);
+    taken.add(safe);
+    return safe;
+  };
+}
+function arrow(message) {
+  if (message.kind === "response") return "-->>";
+  if (message.failed) return "-x";
+  return message.async ? "-)" : "->>";
+}
+function toMermaidSequence(diagram, useCaseId, scenarioId) {
+  const found = findScenario(diagram, useCaseId, scenarioId);
+  if (!found) return "";
+  const sequence = buildSequence(found.useCase, found.scenario, diagram.nodes);
+  const id = idMapper();
+  const lines = ["sequenceDiagram", `  title ${escapeMermaid(found.useCase.name)}`];
+  for (const p of sequence.participants) {
+    const keyword = diagram.nodes.find((n) => n.id === p.id)?.techStack === "Actor" ? "actor" : "participant";
+    lines.push(`  ${keyword} ${id(p.id)} as ${escapeMermaid(p.name) || id(p.id)}`);
+  }
+  const first = sequence.participants[0];
+  const last = sequence.participants.at(-1);
+  if (first && last && (found.useCase.scenarios.length > 1 || sequence.condition)) {
+    const over = first === last ? id(first.id) : `${id(first.id)},${id(last.id)}`;
+    const outcome = found.scenario.outcome === "error" ? " (error)" : "";
+    const when = sequence.condition ? ` when ${sequence.condition}` : "";
+    lines.push(`  Note over ${over}: ${escapeMermaid(`${found.scenario.name}${outcome}${when}`)}`);
+  }
+  const message = (m, indent) => `${indent}${id(m.from)}${arrow(m)}${id(m.to)}: ${escapeMermaid(m.label) || "#32;"}`;
+  const order = new Map(sequence.participants.map((p, i) => [p.id, i]));
+  const sectioned = sectionedItems(sequence.items);
+  sectioned.forEach((entry, at) => {
+    const indent = "  ".repeat(entry.depth + 1);
+    if (entry.kind === "open") {
+      const inside = [];
+      for (let i = at + 1; i < sectioned.length; i++) {
+        const next = sectioned[i];
+        if (next.kind === "close" && next.depth === entry.depth) break;
+        if (next.kind === "item") inside.push(...sequenceMessages([next.item]));
+      }
+      const used = inside.flatMap((m) => [order.get(m.from) ?? 0, order.get(m.to) ?? 0]);
+      const from = sequence.participants[Math.min(...used)];
+      const to = sequence.participants[Math.max(...used)];
+      lines.push(`${indent}rect rgba(127, 127, 127, 0.1)`);
+      if (from && to) lines.push(`${indent}  Note over ${from === to ? id(from.id) : `${id(from.id)},${id(to.id)}`}: ${escapeMermaid(entry.section.name)}`);
+      return;
+    }
+    if (entry.kind === "close") {
+      lines.push(`${indent}end`);
+      return;
+    }
+    const item = entry.item;
+    if (item.kind === "message") {
+      lines.push(message(item.message, indent));
+      return;
+    }
+    item.branches.forEach((branch, i) => {
+      lines.push(`${indent}${i === 0 ? "par" : "and"}`);
+      branch.forEach((m) => lines.push(message(m, `${indent}  `)));
+    });
+    lines.push(`${indent}end`);
+  });
+  return lines.join("\n") + "\n";
+}
+function nodeLabel2(node) {
+  if (node.kind === "text") return escapeMermaid(node.description ?? node.name, true);
+  const techName = node.resolvedType && !node.resolvedType.builtin ? node.resolvedType.name : node.techStack;
+  const tech = node.implicit ? "" : `<br/>[${escapeMermaid(techName, true)}]`;
+  return `${escapeMermaid(node.name, true)}${tech}`;
+}
+function nodeShape(node, label) {
+  if (node.kind === "text") return `>"${label}"]`;
+  switch (node.type) {
+    case "database":
+      return `[("${label}")]`;
+    case "queue":
+    case "broker":
+      return `[["${label}"]]`;
+    default:
+      return `["${label}"]`;
+  }
+}
+function toMermaidArchitecture(diagram) {
+  const id = idMapper();
+  const lines = ["flowchart LR"];
+  if (diagram.title) lines.splice(0, 0, "---", `title: ${JSON.stringify(diagram.title)}`, "---");
+  const children = /* @__PURE__ */ new Map();
+  const known = new Set(diagram.nodes.map((n) => n.id));
+  for (const node of diagram.nodes) {
+    const parent = node.parent && known.has(node.parent) ? node.parent : void 0;
+    children.set(parent, [...children.get(parent) ?? [], node]);
+  }
+  const write = (parent, indent) => {
+    for (const node of children.get(parent) ?? []) {
+      if (node.kind === "group") {
+        lines.push(`${indent}subgraph ${id(node.id)}["${escapeMermaid(node.name, true)}"]`);
+        write(node.id, `${indent}  `);
+        lines.push(`${indent}end`);
+      } else {
+        lines.push(`${indent}${id(node.id)}${nodeShape(node, nodeLabel2(node))}`);
+      }
+    }
+  };
+  write(void 0, "  ");
+  for (const edge of diagram.edges) {
+    const label = edge.label ? `|"${escapeMermaid(edge.label, true)}"|` : "";
+    lines.push(`  ${id(edge.source)} -->${label} ${id(edge.target)}`);
+  }
+  lines.push(...colorLines(diagram, id));
+  return lines.join("\n") + "\n";
+}
+function className(base, dash2) {
+  const name = COLOR_NAMES.find((n) => PALETTE[n] === base) ?? `c${base.slice(1)}`;
+  return dash2 ? `${name}_${dash2}` : name;
+}
+function dashArray(dash2) {
+  return dash2 ? `,stroke-dasharray:${DASH_ARRAY[dash2]}` : "";
+}
+function colorLines(diagram, id) {
+  const classes = /* @__PURE__ */ new Map();
+  const groups = [];
+  for (const node of diagram.nodes) {
+    const base = nodeBaseColor(node);
+    if (!base) continue;
+    const t = tint(base, "light");
+    const dash2 = node.style?.dash;
+    if (node.kind === "group") {
+      groups.push(`  style ${id(node.id)} fill:${t.groupFill},stroke:${t.line},color:${t.text}${dashArray(dash2)}`);
+      continue;
+    }
+    const name = className(base, dash2);
+    const entry = classes.get(name) ?? { def: `fill:${t.fill},stroke:${t.line},color:${t.text}${dashArray(dash2)}`, members: [] };
+    entry.members.push(id(node.id));
+    classes.set(name, entry);
+  }
+  const links = /* @__PURE__ */ new Map();
+  diagram.edges.forEach((edge, i) => {
+    const { color, dash: dash2 } = edge.style ?? {};
+    if (!color && !dash2) return;
+    const key = [color && `stroke:${tint(color, "light").line}`, dash2 && `stroke-dasharray:${DASH_ARRAY[dash2]}`].filter(Boolean).join(",");
+    links.set(key, [...links.get(key) ?? [], i]);
+  });
+  return [
+    ...[...classes].map(([name, { def }]) => `  classDef ${name} ${def}`),
+    ...[...classes].map(([name, { members }]) => `  class ${members.join(",")} ${name}`),
+    ...groups,
+    ...[...links].map(([key, indexes]) => `  linkStyle ${indexes.join(",")} ${key}`)
+  ];
+}
+
+// ../frontend/src/hld/markdown.ts
+var STATUS3 = { pass: "\u2705", fail: "\u274C", unchecked: "\u2014" };
+var SEVERITY = { high: "\u{1F534}", medium: "\u{1F7E0}", low: "\u26AA" };
+function cell(text) {
+  return text === void 0 || text === "" ? "\u2014" : String(text).replace(/\|/g, "\\|").replace(/\s*\r?\n\s*/g, " ");
+}
+function table(head, rows) {
+  return [`| ${head.join(" | ")} |`, `| ${head.map(() => "---").join(" | ")} |`, ...rows.map((r) => `| ${r.map(cell).join(" | ")} |`), ""];
+}
+var fence = (lang, code2) => ["```" + lang, code2.trimEnd(), "```", ""];
+var code = (text) => `\`${text.replace(/`/g, "'")}\``;
+function renderSection(doc, s) {
+  const out = [`## ${s.title}`, ""];
+  switch (s.kind) {
+    case "overview": {
+      if (s.summary) out.push(s.summary, "");
+      out.push(overviewFacts(s), "");
+      if (s.components) out.push(...fence("mermaid", toMermaidArchitecture(doc.diagram)));
+      break;
+    }
+    case "requirements": {
+      if (s.functional.length) {
+        out.push("### Functional", "");
+        for (const f of s.functional) {
+          out.push(`- **${f.name}**${f.description ? ` \u2014 ${f.description}` : ""}`);
+          if (f.scenarios.length > 1 || f.scenarios[0]?.condition) {
+            for (const sc of f.scenarios) out.push(`  - ${sc.name}${sc.outcome === "error" ? " (error)" : ""}${sc.condition ? ` \u2014 when ${sc.condition}` : ""}`);
+          }
+        }
+        out.push("");
+      }
+      if (s.nonFunctional.length) {
+        out.push("### Non-functional", "", ...table(["Requirement", "Status", "Measured"], s.nonFunctional.map((r) => [r.label, STATUS3[r.status], r.measured])));
+      }
+      if (s.flowTests.length) {
+        out.push("### Flow tests", "", ...table(["Test", "Status", "Asserts", "Result"], s.flowTests.map((t) => [t.name, STATUS3[t.status], t.assertions.map(code).join("<br>"), t.measured])));
+      }
+      break;
+    }
+    case "capacity": {
+      if (s.traffic.length) {
+        out.push("### Traffic", "", ...table(["Use case", "Rate", "Mix"], s.traffic.map((t) => [t.useCase, formatTraffic2(t.rps, t.avgRps), t.mix.map((m) => `${m.scenario} ${formatPercent2(m.share)}`).join(", ")])));
+      }
+      if (s.load.length) {
+        out.push(
+          "### Load per component",
+          "",
+          ...table(
+            LOAD_HEADINGS,
+            s.load.map((n) => [
+              n.name,
+              accessText(n, "read"),
+              accessText(n, "write"),
+              `${formatPercent2(n.utilization)}${n.saturated ? " \u26A0\uFE0F saturated" : ""}`,
+              replicasText(n),
+              egressText(n),
+              formatUsd2(n.costUsd)
+            ])
+          )
+        );
+      }
+      if (s.totalCostUsd !== void 0) out.push(`**Total cost:** ${totalCostText(s.totalCostUsd, s.totalEgressUsd)}`, "");
+      break;
+    }
+    case "components":
+      out.push(
+        ...table(
+          ["Component", "Tech", "Kind", "Team", "Replicas", "Responsibility", "Stores"],
+          s.components.map((c) => [`**${c.name}** (${code(c.id)})`, c.tech, c.kind, c.team, c.replicas, c.responsibility, c.entities.join(", ")])
+        )
+      );
+      break;
+    case "dataModel":
+      for (const e of s.entities) {
+        out.push(`### ${e.name}${e.storeName ? ` (in ${e.storeName})` : ""}`, "");
+        if (e.description) out.push(e.description, "");
+        out.push(...table(["Field", "Type", "Flags"], e.fields.map((f) => [code(f.name), f.type, f.flags.join(", ")])));
+      }
+      break;
+    case "apis":
+      for (const ep of s.endpoints) {
+        out.push(`### ${code(ep.endpoint)}`, "");
+        if (ep.service) out.push(`Served by ${ep.service}.`, "");
+        for (const op of ep.operations) {
+          out.push(`**${op.useCase}**${op.endpoint !== ep.endpoint ? ` \u2014 ${code(op.endpoint)}` : ""}`, "");
+          if (op.request) out.push(...fence("json", op.request));
+          out.push(...table(["Scenario", "Response"], op.responses.map((r) => [`${r.scenario}${r.outcome === "error" ? " (error)" : ""}`, code(responseText(r))])));
+        }
+      }
+      break;
+    case "scenarios":
+      for (const u of s.useCases) {
+        out.push(`### ${u.name}`, "");
+        const about = [u.endpoint && code(u.endpoint), u.rps !== void 0 && formatRps2(u.rps), u.description].filter(Boolean).join(" \xB7 ");
+        if (about) out.push(about, "");
+        for (const sc of u.scenarios) {
+          if (u.scenarios.length > 1) out.push(`#### ${sc.name}${sc.outcome === "error" ? " (error)" : ""}`, "");
+          const facts = [
+            sc.condition && `When ${sc.condition}`,
+            sc.share !== void 0 && `${formatPercent2(sc.share)} of traffic`,
+            sc.latency && `p50 ${formatMs2(sc.latency.p50)}, p99 ${formatMs2(sc.latency.p99)}`
+          ].filter(Boolean);
+          if (facts.length) out.push(facts.join(" \xB7 "), "");
+          if (sc.steps) out.push(...fence("mermaid", toMermaidSequence(doc.diagram, u.useCaseId, sc.id)));
+        }
+      }
+      break;
+    case "decisions":
+      for (const d of s.decisions) {
+        out.push(`### ${d.title}`, "");
+        if (d.because) out.push(`**Because** ${d.because}`, "");
+        if (d.rejected.length) {
+          out.push("Rejected:", "");
+          for (const r of d.rejected) out.push(`- **${r.option}** \u2014 ${r.reason}`);
+          out.push("");
+        }
+      }
+      break;
+    case "risks":
+      for (const r of s.risks) {
+        out.push(`- ${SEVERITY[r.severity]} **${r.title}**${r.detail ? ` \u2014 ${r.detail}` : ""}${r.hint ? ` _Fix:_ ${r.hint}` : ""}`);
+      }
+      out.push("");
+      break;
+  }
+  return out;
+}
+function toMarkdown(doc) {
+  const out = [`# ${doc.title}`, ""];
+  if (!doc.checked && doc.sections.some((s) => s.kind === "requirements" && (s.nonFunctional.length || s.flowTests.length))) {
+    out.push("> Requirements and tests were not checked: the simulation did not run.", "");
+  }
+  for (const s of doc.sections) out.push(...renderSection(doc, s));
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trimEnd() + "\n";
+}
+
+// ../plugin/src/views/hld.tsx
+var documents = new Lru(16);
+var markdowns = new Lru(16);
+function hldDocument(doc, key) {
+  let h2 = documents.get(key);
+  if (!h2) {
+    h2 = hld(doc.root, doc.analysis, doc.tests);
+    documents.set(key, h2);
+  }
+  return h2;
+}
+function hldMarkdown(doc, key) {
+  let text = markdowns.get(key);
+  if (!text) {
+    text = toMarkdown(hldDocument(doc, key));
+    markdowns.set(key, text);
+  }
+  return text;
+}
+function shownMarkdown(markdown) {
+  const text = markdown.replace(/```mermaid\n([\s\S]*?)```\n?/g, (_, code2) => `_${code2.startsWith("sequenceDiagram") ? playsCaption() : "The Diagram tab draws the architecture."}_
+`).replace(/<br>/g, "; ");
+  let n = 0;
+  return text.split(/^(?=## )/m).slice(1).map((s) => s.replace(/^## (.+)$/m, (_, title) => `## ${++n}. ${title}`));
+}
+var TONE = { bad: { color: "red", glyph: "\u2717" }, good: { color: "green", glyph: "\u2713" }, warn: { color: "yellow", glyph: "\u26A0" } };
+function hldTab(ui, doc, key, copy2, scrollTo) {
+  const markdown = hldMarkdown(doc, key);
+  const design = hldDocument(doc, key);
+  const sections = shownMarkdown(markdown);
+  return /* @__PURE__ */ h(ui.Box, { key: "body-hld", flexDirection: "column" }, /* @__PURE__ */ h(ui.Markdown, { key: "hld-md-title", text: `# ${design.title}` }), /* @__PURE__ */ h(ui.Text, { dimColor: true }, HLD_SUBTITLE), hldVerdict(design).map((v, i) => /* @__PURE__ */ h(ui.Text, { key: `hld-verdict-${i}`, wrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { color: TONE[v.tone].color, bold: true }, TONE[v.tone].glyph, " "), v.text.map((span2, j) => /* @__PURE__ */ h(ui.Text, { key: `s${j}`, ...span2.bold ? { bold: true, color: TONE[v.tone].color } : {} }, span2.text)))), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Button, { key: "hld-copy", label: "\u29C9 Copy HLD markdown", hotkey: "c", variant: "primary", onPress: (press) => copy2(press.surface, markdown) }), /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "with its Mermaid diagrams, for a README or a wiki")), design.sections.length > 0 && /* @__PURE__ */ h(ui.Box, { key: "hld-toc", flexDirection: "row", flexWrap: "wrap", columnGap: 1 }, /* @__PURE__ */ h(ui.Text, { dimColor: true, bold: true }, "CONTENTS"), design.sections.map((sec, i) => /* @__PURE__ */ h(ui.Button, { key: `toc-${sec.kind}`, label: `${i + 1} ${sec.title}`, dimColor: true, onPress: () => scrollTo(hldAnchor(sec.kind)) }))), sections.map((text, i) => {
+    const kind = design.sections[i]?.kind ?? `section-${i}`;
+    return /* @__PURE__ */ h(ui.Box, { key: hldAnchor(kind), flexDirection: "column" }, /* @__PURE__ */ h(ui.Markdown, { key: `hld-md-${kind}`, text }));
+  }));
+}
+
+// ../plugin/src/views/lines.ts
+var TONE2 = { good: "#22c55e", warn: "#eab308", bad: "#ef4444", ink: "#111111", pink: "#ff5da2" };
+var HEAT = { warm: "#ffd23f", hot: "#ff7ab4", over: "#ff6b61" };
+var line = (...segs) => ({ segs: segs.map((s) => typeof s === "string" ? { text: s } : s) });
+var blank = () => line("");
+var heading = (text) => line({ text, bold: true });
+var usd3 = (x) => formatUsd(x).replace("/month", "");
+var cut2 = (text, room) => text.length <= room ? text : room <= 0 ? "" : `${text.slice(0, Math.max(0, room - 1))}\u2026`;
+function table2(cols, rows, width) {
+  const seg = (c) => c === void 0 ? { text: "" } : typeof c === "string" ? { text: c } : c;
+  let shown2 = cols.map((_, i) => i);
+  const widths = cols.map((c, i) => Math.max(c.title.length, ...rows.map((r) => seg(r[i]).text.length)));
+  const total = () => shown2.reduce((sum, i) => sum + widths[i], 0) + 2 * (shown2.length - 1);
+  while (total() > width) {
+    const droppable = shown2.filter((i) => cols[i].drop !== void 0).sort((a, b) => cols[b].drop - cols[a].drop);
+    if (droppable.length === 0) break;
+    shown2 = shown2.filter((i) => i !== droppable[0]);
+  }
+  const first = Math.max(6, widths[shown2[0]] - Math.max(0, total() - width));
+  const w = (i) => i === shown2[0] ? Math.min(widths[i], first) : widths[i];
+  const row = (cells, header = false) => ({
+    segs: shown2.flatMap((i, k) => {
+      const s = cells[i];
+      const text = cut2(s.text, w(i));
+      const padded = cols[i].right ? text.padStart(w(i)) : k === shown2.length - 1 ? text : text.padEnd(w(i));
+      return [...k > 0 ? [{ text: "  " }] : [], header ? { text: padded, dim: true } : { ...s, text: padded }];
+    })
+  });
+  return [row(cols.map((c) => ({ text: c.title.toUpperCase() })), true), ...rows.map((r) => row(cols.map((_, i) => seg(r[i]))))];
+}
+function stats(items, width) {
+  const out = [];
+  let current = [];
+  let used = 0;
+  for (const item of items) {
+    const size = item.label.length + 1 + item.value.length;
+    if (current.length && used + 3 + size > width) {
+      out.push({ segs: current });
+      current = [];
+      used = 0;
+    }
+    if (current.length) current.push({ text: " \xB7 ", dim: true });
+    current.push({ text: `${item.label} `, dim: true }, { text: item.value, bold: true, ...item.tone ? { color: item.tone } : {} });
+    used += (used ? 3 : 0) + size;
+  }
+  if (current.length) out.push({ segs: current });
+  return out;
+}
+var splits2 = (n) => n.writeLoadRps > 0 && (n.writeScaling === "shards" || n.readCapacityRps !== n.writeCapacityRps);
+var utilTone = (n) => n.saturated ? TONE2.bad : n.utilization > HOT ? TONE2.warn : void 0;
+function utilCell(u, tone2) {
+  const filled = Math.max(u > 0 ? 1 : 0, Math.min(5, Math.round(u * 5)));
+  return { text: `${"\u2501".repeat(filled)}${"\u2500".repeat(5 - filled)} ${formatPercent(u)}`, ...tone2 ? { color: tone2 } : {} };
+}
+function busiestLine(analysis) {
+  const node = busiestOf(analysis);
+  if (!node) return void 0;
+  const u = node.utilization;
+  const bottleneck = node.saturated || u >= BOTTLENECK_FROM;
+  const headroom = u >= 1 ? "past its capacity: requests are dropped" : `${(Math.floor(1 / u * 10) / 10).toFixed(1)}\xD7 headroom before it saturates`;
+  return {
+    segs: [
+      bottleneck ? { text: " BOTTLENECK ", bg: HEAT.over, color: TONE2.ink, bold: true } : { text: " BUSIEST ", bold: true, dim: true },
+      { text: " " },
+      { text: node.id, bold: true },
+      { text: ` at ${formatPercent(u)}: ${headroom}.` }
+    ],
+    wrap: true
+  };
+}
+function analysisLines(diagram, analysis, width) {
+  const out = [];
+  const nodes = analysis.nodes.filter((n) => n.kind !== "client" && n.kind !== "other");
+  const saturated = nodes.filter((n) => n.saturated || n.queue !== void 0 && n.queue.utilization >= 1).length;
+  const spofs = analysis.singlePointsOfFailure;
+  out.push(
+    ...stats(
+      [
+        { label: "Total cost", value: `${formatUsd(analysis.totalCostUsd)}${analysis.totalEgressUsd > 0 ? ` (incl. ${usd3(analysis.totalEgressUsd)} egress)` : ""}` },
+        { label: "Saturated", value: String(saturated), tone: saturated ? TONE2.bad : TONE2.good },
+        { label: "SPOFs", value: String(spofs.length), tone: spofs.length ? TONE2.warn : TONE2.good },
+        { label: "Use cases with traffic", value: String(analysis.useCases.filter((u) => u.rps > 0).length) }
+      ],
+      width
+    )
+  );
+  const busiest = busiestLine(analysis);
+  if (busiest) out.push(blank(), busiest);
+  if (analysis.warnings.length) out.push(blank(), ...analysis.warnings.map((w) => ({ segs: [{ text: `\u26A0 ${w}`, color: TONE2.warn }], wrap: true })));
+  out.push(blank(), heading("Nodes"));
+  const rows = [];
+  for (const n of nodes) {
+    const tone2 = utilTone(n);
+    const name = `${n.id}${n.replicas > 1 ? ` \xD7${n.replicas}` : ""}`;
+    const cells = [
+      { text: name, bold: true },
+      splits2(n) ? `R ${formatRps(n.readLoadRps).replace(" rps", "")} / ${formatRps(n.readCapacityRps)}` : `${formatRps(n.loadRps).replace(" rps", "")} / ${formatRps(n.capacityRps)}`,
+      utilCell(n.utilization, tone2),
+      formatMs(n.latencyMs),
+      formatAvailability(n.availability),
+      `${usd3(n.costUsd)}${n.egressUsd > 0 ? ` +${usd3(n.egressUsd)}` : ""}`
+    ];
+    rows.push(cells);
+    if (splits2(n)) {
+      rows.push([
+        { text: `  ${n.shards > 1 ? `${n.shards} shards` : ""}`, dim: true },
+        `W ${formatRps(n.writeLoadRps).replace(" rps", "")} / ${formatRps(n.writeCapacityRps)}`,
+        { text: `R ${formatPercent(n.readUtilization)} W ${formatPercent(n.writeUtilization)}`, dim: true }
+      ]);
+    }
+  }
+  out.push(
+    ...table2(
+      [{ title: "Node" }, { title: "Load / capacity" }, { title: "Util", drop: 1 }, { title: "Latency", right: true, drop: 2 }, { title: "Avail", right: true, drop: 3 }, { title: "Cost", right: true, drop: 4 }],
+      rows,
+      width
+    )
+  );
+  const queues = analysis.nodes.filter((n) => n.queue);
+  if (queues.length) {
+    out.push(blank(), heading("Queues"));
+    out.push(
+      ...table2(
+        [{ title: "Queue" }, { title: "In / drain" }, { title: "Consumers", right: true, drop: 1 }, { title: "Backlog or lag", right: true }],
+        queues.map((n) => {
+          const q = n.queue;
+          const behind = q.backlogPerHour > 0;
+          return [
+            { text: n.id, bold: true },
+            `${formatRps(q.inflowRps).replace(" rps", "")} / ${formatRps(q.drainRps)}`,
+            Number.isFinite(q.utilization) ? formatPercent(q.utilization) : "\u2014",
+            behind ? { text: `+${formatCount(q.backlogPerHour)} msgs/h`, color: TONE2.bad } : `lag ${formatDuration(q.lagMs)}`
+          ];
+        }),
+        width
+      )
+    );
+  }
+  if (analysis.useCases.length) {
+    out.push(blank(), heading("Use cases"));
+    const rows2 = [];
+    for (const u of analysis.useCases) {
+      rows2.push([{ text: u.name, bold: true }, u.rps > 0 ? formatTraffic(u.rps, u.avgRps) : "no traffic", ...["p50", "p95", "p99", "p999"].map((p) => formatMs(u.percentiles[p])), formatAvailability(u.availability)]);
+      if (u.scenarios.length > 1) {
+        for (const s of u.scenarios) {
+          const dim = !(s.share > 0);
+          rows2.push([{ text: `  ${s.name}`, dim }, { text: `${formatPercent(s.share)} \xB7 mean ${formatMs(s.meanMs)}`, dim }, ...["p50", "p95", "p99", "p999"].map((p) => ({ text: formatMs(s.percentiles[p]), dim })), ""]);
+        }
+      }
+    }
+    out.push(
+      ...table2(
+        [{ title: "Use case" }, { title: "Traffic", drop: 1 }, { title: "p50", right: true, drop: 4 }, { title: "p95", right: true, drop: 5 }, { title: "p99", right: true }, { title: "p99.9", right: true, drop: 3 }, { title: "Avail", right: true, drop: 2 }],
+        rows2,
+        width
+      )
+    );
+  }
+  const b = costBreakdown(diagram, analysis);
+  const sections = [
+    ["Team", b.unowned ? [...b.teams, b.unowned] : b.teams],
+    ["Group", b.groups],
+    ["Tag", b.tags]
+  ];
+  if (sections.some(([, r]) => r.length > 0)) {
+    const budgets = /* @__PURE__ */ new Map();
+    for (const r of diagram.requirements ?? []) {
+      if (r.kind !== "cost" || !r.scope) continue;
+      budgets.set("team" in r.scope ? `@${r.scope.team}` : "tag" in r.scope ? `.${r.scope.tag}` : r.scope.group, r.maxUsdPerMonth);
+    }
+    out.push(blank(), heading("Cost breakdown"));
+    out.push(
+      ...table2(
+        [{ title: "By", drop: 2 }, { title: "Name" }, { title: "Cost", right: true }, { title: "Share", right: true, drop: 3 }, { title: "Budget", right: true, drop: 1 }, { title: "Nodes", drop: 4 }],
+        sections.flatMap(
+          ([by, shares]) => shares.map((s, i) => {
+            const budget2 = budgets.get(s.id);
+            const over = budget2 !== void 0 && s.costUsd > budget2;
+            return [
+              { text: i === 0 ? by : "", dim: true },
+              { text: s.label, bold: true },
+              usd3(s.costUsd),
+              b.totalCostUsd > 0 ? formatPercent(s.costUsd / b.totalCostUsd) : "\u2014",
+              budget2 === void 0 ? { text: "\u2014", dim: true } : { text: `${usd3(budget2)}${over ? " over" : ""}`, color: over ? TONE2.bad : TONE2.good },
+              { text: s.nodes.join(", "), dim: true }
+            ];
+          })
+        ),
+        width
+      )
+    );
+  }
+  if (spofs.length) {
+    out.push(blank(), heading("Single points of failure"));
+    out.push({ segs: [{ text: `${spofs.join(", ")}`, color: TONE2.warn, bold: true }, { text: ": one replica, and a use case cannot do without it. Add x2, or a fallback scenario that calls it with -x and still completes." }], wrap: true });
+  }
+  out.push(blank(), { segs: [{ text: "Teaching numbers from default profiles per technology and a simple queueing model; override them with capacity { \u2026 }.", dim: true }], wrap: true });
+  return out;
+}
+function legendLine(critical, width) {
+  const swatch = (bg) => ({ text: "  ", bg });
+  const segs = [
+    { text: "Load ", dim: true },
+    // From 40% a card's border and bar turn yellow; from 70% it fills.
+    { text: "\u2501\u2501", color: HEAT.warm },
+    { text: " 40 ", dim: true },
+    swatch(HEAT.warm),
+    { text: " 70 ", dim: true },
+    swatch(HEAT.hot),
+    { text: " 90 ", dim: true },
+    swatch(HEAT.over),
+    { text: " 100%", dim: true }
+  ];
+  const path = critical ? ` \xB7 \u2501 p99 path of "${critical.useCase}" ${formatMs(critical.p99Ms)}` : "";
+  const edges = " \xB7 edges: rps \xB7 +latency";
+  const used = segs.reduce((n, s) => n + s.text.length, 0);
+  if (path && used + path.length <= width) segs.push({ text: path, dim: true });
+  if (segs.reduce((n, s) => n + s.text.length, 0) + edges.length <= width) segs.push({ text: edges, dim: true });
+  return { segs };
+}
+
+// ../plugin/src/views/view.ts
+var pickOf = (useCase, scenario) => ({ value: `${useCase.id}:${scenario.id}`, useCase, scenario });
+var PINK = "#ff5da2";
+var INK = "#111111";
+var YELLOW = "#ffd23f";
+var hotkey = (view, key) => view.inPane ? { hotkey: key } : {};
+var panelColumns = (columns) => Math.max(20, Math.min(255, columns));
+var FLOAT_EDGES = { top: true, bottom: true };
+
+// ../plugin/src/views/pieces.tsx
+var INLINE_WARNINGS = 2;
+var GLYPH = { copy: "\u29C9", open: "\u2197", focus: "\u26F6", cycle: "\u21E5", collapse: "\u229F", expand: "\u229E", enter: "\u2922", leave: "\u2191", explore: "\u2261", inline: "\u2193" };
+var textLabel = (c) => [c.icon && GLYPH[c.icon], c.label].filter(Boolean).join(" ");
+function noticesOf(doc, lost, reasons, inPane, lead = []) {
+  const unknown = lost.filter((name) => !reasons.has(name));
+  const warnings = inPane ? doc.warnings : doc.warnings.slice(0, INLINE_WARNINGS);
+  return [
+    ...lead,
+    ...unknown.length ? [{ text: `Not found, so drawn as plain boxes: ${unknown.join(", ")}`, tone: "muted" }] : [],
+    ...lost.filter((name) => reasons.has(name)).map((name) => ({ text: reasons.get(name), tone: "muted" })),
+    ...doc.notes.map((n) => ({ text: n.text, ...n.hint ? { hint: n.hint } : {} })),
+    ...warnings.map((text) => ({ text })),
+    ...!inPane && doc.warnings.length > INLINE_WARNINGS ? [{ text: `\u2026 ${doc.warnings.length - INLINE_WARNINGS} more: Focus, then Analysis`, tone: "muted" }] : []
+  ];
+}
+function noticesText(ui, notices, key) {
+  return notices.map((n, i) => /* @__PURE__ */ h(ui.Text, { key: `${key}-${i}`, ...n.tone === "muted" ? { dimColor: true } : { color: n.tone === "bad" ? "red" : "yellow" }, wrap: "truncate-end" }, n.tone === "muted" ? "" : "\u26A0 ", n.text, n.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true }, " \u2192 ", n.hint)));
+}
+function verdictOf(tests) {
+  const failing = tests.filter((t) => !t.passed);
+  if (!failing[0]) return void 0;
+  return { passed: tests.length - failing.length, total: tests.length, first: `${failing[0].name}: ${failing[0].message}` };
+}
+var DETAILS = { id: "details", icon: "focus", label: "Details" };
+function verdictText(ui, v, width, viewId, details) {
+  const key = `verdict-${viewId}`;
+  const failing = v.total - v.passed;
+  const head = `\u2717 ${failing} of ${v.total} ${v.total === 1 ? "check" : "checks"} fail`;
+  return /* @__PURE__ */ h(ui.Box, { key, flexDirection: "row", gap: 1, width }, /* @__PURE__ */ h(ui.Box, { flexGrow: 1 }, /* @__PURE__ */ h(ui.Text, { wrap: "truncate-end" }, /* @__PURE__ */ h(ui.Text, { color: "red", bold: true }, head), v.first ? `: ${v.first}` : "")), details && /* @__PURE__ */ h(ui.Button, { key: `tests-${viewId}`, label: textLabel(DETAILS), dimColor: true, onPress: details }));
+}
+function linkControls(inPane, roomy) {
+  return [
+    { id: "src", icon: "copy", label: roomy ? "Copy source" : "Source" },
+    { id: "lnk", icon: "copy", label: roomy ? "Copy share link" : "Link" },
+    { id: "open", icon: "open", label: roomy ? "Open in Proschi" : "Open", variant: "primary" },
+    ...inPane ? [{ id: "inline", icon: "inline", label: "Inline", hotkey: "i" }] : [{ id: "focus", icon: "focus", label: "Focus" }]
+  ];
+}
+function controlsText(ui, controls, key, width, act2) {
+  return /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width }, controls.map((c) => /* @__PURE__ */ h(ui.Button, { key: `${c.id}-${key}`, label: textLabel(c), ...c.variant === "primary" ? { variant: "primary" } : {}, ...c.hotkey ? { hotkey: c.hotkey } : {}, onPress: (press) => act2(c.id, press.surface) })));
+}
+function systemsText(ui, s, key, width, act2) {
+  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: "gray", paddingX: 1, width }, s.inside && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "Inside ", s.inside), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "System"), /* @__PURE__ */ h(ui.Text, { color: PINK, wrap: "truncate-end" }, s.selected ? `${s.selected.name} (${s.selected.path})` : "none here"), s.controls.map((c) => /* @__PURE__ */ h(ui.Button, { key: `sys-${c.id}-${key}`, label: textLabel(c), ...c.hotkey ? { hotkey: c.hotkey } : {}, onPress: () => act2(c.id) }))));
 }
 
 // ../frontend/src/playground/useCaseGroups.ts
@@ -6892,46 +11590,362 @@ function groupByEndpoint(useCases) {
   return [...groups].map(([label, list]) => ({ label, useCases: list }));
 }
 
+// ../plugin/src/views/player.tsx
+var EXPLORE_ALL = "__explore";
+var scenarioName = (u, s) => {
+  const status = s.outcome === "error" ? s.steps.find(isErrorStep)?.statusCode : void 0;
+  return `${u.scenarios.length > 1 ? s.name : "Main flow"}${status ? ` \xB7 ${status}` : ""}`;
+};
+function playerModel(view, doc, pick2, playing, step, isPlaying, ctl, sequence = false) {
+  const total = pick2.scenario.steps.length;
+  const actions = {
+    uc: () => ctl.toggle("uc"),
+    sc: () => ctl.toggle("sc"),
+    body: () => playing ? ctl.toggle("body") : void 0,
+    explore: () => ctl.toggle("explore"),
+    close: () => ctl.close(),
+    view: () => {
+      ctl.close();
+      ctl.toggleView();
+    },
+    play: () => {
+      ctl.close();
+      if (!playing) ctl.start(pick2);
+      else if (isPlaying) ctl.pause();
+      else ctl.go(step >= total - 1 ? 0 : step, true);
+    },
+    stop: () => {
+      if (!playing) return;
+      ctl.close();
+      ctl.stop();
+    }
+  };
+  for (const [id, to] of [["first", () => 0], ["prev", () => step - 1], ["next", () => step + 1], ["last", () => total - 1]]) actions[id] = () => playing ? ctl.go(to()) : void 0;
+  const choose = (next) => {
+    ctl.close();
+    if (playing) ctl.start(next, isPlaying);
+    else ctl.pick(next);
+  };
+  for (const u of doc.diagram.useCases) {
+    if (u.scenarios[0]) actions[`uc=${u.id}`] = () => choose(pickOf(u, u.scenarios[0]));
+    for (const s of u.scenarios) {
+      actions[`x-${u.id}-${s.id}`] = () => {
+        ctl.close();
+        ctl.start(pickOf(u, s));
+      };
+    }
+  }
+  actions[`uc=${EXPLORE_ALL}`] = () => ctl.openMenu("explore");
+  for (const s of pick2.useCase.scenarios) actions[`sc=${s.id}`] = () => choose(pickOf(pick2.useCase, s));
+  const open = ctl.open;
+  return { pick: pick2, ...playing ? { playing } : {}, step, total, isPlaying, sequence, ...open && (open !== "body" || playing) ? { open } : {}, actions, line: stepLine(view, pick2, playing ? step : void 0) };
+}
+function stepLine(view, pick2, at) {
+  const steps = pick2.scenario.steps;
+  if (at === void 0 || !steps[at]) {
+    const about = pick2.useCase.description?.replace(/\s*\n\s*/g, " ");
+    return { spans: [{ text: about ? `${about} \xB7 ` : "", tone: "muted" }, { text: "Press \u25B6 to play", tone: "muted" }].filter((s2) => s2.text) };
+  }
+  const current = currentStepsOf(steps, at);
+  const s = current[0];
+  const name = (id) => view.scene.nodes.get(id)?.node.name ?? id;
+  const call = `${s.httpMethod} ${s.endpoint}`.trim();
+  const exec = s.executionType === "ASYNC_FIRE_AND_FORGET" ? { text: "Fire & Forget", tone: "warn" } : s.executionType === "ASYNC_REQUEST_RESPONSE" ? { text: "Async", tone: "info" } : { text: "Sync", tone: "good" };
+  const spans = [
+    call ? { text: call, mono: true } : { text: s.stepName, bold: true },
+    { text: ` \xB7 ${name(s.fromServiceId)} \u2192 ${name(s.toServiceId)} \xB7 `, tone: "muted" },
+    exec,
+    ...s.failed ? [{ text: " \xB7 ", tone: "muted" }, { text: "Failed", tone: "bad", bold: true }] : (s.statusCode ?? 0) >= 400 ? [{ text: " \xB7 ", tone: "muted" }, { text: String(s.statusCode), tone: "bad", bold: true }] : [],
+    ...current.length > 1 ? [{ text: ` \xB7 +${current.length - 1} in parallel`, tone: "muted" }] : []
+  ];
+  return { number: steps.indexOf(s) + 1, ...isErrorStep(s) || s.failed ? { error: true } : {}, spans };
+}
+var useCaseOptions = (doc) => [
+  ...groupByEndpoint(doc.diagram.useCases).flatMap((g) => g.useCases.map((u) => ({ value: u.id, label: u.name, ...g.label ? { group: g.label } : {} }))),
+  { value: EXPLORE_ALL, label: "Explore all\u2026", icon: "explore", divider: true }
+];
+var scenarioOptions = (u) => u.scenarios.map((s) => ({ value: s.id, label: scenarioName(u, s), icon: s.outcome === "error" ? "cross" : "check", tone: s.outcome === "error" ? "bad" : "good" }));
+function barPanel(view, doc, m, at, isPlaying) {
+  const on = at !== void 0;
+  const key = (k) => view.inPane ? { hotkey: k, keycap: false } : {};
+  const ctl = (id, icon, k, enabled) => ({ id, icon, variant: "quiet", ...key(k), ...enabled ? {} : { disabled: true } });
+  const total = m.total;
+  const line2 = on ? stepLine(view, m.pick, at) : m.line;
+  return {
+    kind: "playerBar",
+    useCase: { id: "uc", value: m.pick.useCase.id, options: useCaseOptions(doc), ...m.open === "uc" || m.open === "explore" ? { open: true } : {} },
+    scenario: { id: "sc", value: m.pick.scenario.id, options: scenarioOptions(m.pick.useCase), ...m.open === "sc" ? { open: true } : {} },
+    controls: [
+      ctl("first", "first", "r", on && at > 0),
+      ctl("prev", "prev", "b", on && at > 0),
+      { id: "play", icon: isPlaying ? "pause" : "play", variant: "primary", ...key("p") },
+      ctl("next", "next", "n", on && at < total - 1),
+      ctl("last", "last", "e", on && at < total - 1),
+      ctl("stop", "exit", "d", on)
+    ],
+    step: { ...on ? { at: at + 1 } : {}, total },
+    line: { ...line2.number !== void 0 ? { number: line2.number } : {}, ...line2.error ? { error: true } : {}, text: line2.spans },
+    body: { id: "body", label: "Body", ...on ? {} : { disabled: true }, ...m.open === "body" ? { active: true } : {} },
+    view: { id: "view", label: VIEW_LABELS.picture[m.sequence ? 1 : 0], variant: "quiet", columns: VIEW_COLUMNS, ...key("v") }
+  };
+}
+var VIEW_LABELS = { text: ["\u21C5 Sequence", "\u25EB Architecture"], picture: ["Sequence", "Architecture"] };
+var VIEW_COLUMNS = 14;
+var drawerPanel = (view, pick2, at) => ({
+  kind: "drawer",
+  ...pick2.scenario.condition ? { condition: pick2.scenario.condition } : {},
+  cards: stepCardsOf(pick2.scenario, (id) => view.scene.nodes.get(id)?.node.name ?? id)[at] ?? [],
+  close: { id: "close", icon: "exit", variant: "quiet" }
+});
+var explorerPanel = (doc, pick2) => ({
+  kind: "explorer",
+  groups: groupByEndpoint(doc.diagram.useCases).map((g) => ({
+    ...g.label ? { label: g.label } : {},
+    useCases: g.useCases.map((u) => ({
+      name: u.name,
+      ...u.id === pick2.useCase.id ? { current: true } : {},
+      scenarios: u.scenarios.map((s) => ({ id: `x-${u.id}-${s.id}`, name: u.scenarios.length > 1 ? s.name : "Play", outcome: s.outcome === "error" ? "error" : "ok", ...s.outcome === "error" && s.steps.find(isErrorStep)?.statusCode ? { status: s.steps.find(isErrorStep).statusCode } : {} }))
+    }))
+  })),
+  close: { id: "close", icon: "exit", variant: "quiet" }
+});
+function floatColumns(W2, panel) {
+  if (panel.kind === "menu") return Math.min(W2, MENU_COLUMNS);
+  if (panel.kind === "explorer") return Math.min(W2, 76);
+  return W2;
+}
+var MENU_COLUMNS = 64;
+function floatOf(view, doc, m, bar, W2) {
+  const panel = m.open === "uc" ? { kind: "menu", select: { ...bar.useCase, open: false } } : m.open === "sc" ? { kind: "menu", select: { ...bar.scenario, open: false } } : m.open === "explore" ? explorerPanel(doc, m.pick) : m.open === "body" && m.playing ? drawerPanel(view, m.playing, m.step) : void 0;
+  if (!panel || !m.open) return void 0;
+  const id = m.open === "body" ? "drawer" : m.open === "explore" ? "explorer" : "menu";
+  const actions = {};
+  for (const [k, fn] of Object.entries(m.actions)) actions[`${id}/${k}`] = () => fn();
+  return { id, panel, columns: floatColumns(W2, panel), anchor: { piece: "bar", ...m.open === "body" ? {} : { control: m.open === "explore" ? "uc" : m.open } }, close: () => m.actions.close(), actions };
+}
+function playerBarText(view, doc, m) {
+  const { ui } = view.d;
+  const id = view.viewId;
+  const on = m.playing !== void 0;
+  const at = m.step;
+  const total = m.total;
+  const counter = `Step ${(on ? String(at + 1) : "\u2013").padStart(String(total).length)}/${total}`;
+  const key = (k) => hotkey(view, k);
+  const step = (k, label, name, enabled) => /* @__PURE__ */ h(ui.Button, { key: `${name}-${id}`, label, ...key(k), dimColor: !enabled, onPress: () => m.actions[name]() });
+  const ucWidth = Math.max(...doc.diagram.useCases.map((u) => u.name.length), 14) + 4;
+  const scWidth = Math.max(...m.pick.useCase.scenarios.map((s) => scenarioName(m.pick.useCase, s).length + 2)) + 4;
+  const used = 9 + ucWidth + 1 + scWidth + 1 + 6 * 6 + counter.length + 1;
+  const bar = Math.max(0, Math.min(30, view.width - 4 - used));
+  const filled = on && total ? Math.round(bar * (at + 1) / total) : 0;
+  const line2 = m.line;
+  return /* @__PURE__ */ h(ui.Box, { key: `bar-${id}`, flexDirection: "column", borderStyle: "round", borderColor: PINK, paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true, color: PINK }, "Use case"), /* @__PURE__ */ h(ui.Select, { key: `uc-${id}`, value: m.pick.useCase.id, options: useCaseOptions(doc).map((o) => ({ value: o.value, label: o.value === EXPLORE_ALL ? "\u2261 Explore all\u2026" : o.label })), onSelect: (v) => m.actions[`uc=${v}`]?.() }), /* @__PURE__ */ h(ui.Select, { key: `sc-${id}`, value: m.pick.scenario.id, options: m.pick.useCase.scenarios.map((s) => ({ value: s.id, label: `${s.outcome === "error" ? "\u2717" : "\u2713"} ${scenarioName(m.pick.useCase, s)}` })), onSelect: (v) => m.actions[`sc=${v}`]?.() }), step("r", "\u21E4", "first", on && at > 0), step("b", "\u2039", "prev", on && at > 0), /* @__PURE__ */ h(ui.Button, { key: `play-${id}`, label: m.isPlaying ? "\u275A\u275A" : " \u25B6", variant: "primary", ...key("p"), onPress: () => m.actions.play() }), step("n", "\u203A", "next", on && at < total - 1), step("e", "\u21E5", "last", on && at < total - 1), step("d", "\u2715", "stop", on), /* @__PURE__ */ h(ui.Text, { bold: on, dimColor: !on }, counter), bar > 0 && /* @__PURE__ */ h(ui.Text, null, /* @__PURE__ */ h(ui.Text, { color: YELLOW }, "\u2501".repeat(filled)), /* @__PURE__ */ h(ui.Text, { dimColor: true }, "\u2501".repeat(bar - filled)))), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1 }, /* @__PURE__ */ h(ui.Box, { flexGrow: 1 }, /* @__PURE__ */ h(ui.Text, { wrap: "truncate-end" }, line2.number !== void 0 && chip(ui, String(line2.number), line2.error ? "#ff3b30" : PINK), line2.number !== void 0 ? " " : "", line2.spans.map((s) => /* @__PURE__ */ h(ui.Text, { bold: s.bold === true, dimColor: s.tone === "muted", color: s.tone === "bad" ? "red" : s.tone === "good" ? "green" : s.tone === "warn" ? "yellow" : s.tone === "info" ? "magenta" : void 0 }, s.text)))), /* @__PURE__ */ h(ui.Button, { key: `view-${id}`, label: VIEW_LABELS.text[m.sequence ? 1 : 0].padEnd(Math.max(...VIEW_LABELS.text.map((l) => l.length))), ...key("v"), onPress: () => m.actions.view() }), /* @__PURE__ */ h(ui.Button, { key: `body-${id}`, label: m.open === "body" ? "Body \u25B4" : "Body \u25BE", dimColor: !on, onPress: () => m.actions.body() })), m.open === "body" && m.playing && stepRows(ui, view, m.playing.scenario.steps, at).nodes, m.open === "explore" && groupByEndpoint(doc.diagram.useCases).map((g) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, g.label && /* @__PURE__ */ h(ui.Text, { bold: true, color: "cyan" }, g.label), g.useCases.map((u) => /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap", paddingLeft: g.label ? 2 : 0 }, /* @__PURE__ */ h(ui.Text, { bold: u.id === m.pick.useCase.id }, u.name), u.scenarios.map((s) => /* @__PURE__ */ h(ui.Button, { key: `x-${id}-${u.id}-${s.id}`, onPress: () => m.actions[`x-${u.id}-${s.id}`]() }, /* @__PURE__ */ h(ui.Text, { color: s.outcome === "error" ? "red" : "green" }, s.outcome === "error" ? "\u2717" : "\u2713", " ", u.scenarios.length > 1 ? scenarioName(u, s) : "Play"))))))));
+}
+var FORMAT2 = { JSON: "JSON", XML: "XML", FREE_TEXT: "Text" };
+var LANGUAGE = { JSON: "json", XML: "xml", FREE_TEXT: void 0 };
+var chip = (ui, text, background) => /* @__PURE__ */ h(ui.Text, { backgroundColor: background, color: INK, bold: true }, ` ${text} `);
+var BODY_LINES = 8;
+function bodyRows(ui, label, text, format) {
+  const lines = text.replace(/\n+$/, "").split("\n");
+  const shown2 = lines.slice(0, BODY_LINES);
+  const more = lines.length - shown2.length;
+  const language = LANGUAGE[format];
+  return {
+    nodes: [
+      label,
+      /* @__PURE__ */ h(ui.Code, { source: shown2.join("\n"), wrap: "truncate-end", ...language ? { language } : {} }),
+      ...more > 0 ? [/* @__PURE__ */ h(ui.Text, { dimColor: true }, "\u2026 ", more, " more line", more === 1 ? "" : "s")] : []
+    ],
+    height: 1 + shown2.length + (more > 0 ? 1 : 0)
+  };
+}
+function stepRows(ui, view, steps, at) {
+  const name = (id) => view.scene.nodes.get(id)?.node.name ?? id;
+  const current = currentStepsOf(steps, at);
+  const nodes = [];
+  let height = 0;
+  const row = (node) => {
+    nodes.push(node);
+    height++;
+  };
+  const add = (rows) => {
+    nodes.push(...rows.nodes);
+    height += rows.height;
+  };
+  if (current.length > 1) {
+    row(
+      /* @__PURE__ */ h(ui.Text, { bold: true, color: "blue", wrap: "truncate-end" }, "\u26A1 Parallel Execution (", current.length, " steps running simultaneously)")
+    );
+  }
+  if (steps.length === 0) row(/* @__PURE__ */ h(ui.Text, { dimColor: true }, "This scenario has no steps."));
+  current.forEach((s, i) => {
+    const error = isErrorStep(s);
+    const call = `${s.httpMethod} ${s.endpoint}`.trim();
+    if (i > 0) row(/* @__PURE__ */ h(ui.Text, null, " "));
+    row(
+      /* @__PURE__ */ h(ui.Text, { wrap: "truncate-end" }, chip(ui, String(steps.indexOf(s) + 1), error ? "#ff3b30" : PINK), " ", /* @__PURE__ */ h(ui.Text, { bold: true }, s.stepName), s.failed && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Failed", "#fca5a5")), !s.failed && (s.statusCode ?? 0) >= 400 && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, String(s.statusCode), "#fca5a5")), s.executionType === "SYNC_REQUEST_RESPONSE" && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Sync", "#86efac")), s.executionType === "ASYNC_FIRE_AND_FORGET" && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Fire & Forget", "#fdba74")), s.executionType === "ASYNC_REQUEST_RESPONSE" && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Async", "#d8b4fe")))
+    );
+    row(
+      /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, name(s.fromServiceId), " \u2192 ", name(s.toServiceId), call && call !== s.stepName ? `   ${call}` : "")
+    );
+    if (s.description) row(/* @__PURE__ */ h(ui.Text, { wrap: "truncate-end" }, s.description.replace(/\s*\n\s*/g, " ")));
+    if (s.requestBody) add(bodyRows(ui, /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Request (", FORMAT2[s.requestFormat], ")"), s.requestBody, s.requestFormat));
+    if (s.responseBody && s.executionType !== "ASYNC_FIRE_AND_FORGET") {
+      const label = /* @__PURE__ */ h(ui.Text, { color: error ? "red" : void 0, dimColor: !error }, "Response (", FORMAT2[s.responseFormat], ")", s.statusCode !== void 0 ? ` - ${s.statusCode}` : "");
+      add(bodyRows(ui, label, s.responseBody, s.responseFormat));
+    }
+    if (!s.responseBody && !s.failed && (s.statusCode ?? 0) >= 400) row(/* @__PURE__ */ h(ui.Text, { color: "red" }, "Answered with ", s.statusCode));
+    if (s.failed) {
+      row(
+        /* @__PURE__ */ h(ui.Text, { color: "red", wrap: "truncate-end" }, "No response: the call failed (timeout, connection refused or similar).")
+      );
+    }
+  });
+  return { nodes, height };
+}
+
+// ../plugin/src/views/render.tsx
+var span = (ui, s, i) => /* @__PURE__ */ h(ui.Text, { key: String(i), ...s.color ? { color: s.color } : {}, ...s.bg ? { backgroundColor: s.bg } : {}, bold: s.bold === true, dimColor: s.dim === true }, s.text);
+function lineView(ui, l, key) {
+  const text = /* @__PURE__ */ h(ui.Text, { wrap: l.wrap ? "wrap" : "truncate-end" }, l.segs.length === 0 || l.segs.every((s) => s.text === "") ? " " : l.segs.map((s, i) => span(ui, s, i)));
+  return l.indent ? /* @__PURE__ */ h(ui.Box, { key, paddingLeft: l.indent }, text) : /* @__PURE__ */ h(ui.Box, { key }, text);
+}
+function linesView(ui, lines, key) {
+  return /* @__PURE__ */ h(ui.Box, { key, flexDirection: "column" }, lines.map((l, i) => lineView(ui, l, `${key}-${i}`)));
+}
+
+// ../plugin/src/views/whatif.ts
+var saved = new Lru(16);
+function savedWhatIfs(key, doc) {
+  let results = saved.get(key);
+  if (!results) {
+    results = doc.analysis ? runWhatIfs(doc.root) : [];
+    saved.set(key, results);
+  }
+  return results;
+}
+var toneColor = (r) => r.tone === "better" ? TONE2.good : r.tone === "worse" ? TONE2.bad : void 0;
+var versus = (r) => {
+  const color = toneColor(r);
+  const changed = r.change !== "same" && r.before !== r.after;
+  return { text: changed && r.tone !== "same" ? `${r.after} ${r.tone === "better" ? "\u2193" : "\u2191"}` : `${r.after}  `, ...color ? { color } : { dim: !changed } };
+};
+function savedLines(base, results, width) {
+  const a = headlineOf(base);
+  const availability2 = (r) => ({ ...versus(r), text: r.change !== "same" && r.before !== r.after ? `${r.after} ${r.tone === "better" ? "\u2191" : "\u2193"}` : `${r.after}  ` });
+  return table2(
+    [{ title: "What-if" }, { title: "Result" }, { title: "Worst p99", right: true }, { title: "Avail", right: true, drop: 2 }, { title: "Cost", right: true, drop: 1 }],
+    results.map((w) => [
+      { text: w.name, bold: true },
+      w.passed ? { text: "\u2713 pass", color: TONE2.good, bold: true } : { text: "\u2717 fail", color: TONE2.bad, bold: true },
+      versus(p99Row("", a.p99Ms, w.headline.p99Ms)),
+      availability2(availabilityRow("", a.availability, w.headline.availability)),
+      versus(costRow(a.costUsd, w.headline.costUsd))
+    ]),
+    width
+  );
+}
+function whatIfLines(diagram, base, results, width) {
+  const out = [{ segs: [] }, { segs: [{ text: "What-ifs", bold: true }] }];
+  if (results.length === 0) {
+    out.push({ segs: [{ text: "None saved yet: a whatif block runs the design again with more traffic or nodes down, e.g.", dim: true }], wrap: true });
+    out.push(...whatIfExample(diagram).split("\n").map((text) => ({ segs: [{ text, dim: true }] })));
+    return out;
+  }
+  out.push(...savedLines(base, results, width));
+  for (const text of results.flatMap((r) => r.warnings)) out.push({ segs: [{ text: `\u26A0 ${text}`, color: TONE2.warn }], wrap: true });
+  return out;
+}
+
+// ../plugin/src/views/tabs.tsx
+var TABS = [
+  { id: "diagram", label: "Diagram", key: "1" },
+  { id: "analysis", label: "Analysis", key: "2" },
+  { id: "hld", label: "HLD", key: "3" }
+];
+var MOVED = { whatif: "analysis", sequence: "hld", tests: "hld" };
+var tabOf = (stored) => typeof stored === "string" && MOVED[stored] || (TABS.find((t) => t.id === stored)?.id ?? "diagram");
+function tabBar(ui, current, failing, pick2, open) {
+  return /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap" }, TABS.map((t) => /* @__PURE__ */ h(
+    ui.Button,
+    {
+      key: `tab-${t.id}`,
+      label: t.id === "hld" && failing > 0 ? `${t.label} \u2717${failing}` : t.label,
+      hotkey: t.key,
+      ...t.id === current ? { variant: "primary" } : { dimColor: true },
+      onPress: () => pick2(t.id)
+    }
+  )), open && /* @__PURE__ */ h(ui.Button, { key: "tab-open", label: "\u2197 Open in Proschi", dimColor: true, onPress: (press) => open(press.surface) }));
+}
+function analysisBody(doc, columns) {
+  if (!doc.analysis) return [{ segs: [{ text: "No traffic yet: add a traffic { \u2026 } block and Proschi estimates load, latency, availability and cost for every node, e.g." }], wrap: true }, { segs: [] }, ...trafficExample(doc.diagram).split("\n").map((text) => ({ segs: [{ text, dim: true }] }))];
+  return analysisLines(doc.root, doc.analysis, columns);
+}
+function analysisTab(ui, doc, whatIfs, columns, explore) {
+  if (!doc.analysis) return linesView(ui, analysisBody(doc, columns), "body-analysis");
+  return /* @__PURE__ */ h(ui.Box, { key: "body-analysis", flexDirection: "column" }, linesView(ui, analysisLines(doc.root, doc.analysis, columns), "analysis-lines"), linesView(ui, whatIfLines(doc.diagram, doc.analysis, whatIfs, columns), "whatif-lines"), /* @__PURE__ */ h(ui.Box, { marginTop: 1 }, /* @__PURE__ */ h(ui.Button, { key: "explore-whatifs", label: "\u2197 Explore what-ifs in Proschi", onPress: (press) => explore(press.surface) })));
+}
+
 // ../plugin/src/register.tsx
 var icons = "nerd-font";
+var graphics = "auto";
+var INLINE_ROWS = 40;
 var PANE = "proschi-view";
 var PANE_VIEW = `${PANE}:0`;
 var IDLE = { pick: "", step: 0, isPlaying: false, mode: "diagram", explorer: false, expanded: [] };
 var NO_SOURCE = { source: "" };
-var paneFile = atom({ plugin: "proschi", key: "paneFile" }, "");
-var paneSource = atom({ plugin: "proschi", key: "paneSource" }, NO_SOURCE);
-var players = atom({ plugin: "proschi", key: "player" }, IDLE);
+var paneFile = atom2({ plugin: "proschi", key: "paneFile" }, "");
+var paneSource = atom2({ plugin: "proschi", key: "paneSource" }, NO_SOURCE);
+var players = atom2({ plugin: "proschi", key: "player" }, IDLE);
+var paneTab = atom2({ plugin: "proschi", key: "paneTab" }, "diagram");
 var NO_ROW = {};
-var placedRows = atom({ plugin: "proschi", key: "placed" }, NO_ROW);
+var placedRows = atom2({ plugin: "proschi", key: "placed" }, NO_ROW);
+var prompts = atom2({ plugin: "proschi", key: "prompts" }, 0);
 var INLINE = "inline-";
-var PANE_KEYS = "p play \xB7 n/b step \xB7 r restart \xB7 e end \xB7 v sequence/architecture \xB7 x explorer \xB7 d diagram \xB7 i inline \xB7 esc back to the prompt";
+var paneAnchor;
+var PANE_KEYS = "1-3 tabs \xB7 p play \xB7 n/b step \xB7 r first \xB7 e last \xB7 d stop \xB7 v sequence/architecture \xB7 i inline \xB7 esc back to the prompt";
+var PICTURE_KEYS = "1-3 tabs \xB7 p play \xB7 n/b step \xB7 r first \xB7 e last \xB7 d stop \xB7 v sequence/architecture \xB7 z/x zoom \xB7 0 fit \xB7 i inline \xB7 esc back to the prompt";
+var TAB_KEYS = "1-3 tabs \xB7 \u2191\u2193 scroll \xB7 esc back to the prompt";
+var HLD_KEYS = "1-3 tabs \xB7 \u2191\u2193 scroll \xB7 c copy \xB7 esc back to the prompt";
 var SYSTEM_KEYS = "s next system \xB7 o open/close \xB7 f focus in \xB7 u back out";
-var FRAME2 = 50;
+var FRAME2 = 33;
+var FRAMES = Math.round(TRAVEL_MS / FRAME2) + 1;
 var HINT = [
   "Proschi diagrams render in this terminal: put a Proschi document in a ```proschi fenced block",
   "(or write a .proschi file) and Claude Code draws it as the architecture, with a player for its",
   "use cases and the simulation's load on each node when it has `traffic`. Use the block instead of",
   "Mermaid or ASCII art when showing an architecture or a request flow."
 ].join(" ");
-var layouts = /* @__PURE__ */ new Map();
-var pending = /* @__PURE__ */ new Set();
-var documents = /* @__PURE__ */ new Map();
-var scenes = /* @__PURE__ */ new Map();
-var sequences = /* @__PURE__ */ new Map();
+var layouts = new Lru(32);
+var pending3 = /* @__PURE__ */ new Set();
+var documents2 = new Lru(32);
+var scenes = new Lru(64);
+var sequences = new Lru(32);
 var timers = /* @__PURE__ */ new Map();
-var drawings = /* @__PURE__ */ new Map();
-var prompts = atom({ plugin: "proschi", key: "prompts" }, 0);
+var SITES2 = 64;
+var drawings = new Lru(SITES2);
 var FENCE = /^```proschi[^\n]*\n([\s\S]*?)\n```[ \t]*$/gm;
 function register(on, options) {
-  const chosen = options.icons;
-  icons = chosen === "symbols" || chosen === "none" ? chosen : "nerd-font";
+  icons = options.icons === "symbols" || options.icons === "none" ? options.icons : "nerd-font";
+  graphics = graphicsMode(options.graphics);
+  const refused2 = setCellAspect(options.cellAspect);
   on("session.start", async ($, e, next) => {
+    if (refused2) $.ui.log(`proschi: ${refused2}`, { to: "debug" });
+    void serveRequests($);
     await $.command.register({ name: "proschi", description: "Proschi diagrams: /proschi view <file.proschi> shows one in a pane, or with --inline in the transcript", argumentHint: "view [--inline] [--expand <id>,\u2026] [--focus <id>] <file>" });
     return next(e);
   });
   on("prompt.submit", async ($, e, next) => {
-    await update($, prompts, (n) => n + 1);
+    await update2($, prompts, (n) => n + 1);
     return next(e);
+  });
+  on("session.end", async ($, e, next) => {
+    stopWorker();
+    return next(e);
+  });
+  on("config.set", { key: "theme" }, async ($, e, next) => {
+    const set = await next(e);
+    themeChanged();
+    return set;
   });
   on("prompt.compose", async ($, e, next) => {
     const composed = await next(e);
@@ -6952,25 +11966,32 @@ function register(on, options) {
       } else words.push(rest[i]);
     }
     const file = words.join(" ");
+    if (verb === "perf") return { text: perfReport(Number(words[0]) || 10) };
     if (verb !== "view" || !file) return { text: USAGE };
     if (!await $.fs.exists(file)) return { text: `No such file: ${file}` };
     if (view.expanded || view.focus !== void 0) {
       const { diagram, errors } = parseSource(await readWithImports($, file));
-      const refused = errors.length ? void 0 : viewError(diagram, view);
-      if (refused) return { text: refused };
+      const refused3 = errors.length ? void 0 : viewError(diagram, view);
+      if (refused3) return { text: refused3 };
     }
+    const shown2 = { ...IDLE, expanded: view.expanded ?? [], ...view.focus !== void 0 ? { focus: view.focus } : {} };
     if (inline2) {
-      await placeInline($, { file }, { ...IDLE, expanded: view.expanded ?? [], ...view.focus !== void 0 ? { focus: view.focus } : {} });
+      await placeInline($, { file }, shown2);
       return { text: `Showing ${file} in the transcript.` };
     }
     stop(PANE_VIEW);
-    await update($, memberOf(players, { requestId: PANE_VIEW }), () => ({ ...IDLE, expanded: view.expanded ?? [], ...view.focus !== void 0 ? { focus: view.focus } : {} }));
-    await update($, paneFile, () => file);
+    await update2($, memberOf(players, { requestId: PANE_VIEW }), () => shown2);
+    await update2($, paneFile, () => file);
+    await markOpened($, PANE_VIEW);
     await $.ui.open({ id: PANE, title: `Proschi \xB7 ${basename(file)}` });
     watch($, file);
     return { text: `Showing ${file} in the Proschi pane.` };
   });
   on("ui.close", { id: PANE }, async ($, e, next) => {
+    if (e.origin.kind === "person" && menus.delete(PANE_VIEW)) {
+      $.ui.invalidate("ui.render");
+      return { value: void 0 };
+    }
     stop(PANE_VIEW);
     stop(PANE);
     return next(e);
@@ -6984,7 +12005,7 @@ function register(on, options) {
     for (const match of e.props.text.matchAll(FENCE)) {
       const before2 = e.props.text.slice(last, match.index);
       if (before2.trim()) parts.push(/* @__PURE__ */ h(ui.Markdown, { text: before2 }));
-      const view = await diagramView($, { ui, requestId: e.requestId, columns: (e.viewport?.columns ?? 120) - 4 }, `${e.requestId}:${n++}`, { source: match[1] });
+      const view = await drawDiagram($, { ui, requestId: e.requestId, columns: (e.viewport?.columns ?? 120) - 4 }, `${e.requestId}:${n++}`, { source: match[1] });
       if ("error" in view) {
         parts.push(/* @__PURE__ */ h(ui.Markdown, { text: match[0] }));
         parts.push(/* @__PURE__ */ h(ui.Text, { dimColor: true }, view.error));
@@ -7003,18 +12024,18 @@ function register(on, options) {
     const ui = $.ui.resolve(e);
     const source = await readWithImports($, file).catch(() => void 0);
     if (!source) return row;
-    const view = await diagramView($, { ui, requestId: e.requestId, columns: (e.viewport?.columns ?? 120) - 6 }, `${e.requestId}:0`, source, file);
+    const view = await drawDiagram($, { ui, requestId: e.requestId, columns: (e.viewport?.columns ?? 120) - 6 }, `${e.requestId}:0`, source, file);
     return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, row, /* @__PURE__ */ h(ui.Box, { paddingLeft: 2 }, "error" in view ? /* @__PURE__ */ h(ui.Text, { dimColor: true }, view.error) : view.element));
   });
   on("ui.render", { component: "Placed" }, async ($, e, next) => {
     if (e.props.plugin !== "proschi" || !e.props.id.startsWith(INLINE)) return next(e);
     const ui = $.ui.resolve(e);
     if (e.surface !== "terminal") return /* @__PURE__ */ h(ui.Text, null, "The Proschi drawing draws in a terminal.");
-    const row = await read($, memberOf(placedRows, { requestId: e.props.id }));
+    const row = await read2($, memberOf(placedRows, { requestId: e.props.id }));
     if (!row.file && !row.source) return /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Drawing\u2026");
     const source = row.file ? await readWithImports($, row.file).catch(() => void 0) : { source: row.source, ...row.path ? { path: row.path } : {}, ...row.imports ? { imports: row.imports } : {} };
     if (!source) return /* @__PURE__ */ h(ui.Text, { color: "red" }, "Cannot read ", row.file, ".");
-    const view = await diagramView($, { ui, requestId: e.requestId, columns: (e.viewport?.columns ?? 120) - 4 }, `${e.props.id}:0`, source, row.file);
+    const view = await drawDiagram($, { ui, requestId: e.requestId, columns: (e.viewport?.columns ?? 120) - 4 }, `${e.props.id}:0`, source, row.file);
     return "error" in view ? /* @__PURE__ */ h(ui.Text, { color: "red" }, view.error) : view.element;
   });
   on("ui.render", { component: "Pane", requestId: PANE }, async ($, e) => {
@@ -7023,24 +12044,141 @@ function register(on, options) {
       return /* @__PURE__ */ h(Text, null, "The Proschi pane draws in a terminal.");
     }
     const ui = $.ui.resolve(e);
-    const file = await read($, paneFile);
-    const focused = file ? NO_SOURCE : await read($, paneSource);
+    const file = await read2($, paneFile);
+    const focused = file ? NO_SOURCE : await read2($, paneSource);
     if (!file && !focused.source) return /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Run /proschi view <file.proschi>.");
     const source = file ? await readWithImports($, file).catch(() => void 0) : focused;
     if (!source) return /* @__PURE__ */ h(ui.Text, { color: "red" }, "Cannot read ", file, ".");
     const columns = "bodyColumns" in e.props && typeof e.props.bodyColumns === "number" ? e.props.bodyColumns : (e.viewport?.columns ?? 120) - 4;
-    const view = await diagramView($, { ui, requestId: PANE, columns }, PANE_VIEW, source);
-    if ("error" in view) return /* @__PURE__ */ h(ui.Text, { color: "red" }, view.error);
     const isFocused = "isFocused" in e.props && e.props.isFocused === true;
-    return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, view.element, /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, isFocused ? PANE_KEYS : "ctrl+x tab focuses the pane for its keys"), isFocused && view.systems && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, SYSTEM_KEYS));
+    const scrolled = "scroll" in e.props ? e.props.scroll : void 0;
+    const bodyRows2 = typeof scrolled?.bodyRows === "number" ? scrolled.bodyRows : 0;
+    paneWindow(PANE, typeof scrolled?.offset === "number" ? scrolled.offset : 0, bodyRows2);
+    const tab = tabOf(await read2($, paneTab));
+    const loaded = await documentOf($, PANE_VIEW, source);
+    const failing = "error" in loaded ? 0 : loaded.doc.tests.filter((t) => !t.passed).length;
+    const draw = { ui, requestId: PANE, columns, rows: Math.max(INLINE_ROWS, bodyRows2 - 10) };
+    const keys = (systems, pictures = false) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, isFocused ? tab === "diagram" ? pictures ? PICTURE_KEYS : PANE_KEYS : tab === "hld" ? HLD_KEYS : TAB_KEYS : "ctrl+x tab focuses the pane for its keys"), isFocused && systems && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, SYSTEM_KEYS));
+    const mode = await modeOf($, ui, PANE, PANE_VIEW);
+    if (mode.kind !== "text" && !("error" in loaded)) {
+      const W2 = panelColumns(columns);
+      const { doc, key } = loaded;
+      const pieces = [{ id: "tabs", panel: tabBarPanel(tab, failing), columns: W2 }];
+      const actions = {};
+      for (const t of TABS)
+        actions[`tabs/${t.id}`] = () => {
+          menus.delete(PANE_VIEW);
+          void update2($, paneTab, () => t.id);
+        };
+      const link = doc.link();
+      actions["tabs/open"] = (surface) => void openLink($, surface, link);
+      const page = { doc, key, source: loaded.source };
+      const ahead = TABS.filter((t) => t.id !== tab).map((t) => ({ panel: tabBarPanel(t.id, failing), columns: W2 }));
+      const pages2 = [];
+      for (const t of TABS) {
+        if (t.id === "diagram") continue;
+        const body = pagePart($, t.id, page);
+        pages2.push({ id: `page-${t.id}`, panel: body.panel, columns: W2, shown: t.id === tab });
+        if (t.id !== tab) continue;
+        for (const [id, fn] of Object.entries(body.actions)) actions[`page-${t.id}/${id}`] = fn;
+      }
+      const view2 = await drawDiagram($, draw, PANE_VIEW, source, void 0, { pieces, actions, ahead, pages: pages2, hidden: tab !== "diagram" }, mode);
+      if ("error" in view2) {
+        if (tab === "diagram") return /* @__PURE__ */ h(ui.Text, { color: "red" }, view2.error);
+        $.ui.log(`proschi: the ${tab} tab in text: ${view2.error}`, { to: "debug" });
+      } else if (view2.picture) {
+        if (paneAnchor && tab === "hld") {
+          scrollToAnchorOnceShown($, PANE_VIEW, paneAnchor);
+          paneAnchor = void 0;
+        }
+        return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, view2.element, keys(tab === "diagram" && view2.systems, true));
+      }
+    }
+    const opens = "error" in loaded ? void 0 : loaded.doc.link();
+    const bar = tabBar(ui, tab, failing, (to) => void update2($, paneTab, () => to), opens === void 0 ? void 0 : (surface) => void openLink($, surface, opens));
+    if (tab !== "diagram") {
+      if ("error" in loaded) return /* @__PURE__ */ h(ui.Text, { color: "red" }, loaded.error);
+      const { doc, key } = loaded;
+      const link = opens;
+      const body = tab === "hld" ? hldTab(ui, doc, key, (surface, text) => void copy($, surface, text, "the HLD markdown"), (anchor) => void scroll($, { to: { key: anchor }, in: PANE, block: "start" })) : analysisTab(ui, doc, savedWhatIfs(key, doc), columns, (surface) => void openLink($, surface, link));
+      if (paneAnchor && tab === "hld") {
+        const anchor = paneAnchor;
+        paneAnchor = void 0;
+        $.clock.after(0, () => void scroll($, { to: { key: anchor }, in: PANE, block: "start" }));
+      }
+      return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, bar, body, keys(false));
+    }
+    const view = await drawDiagram($, draw, PANE_VIEW, source, void 0, void 0, { kind: "text" });
+    if ("error" in view) return /* @__PURE__ */ h(ui.Text, { color: "red" }, view.error);
+    return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, bar, view.element, keys(view.systems));
   });
+  registerPicture(on);
+}
+function pagePart($, tab, c) {
+  const actions = {};
+  const { doc, key } = c;
+  if (tab === "analysis") {
+    const link = doc.link();
+    actions["explore-whatifs"] = (surface) => void openLink($, surface, link);
+    return { panel: pageOf(`analysis\0${key}`, () => analysisPage(doc, savedWhatIfs(key, doc))), actions };
+  }
+  const markdown = hldMarkdown(doc, key);
+  const design = hldDocument(doc, key);
+  actions["hld-copy"] = (surface) => void copy($, surface, markdown, "the HLD markdown");
+  for (const s of design.sections) actions[`toc=${s.kind}`] = () => void scrollToAnchor($, PANE_VIEW, hldAnchor(s.kind));
+  return { panel: pageOf(`hld\0${key}`, () => hldPage(design, c.source)), actions };
+}
+var pages = new Lru(8);
+function pageOf(key, make) {
+  let panel = pages.get(key);
+  if (!panel) pages.set(key, panel = make());
+  return panel;
+}
+async function drawDiagram($, d, viewId, source, file, top = { pieces: [], actions: {}, ahead: [] }, known) {
+  const mode = known ?? await modeOf($, d.ui, d.requestId, viewId);
+  const hidden = top.hidden === true;
+  const view = await diagramView($, d, viewId, source, file, mode, hidden ? "first" : "now");
+  if (!hidden) {
+    if ("error" in view) return view;
+    if (view.kind === "text") return { element: view.element, systems: view.systems, picture: false };
+    if (view.kind === "loading") return { element: loading(d.ui, viewId, view.rows, mode.kind === "loading" ? mode.probe : void 0), systems: false, picture: true };
+  } else if (mode.kind === "loading") return { element: loading(d.ui, viewId, d.rows ?? INLINE_ROWS, mode.probe), systems: false, picture: true };
+  const pic = !("error" in view) && view.kind === "picture" ? view : void 0;
+  const float = hidden ? void 0 : pic?.float;
+  const drawn = await pictureSite($, d.ui, {
+    requestId: d.requestId,
+    site: viewId,
+    theme: await themeOf($),
+    pieces: [...top.pieces, ...pic?.pieces ?? []],
+    actions: { ...top.actions, ...pic?.actions ?? {} },
+    hotkeys: d.requestId === PANE,
+    ahead: [...top.ahead, ...pic?.ahead ?? []],
+    layer: "bar",
+    ...float ? { float } : {},
+    ...pic?.corner ? { corner: pic.corner } : {},
+    ...pic?.keys ? { keys: pic.keys } : {},
+    ...pic?.onDrag ? { onDrag: pic.onDrag } : {},
+    ...top.pages ? { pages: top.pages } : {},
+    ...top.pages && pic?.pieces[0] ? { paged: { from: pic.pieces[0].id, shown: !hidden } } : {},
+    rows: pic?.rows ?? d.rows ?? INLINE_ROWS,
+    ...mode.kind === "picture" && mode.form ? { form: mode.form } : {}
+  });
+  if ("element" in drawn) return { element: drawn.element, systems: pic?.systems ?? false, picture: true };
+  $.ui.log(`proschi: the drawing in text: ${drawn.error}`, { to: "debug" });
+  return hidden ? { error: drawn.error } : drawDiagram($, d, viewId, source, file, top, { kind: "text" });
 }
 function proschiFile(tool, input) {
   if (tool !== "Write" && tool !== "Edit") return void 0;
   const path = input?.file_path;
   return typeof path === "string" && path.endsWith(".proschi") ? path : void 0;
 }
-var USAGE = "Usage: /proschi view [--inline] [--expand <system>[,<system>\u2026]] [--focus <system>] <file.proschi>";
+var USAGE = "Usage: /proschi view [--inline] [--expand <system>[,<system>\u2026]] [--focus <system>] <file.proschi>, or /proschi perf [count]";
+function perfReport(n) {
+  const last = pressTimings().slice(-n);
+  if (last.length === 0) return "No presses timed yet: press a tab or a control in the pictures, then run /proschi perf again.";
+  const lines = last.map((t) => `${t.control.padEnd(22)} ${String(t.toShown).padStart(5)} ms  (render after ${t.toRender} ms, built in ${t.build} ms, ${t.sent}/${t.images} pictures new)`);
+  return [`The last ${last.length} presses, press to drawn:`, ...lines].join("\n");
+}
 var basename = (path) => path.split("/").pop() ?? path;
 var dirname = (path) => path.slice(0, Math.max(0, path.lastIndexOf("/")));
 async function projectRoot($, dir) {
@@ -7049,7 +12187,7 @@ async function projectRoot($, dir) {
     if (!current || current === "/") return dir;
   }
 }
-var importReasons = /* @__PURE__ */ new Map();
+var importReasons = new Lru(256);
 async function readWithImports($, file) {
   const name = basename(file);
   const dir = dirname(file);
@@ -7086,10 +12224,10 @@ async function readRemote($, root, spec, locked) {
   const file = `${root}/${CACHE_DIR}/${hash}`;
   if (!await $.fs.exists(file)) throw remoteError.notCached(spec);
   const { base64: base642 } = await $.fs.read(file, { as: "bytes" });
-  const bytes = Uint8Array.from(atob(base642), (c) => c.charCodeAt(0));
-  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
-  if ([...digest].map((b) => b.toString(16).padStart(2, "0")).join("") !== hash) throw remoteError.altered(spec);
-  return new TextDecoder().decode(bytes);
+  const bytes2 = Uint8Array.from(atob(base642), (c) => c.charCodeAt(0));
+  const digest2 = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes2));
+  if ([...digest2].map((b) => b.toString(16).padStart(2, "0")).join("") !== hash) throw remoteError.altered(spec);
+  return new TextDecoder().decode(bytes2);
 }
 function watch($, file) {
   stop(PANE);
@@ -7097,7 +12235,7 @@ function watch($, file) {
   timers.set(
     PANE,
     $.clock.every(1e3, async () => {
-      if (await read($, paneFile) !== file) return;
+      if (await read2($, paneFile) !== file) return;
       const stat = await $.fs.stat(file).catch(() => void 0);
       const mtime = stat && "mtimeMs" in stat ? Number(stat.mtimeMs) : 0;
       if (seen && mtime !== seen) $.ui.invalidate("ui.render");
@@ -7106,21 +12244,23 @@ function watch($, file) {
   );
 }
 function requestLayout($, key, source) {
-  if (pending.has(key)) return;
-  pending.add(key);
-  void $.process.run(["node", `${$.plugin.root}/hooks/layout.cjs`], { stdin: JSON.stringify(source), timeoutMs: 3e4 }).then(
-    ({ exitCode, stdout, stderr }) => {
-      layouts.set(key, exitCode === 0 ? JSON.parse(stdout) : { error: stderr.trim() || `layout exited with ${exitCode}` });
+  if (pending3.has(key)) return;
+  pending3.add(key);
+  void ask($, { kind: "layout", ...source }, "now").then(
+    (out) => {
+      answered(`layout:${key}`);
+      layouts.set(key, out);
     },
     (error) => {
-      layouts.set(key, { error: `Proschi lays diagrams out with Node.js 18 or newer, which did not start: ${String(error)}` });
+      if (isRetryable(error) && retry(`layout:${key}`)) return;
+      const why = error instanceof Error ? error.message : String(error);
+      layouts.set(key, { error: didNotStart(error) ? `Proschi lays diagrams out with Node.js 18 or newer, which did not start: ${why}` : why });
     }
   ).finally(() => {
-    pending.delete(key);
-    $.ui.invalidate("ui.render");
+    pending3.delete(key);
+    redraw($);
   });
 }
-var pickOf = (useCase, scenario) => ({ value: `${useCase.id}:${scenario.id}`, useCase, scenario });
 function normal(p) {
   return {
     pick: p?.pick ?? "",
@@ -7131,37 +12271,50 @@ function normal(p) {
     expanded: Array.isArray(p?.expanded) ? p.expanded.filter((id) => typeof id === "string") : [],
     ...typeof p?.focus === "string" ? { focus: p.focus } : {},
     ...typeof p?.selected === "string" ? { selected: p.selected } : {},
-    ...p?.view === "architecture" ? { view: "architecture" } : {}
+    ...isMoved(zoomOf(p?.zoom)) ? { zoom: zoomOf(p?.zoom) } : {},
+    ...p?.sequence === true ? { sequence: true } : {}
   };
 }
-var PINK = "#ff5da2";
-var INK = "#111111";
-var YELLOW = "#ffd23f";
-var PAUSE = "\u275A\u275A Pause";
-var PLAY = " \u25B6 Play ";
 var BARS_WIDTH = 80;
-async function diagramView($, d, viewId, written, file) {
-  const { ui } = d;
-  const player = normal(await read($, memberOf(players, { requestId: viewId })));
-  const shown = { ...player.expanded.length ? { expanded: player.expanded } : {}, ...player.focus !== void 0 ? { focus: player.focus } : {} };
-  const source = shown.expanded || shown.focus !== void 0 ? { ...written, view: shown } : written;
+async function documentOf($, viewId, written, file) {
+  const player = normal(await read2($, memberOf(players, { requestId: viewId })));
+  const shown2 = { ...player.expanded.length ? { expanded: player.expanded } : {}, ...player.focus !== void 0 ? { focus: player.focus } : {} };
+  const source = shown2.expanded || shown2.focus !== void 0 ? { ...written, view: shown2 } : written;
   const key = keyOf(source);
-  let doc = documents.get(key);
+  let doc = documents2.get(key);
   if (!doc) {
     doc = loadDocument(source);
-    documents.set(key, doc);
+    documents2.set(key, doc);
   }
-  if (d.requestId !== PANE && !drawings.has(viewId)) drawings.set(viewId, { requestId: d.requestId, key: drawnKey(file ? { file } : { source: written.source }) });
-  const where = file ?? "The diagram";
+  const where2 = file ?? "The diagram";
   if (doc.errors.length > 0) {
     const [first] = doc.errors;
-    return { error: `${where} has errors (line ${first.line}: ${first.message})${file ? `: run \`npx proschi check ${file}\`` : ""}.` };
+    return { error: `${where2} has errors (line ${first.line}: ${first.message})${file ? `: run \`npx proschi check ${file}\`` : ""}.` };
   }
-  if (doc.diagram.nodes.length === 0) return { error: `${where} has no components to draw.` };
+  if (doc.diagram.nodes.length === 0) return { error: `${where2} has no components to draw.` };
+  return { doc, source, key, player };
+}
+async function modeOf($, ui, requestId, probeId) {
+  if (graphics === "off") return { kind: "text" };
+  const p = await probeOf($);
+  if (p.status === "unknown") {
+    const key = probeKey(probeId);
+    probe($, requestId, key);
+    return { kind: "loading", probe: /* @__PURE__ */ h(ui.Image, { key, source: probeSource($), columns: 1, rows: 1, alt: " " }) };
+  }
+  if (graphics === "auto" && (p.status === "no" || p.status === "tmux")) return { kind: "text", ...p.status === "tmux" ? { hint: true } : {} };
+  return { kind: "picture", ...p.form ? { form: p.form } : {} };
+}
+async function diagramView($, d, viewId, written, file, mode = { kind: "text" }, priority = "now") {
+  const loaded = await documentOf($, viewId, written, file);
+  if ("error" in loaded) return loaded;
+  const { doc, source, key, player } = loaded;
+  if (d.requestId !== PANE && !drawings.has(viewId)) drawings.set(viewId, { requestId: d.requestId, key: drawnKey(file ? { file } : { source: written.source }) });
   const layout = layouts.get(key);
   if (!layout) {
     requestLayout($, key, source);
-    return { element: /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Laying out ", doc.diagram.title ?? "the diagram", "\u2026"), systems: false };
+    if (mode.kind !== "text") return { kind: "loading", rows: Math.min(d.rows ?? INLINE_ROWS, 20) };
+    return { kind: "text", element: /* @__PURE__ */ h(d.ui.Text, { dimColor: true }, "Laying out ", doc.diagram.title ?? "the diagram", "\u2026"), systems: false };
   }
   if ("error" in layout) return { error: `Proschi could not lay ${file ?? "this diagram"} out: ${layout.error}` };
   const columns = Math.max(40, Math.min(512, d.columns));
@@ -7172,56 +12325,417 @@ async function diagramView($, d, viewId, written, file) {
     scenes.set(sceneKey, scene);
   }
   const picks = doc.diagram.useCases.flatMap((u) => u.scenarios.map((s) => pickOf(u, s)));
-  const pick = picks.find((p) => p.value === player.pick) ?? picks[0];
-  const playing = player.mode === "play" ? pick : void 0;
+  const pick2 = picks.find((p2) => p2.value === player.pick) ?? picks[0];
+  const playing = player.mode === "play" ? pick2 : void 0;
   const steps = playing?.scenario.steps ?? [];
   const step = Math.max(0, Math.min(player.step, steps.length - 1));
   const width = Math.min(Math.max(40, d.columns), Math.max(scene.columns, BARS_WIDTH));
   const systems = selectable(scene, player.focus);
   const selected = systems.find((s) => s.path === player.selected) ?? systems[0];
-  const view = { d, viewId, rasterKey: `d-${viewId}`, anchorKey: `at-${viewId}`, scene, width, overlay: doc.overlay, systems: doc.systems, ...selected ? { selected: selected.id } : {}, inPane: d.requestId === PANE, doc, docKey: key, columns };
+  const sequence = (value) => {
+    const at = picks.find((p2) => p2.value === value) ?? picks[0];
+    return at && sequenceOf(doc, key, at, columns);
+  };
+  const view = { d, viewId, rasterKey: `d-${viewId}`, anchorKey: `at-${viewId}`, scene, width, overlay: doc.overlay, edges: doc.edges, systems: doc.systems, ...selected ? { selected: selected.id } : {}, inPane: d.requestId === PANE, sequence };
   if (playing && player.isPlaying && !timers.has(viewId)) animate($, view, steps);
-  const progress = timers.has(viewId) ? 0 : 100;
-  const { grid, rasterKey } = frameOf2(view, player, step, progress);
-  const link = doc.link(playing ? { useCase: playing.useCase.id, ...playing.useCase.scenarios.length > 1 ? { scenario: playing.scenario.id } : {}, step } : void 0);
-  const lost = lostImports(written, keyOf(written));
-  const hasSystems = systems.length > 0 || player.focus !== void 0;
-  const roomy = view.width >= 79;
-  return { element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, playing ? playerHeader($, view, playing, player) : doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, grid.columns > d.columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", grid.columns, " columns wide, wider than the ", d.columns, " here: ", view.inPane ? "widen the window" : "use \u26F6 Focus or a wider window", " to see it whole."), lost.some((name) => !importReasons.has(name)) && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u26A0 Not found, so drawn as plain boxes: ", lost.filter((name) => !importReasons.has(name)).join(", ")), lost.filter((name) => importReasons.has(name)).map((name) => /* @__PURE__ */ h(ui.Text, { key: `lost-${name}`, dimColor: true }, "\u26A0 ", importReasons.get(name))), doc.notes.map((note) => /* @__PURE__ */ h(ui.Text, { color: "yellow" }, "\u26A0 ", note.text, note.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true }, " \u2192 ", note.hint))), /* @__PURE__ */ h(ui.Raster, { key: rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() })), hasSystems && !playing && systemBar($, view, doc, systems, selected, player), playing ? stepPanel($, view, playing, step, player) : pick && useCaseBar($, view, doc, pick, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: roomy ? "\u29C9 Copy source" : "\u29C9 Source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: roomy ? "\u29C9 Copy share link" : "\u29C9 Link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: roomy ? "\u2197 Open in Proschi" : "\u2197 Open", variant: "primary", onPress: (press) => void openLink($, press.surface, link) }), view.inPane && /* @__PURE__ */ h(ui.Button, { key: `inline-${viewId}`, label: roomy ? "\u2193 Inline" : "\u2193", ...hotkey(view, "i"), onPress: () => void toInline($) }), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `focus-${viewId}`, label: "\u26F6 Focus", onPress: () => focus($, view, file ? basename(file) : doc.diagram.title ?? "diagram", file ? { file } : { source }) }))), systems: hasSystems };
+  const p = {
+    doc,
+    source,
+    view,
+    player,
+    ...pick2 ? { pick: pick2 } : {},
+    ...playing ? { playing } : {},
+    step,
+    // While a step animates, its frames are blitted in place; a drawing starts it from the beginning.
+    progress: timers.has(viewId) ? 0 : 100,
+    systems,
+    ...selected ? { selected } : {},
+    // The link's step counts from 1, as the editor's player does (playground/share.ts PlaybackTarget).
+    link: doc.link(playing ? { useCase: playing.useCase.id, ...playing.useCase.scenarios.length > 1 ? { scenario: playing.scenario.id } : {}, step: step + 1 } : void 0),
+    lost: lostImports(written, keyOf(written)),
+    title: file ? basename(file) : doc.diagram.title ?? "diagram",
+    what: file ? { file } : { source },
+    roomy: view.width >= 79
+  };
+  if (mode.kind === "text") return textView($, p, mode);
+  return await pictureView($, p, mode, priority) ?? textView($, p, { kind: "text" });
 }
-function playedPick(doc, player) {
-  if (player.mode !== "play") return void 0;
-  const picks = doc.diagram.useCases.flatMap((u) => u.scenarios.map((s) => pickOf(u, s)));
-  return picks.find((p) => p.value === player.pick) ?? picks[0];
+var sequenceShown = (p) => p.player.sequence === true && p.pick !== void 0;
+var isWide = (p) => p.view.scene.columns > p.view.d.columns;
+function wideNotice(p, z) {
+  if (!isWide(p) || z.level > 1) return [];
+  const { d, inPane } = p.view;
+  const text = inPane ? `Drawn small: ${p.view.scene.columns} columns wide in ${d.columns}. Zoom with + or z, then drag to pan.` : `Drawn small: ${p.view.scene.columns} columns wide in ${d.columns}. Focus opens it in the pane to zoom.`;
+  return [{ text, tone: "muted" }];
 }
-function frameOf2(view, player, step, progress, tick = 0) {
-  const pick = playedPick(view.doc, player);
-  const steps = pick?.scenario.steps ?? [];
-  const at = Math.max(0, Math.min(step, steps.length - 1));
-  if (pick && player.view !== "architecture") {
-    const key = `${view.docKey}#${pick.value}@${view.columns}`;
-    let sequence = sequences.get(key);
-    if (!sequence) {
-      sequence = buildSequenceScene(view.doc.diagram, pick.useCase, pick.scenario, view.columns);
-      sequences.set(key, sequence);
-    }
-    return { grid: paintSequence(sequence, { icons, ...steps.length > 0 ? { play: { index: at, progress } } : {} }), rasterKey: `q-${view.viewId}` };
+async function pictureView($, p, mode, priority) {
+  const { doc, source, view, pick: pick2, playing, step, progress } = p;
+  const { d, viewId } = view;
+  const hasSystems = p.systems.length > 0 || p.player.focus !== void 0;
+  const z = view.inPane ? zoomOf(p.player.zoom) : FIT;
+  if (sequenceShown(p)) {
+    images.delete(viewId);
+    const rows2 = (d.rows ?? INLINE_ROWS) + 16;
+    if (mode.kind === "loading") return { kind: "loading", rows: rows2 };
+    const built2 = pictureParts($, p, noticesOf(doc, p.lost, importReasons, view.inPane, []), void 0);
+    return { kind: "picture", ...built2, rows: rows2, systems: hasSystems };
   }
-  const grid = paint(view.scene, { overlay: view.overlay, icons, systems: view.systems, ...view.selected ? { selected: view.selected } : {}, ...steps.length > 0 ? { play: playAt(view.scene, steps, at, progress, tick) } : {} });
-  return { grid, rasterKey: view.rasterKey };
+  const notices = noticesOf(doc, p.lost, importReasons, view.inPane, wideNotice(p, z));
+  const theme2 = await themeOf($);
+  const optionsFor = (play, zoomed) => ({
+    theme: theme2,
+    maxWidthPx: maxWidthPx(d.columns),
+    ...doc.overlay && !play ? { overlay: true } : {},
+    ...view.selected ? { selected: view.selected } : {},
+    ...play ? { play: { useCase: play.useCase.id, scenario: play.scenario.id, frames: FRAMES } } : {},
+    // A strip of the drawing's one surface, as wide as its panels: its top where nothing is above it (no tabs, header, title or notice), the load legend in its corner.
+    grid: {
+      room: d.columns,
+      maxRows: d.rows ?? INLINE_ROWS,
+      cellPx: cellPx(),
+      fill: { columns: panelColumns(d.columns), ...view.inPane ? { controls: ZOOM_COLUMNS + 1 } : {}, ...!pick2 && !view.inPane && !doc.diagram.title && notices.length === 0 ? { top: true } : {}, ...!play && doc.overlay && doc.edges ? { legend: true } : {} },
+      ...zoomed ? { zoom: zoomed.zoom, ...zoomed.window ? { window: zoomed.window } : {} } : {}
+    }
+  });
+  const alt = `${doc.diagram.title ?? p.title}: the architecture diagram as a picture`;
+  images.delete(viewId);
+  if (z.level > 1) {
+    const zoomed = zoomedPicture($, view, { source, z, ...playing ? { playing } : {}, ...pick2 ? { pick: pick2 } : {}, step, progress, priority, optionsFor, mode, alt });
+    if ("error" in zoomed) return void 0;
+    const built2 = pictureParts($, p, notices, zoomed.picture, { z, ...zoomed.at ? { at: zoomed.at } : {} });
+    return { kind: "picture", ...built2, rows: zoomed.rows, systems: hasSystems };
+  }
+  const request2 = { source, options: optionsFor(playing) };
+  const out = rasterOf($, request2, priority);
+  const size = out && !("error" in out) ? out.grid ? { columns: out.grid.columns, rows: out.grid.rows } : imageSize(out, d.columns, d.rows ?? INLINE_ROWS) : void 0;
+  const rows = (size?.rows ?? Math.min(view.scene.rows, d.rows ?? INLINE_ROWS)) + 16;
+  if (mode.kind === "loading") return { kind: "loading", rows };
+  if (out && "error" in out) return void 0;
+  let picture;
+  if (out && size) {
+    const imageKey = `img-${viewId}`;
+    const g = out.grid;
+    if (g && (!request2.options.play || g.steps?.length)) {
+      const at = request2.options.play ? step : void 0;
+      const shown2 = gridFrame(g, at, progress === 0 ? 0 : FRAMES - 1);
+      images.set(viewId, { key: imageKey, grid: g, shown: shown2, ...mode.form ? { form: mode.form } : {} });
+      const tiles = g.tiles.map((t, i) => ({ key: `${imageKey}-${i}`, col: t.col, row: t.row, columns: t.columns, rows: t.rows, file: shown2[i] }));
+      picture = { key: imageKey, file: out.base, columns: size.columns, rows: size.rows, alt, anchorKey: view.anchorKey, tiles, ...mode.form ? { form: mode.form } : {} };
+    } else if (!g) {
+      const frames = request2.options.play ? out.frames : void 0;
+      const shownFrames = frames?.[step];
+      const file = shownFrames?.length ? shownFrames[progress === 0 ? 0 : shownFrames.length - 1] : out.base;
+      if (!request2.options.play || frames?.length) {
+        images.set(viewId, { key: imageKey, ...frames ? { frames } : {}, ...mode.form ? { form: mode.form } : {} });
+        picture = { key: imageKey, file, columns: size.columns, rows: size.rows, alt, anchorKey: view.anchorKey, ...mode.form ? { form: mode.form } : {} };
+      }
+    }
+  }
+  const fitAt = out && !("error" in out) && out.grid ? { grid: out.grid, vp: { col: 0, row: 0, columns: out.grid.columns, rows: out.grid.rows } } : void 0;
+  const built = pictureParts($, p, notices, picture, view.inPane ? { z, ...fitAt ? { at: fitAt } : {} } : void 0);
+  if (!playing && pick2) rasterOf($, { source, options: optionsFor(pick2) }, "later");
+  if (view.inPane && fitAt && picture) prefetchZoom($, view, fitAt.grid, stepZoom(z, 1), playing, optionsFor, source);
+  return { kind: "picture", ...built, rows, systems: hasSystems };
+}
+function textView($, p, mode) {
+  const { doc, view, pick: pick2, playing, step, progress } = p;
+  const { d, viewId } = view;
+  const { ui } = d;
+  const scene = view.scene;
+  const steps = playing?.scenario.steps ?? [];
+  const seq2 = sequenceShown(p) ? view.sequence?.(pick2.value) : void 0;
+  if (seq2) textCrops.set(viewId, void 0);
+  const sequenced = seq2 ? paintSequence(seq2, { icons, ...steps.length > 0 ? { play: { index: step, progress } } : {} }) : void 0;
+  const painted = sequenced ?? paint(scene, { overlay: doc.overlay, edges: doc.edges, icons, systems: doc.systems, ...view.selected ? { selected: view.selected } : {}, ...steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {} });
+  const wide = !sequenced && view.inPane && painted.columns > d.columns;
+  const pan = wide ? textPan($, view, painted, zoomOf(p.player.zoom)) : void 0;
+  textCrops.set(viewId, pan ? pan.vp : void 0);
+  const grid = pan ? painted.crop(pan.vp.col, 0, pan.vp.columns, painted.rows) : painted;
+  const lead = [
+    ...mode.hint ? [{ text: TMUX_HINT, tone: "muted" }] : [],
+    ...!sequenced && painted.columns > d.columns ? [
+      {
+        text: pan ? `\u2194 ${painted.columns} columns wide, wider than the ${d.columns} here: columns ${pan.vp.col + 1}\u2013${pan.vp.col + pan.vp.columns} shown. Drag it, or h and l (\u2190 \u2192 after a click on it), to pan.` : `\u2194 ${painted.columns} columns wide, wider than the ${d.columns} here: \u26F6 Focus opens it in the pane, where it pans.`,
+        tone: "muted"
+      }
+    ] : []
+  ];
+  const verdict = verdictOf(doc.tests);
+  const sys = sequenced ? void 0 : systemsOf($, p);
+  const links = linksOf($, p);
+  const m = pick2 && playerModel(view, doc, pick2, playing, step, p.player.isPlaying, playerCtl($, view, pick2.scenario.steps), p.player.sequence === true);
+  return {
+    kind: "text",
+    element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, m && playerBarText(view, doc, m), doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, noticesText(ui, noticesOf(doc, p.lost, importReasons, view.inPane, lead), `notice-${viewId}`), sequenced ? /* @__PURE__ */ h(ui.Raster, { key: sequenceKey(viewId), columns: sequenced.columns, rows: sequenced.rows, cells: sequenced.toBase64() }) : pan ? /* @__PURE__ */ h(ui.Box, { key: `${view.rasterKey}-pan`, flexDirection: "column", width: grid.columns, height: grid.rows }, /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), /* @__PURE__ */ h(ui.Box, { position: "absolute", top: 0, left: 0, width: grid.columns, height: grid.rows }, /* @__PURE__ */ h(ui.Client, { key: pan.overlay, module: "./uiOverlay.js", props: { controls: [], drag: "x" }, width: grid.columns, height: grid.rows })), /* @__PURE__ */ h(ui.Box, { display: "none" }, /* @__PURE__ */ h(ui.Button, { key: `pan-h-${viewId}`, label: "h", hotkey: "h", onPress: pan.keys.left }), /* @__PURE__ */ h(ui.Button, { key: `pan-l-${viewId}`, label: "l", hotkey: "l", onPress: pan.keys.right }))) : /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), doc.edges && !playing && !sequenced && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)), verdict && verdictText(ui, verdict, view.width, viewId, view.inPane ? void 0 : () => focus($, view, p.title, p.what, "hld", "requirements")), sys && systemsText(ui, sys.model, viewId, view.width, (id) => sys.actions[id]?.()), controlsText(ui, links.controls, viewId, view.width, (id, surface) => links.actions[id]?.(surface))),
+    systems: sys !== void 0
+  };
+}
+var textCrops = new Lru(SITES2);
+function textPan($, view, painted, z) {
+  const grid = { columns: painted.columns, rows: painted.rows };
+  const vp = viewportOf(grid, { columns: view.d.columns, rows: painted.rows }, { ...z, level: 1 });
+  const at = { ...z, level: 1 };
+  const to = (col) => void setZoom($, view.viewId, panTo(at, grid, vp, col, 0));
+  const keys = { left: () => to(vp.col - PAN_STEP.columns), right: () => to(vp.col + PAN_STEP.columns) };
+  const overlay = `ov-text-${view.viewId}`;
+  otherOverlays.set(overlay, (data) => {
+    if (data.type === "drag") {
+      const d = data;
+      if (![d.n, d.sx, d.x].every((v) => typeof v === "number")) return;
+      let started = drags.get(view.viewId);
+      if (!started || started.n !== d.n) drags.set(view.viewId, started = { n: d.n, z: at, vp });
+      const col = Math.max(0, Math.min(grid.columns - vp.columns, started.vp.col - (d.x - d.sx)));
+      if (col !== vp.col) to(col);
+    } else if (data.type === "key" && (data.key === "left" || data.key === "right")) keys[data.key]();
+    else if (data.type === "scroll" && typeof data.key === "string") void scrollKey($, PANE, data.key);
+  });
+  return { vp, overlay, keys };
+}
+var images = new Lru(SITES2);
+var menus = new Lru(SITES2);
+function toggleMenu($, viewId, id) {
+  if (menus.get(viewId) === id) menus.delete(viewId);
+  else menus.set(viewId, id);
+  $.ui.invalidate("ui.render");
+}
+function playerCtl($, view, steps) {
+  const id = view.viewId;
+  const open = menus.get(id);
+  return {
+    ...open ? { open } : {},
+    toggle: (k) => toggleMenu($, id, k),
+    openMenu: (k) => {
+      menus.set(id, k);
+      $.ui.invalidate("ui.render");
+    },
+    close: () => {
+      if (menus.delete(id)) $.ui.invalidate("ui.render");
+    },
+    start: (pick2, isPlaying = true) => start2($, view, pick2, isPlaying),
+    go: (to, isPlaying = false) => goTo($, view, steps, to, isPlaying),
+    pause: () => void setPlayer($, view, (p) => ({ ...p, isPlaying: false })),
+    stop: () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })),
+    pick: (pick2) => void setPlayer($, view, (p) => ({ ...p, pick: pick2.value })),
+    toggleView: () => void setPlayer($, view, (p) => {
+      const { sequence, ...rest } = p;
+      return sequence ? rest : { ...rest, sequence: true };
+    })
+  };
+}
+function linksOf($, p) {
+  return {
+    controls: linkControls(p.view.inPane, p.roomy),
+    actions: {
+      src: (surface) => void copy($, surface, p.source.source, "the Proschi source"),
+      lnk: (surface) => void copy($, surface, p.link, "the share link"),
+      open: (surface) => void openLink($, surface, p.link),
+      focus: () => focus($, p.view, p.title, p.what),
+      inline: () => void toInline($)
+    }
+  };
+}
+function systemsOf($, p) {
+  const { view, doc, systems, selected, player } = p;
+  if (systems.length === 0 && player.focus === void 0) return void 0;
+  const s = systemActions($, view, doc, systems, selected, player);
+  const controls = [
+    ...systems.length > 1 ? [{ id: "next", icon: "cycle", label: "Next", ...hotkey(view, "s") }] : [],
+    ...selected && s.design ? [{ id: "open", icon: s.open ? "collapse" : "expand", label: s.open ? "Collapse" : "Expand", ...hotkey(view, "o") }, { id: "focus", icon: "enter", label: "Focus in", ...hotkey(view, "f") }] : [],
+    ...player.focus !== void 0 ? [{ id: "back", icon: "leave", label: "Back out", ...hotkey(view, "u") }] : []
+  ];
+  return {
+    model: { ...player.focus !== void 0 ? { inside: `${player.focus.split(".").join(" \u203A ")} \xB7 ${doc.diagram.title ?? "its design"}` } : {}, ...selected ? { selected: { name: selected.name, path: selected.path } } : {}, controls },
+    actions: { next: s.next, open: s.toggle, focus: s.enter, back: s.leave }
+  };
+}
+function pictureParts($, p, notices, picture, zoomed) {
+  const { view, doc, pick: pick2, playing, player, step } = p;
+  const W2 = panelColumns(view.d.columns);
+  const pieces = [];
+  const actions = {};
+  const ahead = [];
+  const on = (piece, id, fn) => actions[`${piece}/${id}`] = fn;
+  let float;
+  if (pick2) {
+    const m = playerModel(view, doc, pick2, playing, step, player.isPlaying, playerCtl($, view, pick2.scenario.steps), player.sequence === true);
+    const bar = barPanel(view, doc, m, playing ? step : void 0, player.isPlaying);
+    pieces.push({ id: "bar", panel: bar, columns: W2 });
+    for (const [id, fn] of Object.entries(m.actions)) on("bar", id, () => fn());
+    float = floatOf(view, doc, m, bar, W2);
+    if (float) Object.assign(actions, float.actions);
+    if (playing) {
+      for (let i = 0; i < m.total; i++) for (const isPlaying of [true, false]) ahead.push({ panel: barPanel(view, doc, m, i, isPlaying), columns: W2 });
+      const drawer = floatOf(view, doc, { ...m, open: "body" }, bar, W2);
+      if (drawer) ahead.push({ panel: drawer.panel, columns: drawer.columns, edges: FLOAT_EDGES });
+    } else ahead.push({ panel: barPanel(view, doc, m, 0, true), columns: W2 });
+    for (const open of ["uc", "sc"]) {
+      const f = floatOf(view, doc, { ...m, open }, bar, W2);
+      if (f) ahead.push({ panel: f.panel, columns: f.columns, edges: FLOAT_EDGES });
+    }
+  }
+  if (doc.diagram.title) {
+    pieces.push({ id: "title", panel: { kind: "page", blocks: [{ type: "heading", level: 3, text: doc.diagram.title }, ...doc.diagram.summary ? [{ type: "paragraph", small: true, text: doc.diagram.summary }] : []] }, columns: W2 });
+  }
+  if (notices.length) pieces.push({ id: "warn", panel: { kind: "notices", notices }, columns: W2 });
+  const sequenced = sequenceShown(p);
+  if (sequenced) {
+    pieces.push({ id: "sequence", panel: sequencePanel(p, pick2, playing ? step : void 0), columns: W2 });
+    if (playing) {
+      for (let i = 0; i < playing.scenario.steps.length; i++) if (i !== step) ahead.push({ panel: sequencePanel(p, playing, i), columns: W2 });
+    }
+  } else {
+    pieces.push({ id: "diagram", ...picture ? { picture } : {} });
+    if (pick2) ahead.push({ panel: sequencePanel(p, pick2, playing ? step : void 0), columns: W2 });
+  }
+  const verdict = verdictOf(doc.tests);
+  if (verdict) pieces.push({ id: "below", panel: { kind: "notices", verdict, ...!view.inPane ? { details: DETAILS } : {} }, columns: W2 });
+  on("below", "details", () => focus($, view, p.title, p.what, "hld", "requirements"));
+  const sys = sequenced ? void 0 : systemsOf($, p);
+  if (sys) {
+    pieces.push({ id: "systems", panel: { kind: "systemBar", ...sys.model }, columns: W2 });
+    for (const [id, fn] of Object.entries(sys.actions)) on("systems", id, fn);
+  }
+  const links = linksOf($, p);
+  pieces.push({ id: "links", panel: { kind: "actionBar", controls: links.controls }, columns: W2 });
+  for (const [id, fn] of Object.entries(links.actions)) on("links", id, fn);
+  const zoom = zoomed ? zoomParts($, view, zoomed.z, zoomed.at) : void 0;
+  if (zoom) {
+    Object.assign(actions, zoom.actions);
+    for (const dir of [1, -1]) ahead.push({ panel: zoomPanel(stepZoom(zoomed.z, dir)), columns: ZOOM_COLUMNS, edges: FLOAT_EDGES });
+  }
+  return { pieces, actions, ahead, ...float ? { float } : {}, ...zoom ? { corner: zoom.corner, keys: zoom.keys, onDrag: zoom.onDrag } : {} };
+}
+function sequencePanel(p, pick2, step) {
+  const maxRows = p.view.d.rows ?? INLINE_ROWS;
+  const key = `${keyOf(p.source)}\0${pick2.value}\0${step ?? "-"}\0${maxRows}`;
+  let panel = sequencePanels.get(key);
+  if (!panel) {
+    const of = { useCase: pick2.useCase.id, scenario: pick2.scenario.id, ...step !== void 0 ? { step } : {} };
+    panel = { kind: "page", source: p.source, blocks: [{ type: "figure", of, maxRows }] };
+    sequencePanels.set(key, panel);
+  }
+  return panel;
+}
+var sequencePanels = new Lru(64);
+var sequenceKey = (viewId) => `q-${viewId}`;
+function sequenceOf(doc, key, pick2, columns) {
+  const at = `${key}#${pick2.value}@${columns}`;
+  let scene = sequences.get(at);
+  if (!scene) {
+    scene = buildSequenceScene(doc.diagram, pick2.useCase, pick2.scenario, columns);
+    sequences.set(at, scene);
+  }
+  return scene;
+}
+var zoomPanel = (z) => ({
+  kind: "zoom",
+  controls: [
+    { id: "out", label: "\u2212", hotkey: "x", ...z.level === 1 ? { disabled: true } : {} },
+    { id: "level", label: zoomLabel(z.level), ...z.level === 1 ? { disabled: true } : {} },
+    { id: "in", label: "+", hotkey: "z", ...z.level === ZOOMS[ZOOMS.length - 1] ? { disabled: true } : {} },
+    { id: "fit", label: "Fit", hotkey: "0", ...z.level === 1 ? { disabled: true } : {} }
+  ]
+});
+var drags = new Lru(SITES2);
+async function setZoom($, viewId, next) {
+  await update2($, memberOf(players, { requestId: viewId }), (p) => {
+    const { zoom: _zoom, ...rest } = normal(p);
+    void _zoom;
+    return isMoved(next) ? { ...rest, zoom: next } : rest;
+  });
+}
+function zoomParts($, view, z, at) {
+  const id = view.viewId;
+  const actions = {
+    "zoom/in": () => void setZoom($, id, stepZoom(z, 1)),
+    "zoom/out": () => void setZoom($, id, stepZoom(z, -1)),
+    "zoom/level": () => void setZoom($, id, FIT),
+    "zoom/fit": () => void setZoom($, id, FIT)
+  };
+  const keys = { "+": "zoom/in", "=": "zoom/in", "-": "zoom/out" };
+  if (z.level > 1 && at) {
+    const pan = (dc, dr) => () => void setZoom($, id, panTo(z, at.grid, at.vp, at.vp.col + dc, at.vp.row + dr));
+    const moves = [
+      ["left", ["h", "left"], -PAN_STEP.columns, 0],
+      ["right", ["l", "right"], PAN_STEP.columns, 0],
+      ["up", ["k", "up"], 0, -PAN_STEP.rows],
+      ["down", ["j", "down"], 0, PAN_STEP.rows]
+    ];
+    for (const [name, ks, dc, dr] of moves) {
+      actions[`zoom/pan-${name}`] = pan(dc, dr);
+      for (const k of ks) keys[k] = `zoom/pan-${name}`;
+    }
+  }
+  const onDrag = (d) => {
+    if (z.level === 1 || !at) return;
+    let started = drags.get(id);
+    if (!started || started.n !== d.n) drags.set(id, started = { n: d.n, z, vp: at.vp });
+    const next = panTo(started.z, at.grid, started.vp, started.vp.col - (d.x - d.sx), started.vp.row - (d.y - d.sy));
+    const to = viewportOf(at.grid, at.vp, next);
+    if (to.col !== at.vp.col || to.row !== at.vp.row) void setZoom($, id, next);
+  };
+  return { actions, keys, corner: { piece: "diagram", id: "zoom", panel: zoomPanel(z), columns: ZOOM_COLUMNS }, onDrag };
+}
+function prefetchZoom($, view, fitGrid, to, playing, optionsFor, source) {
+  if (to.level <= 1) return;
+  const options = optionsFor(playing, { zoom: to.level });
+  const grid = mergedGrid({ source, options }) ?? { columns: Math.ceil(fitGrid.columns * to.level), rows: Math.ceil(fitGrid.rows * to.level) };
+  const vp = viewportOf(grid, { columns: fitGrid.columns, rows: view.d.rows ?? INLINE_ROWS }, to);
+  rasterOf($, { source, options: optionsFor(playing, { zoom: to.level, window: vp }) }, "later");
+}
+var autoPanned = new Lru(SITES2);
+function zoomedPicture($, view, c) {
+  const { source, z, playing } = c;
+  const viewId = view.viewId;
+  const fit2 = rasterOf($, { source, options: c.optionsFor() }, c.priority);
+  if (fit2 && "error" in fit2) return fit2;
+  const fitGrid = fit2?.grid;
+  const m = mergedGrid({ source, options: c.optionsFor(playing, { zoom: z.level }) });
+  const grid = m ?? (fitGrid ? { columns: Math.ceil(fitGrid.columns * z.level), rows: Math.ceil(fitGrid.rows * z.level) } : void 0);
+  const maxRows = view.d.rows ?? INLINE_ROWS;
+  if (!grid || !fitGrid) return { rows: Math.min(maxRows, 20) + 16 };
+  const vp = viewportOf(grid, { columns: fitGrid.columns, rows: maxRows }, z);
+  const rows = vp.rows + 16;
+  if (playing && m) {
+    const s = playing.scenario.steps[c.step];
+    const ends = s ? [view.scene.nodes.get(s.fromServiceId)?.rect, view.scene.nodes.get(s.toServiceId)?.rect].filter((r) => r !== void 0) : [];
+    const mark = `${playing.value}:${c.step}`;
+    if (ends.length && autoPanned.get(viewId) !== mark) {
+      autoPanned.set(viewId, mark);
+      const fx = ends.reduce((n, r) => n + r.x + r.w / 2, 0) / ends.length / view.scene.columns;
+      const fy = ends.reduce((n, r) => n + r.y + r.h / 2, 0) / ends.length / view.scene.rows;
+      const inside = fx * grid.columns >= vp.col + 4 && fx * grid.columns <= vp.col + vp.columns - 4 && fy * grid.rows >= vp.row + 2 && fy * grid.rows <= vp.row + vp.rows - 2;
+      if (!inside) void setZoom($, viewId, { level: z.level, x: fx, y: fy });
+    }
+  }
+  const visible = m ? m.tiles.flatMap((t, i) => meets(t, vp) ? [i] : []) : [];
+  const files = m ? gridFrame(m, playing ? c.step : void 0, c.progress === 0 ? 0 : FRAMES - 1) : [];
+  const ready = !!m && visible.length > 0 && visible.every((i) => files[i]) && (!playing || !!m.steps?.length);
+  if (!ready) rasterOf($, { source, options: c.optionsFor(playing, { zoom: z.level, window: vp }) }, c.priority);
+  else {
+    rasterOf($, { source, options: c.optionsFor(playing, { zoom: z.level, window: around(vp) }) }, "later");
+    if (!playing && c.pick) rasterOf($, { source, options: c.optionsFor(c.pick, { zoom: z.level, window: around(vp) }) }, "later");
+    prefetchZoom($, view, fitGrid, stepZoom(z, 1), playing, c.optionsFor, source);
+  }
+  if (!ready || !m) return { rows, at: { grid, vp } };
+  const imageKey = `img-${viewId}`;
+  const form = c.mode.kind === "picture" ? c.mode.form : void 0;
+  images.set(viewId, { key: imageKey, grid: m, shown: files.slice(), mounted: new Set(visible), ...form ? { form } : {} });
+  const tiles = visible.map((i) => ({ key: `${imageKey}-${i}`, col: m.tiles[i].col, row: m.tiles[i].row, columns: m.tiles[i].columns, rows: m.tiles[i].rows, file: files[i] }));
+  const picture = { key: imageKey, file: files[visible[0]], columns: vp.columns, rows: vp.rows, alt: c.alt, anchorKey: view.anchorKey, tiles, view: vp, drag: true, ...form ? { form } : {} };
+  return { picture, rows, at: { grid: m, vp } };
 }
 function selectable(scene, focus2) {
   return [...scene.nodes.values()].map((n) => n.node).filter((n) => n.kind === "system" || n.kind === "group" && n.system === n.id).map((n) => ({ id: n.id, path: focus2 !== void 0 ? `${focus2}.${n.id}` : n.id, name: n.name, expanded: n.kind === "group" }));
 }
-function systemBar($, view, doc, systems, selected, player) {
-  const { ui } = view.d;
+function systemActions($, view, doc, systems, selected, player) {
   const design = selected !== void 0 && !!systemAt2(doc.root, selected.path)?.diagram;
   const next = () => {
     const at = systems.findIndex((s) => s.path === selected?.path);
     const to = systems[(at + 1) % systems.length];
     if (to) void setPlayer($, view, (p) => ({ ...p, selected: to.path }));
   };
-  const toggle2 = () => {
+  const toggle = () => {
     if (!selected || !design) return;
     const open2 = player.expanded.includes(selected.path) || selected.expanded;
     void setPlayer($, view, (p) => ({
@@ -7246,9 +12760,9 @@ function systemBar($, view, doc, systems, selected, player) {
     });
   };
   const open = selected !== void 0 && (selected.expanded || player.expanded.includes(selected.path));
-  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, player.focus !== void 0 && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "Inside ", player.focus.split(".").join(" \u203A "), " \xB7 ", doc.diagram.title ?? "its design"), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "System"), /* @__PURE__ */ h(ui.Text, { color: PINK, wrap: "truncate-end" }, selected ? `${selected.name} (${selected.path})` : "none here"), systems.length > 1 && /* @__PURE__ */ h(ui.Button, { key: `sys-next-${view.viewId}`, label: "\u21E5 Next", ...hotkey(view, "s"), onPress: next }), selected && design && /* @__PURE__ */ h(ui.Button, { key: `sys-open-${view.viewId}`, label: open ? "\u229F Collapse" : "\u229E Expand", ...hotkey(view, "o"), onPress: toggle2 }), selected && design && /* @__PURE__ */ h(ui.Button, { key: `sys-focus-${view.viewId}`, label: "\u2922 Focus in", ...hotkey(view, "f"), onPress: enter }), player.focus !== void 0 && /* @__PURE__ */ h(ui.Button, { key: `sys-back-${view.viewId}`, label: "\u2191 Back out", ...hotkey(view, "u"), onPress: leave })));
+  return { design, open, next, toggle, enter, leave };
 }
-var lostByKey = /* @__PURE__ */ new Map();
+var lostByKey = new Lru(32);
 function lostImports(source, key) {
   let names = lostByKey.get(key);
   if (!names) {
@@ -7258,155 +12772,13 @@ function lostImports(source, key) {
   }
   return names;
 }
-var EXPLORE = { long: ["\u2261 Explore use cases", "\u2261 Hide explorer"], short: ["\u2261 Explore", "\u2261 Hide"] };
-var VIEWS = ["\u25EB Architecture", "\u21C5 Sequence"];
-var toggle = (labels, open) => labels[open ? 1 : 0].padEnd(Math.max(...labels.map((l) => l.length)));
-var cut2 = (text, room) => text.length <= room ? text : `${text.slice(0, Math.max(0, room - 1))}\u2026`;
-function useCaseBar($, view, doc, pick, player) {
-  const { ui } = view.d;
-  const groups = groupByEndpoint(doc.diagram.useCases);
-  const count = (u) => `${u.scenarios.length} scenario${u.scenarios.length === 1 ? "" : "s"}`;
-  const labels = groups.flatMap((g) => g.useCases.map((u) => ({ value: u.id, label: `${g.label ? `${g.label} \u203A ` : ""}${u.name} \xB7 ${count(u)}` })));
-  const inner = view.width - 4;
-  const longToggle = toggle(EXPLORE.long, false).length + 4;
-  const picker = 9 + Math.max(...labels.map((o) => o.label.length)) + 2;
-  const oneRow = picker + 1 + 10 + 1 + longToggle <= inner;
-  const explore = toggle(10 + 1 + longToggle <= inner ? EXPLORE.long : EXPLORE.short, player.explorer);
-  const options = oneRow ? labels : labels.map((o) => ({ ...o, label: cut2(o.label, inner - 9 - 2) }));
-  const select = /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Text, { bold: true, color: PINK }, "Use case"), /* @__PURE__ */ h(
-    ui.Select,
-    {
-      key: `uc-${view.viewId}`,
-      value: pick.useCase.id,
-      options,
-      onSelect: (id) => {
-        const u = doc.diagram.useCases.find((c) => c.id === id);
-        if (u?.scenarios[0]) void setPlayer($, view, (p) => ({ ...p, pick: pickOf(u, u.scenarios[0]).value }));
-      }
-    }
-  ));
-  const buttons = /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Button, { key: `play-${view.viewId}`, label: "\u25B6 Play", variant: "primary", ...hotkey(view, "p"), onPress: () => start($, view, pick) }), /* @__PURE__ */ h(ui.Button, { key: `explore-${view.viewId}`, label: explore, ...hotkey(view, "x"), onPress: () => void setPlayer($, view, (p) => ({ ...p, explorer: !p.explorer })) }));
-  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: PINK, paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Box, { flexDirection: oneRow ? "row" : "column", gap: oneRow ? 1 : 0 }, select, buttons), player.explorer && groups.map((g) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, g.label && /* @__PURE__ */ h(ui.Text, { bold: true, color: "cyan" }, g.label), g.useCases.map((u) => /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap", paddingLeft: g.label ? 2 : 0 }, /* @__PURE__ */ h(ui.Text, { bold: u.id === pick.useCase.id }, u.name), u.scenarios.map((s) => /* @__PURE__ */ h(ui.Button, { key: `x-${view.viewId}-${u.id}-${s.id}`, onPress: () => start($, view, pickOf(u, s)) }, scenarioLabel(ui, u, s))))))));
-}
-function scenarioLabel(ui, u, s, current) {
-  const error = s.outcome === "error";
-  const status = error ? s.steps.find(isErrorStep)?.statusCode : void 0;
-  const name = u.scenarios.length > 1 ? s.name : "Play";
-  return /* @__PURE__ */ h(ui.Text, { color: error ? "red" : "green", bold: current === true }, current === void 0 ? "" : current ? "\u25B8 " : "  ", error ? "\u2717" : "\u2713", " ", name, status ? ` \xB7 ${status}` : "");
-}
-function playerHeader($, view, pick, player) {
-  const { ui } = view.d;
-  const { useCase } = pick;
-  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: PINK, paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Button, { key: `back-${view.viewId}`, label: "\u2190 Diagram", ...hotkey(view, "d"), onPress: () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })) }), /* @__PURE__ */ h(ui.Text, { bold: true, wrap: "truncate-end" }, useCase.name), /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\xB7 Playback mode \xB7 read only"), /* @__PURE__ */ h(
-    ui.Button,
-    {
-      key: `view-${view.viewId}`,
-      label: toggle(VIEWS, player.view === "architecture"),
-      ...hotkey(view, "v"),
-      onPress: () => {
-        reveal($, view);
-        void setPlayer($, view, (p) => ({ ...p, view: p.view === "architecture" ? void 0 : "architecture" }), player.isPlaying ? pick.scenario.steps : void 0);
-      }
-    }
-  )), useCase.scenarios.length > 1 && /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap" }, useCase.scenarios.map((s) => {
-    const current = s.id === pick.scenario.id;
-    return /* @__PURE__ */ h(ui.Button, { key: `sc-${view.viewId}-${s.id}`, variant: current ? "primary" : void 0, dimColor: !current, onPress: () => start($, view, pickOf(useCase, s), player.isPlaying) }, scenarioLabel(ui, useCase, s, current));
-  })));
-}
-var FORMAT = { JSON: "JSON", XML: "XML", FREE_TEXT: "Text" };
-var LANGUAGE = { JSON: "json", XML: "xml", FREE_TEXT: void 0 };
-var chip = (ui, text, background) => /* @__PURE__ */ h(ui.Text, { backgroundColor: background, color: INK, bold: true }, ` ${text} `);
-var BODY_LINES = 8;
-function bodyRows(ui, label, text, format) {
-  const lines = text.replace(/\n+$/, "").split("\n");
-  const shown = lines.slice(0, BODY_LINES);
-  const more = lines.length - shown.length;
-  const language = LANGUAGE[format];
-  return {
-    nodes: [
-      label,
-      /* @__PURE__ */ h(ui.Code, { source: shown.join("\n"), wrap: "truncate-end", ...language ? { language } : {} }),
-      ...more > 0 ? [/* @__PURE__ */ h(ui.Text, { dimColor: true }, "\u2026 ", more, " more line", more === 1 ? "" : "s")] : []
-    ],
-    height: 1 + shown.length + (more > 0 ? 1 : 0)
-  };
-}
-function stepRows(ui, view, steps, at) {
-  const name = (id) => view.scene.nodes.get(id)?.node.name ?? id;
-  const current = currentStepsOf(steps, at);
-  const nodes = [];
-  let height = 0;
-  const row = (node) => {
-    nodes.push(node);
-    height++;
-  };
-  const add = (rows) => {
-    nodes.push(...rows.nodes);
-    height += rows.height;
-  };
-  if (current.length > 1) {
-    row(
-      /* @__PURE__ */ h(ui.Text, { bold: true, color: "blue", wrap: "truncate-end" }, "\u26A1 Parallel Execution (", current.length, " steps running simultaneously)")
-    );
-  }
-  if (steps.length === 0) row(/* @__PURE__ */ h(ui.Text, { dimColor: true }, "This scenario has no steps."));
-  current.forEach((s, i) => {
-    const error = isErrorStep(s);
-    const call = `${s.httpMethod} ${s.endpoint}`.trim();
-    if (i > 0) row(/* @__PURE__ */ h(ui.Text, null, " "));
-    row(
-      /* @__PURE__ */ h(ui.Text, { wrap: "truncate-end" }, chip(ui, String(steps.indexOf(s) + 1), error ? "#ff3b30" : PINK), " ", /* @__PURE__ */ h(ui.Text, { bold: true }, s.stepName), s.failed && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Failed", "#fca5a5")), !s.failed && (s.statusCode ?? 0) >= 400 && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, String(s.statusCode), "#fca5a5")), s.executionType === "SYNC_REQUEST_RESPONSE" && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Sync", "#86efac")), s.executionType === "ASYNC_FIRE_AND_FORGET" && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Fire & Forget", "#fdba74")), s.executionType === "ASYNC_REQUEST_RESPONSE" && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Async", "#d8b4fe")))
-    );
-    row(
-      /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, name(s.fromServiceId), " \u2192 ", name(s.toServiceId), call && call !== s.stepName ? `   ${call}` : "")
-    );
-    if (s.description) row(/* @__PURE__ */ h(ui.Text, { wrap: "truncate-end" }, s.description.replace(/\s*\n\s*/g, " ")));
-    if (s.requestBody) add(bodyRows(ui, /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Request (", FORMAT[s.requestFormat], ")"), s.requestBody, s.requestFormat));
-    if (s.responseBody && s.executionType !== "ASYNC_FIRE_AND_FORGET") {
-      const label = /* @__PURE__ */ h(ui.Text, { color: error ? "red" : void 0, dimColor: !error }, "Response (", FORMAT[s.responseFormat], ")", s.statusCode !== void 0 ? ` - ${s.statusCode}` : "");
-      add(bodyRows(ui, label, s.responseBody, s.responseFormat));
-    }
-    if (!s.responseBody && !s.failed && (s.statusCode ?? 0) >= 400) row(/* @__PURE__ */ h(ui.Text, { color: "red" }, "Answered with ", s.statusCode));
-    if (s.failed) {
-      row(
-        /* @__PURE__ */ h(ui.Text, { color: "red", wrap: "truncate-end" }, "No response: the call failed (timeout, connection refused or similar).")
-      );
-    }
-  });
-  return { nodes, height };
-}
-function stepPanel($, view, pick, step, player) {
-  const { ui } = view.d;
-  const { scenario } = pick;
-  const steps = scenario.steps;
-  const total = steps.length;
-  const go = (to, isPlaying = false) => {
-    reveal($, view);
-    void setPlayer($, view, (p) => ({ ...p, step: Math.max(0, Math.min(total - 1, to)), isPlaying }), steps);
-  };
-  const rows = stepRows(ui, view, steps, step);
-  const tallest = steps.reduce((most, _, i) => Math.max(most, stepRows(ui, view, steps, i).height), rows.height);
-  const counter = `Step ${String(Math.min(step + 1, total)).padStart(String(total).length)} of ${total}`;
-  const room = view.width - 4 - (5 + 5 + 12 + 5 + 5 + counter.length + 7);
-  const exit = room - 19 >= 10 ? "\u2715 Exit playback" : "\u2715 Exit";
-  const left = room - (exit.length + 4);
-  const bar = left >= 6 ? Math.min(60, left) : 0;
-  const filled = total === 0 ? 0 : Math.round(bar * (step + 1) / total);
-  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, scenario.condition && /* @__PURE__ */ h(ui.Text, { wrap: "truncate-end" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "When:"), " ", scenario.condition), /* @__PURE__ */ h(ui.Box, { key: `rows-${view.viewId}`, flexDirection: "column" }, rows.nodes, Array.from({ length: tallest - rows.height }, () => /* @__PURE__ */ h(ui.Text, null, " "))), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", marginTop: 1, flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Button, { key: `reset-${view.viewId}`, label: "\u21E4", ...hotkey(view, "r"), onPress: () => go(0) }), /* @__PURE__ */ h(ui.Button, { key: `prev-${view.viewId}`, label: "\u2039", ...hotkey(view, "b"), onPress: () => go(step - 1) }), /* @__PURE__ */ h(
-    ui.Button,
-    {
-      key: `play-${view.viewId}`,
-      label: player.isPlaying ? PAUSE : PLAY,
-      variant: "primary",
-      ...hotkey(view, "p"),
-      onPress: () => player.isPlaying ? void setPlayer($, view, (p) => ({ ...p, isPlaying: false })) : go(step >= total - 1 ? 0 : step, true)
-    }
-  ), /* @__PURE__ */ h(ui.Button, { key: `next-${view.viewId}`, label: "\u203A", ...hotkey(view, "n"), onPress: () => go(step + 1) }), /* @__PURE__ */ h(ui.Button, { key: `end-${view.viewId}`, label: "\u21E5", ...hotkey(view, "e"), onPress: () => go(total - 1) }), /* @__PURE__ */ h(ui.Text, null, counter), bar > 0 && /* @__PURE__ */ h(ui.Text, null, /* @__PURE__ */ h(ui.Text, { color: YELLOW }, "\u2501".repeat(filled)), /* @__PURE__ */ h(ui.Text, { dimColor: true }, "\u2501".repeat(bar - filled))), /* @__PURE__ */ h(ui.Button, { key: `exit-${view.viewId}`, label: exit, dimColor: true, onPress: () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })) })));
-}
-var hotkey = (view, key) => view.inPane ? { hotkey: key } : {};
-function start($, view, pick, isPlaying = true) {
+function goTo($, view, steps, to, isPlaying) {
   reveal($, view);
-  void setPlayer($, view, (p) => ({ ...p, pick: pick.value, step: 0, isPlaying, mode: "play" }), pick.scenario.steps);
+  void setPlayer($, view, (p) => ({ ...p, step: Math.max(0, Math.min(steps.length - 1, to)), isPlaying }), steps);
+}
+function start2($, view, pick2, isPlaying = true) {
+  reveal($, view);
+  void setPlayer($, view, (p) => ({ ...p, pick: pick2.value, step: 0, isPlaying, mode: "play" }), pick2.scenario.steps);
 }
 function reveal($, view) {
   void scroll($, view.inPane ? { to: { key: view.anchorKey }, in: PANE, block: "start" } : { to: { requestId: view.d.requestId }, block: "start" });
@@ -7421,9 +12793,11 @@ async function placeInline($, what, player) {
   const id = `${INLINE}${Date.now().toString(36)}-${++placedCount}`;
   const placing = $.ui.place({ id });
   const stands = await player;
-  await update($, memberOf(players, { requestId: `${id}:0` }), () => ({ ...stands, isPlaying: false }));
-  const drawn = { ...await what, prompt: await read($, prompts) };
-  await update($, memberOf(placedRows, { requestId: id }), () => drawn);
+  const { zoom: _zoom, ...rest } = stands;
+  void _zoom;
+  await update2($, memberOf(players, { requestId: `${id}:0` }), () => ({ ...rest, isPlaying: false }));
+  const drawn = { ...await what, prompt: await read2($, prompts) };
+  await update2($, memberOf(placedRows, { requestId: id }), () => drawn);
   const placed = await placing;
   if (!placed.isPlaced) $.ui.toast(`The Proschi drawing is in the transcript but not shown: ${placed.reason}`);
   else await scroll($, { to: { requestId: placed.requestId }, block: "start" });
@@ -7438,10 +12812,10 @@ async function inLastResponse($, key) {
       return file !== void 0 && drawnKey({ file }) === key;
     }) || [...m.text.matchAll(FENCE)].some((f) => drawnKey({ source: f[1] }) === key))
   );
-  const now = await read($, prompts);
-  for (const [viewId, d] of [...drawings].reverse()) {
+  const now = await read2($, prompts);
+  for (const [viewId, d] of [...drawings.entries()].reverse()) {
     if (d.key !== key) continue;
-    const placed = viewId.startsWith(INLINE) ? await read($, memberOf(placedRows, { requestId: viewId.slice(0, -":0".length) })) : void 0;
+    const placed = viewId.startsWith(INLINE) ? await read2($, memberOf(placedRows, { requestId: viewId.slice(0, -":0".length) })) : void 0;
     if (placed ? placed.prompt === now : replied) return { viewId, requestId: d.requestId };
   }
   return void 0;
@@ -7449,37 +12823,42 @@ async function inLastResponse($, key) {
 function toInline($) {
   stop(PANE_VIEW);
   stop(PANE);
+  menus.delete(PANE_VIEW);
   const what = (async () => {
-    const file = await read($, paneFile);
+    const file = await read2($, paneFile);
     if (file) return { file };
-    const { source, path, imports } = await read($, paneSource);
+    const { source, path, imports } = await read2($, paneSource);
     return { source, ...path ? { path } : {}, ...imports ? { imports } : {} };
   })();
-  const player = read($, memberOf(players, { requestId: PANE_VIEW })).then(normal);
+  const player = read2($, memberOf(players, { requestId: PANE_VIEW })).then(normal);
   return (async () => {
     const standing = await inLastResponse($, drawnKey(await what));
     if (!standing) return placeInline($, what, player);
     stop(standing.viewId);
-    const stands = await player;
-    await update($, memberOf(players, { requestId: standing.viewId }), () => ({ ...stands, isPlaying: false }));
+    const { zoom: _zoom, ...stands } = await player;
+    void _zoom;
+    await update2($, memberOf(players, { requestId: standing.viewId }), () => ({ ...stands, isPlaying: false }));
     await scroll($, { to: { requestId: standing.requestId }, block: "start" });
-  })().then(() => $.ui.close({ id: PANE }));
+  })().then(() => $.ui.close({ id: PANE })).catch((error) => $.ui.log(`proschi: Inline failed: ${error instanceof Error ? error.message : String(error)}`, { to: "debug" }));
 }
-function focus($, view, title, what) {
+function focus($, view, title, what, tab = "diagram", section) {
   const opened = $.ui.open({ id: PANE, title: `Proschi \xB7 ${title}`, focus: true, closeOnEscape: true });
+  paneAnchor = section && hldAnchor(section);
   void (async () => {
-    const player = normal(await read($, memberOf(players, { requestId: view.viewId })));
+    await markOpened($, PANE_VIEW);
+    await update2($, paneTab, () => tab);
+    const player = normal(await read2($, memberOf(players, { requestId: view.viewId })));
     if (player.isPlaying) await setPlayer($, view, (p) => ({ ...p, isPlaying: false }));
     stop(PANE_VIEW);
-    await update($, memberOf(players, { requestId: PANE_VIEW }), () => player);
+    await update2($, memberOf(players, { requestId: PANE_VIEW }), () => player);
     if ("file" in what) {
-      await update($, paneFile, () => what.file);
+      await update2($, paneFile, () => what.file);
       watch($, what.file);
     } else {
       const { source, path, imports } = what.source;
       stop(PANE);
-      await update($, paneFile, () => "");
-      await update($, paneSource, () => ({ source, ...path ? { path } : {}, ...imports ? { imports } : {} }));
+      await update2($, paneFile, () => "");
+      await update2($, paneSource, () => ({ source, ...path ? { path } : {}, ...imports ? { imports } : {} }));
     }
     const placed = await opened;
     if (!placed.isPlaced) $.ui.toast(`The Proschi pane is open but not shown: ${placed.reason}`);
@@ -7488,7 +12867,7 @@ function focus($, view, title, what) {
 async function setPlayer($, view, fn, steps) {
   stop(view.viewId);
   if (steps && steps.length > 0) animate($, view, steps);
-  await update($, memberOf(players, { requestId: view.viewId }), (p) => fn(normal(p)));
+  await update2($, memberOf(players, { requestId: view.viewId }), (p) => fn(normal(p)));
 }
 function stop(viewId) {
   timers.get(viewId)?.cancel();
@@ -7498,15 +12877,42 @@ function animate($, view, steps) {
   stop(view.viewId);
   let started = -1;
   let tick = 0;
+  let sent = "";
   const timer = $.clock.every(FRAME2, async () => {
-    const player = normal(await read($, memberOf(players, { requestId: view.viewId })));
+    const player = normal(await read2($, memberOf(players, { requestId: view.viewId })));
     if (player.mode !== "play") return stop(view.viewId);
     const step = Math.max(0, Math.min(player.step, steps.length - 1));
     const now = await $.clock.now();
     if (started < 0) started = now;
     const elapsed = now - started;
-    const { grid, rasterKey } = frameOf2(view, player, step, Math.min(100, elapsed / TRAVEL_MS * 100), tick++);
-    await $.ui.blit({ requestId: view.d.requestId, key: rasterKey, cells: grid.toBase64() });
+    const progress = Math.min(100, elapsed / TRAVEL_MS * 100);
+    const image = images.get(view.viewId);
+    const frames = image?.frames?.[step];
+    const tiles = image?.grid?.steps?.[step];
+    if (image?.grid && image.shown && tiles) {
+      const files = gridFrame(image.grid, step, Math.round(progress / 100 * (tiles.frames.length - 1)));
+      const shown2 = image.shown;
+      const changed = files.flatMap((file, i) => file === shown2[i] || !file || image.mounted && !image.mounted.has(i) ? [] : [i]);
+      for (const i of changed) shown2[i] = files[i];
+      await Promise.all(changed.map(async (i) => $.ui.blit({ requestId: view.d.requestId, key: `${image.key}-${i}`, source: await sourceOf($, files[i], image.form) })));
+    } else if (image && frames?.length) {
+      const file = frames[Math.round(progress / 100 * (frames.length - 1))];
+      if (file !== sent) {
+        sent = file;
+        await $.ui.blit({ requestId: view.d.requestId, key: image.key, source: await sourceOf($, file, image.form) });
+      }
+    } else if (player.sequence) {
+      const seq2 = view.sequence?.(player.pick);
+      if (seq2) {
+        const frame2 = paintSequence(seq2, { icons, play: { index: step, progress } });
+        await $.ui.blit({ requestId: view.d.requestId, key: sequenceKey(view.viewId), cells: frame2.toBase64() }).catch(() => void 0);
+      }
+    } else {
+      const play = playAt(view.scene, steps, step, progress, tick++);
+      const cells = paint(view.scene, { overlay: view.overlay, edges: view.edges, icons, systems: view.systems, ...view.selected ? { selected: view.selected } : {}, play });
+      const vp = textCrops.get(view.viewId);
+      await $.ui.blit({ requestId: view.d.requestId, key: view.rasterKey, cells: (vp ? cells.crop(vp.col, 0, vp.columns, cells.rows) : cells).toBase64() });
+    }
     if (!player.isPlaying) {
       if (elapsed >= TRAVEL_MS) stop(view.viewId);
       return;
@@ -7515,7 +12921,7 @@ function animate($, view, steps) {
     started = -1;
     const last = step >= steps.length - 1;
     if (last) stop(view.viewId);
-    await update($, memberOf(players, { requestId: view.viewId }), (p) => ({ ...normal(p), step: last ? step : step + 1, isPlaying: !last }));
+    await update2($, memberOf(players, { requestId: view.viewId }), (p) => ({ ...normal(p), step: last ? step : step + 1, isPlaying: !last }));
     if (view.inPane) await scroll($, { to: { key: view.anchorKey }, in: PANE, block: "nearest" });
   });
   timers.set(view.viewId, timer);
@@ -7528,8 +12934,9 @@ async function openLink($, surface, link) {
   for (const opener of ["open", "xdg-open"]) {
     const opened = await $.process.run([opener, link], { timeoutMs: 1e4 }).then(
       (r) => r.exitCode === 0,
-      () => false
+      (error) => isAborted(error) ? void 0 : false
     );
+    if (opened === void 0) return;
     if (opened) {
       $.ui.toast("Opened the diagram in Proschi");
       return;

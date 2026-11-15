@@ -39,7 +39,7 @@ One-to-one chat mixes three ideas that each look simple alone: a durable write, 
 **What the tests check.**
 
 - *Messages are stored before the ack, and history reads them back*: Send message writes a database before responding, and Load history reads a database.
-- *Presence decides how a message is delivered*: Send message calls a cache before reaching the recipient and before calling push.
+- *Presence decides how a message is delivered*: Send message reads a cache (`GET`) before reaching the recipient and before calling push.
 - *Delivery happens after the ack*: Send message never waits for push or the recipient, and reaches the recipient only after the database write.
 - *Online recipients get the message over their connection*: in `"Online"`, a queue (the pub/sub broker) comes before the recipient, and push is never called.
 - *Offline recipients get a push notification*: `"Offline"` calls push and never the recipient.

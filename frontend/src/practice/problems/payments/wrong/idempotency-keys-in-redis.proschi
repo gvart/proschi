@@ -8,7 +8,7 @@ import "problem.proschi"
 
 lb      "Load Balancer"   [AWS Load Balancer] x2 @platform
 api     "Payments API"    [REST API]          x3 @payments "Records payments, calls the gateway, answers retries"
-intents "Payment Intents" [Redis]        x2 @payments "One row per idempotency key: status and the stored response"
+intents "Payment Intents" [Redis]             x2 @payments "One row per idempotency key: status and the stored response"
 retries "Retry Queue"     [AWS SQS]           x2 @payments "Pending charges to retry with the same key"
 worker  "Retry Worker"    [AWS ECS]           x2 @payments "Retries pending charges and books them"
 
@@ -57,15 +57,15 @@ decision "One PostgreSQL primary is enough" because "Checkout writes about 2k ro
 usecase "Checkout" "Charge the shopper's card for an order, exactly once" {
   shopper -> lb      : POST /payments json {"orderId": "o-1042", "amount": 4999, "currency": "EUR", "idempotencyKey": "chk_7f3a"}
   lb      -> api     : POST /payments
-  api     -> intents : INSERT intent ON CONFLICT (idempotencyKey) DO NOTHING RETURNING *
+  api     -> intents : SET intent NX, keyed by the idempotency key
 
   alt "Charged" when "the key is new and the gateway approves" {
     intents --> api     : inserted, status pending
-    api      -> gateway : POST /charges Idempotency-Key chk_7f3a
+    api      -> gateway : POST /charges header Idempotency-Key
     gateway --> api     : 201 approved
     api      -> ledger  : APPEND debit and credit entries for pay_81
     ledger  --> api     : ok
-    api      -> intents : UPDATE status succeeded, store response
+    api      -> intents : SET status succeeded, store response
     intents --> api     : ok
     api     --> lb      : 201 {"paymentId": "pay_81", "status": "succeeded"}
     lb      --> shopper : 201 {"paymentId": "pay_81", "status": "succeeded"}
@@ -75,7 +75,7 @@ usecase "Checkout" "Charge the shopper's card for an order, exactly once" {
     lb      --> shopper : 201 {"paymentId": "pay_81", "status": "succeeded"}
   } alt "Gateway down" when "the gateway times out or fails" {
     intents --> api     : inserted, status pending
-    api      -x gateway : POST /charges Idempotency-Key chk_7f3a
+    api      -x gateway : POST /charges header Idempotency-Key
     api      -> retries : ENQUEUE RetryCharge {"idempotencyKey": "chk_7f3a"}
     retries --> api     : ok
     api     --> lb      : 202 {"paymentId": "pay_81", "status": "pending"}
@@ -85,13 +85,13 @@ usecase "Checkout" "Charge the shopper's card for an order, exactly once" {
 
 usecase "Retry charge" "The queue hands a worker one pending charge; it is acknowledged once booked" {
   retries  -> worker  : RetryCharge {"idempotencyKey": "chk_7f3a"}
-  worker   -> intents : SELECT intent FOR UPDATE
+  worker   -> intents : GET intent
   intents --> worker  : status pending
-  worker   -> gateway : POST /charges Idempotency-Key chk_7f3a
+  worker   -> gateway : POST /charges header Idempotency-Key
   gateway --> worker  : 201 approved
   worker   -> ledger  : APPEND debit and credit entries for pay_81
   ledger  --> worker  : ok
-  worker   -> intents : UPDATE status succeeded, store response
+  worker   -> intents : SET status succeeded, store response
   intents --> worker  : ok
   worker  --> retries : ack
 }

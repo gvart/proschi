@@ -1,3 +1,7 @@
+---
+updated: 2026-11-01
+---
+
 # Org diagrams and team systems
 
 Most requests cross several teams, and each team owns its own design. An org

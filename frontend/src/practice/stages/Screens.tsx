@@ -1,11 +1,11 @@
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
-import { ArrowRight, CircleCheck, Layers, Map as MapIcon, Timer } from 'lucide-react';
+import { ArrowRight, Check, CircleCheck, Layers, Map as MapIcon, Timer } from 'lucide-react';
 import problems from 'virtual:practice-listings';
 import { field, outlineButton, primaryButton } from '../../components/Playground/ui';
 import Markdown from '../Markdown';
 import type { Problem } from '../types';
 import { redactedStatement, type Interview } from '../modes/interviewFile';
-import { Brief, PinnedBrief, RequirementsCard, StageHeading, Worksheet } from '../interview/StageParts';
+import { Brief, EstimateLayout, PinnedBrief, RequirementsCard, StageHeading, Worksheet } from '../interview/StageParts';
 import { questionRowId, type WorksheetRow } from '../interview/stages';
 import { setupHref } from '../interview/links';
 import { ROADMAP, roadmapFor, roadmapHref, roadmapState } from '../roadmap';
@@ -142,30 +142,34 @@ export function EstimateStage({ problem, interview, notes, onNotes, onNext, phon
   const rows: WorksheetRow[] = notes.rows ?? questions.map((e, i) => ({ id: questionRowId(i), label: e.question, expression: '', unit: e.unit }));
   const done = Object.keys(notes.estimates).length >= questions.length;
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto" data-testid="stage-estimate">
-      <div className="mx-auto grid w-full max-w-6xl gap-5 px-4 py-6 sm:px-6 lg:grid-cols-[minmax(0,21rem)_minmax(0,1fr)] lg:items-start lg:py-10">
-        <div className="space-y-4 lg:sticky lg:top-0">
+    <EstimateLayout
+      testId="stage-estimate"
+      aside={
+        <>
           <StageHeading stage="estimate" eyebrow={stageEyebrow(3, 'Estimate')} title="Back-of-the-envelope numbers">
             Work each number out yourself and commit to it with Check. The accepted range and the worked answer show after.
           </StageHeading>
-          <RequirementsCard items={factsOf(interview)} collapsible={phone} empty="Estimate from the brief." />
-          <PinnedBrief title="Full brief, with scale" source={problem.statement} />
-        </div>
-        <div className="space-y-4">
-          <Worksheet
-            rows={rows}
-            onChange={(next) => onNotes((n) => ({ ...n, rows: next }))}
-            scoring={{ questions, answers: notes.estimates, onCheck: (index, value) => onNotes((n) => checkEstimate(n, index, questions[index], value)) }}
-          />
-          {done && (
-            <button type="button" onClick={onNext} className={primaryButton}>
-              Next: Design
-              <ArrowRight size={15} aria-hidden="true" />
-            </button>
-          )}
-        </div>
+          <PinnedBrief title="Full brief, with scale" source={problem.statement} fill />
+        </>
+      }
+    >
+      {/* The facts sit over the worksheet, so the brief keeps its column; a long list scrolls. */}
+      <div className="lg:max-h-[40%] lg:shrink-0 lg:overflow-y-auto">
+        <RequirementsCard items={factsOf(interview)} collapsible={phone} empty="Estimate from the brief." />
       </div>
-    </div>
+      <Worksheet
+        rows={rows}
+        onChange={(next) => onNotes((n) => ({ ...n, rows: next }))}
+        scoring={{ questions, answers: notes.estimates, onCheck: (index, value) => onNotes((n) => checkEstimate(n, index, questions[index], value)) }}
+        fill
+      />
+      {done && (
+        <button type="button" onClick={onNext} className={`${primaryButton} lg:shrink-0 lg:self-start`}>
+          Next: Design
+          <ArrowRight size={15} aria-hidden="true" />
+        </button>
+      )}
+    </EstimateLayout>
   );
 }
 
@@ -186,10 +190,12 @@ interface WrapupProps {
   onNotes: Update;
   /** The tests and the free design review (TestPanel), run from here. */
   tests: ReactNode;
+  /** Where Finish leads: back where the problem was opened from (the roadmap or the problem list). */
+  finish: { href: string; label: string };
 }
 
-/** Wrap-up: the tests and the review, a recall prompt, then where to go next. */
-export function WrapupStage({ problem, progress, solved, notes, onNotes, tests }: WrapupProps) {
+/** Wrap-up: the tests and the review, a recall prompt, then Finish or where to go next. */
+export function WrapupStage({ problem, progress, solved, notes, onNotes, tests, finish }: WrapupProps) {
   const topics = useRelatedTopics(problem.id);
   const next = useNextOnRoadmap(problem.id, progress);
   const link = 'inline-flex items-center gap-1.5 font-semibold text-ink underline decoration-2 underline-offset-2 hover:decoration-pop-blue';
@@ -225,15 +231,21 @@ export function WrapupStage({ problem, progress, solved, notes, onNotes, tests }
 
         <section aria-labelledby="keep-going" className="space-y-3">
           <h3 id="keep-going" className="font-display text-xl font-bold tracking-tight text-ink">
-            Keep going
+            Finish, or keep going
           </h3>
-          {next && (
-            <a href={roadmapHref(next.id)} className={solved ? primaryButton : outlineButton} data-testid="wrapup-next">
-              <MapIcon size={15} aria-hidden="true" />
-              Next on the roadmap: {next.title}
-              <ArrowRight size={15} aria-hidden="true" />
+          <div className="flex flex-wrap items-center gap-2">
+            <a href={finish.href} className={primaryButton} title={`Back to the ${finish.label.toLowerCase()}`} data-testid="wrapup-finish">
+              <Check size={15} aria-hidden="true" />
+              Finish
             </a>
-          )}
+            {next && (
+              <a href={roadmapHref(next.id)} className={`${outlineButton} min-w-0`} data-testid="wrapup-next">
+                <MapIcon size={15} aria-hidden="true" className="shrink-0" />
+                <span className="truncate">Next on the roadmap: {next.title}</span>
+                <ArrowRight size={15} aria-hidden="true" className="shrink-0" />
+              </a>
+            )}
+          </div>
           <ul className="space-y-1.5 text-sm">
             {topics.map(({ topic, count }) => (
               <li key={topic.id}>

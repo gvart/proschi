@@ -99,10 +99,10 @@ export function validateProblem(problem: Problem, engine: Engine = defaultEngine
   // given.proschi: standalone, error-free, canonical.
   const importLine = problem.given.split('\n').findIndex((l) => /^\s*import /.test(l));
   if (importLine >= 0) add(GIVEN, 'The given must not import anything', importLine + 1);
-  report(GIVEN, parse(problem.given).diagnostics.filter((d) => d.severity === 'error'));
+  report(GIVEN, parse(problem.given, problem.strict ? { strictOps: true } : {}).diagnostics.filter((d) => d.severity === 'error'));
   if (format(problem.given) !== problem.given) add(GIVEN, 'Not in canonical format; run proschi fmt');
 
-  // solution.proschi: no diagnostics at all, canonical, passes every test.
+  // solution.proschi: no diagnostics at all (parsed with strictOps for a strict problem, as grading does), canonical, passes every test.
   if (!problem.solution.startsWith(`${IMPORT_LINE}\n`)) add(SOLUTION, `Must start with ${IMPORT_LINE}`, 1);
   const solution = parseSolution(problem, problem.solution);
   report(SOLUTION, solution.diagnostics);
