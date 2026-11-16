@@ -149,14 +149,23 @@ they draw in pictures and text cells alike.
    `.claude-plugin/marketplace.json`. After merging a newer upstream
    release, use that release's version with `-themes.1`.
 2. In `tooling/`: `npm ci`, `npm test`, then `npm pack`. That writes
-   `proschi-<version>.tgz`.
+   `proschi-<version>.tgz`. Then `npm run package:vscode` writes the VS Code
+   extension to `dist/proschi.vsix`; copy it to
+   `proschi-vscode-<version>.vsix`. The extension keeps upstream's version
+   (`vscode/package.json`): VS Code would rank a `-themes.N` version below
+   upstream's release of the same number anyway.
 3. Commit and push. Then create a GitHub release on st22nestrel/proschi
-   tagged `v<version>`, and attach the `.tgz`:
+   tagged `v<version>`, and attach the `.tgz` and the `.vsix`:
 
    ```sh
    gh release create v0.19.0-themes.2 tooling/proschi-0.19.0-themes.2.tgz \
+     tooling/proschi-vscode-0.19.0-themes.2.vsix \
      --repo st22nestrel/proschi --title "proschi 0.19.0-themes.2" --notes "…"
    ```
+
+   Install the extension with `code --install-extension
+   proschi-vscode-<version>.vsix`, and turn off auto-update for it, so the
+   Marketplace's upstream build doesn't replace it.
 
 4. Consumers depend on the release asset URL:
 
