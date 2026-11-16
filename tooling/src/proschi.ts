@@ -30,7 +30,7 @@ export type { DiagramScenario } from '../../frontend/src/dsl/types';
 export { DIFF_SECTIONS, diffDiagrams, requirementKey, summarizeDiff, type DiagramDiff, type DiffSection, type FieldChange } from '../../frontend/src/dsl/diff';
 export { toMermaidArchitecture, toMermaidSequence } from '../../frontend/src/dsl/mermaid';
 export { buildSequence, sectionedItems, type SequenceMessage } from '../../frontend/src/dsl/sequence';
-export { EXPORT_CSP, buildHld, toHtml as hldToHtml, toMarkdown as hldToMarkdown, type HldDocument, type HldFigures } from '../../frontend/src/hld';
+export { EXPORT_CSP, buildHld, toHtml as hldToHtml, toMarkdown as hldToMarkdown, type HldDocument, type HldFigures, type HldPageTheme } from '../../frontend/src/hld';
 // `analyze` is the editor's simulation; tooling's own analysis.ts has an `analyze` for documents.
 export {
   analyze as simulate,

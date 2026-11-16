@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ecommerceExample, parse } from '../dsl';
 import { shortenerAnalysis, shortenerDiagram, shortenerTests } from './fixtures';
-import { assertionLabel, buildHld, hld, nullEngine, overviewFacts, requirementLabel, section, toHtml, toMarkdown, type Engine } from './index';
+import { DEFAULT_HLD_PAGE, assertionLabel, buildHld, hld, nullEngine, overviewFacts, requirementLabel, section, toHtml, toMarkdown, type Engine } from './index';
 
 /** Every opened tag is closed, in order (void elements aside). */
 function expectBalancedHtml(html: string) {
@@ -293,6 +293,19 @@ describe('toHtml', () => {
     expect(html).not.toMatch(/<script|<link|https?:\/\/(?!example\.com)/);
     for (const s of doc.sections) expect(html).toContain(`<section id="${s.kind}"><h2>${s.title}</h2>`);
     expect(html).toContain('<span class="fail">✗ fail</span>');
+  });
+
+  it('colours the page with its own palette, or the one given', () => {
+    const plain = toHtml(doc);
+    expect(plain).toContain(`:root { color-scheme: light dark; ${DEFAULT_HLD_PAGE.light} }`);
+    expect(plain).toContain(`@media (prefers-color-scheme: dark) { :root { ${DEFAULT_HLD_PAGE.dark} } }`);
+    const themed = toHtml(doc, { architecture: '<svg id="arch"></svg>' }, { light: '--bg: #111111;', dark: '--bg: #222222;', figure: 'border: 2px solid red;' });
+    expect(themed).toContain(':root { color-scheme: light dark; --bg: #111111; }');
+    expect(themed).toContain('@media (prefers-color-scheme: dark) { :root { --bg: #222222; } }');
+    expect(themed).toContain('figure { margin: 8px 0; overflow-x: auto; padding: 8px; border: 2px solid red; }');
+    expect(themed).not.toContain(DEFAULT_HLD_PAGE.light);
+    // Print stays light whatever the theme.
+    expect(themed).toMatch(/@media print \{\n {2}:root \{ color-scheme: light; --bg: #ffffff;/);
   });
 
   it('embeds figures when given, and lists messages otherwise', () => {

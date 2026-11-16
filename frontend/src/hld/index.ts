@@ -5,7 +5,7 @@ import { hld, type HldDocument } from './hld';
 export * from './engine';
 export * from './hld';
 export { toMarkdown } from './markdown';
-export { EXPORT_CSP, toHtml, type HldFigures } from './html';
+export { DEFAULT_HLD_PAGE, EXPORT_CSP, toHtml, type HldFigures, type HldPageTheme } from './html';
 
 /** Runs the simulation (when there is one) and builds the HLD from its results. */
 export function buildHld(diagram: Diagram, engine: Engine = defaultEngine): HldDocument {

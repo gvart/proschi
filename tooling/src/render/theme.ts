@@ -78,8 +78,12 @@ export interface RenderTheme {
   note: { fill: string; border?: string; icon: string; title: string; body: string };
   /** Text weight of names and titles. */
   bold: number;
-  /** CSS custom properties of the `--format html` page, light then dark. */
-  page: { light: string; dark: string; figure: string };
+  /**
+   * CSS custom properties of the `--format html` page, light then dark, and a figure's frame.
+   * `document` adds what the HLD page (`--format hld-html`) also needs, per scheme: `--surface`
+   * (tables, code), `--rule` (table cells, heading underlines), `--pass`, `--warn` and `--link-decoration`.
+   */
+  page: { light: string; dark: string; figure: string; document: { light: string; dark: string } };
 }
 
 const MONO = "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
@@ -124,10 +128,17 @@ function sketch(colorway: 'light' | 'dark', page: RenderTheme['page']): RenderTh
   };
 }
 
+/** The HLD page's tables and statuses on a dark page (sketch-light for a dark-scheme reader, and sketch-dark). */
+const SKETCH_DARK_DOCUMENT = '--surface: #1e1d24; --rule: #3a3744; --pass: #4ade80; --warn: #fbbf24; --link-decoration: underline;';
+
 export const SKETCH_LIGHT: RenderTheme = sketch('light', {
   light: '--bg: #ffffff; --fg: #111111; --muted: #5b5b5b; --card: #fff8e7; --border: #111111; --link: #111111; --error: #ff3b30;',
   dark: '--bg: #141318; --fg: #f4efe3; --muted: #a9a5b4; --card: #fff8e7; --border: #f4efe3; --link: #f4efe3; --error: #ff6b61;',
   figure: 'background: var(--card); border: 2px solid var(--border); border-radius: 4px; box-shadow: 3px 3px 0 var(--border);',
+  document: {
+    light: '--surface: #fff8e7; --rule: #d6cfbf; --pass: #15803d; --warn: #b45309; --link-decoration: underline;',
+    dark: SKETCH_DARK_DOCUMENT,
+  },
 });
 
 // Dark pictures read best on a dark page whatever the reader's colour scheme, so both sets are dark.
@@ -136,6 +147,7 @@ export const SKETCH_DARK: RenderTheme = sketch('dark', {
   light: DARK_PAGE,
   dark: DARK_PAGE,
   figure: 'background: var(--card); border: 2px solid var(--border); border-radius: 4px; box-shadow: 3px 3px 0 var(--border);',
+  document: { light: SKETCH_DARK_DOCUMENT, dark: SKETCH_DARK_DOCUMENT },
 });
 
 /** The default theme (`sketch-light`). */
@@ -182,6 +194,10 @@ export const CLASSIC: RenderTheme = {
     light: '--bg: #f8fafc; --fg: #1f2937; --muted: #6b7280; --card: #ffffff; --border: #e5e7eb; --link: #2563eb; --error: #dc2626;',
     dark: '--bg: #0f172a; --fg: #e5e7eb; --muted: #94a3b8; --card: #ffffff; --border: #334155; --link: #93c5fd; --error: #f87171;',
     figure: 'background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 8px;',
+    document: {
+      light: '--surface: #ffffff; --rule: #e5e7eb; --pass: #15803d; --warn: #b45309;',
+      dark: '--surface: #1e293b; --rule: #334155; --pass: #4ade80; --warn: #fbbf24;',
+    },
   },
 };
 

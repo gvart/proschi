@@ -464,7 +464,7 @@ export async function renderFiles(diagram: Diagram, format: RenderFormat, baseNa
   if (format === 'html') return [{ name: `${baseName}.html`, content: renderHtml(diagram, await renderSvgs(diagram, true, options), asRenderTheme(options.theme)) }];
   if (format === 'preview-html') return [{ name: `${baseName}.preview.html`, content: renderPreviewHtml(diagram, await renderSvgs(diagram, true, options), asRenderTheme(options.theme)) }];
   if (format === 'hld-md') return [{ name: `${baseName}.hld.md`, content: renderHldMarkdown(diagram) }];
-  if (format === 'hld-html') return [{ name: `${baseName}.hld.html`, content: renderHldHtml(diagram, await renderSvgs(diagram, true, options)) }];
+  if (format === 'hld-html') return [{ name: `${baseName}.hld.html`, content: renderHldHtml(diagram, await renderSvgs(diagram, true, options), asRenderTheme(options.theme)) }];
   const { architecture, scenarios } = await renderSvgs(diagram, false, options);
   return [{ name: 'architecture.svg', content: `${architecture}\n` }, ...scenarios.map((s) => ({ name: `${s.slug}.svg`, content: `${s.svg}\n` }))];
 }

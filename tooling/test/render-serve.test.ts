@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { request, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { homedir, tmpdir } from 'node:os';
@@ -140,6 +140,38 @@ describe('proschi preview server', () => {
     expect(await status('GET', `evil.example:${port}`)).toBe(403);
     expect(await status('GET', `localhost:${port}`)).toBe(200);
     expect(await status('POST', `127.0.0.1:${port}`)).toBe(405);
+  });
+});
+
+describe('preview server sketch themes from proschi.json', () => {
+  it.each([
+    ['sketch-light', '#ffffff', '#FFF8E7'],
+    ['sketch-dark', '#0d0c10', '#141318'],
+    ['sketch', '#ffffff', '#FFF8E7'],
+  ])('uses %s for the index, preview page and embedded diagrams', async (theme, pageBackground, diagramBackground) => {
+    const dir = mkdtempSync(join(tmpdir(), 'proschi-serve-theme-'));
+    writeFileSync(join(dir, 'proschi.json'), JSON.stringify({ theme }));
+    mkdirSync(join(dir, 'nested'));
+    writeFileSync(join(dir, 'nested', 'main.proschi'), DOC);
+    const themedServer = createPreviewServer({ root: dir, listFiles: (folder) => collectFiles([folder]) });
+    await new Promise<void>((done) => themedServer.listen(0, '127.0.0.1', done));
+    const url = `http://127.0.0.1:${(themedServer.address() as AddressInfo).port}`;
+    try {
+      for (const path of ['/', '/view?path=nested/main.proschi']) {
+        const response = await fetch(url + path);
+        expect(response.status).toBe(200);
+        const html = await response.text();
+        expect(html).toContain(`--bg: ${pageBackground};`);
+        if (path !== '/') {
+          const backgrounds = [...html.matchAll(/<rect width="100%" height="100%" fill="([^"]+)"\/>/g)].map((match) => match[1]);
+          // Both architecture and scenario follow the inherited config.
+          expect(backgrounds).toEqual([diagramBackground, diagramBackground]);
+        }
+      }
+    } finally {
+      await new Promise<void>((done) => themedServer.close(() => done()));
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

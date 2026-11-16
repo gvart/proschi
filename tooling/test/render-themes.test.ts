@@ -218,6 +218,31 @@ describe('render themes', () => {
     }
   });
 
+  it.each([
+    ['sketch-light', ['--theme', 'sketch-light'], '--bg: #ffffff;', '--bg: #141318;', '#FFF8E7'],
+    ['sketch-dark', ['--theme', 'sketch-dark'], '--bg: #0d0c10;', '--bg: #0d0c10;', '#141318'],
+    ['classic', ['--theme', 'classic'], '--bg: #f8fafc;', '--bg: #0f172a;', '#ffffff'],
+    ['the default (sketch-light)', [], '--bg: #ffffff;', '--bg: #141318;', '#FFF8E7'],
+  ])('colours the HLD page with %s, as its figures', async (_name, flags, light, dark, figure) => {
+    const r = await renderIn(project(), ['--format', 'hld-html', ...flags]);
+    expect(r.code).toBe(0);
+    const html = r.read('main.hld.html');
+    const style = html.match(/<style>([\s\S]*?)<\/style>/)![1];
+    expect(style.match(/^:root \{ color-scheme: light dark; (.*) \}$/m)![1]).toContain(light);
+    expect(style.match(/^@media \(prefers-color-scheme: dark\) \{ :root \{ (.*) \} \}$/m)![1]).toContain(dark);
+    // Every colour the page's rules read is set in both schemes.
+    for (const v of ['--bg', '--fg', '--muted', '--card', '--border', '--link', '--error', '--surface', '--rule', '--pass', '--warn']) {
+      expect(style.match(new RegExp(`${v}:`, 'g'))!.length, v).toBeGreaterThanOrEqual(3);
+    }
+    expect(background(html.match(/<figure><svg[\s\S]*?<\/svg><\/figure>/)![0])).toBe(figure);
+  });
+
+  it('colours the HLD page from "theme" in proschi.json', async () => {
+    const r = await renderIn(project({ theme: 'sketch-dark' }), ['--format', 'hld-html']);
+    expect(r.code).toBe(0);
+    expect(r.read('main.hld.html')).toContain(':root { color-scheme: light dark; --bg: #0d0c10;');
+  });
+
   it('styles the HLD page and the preview page in sketch-dark', async () => {
     const dir = project();
     const hld = await renderIn(dir, ['--format', 'hld-html', '--theme', 'sketch-dark']);
