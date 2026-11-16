@@ -48,10 +48,11 @@ class ProschiConfigurable : BoundConfigurable("Proschi") {
             group("Preview") {
                 row("Theme:") {
                     comboBox(ProschiSettings.PREVIEW_THEMES)
-                        .bindItem({ options.previewTheme }, { options.previewTheme = it ?: ProschiSettings.PREVIEW_THEMES.first() })
+                        .bindItem({ ProschiSettings.previewTheme(options.previewTheme) }, { options.previewTheme = ProschiSettings.previewTheme(it) })
                         .comment(
-                            "<code>sketch</code>: cream paper, ink outlines, hard shadows. <code>classic</code>: white, rounded grey cards, " +
-                                "coloured icon tiles, blue arrows. A <code>\"theme\"</code> in the nearest <code>proschi.json</code> overrides it.",
+                            "<code>sketch-light</code>: cream paper, ink outlines, hard shadows. <code>sketch-dark</code>: the same on dark paper. " +
+                                "<code>classic</code>: white, rounded grey cards, coloured icon tiles, blue arrows. " +
+                                "A <code>\"theme\"</code> in the nearest <code>proschi.json</code> overrides it.",
                         )
                 }
             }

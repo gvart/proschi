@@ -147,7 +147,7 @@ class ProschiPreviewPanel(private val project: Project, private val toolWindow: 
     private fun renderWith(target: VirtualFile, legacy: Boolean) {
         val browser = browser ?: return
         val out: Path = Files.createTempDirectory("proschi-preview")
-        val theme = ProschiSettings.options.previewTheme.takeIf { it in ProschiSettings.PREVIEW_THEMES } ?: ProschiSettings.PREVIEW_THEMES.first()
+        val theme = ProschiSettings.previewTheme(ProschiSettings.options.previewTheme)
         val args =
             if (legacy) ProschiCommands.legacyPreviewArgs(target.name, out.toString())
             else ProschiCommands.previewArgs(target.name, out.toString(), theme)
@@ -189,7 +189,7 @@ class ProschiPreviewPanel(private val project: Project, private val toolWindow: 
      * The render pages are laid out for a browser window; this restyles them for the
      * tool window: one column, diagrams scaled down to the panel's width, and the page's
      * colors from the IDE theme. The cards around the diagrams keep the render theme's
-     * color (`--card`: cream in sketch, white in classic), so each diagram sits on its
+     * color (`--card`: cream in sketch-light, dark in sketch-dark, white in classic), so each diagram sits on its
      * own background. The `preview-html` page allows styles only by hash, so the
      * restyle's hash joins its Content-Security-Policy.
      */

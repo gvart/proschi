@@ -8,7 +8,7 @@ import { parse } from '../src/proschi';
 import { getTheme, renderArchitectureSvg, renderSequenceSvg, renderSvgs, THEME_NAMES } from '../src/render';
 import { typeColor } from '../src/render/icons';
 import { previewHtml, renderPreviewContent } from '../src/render/preview';
-import { CLASSIC, SKETCH, SKETCH_DARK, SKETCH_LIGHT } from '../src/render/theme';
+import { CLASSIC, SKETCH, SKETCH_DARK, SKETCH_LIGHT, THEME_ALIASES } from '../src/render/theme';
 import { themeFor } from '../src/render/themeConfig';
 
 async function capture(argv: string[]) {
@@ -367,10 +367,21 @@ describe('VS Code preview themes', () => {
     expect(themeFor(join(bare, 'main.proschi'))).toBe(SKETCH);
     expect(themeFor(join(bare, 'main.proschi'), undefined, 'classic')).toBe(CLASSIC);
     expect(themeFor(join(bare, 'main.proschi'), undefined, 'sketch')).toBe(SKETCH);
+    expect(themeFor(join(bare, 'main.proschi'), undefined, 'sketch-light')).toBe(SKETCH_LIGHT);
+    expect(themeFor(join(bare, 'main.proschi'), undefined, 'sketch-dark')).toBe(SKETCH_DARK);
     expect(themeFor(join(bare, 'main.proschi'), undefined, '')).toBe(SKETCH);
+    expect(themeFor(join(project({ theme: 'sketch-dark' }), 'main.proschi'), undefined, 'sketch-light')).toBe(SKETCH_DARK);
     expect(themeFor(join(project({ theme: 'sketch' }), 'main.proschi'), undefined, 'classic')).toBe(SKETCH);
     expect(themeFor(join(project({ theme: 'classic' }), 'main.proschi'), undefined, 'sketch')).toBe(CLASSIC);
     expect(themeFor(join(project({ openapi: {} }), 'main.proschi'), undefined, 'classic')).toBe(CLASSIC);
     expect(() => themeFor(join(bare, 'main.proschi'), undefined, 'neon')).toThrow("Unknown theme 'neon'");
+  });
+
+  it('offers every theme and alias in the proschi.preview.theme setting, sketch-light by default', () => {
+    const manifest = JSON.parse(readFileSync(join(__dirname, '../vscode/package.json'), 'utf8'));
+    const setting = manifest.contributes.configuration.properties['proschi.preview.theme'];
+    expect(setting.enum).toEqual([...THEME_NAMES, ...Object.keys(THEME_ALIASES)]);
+    expect(setting.enumDescriptions).toHaveLength(setting.enum.length);
+    expect(setting.default).toBe('sketch-light');
   });
 });

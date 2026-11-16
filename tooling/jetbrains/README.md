@@ -20,7 +20,7 @@ Install it from the
 | *Tools → Proschi → Show Diagram Preview* | `proschi render --format preview-html` shown in the *Proschi Preview* tool window (JCEF): the architecture, a scenario picker, and each use case's description, folded, with `Label: name (detail); …` sentences as tables. It renders again each time you save the file or a `proschi.json`, and switches to whichever `.proschi` editor you select while the window is open |
 | *Tools → Proschi → Open in Proschi* | `proschi share-link <file>` and opens the link: the web editor at proschi.app with the file and its imports. The diagram travels in the link; nothing is uploaded |
 | Status bar | The *Language Services* widget shows the server's state and links to the settings |
-| Settings | *Settings → Languages & Frameworks → Proschi*: turn the language server on or off, set paths to the server, the CLI and Node.js, and pick the preview's theme (`sketch` or `classic`; a `"theme"` in the nearest `proschi.json` overrides it) |
+| Settings | *Settings → Languages & Frameworks → Proschi*: turn the language server on or off, set paths to the server, the CLI and Node.js, and pick the preview's theme (`sketch-light`, `sketch-dark` or `classic`; `sketch` still works as an alias of `sketch-light`; a `"theme"` in the nearest `proschi.json` overrides it) |
 
 The *Proschi* menu also opens from the editor and project view context menus
 on `.proschi` files.

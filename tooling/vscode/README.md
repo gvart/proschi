@@ -46,10 +46,11 @@ them.
   `Requests: Own ids (public); Other office (broker)` shown as tables. It
   updates as you type, keeps the scenario you picked, and follows the active
   `.proschi` editor.
-- Two looks for the preview, set with `proschi.preview.theme`: `sketch`
-  (the default; cream paper, ink outlines, hard shadows, as on proschi.app)
-  or `classic` (white, rounded light-grey cards, icon tiles coloured by
-  component type, blue request arrows). A `"theme"` in the nearest
+- Three looks for the preview, set with `proschi.preview.theme`:
+  `sketch-light` (the default; cream paper, ink outlines, hard shadows, as on
+  proschi.app; `sketch` is an alias), `sketch-dark` (the same look on dark
+  paper) or `classic` (white, rounded light-grey cards, icon tiles coloured
+  by component type, blue request arrows). A `"theme"` in the nearest
   `proschi.json` overrides the setting, as it does for `proschi render`.
   The preview redraws when either changes.
 

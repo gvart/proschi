@@ -60,8 +60,17 @@ class ProschiCommandsTest {
             ProschiCommands.previewArgs("shop.proschi", "/tmp/p", "classic"),
         )
         assertEquals(listOf("render", "--format", "html", "--out", "/tmp/p", "shop.proschi"), ProschiCommands.legacyPreviewArgs("shop.proschi", "/tmp/p"))
-        assertEquals(listOf("sketch", "classic"), ProschiSettings.PREVIEW_THEMES)
-        assertEquals("sketch", ProschiSettings.Options().previewTheme)
+        assertEquals(listOf("sketch-light", "sketch-dark", "classic"), ProschiSettings.PREVIEW_THEMES)
+        assertEquals("sketch-light", ProschiSettings.Options().previewTheme)
+    }
+
+    @Test
+    fun `reads the preview theme setting with its alias, and an unknown one as the default`() {
+        assertEquals("sketch-dark", ProschiSettings.previewTheme("sketch-dark"))
+        assertEquals("classic", ProschiSettings.previewTheme("classic"))
+        assertEquals("sketch-light", ProschiSettings.previewTheme("sketch"))
+        assertEquals("sketch-light", ProschiSettings.previewTheme("neon"))
+        assertEquals("sketch-light", ProschiSettings.previewTheme(null))
     }
 
     @Test
