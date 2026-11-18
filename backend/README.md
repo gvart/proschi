@@ -1235,7 +1235,7 @@ solve locally either way.
 
    With both set, the next push to `main` (or Actions → Site → Run workflow)
    then:
-   - builds the site with `VITE_ACCOUNTS=true`;
+   - builds the site with `VITE_ACCOUNTS=true` and `VITE_BILLING=true`;
    - when staging is enabled (step 5), deploys to **staging**
      (staging.proschi.app, with its own D1) and runs `scripts/smoke.mjs`
      against it;
@@ -1510,10 +1510,10 @@ needs only the ones before it):
    `0025_partner`, `0026_email_auth`, `0027_interview_deep`,
    `0028_campaigns` and `0029_feedback`.
    `npx wrangler d1 migrations list proschi --remote` shows what is left.
-7. **The UI.** The deploy builds the site with `VITE_ACCOUNTS: 'true'` only.
-   Add `VITE_BILLING: 'true'` next to it in `.github/workflows/site.yml` (the
-   production build, and staging's) to show the pricing page and the
-   upgrade buttons. Without it the API works, but nothing links to it.
+7. **The UI.** The deploy builds the site with `VITE_ACCOUNTS: 'true'` and
+   `VITE_BILLING: 'true'` in `.github/workflows/site.yml` (the production build,
+   and staging's), which shows the pricing page and the upgrade buttons.
+   Without `VITE_BILLING` the API works, but nothing links to it.
 8. **Check.** The admin panel's **Health** tab: the AI key, the gateway and
    the seven Polar secrets set, Polar live (not sandbox). Then one real
    purchase of the top-up (refund it in Polar) and see it as `applied` in
