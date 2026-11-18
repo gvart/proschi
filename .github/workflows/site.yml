@@ -133,6 +133,7 @@ jobs:
         working-directory: frontend
         env:
           VITE_ACCOUNTS: 'true'
+          VITE_BILLING: 'true'
       - run: npm ci && npm run deploy:staging
         working-directory: backend
         env:
@@ -169,6 +170,7 @@ jobs:
         working-directory: frontend
         env:
           VITE_ACCOUNTS: 'true'
+          VITE_BILLING: 'true'
       # npm run backup prints the D1 bookmark before migrating, and sets the step output.
       - id: deploy
         run: npm ci && npm run deploy
