@@ -1,0 +1,88 @@
+backend/src/index.ts
+  s_df7ed84f9dfa19::t_0f372543aa94a0 75
+  s_df7ed84f9dfa19::t_b83c5dd230686e 452
+frontend/plugins/docsSite.test.ts
+  s_df7ed84f9dfa19::t_4b7c50ab05bad9 24
+docs/DATENSCHUTZ.md
+  s_df7ed84f9dfa19::t_d0b54a9ccba697 1-26,28-76
+  s_df7ed84f9dfa19::t_62191b47ffa524 27
+frontend/docs/agb/index.html
+  s_df7ed84f9dfa19::t_07050b294109dd 1-35
+backend/src/email.ts
+  s_df7ed84f9dfa19::t_2af9f1a4c8b7f9 39
+  s_df7ed84f9dfa19::t_27218dddeedfc5 21-22
+backend/test/legal.test.ts
+  s_df7ed84f9dfa19::t_835c40d6b22374 1-2,7-8,10-31,33-34,39-40,43-44,48-49,51-56,58-137
+  s_df7ed84f9dfa19::t_ef263b3c8318d2 3-6,9,32,35-38,41-42,45-47,50,138-139
+  s_df7ed84f9dfa19::t_98e22512bf39c1 57
+frontend/src/pricing/PricingApp.tsx
+  s_df7ed84f9dfa19::t_f74e1cee31490d 286-299
+docs/site.json
+  s_df7ed84f9dfa19::t_04d5f29a0ad880 327-328
+  s_df7ed84f9dfa19::t_2e13f7aa63f4f6 201-212
+frontend/src/design/site.ts
+  s_df7ed84f9dfa19::t_f5ded358e74c24 104-105
+  s_df7ed84f9dfa19::t_f704401eb85962 102-103
+docs/PRIVACY.md
+  s_df7ed84f9dfa19::t_f36dbf8d2c8d0c 22-33,35-63
+  s_df7ed84f9dfa19::t_8c1f3ea8ae9950 34
+  s_df7ed84f9dfa19::t_7ef3cdb9844043 7-9
+  s_df7ed84f9dfa19::t_a3b23b0e6b8cc9 2
+  s_344993999c180f::t_2aeeb078cdde06 10
+backend/src/env.ts
+  s_df7ed84f9dfa19::t_cd1180a815079b 136-138
+  s_df7ed84f9dfa19::t_06022498c7d728 134-135,139-142
+docs/TERMS.md
+  s_df7ed84f9dfa19::t_5abd595e097b04 2,7-9
+  s_df7ed84f9dfa19::t_0fb319ca0ef1c8 21-23
+  s_df7ed84f9dfa19::t_95c59172c9ad89 104-118
+  s_df7ed84f9dfa19::t_2df12dfc4a1350 72-76
+  s_344993999c180f::t_982a4068d91db3 10
+frontend/src/docs/docs.css
+  s_df7ed84f9dfa19::t_c2a3f8afac7536 445-447
+frontend/docs/datenschutz/index.html
+  s_df7ed84f9dfa19::t_07050b294109dd 1-35
+backend/wrangler.jsonc
+  s_df7ed84f9dfa19::t_0fc17a5859f432 24
+  s_df7ed84f9dfa19::t_35fdf3a47a14b2 111
+backend/README.md
+  s_df7ed84f9dfa19::t_6086f17ca7d944 1491
+docs/AGB.md
+  s_df7ed84f9dfa19::t_e4b5f284a41589 57-65
+  s_df7ed84f9dfa19::t_73daf43f860592 77-79,87-93
+  s_df7ed84f9dfa19::t_a1c71a8458e0b0 101
+  s_df7ed84f9dfa19::t_0b765c13f5ef21 107
+  s_df7ed84f9dfa19::t_187c7408ee5da0 1-21,28-56,66-76,80-86,94-100,102-106,108-112
+  s_df7ed84f9dfa19::t_f43b461021ef41 22
+  s_df7ed84f9dfa19::t_dee492a92f32e2 23-27
+frontend/e2e/docs.e2e.ts
+  s_df7ed84f9dfa19::t_ed911746fa5385 25-26
+backend/src/legal.ts
+  s_df7ed84f9dfa19::t_ec2b1e273712f4 131
+  s_df7ed84f9dfa19::t_8eb6f51bcc48a2 1-5,8-15,18-24,27-32,34-41,44-47,50-51,54-90,103-110,119-120,127-130,132-178
+  s_df7ed84f9dfa19::t_cfa112203b9fd1 6-7,16-17,25-26,33,42-43,48-49,52-53,91-102,111-118,121-126,179
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f521f043c0ec55ebc5742f9011e5bf9aa4913baa",
+  "prompts": {},
+  "sessions": {
+    "s_344993999c180f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1893b4bd-6b15-43c0-aee7-8234b3fab2a9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    },
+    "s_df7ed84f9dfa19": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "71bbb740-1260-41c4-a1a4-33ac41650de6",
+        "model": "unknown"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
