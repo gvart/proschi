@@ -1488,6 +1488,7 @@ needs only the ones before it):
    | `CREDITS_USD_EUR` | Optional: the dollar-to-euro rate credits are priced at (unset: 0.95) |
    | `POLAR_ACCESS_TOKEN`, `POLAR_WEBHOOK_SECRET` | Checkout, the portal, plan changes and the webhook (501 without them) |
       | `TURNSTILE_SECRET_KEY` | Turnstile's check (skipped without it) |
+   | `LEGAL_NAME`, `LEGAL_ADDRESS`, `LEGAL_EMAIL` | `/impressum` and its contact form, which emails `LEGAL_EMAIL` (404 without all three; `LEGAL_ADDRESS` separates its lines with `\|`) |
    | `ADMIN_EMAIL` | Optional: where campaigns' **Send a test to me** goes (501 without it) |
    | `CAMPAIGN_DAILY_CAP` | Optional: campaign emails a UTC day (unset: 500) |
    | `METRICS_TOKEN`, `ADMIN_SETUP_TOKEN` | Optional: the usage summary; the admin's first passkey (once, then delete it) |

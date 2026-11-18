@@ -1,8 +1,12 @@
 ---
-updated: 2026-11-09
+updated: 2026-11-18
 ---
 
 # Terms
+
+This English text is for information. The binding version is the German
+[AGB](AGB.md), and the provider is named in the
+[Impressum](https://proschi.app/impressum).
 
 Short version: Proschi's code is open source under the MIT license, and the
 editor, the simulation and the practice problems are free. These terms cover
@@ -14,9 +18,9 @@ Pro and Max plans, credits and top-ups. What is stored about you is on the
 
 You can use the editor and practice without an account. With one, the
 account keeps 5 diagrams, 20 versions each, up to 64 KiB a diagram, and
-gets 100 credits once, at sign-up. The service is offered as is, without a
-warranty: keep a copy of diagrams you can't lose (the editor's export, or
-the files in your repository).
+gets 100 credits once, at sign-up. Keep a copy of diagrams you can't lose
+(the editor's export, or the files in your repository). What we are liable
+for is under [Liability](#liability).
 
 ## Credits
 
@@ -65,6 +69,11 @@ some or subscribe again. Top-up credits stay yours.
 consumer law of the country you buy from. Ask through the billing portal or
 [GitHub issues](https://github.com/gvart/proschi/issues).
 
+**Right of withdrawal.** Consumers have a statutory right of withdrawal on
+purchases. Because Polar is the seller, withdrawal and refunds go to Polar,
+under the information Polar gives at checkout. Your statutory rights are
+unaffected.
+
 ## Top-ups
 
 A top-up is 1,000 credits for €12, on any plan. Top-up credits never
@@ -91,6 +100,21 @@ described on the [Privacy](PRIVACY.md#the-sites-operator) page.
 
 **Delete account** on your account page cancels a Pro or Max subscription at
 once and deletes the account with its unused credits. Download your data first if you want a copy.
+
+## Liability
+
+We are liable without limit for intent and gross negligence, for injury to
+life, body or health, and under the German Product Liability Act. For slightly
+negligent breach of an essential contractual duty, liability is limited to the
+foreseeable damage typical of the contract. Other liability for slight
+negligence is excluded.
+
+## Governing law
+
+German law applies, excluding the UN Convention on Contracts for the
+International Sale of Goods. Mandatory consumer protection rules of the country
+where a consumer habitually lives are unaffected. If a provision is invalid, the
+rest of the contract stays in force.
 
 ## Changes
 
