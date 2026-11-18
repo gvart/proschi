@@ -1,0 +1,19 @@
+frontend/e2e/interview.e2e.ts
+  s_71964bfa066b0a::t_39f4e00d928aae 359-360
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3cec14648f23beb99025d7c5bebfbda7a3dfc259",
+  "prompts": {},
+  "sessions": {
+    "s_71964bfa066b0a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1074fdaf-4613-4912-8bea-df45fe51e0b5",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
