@@ -18,6 +18,8 @@ export const SENDER = { name: 'Proschi', email: 'reminders@proschi.app' };
 
 export interface OutgoingEmail {
   to: string;
+  /** Where a reply goes instead of the sender (the contact form's visitor, src/legal.ts). */
+  replyTo?: string;
   subject: string;
   text: string;
   html: string;
@@ -34,6 +36,7 @@ export async function sendEmail(env: Env, message: OutgoingEmail): Promise<strin
   const result = await env.EMAIL.send({
     from: SENDER,
     to: message.to,
+    ...(message.replyTo ? { replyTo: message.replyTo } : {}),
     subject: message.subject,
     text: message.text,
     html: message.html,

@@ -198,6 +198,18 @@
       "title": "Terms",
       "source": "TERMS.md",
       "description": "The terms of the hosted Proschi service: the free plan, Pro, interview packs, payment through Polar, canceling, refunds and mock interviews."
+    },
+    {
+      "slug": "datenschutz",
+      "title": "Datenschutz",
+      "source": "DATENSCHUTZ.md",
+      "description": "Die Datenschutzerklärung von Proschi: Verantwortliche Stelle, Zwecke und Rechtsgrundlagen, Speicherdauer, Empfänger und Ihre Rechte nach der DSGVO."
+    },
+    {
+      "slug": "agb",
+      "title": "AGB",
+      "source": "AGB.md",
+      "description": "Die Allgemeinen Geschäftsbedingungen von Proschi: Leistungen, Preise, Zahlung über Polar, Kündigung, Credits, Widerruf und Haftung."
     }
   ],
   "anchorRedirects": {
@@ -312,6 +324,8 @@
         { "page": "compare", "label": "Compared with other tools" },
         { "page": "privacy" },
         { "page": "terms" },
+        { "page": "datenschutz" },
+        { "page": "agb" },
         { "href": "blog/", "label": "Blog" },
         { "href": "https://github.com/gvart/proschi/blob/main/CHANGELOG.md", "label": "Changelog" },
         { "href": "https://github.com/gvart/proschi", "label": "GitHub" }

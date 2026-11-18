@@ -21,7 +21,7 @@ const stubPath = (slug: string) => `${stubsDir}${slug ? `${slug}/` : ''}index.ht
 function target(from: string, href: string): { slug: string; anchor?: string } | undefined {
   const url = new URL(href, `https://x/docs/${from ? `${from}/` : ''}`)
   if (url.host !== 'x' || !url.pathname.startsWith('/docs/')) return undefined
-  return { slug: url.pathname.slice('/docs/'.length).replace(/\/$/, ''), anchor: url.hash ? url.hash.slice(1) : undefined }
+  return { slug: url.pathname.slice('/docs/'.length).replace(/\/$/, ''), anchor: url.hash ? decodeURIComponent(url.hash.slice(1)) : undefined }
 }
 
 describe('docs/site.json', () => {

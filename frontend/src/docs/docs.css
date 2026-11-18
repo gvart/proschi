@@ -442,6 +442,9 @@
   font: 800 clamp(2.4rem, 5.2vw, 4.25rem) / var(--lh-display) var(--font-display);
   letter-spacing: -0.03em;
   text-wrap: balance;
+  /* A long German title (Datenschutzerklärung) is wider than a phone. */
+  overflow-wrap: anywhere;
+  hyphens: auto;
 }
 .doc-updated {
   margin: 14px 0 0;

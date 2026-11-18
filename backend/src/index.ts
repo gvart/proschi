@@ -72,6 +72,7 @@ import { postSoloInterviews, soloInterviewHistory } from './soloInterviews';
 import { getMistakes, postMistakes } from './mistakes';
 import { deleteInterviewPlan, getInterviewPlan, putInterviewPlan } from './interviewPlan';
 import { confirmEmail, confirmPage, deleteEmail, getEmailPrefs, patchEmail, putEmail, unsubscribe, unsubscribePage } from './reminders';
+import { impressum } from './legal';
 import { getPublicProfile } from './profile';
 import { servePublicProfile } from './profilePage';
 import { getCertificate, getEmbeds, getMyCertificate, putEmbeds, putMyCertificate, serveCertificate } from './certificates';
@@ -448,6 +449,7 @@ async function health(ctx: Ctx): Promise<Response> {
 export default {
   async fetch(request, env, exec): Promise<Response> {
     const { pathname } = new URL(request.url);
+    if (/^\/impressum\/?$/.test(pathname)) return impressum(request, createContext(request, env, exec));
     // A live share link: the share page, which loads the diagram with GET /api/share/<token>.
     if ((request.method === 'GET' || request.method === 'HEAD') && /^\/share\/[A-Za-z0-9_-]{22}$/.test(pathname)) return shareViewPage(request, env.ASSETS);
     const page = pathname.startsWith('/u/') || pathname.startsWith('/c/');

@@ -22,6 +22,8 @@ test('every internal link and #anchor in the built docs resolves', () => {
       if (/^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith('//')) continue;
       const url = new URL(href, page);
       if (!url.href.startsWith(DIST.href)) continue;
+      // Rendered by the Worker from its secrets (backend/src/legal.ts), so never a file in dist.
+      if (url.href === new URL('impressum', DIST).href) continue;
       let file = new URL(url.pathname, url);
       if (existsSync(file) && statSync(file).isDirectory()) file = new URL('index.html', file.href.endsWith('/') ? file : `${file.href}/`);
       const at = page.href.slice(DIST.href.length);

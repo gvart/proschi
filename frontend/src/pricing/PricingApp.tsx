@@ -283,7 +283,20 @@ export function Pricing({ account, plan, estimates }: { account: Account; plan?:
             saved least recently become read-only until you delete some or come back. Top-up credits stay yours.
           </Faq>
           <Faq q="Who takes the payment?">
-            Polar, our merchant of record, runs the checkout, charges VAT where it applies and sends the invoices. Proschi never sees your card.
+            Polar, our merchant of record, runs the checkout, charges VAT where it applies and sends the invoices. Proschi never sees your card. The binding
+            terms are the{' '}
+            <a href="../docs/agb/" className="font-semibold underline underline-offset-2">
+              AGB
+            </a>{' '}
+            and the{' '}
+            <a href="../docs/datenschutz/" className="font-semibold underline underline-offset-2">
+              Datenschutzerklärung
+            </a>
+            , and the provider is named in the{' '}
+            <a href="../impressum" className="font-semibold underline underline-offset-2">
+              Impressum
+            </a>
+            .
           </Faq>
           <Faq q="Who is the interviewer?">
             Claude, made by Anthropic. A mock interview sends Anthropic your answers and diagram, and Design partner sends the diagram and your messages.

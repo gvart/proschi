@@ -99,6 +99,10 @@ export const FOOTER_COLUMNS: { title: string; links: SiteLink[] }[] = [
       ...(ACCOUNTS_ON ? [{ label: 'Send feedback', href: 'practice/#/me', feedback: true }] : []),
       { label: 'Privacy', href: 'docs/privacy/' },
       { label: 'Terms', href: 'docs/terms/' },
+      { label: 'Datenschutz', href: 'docs/datenschutz/' },
+      { label: 'AGB', href: 'docs/agb/' },
+      // Served by the Worker from its secrets (backend/src/legal.ts), so only in builds with one.
+      ...(ACCOUNTS_ON ? [{ label: 'Impressum', href: 'impressum' }] : []),
       { label: 'MIT license', href: `${GITHUB_URL}/blob/main/LICENSE` },
     ],
   },
