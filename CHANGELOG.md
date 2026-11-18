@@ -9,6 +9,13 @@ deployed from `main` and ships with the same changes. From 0.12.0 on,
 [release-please](https://github.com/googleapis/release-please) writes each
 section from the conventional commit titles of the merged pull requests.
 
+## [0.21.0](https://github.com/gvart/proschi/compare/tooling-v0.20.0...tooling-v0.21.0) (2026-11-18)
+
+
+### Added
+
+* enable paid plans on proschi.app ([#216](https://github.com/gvart/proschi/issues/216)) ([de6cf50](https://github.com/gvart/proschi/commit/de6cf50ee3fca0bab6185a597d482b96df6be7b8))
+
 ## [0.20.0](https://github.com/gvart/proschi/compare/tooling-v0.19.0...tooling-v0.20.0) (2026-11-18)
 
 
