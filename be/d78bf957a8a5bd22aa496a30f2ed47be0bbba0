@@ -1,0 +1,38 @@
+frontend/src/practice/problems/notion-sharding/lesson.md
+  s_91ba69d9cbae8d::t_3633a48b45a779 40-42,58,60-70,194
+frontend/src/practice/problems/distributed-kv/lesson.md
+  s_91ba69d9cbae8d::t_4942214afd0f3c 51,56,65-67,88,95,129-130
+  s_91ba69d9cbae8d::t_8c6129045e4047 4,98,204
+frontend/src/practice/problems/notion-sharding/interview.md
+  s_91ba69d9cbae8d::t_8c6129045e4047 69
+  s_91ba69d9cbae8d::t_3633a48b45a779 48,53,58,62,65,67-68,70-74
+frontend/src/practice/problems/social-graph-cache/interview.md
+  s_91ba69d9cbae8d::t_3633a48b45a779 42,47,52,64-73,75
+  s_91ba69d9cbae8d::t_8c6129045e4047 63
+frontend/src/practice/problems/distributed-kv/interview.md
+  s_91ba69d9cbae8d::t_4942214afd0f3c 58,81
+frontend/src/practice/problems/recommendations/lesson.md
+  s_91ba69d9cbae8d::t_fe151f33b50c95 39,44
+  s_91ba69d9cbae8d::t_3633a48b45a779 25-26,32-33,40-43,48,112,117,133
+frontend/src/practice/problems/multi-region-active-active/lesson.md
+  s_91ba69d9cbae8d::t_3633a48b45a779 21-23,42,50
+frontend/src/practice/problems/social-graph-cache/lesson.md
+  s_91ba69d9cbae8d::t_3633a48b45a779 4,68,208
+  s_91ba69d9cbae8d::t_fe151f33b50c95 65
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bed78bf957a8a5bd22aa496a30f2ed47be0bbba0",
+  "prompts": {},
+  "sessions": {
+    "s_91ba69d9cbae8d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fe8c51ce-b526-4c6e-949d-867e4a8bd64a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": null
+    }
+  }
+}
