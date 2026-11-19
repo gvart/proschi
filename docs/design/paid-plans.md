@@ -679,3 +679,31 @@ id; don't rewrite old ones.
   opens on the stage it was left on, and Clarify stays one click away. The
   Wrap-up's main action is **Finish**, back to where the problem was opened
   from (the roadmap); "Next on the roadmap" stays beside it.
+- **P59. On interview prep, Design partner is the Interview coach.**
+  Amends P30 and P50 for the roadmap's stages (P51). On a roadmap problem's
+  interview prep stages (every stage, the full editor included) the chat is
+  the **Interview coach**: it helps the candidate answer the interviewer
+  (what to clarify, sanity checks of their back-of-the-envelope estimates,
+  how to structure and explain the design and its trade-offs, the wrap-up),
+  Socratic and short, and never designs the system for them or writes their
+  Proschi except for an explicit "Show me the changes" (`solve`). It has its
+  own system prompt (`COACH_PROMPT`, with the language reference, the change
+  rules and the injection rules), followed by P30's practice rules, so the
+  hidden facts and the reference design stay as secret as before. The
+  editor's and the Problems tab's Design partner keeps the architect's
+  prompt unchanged. The persona is chosen when the chat starts
+  (`{kind: 'prep', problemId}`) and stored with the session
+  (`partner_sessions.persona`), so nothing in a turn can switch it; the
+  coach's chat is separate from the Problems tab's (`prep:<id>` in this
+  browser) and refuses `build`. Each coach turn carries the stage on screen
+  and the candidate's own stage notes (their clarifying questions, the
+  estimate worksheet's filled rows with each check's result, the wrap-up
+  reflection), cut to fixed caps and checked by the server (400 past them),
+  fenced as data (`<stage>`, `<candidate_notes>`), never stored and only
+  paid for as the tokens they take. They describe where the candidate is;
+  nothing in them relaxes the hidden-facts rule. Credits, plans, sign-in and
+  the mock interview's lock-out are the partner's. Selecting text asks the
+  coach ("Ask Interview coach"); a one-line tip under the stage bar says so
+  until it is used once or dismissed (`proschi.prep.askTip`), and the
+  coach's empty state repeats it with two or three example asks for the
+  stage on screen.

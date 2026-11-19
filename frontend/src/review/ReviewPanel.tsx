@@ -17,6 +17,8 @@ interface ReviewPanelProps {
   reviewer?: DesignReviewer;
   /** Opens Design partner (src/partner), where there is one: offered under the review. */
   onOpenPartner?: () => void;
+  /** Interview prep: the link opens the Interview coach (P59) instead. */
+  coach?: boolean;
 }
 
 type State =
@@ -43,7 +45,7 @@ const SEVERITY_ORDER = [...REVIEW_SEVERITIES].reverse();
  * Free, instant and on every build. Talking a design through, with changes
  * to accept, is Design partner's (src/partner), linked from here.
  */
-export default function ReviewPanel({ source, input, onSelect, reviewer = ruleReviewer, onOpenPartner }: ReviewPanelProps) {
+export default function ReviewPanel({ source, input, onSelect, reviewer = ruleReviewer, onOpenPartner, coach = false }: ReviewPanelProps) {
   const [state, setState] = useState<State>({ status: 'idle' });
 
   const review = async () => {
@@ -84,10 +86,10 @@ export default function ReviewPanel({ source, input, onSelect, reviewer = ruleRe
       {state.status === 'done' && <Review review={state.review} stale={state.source !== source} locs={state.locs} onSelect={onSelect} />}
       {onOpenPartner && (
         <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted" data-testid="review-partner-link">
-          Want to talk it through, with changes you can accept?
+          {coach ? 'Want to practise explaining it?' : 'Want to talk it through, with changes you can accept?'}
           <button type="button" onClick={onOpenPartner} className="inline-flex items-center gap-1 font-semibold text-ink underline decoration-ink/40 underline-offset-2 hover:decoration-ink">
             <MessagesSquare size={12} aria-hidden="true" />
-            Open Design partner
+            {coach ? 'Open Interview coach' : 'Open Design partner'}
           </button>
         </p>
       )}

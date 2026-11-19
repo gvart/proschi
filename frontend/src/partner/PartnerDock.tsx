@@ -5,6 +5,8 @@ interface PartnerDockProps {
   open: boolean;
   phone: boolean;
   onClose: () => void;
+  /** The phone sheet's name: Design partner, or the Interview coach on interview prep. */
+  label?: string;
   children: ReactNode;
 }
 
@@ -14,7 +16,7 @@ interface PartnerDockProps {
  * first opening on, so closing and reopening keeps the conversation and the
  * draft.
  */
-export default function PartnerDock({ open, phone, onClose, children }: PartnerDockProps) {
+export default function PartnerDock({ open, phone, onClose, label = 'Design partner', children }: PartnerDockProps) {
   const [opened, setOpened] = useState(open);
   if (open && !opened) setOpened(true);
 
@@ -42,7 +44,7 @@ export default function PartnerDock({ open, phone, onClose, children }: PartnerD
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Design partner"
+        aria-label={label}
         className="ps-partner-sheet absolute inset-x-0 bottom-0 top-3 flex flex-col overflow-hidden rounded-t-brutal border-t-bw-2 border-x-bw-1 border-ink bg-surface pb-[env(safe-area-inset-bottom)]"
       >
         <div className="flex shrink-0 justify-center bg-surface pt-1.5" aria-hidden="true">

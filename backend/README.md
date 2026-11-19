@@ -565,16 +565,16 @@ provider is offered and `/auth/<provider>/…` answers 503.
 ### Design partner
 
 The AI chat beside the editor and on practice problems (`src/partner.ts`,
-migration 0025, docs/design/paid-plans.md P29 to P31), feature
+migrations 0025 and 0037, docs/design/paid-plans.md P29 to P31 and P59), feature
 `design_partner`, paid in [credits](#credits). Credits in requests and
 answers are decimals with up to 3 places (the ledger stores millicredits).
 The page's types are `frontend/src/partner/contract.ts`.
 
 | Route | What it does |
 |---|---|
-| `POST /api/partner/sessions {context: {kind: 'editor'} \| {kind: 'practice', problemId}, deep?}` | A new chat: `{id}`. `deep` (Max, `deep_mode`) runs it on Opus at Opus's price |
+| `POST /api/partner/sessions {context: {kind: 'editor'} \| {kind: 'practice' \| 'prep', problemId}, deep?}` | A new chat: `{id}`. `prep` is the Interview coach (below). `deep` (Max, `deep_mode`) runs it on Opus at Opus's price |
 | `GET /api/partner/sessions/<id>` | `{id, context, deep, turns: Turn[]}`; another account's session is 404 |
-| `POST /api/partner/sessions/<id>/turns {intent, message, source, files?: [{name, source}], changeId?}` | `intent`: `review`, `build`, `chat`, `improve` (with `changeId`) or `solve`. `{turn: Turn, credits: {charged, balance}}`. 409 `turn_in_progress` while another turn runs, 409 `interview_active` during a mock interview, 402 `no_credits` |
+| `POST /api/partner/sessions/<id>/turns {intent, message, source, files?: [{name, source}], changeId?, prep?: Prep}` | `intent`: `review`, `build`, `chat`, `improve` (with `changeId`) or `solve`. `{turn: Turn, credits: {charged, balance}}`. 409 `turn_in_progress` while another turn runs, 409 `interview_active` during a mock interview, 402 `no_credits` |
 | `POST /api/partner/sessions/<id>/changes/<changeId> {decision: 'accepted' \| 'rejected'}` | 204, free; feedback for the next turn |
 
 - `Turn = {id, role: 'user' | 'partner', message /* Markdown */, questions?: [{id, text, options?}], changes?: Change[], assisted?, at}`
@@ -586,6 +586,20 @@ The page's types are `frontend/src/partner/contract.ts`.
 - On a practice problem it coaches (P30): only `intent: 'solve'`, the
   user's explicit ask, returns `changes`, and such a turn has
   `assisted: true`, which marks the problem's progress assisted.
+- **Interview coach** (P59): a chat started with `{kind: 'prep', problemId}`
+  (a roadmap problem's interview prep stages) is a practice chat answered by
+  the Interview coach's prompt (`COACH_PROMPT` in `src/ai/partnerPrompt.ts`)
+  instead of the architect's. The persona is stored with the session
+  (`partner_sessions.persona`, `'partner'` or `'coach'`) and read only from
+  there; GET and Download my data give the context back as `prep`. It
+  refuses `intent: 'build'` (400) and, as on practice, returns changes only
+  on `solve`. Only its turns may carry
+  `Prep = {stage: 'lesson' | 'clarify' | 'estimate' | 'design' | 'wrapup', questions?, worksheet?: [{label, expression, unit, checked?: {value, correct}}], reflection?}`
+  (the stage on screen and the candidate's own notes; 400 on any other
+  chat), capped at 2,000 characters per text, 24 rows and 200 characters per
+  cell (`frontend/src/partner/prep.ts`, 400 past them). It reaches the model
+  fenced as data (`<stage>`, `<candidate_notes>`), is never stored, and costs
+  only the tokens it takes.
 
 ### Interview history and the AI roadmap
 

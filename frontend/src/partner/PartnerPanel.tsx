@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
-import { ArrowUp, ClipboardCheck, Hammer, Lightbulb, LogIn, MessagesSquare, Sparkles, SquarePen, TriangleAlert, X } from 'lucide-react';
+import { ArrowUp, ClipboardCheck, Hammer, Lightbulb, LogIn, MessageCircleQuestionMark, MessagesSquare, MousePointerClick, Sparkles, SquarePen, TriangleAlert, X } from 'lucide-react';
 import Markdown from '../practice/Markdown';
 import { primaryButton, toolButton } from '../components/Playground/ui';
 import { useFeature } from '../components/featureState';
@@ -16,6 +16,8 @@ import { confirm } from '../design/dialogs';
 import { useToastClearance } from '../design/toastClearance';
 import { PARTNER_SHORTCUT } from './shortcut';
 import { usePartner, type PartnerProblem } from './usePartner';
+import type { PrepStage, PrepTurn } from './prep';
+import { COACH_EXAMPLES } from '../practice/stages/coach';
 import MicButton, { type MicButtonHandle } from '../voice/MicButton';
 import { useVoiceDraft } from '../voice/useVoiceDraft';
 
@@ -28,10 +30,13 @@ import { useVoiceDraft } from '../voice/useVoiceDraft';
  * and the estimate under it follows the pick. Each ask shows its estimate
  * first and its real cost after. On a practice problem it coaches: changes
  * come only from "Show me the changes", which marks the problem assisted.
+ * On a roadmap problem's interview prep stages (context `prep`, P59) it is
+ * the Interview coach instead: named so, with examples for the stage on
+ * screen, and each turn carries that stage and the learner's notes.
  */
 
 export interface PartnerPanelProps {
-  /** `editor:<docId>` or `practice:<problemId>`: which conversation to resume. */
+  /** `editor:<docId>`, `practice:<problemId>` or `prep:<problemId>`: which conversation to resume. */
   storeKey: string;
   context: PartnerContext;
   account: Account;
@@ -53,9 +58,16 @@ export interface PartnerPanelProps {
   onAssisted?: () => void;
   /** The diagram of a source (with this page's imports), for the change cards' previews. */
   diagramOf?: (source: string) => Diagram;
-  /** Text to put in the composer (e.g. a quote picked with "Ask Design partner"); a new `id` puts it again. */
+  /** Text to put in the composer (e.g. a quote picked with "Ask Interview coach"); a new `id` puts it again. */
   prefill?: { id: number; text: string };
+  /** Interview coach: the stage on screen, for its examples and starters. */
+  stage?: PrepStage;
+  /** Interview coach: the stage and the notes, sent with each turn. */
+  getPrep?: () => PrepTurn | undefined;
 }
+
+/** Who answers in a context: the Interview coach on interview prep (P59), else Design partner. */
+const partnerName = (context: PartnerContext) => (context.kind === 'prep' ? 'Interview coach' : 'Design partner');
 
 const MAX_MESSAGE = 4000;
 
@@ -96,14 +108,15 @@ export default function PartnerPanel(props: PartnerPanelProps) {
   const deepFeature = useFeature('deep_mode');
   const signedOut = account.state.status === 'signed-out';
   const on = feature.ok && !offReason;
+  const name = partnerName(context);
 
   return (
-    <section aria-label="Design partner" className="flex h-full min-h-0 flex-col bg-surface text-ink" data-testid="partner-panel">
+    <section aria-label={name} className="flex h-full min-h-0 flex-col bg-surface text-ink" data-testid="partner-panel">
       {on ? (
         <Conversation {...props} deepAllowed={deepFeature.ok} />
       ) : (
         <>
-          <PanelHeader practice={context.kind === 'practice'} onClose={onClose} />
+          <PanelHeader context={context} onClose={onClose} />
           <div className="flex-1 min-h-0 overflow-y-auto p-4">
             {offReason ? (
               <Notice icon={<TriangleAlert size={16} aria-hidden="true" />} title="Off during an interview">
@@ -112,10 +125,10 @@ export default function PartnerPanel(props: PartnerPanelProps) {
             ) : feature.loading ? (
               <Skeleton />
             ) : signedOut ? (
-              <SignIn account={account} />
+              <SignIn account={account} coach={context.kind === 'prep'} />
             ) : (
               <Notice icon={<Sparkles size={16} aria-hidden="true" />} title="Not on for this account">
-                Design partner isn’t available on your account right now.{' '}
+                {name} isn’t available on your account right now.{' '}
                 {billingEnabled && <UpgradeHint base={props.base}>See the plans</UpgradeHint>}
               </Notice>
             )}
@@ -126,17 +139,18 @@ export default function PartnerPanel(props: PartnerPanelProps) {
   );
 }
 
-function PanelHeader({ practice, onClose, children }: { practice: boolean; onClose: () => void; children?: ReactNode }) {
+function PanelHeader({ context, onClose, children }: { context: PartnerContext; onClose: () => void; children?: ReactNode }) {
+  const coach = context.kind === 'prep';
   return (
     <header className="flex h-12 shrink-0 items-center gap-2 border-b-bw-1 border-ink bg-surface pl-3 pr-1.5">
-      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-sm border-bw-1 border-ink bg-pop-lilac text-on-accent" aria-hidden="true">
-        <MessagesSquare size={15} />
+      <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-sm border-bw-1 border-ink text-on-accent ${coach ? 'bg-pop-yellow' : 'bg-pop-lilac'}`} aria-hidden="true">
+        {coach ? <MessageCircleQuestionMark size={15} /> : <MessagesSquare size={15} />}
       </span>
-      <h2 className="font-display text-base font-bold tracking-tight">Design partner</h2>
-      {practice && <span className="rounded-sm border border-ink/40 px-1.5 py-px text-[11px] font-semibold text-muted">Coach</span>}
+      <h2 className="font-display text-base font-bold tracking-tight">{partnerName(context)}</h2>
+      {context.kind === 'practice' && <span className="rounded-sm border border-ink/40 px-1.5 py-px text-[11px] font-semibold text-muted">Coach</span>}
       <div className="ml-auto flex items-center gap-0.5">
         {children}
-        <button type="button" onClick={onClose} aria-label="Close Design partner" title={`Close (${PARTNER_SHORTCUT})`} className="grid h-8 w-8 place-items-center rounded-sm text-muted hover:bg-ink/10 hover:text-ink">
+        <button type="button" onClick={onClose} aria-label={`Close ${partnerName(context)}`} title={`Close (${PARTNER_SHORTCUT})`} className="grid h-8 w-8 place-items-center rounded-sm text-muted hover:bg-ink/10 hover:text-ink">
           <X size={16} aria-hidden="true" />
         </button>
       </div>
@@ -144,9 +158,12 @@ function PanelHeader({ practice, onClose, children }: { practice: boolean; onClo
   );
 }
 
-function Conversation({ storeKey, context, account, base = '../', source, getSource, getFiles, apply, undo, onClose, onAssisted, diagramOf, prefill, deepAllowed }: PartnerPanelProps & { deepAllowed: boolean }) {
-  const practice = context.kind === 'practice';
-  const { state, send, decide, reset, dismiss } = usePartner({ storeKey, context, enabled: true, getSource, getFiles, onAssisted });
+function Conversation({ storeKey, context, account, base = '../', source, getSource, getFiles, apply, undo, onClose, onAssisted, diagramOf, prefill, stage, getPrep, deepAllowed }: PartnerPanelProps & { deepAllowed: boolean }) {
+  // The Problems tab's workspace and interview prep both coach first (P30); interview prep is the Interview coach (P59).
+  const practice = context.kind !== 'editor';
+  const coach = context.kind === 'prep';
+  const name = partnerName(context);
+  const { state, send, decide, reset, dismiss } = usePartner({ storeKey, context, enabled: true, getSource, getFiles, getPrep, name, onAssisted });
   const estimates = useEstimates(account.state.status === 'signed-in');
   const [deepChoice, setDeepChoice] = useState(false);
   const [draft, setDraft] = useState('');
@@ -214,17 +231,20 @@ function Conversation({ storeKey, context, account, base = '../', source, getSou
     });
   };
 
-  // A quote to ask about lands in the composer, after what is already typed, with the caret at the end.
-  const prefilled = useRef<number | undefined>(undefined);
-  useEffect(() => {
-    if (!prefill || prefilled.current === prefill.id) return;
-    prefilled.current = prefill.id;
-    setDraft((d) => (d.trim() ? `${d.trimEnd()}\n\n${prefill.text}` : prefill.text).slice(0, MAX_MESSAGE));
+  // A quote to ask about lands in the composer after what is already typed (an example replaces it), with the caret at the end.
+  const putInComposer = (text: string, replace = false) => {
+    setDraft((d) => (d.trim() && !replace ? `${d.trimEnd()}\n\n${text}` : text).slice(0, MAX_MESSAGE));
     requestAnimationFrame(() => {
       const el = input.current;
       el?.focus();
       el?.setSelectionRange(el.value.length, el.value.length);
     });
+  };
+  const prefilled = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (!prefill || prefilled.current === prefill.id) return;
+    prefilled.current = prefill.id;
+    putInComposer(prefill.text);
   }, [prefill]);
 
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -249,7 +269,7 @@ function Conversation({ storeKey, context, account, base = '../', source, getSou
 
   return (
     <>
-      <PanelHeader practice={practice} onClose={onClose}>
+      <PanelHeader context={context} onClose={onClose}>
         {deepAllowed && (
           <button
             type="button"
@@ -278,7 +298,11 @@ function Conversation({ storeKey, context, account, base = '../', source, getSou
             <Skeleton label="Loading your conversation…" />
           </div>
         ) : empty ? (
-          <EmptyState practice={practice} />
+          coach ? (
+            <CoachEmptyState stage={stage} onExample={(text) => putInComposer(text, true)} />
+          ) : (
+            <EmptyState practice={practice} />
+          )
         ) : (
           <ol aria-label="Conversation" aria-live="polite" className="space-y-5 px-4 py-4">
             {state.turns.map((turn) =>
@@ -287,6 +311,7 @@ function Conversation({ storeKey, context, account, base = '../', source, getSou
               ) : (
                 <PartnerMessage
                   key={turn.id}
+                  name={name}
                   turn={turn}
                   charge={state.charges[turn.id]}
                   questions={turn === lastTurn ? openQuestions : undefined}
@@ -323,10 +348,10 @@ function Conversation({ storeKey, context, account, base = '../', source, getSou
 
       <form ref={clearToasts} onSubmit={(e) => void submit(e)} className="shrink-0 border-t-bw-1 border-ink bg-surface px-3 pb-3 pt-2.5">
         {state.problem && <ProblemLine problem={state.problem} base={base} onDismiss={dismiss} />}
-        {state.status !== 'resuming' && <StarterChips practice={practice} busy={busy} starter={starter} onPick={pick} estimate={estimate} onAsk={ask} />}
+        {state.status !== 'resuming' && <StarterChips chips={chipsFor(context, stage)} solve={practice && (!coach || stage === 'design' || stage === 'wrapup')} busy={busy} starter={starter} onPick={pick} estimate={estimate} onAsk={ask} />}
         <div className="flex items-end gap-1.5 rounded-sm border-bw-1 border-ink bg-paper p-1 transition-shadow duration-d1 focus-within:shadow-brutal-sm">
           <label htmlFor={`partner-message-${storeKey}`} className="sr-only">
-            Message Design partner
+            Message {name}
           </label>
           <textarea
             id={`partner-message-${storeKey}`}
@@ -338,7 +363,7 @@ function Conversation({ storeKey, context, account, base = '../', source, getSou
             }}
             onKeyDown={onKey}
             rows={starter === 'build' ? 4 : 1}
-            placeholder={starter !== 'chat' ? STARTERS[starter].placeholder : openQuestions?.length ? 'Answer in your own words, or pick an option' : practice ? 'Ask about the problem or your design' : 'Ask about your design'}
+            placeholder={starter !== 'chat' ? STARTERS[starter].placeholder : openQuestions?.length ? 'Answer in your own words, or pick an option' : coach ? 'Ask about this stage, or how you’d answer' : practice ? 'Ask about the problem or your design' : 'Ask about your design'}
             className="max-h-[172px] min-h-[36px] flex-1 min-w-0 resize-none bg-transparent px-2 py-1.5 text-sm text-ink placeholder:text-muted focus:outline-none"
           />
           <MicButton ref={mic} onText={voice.onText} />
@@ -391,15 +416,53 @@ function EmptyState({ practice }: { practice: boolean }) {
   );
 }
 
+/** The Interview coach's empty state: what it helps with, examples for the stage on screen, and the select-to-ask tip. */
+function CoachEmptyState({ stage, onExample }: { stage?: PrepStage; onExample: (text: string) => void }) {
+  return (
+    <div className="px-4 py-5" data-testid="coach-empty">
+      <p className="text-sm leading-relaxed text-ink/80">
+        Your coach for this interview: it helps you decide what to clarify, sanity-checks your estimates, and helps you structure and explain your design and its trade-offs. It asks you questions rather than handing you the answer.
+      </p>
+      <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-muted">Try asking</p>
+      <ul className="mt-1.5 space-y-1.5" aria-label="Examples">
+        {COACH_EXAMPLES[stage ?? 'clarify'].map((e) => (
+          <li key={e}>
+            <button
+              type="button"
+              onClick={() => onExample(e)}
+              className="w-full rounded-sm border-bw-1 border-ink/30 bg-paper px-3 py-2 text-left text-sm text-ink transition-colors duration-d1 hover:border-ink hover:bg-pop-yellow/30"
+            >
+              {e}
+            </button>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-4 flex items-start gap-2 text-xs text-ink/80">
+        <MousePointerClick size={14} className="mt-px shrink-0 text-muted" aria-hidden="true" />
+        <span>
+          Select any text on the stage (the brief, the lesson, your notes, a failing test), then <strong className="font-semibold">Ask Interview coach</strong> to ask about it.
+        </span>
+      </p>
+      <p className="mt-3 text-xs text-muted">The coach can be wrong; the tests are the verdict.</p>
+    </div>
+  );
+}
+
 const STARTER_ICONS: Record<Exclude<Starter, 'chat'>, ReactNode> = {
   review: <ClipboardCheck size={13} aria-hidden="true" />,
   build: <Hammer size={13} aria-hidden="true" />,
   hint: <Lightbulb size={13} aria-hidden="true" />,
 };
 
-/** The chips that pick what the one composer sends; on practice also "Show me the changes". */
-function StarterChips({ practice, busy, starter, onPick, estimate, onAsk }: { practice: boolean; busy: boolean; starter: Starter; onPick: (s: Starter) => void; estimate: (i: Intent) => string | undefined; onAsk: Ask }) {
-  const chips: Exclude<Starter, 'chat'>[] = practice ? ['review', 'hint'] : ['review', 'build'];
+/** The starter chips of a context: the Interview coach reviews a design only once there is one (Design, Wrap-up). */
+function chipsFor(context: PartnerContext, stage?: PrepStage): Exclude<Starter, 'chat'>[] {
+  if (context.kind === 'editor') return ['review', 'build'];
+  if (context.kind === 'prep' && stage !== 'design' && stage !== 'wrapup') return ['hint'];
+  return ['review', 'hint'];
+}
+
+/** The chips that pick what the one composer sends; on practice also "Show me the changes" (`solve`). */
+function StarterChips({ chips, solve, busy, starter, onPick, estimate, onAsk }: { chips: Exclude<Starter, 'chat'>[]; solve: boolean; busy: boolean; starter: Starter; onPick: (s: Starter) => void; estimate: (i: Intent) => string | undefined; onAsk: Ask }) {
   return (
     <div className="mb-2 flex flex-wrap items-center gap-1" role="group" aria-label="Start with" data-testid="partner-starters">
       {chips.map((c) => (
@@ -416,7 +479,7 @@ function StarterChips({ practice, busy, starter, onPick, estimate, onAsk }: { pr
           {STARTERS[c].label}
         </button>
       ))}
-      {practice && <SolveAction busy={busy} estimate={estimate('solve')} onAsk={onAsk} compact className="basis-full sm:basis-auto" />}
+      {solve && <SolveAction busy={busy} estimate={estimate('solve')} onAsk={onAsk} compact className="basis-full sm:basis-auto" />}
     </div>
   );
 }
@@ -467,9 +530,9 @@ function UserMessage({ turn }: { turn: Turn }) {
   );
 }
 
-function PartnerMessage({ turn, charge, questions, onAnswer, children }: { turn: Turn; charge?: number; questions?: Question[]; onAnswer: (text: string) => void; children?: ReactNode }) {
+function PartnerMessage({ name, turn, charge, questions, onAnswer, children }: { name: string; turn: Turn; charge?: number; questions?: Question[]; onAnswer: (text: string) => void; children?: ReactNode }) {
   return (
-    <li aria-label="Design partner" data-testid="partner-turn" data-turn={turn.id}>
+    <li aria-label={name} data-testid="partner-turn" data-turn={turn.id}>
       {turn.message && <Markdown source={turn.message} />}
       {turn.questions && <Questions questions={turn.questions} active={!!questions} onAnswer={onAnswer} />}
       {children && <div className="mt-3 space-y-3">{children}</div>}
@@ -596,12 +659,17 @@ function ProblemLine({ problem, base, onDismiss }: { problem: PartnerProblem; ba
   );
 }
 
-function SignIn({ account }: { account: Account }) {
+function SignIn({ account, coach }: { account: Account; coach: boolean }) {
   const providers = account.state.status === 'signed-out' ? account.state.providers : [];
   return (
     <div className="space-y-3">
-      <p className="text-sm font-semibold text-ink">Sign in to work with Design partner</p>
-      <p className="text-sm leading-relaxed text-ink/80">It reviews your design, answers questions and proposes changes you accept or reject. New accounts start with {PLAN_CREDITS.free} free credits: {partnerText(PLAN_CREDITS.free)}.</p>
+      <p className="text-sm font-semibold text-ink">Sign in to work with {coach ? 'Interview coach' : 'Design partner'}</p>
+      <p className="text-sm leading-relaxed text-ink/80">
+        {coach
+          ? 'It helps you answer the interviewer: what to clarify, your estimates, and how to explain your design and its trade-offs.'
+          : 'It reviews your design, answers questions and proposes changes you accept or reject.'}{' '}
+        New accounts start with {PLAN_CREDITS.free} free credits: {partnerText(PLAN_CREDITS.free)}.
+      </p>
       <div className="flex flex-wrap gap-2">
         {providers.map((p) => (
           <button key={p} type="button" onClick={() => account.signIn(p)} className={primaryButton}>

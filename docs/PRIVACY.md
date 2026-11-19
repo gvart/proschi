@@ -1,5 +1,5 @@
 ---
-updated: 2026-11-18
+updated: 2026-11-19
 ---
 
 # Privacy
@@ -82,6 +82,7 @@ server. What they remember stays in your browser's storage on this device:
 | `proschi.interview.<problem>` | Scripted interview mode in progress on a problem: the length, the phase, the time spent per phase, the questions asked, your estimates, the last test run and the self-review ticks; removed when you leave interview mode |
 | `proschi.interview.history` | The summaries of your last 50 finished scripted interviews (time per phase, questions, estimates, tests, self-review) |
 | `proschi.aiInterview.<problem>` | Signed in: the id of the mock interview open on a problem, so a reload resumes it; the interview itself is on the server, below |
+| `proschi.prep.askTip` | That you used or dismissed the tip that selecting text on an interview prep step asks the Interview coach |
 | `proschi.aiInterview.consent` | That you agreed once to what a mock interview sends to the AI provider |
 | `proschi.achievements` | Badges earned on a copy of the site without accounts: which, when, and when the page showed them to you |
 | `proschi.cards` | Daily review, on a copy of the site without accounts: every card review (which card, your rating, when, how long it took and your local date) |
@@ -456,10 +457,14 @@ id). The server runs the simulation and the tests on it and sends your
 message, the design, those results, the problem and the chat's earlier
 messages to Anthropic's Claude, through Cloudflare's AI Gateway, to write the
 answer and any changes it proposes. The provider uses them only to answer,
-not to train its models.
+not to train its models. On a roadmap problem's interview prep steps the
+chat is the **Interview coach**: each message also sends the step you are on
+and your notes of the steps (your clarifying questions, the estimate
+worksheet's rows and their checks, your wrap-up answer), which go to the
+provider the same way and are not stored.
 
-**What is stored**: each chat (where it was opened, and on a practice problem
-which one), its messages and the partner's answers, the changes it proposed
+**What is stored**: each chat (where it was opened, whether it is the
+Interview coach, and on a practice problem which one), its messages and the partner's answers, the changes it proposed
 with the server's check of each and whether you accepted or rejected it. A
 chat is private, part of **Download my data**, and deleted with your account;
 a daily job deletes it 90 days after its last message. What each message
