@@ -1,0 +1,105 @@
+frontend/src/practice/cards/streaming/tumbling-window.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 12
+frontend/src/practice/cards/api-design/etag-lost-update.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 10-12
+frontend/src/learn/grade.ts
+  s_8e3b9adcb2f683::t_250a56d6e94326 3-4
+frontend/src/practice/cards/queues/visibility-timeout.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 10-11
+frontend/src/practice/cards/streaming/watermarks.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 10-11
+frontend/src/practice/cards/realtime/sync-on-reconnect.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 10-13
+frontend/src/learn/cards.ts
+  s_8e3b9adcb2f683::t_4432da9d9147a1 84-85,187-190,192-205,208,210-220,336,338-340,345,393-397,400-401
+  s_8e3b9adcb2f683::t_250a56d6e94326 153-186
+  s_8e3b9adcb2f683::t_a5025aeef166dc 206-207,209
+frontend/src/practice/cards/caching/cache-stampede.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 12,14
+frontend/src/practice/cards/databases/connection-pooler.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 11
+frontend/src/practice/cards/streaming/log-compaction.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 11
+frontend/src/practice/cards/consistency/unique-username.md
+  s_8e3b9adcb2f683::t_6159c3c6857d88 10
+frontend/src/practice/cards/api-design/rate-limit-response.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 11-12
+frontend/src/learn/cards.test.ts
+  s_8e3b9adcb2f683::t_4f8087497f90af 107,137-151
+  s_8e3b9adcb2f683::t_6753c1ae0ebc16 152
+frontend/src/practice/cards/resilience/deadline-propagation.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 11
+frontend/src/practice/cards/sharding/geo-partitioning.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 11
+frontend/src/practice/cards/replication/read-your-writes.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 11
+frontend/src/practice/cards/caching/early-recomputation.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 12
+frontend/src/practice/cards/security/jwt-payload-is-readable.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 10-11
+frontend/src/practice/cards/estimation/round-trip-latencies.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 10-11
+frontend/src/practice/cards/security/authn-vs-authz.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 10
+frontend/src/practice/cards/consistency/crdts.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 13
+frontend/plugins/cardPages.test.ts
+  s_8e3b9adcb2f683::t_003db4f77df62a 118
+frontend/src/practice/cards/networking/handshake-round-trips.md
+  s_8e3b9adcb2f683::t_6102789d1435ab 11
+frontend/src/practice/cards/data-structures/inverted-index.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 10
+frontend/src/practice/cards/coordination/raft-election-timeout.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 9,12
+frontend/src/practice/cards/data-structures/merkle-tree.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 11
+frontend/src/practice/cards/caching/negative-caching.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 11
+frontend/src/practice/cards/estimation/seconds-in-a-month.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 8-9
+frontend/src/practice/cards/databases/write-ahead-log.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 10
+frontend/src/practice/cards/data-structures/geohash-prefix.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 11
+frontend/src/practice/cards/observability/trace-and-span-ids.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 8-9
+frontend/src/learn/grade.test.ts
+  s_8e3b9adcb2f683::t_4f8087497f90af 17-18
+frontend/src/practice/cards/queues/competing-consumers.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 9
+frontend/src/practice/cards/resilience/leaky-bucket.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 10
+frontend/src/practice/cards/storage/durability-is-not-backup.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 11
+frontend/src/practice/cards/storage/multipart-upload.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 9
+frontend/src/practice/cards/replication/monotonic-reads.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 12
+frontend/src/practice/cards/observability/red-and-use.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 8-10
+frontend/src/practice/cards/databases/lsm-write-path.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 10-12
+frontend/src/practice/cards/realtime/delivery-receipts.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 9-10
+frontend/src/practice/cards/sharding/scatter-gather.md
+  s_8e3b9adcb2f683::t_6b1558525d6d10 9
+docs/CARDS.md
+  s_8e3b9adcb2f683::t_820cb38d6aeeb0 2,142-147
+  s_8e3b9adcb2f683::t_518edd3342600b 148
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3ade80e1711988643a5fa9f7272e242fbfc8971e",
+  "prompts": {},
+  "sessions": {
+    "s_8e3b9adcb2f683": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "25463a51-017e-46c5-8f3a-3c6b250d4e71",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
