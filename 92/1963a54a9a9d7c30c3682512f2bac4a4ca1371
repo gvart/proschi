@@ -1,0 +1,37 @@
+frontend/src/practice/problems/metrics-ingest/interview.md
+  s_91ba69d9cbae8d::t_45a707c18d2ebc 48,53,58
+frontend/src/practice/problems/trending-topics/lesson.md
+  s_91ba69d9cbae8d::t_45a707c18d2ebc 2,8,186
+frontend/src/practice/problems/metrics-ingest/lesson.md
+  s_91ba69d9cbae8d::t_45a707c18d2ebc 73,133
+frontend/src/practice/problems/ad-click-aggregator/interview.md
+  s_91ba69d9cbae8d::t_45a707c18d2ebc 3-8
+frontend/src/practice/problems/search-autocomplete/interview.md
+  s_91ba69d9cbae8d::t_45a707c18d2ebc 42,47,52,63-69,71-73
+frontend/src/practice/problems/trending-topics/interview.md
+  s_91ba69d9cbae8d::t_45a707c18d2ebc 48,53,58
+frontend/src/practice/problems/search-autocomplete/lesson.md
+  s_91ba69d9cbae8d::t_45a707c18d2ebc 197
+frontend/src/practice/problems/ad-click-aggregator/lesson.md
+  s_91ba69d9cbae8d::t_45a707c18d2ebc 10,48,95,105,107,163,173,186
+frontend/src/practice/problems/view-counting/interview.md
+  s_91ba69d9cbae8d::t_45a707c18d2ebc 3-8,42,47,52,75-82
+frontend/src/practice/problems/view-counting/lesson.md
+  s_91ba69d9cbae8d::t_45a707c18d2ebc 2,43,73,242
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "921963a54a9a9d7c30c3682512f2bac4a4ca1371",
+  "prompts": {},
+  "sessions": {
+    "s_91ba69d9cbae8d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fe8c51ce-b526-4c6e-949d-867e4a8bd64a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
