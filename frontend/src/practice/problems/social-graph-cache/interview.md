@@ -39,17 +39,17 @@ Losing any single machine, **a MySQL replica included**, must not break a latenc
 ### What does a profile page look like?
 - kind: weak
 
-A UI question.
+A UI question. Ask how many objects and associations a page reads, and how many reads a second that makes.
 
 ### Should the API be GraphQL?
 - kind: weak
 
-The API style does not change the cache tiers.
+The API style does not change the cache tiers. Ask what share of reads the cache answers and who may talk to MySQL.
 
 ### Which PHP version does the web tier run?
 - kind: weak
 
-An implementation detail.
+An implementation detail of the client. Ask about the read and write rates and the latency limits instead.
 
 ## Estimates
 
@@ -60,11 +60,18 @@ An implementation detail.
 
 1M × 3.6% = **36,000 a second** reach the leaders.
 
-### If the leaders answer 90% of what reaches them, how many reads a second reach MySQL?
-- answer: 3600
-- unit: reads/s
-- range: 3000 to 4500
+### With three MySQL shards, each a primary and a replica taking 20k reads a second each, how busy is the one server left in a shard that lost the other?
+- answer: 60
+- unit: % utilisation
+- range: 55 to 65
 
-36k × 10% = **3,600 a second**.
+Every follower miss is read from MySQL, and each shard gets a third: 36k ÷ 3 = 12k reads a second. On one 20k server that is **60%**. With two shards it would be 18k, 90% busy, and the read p99 breaks: the shard that lost a replica sets the shard count.
+
+### At 100k operations a second per cache server, how many followers keep 1M reads a second under 70% busy?
+- answer: 15
+- unit: followers
+- range: 14 to 18
+
+1M ÷ (100k × 0.7) ≈ 14.3, so **15**. Run 16, and losing one still leaves 15 at 67%.
 
 Numbers: [Numbers to know](../docs/numbers/).

@@ -1,7 +1,7 @@
 # Distributed Key-Value Store: quorums on a ring
 
 ```tldr
-Most problems on this roadmap use a store like DynamoDB or Cassandra as a box; this one opens it. A Dynamo-style store has **no leader**: every key lives on **three machines picked by hashing**, any of them takes reads and writes, and **R + W > N** makes reads meet the latest write. It keeps accepting writes while machines fail (**sloppy quorums**, **read repair**), at the price that two readers can briefly see different values. Size it for **90k replica operations**, with a group that has lost a node.
+Most problems on this roadmap use a partitioned key-value store as a box; this one opens it. A Dynamo-style store (Cassandra, Riak) has **no leader**: every key lives on **three machines picked by hashing**, any of them takes reads and writes, and **R + W > N** makes every read meet the latest write. It keeps accepting writes while machines fail (**sloppy quorums**, **read repair**), at the price that two readers can briefly see different values. Size it for the **90k replica operations** behind 40k client requests, in a replica group that has **lost a node**.
 ```
 
 ## What you'll learn
@@ -48,12 +48,12 @@ Most problems on this roadmap use a store like DynamoDB or Cassandra as a box; t
 | Replica writes | 10k × N = 3 | 30k/s |
 | Replica reads | 30k × R = 2 | 60k/s |
 | Replica operations | 30k + 60k | 90k/s |
-| One storage node | 20k reads + 20k writes | uses a share of each |
+| One storage node's capacity | given | 20k reads/s and 20k writes/s |
 | Data per day, upper bound | 10k × 1 KB × 86,400 | about 860 GB written, before overwrites |
 
 **Replication multiplies load.** Clients make 40k requests a second; the storage nodes do 90k operations. Every write lands on all three replicas (a write acknowledged by two still has to reach the third), and every read asks two.
 
-**How busy is a node?** In the model a partitioned store serves reads and writes on every replica, and utilisation is the sum of both shares. With S shards there are 3S nodes; per node: 60k ÷ 3S reads of 20k, plus 30k ÷ 3S writes of 20k, which is 1.5 ÷ S.
+**How busy is a node?** In the model a partitioned store serves reads and writes on every replica, and utilisation is the sum of both shares. With S shards there are 3S nodes; per node: 60k ÷ 3S reads of 20k, plus 30k ÷ 3S writes of 20k, which is 1 ÷ S + 0.5 ÷ S = 1.5 ÷ S.
 
 | Shards | Nodes | Busy, all up | Busy, group with a node down | Cost of nodes |
 |---|---|---|---|---|
@@ -62,7 +62,9 @@ Most problems on this roadmap use a store like DynamoDB or Cassandra as a box; t
 | 4 | 12 | 38% | 56% | $6,000 |
 | 5 | 15 | 30% | 45% | $7,500 |
 
-**The coordinators.** Every client request passes one coordinator: 40k requests at about 2k each is 20 replicas at 100%. Keep them under 70% and check the count with one replica gone.
+The fourth column is the third times 1.5: when a node dies, the two left in its group carry what three carried (see *Sizing for a lost node* below). That column, not the healthy one, picks the shard count.
+
+**The coordinators.** Every client request passes one coordinator: 40k requests at about 2k each is 20 coordinators at 100% busy. To stay under 70% takes 40k ÷ 1.4k ≈ 29, and one more so that losing a coordinator changes nothing: 30, at $100 each.
 
 **Latency.** A Put or Get is one coordinator hop (10 ms in the model) and one parallel round to the replicas (5 ms). What changes with the shard count is the replicas' queueing, and it shows in the p99 most when a node is down.
 
@@ -83,17 +85,17 @@ In the simulation, the ring is the shard count: `shards 4` with `x3` is twelve m
 Each write goes to the key's N replicas. The coordinator waits for W acknowledgements before it answers; a read asks R replicas and returns the newest version among them.
 
 ```callout takeaway R + W > N
-Every read set then overlaps every write set in at least one replica, so **a read always meets the latest acknowledged write**.
+Every read set then overlaps every write set in at least one replica, so **a read always meets the latest acknowledged write**. With N = 3, W = 2, R = 2: whichever two replicas you read, at least one of them is among the two that acknowledged.
 ```
 
 | Setting | Effect |
 |---|---|
 | N = 3, W = 2, R = 2 | Overlap guaranteed; one replica can be down for reads and writes |
 | W = 3 | Every write waits for the slowest replica; one down fails the write |
-| R = 3 | Every read waits for the slowest; a third more read load |
+| R = 3 | Every read waits for the slowest; half as many replica reads again (60k → 90k a second) |
 | R = 1, W = 1 | Fastest, cheapest, and a read can miss an acknowledged write |
 
-The quorum is not free. W = 2 still sends the write to all three (the third copy is what makes a later read quorum overlap), and R = 2 doubles the read load compared with reading one replica. In Proschi, write the prefixes `x3 PUT …` and `x2 GET …` so the simulation counts the operations; latency counts the step once, as if the calls went out in parallel, as a coordinator does.
+The quorum is not free. W = 2 still sends the write to all three: W is how many acknowledgements the coordinator waits for, not how many copies are made. (The two acknowledgements give the overlap; the third copy is durability, a spare for the day one of the other two is lost.) And R = 2 doubles the read load compared with reading one replica. In Proschi, write the prefixes `x3 PUT …` and `x2 GET …` so the simulation counts the operations; latency counts the step once, as if the calls went out in parallel, as a coordinator does.
 
 ```proschi
 title "Quorum writes on a settings store"
@@ -123,6 +125,8 @@ quorum-replica-load
 A strict quorum counts only the key's own three replicas: with one down, W = 2 still works; with two down, writes fail. Dynamo went further with a *sloppy quorum*: the write goes to the first N *healthy* nodes on the ring, so a stand-in takes the copy meant for the dead node. The stand-in keeps it with a *hint* naming the intended owner and hands it back when the owner returns (*hinted handoff*).
 
 It buys writes that keep succeeding through failures, which Amazon wanted for the shopping cart. The cost: while a hint is outstanding, the copies are not on the key's home replicas, so R + W > N no longer guarantees that a read sees the write. Cassandra keeps hints but does not count them toward the consistency level; Riak lets you choose.
+
+In this problem only one of the three replicas is down, so the strict quorum still holds: two home replicas acknowledge. The hint is there so the third copy is not lost while its node is away.
 
 ```deepdive How the model draws it
 The `"Replica down"` scenario writes two replicas, answers, then shows the call to the third failing (`-x`) and the hinted copy going to another node. Those last steps come after the response, so they cost load but no latency.
@@ -197,6 +201,7 @@ Likely follow-ups:
 - *How does a node know who is alive?* Gossip: every second each node exchanges membership and heartbeat state with a random peer, and a failure detector marks nodes suspect.
 - *How does a new node join?* It takes virtual nodes on the ring, and the previous owners stream those ranges to it while still serving them.
 - *Two writes at once?* Vector clocks detect the concurrency; the store keeps both siblings, and the reader merges. Or use CRDT values that merge themselves.
+- *Is this how DynamoDB works?* No, despite the name. The Dynamo of the 2007 paper is leaderless; the DynamoDB service gives each partition's three replicas a leader, elected with Paxos, and writes go through it. Cassandra and Riak are the direct descendants of the paper.
 - *Can you offer strong consistency?* Per key, with R + W > N and no sloppy quorum, a read gets the latest acknowledged write, but not linearizability under concurrent writes. For compare-and-set, use a consensus protocol per key range (Cassandra's lightweight transactions use Paxos).
 - *A whole data center goes down?* Place replicas across zones, and use local quorums per data center with asynchronous replication between them.
 

@@ -18,7 +18,9 @@ In 2013 Netflix's internal availability goal was 99.99%: under an hour of downti
 
 So Netflix deployed every service on a member's call path in two AWS regions, **US-East-1** in Virginia and **US-West-2** in Oregon, both serving members all the time. On a normal day geo-DNS sends each member to the closer region, roughly half to each. When a region goes bad, Netflix overrides DNS and sends every member to the healthy one. Members see a short blip instead of an outage, and engineers can fix the broken region without the clock running.
 
-In the problem, members **Browse** (8k requests a second) and **Save progress** (2k), half in each region. Each region has a Zuul gateway, a stateless playback API, EVCache in front of Cassandra, and nothing it shares with the other region except Cassandra's background replication. The third use case, **Browse in failover**, adds to each region the members it takes over when the other is evacuated. You size both regions so that the drill fits.
+In the problem, members **Browse** (8k requests a second) and **Save progress** (2k), half in each region. Each region has its own **Zuul** (Netflix's edge gateway), a stateless playback API, and **EVCache** (Netflix's Memcached-based cache) in front of Cassandra. The regions share nothing except Cassandra's background replication. The third use case, **Browse in failover**, adds to each region the members it takes over when the other is evacuated, so both regions are measured on their worst day at once.
+
+The limits: p99 (the latency 99% of requests beat) under 100 ms for Browse and Browse in failover and under 130 ms for Save progress; every use case available 99.99% of the time; no latency limit broken by losing any single instance, even with the failover load on; and at most $5,000 a month for both regions.
 
 ## Back-of-the-envelope
 
@@ -37,7 +39,7 @@ $4,600 | a month for both regions
 
 **Zuul.** 9k a second at 10k per instance: two would do on paper (45%), but losing one leaves one at 90%. Three run at 30%, 45% after losing one.
 
-**Cassandra and EVCache.** Browse misses are 10% on a normal day, 30% for members just moved (assumed): about 1.6k reads a second per region, plus 1k local writes and 1k replicated from the other region. Two Cassandra nodes (20k each) are almost idle; they are there for availability, as are two EVCache nodes.
+**Cassandra and EVCache.** Only cache misses read Cassandra: 10% of a region's own 4k Browse (400 a second) and, in the drill, 30% of the 4k it takes over (1.2k; the lower hit rate for members just moved is an assumption). Add 1k local writes and 1k replicated from the other region: about 2.4k operations a second on a normal day and 3.6k in the drill. Two Cassandra nodes (20k each) are almost idle; they are there for availability, as are two EVCache nodes.
 
 | Per region | Normal day | Other region evacuated | Capacity |
 |---|---|---|---|
@@ -45,7 +47,7 @@ $4,600 | a month for both regions
 | Playback API | 5k / s | 9k / s | 7 × 2k |
 | Cassandra | ~2.4k / s | ~3.6k / s | 2 × 20k |
 
-**Cost.** Per region: 3 Zuul ($300), 7 API ($700), 2 EVCache ($300), 2 Cassandra ($1,000): $2,300, and $4,600 for both. Active-active roughly doubles the compute you pay for: on a normal day each API runs at about a third of its capacity.
+**Cost.** Per region: 3 Zuul ($300), 7 API ($700), 2 EVCache ($300), 2 Cassandra ($1,000): $2,300, and $4,600 for both, inside the $5,000 budget. Active-active roughly doubles the compute you pay for: on a normal day each API runs at about a third of its capacity.
 
 ```quiz
 multi-region-failover-headroom
