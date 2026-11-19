@@ -98,6 +98,40 @@ test.describe('mock interview set-up', () => {
     expect(roomProblem(page)).not.toBe(first);
   });
 
+  test('Start over throws the interview in progress away: the next start on its problem is fresh', async ({ page }) => {
+    await startOn(page, 'URL Shortener');
+    await expect(page.getByTestId('brief')).toHaveAttribute('data-typing', 'true');
+    await page.keyboard.press('Space');
+    await page.getByRole('button', { name: 'Ask your clarifying questions' }).click();
+    await page.getByRole('button', { name: 'Ask: How fast must a redirect be?' }).click();
+    await expect(page.getByText('Good question')).toBeVisible();
+    await page.getByRole('button', { name: 'Exit the interview' }).click();
+    await answerDialog(page, 'Leave');
+
+    const open = page.getByTestId('open-solo');
+    await expect(open).toContainText('URL Shortener');
+    // Cancelled, nothing changes.
+    await open.getByRole('button', { name: 'Start over' }).click();
+    await answerDialog(page, 'Cancel');
+    await expect(open).toBeVisible();
+    await open.getByRole('button', { name: 'Start over' }).click();
+    await expect(page.locator('.ps-dialog')).toContainText('Finished interviews, their results and your XP stay.');
+    await answerDialog(page, 'Start over');
+    await expect(open).toHaveCount(0);
+    // Its problem is chosen, ready to start again.
+    await expect(page.getByTestId('chosen-problem')).toContainText('URL Shortener');
+    await toSetupStep(page);
+    await page.getByRole('button', { name: 'Start the interview' }).click();
+    await expect(room(page)).toBeVisible();
+    expect(roomProblem(page)).toBe('url-shortener');
+    // Fresh: the brief is typed out again, and nothing is asked yet.
+    await expect(page.getByTestId('brief')).toHaveAttribute('data-typing', 'true');
+    await page.keyboard.press('Space');
+    await page.getByRole('button', { name: 'Ask your clarifying questions' }).click();
+    await expect(page.getByRole('button', { name: 'Ask: How fast must a redirect be?' })).toBeVisible();
+    await expect(page.getByText('Good question')).toHaveCount(0);
+  });
+
   test('Choose a problem: a searchable list, and a problem’s Wrap-up preselects its problem', async ({ page }) => {
     await page.goto('practice/#/interview');
     await page.getByRole('radio', { name: 'Choose a problem' }).click();

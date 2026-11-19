@@ -85,6 +85,23 @@ describe('progress', () => {
     expect(again).toMatchObject({ progress: { runs: 1, source: 'mine' } });
   });
 
+  it('forgets the stored design on a reset, keeping the solve, the runs and the best designs', async () => {
+    const { token } = await signedInUser();
+    expect((await call(`/api/problems/${ID}/source`, { method: 'DELETE' })).status).toBe(401);
+    expect((await call('/api/problems/nope/source', { method: 'DELETE', token })).status).toBe(404);
+    // Nothing stored yet: nothing to forget, and no row appears.
+    expect((await call(`/api/problems/${ID}/source`, { method: 'DELETE', token })).status).toBe(204);
+    expect(((await (await call('/api/me', { token })).json()) as Record<string, any>).progress[ID]).toBeUndefined();
+
+    await run(token, { source: problem.solution, solved: true });
+    const before = ((await (await call('/api/me', { token })).json()) as Record<string, any>).progress[ID];
+    expect(before.source).toBe(problem.solution);
+    expect((await call(`/api/problems/${ID}/source`, { method: 'DELETE', token })).status).toBe(204);
+    const after = ((await (await call('/api/me', { token })).json()) as Record<string, any>).progress[ID];
+    const { source: _gone, ...kept } = before;
+    expect(after).toEqual(kept);
+  });
+
   it('validates the run', async () => {
     const { token } = await signedInUser();
     expect((await run(token, { source: 'x', solved: false }, 'no-such-problem')).status).toBe(404);

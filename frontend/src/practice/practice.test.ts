@@ -4,7 +4,7 @@ import { defaultEngine, nullEngine, type Engine, type TestResult } from '../hld/
 import { parseInline, parseMarkdown, safeHref } from './markdownReader';
 import { catalogErrors, findProblem, problems } from './catalog';
 import { loadProblem } from './loadProblem';
-import { PROGRESS_KEY, loadProgress, saveProgress, sourceOf, statusOf, withRun, withSource } from './progress';
+import { PROGRESS_KEY, loadProgress, saveProgress, sourceOf, statusOf, withAssisted, withReset, withRun, withSource } from './progress';
 import { CAPACITY_MESSAGE, PROBLEM_FILE, parseSolution, problemResolver, runTests } from './workspace';
 import { validateProblem } from './validate';
 import type { Problem } from './types';
@@ -250,6 +250,16 @@ describe('progress', () => {
     expect(statusOf(withSource(solved, problem, 'y'), problem.id)).toBe('solved');
     expect(statusOf(withRun(solved, problem, false), problem.id)).toBe('solved');
     expect(statusOf(withRun({}, problem, false), problem.id)).toBe('attempted');
+  });
+
+  it('a reset drops the last source and keeps the status and the assisted mark', () => {
+    const solved = withAssisted(withRun(withSource({}, problem, 'x'), problem, true), problem.id);
+    const reset = withReset(solved, problem.id);
+    expect(reset).toEqual({ [problem.id]: { status: 'solved', assisted: true } });
+    expect(sourceOf(reset, problem)).toBe(problem.starter);
+    expect(withReset(withSource({}, problem, 'y'), problem.id)).toEqual({ [problem.id]: { status: 'attempted' } });
+    // Nothing to reset: nothing changes, and no entry appears.
+    expect(withReset({}, problem.id)).toEqual({});
   });
 
   it('ignores damaged entries and unavailable storage', () => {

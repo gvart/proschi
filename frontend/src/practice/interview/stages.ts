@@ -220,6 +220,13 @@ export const saveStage = (id: string, stage: Phase): void => saveJson(STAGE_KEY(
 const BRIEF_KEY = (id: string) => `proschi.interview.brief.${id}`;
 export const loadBriefRead = (id: string): boolean => loadJson<unknown>(BRIEF_KEY(id), false) === true;
 export const saveBriefRead = (id: string): void => saveJson(BRIEF_KEY(id), true);
+export function clearBriefRead(id: string): void {
+  try {
+    localStorage.removeItem(BRIEF_KEY(id));
+  } catch {
+    // Storage unavailable: nothing was stored.
+  }
+}
 
 
 /** The messages said on `stage`, and how many came before it; a message without a stage counts as the first stage's. */

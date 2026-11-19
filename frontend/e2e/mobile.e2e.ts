@@ -306,7 +306,7 @@ test.describe('a problem header at 500px', () => {
     expect(Math.abs(box.y + box.height / 2 - (title.y + title.height / 2)), 'More sits on the title’s row').toBeLessThan(12);
     await expect(header.getByRole('button', { name: 'Help' })).toBeHidden();
     await more.click();
-    await expect(page.getByRole('menuitem', { name: 'Reset to the starter code' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Start the problem over' })).toBeVisible();
     await expect(page.getByRole('menuitem', { name: 'Take the practice tour' })).toBeVisible();
   });
 });

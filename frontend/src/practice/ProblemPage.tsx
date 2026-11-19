@@ -17,7 +17,7 @@ import TestPanel from './TestPanel';
 import ReviewPanel from '../review/ReviewPanel';
 import { practiceReviewInput } from '../review/practice';
 import { AssistedTag, CompanyBadge, DifficultyBadge, StatusIcon } from './Badges';
-import { markLessonRead, sourceOf, statusOf, withAssisted, withRun, withSource, type Progress } from './progress';
+import { markLessonRead, sourceOf, statusOf, withAssisted, withReset, withRun, withSource, type Progress } from './progress';
 import { billingEnabled } from '../services/billing';
 import PartnerButton from '../partner/PartnerButton';
 import { usePartnerShortcut } from '../partner/shortcut';
@@ -51,7 +51,7 @@ import { questionRowId } from './interview/stages';
 import { setupHref } from './interview/links';
 import { ChecksSheet } from './interview/Room';
 import { useCodePref } from './interview/prefs';
-import { factsOf, goTo as reachStage, labelOf, loadNotes, nextOf, notesSaved, openingScreen, saveNotes, stageDone, type StageId, type StageNotes, type WorkStage } from './stages/flow';
+import { EMPTY_NOTES, factsOf, goTo as reachStage, labelOf, loadNotes, nextOf, notesSaved, openingScreen, saveNotes, stageDone, type StageId, type StageNotes, type WorkStage } from './stages/flow';
 import StageBar, { StageFoot, type StageNext } from './stages/StageBar';
 import { ClarifyStage, EstimateStage, WrapupStage } from './stages/Screens';
 import DesignGuide from './stages/DesignGuide';
@@ -326,8 +326,28 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
     setTour('tour');
   };
 
+  /**
+   * Starts the problem over: what the learner wrote goes (the design, back to
+   * the starter, also on the server; the stage notes; the guided steps; the
+   * last run shown). The status, the assisted mark, XP, badges and the solve
+   * history stay.
+   */
   const reset = async () => {
-    if (await confirm({ title: 'Replace your design with the starter code?', body: 'Your current code is lost.', confirmLabel: 'Replace', tone: 'danger' })) setSource(problem.starter);
+    const keeps = status === 'solved' ? 'The problem stays solved and your XP stays.' : 'Your XP stays.';
+    const goes = staged ? 'your design, your stage notes and the last test run' : 'your design and the last test run';
+    if (!(await confirm({ title: 'Start this problem over?', body: `This removes ${goes}. ${keeps}`, confirmLabel: 'Start over', tone: 'danger' }))) return;
+    setSource(problem.starter);
+    onProgress((p) => withReset(p, problem.id));
+    void account.clearSource(problem.id);
+    updateNotes(() => EMPTY_NOTES);
+    if (guidedSteps) updateGuided((g) => ({ ...g, done: [] }));
+    setRun(undefined);
+    setServerNote(undefined);
+    setChecksOpen(false);
+    if (staged) {
+      setDrawer(false);
+      setScreen(EMPTY_NOTES.stage);
+    }
   };
 
   const goTo = (loc: SourceLoc | Diagnostic) => {
@@ -753,22 +773,16 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
             <CompanyBadge company={problem.company} />
           </span>
         )}
-        {screen === 'design' ? (
-          <>
-            {/* From sm up Reset and Help have their own buttons; on phones they share "More", so the row does not wrap. */}
-            <span className={`hidden sm:flex items-center gap-1 ml-auto`}>
-              {!staged && lessonButton(outlineButton)}
-              <button onClick={reset} className={toolButton} aria-label="Reset" title="Reset: start over from the starter code">
-                <RotateCcw size={14} />
-                <span className="hidden min-[1440px]:inline">Reset</span>
-              </button>
-            </span>
-            <MoreMenu className={`sm:hidden ml-auto`} onReset={reset} onTour={startTour} onZen={editorView ? zen.toggle : undefined} />
-            {editorView && <ZenButton zen={zen} className={`${iconButton} max-sm:hidden`} />}
-          </>
-        ) : (
-          <span className="ml-auto" />
-        )}
+        {/* From sm up Reset and Help have their own buttons; on phones they share "More", so the row does not wrap. */}
+        <span className={`hidden sm:flex items-center gap-1 ml-auto`}>
+          {!staged && lessonButton(outlineButton)}
+          <button onClick={reset} className={toolButton} aria-label="Reset" title="Reset: start this problem over (your work goes; a solve and your XP stay)">
+            <RotateCcw size={14} />
+            <span className="hidden min-[1440px]:inline">Reset</span>
+          </button>
+        </span>
+        <MoreMenu className={`sm:hidden ml-auto`} onReset={reset} onTour={startTour} onZen={editorView ? zen.toggle : undefined} />
+        {editorView && <ZenButton zen={zen} className={`${iconButton} max-sm:hidden`} />}
         <AccountMenu account={account} />
         <HelpMenu className="hidden sm:block" tourLabel="Take the practice tour" onTour={startTour} />
       </Header>
@@ -852,7 +866,7 @@ function MoreMenu({ className, onReset, onTour, onZen }: { className: string; on
                 onReset();
               }}
             >
-              Reset to the starter code
+              Start the problem over
             </MenuItem>
             {onZen && (
               <MenuItem

@@ -24,6 +24,8 @@ export interface Account {
   downloadData: () => Promise<void>;
   /** Records a test run on the server, signed in, with the local `day` it was made; undefined otherwise or when it fails. */
   recordRun: (problemId: string, source: string, solved: boolean, day: string) => Promise<RunRecord | undefined>;
+  /** Signed in, forgets the design the server keeps for a problem (a reset), so the next sign-in does not bring it back. */
+  clearSource: (problemId: string) => Promise<void>;
 }
 
 type Boot = { me?: Me; providers: ProviderId[]; message?: string };
@@ -159,5 +161,12 @@ export function useAccount(onSignedIn: (me: Me) => void): Account {
     [whenSignedIn],
   );
 
-  return { state, signIn, link, unlink, signOut, signOutEverywhere, update, remove, downloadData, recordRun };
+  const clearSource = useCallback(
+    async (problemId: string) => {
+      await whenSignedIn(() => api<void>(`/api/problems/${encodeURIComponent(problemId)}/source`, { method: 'DELETE' }));
+    },
+    [whenSignedIn],
+  );
+
+  return { state, signIn, link, unlink, signOut, signOutEverywhere, update, remove, downloadData, recordRun, clearSource };
 }
