@@ -28,13 +28,14 @@ versions; the service merges them (the union of the items, so no add is
 lost) and writes the merged cart back before answering.
 
 ## Replicate for five nines
-- replicas: any service x2
+- replicas: any service x3
 - replicas: any database x3
 - test: availability of Add to cart ≥ 99.999%
 - test: survive any node failure
 
 99.999% is about five minutes of downtime a year. One copy of anything
-cannot promise that: write `x2` or more on the service (a load balancer in
-front spreads shoppers over the replicas) and keep the carts on three
+cannot promise that, and neither can two: two service replicas give only
+99.9975%. Write `x3` on the service (a load balancer in front spreads
+shoppers over the replicas) and keep the carts on three
 replicas (`x3`), so any of them can take a write while another is down.
 Then run the tests.
