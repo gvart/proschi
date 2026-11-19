@@ -168,7 +168,7 @@ instead ([Mobile apps](#mobile-apps)), and so does the `proschi` CLI
 | `DELETE /api/me/documents/<id>/versions/<tag>` | Deletes the version's content at once; its tag stays taken. 204 (also for a tag it does not have), 400 for `latest`, 404 for a diagram the account does not have |
 | `GET /api/me/versions/resolve?name=<name>&tag=<tag or latest>` | A cloud reference: `{documentId, name, tag, seq, sha256, source, imports}`. 404 when no live diagram has the name or it has no such version; 409 `{error: 'ambiguous_name', message, documentIds}` when several do; 400 for a missing name or `bad_tag` |
 | `GET /api/me/limits` | `{plan, limits: {documents, versionsPerDocument, documentBytes, monthlyCredits}, usage: {documents}}` ([Plans and limits](#plans-and-limits)) |
-| `GET /api/me/plan` | `{plan, billing, subscription: {status, product, currentPeriodEnd, cancelAtPeriodEnd} \| null, customer, limits, features, credits: {balance, monthly: {allowance, left, resetsAt} \| null, signup, topup}}` ([Billing and credits](#billing-and-credits)), credits with up to 3 decimals; `limits.documents` and `versionsPerDocument` are null where unlimited |
+| `GET /api/me/plan` | `{plan, billing, subscription: {status, product, currentPeriodEnd, cancelAtPeriodEnd} \| null, customer, comp: {plan, endsAt} \| null, limits, features, credits: {balance, monthly: {allowance, left, resetsAt} \| null, signup, topup}}` ([Billing and credits](#billing-and-credits)), credits with up to 3 decimals; `limits.documents` and `versionsPerDocument` are null where unlimited; `comp` is the admin's comp (`endsAt` in Unix ms) while it is what gives the plan |
 | `POST /api/billing/checkout {product}` | `product`: `pro_monthly`, `pro_yearly`, `max_monthly`, `max_yearly` or `credits_1000`. `{url}` of a Polar checkout to send the browser to. 409 `has_subscription` for a plan while a subscription is running (switch it instead); a top-up is always allowed; 501 without Polar set up |
 | `POST /api/billing/change-plan {product}` | Switches the running subscription to another plan product at Polar (one subscription, never a second): `{ok: true, plan, effective: 'now'}`; the webhook then sets the plan. 409 `no_subscription`, `canceling` (set to end) or `same_plan`; 400 for `credits_1000`; 502 when Polar refuses |
 | `POST /api/voice/transcribe?seconds=&lang=` | Voice input's server speech-to-text (P39) where the browser has no speech recognition: the body is one recorded chunk (`audio/webm`, `ogg`, `mp4`, `mpeg`, `wav` or `aac`, at most 1 MiB), Workers AI `@cf/openai/whisper-large-v3-turbo` writes it down: `{text, credits}`. Signed in, with credits: held at its worst case (60 s) and charged 2x Whisper's $0.000513 an audio minute (about 0.1 credit a minute), as action `voice`, by the longer of `seconds` and what the size implies at 32 kbit/s, at most 60 s. 402 `no_credits`, 413 too large, 415 another type, 502 `stt_failed` (not charged), 501 without the `AI` binding; `VOICE_LIMITER` per user |
@@ -879,7 +879,7 @@ changes goes to the audit log in the same batch as the change.
 | `GET /api/admin/passkeys`, `POST /api/admin/passkeys/options`, `POST /api/admin/passkeys {name, response}`, `DELETE /api/admin/passkeys/<id>`, `POST /api/admin/sessions/revoke-all` | Passkeys and sessions (409 for the last passkey) |
 | `GET /api/admin/overview`, `GET /api/admin/health` | The overview and health pages |
 | `GET /api/admin/cf-usage` | Cloudflare usage against the plan (501 without `CF_API_TOKEN` and `CF_ACCOUNT_ID`) |
-| `GET /api/admin/users?q=&filter=all\|active\|blocked\|public\|email&sort=created\|seen\|name\|solved&offset=` | 50 at a time, with `total` |
+| `GET /api/admin/users?q=&filter=all\|active\|blocked\|public\|email&plan=all\|free\|pro\|max\|comped&sort=created\|seen\|name\|solved&offset=` | 50 at a time, with `total`; each with its effective `plan` and, while one runs, `compUntil` and `compPlan` |
 | `GET /api/admin/users/<id>`, `PATCH /api/admin/users/<id> {displayName?, publicProfile?}`, `DELETE /api/admin/users/<id>` | One account |
 | `POST /api/admin/users/<id>/block {reason?}`, `/unblock`, `/sign-out`; `DELETE /api/admin/users/<id>/email` | Moderation (409 when already blocked or not blocked) |
 | `GET /api/admin/shares?q=&offset=`, `DELETE /api/admin/shares/<id>` | Short links |
@@ -1532,6 +1532,16 @@ Polar webhook delivery with its outcome (`applied`, `duplicate`, `ignored`,
 secret shows up as `bad_signature` rows. The **AI** tab has interviews,
 reviews, tokens and cost per day, and the credits charged per day against
 what those calls cost. On an account, the admin can grant or revoke top-up
-credits (in credits, up to 3 decimals) and comp Pro until a date (`users.comp_until`, migration
-0023), each with a reason in the audit log; a comp never touches Polar, and
+credits (in credits, up to 3 decimals) and comp Pro or Max until a date
+(`POST /api/admin/users/<id>/comp {plan, until, reason}`, `plan` 'pro' by
+default; `users.comp_until`, migration 0023, and `users.comp_plan`, 0037),
+sent again to extend or change it, and end it early
+(`POST /api/admin/users/<id>/comp/end {reason}`), each with a reason in the
+audit log. While it runs the account gets the higher of its own plan and the
+comp's (`src/plans.ts` `effectivePlan`), so a comp never lowers a paid Max.
+The monthly credits follow the effective plan at the month's grant: a free
+account gets the comp's allowance on its next read (it had no grant this
+month), an account already granted this month (a Pro subscriber given Max)
+gets Max's from the next month, and ending a comp takes nothing back. A comp
+never touches Polar, and
 refunds are made in Polar's dashboard, which the panel links to.

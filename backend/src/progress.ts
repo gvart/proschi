@@ -198,7 +198,7 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
   const user = await requireUser(request, ctx);
   await rateLimit(ctx.env.PROFILE_LIMITER, user.id, 'Too many account changes; wait a minute');
   const [account, identities, sessions, progress, cardReviews, cardStates, achievements, challenges] = await DB.batch([
-    DB.prepare('SELECT created_at, daily_goal, practice_goal, last_seen_day, plan, comp_until FROM users WHERE id = ?').bind(user.id),
+    DB.prepare('SELECT created_at, daily_goal, practice_goal, last_seen_day, plan, comp_until, comp_plan FROM users WHERE id = ?').bind(user.id),
     DB.prepare('SELECT provider, subject FROM identities WHERE user_id = ? ORDER BY provider').bind(user.id),
     DB.prepare('SELECT kind, created_at, expires_at, used_at, scopes FROM sessions WHERE user_id = ? ORDER BY created_at, rowid').bind(user.id),
     DB.prepare(
@@ -227,6 +227,8 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
       plan: (account.results[0] as Row).plan,
       // Pro given by the admin until then (Unix seconds); null without.
       compUntil: (account.results[0] as Row).comp_until,
+      // The plan that comp gives: 'pro' or 'max'; null for Pro (as before Max comps) or without a comp.
+      compPlan: (account.results[0] as Row).comp_plan,
     },
     identities: (identities.results as Row[]).map((r) => ({ provider: r.provider, subject: r.subject })),
     // kind: web (the site's cookie), app_access or app_refresh (an app's tokens, with their scopes; rotatedAt once a refresh token was used).

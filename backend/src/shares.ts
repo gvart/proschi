@@ -147,6 +147,7 @@ interface ShareRow {
   /** The owner's: their plan, and whether their embeds show Proschi's branding (src/certificates.ts putEmbeds). */
   plan: string;
   comp_until: number | null;
+  comp_plan: string | null;
   embed_branding: number;
 }
 
@@ -154,7 +155,7 @@ interface ShareRow {
 async function findShare(ctx: Ctx, id: string): Promise<ShareRow | null> {
   if (!SHARE_ID.test(id)) return null;
   return ctx.env.DB.prepare(
-    `SELECT s.id, s.title, s.source, s.imports, s.image IS NOT NULL AS has_image, s.image_width, s.image_height, s.created_at, u.plan, u.comp_until, u.embed_branding
+    `SELECT s.id, s.title, s.source, s.imports, s.image IS NOT NULL AS has_image, s.image_width, s.image_height, s.created_at, u.plan, u.comp_until, u.comp_plan, u.embed_branding
      FROM shares s JOIN users u ON u.id = s.user_id WHERE s.id = ? AND u.blocked_at IS NULL`,
   )
     .bind(id)
@@ -177,7 +178,7 @@ export async function getShare(ctx: Ctx, id: string): Promise<Response> {
       ...(row.imports ? { imports: JSON.parse(row.imports) as Record<string, string> } : {}),
       hasImage: row.has_image === 1,
       createdAt: row.created_at,
-      ...(row.embed_branding === 0 && can({ plan: effectivePlan(row.plan, row.comp_until) }, 'pro_exports', ctx.env).ok ? { branding: false } : {}),
+      ...(row.embed_branding === 0 && can({ plan: effectivePlan(row.plan, row.comp_until, row.comp_plan) }, 'pro_exports', ctx.env).ok ? { branding: false } : {}),
     },
     200,
     { 'Cache-Control': SHORT_CACHE },

@@ -1,13 +1,13 @@
 import type { Page } from '@playwright/test';
 import { mockAdmin, PRO_USER, USER } from './admin';
-import { answerDialog, expect, test } from './fixtures';
+import { answerDialog, chooseOption, expect, test } from './fixtures';
 
 /**
  * The admin panel (/admin/) in the build with accounts, API mocked with
  * seeded data (e2e/admin.ts): the passkey gate before setup and after, and
  * signed in, the overview, an account's detail and blocking it, the billing
  * and AI tabs, the webhook log, the health page's paid configuration, live
- * share links, and granting credits and comping Pro (each with a reason).
+ * share links, and granting credits and comping Pro or Max (each with a reason).
  */
 
 const signedIn = { passkeys: true, setupAvailable: false, signedIn: true };
@@ -57,13 +57,18 @@ test.describe('admin panel', () => {
     await expect(page).toHaveURL(/#\/users$/);
     await expect(nav(page).getByRole('link', { name: 'Users' })).toHaveAttribute('aria-current', 'page');
     await expect(page.getByRole('heading', { level: 1, name: 'Users' })).toBeVisible();
+    // Each row shows its effective plan; the plan filter asks the server.
+    await expect(page.getByRole('row', { name: /Ada Lovelace/ }).getByText('Pro', { exact: true })).toBeVisible();
+    const asked = page.waitForRequest((r) => new URL(r.url()).pathname === '/api/admin/users' && new URL(r.url()).searchParams.get('plan') === 'max');
+    await chooseOption(page.getByRole('combobox', { name: 'Plan' }), 'Max');
+    await asked;
     await page.getByRole('button', { name: 'spammer9000' }).click();
     await expect(page).toHaveURL(new RegExp(`#/users/${USER}$`));
     const signIn = page.getByRole('region', { name: 'Sign-in and sign-up credits' });
     await expect(signIn.getByText('Email and password')).toBeVisible();
     await expect(signIn.getByText('Refused: this person had an account before (same address or sign-in)')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'spammer9000' })).toBeVisible();
-    await expect(page.getByText('free plan')).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Profile' }).getByText('Free', { exact: true })).toBeVisible();
 
     await page.getByLabel('Reason for blocking').fill('spam');
     await page.getByRole('button', { name: 'Block', exact: true }).click();
@@ -76,11 +81,11 @@ test.describe('admin panel', () => {
     await expect(page).toHaveURL(/#\/users$/);
   });
 
-  test('an account’s subscription and ledger; granting credits and comping Pro need a reason', async ({ page }) => {
+  test('an account’s subscription and ledger; granting credits and comping Max need a reason', async ({ page }) => {
     const posts = await mockAdmin(page, signedIn);
     await page.goto(`admin/#/users/${PRO_USER}`);
     await expect(page.getByRole('heading', { name: 'Ada Lovelace' })).toBeVisible();
-    await expect(page.getByText('pro plan')).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Profile' }).getByText('Pro', { exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: /Open in Polar \(sandbox\)/ })).toHaveAttribute('href', 'https://sandbox.polar.sh/to/dashboard/customers/cus_01JAZ2K7M3');
     await expect(page.getByText('721.148 of 800 monthly · 0 sign-up · 1,012.652 top-up')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Credit ledger (7)' })).toBeVisible();
@@ -98,13 +103,26 @@ test.describe('admin panel', () => {
     await expect(page.getByText('Granted 12.5 top-up credits.')).toBeVisible();
     expect(posts).toEqual([{ method: 'POST', path: `/api/admin/users/${PRO_USER}/credits`, body: { kind: 'grant', credits: 12.5, ref: expect.stringMatching(/^[0-9a-f-]{36}$/), reason: 'Support ticket 1234' } }]);
 
-    await page.getByRole('button', { name: 'Comp Pro' }).click();
-    const comp = page.getByRole('dialog', { name: 'Comp Pro for Ada Lovelace' });
-    await comp.getByLabel('Pro until (the end of this UTC day)').fill('2099-01-31');
+    await page.getByRole('button', { name: 'Comp a plan' }).click();
+    const comp = page.getByRole('dialog', { name: 'Comp a plan for Ada Lovelace' });
+    await expect(comp.getByRole('radio', { name: 'Pro' })).toBeChecked();
+    await comp.getByRole('radio', { name: 'Max' }).check();
+    await comp.getByLabel('Max until (the end of this UTC day)').fill('2099-01-31');
     await comp.getByLabel('Reason (in the audit log)').fill('Conference speaker');
-    await comp.getByRole('button', { name: 'Comp Pro' }).click();
-    await expect(page.getByText('Pro until the end of 2099-01-31 (UTC).')).toBeVisible();
-    expect(posts[1]).toEqual({ method: 'POST', path: `/api/admin/users/${PRO_USER}/comp`, body: { until: Date.parse('2099-01-31T23:59:59Z') / 1000, reason: 'Conference speaker' } });
+    await comp.getByRole('button', { name: 'Comp Max' }).click();
+    await expect(page.getByText('Max until the end of 2099-01-31 (UTC).')).toBeVisible();
+    expect(posts[1]).toEqual({ method: 'POST', path: `/api/admin/users/${PRO_USER}/comp`, body: { plan: 'max', until: Date.parse('2099-01-31T23:59:59Z') / 1000, reason: 'Conference speaker' } });
+    await expect(page.getByText('Max comp until', { exact: false }).first()).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Profile' }).getByText('Max', { exact: true })).toBeVisible();
+
+    // Changing it starts from the running comp: its plan, and the presets extend from its end.
+    await page.getByRole('button', { name: 'Change comp' }).click();
+    const change = page.getByRole('dialog', { name: "Change Ada Lovelace's comp" });
+    await expect(change.getByRole('radio', { name: 'Max' })).toBeChecked();
+    await expect(change.getByLabel('Max until (the end of this UTC day)')).toHaveValue('2099-01-31');
+    await change.getByRole('button', { name: '+30 days' }).click();
+    await expect(change.getByLabel('Max until (the end of this UTC day)')).toHaveValue('2099-03-02');
+    await change.getByRole('button', { name: 'Cancel' }).click();
 
     await page.getByRole('button', { name: 'End comp' }).click();
     const end = page.getByRole('dialog', { name: /End Ada Lovelace's comp/ });
@@ -167,7 +185,7 @@ test.describe('admin panel', () => {
     await page.goto('admin/#/billing');
     await expect(nav(page).getByRole('link', { name: 'Billing' })).toHaveAttribute('aria-current', 'page');
     await expect(page.getByRole('heading', { name: 'Paid accounts (5)' })).toBeVisible();
-    await expect(page.getByText('Comp until')).toBeVisible();
+    await expect(page.getByText('Pro comp until')).toBeVisible();
     await expect(page.getByRole('row', { name: /Margaret Hamilton/ }).getByText('Max', { exact: true })).toBeVisible();
     await expect(page.getByText('Max accounts')).toBeVisible();
     await expect(page.getByText('Top-up orders', { exact: true })).toBeVisible();

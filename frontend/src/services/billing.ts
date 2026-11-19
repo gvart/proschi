@@ -55,6 +55,8 @@ export interface PlanInfo {
   subscription: { status: string; product: Product | null; currentPeriodEnd: number | null; cancelAtPeriodEnd: boolean } | null;
   /** Whether the account has a Polar customer (bought something): the portal opens. */
   customer: boolean;
+  /** The admin's comp while it is what gives the plan: that plan, free until `endsAt` (Unix ms). */
+  comp?: { plan: PlanId | string; endsAt: number } | null;
   limits: { documents: number | null; versionsPerDocument: number | null; documentBytes: number };
   credits: CreditBalance;
   /** Every paid feature's answer for the account (backend/src/features.ts); read through components/Feature.tsx. */

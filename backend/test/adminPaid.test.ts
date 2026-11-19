@@ -138,14 +138,14 @@ describe('admin: the paid product', () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch');
     const path = `/api/admin/users/${user.id}/comp`;
     const until = nowS() + 30 * 86_400;
-    for (const bad of [{ until }, { until, reason: ' ' }, { until: nowS() - 1, reason: 'x' }, { until: nowS() + 6 * 366 * 86_400, reason: 'x' }, { until: 'tomorrow', reason: 'x' }]) {
+    for (const bad of [{ until }, { until, reason: ' ' }, { until: nowS() - 1, reason: 'x' }, { until: nowS() + 6 * 366 * 86_400, reason: 'x' }, { until: 'tomorrow', reason: 'x' }, { plan: 'gold', until, reason: 'x' }, { plan: 'free', until, reason: 'x' }]) {
       expect((await adminCall(path, admin, { method: 'POST', body: bad })).status, JSON.stringify(bad)).toBe(400);
     }
     expect((await adminCall(path, admin, { method: 'POST', body: { until, reason: 'Conference speaker' } })).status).toBe(204);
     expect(fetchSpy.mock.calls.some(([input]) => String(input instanceof Request ? input.url : input).includes('polar'))).toBe(false);
-    expect(await audit('user.comp')).toEqual([{ target: user.id, detail: { until, reason: 'Conference speaker' }, passkey_id: expect.any(String) }]);
-    const detail = (await (await adminCall(`/api/admin/users/${user.id}`, admin)).json()) as { user: { plan: string; effectivePlan: string; compUntil: number } };
-    expect(detail.user).toMatchObject({ plan: 'free', effectivePlan: 'pro', compUntil: until });
+    expect(await audit('user.comp')).toEqual([{ target: user.id, detail: { plan: 'pro', until, reason: 'Conference speaker' }, passkey_id: expect.any(String) }]);
+    const detail = (await (await adminCall(`/api/admin/users/${user.id}`, admin)).json()) as { user: { plan: string; effectivePlan: string; compUntil: number; compPlan: string } };
+    expect(detail.user).toMatchObject({ plan: 'free', effectivePlan: 'pro', compUntil: until, compPlan: 'pro' });
     expect((await call('/api/roadmap/next', { token: user.token })).status).toBe(200);
 
     expect((await adminCall(`${path}/end`, admin, { method: 'POST', body: {} })).status).toBe(400);
@@ -166,11 +166,87 @@ describe('admin: the paid product', () => {
   });
 
   it('computes the effective plan in one place', () => {
-    expect(effectivePlan('free', null, 100)).toBe('free');
-    expect(effectivePlan('pro', null, 100)).toBe('pro');
-    expect(effectivePlan('free', 101, 100)).toBe('pro');
-    expect(effectivePlan('free', 100, 100)).toBe('free');
-    expect(effectivePlan('pro', 50, 100)).toBe('pro');
+    expect(effectivePlan('free', null, null, 100)).toBe('free');
+    expect(effectivePlan('pro', null, null, 100)).toBe('pro');
+    expect(effectivePlan('free', 101, null, 100)).toBe('pro');
+    expect(effectivePlan('free', 101, 'max', 100)).toBe('max');
+    expect(effectivePlan('pro', 101, 'max', 100)).toBe('max');
+    expect(effectivePlan('max', 101, 'pro', 100)).toBe('max');
+    expect(effectivePlan('free', 100, 'max', 100)).toBe('free');
+    expect(effectivePlan('pro', 50, 'max', 100)).toBe('pro');
+  });
+
+  it('comps Max, extends it, changes it to Pro, ends it, and lists and filters accounts by plan', async () => {
+    const admin = await setUp();
+    const user = await signedInUser('Maxine');
+    await signedInUser('Fred');
+    const path = `/api/admin/users/${user.id}/comp`;
+    const detail = async () => ((await (await adminCall(`/api/admin/users/${user.id}`, admin)).json()) as { user: Record<string, unknown> }).user;
+    const listed = async (plan: string) => {
+      const response = await adminCall(`/api/admin/users?plan=${plan}`, admin);
+      expect(response.status).toBe(200);
+      return ((await response.json()) as { users: { displayName: string; plan: string; compUntil: number | null; compPlan: string | null }[] }).users;
+    };
+
+    const until = nowS() + 30 * 86_400;
+    expect((await adminCall(path, admin, { method: 'POST', body: { plan: 'max', until, reason: 'Design partner' } })).status).toBe(204);
+    expect(await detail()).toMatchObject({ plan: 'free', effectivePlan: 'max', compUntil: until, compPlan: 'max' });
+    expect(await (await call('/api/me/plan', { token: user.token })).json()).toMatchObject({ plan: 'max', comp: { plan: 'max', endsAt: until * 1000 } });
+    expect((await listed('all')).map((u) => [u.displayName, u.plan, u.compUntil, u.compPlan]).sort()).toEqual([
+      ['Fred', 'free', null, null],
+      ['Maxine', 'max', until, 'max'],
+    ]);
+    expect((await listed('max')).map((u) => u.displayName)).toEqual(['Maxine']);
+    expect((await listed('comped')).map((u) => u.displayName)).toEqual(['Maxine']);
+    expect((await listed('free')).map((u) => u.displayName)).toEqual(['Fred']);
+    expect(await listed('pro')).toEqual([]);
+    expect((await adminCall('/api/admin/users?plan=gold', admin)).status).toBe(400);
+
+    // Extend: the same call with a later date.
+    const later = nowS() + 90 * 86_400;
+    expect((await adminCall(path, admin, { method: 'POST', body: { plan: 'max', until: later, reason: 'Extended' } })).status).toBe(204);
+    expect(await detail()).toMatchObject({ effectivePlan: 'max', compUntil: later, compPlan: 'max' });
+    // Change to Pro; the plan defaults to Pro, as before Max comps.
+    expect((await adminCall(path, admin, { method: 'POST', body: { until: later, reason: 'Down to Pro' } })).status).toBe(204);
+    expect(await detail()).toMatchObject({ effectivePlan: 'pro', compPlan: 'pro' });
+    expect((await listed('pro')).map((u) => u.displayName)).toEqual(['Maxine']);
+    expect((await audit('user.comp')).map((a) => a.detail)).toEqual([
+      { plan: 'max', until, reason: 'Design partner' },
+      { plan: 'max', until: later, reason: 'Extended' },
+      { plan: 'pro', until: later, reason: 'Down to Pro' },
+    ]);
+
+    expect((await adminCall(`${path}/end`, admin, { method: 'POST', body: { reason: 'Done' } })).status).toBe(204);
+    expect(await detail()).toMatchObject({ plan: 'free', effectivePlan: 'free', compUntil: null, compPlan: null });
+    expect(await env.DB.prepare('SELECT comp_until, comp_plan FROM users WHERE id = ?').bind(user.id).first()).toEqual({ comp_until: null, comp_plan: null });
+    expect((await listed('free')).map((u) => u.displayName).sort()).toEqual(['Fred', 'Maxine']);
+    expect(await listed('comped')).toEqual([]);
+  });
+
+  it('a comp never lowers a paid Max, and a Max comp lifts a Pro subscriber to Max', async () => {
+    const admin = await setUp();
+    const maxer = await signedInUser('Mia');
+    const pro = await signedInUser('Mo');
+    await deliver(subscription(maxer.id, 'active', '2026-11-06T10:00:00Z', 'prod-max-monthly'));
+    await deliver(subscription(pro.id, 'active', '2026-11-06T10:00:00Z'));
+    const until = nowS() + 86_400;
+    await adminCall(`/api/admin/users/${maxer.id}/comp`, admin, { method: 'POST', body: { plan: 'pro', until, reason: 'x' } });
+    await adminCall(`/api/admin/users/${pro.id}/comp`, admin, { method: 'POST', body: { plan: 'max', until, reason: 'x' } });
+    const planOf = async (token: string) => ((await (await call('/api/me/plan', { token })).json()) as { plan: string }).plan;
+    expect(await planOf(maxer.token)).toBe('max');
+    // A comp that doesn't lift the plan isn't the user's to see.
+    expect(await (await call('/api/me/plan', { token: maxer.token })).json()).toMatchObject({ comp: null });
+    expect(await (await call('/api/me/plan', { token: pro.token })).json()).toMatchObject({ comp: { plan: 'max', endsAt: until * 1000 } });
+    expect(await planOf(pro.token)).toBe('max');
+    const billing = (await (await adminCall('/api/admin/billing', admin)).json()) as { counts: Record<string, number>; pro: { displayName: string; plan: string; source: string; compPlan: string | null }[] };
+    expect(billing.counts).toMatchObject({ pro: 0, max: 2, comped: 2 });
+    expect(billing.pro.map((p) => [p.displayName, p.plan, p.source, p.compPlan])).toEqual([
+      ['Mia', 'max', 'subscription', 'pro'],
+      ['Mo', 'max', 'comp', 'max'],
+    ]);
+    // Ending the Max comp leaves the Pro subscription.
+    await adminCall(`/api/admin/users/${pro.id}/comp/end`, admin, { method: 'POST', body: { reason: 'y' } });
+    expect(await planOf(pro.token)).toBe('pro');
   });
 
   it('shows an account’s subscription, effective plan and credit balance', async () => {

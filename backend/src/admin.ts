@@ -12,7 +12,7 @@ import { MC } from './plans';
 import { HttpError, json, readJson } from './http';
 import { errorText } from './log';
 import { deleteFeedbackFiles } from './feedback';
-import { effectivePlan, effectivePlanSql } from './plans';
+import { compPlanName, effectivePlan, effectivePlanSql, planName } from './plans';
 
 /**
  * The admin panel's data (/admin/, backend/README.md "Admin panel"); every
@@ -289,6 +289,16 @@ const FILTERS: Record<Filter, string> = {
   public: 'u.public_profile = 1',
   email: 'EXISTS (SELECT 1 FROM email_prefs e WHERE e.user_id = u.id)',
 };
+/** The effective plan (src/plans.ts) in listUsers, ?4 now in Unix seconds. */
+const LIST_PLAN_SQL = effectivePlanSql('u', '?4');
+/** listUsers' `plan=`: the effective plan, or a comp running. An unknown stored plan counts as free (planName). */
+const PLAN_FILTERS: Record<string, string> = {
+  all: '1',
+  free: `COALESCE(${LIST_PLAN_SQL}, '') NOT IN ('pro', 'max')`,
+  pro: `${LIST_PLAN_SQL} = 'pro'`,
+  max: `${LIST_PLAN_SQL} = 'max'`,
+  comped: 'u.comp_until > ?4',
+};
 const SORTS: Record<string, string> = {
   created: 'u.created_at DESC, u.id',
   seen: 'u.last_seen_day IS NULL, u.last_seen_day DESC, u.created_at DESC, u.id',
@@ -296,25 +306,29 @@ const SORTS: Record<string, string> = {
   solved: 'solved DESC, u.created_at DESC, u.id',
 };
 
-/** GET /api/admin/users?q=&filter=all|blocked|active|public|email&sort=created|seen|name|solved&offset= */
+/** GET /api/admin/users?q=&filter=all|blocked|active|public|email&plan=all|free|pro|max|comped&sort=created|seen|name|solved&offset= */
 export async function listUsers(request: Request, ctx: Ctx): Promise<Response> {
   await requireAdmin(request, ctx);
   const url = new URL(request.url);
   const q = (url.searchParams.get('q') ?? '').trim().slice(0, 100);
   const filter = (url.searchParams.get('filter') ?? 'all') as Filter;
   if (!Object.prototype.hasOwnProperty.call(FILTERS, filter)) throw new HttpError(400, `filter must be one of ${Object.keys(FILTERS).join(', ')}`);
+  const plan = url.searchParams.get('plan') ?? 'all';
+  if (!Object.prototype.hasOwnProperty.call(PLAN_FILTERS, plan)) throw new HttpError(400, `plan must be one of ${Object.keys(PLAN_FILTERS).join(', ')}`);
   const sort = url.searchParams.get('sort') ?? 'created';
   if (!Object.prototype.hasOwnProperty.call(SORTS, sort)) throw new HttpError(400, `sort must be one of ${Object.keys(SORTS).join(', ')}`);
   const offset = offsetOf(url);
-  // ?1 the query as typed (an id or a provider's user id), ?2 as a pattern on the display name, ?3 a week ago (the last
-  // parameter is always bound and used, as D1 refuses bindings a statement does not use).
+  const t = now();
+  // ?1 the query as typed (an id or a provider's user id), ?2 as a pattern on the display name, ?3 a week ago, ?4 now
+  // (every parameter is always bound and used, as D1 refuses bindings a statement does not use).
   const where = `(?1 = '' OR u.id = ?1 OR u.display_name LIKE ?2 ESCAPE '\\' OR EXISTS (SELECT 1 FROM identities i WHERE i.user_id = u.id AND i.subject = ?1))
-    AND ${FILTERS[filter]} AND ?3 IS NOT NULL`;
-  const params = [q, contains(q), utcDay(now() - 6 * DAY)];
+    AND ${FILTERS[filter]} AND ${PLAN_FILTERS[plan]} AND ?3 IS NOT NULL AND ?4 IS NOT NULL`;
+  const params = [q, contains(q), utcDay(t - 6 * DAY), t];
   const { DB } = ctx.env;
   const [rows, total] = await DB.batch([
     DB.prepare(
       `SELECT u.id, u.display_name, u.public_profile, u.created_at, u.last_seen_day, u.blocked_at, u.blocked_reason,
+         ${LIST_PLAN_SQL} AS plan, CASE WHEN u.comp_until > ?4 THEN u.comp_until END AS comp_until, u.comp_plan,
          (SELECT group_concat(provider) FROM identities i WHERE i.user_id = u.id) AS providers,
          (SELECT COUNT(*) FROM progress p WHERE p.user_id = u.id AND p.solved_at IS NOT NULL) AS solved,
          EXISTS (SELECT 1 FROM email_prefs e WHERE e.user_id = u.id) AS has_email
@@ -330,6 +344,9 @@ export async function listUsers(request: Request, ctx: Ctx): Promise<Response> {
     last_seen_day: string | null;
     blocked_at: number | null;
     blocked_reason: string | null;
+    plan: string | null;
+    comp_until: number | null;
+    comp_plan: string | null;
     providers: string | null;
     solved: number;
     has_email: number;
@@ -347,6 +364,10 @@ export async function listUsers(request: Request, ctx: Ctx): Promise<Response> {
         lastSeenDay: r.last_seen_day,
         blockedAt: r.blocked_at,
         blockedReason: r.blocked_reason,
+        // The effective plan (a comp counts), and the comp while one runs.
+        plan: planName(r.plan),
+        compUntil: r.comp_until,
+        compPlan: r.comp_until !== null ? compPlanName(r.comp_plan) : null,
         providers: r.providers ? r.providers.split(',').sort() : [],
         solved: r.solved,
         hasEmail: r.has_email === 1,
@@ -403,7 +424,8 @@ export async function getUser(request: Request, ctx: Ctx, id: string): Promise<R
         blockedReason: user.blocked_reason,
         plan: user.plan,
         compUntil: user.comp_until,
-        effectivePlan: effectivePlan(user.plan as string, user.comp_until as number | null),
+        compPlan: user.comp_until !== null ? compPlanName(user.comp_plan as string | null) : null,
+        effectivePlan: effectivePlan(user.plan as string, user.comp_until as number | null, user.comp_plan as string | null),
       },
       billing: billingOf(billing.results[0] as Row | undefined),
       credits,
@@ -782,24 +804,29 @@ export async function adjustCredits(request: Request, ctx: Ctx, id: string): Pro
 const MAX_COMP_DAYS = 5 * 366;
 
 /**
- * POST /api/admin/users/<id>/comp {until, reason}: Pro until `until` (Unix
- * seconds, in the future, at most 5 years ahead). It is `users.comp_until`
- * only: the effective plan (src/plans.ts) is Pro while it is in the future,
- * whatever the subscription; nothing is sent to Polar and no webhook ends it.
+ * POST /api/admin/users/<id>/comp {plan, until, reason}: `plan` ('pro', the
+ * default, or 'max') until `until` (Unix seconds, in the future, at most 5
+ * years ahead); sent again, it changes the plan and the end of a running
+ * comp. It is `users.comp_plan` and `users.comp_until` only: the effective
+ * plan (src/plans.ts) is the higher of the stored plan and the comp's while
+ * it is in the future, whatever the subscription; nothing is sent to Polar
+ * and no webhook ends it. Credits follow at the next monthly grant (P32).
  */
 export async function compUser(request: Request, ctx: Ctx, id: string): Promise<Response> {
   const admin = await requireAdmin(request, ctx);
   await assertUser(ctx, id);
   const body = await readJson(request);
   const t = now();
+  const plan = body.plan ?? 'pro';
+  if (plan !== 'pro' && plan !== 'max') throw new HttpError(400, "plan must be 'pro' or 'max'");
   const until = body.until;
   if (typeof until !== 'number' || !Number.isInteger(until) || until <= t || until > t + MAX_COMP_DAYS * DAY) {
     throw new HttpError(400, 'until must be a time in the future, at most 5 years ahead, in Unix seconds');
   }
   const reason = reasonOf(body);
   await ctx.env.DB.batch([
-    ctx.env.DB.prepare('UPDATE users SET comp_until = ? WHERE id = ?').bind(until, id),
-    auditStatement(ctx.env, admin, 'user.comp', id, { until, reason }),
+    ctx.env.DB.prepare('UPDATE users SET comp_until = ?, comp_plan = ? WHERE id = ?').bind(until, plan, id),
+    auditStatement(ctx.env, admin, 'user.comp', id, { plan, until, reason }),
   ]);
   return new Response(null, { status: 204 });
 }
@@ -809,7 +836,7 @@ export async function endComp(request: Request, ctx: Ctx, id: string): Promise<R
   const admin = await requireAdmin(request, ctx);
   await assertUser(ctx, id);
   const reason = reasonOf(await readJson(request));
-  const [ended] = await ctx.env.DB.batch([ctx.env.DB.prepare('UPDATE users SET comp_until = NULL WHERE id = ? AND comp_until > ?').bind(id, now())]);
+  const [ended] = await ctx.env.DB.batch([ctx.env.DB.prepare('UPDATE users SET comp_until = NULL, comp_plan = NULL WHERE id = ? AND comp_until > ?').bind(id, now())]);
   if (ended.meta.changes === 0) throw new HttpError(409, 'No comp running');
   await ctx.env.DB.batch([auditStatement(ctx.env, admin, 'user.comp.end', id, { reason })]);
   return new Response(null, { status: 204 });
@@ -848,7 +875,7 @@ export async function getBilling(request: Request, ctx: Ctx): Promise<Response> 
          (SELECT COUNT(*) FROM refunded_orders) AS refunded`,
     ).bind(t, monthStart),
     DB.prepare(
-      `SELECT u.id, u.display_name, u.plan, u.comp_until, b.polar_customer_id, b.status, b.product, b.current_period_end, b.cancel_at_period_end
+      `SELECT u.id, u.display_name, u.plan, u.comp_until, u.comp_plan, b.polar_customer_id, b.status, b.product, b.current_period_end, b.cancel_at_period_end
        FROM users u LEFT JOIN billing b ON b.user_id = u.id WHERE ${pro} ORDER BY u.display_name COLLATE NOCASE, u.id LIMIT ${PAGE} OFFSET ${offset}`,
     ).bind(t),
     DB.prepare(
@@ -888,13 +915,16 @@ export async function getBilling(request: Request, ctx: Ctx): Promise<Response> 
       pageSize: PAGE,
       pro: (list.results as Row[]).map((r) => {
         const comped = typeof r.comp_until === 'number' && r.comp_until > t;
+        const plan = effectivePlan(r.plan as string, r.comp_until as number | null, r.comp_plan as string | null, t);
         return {
           id: r.id,
           displayName: r.display_name,
-          plan: effectivePlan(r.plan as string, r.comp_until as number | null),
-          // What keeps the account on its plan: a subscription, a comp, or a plan set by hand.
-          source: PRO_STATUSES.includes(String(r.status)) ? 'subscription' : comped ? 'comp' : 'plan',
+          plan,
+          // What keeps the account on its plan: a comp that lifts it above the stored plan (a Max comp on a Pro
+          // subscription), a subscription, a comp, or a plan set by hand.
+          source: comped && plan !== r.plan ? 'comp' : PRO_STATUSES.includes(String(r.status)) ? 'subscription' : comped ? 'comp' : 'plan',
           compUntil: comped ? r.comp_until : null,
+          compPlan: comped ? compPlanName(r.comp_plan as string | null) : null,
           polarCustomerId: r.polar_customer_id,
           status: r.status,
           product: r.product,

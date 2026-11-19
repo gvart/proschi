@@ -53,18 +53,28 @@ export function planName(plan: string | null | undefined): string {
   return plan && Object.prototype.hasOwnProperty.call(PLANS, plan) ? plan : 'free';
 }
 
+/** The plan a comp gives (`users.comp_plan`): 'max', or 'pro' for anything else (NULL, from before Max comps). */
+export const compPlanName = (compPlan: string | null | undefined): 'pro' | 'max' => (compPlan === 'max' ? 'max' : 'pro');
+
 /**
  * The plan an account gets now: the one place a comp counts
- * (docs/design/paid-plans.md P24). Pro while the subscription keeps
- * `users.plan` on 'pro' (src/billing.ts) OR while the admin's comp
- * (`users.comp_until`, Unix seconds) is in the future; else `users.plan`.
- * A comp never lowers a plan: Max with a comp stays Max.
+ * (docs/design/paid-plans.md P24). While the admin's comp
+ * (`users.comp_until`, Unix seconds) is in the future, the higher of the
+ * stored plan (`users.plan`, which the subscription sets, src/billing.ts)
+ * and the comp's plan (`users.comp_plan`: Pro or Max); else `users.plan`.
+ * A comp never lowers a plan: Max with a Pro comp stays Max.
  * src/auth.ts reads it into `User.plan` on every request, so can() and
  * limitsFor see it; src/credits.ts reads it for the monthly allowance.
  */
-export function effectivePlan(plan: string | null | undefined, compUntil: number | null | undefined, at = Math.floor(Date.now() / 1000)): string {
-  return compUntil != null && compUntil > at && plan !== 'max' ? 'pro' : (plan ?? 'free');
+export function effectivePlan(plan: string | null | undefined, compUntil: number | null | undefined, compPlan: string | null | undefined, at = Math.floor(Date.now() / 1000)): string {
+  if (compUntil == null || compUntil <= at) return plan ?? 'free';
+  return plan === 'max' || compPlanName(compPlan) === 'max' ? 'max' : 'pro';
 }
 
-/** effectivePlan as SQL over the users row `u`, `at` the parameter that holds now in Unix seconds (e.g. '?2'), for a query that checks the plan itself. */
-export const effectivePlanSql = (u: string, at: string): string => `(CASE WHEN ${u}.comp_until > ${at} AND ${u}.plan <> 'max' THEN 'pro' ELSE ${u}.plan END)`;
+/**
+ * effectivePlan as SQL over the users row `u`, `at` the parameter that holds
+ * now in Unix seconds (e.g. '?2'), for a query that checks the plan itself.
+ * `at` appears once, so an anonymous '?' binds in order.
+ */
+export const effectivePlanSql = (u: string, at: string): string =>
+  `(CASE WHEN ${u}.comp_until > ${at} THEN (CASE WHEN ${u}.plan = 'max' OR ${u}.comp_plan = 'max' THEN 'max' ELSE 'pro' END) ELSE ${u}.plan END)`;

@@ -3,11 +3,11 @@ import { requireUser } from './auth';
 import type { Ctx } from './context';
 import { timingSafeEqual } from './crypto';
 import { creditsView, monthlyGrantStatement, planOf, refundedOrderStatement, revokeStatement, topupStatement, upgradeGrantStatement, upgradeRevokeStatement } from './credits';
-import type { Env } from './env';
+import { now, type Env } from './env';
 import { HttpError, json, rateLimit, readJson } from './http';
 import { log } from './log';
 import { featureMap } from './features';
-import { limitsFor, MC, planName, UNLIMITED } from './plans';
+import { compPlanName, limitsFor, MC, planName, UNLIMITED } from './plans';
 
 /**
  * Pro, Max and credit top-ups through Polar, the merchant of record
@@ -162,7 +162,7 @@ export async function createPortal(request: Request, ctx: Ctx): Promise<Response
 
 /**
  * GET /api/me/plan: the plan, the subscription's state and renewal, the
- * plan's limits (null where unlimited), the credits (src/credits.ts
+ * admin's comp while it lifts the plan ({plan, endsAt}), the plan's limits (null where unlimited), the credits (src/credits.ts
  * creditsView) and every paid feature's answer (src/features.ts can:
  * {ok, reason?}). Works without billing set up (everyone is on free), so the
  * paid features can read credits; `billing` says whether checkout is on.
@@ -174,6 +174,9 @@ export async function getPlan(request: Request, ctx: Ctx): Promise<Response> {
   const row = await billingRow(ctx.env.DB, user.id);
   const credits = await creditsView(ctx.env, user.id);
   const cap = (n: number) => (n >= UNLIMITED ? null : n);
+  // The admin's comp, while it is what lifts the plan (src/plans.ts effectivePlan): its end in Unix ms, like currentPeriodEnd.
+  const stored = await ctx.env.DB.prepare('SELECT plan, comp_until, comp_plan FROM users WHERE id = ?').bind(user.id).first<{ plan: string; comp_until: number | null; comp_plan: string | null }>();
+  const comp = stored?.comp_until && stored.comp_until > now() && planName(stored.plan) !== plan ? { plan: compPlanName(stored.comp_plan), endsAt: stored.comp_until * 1000 } : null;
   return json(
     {
       plan,
@@ -182,6 +185,7 @@ export async function getPlan(request: Request, ctx: Ctx): Promise<Response> {
         ? { status: row.status, product: row.product, currentPeriodEnd: row.current_period_end, cancelAtPeriodEnd: row.cancel_at_period_end === 1 }
         : null,
       customer: !!row?.polar_customer_id,
+      comp,
       limits: { documents: cap(limits.documents), versionsPerDocument: cap(limits.versionsPerDocument), documentBytes: limits.documentBytes },
       credits,
       features: featureMap(user, ctx.env),

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { adjustCredits, compUser, endComp, listUserCredits, type UserDetail } from './api';
+import { adjustCredits, compUser, endComp, listUserCredits, type CompPlan, type UserDetail } from './api';
 import { formatDate, formatDateTime, formatNumber, humanize } from './format';
 import { polarCustomerUrl, polarOrderUrl, polarSubscriptionUrl } from './polarLinks';
 import { useAction, useLoad } from './hooks';
@@ -45,7 +45,7 @@ export default function UserBilling({ id, data, onChanged, onSignedOut }: { id: 
           <Stat
             label="Effective plan"
             value={humanize(user.effectivePlan)}
-            note={comped ? `comped until ${formatDate(user.compUntil)}` : user.plan !== user.effectivePlan ? `stored plan ${user.plan}` : 'from the subscription'}
+            note={comped ? `${humanize(user.compPlan ?? 'pro')} comp until ${formatDate(user.compUntil)}` : user.plan !== user.effectivePlan ? `stored plan ${user.plan}` : 'from the subscription'}
             tone={user.effectivePlan !== 'free' ? 'pass' : undefined}
           />
           <Stat
@@ -88,7 +88,7 @@ export default function UserBilling({ id, data, onChanged, onSignedOut }: { id: 
             Grant or revoke credits
           </button>
           <button type="button" className="ps-btn ps-btn--secondary ps-btn--sm" onClick={() => setDialog('comp')}>
-            {comped ? 'Change comp' : 'Comp Pro'}
+            {comped ? 'Change comp' : 'Comp a plan'}
           </button>
           {comped && (
             <button type="button" className="ps-btn ps-btn--danger ps-btn--sm" onClick={() => setDialog('end')}>
@@ -152,8 +152,8 @@ export default function UserBilling({ id, data, onChanged, onSignedOut }: { id: 
       </Section>
 
       {dialog === 'credits' && <CreditsDialog id={id} name={user.displayName} topup={credits.topup} onClose={() => setDialog(undefined)} onDone={done} />}
-      {dialog === 'comp' && <CompDialog id={id} name={user.displayName} until={comped ? user.compUntil : null} onClose={() => setDialog(undefined)} onDone={done} />}
-      {dialog === 'end' && <EndCompDialog id={id} name={user.displayName} onClose={() => setDialog(undefined)} onDone={done} />}
+      {dialog === 'comp' && <CompDialog id={id} name={user.displayName} current={comped && user.compUntil !== null ? { plan: user.compPlan ?? 'pro', until: user.compUntil } : null} onClose={() => setDialog(undefined)} onDone={done} />}
+      {dialog === 'end' && <EndCompDialog id={id} name={user.displayName} plan={user.compPlan ?? 'pro'} onClose={() => setDialog(undefined)} onDone={done} />}
     </>
   );
 }
@@ -211,31 +211,62 @@ function CreditsDialog({ id, name, topup, onClose, onDone }: { id: string; name:
 /** A date input's value (YYYY-MM-DD) as the end of that UTC day, in Unix seconds. */
 const endOfDay = (date: string) => Math.floor(Date.parse(`${date}T23:59:59Z`) / 1000);
 
-function CompDialog({ id, name, until, onClose, onDone }: { id: string; name: string; until: number | null; onClose: () => void; onDone: (message: string) => void }) {
-  const [date, setDate] = useState(() => new Date((until ?? Math.floor(Date.now() / 1000) + 30 * 86_400) * 1000).toISOString().slice(0, 10));
+/** A date input's value (YYYY-MM-DD) `days` after `from` (Unix seconds). */
+const dayAfter = (from: number, days: number) => new Date((from + days * 86_400) * 1000).toISOString().slice(0, 10);
+
+/** Quick ends for a comp, from today or, to extend one, from its current end. */
+const PRESETS = [
+  { label: '+30 days', days: 30 },
+  { label: '+90 days', days: 90 },
+  { label: '+1 year', days: 365 },
+];
+
+function CompDialog({ id, name, current, onClose, onDone }: { id: string; name: string; current: { plan: CompPlan; until: number } | null; onClose: () => void; onDone: (message: string) => void }) {
+  const nowS = Math.floor(Date.now() / 1000);
+  const [plan, setPlan] = useState<CompPlan>(current?.plan ?? 'pro');
+  const [date, setDate] = useState(() => (current ? dayAfter(current.until, 0) : dayAfter(nowS, 30)));
   const [reason, setReason] = useState('');
   const action = useAction();
   const today = new Date().toISOString().slice(0, 10);
+  const label = humanize(plan);
   return (
     <Dialog
-      title={`Comp Pro for ${name}`}
+      title={current ? `Change ${name}'s comp` : `Comp a plan for ${name}`}
       open
       onClose={onClose}
-      submitLabel="Comp Pro"
+      submitLabel={`Comp ${label}`}
       busy={action.busy}
       error={action.error}
       onSubmit={() =>
         void action.run(async () => {
-          await compUser(id, endOfDay(date), reason);
-          onDone(`Pro until the end of ${date} (UTC).`);
+          await compUser(id, plan, endOfDay(date), reason);
+          onDone(`${label} until the end of ${date} (UTC).`);
         })
       }
     >
+      <fieldset className="adm-radios">
+        <legend className="adm-sr">Plan</legend>
+        <label>
+          <input type="radio" name="plan" checked={plan === 'pro'} onChange={() => setPlan('pro')} /> Pro
+        </label>
+        <label>
+          <input type="radio" name="plan" checked={plan === 'max'} onChange={() => setPlan('max')} /> Max
+        </label>
+      </fieldset>
       <label>
-        Pro until (the end of this UTC day)
+        {label} until (the end of this UTC day)
         <input className="adm-input" type="date" required min={today} value={date} onChange={(e) => setDate(e.target.value)} />
       </label>
-      <p className="adm-muted">Nothing is charged or changed in Polar. A subscription keeps running as it is.</p>
+      <div className="adm-actions">
+        {PRESETS.map((p) => (
+          <button key={p.days} type="button" className="ps-btn ps-btn--ghost ps-btn--sm" onClick={() => setDate(dayAfter(Math.max(current?.until ?? nowS, nowS), p.days))}>
+            {p.label}
+          </button>
+        ))}
+      </div>
+      <p className="adm-muted">
+        {current ? "The new plan and end replace the running comp's. " : ''}Nothing is charged or changed in Polar; a subscription keeps running, and a comp never lowers its plan. The monthly credits follow at the next month&apos;s grant (a free account gets them at once).
+      </p>
       <label>
         Reason (in the audit log)
         <textarea className="adm-input" required maxLength={500} rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Conference speaker" />
@@ -244,7 +275,7 @@ function CompDialog({ id, name, until, onClose, onDone }: { id: string; name: st
   );
 }
 
-function EndCompDialog({ id, name, onClose, onDone }: { id: string; name: string; onClose: () => void; onDone: (message: string) => void }) {
+function EndCompDialog({ id, name, plan, onClose, onDone }: { id: string; name: string; plan: CompPlan; onClose: () => void; onDone: (message: string) => void }) {
   const [reason, setReason] = useState('');
   const action = useAction();
   return (
@@ -263,7 +294,7 @@ function EndCompDialog({ id, name, onClose, onDone }: { id: string; name: string
         })
       }
     >
-      <p>Pro ends now unless a subscription keeps it.</p>
+      <p>The {humanize(plan)} comp ends now; the account is back on its own plan (a subscription keeps its plan). Credits already granted this month stay.</p>
       <label>
         Reason (in the audit log)
         <textarea className="adm-input" required maxLength={500} rows={3} value={reason} onChange={(e) => setReason(e.target.value)} />

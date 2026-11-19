@@ -57,8 +57,8 @@ export const credits = (mc: number): number => Math.round(mc) / MC;
 
 /** The account's effective plan (a comp counts, src/plans.ts); undefined without the account. */
 export async function planOf(DB: D1Database, userId: string): Promise<string | undefined> {
-  const row = await DB.prepare('SELECT plan, comp_until FROM users WHERE id = ?').bind(userId).first<{ plan: string; comp_until: number | null }>();
-  return row ? planName(effectivePlan(row.plan, row.comp_until)) : undefined;
+  const row = await DB.prepare('SELECT plan, comp_until, comp_plan FROM users WHERE id = ?').bind(userId).first<{ plan: string; comp_until: number | null; comp_plan: string | null }>();
+  return row ? planName(effectivePlan(row.plan, row.comp_until, row.comp_plan)) : undefined;
 }
 
 /** This month's base grant (refs 'monthly:…'); the upgrades' grants and take-backs are 'monthly_grant' rows with other refs (P35). */

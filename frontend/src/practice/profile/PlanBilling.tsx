@@ -28,6 +28,7 @@ const BADGE: Record<string, string> = { free: 'bg-paper', pro: 'bg-pop-yellow te
 function renewalText(plan: PlanInfo): string | undefined {
   const sub = plan.subscription;
   const name = PLAN_NAME[plan.plan];
+  if (plan.comp && name) return `Free ${name} until ${dateOf(plan.comp.endsAt)}.`;
   if (!sub || plan.plan === 'free' || !name) return undefined;
   const cadence = productPlan(sub.product)?.period ?? 'monthly';
   if (sub.status === 'past_due') return `${name} ${cadence}: the last payment failed; Polar is retrying it. Update your card in the billing portal.`;

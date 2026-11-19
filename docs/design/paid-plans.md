@@ -127,12 +127,16 @@ id; don't rewrite old ones.
   stays complete, gated data included (the history off Pro, every verdict):
   it is the user's right of access to their own data, not a paid feature.
 - **P24. The admin panel covers the paid product.** One effective plan
-  (`src/plans.ts` `effectivePlan`): Pro while the subscription keeps
-  `users.plan` on `pro` OR while the admin's comp (`users.comp_until`,
-  migration 0023) is in the future. `src/auth.ts` reads it into `User.plan`
-  on every request, so `can()` and `limitsFor` see it; the credits and the
-  live links read the same rule. A comp never calls Polar and no webhook
-  ends it; the admin can end it early. The admin grants or revokes pack
+  (`src/plans.ts` `effectivePlan`, and `effectivePlanSql` for queries):
+  `users.plan` (which the subscription sets), or, while the admin's comp
+  (`users.comp_until`, migration 0023) is in the future, the higher of that
+  and the comp's plan (`users.comp_plan`, Pro or Max, migration 0037; NULL
+  is Pro). So a comp never lowers a plan, and a Max comp lifts a Pro
+  subscriber to Max. `src/auth.ts` reads it into `User.plan` on every
+  request, so `can()` and `limitsFor` see it; the credits and the live links
+  read the same rule. A comp never calls Polar and no webhook ends it; the
+  admin can extend it, change its plan, or end it early. The Users list
+  shows and filters by the effective plan (free, pro, max, comped). The admin grants or revokes pack
   credits as ledger rows `admin_grant` / `admin_revoke` with an idempotent
   ref; a revoke never takes the pack balance below 0. Every admin action
   needs a reason and is in the audit log. Refunds stay in Polar: the panel
@@ -203,7 +207,11 @@ id; don't rewrite old ones.
 - **P32. The month's credits follow the plan up, never down.** An upgrade
   mid-month (Pro to Max, or a new subscription) tops the month up to the
   new allowance at once; a downgrade keeps what was granted until the month
-  ends. A comp gives Pro, but never lowers an account that is on Max.
+  ends. A comp follows the same rule through the month's grant, with no
+  proration of its own: an account already granted this month (a Pro
+  subscriber given a Max comp) gets Max's allowance from the next month; a
+  free account, which had no grant, gets the comp plan's allowance on its
+  next read; ending a comp takes nothing back.
 - **P33. Sign-up credits once per identity.** The 100 sign-up credits are
   not given when an account is created: the sign-up flow grants them after
   its own checks (`grantSignupCredits`), once per account and once per

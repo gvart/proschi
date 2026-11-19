@@ -1,6 +1,6 @@
 import { ChevronDown, ChevronsUpDown, ChevronUp } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { formatNumber } from './format';
+import { formatNumber, humanize } from './format';
 import type { SortDir } from './hooks';
 import { pageOf, type PageId } from './route';
 
@@ -133,6 +133,17 @@ export function SearchBox({ value, onChange, placeholder, label }: { value: stri
 export function LevelBadge({ level }: { level: string }) {
   const tone = level === 'error' ? 'fail' : level === 'warn' ? 'yellow' : 'neutral';
   return <span className={`ps-badge ps-badge--${tone}`}>{level}</span>;
+}
+
+/** An account's effective plan: Pro blue, Max lilac, Free neutral; `comped` adds that a comp gives it. */
+export function PlanBadge({ plan, comped }: { plan: string; comped?: boolean }) {
+  const tone = plan === 'max' ? 'lilac' : plan === 'pro' ? 'blue' : 'neutral';
+  return (
+    <span className={`ps-badge ps-badge--${tone}`}>
+      {humanize(plan)}
+      {comped && ' · comp'}
+    </span>
+  );
 }
 
 /**
