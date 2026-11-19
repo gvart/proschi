@@ -1,6 +1,8 @@
 import { loadJson, saveJson } from '../../services/storage';
 import { readGuidedProgress, type GuidedProgress } from './guidedFile';
 import { readSession, type InterviewSession, type InterviewSummary } from './session';
+import { saveDesign } from '../interview/prefs';
+import { clearBriefRead, saveWorksheet } from '../interview/stages';
 
 /**
  * Interview and guided mode remember their state in this browser only
@@ -28,6 +30,22 @@ export function saveSession(session: InterviewSession | undefined, problem: stri
       // Storage unavailable: nothing was stored.
     }
   }
+}
+
+/**
+ * Throws away the interview on your own in progress on `problem`, so the next
+ * one starts clean: its session (answers, checklist, clock), the design on its
+ * whiteboard, its worksheet and its brief. A finished one is left alone: its
+ * summary is in the history, which stays too.
+ */
+export function discardSession(problem: string): void {
+  const session = loadSession(problem);
+  if (!session || session.finishedAt !== undefined) return;
+  const key = `${problem}.${session.startedAt}`;
+  saveWorksheet(key, undefined);
+  clearBriefRead(key);
+  saveDesign(problem, undefined);
+  saveSession(undefined, problem);
 }
 
 export function loadHistory(): InterviewSummary[] {

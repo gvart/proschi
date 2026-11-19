@@ -66,7 +66,7 @@ import { getMetricsSummary, postMetrics } from './metrics';
 import type { Env } from './env';
 import { assertSameOrigin, bearerToken, errorResponse, HttpError, json, withSecurityHeaders } from './http';
 import { errorText, log } from './log';
-import { deleteMe, exportMe, getMe, importProgress, recordRun, updateMe } from './progress';
+import { clearSource, deleteMe, exportMe, getMe, importProgress, recordRun, updateMe } from './progress';
 import { postLessonsRead } from './lessons';
 import { postSoloInterviews, soloInterviewHistory } from './soloInterviews';
 import { getMistakes, postMistakes } from './mistakes';
@@ -155,6 +155,7 @@ import { deleteFeedback, getFeedback, getFeedbackFile, listFeedback, patchFeedba
  *   POST   /api/me/sessions/revoke-all      sign out everywhere
  *   DELETE /api/me/identities/<provider>    unlink a sign-in
  *   POST   /api/problems/<id>/runs {source, solved, imported?, day?}
+ *   DELETE /api/problems/<id>/source        forget the stored design (a reset); the solve and runs stay
  *   GET    /api/problems/<id>/leaderboard?metric=cost|p99   the problem's top 10 who opted in, by cheapest or fastest passing design (+ your rank, signed in)
  *   GET    /api/stats                       every problem's summary
  *   GET    /api/stats/<id>                  one problem's distributions (+ yours, signed in)
@@ -342,6 +343,7 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('POST', 'api', 'me', 'sessions', 'revoke-all')) return revokeAllSessions(request, ctx);
   if (is('DELETE', 'api', 'me', 'identities', '*')) return unlinkIdentity(request, ctx, parts[3]);
   if (is('POST', 'api', 'problems', '*', 'runs')) return recordRun(request, ctx, parts[2]);
+  if (is('DELETE', 'api', 'problems', '*', 'source')) return clearSource(request, ctx, parts[2]);
   if (is('GET', 'api', 'problems', '*', 'leaderboard')) return getProblemLeaderboard(request, ctx, parts[2]);
   if (is('GET', 'api', 'stats')) return getStats(ctx);
   if (is('GET', 'api', 'stats', '*')) return getProblemStats(request, ctx, parts[2]);

@@ -434,6 +434,18 @@ export async function recordRun(request: Request, ctx: Ctx, problemId: string): 
 }
 
 /**
+ * DELETE /api/problems/<id>/source: forgets the design stored for the
+ * problem, when the learner resets it to start over. Everything else stays:
+ * runs, the solve and its day, the best designs and the stats.
+ */
+export async function clearSource(request: Request, ctx: Ctx, problemId: string): Promise<Response> {
+  const user = await requireUser(request, ctx);
+  if (!findProblem(problemId)) throw new HttpError(404, `No problem called ${problemId}`);
+  await ctx.env.DB.prepare('UPDATE progress SET source = NULL WHERE user_id = ? AND problem_id = ?').bind(user.id, problemId).run();
+  return new Response(null, { status: 204 });
+}
+
+/**
  * POST /api/me/import {items: [{problemId, source, solved}]}: the browser's
  * progress on first sign-in, in one request, imported as recordRun does with
  * `imported`. Unknown problems are skipped and listed in `skipped`.

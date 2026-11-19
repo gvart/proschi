@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, Bot, Keyboard, Mic, Timer, User } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Bot, Keyboard, Mic, RotateCcw, Timer, User } from 'lucide-react';
 import listings from 'virtual:practice-listings';
 import { outlineButton, primaryButton, toolButton } from '../../components/Playground/ui';
 import { apiEnabled } from '../../services/api';
@@ -11,7 +11,8 @@ import { useToastClearance } from '../../design/toastClearance';
 import { voiceSupported } from '../../voice/recognizer';
 import type { Problem } from '../types';
 import { DEFAULT_DURATION, DURATIONS, PHASES, PHASE_SHARE, startSession, type Duration } from '../modes/session';
-import { loadSession, saveSession } from '../modes/store';
+import { discardSession, loadSession, saveSession } from '../modes/store';
+import { confirm } from '../../design/dialogs';
 import { giveConsent, listInterviews, saveActive, startError, startInterview, type AiInterview } from '../modes/ai/api';
 import { interviewPool, pickProblem } from './pick';
 import { loadDone, loadLast, recordStart, saveDesign, useSoundPref, useTalkPref, type Kind } from './prefs';
@@ -102,7 +103,7 @@ export default function Setup({ preselect, prefer, onStarted }: SetupProps) {
   /** A start refused because a mock interview is open (409 active_session): resume it, or end it and start this one. */
   const [conflict, setConflict] = useState<{ id: string; problem: string; next: string }>();
   const open = server?.interviews.find((i) => i.status === 'active' || i.status === 'finishing');
-  const soloOpen = useMemo(() => listings.map((p) => loadSession(p.id)).find((s) => s && s.finishedAt === undefined), []);
+  const [soloOpen, setSoloOpen] = useState(() => listings.map((p) => loadSession(p.id)).find((s) => s && s.finishedAt === undefined));
 
   // The wizard: the screens, the one shown, and whether it was opened from the review (Continue goes back there).
   const steps = setupSteps({ who: ai, kind: checking ? kindChoice : kind });
@@ -139,6 +140,21 @@ export default function Setup({ preselect, prefer, onStarted }: SetupProps) {
   const resume = (problem: string, id?: string) => {
     if (id) saveActive(problem, id);
     onStarted(problem);
+  };
+
+  /** Throws the interview on your own in progress away (modes/store.ts discardSession), with its problem chosen for a fresh start. */
+  const startOver = async (problem: string) => {
+    const yes = await confirm({
+      title: 'Start this interview over?',
+      body: `This removes the interview on ${titleOf(problem)} in progress: your answers, your notes, your design and the time on the clock. Finished interviews, their results and your XP stay.`,
+      confirmLabel: 'Start over',
+      tone: 'danger',
+    });
+    if (!yes) return;
+    discardSession(problem);
+    setSoloOpen(undefined);
+    setChoice('choose');
+    setChosen(problem);
   };
 
   const problemFor = (): string | undefined => {
@@ -343,6 +359,10 @@ export default function Setup({ preselect, prefer, onStarted }: SetupProps) {
           <span className="flex-1">You have an interview on your own in progress ({titleOf(soloOpen.problem)}).</span>
           <button type="button" onClick={() => resume(soloOpen.problem)} className={outlineButton}>
             Resume it
+          </button>
+          <button type="button" onClick={() => void startOver(soloOpen.problem)} className={toolButton}>
+            <RotateCcw size={14} aria-hidden="true" />
+            Start over
           </button>
         </Banner>
       )}

@@ -64,6 +64,7 @@ export const TOKEN_ROUTES: readonly (readonly [method: string, path: string, sco
   ['DELETE', 'api/me/documents/*/versions/*', 'documents:write'],
 
   ['POST', 'api/problems/*/runs', 'progress'],
+  ['DELETE', 'api/problems/*/source', 'progress'],
   ['POST', 'api/me/import', 'progress'],
   ['POST', 'api/me/lessons', 'progress'],
   ['GET', 'api/me/mistakes', 'progress'],

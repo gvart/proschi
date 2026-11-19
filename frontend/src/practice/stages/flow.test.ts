@@ -24,6 +24,14 @@ describe('the stages of a practice problem', () => {
     expect(openingScreen(false, 'always', EMPTY_NOTES)).toBe('clarify');
   });
 
+  it('a reset (empty notes saved) opens on Clarify, not the lesson again', () => {
+    localStorage.clear();
+    saveNotes('reset-me', { ...goTo(EMPTY_NOTES, 'wrapup'), questions: 'Who uses it?', reflection: 'The DB.' });
+    saveNotes('reset-me', EMPTY_NOTES);
+    expect(loadNotes('reset-me')).toEqual(EMPTY_NOTES);
+    expect(openingScreen(true, undefined, loadNotes('reset-me'), notesSaved('reset-me'))).toBe('clarify');
+  });
+
   it('remembers the furthest stage, so going back keeps the later ones open', () => {
     const back = goTo(goTo(EMPTY_NOTES, 'design'), 'clarify');
     expect(back).toMatchObject({ stage: 'clarify', reached: 'design' });

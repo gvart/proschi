@@ -78,6 +78,17 @@ export function withSource(progress: Progress, problem: Problem, source: string)
   return { ...progress, [problem.id]: { status, ...(changed ? { source } : {}), ...(progress[problem.id]?.assisted ? { assisted: true as const } : {}) } };
 }
 
+/**
+ * Records a reset (starting the problem over): the last source is dropped, so
+ * it opens on the starter again. Its status and the assisted mark stay: a
+ * solved problem stays solved.
+ */
+export function withReset(progress: Progress, id: string): Progress {
+  const entry = progress[id];
+  if (!entry) return progress;
+  return { ...progress, [id]: { status: entry.status, ...(entry.assisted ? { assisted: true as const } : {}) } };
+}
+
 /** Marks a problem assisted: Design partner showed the changes for it. Kept through later edits and runs. */
 export function withAssisted(progress: Progress, id: string): Progress {
   const entry = progress[id] ?? { status: 'attempted' as Status };
