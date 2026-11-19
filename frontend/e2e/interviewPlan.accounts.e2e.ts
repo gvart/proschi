@@ -72,6 +72,8 @@ test('Max: the account’s plan wins over this browser’s', async ({ page }) =>
     );
   }, dayFromNow(0));
   await page.goto('practice/#/roadmap');
+  // The plan starts closed, under "Up next".
+  await page.getByTestId('interview-plan-toggle').click();
   const plan = page.getByRole('region', { name: 'Interview plan' });
   // The account's plan replaced this browser's (and with it today's list).
   await expect(plan.getByTestId('plan-days-left')).toHaveText('6');
@@ -83,6 +85,8 @@ test('Max on a phone: the plan fits, the strip scrolls on its own', async ({ pag
   await mockSignedIn(page, MAX);
   await mockPlanApi(page, { date: dayFromNow(21), minutes: 45, start: dayFromNow(0) });
   await page.goto('practice/#/roadmap');
+  // The plan starts closed, under "Up next".
+  await page.getByTestId('interview-plan-toggle').click();
   const plan = page.getByRole('region', { name: 'Interview plan' });
   await expect(plan.getByTestId('plan-days-left')).toHaveText('21');
   await expect(plan.getByTestId('plan-items').getByRole('listitem').first()).toBeVisible();
@@ -113,6 +117,8 @@ test('a ticked item: a problem solved today is done', async ({ page }) => {
     );
   }, dayFromNow(0));
   await page.goto('practice/#/roadmap');
+  // The plan starts closed, under "Up next".
+  await page.getByTestId('interview-plan-toggle').click();
   const items = page.getByRole('region', { name: 'Interview plan' }).getByTestId('plan-items').getByRole('listitem');
   await expect(items).toHaveCount(2);
   await expect(items.nth(0)).toHaveAttribute('data-done', 'true');
