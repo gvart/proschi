@@ -19,10 +19,10 @@ answered within that. One database read on the way is fine.
 - fact: Say hello available 99.9% of the time
 
 Say hello must be available **99.9%** of the time, about 43 minutes of
-downtime a month. Both the API and the database are on every request, so
-both must be better than that.
+downtime a month. The API and the database are both on every request, so
+their availabilities multiply and each must be better than 99.9%.
 
-### Can one machine of something be enough?
+### Is one copy of each component enough?
 - kind: good
 - fact: Every component has a spare: two replicas or more
 

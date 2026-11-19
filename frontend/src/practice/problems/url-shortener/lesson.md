@@ -65,6 +65,8 @@ Start with the ratio. 10,000 redirects against 100 shortenings is **100 reads fo
 
 The 500-byte row is an assumption (code, URL, timestamp, overhead). About 1.6 TB a year fits one modern database: storage is not what makes this problem hard.
 
+*Base62* writes a number with the 62 characters `0-9`, `a-z` and `A-Z`, so a code of *n* characters has 62ⁿ values. Six characters last about 18 years at this write rate; seven last about a thousand.
+
 ```quiz
 hit-rate-to-db-load
 base62-code-space
@@ -74,7 +76,7 @@ Now the per-component load. In Proschi's simulation each kind of node has a defa
 
 | Component | Load it sees | Capacity per replica | Replicas at 100% busy |
 |---|---|---|---|
-| API service (`[REST API]`) | 10,000 + 100 = 10,100 rps | 2,000 rps | ≈ 5 |
+| API service (`[REST API]`) | 10,000 + 100 = 10,100 rps | 2,000 rps | 6 (5.05, rounded up) |
 | Cache (`[Redis]`) | 10,000 reads + 500 writes | 100,000 rps | 1 |
 | Database (`[DynamoDB]`) | 500 reads + 100 writes | 20,000 rps | 1 |
 
@@ -84,7 +86,7 @@ At 100% a node is saturated and every latency requirement that touches it fails.
 
 Three more estimates show up directly in the numbers:
 
-- **Latency.** Idle latencies are about 2 ms for a load balancer, 10 ms for a service, 1 ms for Redis and 5 ms for a database. A hit is roughly *load balancer + API + cache*; a miss adds the database read and the cache fill. An idle hop's p99 is about 2.8× its mean, so add up the miss path's hops and multiply: that is the path pushing against 50 ms.
+- **Latency.** Idle latencies are about 2 ms for a load balancer, 10 ms for a service, 1 ms for Redis and 5 ms for a database. A hit is roughly *load balancer + API + cache*, about 13 ms; a miss adds the database read, about 18 ms (the cache fill can be asynchronous, off the path). An idle hop's p99 is about 2.8× its mean, so a hit's p99 is near 36 ms and a miss's near 50 ms. The 50 ms limit is checked over all redirects together, hits and misses mixed, so an idle design passes with some room. Queueing eats that room quickly: a busy API slows both paths.
 - **Availability.** One service replica is up 99.5% of the time, which alone fails 99.9%. Two replicas are both down only 0.5% × 0.5% = 0.0025% of the time (up 99.9975%). Every node on the path multiplies in, hence "two of everything".
 - **Cost.** Each replica has a flat monthly price: about $50 for a load balancer, $100 for a service, $150 for Redis, $400 for PostgreSQL, $500 for DynamoDB. Multiply out your replica counts before running anything.
 
@@ -257,9 +259,9 @@ Summarise in one breath: "A stateless API behind a load balancer; codes written 
 
 **One of anything.** A single API, cache or load balancer is a SPOF, and one API replica alone fails 99.9% (99.5% each). `survive any node failure` catches it.
 
-**Running the API hot.** Five API replicas carry 10k rps on paper, but at 100% they're saturated and at 90% queueing wrecks p99. The p99 requirement on `Redirect` catches it.
+**Running the API hot.** Six API replicas carry 10.1k rps on paper, but at 84% busy queueing wrecks p99, and losing one replica saturates the other five. The p99 requirement on `Redirect` and `survive any node failure` catch it.
 
-**Answering 200 or 301.** The tests ask for `302`: **Redirects redirect**.
+**Answering 200 or 301.** A `200` is not a redirect, and browsers cache a `301`, so later clicks never reach the service. The tests ask for `302`: **Redirects redirect**.
 
 ## In the interview
 
@@ -272,9 +274,9 @@ Summarise in one breath: "A stateless API behind a load balancer; codes written 
 Follow-up questions you'll likely get:
 
 - **"How do you generate codes without collisions?"** A counter in Base62 never collides. To avoid one counter bottleneck, give each API server a block of numbers (say 1,000) from a central sequence; permute them if enumeration is a concern.
-- **"301 or 302?"** Browsers cache a 301, which is cheaper for us, but we lose click counts and can't change the target. 302 keeps every click visible; shorteners that sell analytics use it.
+- **"301 or 302?"** A 301 is permanent: browsers cache it and skip us next time, which is cheaper, but we lose click counts and can't change the target. A 302 is temporary: every click comes back to us. Pick 302 when you count clicks or may edit links, 301 when you only want less load.
 - **"What's your cache eviction policy?"** LRU (least recently used) with a TTL. Codes never change, so staleness isn't the worry; memory is.
-- **"What happens when the cache goes down?"** Fall back to the database, ideally with a limit on how hard you hit it, and warm the cache back up. Mention the thundering-herd risk.
+- **"What happens when the cache goes down?"** Fall back to the database, ideally with a limit on how hard you hit it, and warm the cache back up. Mention the *thundering herd*: with the cache empty, every redirect misses at once and the database gets 20× its normal reads.
 - **"How would you add click analytics?"** Publish a click event to a queue asynchronously on each redirect and count in a separate pipeline. Never put analytics on the redirect's critical path.
 - **"How do you stop abuse?"** Rate-limit shortening per user or IP, and check targets against a phishing list.
 
