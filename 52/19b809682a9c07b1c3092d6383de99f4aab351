@@ -1,0 +1,45 @@
+frontend/src/practice/problems/distributed-kv/wrong/cache-in-front.proschi
+  s_91ba69d9cbae8d::t_c9760ffafb1cb3 34
+frontend/src/practice/problems/ad-click-aggregator/problem.md
+  s_91ba69d9cbae8d::t_c9760ffafb1cb3 133
+frontend/src/practice/problems/snowflake-ids/interview.md
+  s_91ba69d9cbae8d::t_c9760ffafb1cb3 46,48
+frontend/src/practice/problems/ride-matching/solution.proschi
+  s_91ba69d9cbae8d::t_c9760ffafb1cb3 21
+frontend/src/practice/problems/distributed-kv/wrong/read-all-replicas.proschi
+  s_91ba69d9cbae8d::t_c9760ffafb1cb3 3
+frontend/src/practice/problems/snowflake-ids/problem.md
+  s_91ba69d9cbae8d::t_c9760ffafb1cb3 53
+frontend/src/practice/problems/distributed-kv/solution.proschi
+  s_91ba69d9cbae8d::t_c9760ffafb1cb3 26
+frontend/src/practice/problems/ticket-booking/solution.proschi
+  s_91ba69d9cbae8d::t_c9760ffafb1cb3 40,83
+frontend/src/practice/problems/distributed-kv/wrong/no-read-repair.proschi
+  s_91ba69d9cbae8d::t_c9760ffafb1cb3 32
+frontend/src/practice/problems/ad-click-aggregator/solution.proschi
+  s_91ba69d9cbae8d::t_c9760ffafb1cb3 45
+frontend/src/practice/problems/distributed-kv/wrong/too-few-shards.proschi
+  s_91ba69d9cbae8d::t_c9760ffafb1cb3 32
+frontend/src/practice/problems/search-autocomplete/solution.proschi
+  s_91ba69d9cbae8d::t_c9760ffafb1cb3 40
+frontend/src/practice/problems/web-crawler/solution.proschi
+  s_91ba69d9cbae8d::t_c9760ffafb1cb3 3
+frontend/src/practice/problems/news-feed/solution.proschi
+  s_91ba69d9cbae8d::t_c9760ffafb1cb3 43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5219b809682a9c07b1c3092d6383de99f4aab351",
+  "prompts": {},
+  "sessions": {
+    "s_91ba69d9cbae8d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fe8c51ce-b526-4c6e-949d-867e4a8bd64a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
