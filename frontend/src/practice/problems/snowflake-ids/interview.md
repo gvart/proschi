@@ -43,9 +43,9 @@ able to answer, and none may depend on a shared component per id.
 
 ### Is there a budget?
 - kind: good
-- fact: At most $4,000 / month, the existing ZooKeeper cluster included
+- fact: At most $4,000 / month, the existing ZooKeeper cluster and Tweet Service included
 
-At most **$4,000 a month**, the existing ZooKeeper cluster included. That
+At most **$4,000 a month**, the existing ZooKeeper cluster and Tweet Service included. That
 caps how many generators you can run.
 
 ### Should ids be UUID strings?

@@ -1,6 +1,6 @@
 import "problem.proschi"
 
-frontier "URL Frontier"  [Kafka]  x3 @crawl "URLs to crawl, partitioned by host so one fetcher owns each host"
+frontier "URL Frontier"  [Kafka]  x3 @crawl "URLs to crawl, partitioned by host so each host is read by one fetcher"
 fetchers "Fetchers"      [Go]     x4 @crawl "Download pages, one host at a time per partition"
 hosts    "Host State"    [Redis]  x2 @crawl "Per host: robots.txt rules and the earliest time of the next fetch"
 pages    "Page Store"    [AWS S3] x3 @crawl "Every fetched page, compressed, keyed by URL hash"

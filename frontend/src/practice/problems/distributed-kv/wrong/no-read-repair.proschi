@@ -29,7 +29,7 @@ decision "Consistent hashing with virtual nodes" {
 decision "Three replicas, W = 2 and R = 2" {
   because "R + W > N, so every read quorum overlaps the last write quorum; and a write or read still succeeds with one of the three replicas down"
   rejected "W = 3" "One replica down or slow fails or stalls every write to its keys"
-  rejected "R = 3" "Reads are three quarters of the traffic: a third more read load means more shards, over the budget"
+  rejected "R = 3" "Reads are three quarters of the traffic: half again as many reads means more shards, over the budget"
   rejected "R = 1 and W = 1" "Faster and cheaper, but a read can miss the latest acknowledged write"
 }
 decision "Four shards of three nodes" {

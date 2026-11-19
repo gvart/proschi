@@ -50,7 +50,7 @@ Use these use case names exactly: the traffic, requirements and tests in
 - Get ID available **99.99%** of the time ("highly available" was a
   requirement).
 - Losing any single machine must not stop id generation.
-- At most **$4,000 / month**, the existing ZooKeeper cluster included.
+- At most **$4,000 / month**, the existing ZooKeeper cluster and Tweet Service included.
 
 ## What is given
 

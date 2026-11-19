@@ -42,7 +42,7 @@ decision "Commit aggregates with the checkpoint" {
   because "Flink writes each window's records into a Kafka transaction and commits it only once the checkpoint holding its state and offsets is durable; a crash before that aborts the transaction and the job replays from the last checkpoint, so no record is counted twice"
   rejected "Publish each window as it closes" "After a crash the job replays events whose aggregates were already published, and advertisers are charged twice"
 }
-decision "Checkpoint every two minutes" because "Readers see aggregates only once committed, so the checkpoint interval is the pipeline's delay: two minutes instead of Flink's default ten, short enough for pacing and dashboards"
+decision "Checkpoint every two minutes" because "Readers see aggregates only once committed, so the checkpoint interval is the pipeline's delay: two minutes instead of the ten-minute default Uber's post mentions, short enough for pacing and dashboards"
 decision "A record UUID on every aggregate" {
   because "Pinot upserts by it, the budget service applies each one once and Hive deduplicates by it, so a record that is delivered twice is still counted once"
   rejected "Trust exactly-once delivery alone" "A consumer can still crash after applying a record and before committing its offset"

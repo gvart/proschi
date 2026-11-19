@@ -37,7 +37,7 @@ decision "Precompute the top ten per prefix" {
   rejected "Prefix queries on the search cluster" "Would need 40+ Elasticsearch nodes and still miss the p99"
 }
 decision "Cache popular prefixes at the CDN" {
-  because "80% of keystrokes hit a few thousand popular prefixes; serving them at the edge cuts the Suggest Service from ~80 to 20 replicas"
+  because "80% of keystrokes hit a few thousand popular prefixes; serving them at the edge cuts the Suggest Service from ~100 to 20 replicas"
   rejected "No edge cache" "Every keystroke reaches your servers; the budget does not allow it"
 }
 decision "Rebuild every 15 minutes from the query log" because "Rankings change slowly; a batch over the log keeps all the counting off the request path"
