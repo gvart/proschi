@@ -4,12 +4,12 @@ import { mockProfile, PROFILE } from './profile';
 
 /**
  * The practice hub: one page whose home (`#/`) is the problem list, with a
- * one-time "What are you here for?" and, depending on the answer, one
- * Continue line (interview prep: the roadmap's next step and the mock
- * interview) or the daily streak with today's review, challenge and Arcade
- * run. One slim bar of sections: Problems, the Interview prep and More
- * practice menus, and Progress, with the header's Practice link marked on
- * every one. Then the progress page (this browser's data in a build without
+ * one-time "What are you here for?"; interview prep opens the page on the
+ * roadmap instead, a daily habit adds the streak with today's review,
+ * challenge and Arcade run, and a problem left unsolved one Continue line.
+ * One slim, flat bar of sections: Roadmap, All problems, Mock interview, the
+ * Daily menu and Progress, with the header's Practice link marked on every
+ * one. Then the progress page (this browser's data in a build without
  * accounts), the settings page (`#/me`) and a public profile (`#/u/<id>`),
  * whose API answer is mocked here: this build has no API.
  */
@@ -30,9 +30,14 @@ test.describe('practice hub', () => {
     await page.goto('practice/');
     await expect(page.getByRole('heading', { level: 1, name: 'System design practice' })).toBeVisible();
     await expect(headerPractice(page)).toHaveAttribute('aria-current', 'page');
-    await expect(hubNav(page).getByRole('link')).toHaveText(['Problems', 'Progress']);
-    await expect(hubNav(page).getByRole('button')).toHaveText([/Interview prep/, /More practice/]);
-    await expect(hubNav(page).getByRole('link', { name: 'Problems' })).toHaveAttribute('aria-current', 'page');
+    // Each link's name is its full label (a phone shows the shorter one).
+    for (const name of ['Roadmap', 'All problems', 'Mock interview', 'Progress']) await expect(hubNav(page).getByRole('link', { name, exact: true })).toBeVisible();
+    await expect(hubNav(page).getByRole('link')).toHaveCount(4);
+    await expect(hubNav(page).getByRole('button')).toHaveText(['Daily']);
+    await expect(hubNav(page).getByRole('link', { name: 'All problems' })).toHaveAttribute('aria-current', 'page');
+    // The list says once what it is, and where the guided path is.
+    await expect(page.getByText('Every problem is here and open, in a plain workspace.')).toBeVisible();
+    await expect(page.getByRole('main').getByRole('link', { name: 'Roadmap' })).toHaveAttribute('href', '#/roadmap');
     // No streak, no nudges, nothing to continue: the question, then the list.
     await expect(page.getByRole('group', { name: 'Daily streak' })).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Continue' })).toHaveCount(0);
@@ -46,14 +51,12 @@ test.describe('practice hub', () => {
     await expect(goalQuestion(page)).toHaveCount(0);
     await page.getByRole('button', { name: 'Personalize this page' }).click();
 
-    // Interview prep: the roadmap's next step, the roadmap and the mock interview.
+    // Interview prep: nothing more on the home, the roadmap and the mock interview are tabs; the page stays put.
     await goalQuestion(page).getByRole('button', { name: /Prepare for an interview/ }).click();
     await expect(goalQuestion(page).getByRole('button', { name: /Prepare for an interview/ })).toHaveAttribute('aria-pressed', 'true');
     const next = page.getByRole('region', { name: 'Continue' });
-    await expect(next).toContainText('Next on the roadmap');
-    await expect(next.getByRole('link', { name: /Continue/ })).toHaveAttribute('href', /^#\/roadmap\/[a-z0-9-]+$/);
-    await expect(next.getByRole('link', { name: 'See the roadmap' })).toHaveAttribute('href', '#/roadmap');
-    await expect(next.getByRole('link', { name: 'Start a mock interview' })).toHaveAttribute('href', '#/interview');
+    await expect(next).toHaveCount(0);
+    await expect(page.getByRole('heading', { level: 1, name: 'System design practice' })).toBeVisible();
 
     // A daily habit too: the streak and today's review, challenge and Arcade run.
     await goalQuestion(page).getByRole('button', { name: /Build a daily habit/ }).click();
@@ -75,7 +78,8 @@ test.describe('practice hub', () => {
     // A problem opened and left unsolved is what Continue picks up, for any goal.
     await page.goto('practice/#/pastebin');
     await expect(page.getByRole('link', { name: 'Problems' }).first()).toBeVisible();
-    await page.goto('practice/');
+    // The list itself (`#/`): with no address, interview prep opens on the roadmap.
+    await page.goto('practice/#/');
     await page.getByRole('button', { name: 'Change' }).click();
     await goalQuestion(page).getByRole('button', { name: /Prepare for an interview/ }).click();
     await goalQuestion(page).getByRole('button', { name: /Build a daily habit/ }).click();
@@ -85,14 +89,30 @@ test.describe('practice hub', () => {
     await expect(next).toContainText('Pick up where you left off');
     await expect(next).toContainText('Pastebin');
     await expect(next.getByRole('link', { name: /Continue/ })).toHaveAttribute('href', '#/pastebin');
-    await expect(next.getByRole('link', { name: 'Start a mock interview' })).toHaveCount(0);
   });
 
-  test('the hub’s sections, grouped in two menus, and the header marking Practice on every address', async ({ page }) => {
+  test('interview prep opens the practice page on the roadmap; All problems stays the list', async ({ page }) => {
+    await setPracticeGoal(page, ['interview']);
+    await page.goto('practice/');
+    await expect(page).toHaveURL(/#\/roadmap$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Interview prep roadmap' })).toBeVisible();
+    await expect(hubNav(page).getByRole('link', { name: 'Roadmap' })).toHaveAttribute('aria-current', 'page');
+    await hubNav(page).getByRole('link', { name: 'All problems' }).click();
+    await expect(page).toHaveURL(/#\/$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'System design practice' })).toBeVisible();
+    await page.reload();
+    await expect(page.getByRole('heading', { level: 1, name: 'System design practice' })).toBeVisible();
+    // Back returns to the list, not into the redirect.
+    await page.goBack();
+    await expect(page).toHaveURL(/#\/roadmap$/);
+  });
+
+  test('the hub’s flat sections and one Daily menu, and the header marking Practice on every address', async ({ page }) => {
     await setPracticeGoal(page, ['habit']);
-    await page.goto('practice/#/roadmap');
+    await page.goto('practice/#/review');
     await expect(headerPractice(page)).toHaveAttribute('aria-current', 'page');
-    await expect(hubNav(page).getByRole('button', { name: 'Interview prep' })).toHaveClass(/after:bg-ink/);
+    await expect(hubNav(page).getByRole('button', { name: 'Daily' })).toHaveClass(/after:bg-ink/);
+    await page.goto('practice/#/roadmap');
     await expect(page.getByRole('group', { name: 'Daily streak' })).toContainText('No streak yet');
     await expect(page.getByRole('group', { name: 'Daily streak' })).toContainText('0 of 10 cards today');
 
@@ -102,7 +122,7 @@ test.describe('practice hub', () => {
       ['Arcade', /#\/arcade$/, 'Scale or Fail'],
       ['Progress', /#\/progress$/, 'Your progress'],
       ['Roadmap', /#\/roadmap$/, 'Interview prep roadmap'],
-      ['Problems', /#\/$/, 'System design practice'],
+      ['All problems', /#\/$/, 'System design practice'],
     ];
     // The bar stays in the same place on every section, the home too.
     const barTop = async () => (await hubNav(page).boundingBox())?.y;
@@ -121,9 +141,11 @@ test.describe('practice hub', () => {
       await expect(headerPractice(page)).toHaveAttribute('aria-current', 'page');
     }
 
-    // The mock interview: its set-up.
+    // The mock interview: its set-up, with the bar (the room has none).
     await (await sectionLink(page, 'Mock interview')).click();
     await expect(page).toHaveURL(/#\/interview$/);
+    await expect(await sectionLink(page, 'Mock interview')).toHaveAttribute('aria-current', 'page');
+    expect(await barTop()).toBe(top);
 
     // Older addresses open inside the hub, on their section.
     const inside: [string, string][] = [

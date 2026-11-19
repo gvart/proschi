@@ -36,16 +36,14 @@ export async function setPracticeGoal(page: Page, goals: ('solve' | 'interview' 
   await page.addInitScript(([key, value]) => window.localStorage.setItem(key, value), [GOAL_KEY, JSON.stringify({ goals, asked: true })] as const);
 }
 
-/** The menu of the practice hub's bar (src/practice/hub/tabs.ts HUB_GROUPS) holding each section; Problems and Progress are links on the bar itself. */
+/** The menu of the practice hub's bar (src/practice/hub/tabs.ts HUB_GROUPS) holding each section; Roadmap, All problems, Mock interview and Progress are links on the bar itself. */
 const SECTION_MENU: Record<string, RegExp> = {
-  Roadmap: /^Interview/,
-  'Mock interview': /^Interview/,
-  'Review cards': /^More/,
-  'Daily challenge': /^More/,
-  Arcade: /^More/,
+  'Review cards': /^Daily$/,
+  'Daily challenge': /^Daily$/,
+  Arcade: /^Daily$/,
 };
 
-/** The practice hub's link to `section`, its menu opened first when it sits in one (on a phone the menus are named "Interview" and "More"). */
+/** The practice hub's link to `section`, its menu opened first when it sits in one (a link's name is its full label, on a phone too). */
 export async function sectionLink(page: Page, section: string): Promise<Locator> {
   const nav = page.getByRole('navigation', { name: 'Practice sections' });
   const menu = SECTION_MENU[section];

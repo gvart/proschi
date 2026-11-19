@@ -188,7 +188,7 @@ test.describe('no sideways scrolling on a phone', () => {
   });
 
   test('practice hub: the bar of sections on every section', async ({ page }) => {
-    for (const path of ['practice/', 'practice/#/roadmap', 'practice/#/review', 'practice/#/challenge', 'practice/#/arcade', 'practice/#/progress', 'practice/#/roadmap/approach']) {
+    for (const path of ['practice/', 'practice/#/roadmap', 'practice/#/interview', 'practice/#/review', 'practice/#/challenge', 'practice/#/arcade', 'practice/#/progress', 'practice/#/roadmap/approach']) {
       await visit(page, path);
       await expect(page.getByRole('navigation', { name: 'Practice sections' })).toBeVisible();
     }
@@ -200,14 +200,20 @@ test.describe('no sideways scrolling on a phone', () => {
       await visit(page, path);
       const bar = page.getByRole('navigation', { name: 'Practice sections' });
       await expect(bar).toBeVisible();
-      // Problems, the two menus and Progress, all in view in one row.
-      for (const item of [bar.getByRole('link', { name: 'Problems', exact: true }), bar.getByRole('button', { name: /^Interview/ }), bar.getByRole('button', { name: /^More/ }), bar.getByRole('link', { name: 'Progress', exact: true })]) {
+      // Roadmap, All problems, Mock interview, the Daily menu and Progress, all in view in one row.
+      for (const item of [
+        bar.getByRole('link', { name: 'Roadmap', exact: true }),
+        bar.getByRole('link', { name: 'All problems', exact: true }),
+        bar.getByRole('link', { name: 'Mock interview', exact: true }),
+        bar.getByRole('button', { name: 'Daily' }),
+        bar.getByRole('link', { name: 'Progress', exact: true }),
+      ]) {
         await expect(item).toBeInViewport({ ratio: 1 });
       }
       const tops = await bar.locator(':scope > a, :scope > div > button').evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
       expect(new Set(tops).size, `${path}: the bar wraps`).toBe(1);
       // Every section in a menu is reachable, in view.
-      for (const name of ['Roadmap', 'Mock interview', 'Review cards', 'Daily challenge', 'Arcade']) {
+      for (const name of ['Review cards', 'Daily challenge', 'Arcade']) {
         await expect(await sectionLink(page, name)).toBeInViewport({ ratio: 1 });
       }
       await page.keyboard.press('Escape');
@@ -269,7 +275,7 @@ test.describe('on the narrowest phone (320px)', () => {
   test.use({ viewport: { width: 320, height: 640 }, isMobile: true, hasTouch: true });
 
   test('practice hub, the account page and a public profile', async ({ page }) => {
-    for (const path of ['practice/', 'practice/#/roadmap', 'practice/#/review', 'practice/#/challenge', 'practice/#/progress', 'practice/#/me']) await visit(page, path);
+    for (const path of ['practice/', 'practice/#/roadmap', 'practice/#/interview', 'practice/#/review', 'practice/#/challenge', 'practice/#/progress', 'practice/#/me']) await visit(page, path);
     await mockProfile(page);
     await visit(page, `practice/#/u/${PROFILE.id}`);
   });

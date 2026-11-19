@@ -3,10 +3,10 @@ import { loadJson, saveJson } from '../../services/storage';
 
 /**
  * What someone is on the practice page for, asked once on the home and
- * changeable there and in Settings › Learning. It decides what the home shows
- * beside the problem list: interview prep adds the roadmap's next step and the
- * mock interview, a daily habit the streak and today's review, challenge and
- * Arcade run; solving problems (or no answer) adds nothing. The streak can also
+ * changeable there and in Settings › Learning. Interview prep opens the
+ * practice page on the roadmap (landsOnRoadmap); a daily habit adds the streak
+ * and today's review, challenge and Arcade run beside the problem list;
+ * solving problems (or no answer) adds nothing. The streak can also
  * be switched on or off by itself. Kept in this browser
  * (`proschi.practice.goal`, listed in docs/PRIVACY.md) and, signed in, with
  * the account too (`practiceGoal` of GET and PATCH /api/me,
@@ -48,6 +48,13 @@ export function parseGoal(raw: unknown): GoalState {
 /** Whether the streak and the daily nudges show: switched on by hand, or wanted as a daily habit. */
 export const wantsStreak = (g: GoalState) => g.streak ?? g.goals.includes('habit');
 export const wantsInterview = (g: GoalState) => g.goals.includes('interview');
+
+/**
+ * Whether the practice page, opened with no address at all (`/practice/`, the
+ * header's link), lands on the roadmap rather than the list: for interview
+ * prep (main.tsx). `#/` is always the list, so "All problems" stays one click.
+ */
+export const landsOnRoadmap = (hash: string): boolean => (hash === '' || hash === '#') && wantsInterview(read());
 
 /** Whether the signed-in announcement (announcements/Announcement.tsx) is still loading, on the page, or not there (none, dismissed, or signed out). */
 export type AnnouncementState = 'loading' | 'shown' | 'none';

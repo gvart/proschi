@@ -1,32 +1,32 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import LeaderboardPanel from '../LeaderboardPanel';
-import { roadmapState, type RoadmapStage } from '../roadmap';
 import { continueTarget } from './continue';
-import { asksGoal, parseGoal, wantsInterview, wantsStreak } from './goal';
-import { HUB_GROUPS, HUB_TABS, hubTabOf, mockInterviewHref } from './tabs';
+import { asksGoal, landsOnRoadmap, parseGoal, setGoal, wantsInterview, wantsStreak } from './goal';
+import { BAR_TABS, HUB_GROUPS, HUB_TABS, hubTabOf } from './tabs';
 
 describe('practice hub', () => {
-  it('has the problems first, the rest grouped as interview prep and more practice, and progress last', () => {
+  it('has flat tabs, Roadmap, All problems and Mock interview, one Daily menu, and progress last', () => {
     expect(HUB_TABS.map((t) => [t.label, t.href])).toEqual([
-      ['Problems', '#/'],
       ['Roadmap', '#/roadmap'],
+      ['All problems', '#/'],
+      ['Mock interview', '#/interview'],
       ['Review cards', '#/review'],
       ['Daily challenge', '#/challenge'],
       ['Arcade', '#/arcade'],
       ['Progress', '#/progress'],
     ]);
-    expect(HUB_GROUPS.map((g) => [g.label, g.tabs])).toEqual([
-      ['Interview prep', ['roadmap']],
-      ['More practice', ['review', 'challenge', 'arcade']],
-    ]);
-    expect(mockInterviewHref()).toBe('#/interview');
+    expect(BAR_TABS).toEqual(['roadmap', 'problems', 'interview']);
+    expect(HUB_GROUPS.map((g) => [g.label, g.tabs])).toEqual([['Daily', ['review', 'challenge', 'arcade']]]);
+    // A phone's shorter names are part of the full ones (the accessible names).
+    for (const t of HUB_TABS) if (t.short) expect(t.label.toLowerCase()).toContain(t.short.toLowerCase());
   });
 
   it('marks the tab of every address that opens inside it', () => {
     expect(hubTabOf('')).toBe('problems');
     expect(hubTabOf('roadmap')).toBe('roadmap');
     expect(hubTabOf('roadmap/approach')).toBe('roadmap');
+    expect(hubTabOf('interview')).toBe('interview');
     expect(hubTabOf('review')).toBe('review');
     expect(hubTabOf('review/caching')).toBe('review');
     expect(hubTabOf('challenge')).toBe('challenge');
@@ -34,42 +34,27 @@ describe('practice hub', () => {
     expect(hubTabOf('arcade/daily')).toBe('arcade');
     expect(hubTabOf('progress')).toBe('progress');
     expect(hubTabOf('url-shortener')).toBeUndefined();
+    // A mock interview's room stays without the bar.
+    expect(hubTabOf('interview/url-shortener')).toBeUndefined();
     expect(hubTabOf('me')).toBeUndefined();
     expect(hubTabOf('u/a1b2')).toBeUndefined();
   });
 });
 
 describe('continue', () => {
-  const stages: RoadmapStage[] = [
-    { id: 'one', title: 'One', why: 'Basics.', problems: ['a', 'b'] },
-    { id: 'two', title: 'Two', why: 'More.', problems: ['c'] },
-  ];
-  const known = new Set(['a', 'b', 'c', 'x']);
+  const known = new Set(['a', 'b', 'x']);
 
   it('picks up the last problem opened while it is unsolved, where it was opened', () => {
     const progress = { x: { status: 'attempted' as const } };
-    const roadmap = roadmapState(stages, progress);
-    expect(continueTarget({ last: { id: 'x', roadmap: false }, progress, known, roadmap, access: 'open' })).toEqual({ kind: 'last', id: 'x', href: '#/x' });
-    expect(continueTarget({ last: { id: 'x', roadmap: true }, progress, known, roadmap, access: 'open' })?.href).toBe('#/roadmap/x');
+    expect(continueTarget({ last: { id: 'x', roadmap: false }, progress, known })).toEqual({ id: 'x', href: '#/x' });
+    expect(continueTarget({ last: { id: 'x', roadmap: true }, progress, known })?.href).toBe('#/roadmap/x');
   });
 
-  it('otherwise leads to the roadmap’s next step, or to the roadmap when that step is locked', () => {
-    const progress = { a: { status: 'solved' as const }, b: { status: 'solved' as const } };
-    const roadmap = roadmapState(stages, progress);
-    expect(continueTarget({ last: { id: 'b', roadmap: true }, progress, known, roadmap, access: 'open' })).toEqual({ kind: 'roadmap', id: 'c', href: '#/roadmap/c' });
-    expect(continueTarget({ last: { id: 'gone', roadmap: false }, progress, known, roadmap, access: 'sign-in' })).toEqual({ kind: 'roadmap', id: 'c', href: '#/roadmap' });
-  });
-
-  it('leaves the roadmap out unless asked for (interview prep): only an unsolved last problem continues', () => {
-    const progress = { a: { status: 'solved' as const }, x: { status: 'attempted' as const } };
-    const roadmap = roadmapState(stages, progress);
-    expect(continueTarget({ progress, known, roadmap, access: 'open', roadmapStep: false })).toBeUndefined();
-    expect(continueTarget({ last: { id: 'x', roadmap: false }, progress, known, roadmap, access: 'open', roadmapStep: false })?.id).toBe('x');
-  });
-
-  it('has nothing to continue once the roadmap is done', () => {
-    const progress = { a: { status: 'solved' as const }, b: { status: 'solved' as const }, c: { status: 'solved' as const } };
-    expect(continueTarget({ progress, known, roadmap: roadmapState(stages, progress), access: 'open' })).toBeUndefined();
+  it('has nothing to continue once it is solved, gone, or there is none (the roadmap has its own Up next)', () => {
+    const progress = { a: { status: 'solved' as const } };
+    expect(continueTarget({ progress, known })).toBeUndefined();
+    expect(continueTarget({ last: { id: 'a', roadmap: true }, progress, known })).toBeUndefined();
+    expect(continueTarget({ last: { id: 'gone', roadmap: false }, progress, known })).toBeUndefined();
   });
 });
 
@@ -86,6 +71,17 @@ describe('goal', () => {
     expect(wantsStreak(parseGoal({ goals: ['solve'], streak: true }))).toBe(true);
     expect(wantsStreak(parseGoal({}))).toBe(false);
     expect(wantsInterview(parseGoal({ goals: ['interview'] }))).toBe(true);
+  });
+
+  it('lands interview prep on the roadmap only when the page opens with no address', () => {
+    setGoal(() => ({ goals: ['interview'], asked: true }));
+    expect(landsOnRoadmap('')).toBe(true);
+    expect(landsOnRoadmap('#')).toBe(true);
+    // `#/` is All problems; any other address is kept.
+    expect(landsOnRoadmap('#/')).toBe(false);
+    expect(landsOnRoadmap('#/review')).toBe(false);
+    setGoal(() => ({ goals: ['solve', 'habit'], asked: true }));
+    expect(landsOnRoadmap('')).toBe(false);
   });
 
   it('asks the question only when no announcement is on the page, and never once answered', () => {

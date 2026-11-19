@@ -135,7 +135,7 @@ export function LearningSection({ activity }: { activity: Activity }) {
       <Row
         label="What you’re here for"
         labelId="settings-focus"
-        help="Interview prep adds the roadmap and mock interviews to the practice page; a daily habit adds your streak and today’s review. Kept in this browser."
+        help="Interview prep opens the practice page on the roadmap; a daily habit adds your streak and today’s review. Kept in this browser."
         control={
           <div role="group" aria-labelledby="settings-focus" className="flex flex-wrap gap-2">
             {GOALS.map(({ id, label }) => {
