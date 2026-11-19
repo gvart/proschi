@@ -2,9 +2,7 @@ import { Suspense, lazy, useId, useState } from 'react';
 import { CalendarDays, ChevronDown } from 'lucide-react';
 import { Feature } from '../../components/Feature';
 import UpgradeHint from '../../components/UpgradeHint';
-import { localDay } from '../../learn/review';
 import type { PlanPanelProps } from './PlanPanel';
-import { usePlanState } from './planStore';
 
 // The plan needs the whole deck: loaded after the page shows.
 const PlanPanel = lazy(() => import('./PlanPanel'));
@@ -42,13 +40,11 @@ export default function InterviewPlan(props: Omit<PlanPanelProps, 'sync'> & { ba
 
 function PlanToggle(props: Omit<PlanPanelProps, 'sync'>) {
   const id = useId();
-  const plan = usePlanState();
-  const [override, setOverride] = useState<boolean>();
-  // Open by default once a date is set, also when the account's plan arrives after the page shows.
-  const open = override ?? (!!plan.settings && plan.settings.date >= localDay(new Date()));
+  // Closed by default, so the roadmap's "Up next" stays first; mounted while hidden, so the plan keeps syncing.
+  const [open, setOpen] = useState(false);
   return (
     <>
-      <button type="button" aria-expanded={open} aria-controls={id} onClick={() => setOverride(!open)} className={link} data-testid="interview-plan-toggle">
+      <button type="button" aria-expanded={open} aria-controls={id} onClick={() => setOpen(!open)} className={link} data-testid="interview-plan-toggle">
         <CalendarDays size={14} aria-hidden="true" />
         Interview plan
         <ChevronDown size={14} aria-hidden="true" className={`transition-transform duration-d1 motion-reduce:transition-none ${open ? 'rotate-180' : ''}`} />

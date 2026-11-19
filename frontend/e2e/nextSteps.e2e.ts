@@ -56,6 +56,8 @@ test.describe('Your next steps', () => {
 
     await withProgress(page);
     await page.addInitScript(() => localStorage.setItem('proschi.practice.goal', JSON.stringify({ goals: ['habit', 'interview'], asked: true })));
+    // The home itself (`#/`): with no address, interview prep would open on the roadmap.
+    await page.goto('practice/#/');
     await page.reload();
     await expect(page.getByRole('navigation', { name: 'Also today' })).toBeVisible();
     await expect(page.getByText('Your next steps')).toHaveCount(0);

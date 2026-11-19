@@ -1,5 +1,5 @@
 ---
-updated: 2026-11-18
+updated: 2026-11-19
 ---
 
 # Datenschutzerklärung
@@ -23,7 +23,7 @@ Person. Dort steht auch die Kontaktadresse für alle Datenschutzanfragen.
 | Konto und Anmeldung | Anbieter-ID, Anzeigename, E-Mail-Adresse, Passwort-Hash, Sitzungen | Art. 6 Abs. 1 lit. b DSGVO | Bis zur Löschung des Kontos; Sitzungen 30 Tage, verlängert bei Nutzung |
 | Lernfortschritt, Diagramme, Kurzlinks | Inhalte und Fortschritt, die Sie im Konto speichern | Art. 6 Abs. 1 lit. b DSGVO | Bis zur Löschung durch Sie oder des Kontos |
 | Bezahlte Tarife und Guthaben | Polar-Kunden- und Abo-ID, Tarif, Status, Guthabenbuchungen | Art. 6 Abs. 1 lit. b DSGVO | Bis zur Löschung des Kontos, gesetzliche Aufbewahrung bei Polar |
-| KI-Funktionen (Probeinterviews, Design Partner) | Ihre Eingaben, Ihr Entwurf, Transkripte und Ergebnisse | Art. 6 Abs. 1 lit. b DSGVO | Transkripte und Chats 90 Tage, Ergebnisse bis zur Löschung des Kontos |
+| KI-Funktionen (Probeinterviews, Design Partner, Interview-Coach) | Ihre Eingaben, Ihr Entwurf, beim Interview-Coach zusätzlich der aktuelle Schritt und Ihre Notizen der Schritte (Rückfragen, Schätzungen, Abschluss; nur an Anthropic übermittelt, nicht gespeichert), Transkripte und Ergebnisse | Art. 6 Abs. 1 lit. b DSGVO | Transkripte und Chats 90 Tage, Ergebnisse bis zur Löschung des Kontos |
 | Kontaktformular im Impressum | Name (freiwillig), E-Mail-Adresse, Nachricht, IP-Adresse (nur für Ratenbegrenzung und Turnstile) | Art. 6 Abs. 1 lit. f DSGVO (Beantwortung von Anfragen), bei Vertragsbezug Art. 6 Abs. 1 lit. b DSGVO | Nicht auf dem Server gespeichert; die E-Mail bleibt im Postfach, bis die Anfrage erledigt ist |
 | E-Mail-Erinnerungen und Produktneuigkeiten | E-Mail-Adresse, Einstellungen, Zeitzone | Art. 6 Abs. 1 lit. a DSGVO (Erinnerungen), Art. 6 Abs. 1 lit. f DSGVO und § 7 Abs. 3 UWG (Produktneuigkeiten) | Bis zum Abmelden oder zur Löschung des Kontos |
 | Missbrauchsschutz bei Startguthaben | Einweg-Hashes von Anmeldekennung und IP-Adresse | Art. 6 Abs. 1 lit. f DSGVO | IP-Hash 7 Tage, Kennungs-Hash dauerhaft |

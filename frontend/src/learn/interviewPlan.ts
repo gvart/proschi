@@ -177,12 +177,22 @@ export function buildPlan(input: PlanInput): PlanDay[] {
       exclude: [...planned],
       omit: ['review', 'challenge'],
       limit: 6,
-    }).filter((s) => s.problem && open(s.problem));
-    const items = steps.map((s) => problemItem(s.problem!, s.reason, { title: s.title }));
-    const seen = new Set(items.map((i) => i.problem));
+    });
+    const items: PlanItem[] = [];
+    const seen = new Set<string>();
+    // As on the roadmap: a problem opens once every required one before it is solved (or planned earlier in the list).
+    const unlocked = (id: string) => {
+      const at = input.roadmap.indexOf(id);
+      return at < 0 || input.roadmap.slice(0, at).every((r) => skip.has(r) || solved.has(r) || planned.has(r) || seen.has(r));
+    };
+    const add = (item: PlanItem) => {
+      items.push(item);
+      seen.add(item.problem!);
+    };
+    for (const s of steps) if (s.problem && open(s.problem) && unlocked(s.problem)) add(problemItem(s.problem, s.reason, { title: s.title }));
     for (const id of input.roadmap) {
       if (items.length >= 6) break;
-      if (open(id) && !seen.has(id)) items.push(problemItem(id, 'Next on the roadmap.', { title: `Try ${byId.get(id)!.title}` }));
+      if (open(id) && !seen.has(id) && unlocked(id)) add(problemItem(id, 'Next on the roadmap.', { title: `Try ${byId.get(id)!.title}` }));
     }
     return items;
   };

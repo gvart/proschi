@@ -1,11 +1,10 @@
 import { Suspense, lazy, type ReactNode } from 'react';
-import { ArrowRight, CalendarDays, Check, Flame, Gamepad2, Layers, ListChecks, Play, Briefcase, X, Zap, type LucideIcon } from 'lucide-react';
+import { ArrowRight, Check, Flame, Gamepad2, Layers, ListChecks, Play, Briefcase, X, Zap, type LucideIcon } from 'lucide-react';
 import { eyebrow } from '../../components/Playground/ui';
 import type { Account } from '../useAccount';
 import type { ContinueTarget } from './continue';
-import { GOALS, setGoal, wantsInterview, wantsStreak, type Goal, type GoalState } from './goal';
+import { GOALS, setGoal, wantsStreak, type Goal, type GoalState } from './goal';
 import { useTodayCards, type TodayCards } from './todayCards';
-import { mockInterviewHref } from './tabs';
 import { useChallengeStatus, useDailyRunStatus, type Played } from './todayStatus';
 
 /**
@@ -14,9 +13,9 @@ import { useChallengeStatus, useDailyRunStatus, type Played } from './todayStatu
  *
  * - the first time, a skippable "What are you here for?" (never a wall: the
  *   list is right under it);
- * - at most one "Continue" line: the last problem left unsolved, or for
- *   interview prep the roadmap's next step, with the roadmap and the mock
- *   interview beside it;
+ * - at most one "Continue" line: the last problem left unsolved (interview
+ *   prep opens on the roadmap instead, main.tsx, whose "Up next" is the next
+ *   step; the roadmap and the mock interview are tabs of the bar);
  * - for a daily habit (or the streak switched on), one line with the streak
  *   and today's review, challenge and Arcade run.
  *
@@ -30,7 +29,7 @@ const DueCards = lazy(() => import('./DueCards'));
 const GOAL_ICON: Record<Goal, LucideIcon> = { solve: ListChecks, interview: Briefcase, habit: Flame };
 const GOAL_ABOUT: Record<Goal, string> = {
   solve: 'Just the problems',
-  interview: 'A roadmap and mock interviews',
+  interview: 'Opens on the roadmap, with mock interviews',
   habit: 'A streak and a few minutes a day',
 };
 
@@ -46,7 +45,7 @@ export default function HomeExtras({
 }: {
   goal: GoalState;
   account: Account;
-  /** Where "Continue" leads, if anywhere (PracticeApp asks for the roadmap's next step only for interview prep). */
+  /** Where "Continue" leads, if anywhere: the last problem left unsolved. */
   next?: ContinueTarget;
   nextTitle?: string;
   /** The compact streak, or the way to start one, as PracticeApp builds it. */
@@ -54,14 +53,13 @@ export default function HomeExtras({
   /** Whether to ask "What are you here for?" (goal.ts asksGoal: not while an announcement is on the page). */
   ask?: boolean;
 }) {
-  const interview = wantsInterview(goal);
   const habit = wantsStreak(goal);
   // One load of the card states (one request signed in) for the Review chip.
   const cards = useTodayCards(account, habit);
   return (
     <>
       {ask && <GoalPrompt goal={goal} />}
-      {(next || interview) && <ContinueLine next={next} title={nextTitle} interview={interview} />}
+      {next && <ContinueLine next={next} title={nextTitle} />}
       {habit && <HabitLine account={account} streak={streak} cards={cards} />}
     </>
   );
@@ -93,7 +91,7 @@ function GoalPrompt({ goal }: { goal: GoalState }) {
           <h2 id="goal-title" className="font-display text-lg font-extrabold leading-tight text-ink">
             What are you here for?
           </h2>
-          <p className="mt-0.5 text-sm text-muted">Pick any. It only changes what shows around the problems; change it any time.</p>
+          <p className="mt-0.5 text-sm text-muted">Pick any. It only changes where the page opens and what shows around the problems; change it any time.</p>
         </div>
         <button type="button" onClick={done} aria-label="Skip the question" className="-mr-1.5 -mt-1.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-sm text-ink/70 hover:bg-ink/5 hover:text-ink focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-pop-blue">
           <X size={16} aria-hidden="true" />
@@ -137,36 +135,23 @@ function GoalPrompt({ goal }: { goal: GoalState }) {
   );
 }
 
-/** The one Continue line; for interview prep, the roadmap and the mock interview beside it. */
-function ContinueLine({ next, title, interview }: { next?: ContinueTarget; title?: string; interview: boolean }) {
+/** The one Continue line: the last problem left unsolved. */
+function ContinueLine({ next, title }: { next: ContinueTarget; title?: string }) {
   return (
     <section aria-label="Continue" className="mt-5 rounded-brutal border-bw-2 border-ink bg-surface px-3 py-2.5 shadow-brutal-sm">
-      {next && (
-        <a href={next.href} className="group flex items-center gap-3 rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-pop-blue">
-          <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-sm bg-pop-yellow text-on-accent">
-            {next.kind === 'last' ? <Play size={15} aria-hidden="true" /> : <CalendarDays size={15} aria-hidden="true" />}
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className={`block ${eyebrow}`}>{next.kind === 'last' ? 'Pick up where you left off' : 'Next on the roadmap'}</span>
-            <span className="block truncate font-display text-base font-extrabold leading-tight text-ink">{title ?? next.id}</span>
-          </span>
-          <span className="inline-flex shrink-0 items-center gap-1 text-sm font-bold text-ink group-hover:underline">
-            Continue
-            <ArrowRight size={14} aria-hidden="true" />
-          </span>
-        </a>
-      )}
-      {interview && (
-        <p className={`flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink/80 ${next ? 'mt-2 border-t-bw-1 border-dashed border-ink/25 pt-2' : ''}`}>
-          <span className={`max-sm:hidden ${eyebrow}`}>Interview prep</span>
-          <a href="#/roadmap" className={textLink}>
-            See the roadmap
-          </a>
-          <a href={mockInterviewHref()} className={textLink}>
-            Start a mock interview
-          </a>
-        </p>
-      )}
+      <a href={next.href} className="group flex items-center gap-3 rounded-sm focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-pop-blue">
+        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-sm bg-pop-yellow text-on-accent">
+          <Play size={15} aria-hidden="true" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className={`block ${eyebrow}`}>Pick up where you left off</span>
+          <span className="block truncate font-display text-base font-extrabold leading-tight text-ink">{title ?? next.id}</span>
+        </span>
+        <span className="inline-flex shrink-0 items-center gap-1 text-sm font-bold text-ink group-hover:underline">
+          Continue
+          <ArrowRight size={14} aria-hidden="true" />
+        </span>
+      </a>
     </section>
   );
 }

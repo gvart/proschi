@@ -46,6 +46,13 @@ export default function ProblemList({ problems, progress, stats, meta, top, chil
         Each problem gives use cases, traffic and requirements. Design the system in Proschi; the tests run in your browser and explain what holds up and
         what does not.
       </p>
+      <p className="mt-2 max-w-2xl text-sm text-muted">
+        Every problem is here and open, in a plain workspace. For the guided path, in order with lessons and stages, use the{' '}
+        <a href="#/roadmap" className="font-semibold text-ink underline decoration-ink/30 underline-offset-2 hover:decoration-ink focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-pop-blue rounded-sm">
+          Roadmap
+        </a>
+        .
+      </p>
       <div className="mt-3 flex flex-wrap items-center gap-3">
         <p className="inline-flex rounded-full border-bw-1 border-ink bg-surface px-3 py-1 text-sm font-semibold tabular-nums text-ink">
           {solved} of {problems.length} solved

@@ -1,24 +1,23 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { ChevronDown, Gamepad2, Layers, Map as MapIcon, MessagesSquare, Radar, Zap, type LucideIcon } from 'lucide-react';
-import { HUB_GROUPS, mockInterviewHref, tabLink, type HubGroup, type HubTab } from './tabs';
+import { ChevronDown, Gamepad2, Layers, Radar, Zap, type LucideIcon } from 'lucide-react';
+import { BAR_TABS, HUB_GROUPS, tabLink, type HubGroup, type HubTab } from './tabs';
 
 /**
- * Practice: one hub for the problem list and everything around it. Its top is
- * one slim bar: **Problems** first (the home, `#/`), then two menus grouping
- * the rest by what it is for, **Interview prep** (the roadmap and the mock
- * interview) and **More practice** (review cards, the daily challenge, the
- * Arcade), and **Progress** at the end. The list stays the page; the extras
- * are a click away without six equal buttons competing with it. Each section
- * keeps its own address, so `#/review/<topic>` or `#/roadmap/<guide>` open
- * inside the hub with their section (and its menu) marked. The bar fits one
- * row down to 320 px (shorter menu names on phones), never a sideways scroll.
+ * Practice: one hub for the problems and everything around them. Its top is
+ * one slim, flat bar: **Roadmap** (the guided path), **All problems** (the
+ * open list, the home `#/`), **Mock interview** (its set-up), one **Daily**
+ * menu (review cards, the daily challenge, the Arcade) and **Progress** at the
+ * end. Each section keeps its own address, so `#/review/<topic>` or
+ * `#/roadmap/<guide>` open inside the hub with their section (and the menu)
+ * marked. The bar fits one row down to 320 px (shorter names on phones, the
+ * full ones kept as each link's accessible name), never a sideways scroll.
  */
 
-const ICON: Partial<Record<HubTab, LucideIcon>> = { roadmap: MapIcon, review: Layers, challenge: Zap, arcade: Gamepad2 };
+const ICON: Partial<Record<HubTab, LucideIcon>> = { review: Layers, challenge: Zap, arcade: Gamepad2 };
 
 const item =
-  'relative inline-flex h-11 shrink-0 items-center gap-1 whitespace-nowrap rounded-sm px-2.5 text-sm font-semibold transition-colors duration-d1 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-pop-blue sm:px-3';
-const marked = 'text-ink after:absolute after:inset-x-2.5 after:-bottom-px after:h-[3px] after:rounded-full after:bg-ink sm:after:inset-x-3';
+  'relative inline-flex h-11 shrink-0 items-center gap-1 whitespace-nowrap rounded-sm px-2 text-sm font-semibold max-[359px]:px-1.5 transition-colors duration-d1 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-pop-blue sm:px-3';
+const marked = 'text-ink after:absolute after:inset-x-2 max-[359px]:after:inset-x-1.5 after:-bottom-px after:h-[3px] after:rounded-full after:bg-ink sm:after:inset-x-3';
 const quiet = 'text-ink/70 hover:text-ink hover:bg-ink/5';
 
 /** `onIntent` runs when a section is pointed at or focused, before the click: its code can start loading. */
@@ -34,26 +33,37 @@ export default function PracticeHub({
   onIntent?: (tab: HubTab) => void;
   children: ReactNode;
 }) {
-  const link = (id: HubTab, label?: ReactNode, extra = '') => {
+  const link = (id: HubTab, content?: ReactNode, extra = '') => {
     const t = tabLink(id);
     const current = id === tab;
     return (
       <a
+        key={id}
         href={t.href}
         className={`${item} ${current ? marked : quiet} ${extra}`}
         aria-current={current ? 'page' : undefined}
+        // The full name, also where a phone shows the short one (it is part of it).
+        aria-label={t.short || content ? t.label : undefined}
         onPointerEnter={() => onIntent?.(id)}
         onFocus={() => onIntent?.(id)}
       >
-        {label ?? t.label}
+        {content ??
+          (t.short ? (
+            <>
+              <span className="sm:hidden">{t.short}</span>
+              <span className="max-sm:hidden">{t.label}</span>
+            </>
+          ) : (
+            t.label
+          ))}
       </a>
     );
   };
   return (
     <>
       <div className="ps-hub-top max-w-4xl mx-auto px-4 pt-4 sm:pt-6">
-        <nav aria-label="Practice sections" className="flex items-center gap-0.5 border-b-bw-1 border-ink/15 sm:gap-1">
-          {link('problems')}
+        <nav aria-label="Practice sections" className="flex items-center border-b-bw-1 border-ink/15 sm:gap-1">
+          {BAR_TABS.map((id) => link(id))}
           {HUB_GROUPS.map((g) => (
             <SectionMenu key={g.id} group={g} tab={tab} onIntent={onIntent} />
           ))}
@@ -62,7 +72,7 @@ export default function PracticeHub({
             'progress',
             <>
               <Radar size={15} aria-hidden="true" />
-              <span className="max-[379px]:sr-only">Progress</span>
+              <span className="max-sm:hidden">Progress</span>
             </>,
           )}
         </nav>
@@ -105,14 +115,13 @@ function SectionMenu({ group, tab, onIntent }: { group: HubGroup; tab: HubTab; o
         onClick={() => setOpen((o) => !o)}
         className={`${item} ${current ? marked : quiet} ${open ? 'bg-ink/5 text-ink' : ''}`}
       >
-        <span className="sm:hidden">{group.short}</span>
-        <span className="max-sm:hidden">{group.label}</span>
+        {group.label}
         <ChevronDown size={14} aria-hidden="true" className={`transition-transform duration-d1 ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
         <div
           id={panelId}
-          className="absolute left-0 top-full z-40 mt-1.5 w-[min(20rem,calc(100vw-2rem))] rounded-brutal border-bw-2 border-ink bg-surface p-1.5 shadow-brutal-md motion-safe:animate-[ps-pop_var(--d-spring)_var(--e-spring)] max-sm:fixed max-sm:inset-x-4 max-sm:top-auto max-sm:w-auto"
+          className="absolute right-0 top-full z-40 mt-1.5 w-[min(20rem,calc(100vw-2rem))] rounded-brutal border-bw-2 border-ink bg-surface p-1.5 shadow-brutal-md motion-safe:animate-[ps-pop_var(--d-spring)_var(--e-spring)] max-sm:fixed max-sm:inset-x-4 max-sm:top-auto max-sm:w-auto"
         >
           <ul>
             {group.tabs.map((id) => {
@@ -123,17 +132,13 @@ function SectionMenu({ group, tab, onIntent }: { group: HubGroup; tab: HubTab; o
                 </li>
               );
             })}
-            {group.id === 'prep' && (
-              <li>
-                <MenuLink href={mockInterviewHref()} icon={MessagesSquare} label="Mock interview" about="A timed design interview on a whiteboard" onPick={() => setOpen(false)} />
-              </li>
-            )}
           </ul>
         </div>
       )}
     </div>
   );
 }
+
 
 /** A section in a menu: named by its label, described by its line. */
 function MenuLink({ href, icon: Icon, label, about, current = false, onPick, onIntent }: { href: string; icon: LucideIcon; label: string; about?: string; current?: boolean; onPick: () => void; onIntent?: () => void }) {

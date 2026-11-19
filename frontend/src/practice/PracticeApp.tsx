@@ -32,7 +32,7 @@ import { notifyActivity } from './skills/activity';
 import AchievementToast from './skills/AchievementToast';
 import PracticeHub from './hub/PracticeHub';
 import HomeExtras, { GoalSummary } from './hub/HomeExtras';
-import { asksGoal, mergeAccountGoal, onGoalChange, useGoal, wantsInterview, wantsStreak, type AnnouncementState, type GoalState } from './hub/goal';
+import { asksGoal, mergeAccountGoal, onGoalChange, useGoal, wantsStreak, type AnnouncementState, type GoalState } from './hub/goal';
 import { hubTabOf, type HubTab } from './hub/tabs';
 import { continueTarget, loadLastProblem, saveLastProblem } from './hub/continue';
 import { profileIdOf } from './profile/profile';
@@ -64,10 +64,11 @@ const AccountRoute = lazy(() => import('./profile/AccountRoute'));
 const PublicProfileRoute = lazy(() => import('./profile/PublicProfileRoute'));
 const CertificateRoute = lazy(() => import('./certificate/CertificateRoute'));
 // The mock interview: the set-up, the room (editor, canvas, simulation) and the result.
-const InterviewRoute = lazy(() => import('./interview/InterviewRoute'));
+const loadInterviewCode = () => import('./interview/InterviewRoute');
+const InterviewRoute = lazy(loadInterviewCode);
 
 /** The hub's sections whose code loads on first use: pointing at one's link starts loading it, so the click rarely waits. */
-const SECTION_CODE: Partial<Record<HubTab, () => Promise<unknown>>> = { review: loadReviewCode, challenge: loadChallengeCode, arcade: loadArcadeCode, progress: loadProgressCode };
+const SECTION_CODE: Partial<Record<HubTab, () => Promise<unknown>>> = { interview: loadInterviewCode, review: loadReviewCode, challenge: loadChallengeCode, arcade: loadArcadeCode, progress: loadProgressCode };
 const preloadSection = (tab: HubTab) => void SECTION_CODE[tab]?.().catch(() => undefined);
 
 /** A page whose code is still loading: holds a screen's height, so the footer does not jump up and back down when it arrives. */
@@ -253,12 +254,12 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   const achievements = useAchievements(account.state, progress);
   // The practice hub's tab: the list (also under an unknown problem's address), the roadmap (with its guides), daily review, the challenge, the Arcade or progress.
   const hubTab = onRoadmap || guide || onReview || onChallenge || onArcade || onProgress ? hubTabOf(route) : onProfile ? undefined : 'problems';
-  // "Continue" on the home: the last problem opened here, while unsolved, else (for interview prep) the roadmap's next step.
+  // "Continue" on the home: the last problem opened here, while unsolved (the roadmap's next step is the roadmap's own "Up next").
   const problemOpen = problem?.id;
   useEffect(() => {
     if (problemOpen) saveLastProblem({ id: problemOpen, roadmap: fromRoadmap });
   }, [problemOpen, fromRoadmap]);
-  const next = hubTab === 'problems' ? continueTarget({ last: loadLastProblem(), progress, known: new Set(problems.map((p) => p.id)), roadmap: roadmapNow, access, roadmapStep: wantsInterview(goal) }) : undefined;
+  const next = hubTab === 'problems' ? continueTarget({ last: loadLastProblem(), progress, known: new Set(problems.map((p) => p.id)) }) : undefined;
   const { refresh: refreshAchievements } = achievements;
   // A new page checks for new badges (signed in, at most every few seconds).
   useEffect(() => refreshAchievements(), [route, refreshAchievements]);
@@ -335,7 +336,19 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
     return (
       <FeaturesContext.Provider value={features}>
         <Suspense fallback={<PageLoading label="Loading the mock interview…" />}>
-          <InterviewRoute problemId={route.slice('interview/'.length) || undefined} query={params} engine={engine} header={header} achievements={achievements} signedIn={signedIn} />
+          <InterviewRoute
+            problemId={route.slice('interview/'.length) || undefined}
+            query={params}
+            engine={engine}
+            header={header}
+            hub={(setup) => (
+              <PracticeHub tab="interview" onIntent={preloadSection} aside={streak}>
+                {setup}
+              </PracticeHub>
+            )}
+            achievements={achievements}
+            signedIn={signedIn}
+          />
         </Suspense>
       </FeaturesContext.Provider>
     );

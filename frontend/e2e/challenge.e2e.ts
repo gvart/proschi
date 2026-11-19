@@ -73,7 +73,7 @@ test.describe('daily challenge', () => {
     // A daily habit, so the streak shows after the challenge.
     await setPracticeGoal(page, ['habit']);
     const cards = await loadCards(request);
-    // The practice page's More practice menu holds the daily challenge.
+    // The practice page's Daily menu holds the daily challenge.
     await page.goto('practice/');
     await (await sectionLink(page, 'Daily challenge')).click();
     await expect(page).toHaveURL(/#\/challenge$/);

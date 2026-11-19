@@ -220,8 +220,8 @@ account are joined. The reading badges count them (docs/CARDS.md,
 
 ### The steps
 
-A problem opened from **Interview prep** (the roadmap) is worked through in
-steps; one opened from the **Problems** list stays the plain workspace of
+A problem opened from the **Roadmap** (the guided path) is worked through in
+steps; one opened from **All problems** (the open list) stays the plain workspace of
 the lesson section above (the statement, editor and diagram, Run tests, the
 Interview mode and Guided walkthrough buttons, Design partner), like a
 coding-practice site, with no step bar. Solved state and saved code are
@@ -233,13 +233,23 @@ to a number), **Design** (the whiteboard, with the full editor one click
 away) and **Wrap-up** (the tests, the review and a recall prompt). The
 notes of each step are kept per problem in the browser
 (`proschi.practice.stages.<id>`); a problem opens on the step it was
-left on, a first visit on the lesson. See `docs/design/paid-plans.md` P50, P51,
-P52 and P58.
+left on, a first visit on the lesson. On the steps, the AI chat is the
+**Interview coach** rather than Design partner (with paid plans, signed in,
+paid in credits): it helps you answer the interviewer (what to clarify, a
+sanity check of your estimates, how to structure and explain your design
+and its trade-offs, the wrap-up) by asking you questions, and writes no
+design for you unless you ask for "Show me the changes". Each message sends
+it the step you are on and your notes of the steps, so it knows where you
+are. Select any text on a step (the brief, the lesson, your notes, a failing
+test) and choose **Ask Interview coach** to ask about it; a tip under the
+step bar says so until you use it or dismiss it. See
+`docs/design/paid-plans.md` P50, P51, P52, P58 and P59.
 
 ## `interview.md`
 
-The mock interview has pages of its own: **Interview prep › Mock
-interview** (`practice/#/interview`), or **Practice this as a mock
+The mock interview has pages of its own: the **Mock interview** tab
+(`practice/#/interview`, its set-up keeps the practice tabs; the room has
+none), or **Practice this as a mock
 interview** in a problem's Wrap-up, which opens it with that problem chosen. It goes in three steps.
 
 1. **Set up.** The problem is **Surprise me** by default: a random one you

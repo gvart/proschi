@@ -1,4 +1,5 @@
 import type { CreditEstimates, Range } from '../services/credits';
+import type { PrepTurn } from './prep';
 
 /**
  * Design partner's API types (backend/README.md "Design partner",
@@ -9,7 +10,14 @@ import type { CreditEstimates, Range } from '../services/credits';
 
 export type Intent = 'review' | 'build' | 'chat' | 'improve' | 'solve';
 
-export type PartnerContext = { kind: 'editor' } | { kind: 'practice'; problemId: string };
+/**
+ * Where the chat is: the editor and the Problems tab's workspace (`practice`)
+ * get the Design partner, a software architect; a roadmap problem's interview
+ * prep stages (`prep`) get the Interview coach (docs/design/paid-plans.md
+ * P59). Fixed when the chat starts.
+ */
+export type PartnerContext = { kind: 'editor' } | { kind: 'practice'; problemId: string } | { kind: 'prep'; problemId: string };
+
 
 export interface Metrics {
   tests: { passed: number; total: number } | null;
@@ -65,6 +73,8 @@ export interface TurnRequest {
   source: string;
   files?: { name: string; source: string }[];
   changeId?: string;
+  /** Interview coach only. */
+  prep?: PrepTurn;
 }
 
 export interface TurnAnswer {
@@ -141,7 +151,7 @@ export function parseSession(v: unknown): Session | undefined {
   const id = str(v.id);
   if (!id) return undefined;
   const c = isObject(v.context) ? v.context : {};
-  const context: PartnerContext = c.kind === 'practice' && typeof c.problemId === 'string' ? { kind: 'practice', problemId: c.problemId } : { kind: 'editor' };
+  const context: PartnerContext = (c.kind === 'practice' || c.kind === 'prep') && typeof c.problemId === 'string' ? { kind: c.kind, problemId: c.problemId } : { kind: 'editor' };
   const turns = Array.isArray(v.turns) ? v.turns.map(parseTurn).filter((t): t is Turn => !!t) : [];
   return { id, context, deep: v.deep === true, turns };
 }

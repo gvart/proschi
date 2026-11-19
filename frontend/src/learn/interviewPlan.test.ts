@@ -62,10 +62,12 @@ describe('interview plan days', () => {
 
   it('fills learning days with problems for the weakest skill first, within the minutes', () => {
     const due = { total: 6, byTopic: { caching: 6 } };
+    // kv first on the roadmap, so the weakest skill's problem is open.
+    const roadmap = ['kv', 'url-shortener', 'cache', 'chat', 'feed', 'payments'];
     // 45 minutes: the cards and one medium problem (35 min).
-    expect(plan({ due })[0].items.map((i) => i.key)).toEqual(['cards:due', 'problem:kv']);
+    expect(plan({ due, roadmap })[0].items.map((i) => i.key)).toEqual(['cards:due', 'problem:kv']);
     // An hour: the cards and two problems, a medium and an easy one.
-    const days = plan({ due, settings: { ...base.settings, minutes: 60 } });
+    const days = plan({ due, roadmap, settings: { ...base.settings, minutes: 60 } });
     expect(days[0].items.map((i) => i.key)).toEqual(['cards:due', 'problem:kv', 'problem:url-shortener']);
     expect(days[0].items.map((i) => i.minutes)).toEqual([3, 35, 20]);
     expect(days[0].items[0]).toMatchObject({ title: 'Review 6 due cards', count: 6 });
@@ -73,8 +75,19 @@ describe('interview plan days', () => {
     // Later days go on with what is left, never repeating a problem.
     const problemsPlanned = days.flatMap((d) => d.items.filter((i) => i.kind === 'problem').map((i) => i.problem));
     expect(new Set(problemsPlanned).size).toBe(problemsPlanned.length);
-    expect(days[1].items[0].problem).toBe('feed');
-    expect(days[1].items[0].minutes).toBe(45);
+    // feed (Sharding) still waits for cache and chat on the roadmap, so day two goes on in its order.
+    expect(days[1].items[0].problem).toBe('cache');
+    expect(days[1].items[0].minutes).toBe(20);
+  });
+
+  it('never plans a problem the roadmap still locks', () => {
+    // Sharding is weakest, but kv waits for url-shortener and cache on the roadmap.
+    const days = plan({ settings: { ...base.settings, minutes: 60 } });
+    expect(days[0].items.map((i) => i.problem)).toEqual(['url-shortener', 'cache']);
+    // Every planned problem comes after the ones before it on the roadmap.
+    const order = days.flatMap((d) => d.items.filter((i) => i.kind === 'problem').map((i) => i.problem!));
+    const at = (id: string) => base.roadmap.indexOf(id);
+    for (const [i, id] of order.entries()) expect(base.roadmap.slice(0, at(id)).every((r) => order.slice(0, i).includes(r))).toBe(true);
   });
 
   it('never plans a tutorial', () => {

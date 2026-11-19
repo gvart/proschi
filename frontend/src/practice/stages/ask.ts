@@ -1,8 +1,8 @@
-/** The longest quote "Ask Design partner" puts in the composer; longer selections are cut. */
+/** The longest quote "Ask Interview coach" puts in the composer; longer selections are cut. */
 export const MAX_QUOTE = 600;
 
 /**
- * Selected text as a quote for Design partner's composer: each line behind
+ * Selected text as a quote for the Interview coach's composer: each line behind
  * `> `, blank lines dropped, cut at MAX_QUOTE characters, and an empty line
  * after it for the question. Undefined when nothing but spaces was selected.
  */

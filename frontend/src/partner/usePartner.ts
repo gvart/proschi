@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createSession, decide as postDecision, getSession, NoCreditsError, sendTurn, SignedOutError, TurnInProgressError } from './api';
 import type { Intent, PartnerContext, Turn, TurnRequest } from './contract';
+import type { PrepTurn } from './prep';
 import { reportBalance } from '../services/useCredits';
 import { loadStored, saveStored, type Decision } from './store';
 
@@ -31,13 +32,17 @@ export interface PartnerState {
 }
 
 interface Options {
-  /** `editor:<docId>` or `practice:<problemId>`. */
+  /** `editor:<docId>`, `practice:<problemId>` or `prep:<problemId>`. */
   storeKey: string;
   context: PartnerContext;
   /** Signed in with the feature: only then is the stored conversation read. */
   enabled: boolean;
   getSource: () => string;
   getFiles?: () => { name: string; source: string }[] | undefined;
+  /** Interview coach: the stage on screen and the notes, read as each turn is sent. */
+  getPrep?: () => PrepTurn | undefined;
+  /** Who answers, for the error line: "Design partner" or "Interview coach". */
+  name?: string;
   /** A turn came with assisted: true (practice). */
   onAssisted?: () => void;
 }
@@ -48,14 +53,16 @@ const POLL_FOR_MS = 120_000;
 const EMPTY: PartnerState = { sessionDeep: false, turns: [], charges: {}, status: 'idle', decisions: {}, improved: [] };
 
 /** Design partner's conversation for one document or problem: resume, send, decide. */
-export function usePartner({ storeKey, context, enabled, getSource, getFiles, onAssisted }: Options) {
+export function usePartner({ storeKey, context, enabled, getSource, getFiles, getPrep, name = 'Design partner', onAssisted }: Options) {
   const [state, setState] = useState<PartnerState>(EMPTY);
   const stateRef = useRef(state);
   const onAssistedRef = useRef(onAssisted);
   const contextRef = useRef(context);
   const keyRef = useRef(storeKey);
+  const getPrepRef = useRef(getPrep);
   useEffect(() => {
     keyRef.current = storeKey;
+    getPrepRef.current = getPrep;
     stateRef.current = state;
     onAssistedRef.current = onAssisted;
     contextRef.current = context;
@@ -141,7 +148,8 @@ export function usePartner({ storeKey, context, enabled, getSource, getFiles, on
           setState((x) => ({ ...x, sessionId: created, sessionDeep: deep }));
         }
         const files = getFiles?.();
-        const request: TurnRequest = { intent, message, source: getSource(), ...(files?.length ? { files } : {}), ...(opts.changeId ? { changeId: opts.changeId } : {}) };
+        const prep = getPrepRef.current?.();
+        const request: TurnRequest = { intent, message, source: getSource(), ...(files?.length ? { files } : {}), ...(opts.changeId ? { changeId: opts.changeId } : {}), ...(prep ? { prep } : {}) };
         const answer = await sendTurn(id, request);
         // Another document or problem opened meanwhile: the answer belongs to the conversation left behind.
         if (keyRef.current !== storeKey) return true;
@@ -163,13 +171,13 @@ export function usePartner({ storeKey, context, enabled, getSource, getFiles, on
         else if (e instanceof TurnInProgressError && id) {
           drop({ kind: 'busy' });
           pollBusy(id);
-        } else drop({ kind: 'error', message: 'Design partner could not answer just now. Your message is still in the box; try again in a moment.' });
+        } else drop({ kind: 'error', message: `${name} could not answer just now. Your message is still in the box; try again in a moment.` });
         return false;
       } finally {
         inFlight.current = false;
       }
     },
-    [storeKey, getSource, getFiles, pollBusy],
+    [storeKey, getSource, getFiles, pollBusy, name],
   );
 
   const decide = useCallback(

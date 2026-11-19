@@ -101,7 +101,7 @@ for (const width of [320, 360]) {
       }
       // Every section of the hub can be reached from its bar, in view, without the page scrolling sideways.
       await page.goto('practice/#/progress');
-      for (const name of ['Problems', 'Roadmap', 'Mock interview', 'Review cards', 'Daily challenge', 'Arcade', 'Progress']) {
+      for (const name of ['Roadmap', 'All problems', 'Mock interview', 'Review cards', 'Daily challenge', 'Arcade', 'Progress']) {
         await expect(await sectionLink(page, name)).toBeInViewport({ ratio: 1 });
       }
       await page.keyboard.press('Escape');
