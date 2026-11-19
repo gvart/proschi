@@ -1216,6 +1216,122 @@ function accessOf(httpMethod, label) {
   return word && WRITE_VERBS.includes(word.toUpperCase()) ? "write" : "read";
 }
 
+// ../frontend/src/dsl/sequence.ts
+var PAYLOAD_LIMIT = 40;
+function shorten(text, max = PAYLOAD_LIMIT) {
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length > max ? `${flat.slice(0, max - 1).trimEnd()}\u2026` : flat;
+}
+function requestLabel(step) {
+  const name = !step.httpMethod && step.stepName === `${step.fromServiceId} \u2192 ${step.toServiceId}` ? "" : step.stepName;
+  return [name, step.description, step.requestBody && shorten(step.requestBody)].filter(Boolean).join(" ");
+}
+function responseLabel(step) {
+  return [step.statusCode, step.responseBody && shorten(step.responseBody)].filter((p) => p !== void 0 && p !== "").join(" ");
+}
+function hasResponse(step) {
+  return !step.failed && (!!step.responseLoc || step.statusCode !== void 0 || !!step.responseBody);
+}
+function request(step) {
+  return {
+    kind: "request",
+    from: step.fromServiceId,
+    to: step.toServiceId,
+    number: step.stepOrder + 1,
+    label: requestLabel(step),
+    async: step.executionType !== "SYNC_REQUEST_RESPONSE",
+    failed: !!step.failed,
+    error: !!step.failed,
+    sections: step.sections ?? [],
+    step
+  };
+}
+function response(step) {
+  return {
+    kind: "response",
+    from: step.toServiceId,
+    to: step.fromServiceId,
+    number: step.stepOrder + 1,
+    label: responseLabel(step),
+    async: false,
+    failed: false,
+    error: (step.statusCode ?? 0) >= 400,
+    status: step.statusCode,
+    sections: step.responseSections ?? step.sections ?? [],
+    step
+  };
+}
+function buildSequence(useCase, scenario, nodes = []) {
+  const items = [];
+  const stack = [];
+  const emit = (message) => items.push({ kind: "message", message });
+  const unwindFor = (from) => {
+    const depth = stack.map((s) => s.toServiceId).lastIndexOf(from);
+    while (stack.length > depth + 1) emit(response(stack.pop()));
+  };
+  const steps = scenario.steps;
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i];
+    if (step.parallelGroup === void 0) {
+      unwindFor(step.fromServiceId);
+      emit(request(step));
+      if (hasResponse(step)) stack.push(step);
+      continue;
+    }
+    const group = [];
+    while (i < steps.length && steps[i].parallelGroup === step.parallelGroup) group.push(steps[i++]);
+    i--;
+    unwindFor(step.fromServiceId);
+    items.push({ kind: "par", branches: group.map((s) => hasResponse(s) ? [request(s), response(s)] : [request(s)]) });
+  }
+  while (stack.length) emit(response(stack.pop()));
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const participants = [];
+  const seen = /* @__PURE__ */ new Set();
+  const add = (id) => {
+    if (seen.has(id)) return;
+    seen.add(id);
+    const node = byId.get(id);
+    participants.push({ id, name: node?.name ?? id, tech: node && !node.implicit ? node.techStack : void 0 });
+  };
+  for (const step of steps) {
+    add(step.fromServiceId);
+    add(step.toServiceId);
+  }
+  return { useCase, scenario, participants, items, condition: scenario.condition || void 0 };
+}
+function findScenario(diagram, useCaseId, scenarioId) {
+  const useCase = diagram.useCases.find((u) => u.id === useCaseId);
+  const scenario = scenarioId ? useCase?.scenarios.find((s) => s.id === scenarioId) : useCase?.scenarios[0];
+  return useCase && scenario ? { useCase, scenario } : void 0;
+}
+function sequenceMessages(items) {
+  return items.flatMap((item) => item.kind === "message" ? [item.message] : item.branches.flat());
+}
+function sameSection(a, b) {
+  return a.name === b.name && a.loc.line === b.loc.line && a.loc.col === b.loc.col && a.loc.file === b.loc.file;
+}
+function itemSections(item) {
+  return item.kind === "message" ? item.message.sections : item.branches[0]?.[0]?.sections ?? [];
+}
+function sectionedItems(items) {
+  const out = [];
+  const open = [];
+  for (const item of items) {
+    const path = itemSections(item);
+    let common = 0;
+    while (common < open.length && common < path.length && sameSection(open[common], path[common])) common++;
+    while (open.length > common) out.push({ kind: "close", section: open.pop(), depth: open.length });
+    for (const section of path.slice(common)) {
+      out.push({ kind: "open", section, depth: open.length });
+      open.push(section);
+    }
+    out.push({ kind: "item", item, depth: open.length });
+  }
+  while (open.length) out.push({ kind: "close", section: open.pop(), depth: open.length });
+  return out;
+}
+
 // ../frontend/src/utils/canvasColors.ts
 var CANVAS_TOKENS = {
   light: { paper: "#FFF8E7", surface: "#FFFFFF", ink: "#111111", muted: "#5B5B5B", shadow: "#111111", accent: "#FF5DA2", fail: "#FF3B30" },
@@ -2226,6 +2342,8 @@ var Parser = class _Parser {
   diagnostics = [];
   /** Warnings reported so far (see `warning`). */
   warned = /* @__PURE__ */ new Set();
+  /** Responses already reported as drawn away from where they are written. */
+  movedResponses = /* @__PURE__ */ new Set();
   nodes = /* @__PURE__ */ new Map();
   edges = [];
   /** Connections so far per `from->to`, for the ids of repeated ones. */
@@ -2341,7 +2459,7 @@ var Parser = class _Parser {
       i = this.parseLine(i);
     }
     for (const frame2 of this.stack) {
-      const what = frame2.kind === "group" ? `group '${frame2.id}'` : frame2.kind === "usecase" ? `usecase '${frame2.useCase.name}'` : frame2.kind === "alt" ? `alt '${frame2.name}'` : frame2.kind === "par" ? "par block" : frame2.kind === "system" ? `system '${frame2.system.id}'` : frame2.kind === "stub" ? `the capacity of system '${frame2.system.id}'` : frame2.kind === "type" ? `type '${frame2.decl.name}'` : sectionName(frame2);
+      const what = frame2.kind === "group" ? `group '${frame2.id}'` : frame2.kind === "usecase" ? `usecase '${frame2.useCase.name}'` : frame2.kind === "alt" ? `alt '${frame2.name}'` : frame2.kind === "par" ? "par block" : frame2.kind === "steps" ? `section '${frame2.section.name}'` : frame2.kind === "system" ? `system '${frame2.system.id}'` : frame2.kind === "stub" ? `the capacity of system '${frame2.system.id}'` : frame2.kind === "type" ? `type '${frame2.decl.name}'` : sectionName(frame2);
       this.error(`Missing } to close ${what}`, frame2.loc);
       if (frame2.kind === "system") this.finishSystem(frame2);
     }
@@ -2443,6 +2561,11 @@ var Parser = class _Parser {
         break;
       case "alt":
         this.parseAlt(tokens, line2);
+        break;
+      // A keyword only as `section "Name" {`, so a node may still be called section.
+      case "section":
+        if ((second?.kind === "string" || second?.kind === "ident") && tokens[tokens.length - 1].kind === "lbrace") this.parseStepSection(tokens, line2);
+        else this.parseNode(tokens, line2);
         break;
       case "import":
         this.parseImport(tokens, line2);
@@ -2994,7 +3117,7 @@ var Parser = class _Parser {
   parseAlt(tokens, line2) {
     const keyword = tokens[0];
     const top = this.top();
-    if (top?.kind !== "usecase" && top?.kind !== "alt") {
+    if (top?.kind !== "usecase" && top?.kind !== "alt" && top?.kind !== "steps") {
       this.error(top?.kind === "par" ? "alt blocks cannot be inside a par block" : "alt is only allowed inside a usecase", this.locOf(keyword, line2));
       return;
     }
@@ -3025,7 +3148,7 @@ var Parser = class _Parser {
       this.stack.push({ kind: "section", section: "test", discard: true, skipped: `alt '${nameToken.value}'`, loc: loc2 });
       return;
     }
-    const owner = top.body;
+    const owner = this.currentBody();
     let set = owner.openAlt;
     if (!set) {
       set = { kind: "alt", branches: [] };
@@ -3041,11 +3164,42 @@ var Parser = class _Parser {
   closeFrame() {
     const frame2 = this.stack.pop();
     if (frame2?.kind === "alt") frame2.owner.openAlt = frame2.set;
+    if (frame2?.kind === "steps") {
+      this.currentBody().openAlt = void 0;
+      if (frame2.steps === 0) this.warning(`Section '${frame2.section.name}' has no steps`, frame2.section.loc);
+    }
+  }
+  /**
+   * `section "Name" {`: names the run of steps in it, e.g. the part of a
+   * participant that performs them. Sections nest and may hold `par` and
+   * `alt` blocks; they only label steps, so the steps, their numbers and the
+   * scenarios are the same as without them.
+   */
+  parseStepSection(tokens, line2) {
+    const keyword = tokens[0];
+    const nameToken = tokens[1];
+    const top = this.top();
+    const skip = (message, at = keyword) => {
+      const loc2 = this.locOf(at, line2);
+      this.error(message, loc2);
+      this.stack.push({ kind: "section", section: "test", discard: true, skipped: `section '${nameToken.value}'`, loc: loc2 });
+    };
+    if (top?.kind === "par") return skip("section blocks cannot be inside a par block; put the par block inside the section");
+    if (top?.kind !== "usecase" && top?.kind !== "alt" && top?.kind !== "steps") return skip("section is only allowed inside a usecase");
+    if (tokens.length > 3) return skip(`Unexpected ${describe(tokens[2])}; write section "Name" {`, tokens[2]);
+    const loc = this.locOf(nameToken, line2);
+    if (!nameToken.value.trim()) return skip('A section needs a name, e.g. section "Auth" {');
+    this.currentBody().openAlt = void 0;
+    this.stack.push({ kind: "steps", section: { name: nameToken.value.trim(), loc }, steps: 0, loc });
+  }
+  /** The `section` blocks around the current line, outermost first. */
+  openSections() {
+    return this.stack.flatMap((f) => f.kind === "steps" ? [f.section] : []);
   }
   parsePar(tokens, line2) {
     const keyword = tokens[0];
     const top = this.top();
-    if (top?.kind !== "usecase" && top?.kind !== "alt") {
+    if (top?.kind !== "usecase" && top?.kind !== "alt" && top?.kind !== "steps") {
       this.error(top?.kind === "par" ? "par blocks cannot be nested" : "par is only allowed inside a usecase", this.locOf(keyword, line2));
       return;
     }
@@ -3054,7 +3208,7 @@ var Parser = class _Parser {
       return;
     }
     this.expectEnd(tokens, 2, line2);
-    top.body.openAlt = void 0;
+    this.currentBody().openAlt = void 0;
     const useCase = this.currentUseCase();
     useCase.parCount++;
     this.stack.push({ kind: "par", group: useCase.parCount, loc: this.locOf(keyword, line2) });
@@ -3164,7 +3318,7 @@ var Parser = class _Parser {
     const toRef = { id: to, loc: this.locOf(toToken, line2) };
     this.references.push({ id: from, loc: this.locOf(fromToken, line2) }, toRef);
     const top = this.top();
-    const inUseCase = top?.kind === "usecase" || top?.kind === "alt" || top?.kind === "par";
+    const inUseCase = top?.kind === "usecase" || top?.kind === "alt" || top?.kind === "par" || top?.kind === "steps";
     if (tagToken && inUseCase) {
       this.error("Tags style connections in the architecture, not use case steps", this.locOf(tagToken, line2));
       return lastLine;
@@ -3173,6 +3327,8 @@ var Parser = class _Parser {
       const body = this.currentBody();
       body.openAlt = void 0;
       const prefixes = arrow2 === "-->" ? { rest: label, col: labelToken && this.labelStart(labelToken, line2) } : this.readLabelPrefixes(label, labelToken, line2);
+      const sections = this.openSections();
+      for (const frame2 of this.stack) if (frame2.kind === "steps") frame2.steps++;
       body.items.push({
         kind: "step",
         step: {
@@ -3181,6 +3337,7 @@ var Parser = class _Parser {
           arrow: arrow2,
           label: prefixes.rest,
           parallelGroup: top.kind === "par" ? top.group : void 0,
+          ...sections.length ? { sections } : {},
           ...prefixes.multiplier !== void 0 ? { multiplier: prefixes.multiplier } : {},
           ...prefixes.sizeBytes !== void 0 ? { sizeBytes: prefixes.sizeBytes } : {},
           ...prefixes.col !== void 0 ? { labelCol: prefixes.col } : {},
@@ -4470,6 +4627,7 @@ var Parser = class _Parser {
         loc: path.locs.at(-1) ?? useCase.loc
       };
     });
+    for (const scenario of scenarios) this.checkResponseOrder(useCase, scenario);
     const steps = scenarios[0]?.steps ?? [];
     const entry = steps[0];
     return {
@@ -4496,6 +4654,7 @@ var Parser = class _Parser {
         }
         answered2.add(request2);
         request2.responseLoc = step.loc;
+        if (!sameSections(step.sections, request2.sections)) request2.responseSections = step.sections ?? [];
         if (steps.length > steps.indexOf(request2) + 1 && !(step.parallelGroup !== void 0 && step.parallelGroup === request2.parallelGroup)) {
           request2.deferredResponse = { after: steps.length, ...step.parallelGroup !== void 0 ? { group: step.parallelGroup } : {} };
         }
@@ -4548,7 +4707,8 @@ var Parser = class _Parser {
         ...typed.op ? { op: typed.op } : {},
         ...label.headers ? { headers: label.headers } : {},
         ...port !== void 0 ? { toPort: port } : {},
-        ...fromPort !== void 0 ? { fromPort } : {}
+        ...fromPort !== void 0 ? { fromPort } : {},
+        ...step.sections ? { sections: step.sections } : {}
       });
     }
     resolveForwards(steps);
@@ -4622,6 +4782,58 @@ var Parser = class _Parser {
     if (this.edges.length === 0 || a === b || this.connected.has(`${a}|${b}`)) return;
     const [from, to] = step.arrow === "-->" ? [b, a] : [a, b];
     this.warning(`No connection between '${from}' and '${to}' in the architecture; add '${from} -> ${to}'`, step.loc);
+  }
+  /**
+   * Warns when the sequence diagram draws a `-->` in other `section` frames
+   * than where it is written. Responses are placed by the call stack: a callee
+   * answers once its own calls are done, and open calls are answered before
+   * their caller sends again. Requests are drawn in the order written, so a
+   * response moves when a request written after it is drawn before it, or one
+   * written before it is drawn after it. Only moves past requests in other
+   * sections are reported: those split a frame or reorder the frames, while a
+   * move inside one run of sections changes no frame.
+   */
+  checkResponseOrder(useCase, scenario) {
+    const before2 = (a, b) => (a.file ?? "") === (b.file ?? "") && (a.line < b.line || a.line === b.line && a.col < b.col);
+    const path = (sections) => sections.length ? `section '${sections.map((s) => s.name).join(" \u203A ")}'` : "no section";
+    const drawn = [];
+    for (const item of buildSequence(useCase, scenario).items) {
+      if (item.kind === "par") {
+        const first = item.branches[0]?.[0]?.step;
+        if (first?.loc) drawn.push({ request: true, loc: first.loc, name: "the par block", sections: first.sections ?? [] });
+        continue;
+      }
+      const { message } = item;
+      if (message.kind === "request") {
+        if (message.step.loc) drawn.push({ request: true, loc: message.step.loc, name: `'${message.step.stepName}'`, sections: message.sections });
+      } else if (message.step.responseLoc) drawn.push({ request: false, loc: message.step.responseLoc, step: message.step, sections: message.sections });
+    }
+    drawn.forEach((r, i) => {
+      if (r.request) return;
+      const key = `${r.loc.file ?? ""}
+${r.loc.line}
+${r.loc.col}`;
+      if (this.movedResponses.has(key)) return;
+      const elsewhere = (m) => m.request && !sameSections(m.sections, r.sections);
+      const later = drawn.slice(0, i).filter((m) => elsewhere(m) && before2(r.loc, m.loc));
+      const earlier = drawn.slice(i + 1).filter((m) => elsewhere(m) && before2(m.loc, r.loc));
+      const { fromServiceId: caller, toServiceId: callee } = r.step;
+      if (later.length) {
+        const m = later[later.length - 1];
+        this.movedResponses.add(key);
+        this.warning(
+          `This response is drawn after ${m.name} (line ${m.loc.line}, ${path(m.sections)}), not where it is written: ${callee} answers ${caller} once its own calls are done. Move the --> below that step, or nest that step's section inside this response's section`,
+          r.loc
+        );
+      } else if (earlier.length) {
+        const m = earlier[0];
+        this.movedResponses.add(key);
+        this.warning(
+          `This response is drawn before ${m.name} (line ${m.loc.line}, ${path(m.sections)}), not where it is written: ${caller} gets the answer from ${callee} before it sends again. Move the --> above that step`,
+          r.loc
+        );
+      }
+    });
   }
   createImplicitNodes() {
     for (const ref of this.references) {
@@ -4999,6 +5211,9 @@ ${message}`;
     this.diagnostics.push({ severity: "warning", message, ...loc });
   }
 };
+function sameSections(a = [], b = []) {
+  return a.length === b.length && a.every((s, i) => s === b[i]);
+}
 function expand(items) {
   let paths = [{ names: [], conditions: [], locs: [], steps: [] }];
   for (const item of items) {
@@ -5360,97 +5575,6 @@ function stepAccess(step) {
 function accessIn(diagram) {
   const queues = new Set(diagram.nodes.filter((n) => kindMatches(kindOf(n), "queue")).map((n) => n.id));
   return (step) => queues.has(step.toServiceId) ? "write" : stepAccess(step);
-}
-
-// ../frontend/src/dsl/sequence.ts
-var PAYLOAD_LIMIT = 40;
-function shorten(text, max = PAYLOAD_LIMIT) {
-  const flat = text.replace(/\s+/g, " ").trim();
-  return flat.length > max ? `${flat.slice(0, max - 1).trimEnd()}\u2026` : flat;
-}
-function requestLabel(step) {
-  const name = !step.httpMethod && step.stepName === `${step.fromServiceId} \u2192 ${step.toServiceId}` ? "" : step.stepName;
-  return [name, step.description, step.requestBody && shorten(step.requestBody)].filter(Boolean).join(" ");
-}
-function responseLabel(step) {
-  return [step.statusCode, step.responseBody && shorten(step.responseBody)].filter((p) => p !== void 0 && p !== "").join(" ");
-}
-function hasResponse(step) {
-  return !step.failed && (!!step.responseLoc || step.statusCode !== void 0 || !!step.responseBody);
-}
-function request(step) {
-  return {
-    kind: "request",
-    from: step.fromServiceId,
-    to: step.toServiceId,
-    number: step.stepOrder + 1,
-    label: requestLabel(step),
-    async: step.executionType !== "SYNC_REQUEST_RESPONSE",
-    failed: !!step.failed,
-    error: !!step.failed,
-    step
-  };
-}
-function response(step) {
-  return {
-    kind: "response",
-    from: step.toServiceId,
-    to: step.fromServiceId,
-    number: step.stepOrder + 1,
-    label: responseLabel(step),
-    async: false,
-    failed: false,
-    error: (step.statusCode ?? 0) >= 400,
-    status: step.statusCode,
-    step
-  };
-}
-function buildSequence(useCase, scenario, nodes = []) {
-  const items = [];
-  const stack = [];
-  const emit = (message) => items.push({ kind: "message", message });
-  const unwindFor = (from) => {
-    const depth = stack.map((s) => s.toServiceId).lastIndexOf(from);
-    while (stack.length > depth + 1) emit(response(stack.pop()));
-  };
-  const steps = scenario.steps;
-  for (let i = 0; i < steps.length; i++) {
-    const step = steps[i];
-    if (step.parallelGroup === void 0) {
-      unwindFor(step.fromServiceId);
-      emit(request(step));
-      if (hasResponse(step)) stack.push(step);
-      continue;
-    }
-    const group = [];
-    while (i < steps.length && steps[i].parallelGroup === step.parallelGroup) group.push(steps[i++]);
-    i--;
-    unwindFor(step.fromServiceId);
-    items.push({ kind: "par", branches: group.map((s) => hasResponse(s) ? [request(s), response(s)] : [request(s)]) });
-  }
-  while (stack.length) emit(response(stack.pop()));
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  const participants = [];
-  const seen = /* @__PURE__ */ new Set();
-  const add = (id) => {
-    if (seen.has(id)) return;
-    seen.add(id);
-    const node = byId.get(id);
-    participants.push({ id, name: node?.name ?? id, tech: node && !node.implicit ? node.techStack : void 0 });
-  };
-  for (const step of steps) {
-    add(step.fromServiceId);
-    add(step.toServiceId);
-  }
-  return { useCase, scenario, participants, items, condition: scenario.condition || void 0 };
-}
-function findScenario(diagram, useCaseId, scenarioId) {
-  const useCase = diagram.useCases.find((u) => u.id === useCaseId);
-  const scenario = scenarioId ? useCase?.scenarios.find((s) => s.id === scenarioId) : useCase?.scenarios[0];
-  return useCase && scenario ? { useCase, scenario } : void 0;
-}
-function sequenceMessages(items) {
-  return items.flatMap((item) => item.kind === "message" ? [item.message] : item.branches.flat());
 }
 
 // ../frontend/src/sim/profiles.ts
@@ -6599,7 +6723,7 @@ function analyze(diagram, options = {}) {
   }
   for (const s of systems?.systems ?? []) warnings.push(...s.warnings);
   const access = accessIn(diagram);
-  const pathOf = (hopsOfPath) => ({
+  const pathOf2 = (hopsOfPath) => ({
     parts: hopsOfPath.map(
       (part) => part.map((h2) => {
         if (h2.failed) return { fixedMs: timeoutOf(h2.target), tailMs: 0 };
@@ -6619,12 +6743,12 @@ function analyze(diagram, options = {}) {
     };
     const withRetries = (writes2) => (id) => retries.has(id) ? availabilityOf(id, writes2) * retries.get(id).success : availabilityOf(id, writes2);
     if (lookups || retry2) {
-      const { scenarios: scenarios2, percentiles: percentiles2, tailScenario: tailScenario2 } = cachedLatency(u, shares, lookups ?? [], retry2 ? retries : /* @__PURE__ */ new Map(), pathOf, new Set(options.percentiles ?? PERCENTILES2));
+      const { scenarios: scenarios2, percentiles: percentiles2, tailScenario: tailScenario2 } = cachedLatency(u, shares, lookups ?? [], retry2 ? retries : /* @__PURE__ */ new Map(), pathOf2, new Set(options.percentiles ?? PERCENTILES2));
       const writes2 = mainWrites(u, shares, (step) => access(step) === "write");
       const availability3 = useCaseAvailability(u, shares, retries.size ? withRetries(writes2) : (id) => availabilityOf(id, writes2)) * (1 - (stranded ?? 0));
       return { id: u.id, name: u.name, rps, ...average !== void 0 ? { avgRps: rps * average } : {}, scenarios: scenarios2, percentiles: percentiles2, tailScenario: tailScenario2, availability: availability3 };
     }
-    const paths = u.scenarios.map((s) => pathOf(criticalPath(u, s)));
+    const paths = u.scenarios.map((s) => pathOf2(criticalPath(u, s)));
     const scenarios = u.scenarios.map((s, i) => ({
       id: s.id,
       name: s.name,
@@ -6658,10 +6782,10 @@ function analyze(diagram, options = {}) {
     ...systems ? { systems: systems.systems } : {}
   };
 }
-function cachedLatency(u, shares, lookups, retries, pathOf, wanted3) {
+function cachedLatency(u, shares, lookups, retries, pathOf2, wanted3) {
   const variants = u.scenarios.map(
     (s, i) => cacheVariants(criticalPath(u, s), lookups[i] ?? []).flatMap(
-      (v) => retries.size ? retryVariants(v.hops, retries).map((r) => ({ share: v.share * r.share, path: pathOf(r.hops) })) : [{ share: v.share, path: pathOf(v.hops) }]
+      (v) => retries.size ? retryVariants(v.hops, retries).map((r) => ({ share: v.share * r.share, path: pathOf2(r.hops) })) : [{ share: v.share, path: pathOf2(v.hops) }]
     )
   );
   const scenarios = u.scenarios.map((s, i) => ({
@@ -9029,6 +9153,218 @@ function playAt(scene, steps, index, progress, tick = 0) {
   return { active, failing, pathNodes: pathNodes2, pathEdges, edges, packets, tick };
 }
 
+// src/terminal/sequence.ts
+var HEAD_ROWS = 4;
+var BOX_MIN = 12;
+var BOX_MAX = 26;
+var BOX_FLOOR = 8;
+var LABEL_MIN = 8;
+var FAIL_AT2 = 55;
+var cut = (text, room) => room <= 0 ? "" : text.length <= room ? text : `${text.slice(0, Math.max(0, room - 1))}\u2026`;
+function labelOf(m) {
+  if (m.kind === "request") return `${m.number} ${m.label}`.trimEnd();
+  return m.label || "return";
+}
+function buildSequenceScene(diagram, useCase, scenario, columns) {
+  const sequence = buildSequence(useCase, scenario, diagram.nodes);
+  const nodes = new Map(diagram.nodes.map((n) => [n.id, n]));
+  const index = new Map(sequence.participants.map((p, i) => [p.id, i]));
+  const items = sectionedItems(sequence.items);
+  const messages = items.flatMap((i) => i.kind !== "item" ? [] : i.item.kind === "message" ? [i.item.message] : i.item.branches.flat());
+  let deepest = 0;
+  for (const i of items) deepest = Math.max(deepest, i.depth + (i.kind === "item" && i.item.kind === "par" ? 1 : 0));
+  const margin = deepest + 1;
+  const natural = sequence.participants.map((p) => {
+    const node = nodes.get(p.id);
+    const named = p.name.length + (node && node.kind === "component" ? 2 : 0);
+    return Math.max(BOX_MIN, Math.min(BOX_MAX, Math.max(named, p.tech?.length ?? 0) + 4));
+  });
+  let widths = natural;
+  const place = (room2) => {
+    const xs = [];
+    sequence.participants.forEach((_, i) => {
+      const half = Math.ceil(widths[i] / 2);
+      xs.push(i === 0 ? Math.max(half, margin + 1) : xs[i - 1] + Math.ceil(widths[i - 1] / 2) + half + 1);
+    });
+    let right = xs.length ? xs[xs.length - 1] + Math.ceil(widths[widths.length - 1] / 2) : 0;
+    const spans = messages.map((m) => {
+      const a = index.get(m.from);
+      const b = index.get(m.to);
+      return { lo: Math.min(a, b), hi: a === b ? a + 1 : Math.max(a, b), need: Math.min(room2, labelOf(m).length) + 3 };
+    }).sort((p, q) => p.hi - q.hi);
+    for (const { lo, hi, need } of spans) {
+      if (hi >= xs.length) {
+        right = Math.max(right, xs[lo] + need + 3);
+        continue;
+      }
+      const short2 = xs[lo] + need - xs[hi];
+      if (short2 > 0) for (let i = hi; i < xs.length; i++) xs[i] += short2;
+    }
+    right = Math.max(right, xs.length ? xs[xs.length - 1] + Math.ceil(widths[widths.length - 1] / 2) : 0);
+    return { xs, width: right + margin + 1 };
+  };
+  const longest = Math.max(LABEL_MIN, ...messages.map((m) => labelOf(m).length));
+  let room = longest;
+  let placed = place(room);
+  while (placed.width > columns && room > LABEL_MIN) placed = place(--room);
+  for (let box = BOX_MAX - 1; placed.width > columns && box >= BOX_FLOOR; box--) {
+    widths = natural.map((w) => Math.min(w, box));
+    placed = place(room);
+  }
+  while (room < longest && placed.width < columns) {
+    const wider = place(room + 1);
+    if (wider.width > columns) break;
+    placed = wider;
+    room++;
+  }
+  const lifelines = sequence.participants.map((p, i) => ({ ...p, node: nodes.get(p.id), x: placed.xs[i], w: widths[i] }));
+  const width = Math.max(placed.width, 20);
+  const frames = [];
+  const open = [];
+  const rows = [];
+  let y = HEAD_ROWS + 1;
+  const message = (m) => {
+    const a = index.get(m.from);
+    const b = index.get(m.to);
+    rows.push({ y, message: m, label: cut(labelOf(m), room), from: a, to: b });
+    y += a === b ? 3 : 2;
+  };
+  for (const item of items) {
+    if (item.kind === "open") {
+      const frame2 = { title: item.section.name, par: false, depth: item.depth, top: y++, bottom: -1, dividers: [] };
+      frames.push(frame2);
+      open.push(frame2);
+    } else if (item.kind === "close") {
+      open.pop().bottom = y++;
+    } else if (item.item.kind === "message") message(item.item.message);
+    else {
+      const frame2 = { title: "par", par: true, depth: item.depth, top: y++, bottom: -1, dividers: [] };
+      frames.push(frame2);
+      item.item.branches.forEach((branch, i) => {
+        if (i > 0) frame2.dividers.push(y++);
+        branch.forEach(message);
+      });
+      frame2.bottom = y++;
+    }
+  }
+  return { columns: width, rows: y + 1, lifelines, frames, messages: rows, steps: scenario.steps };
+}
+function paintSequence(scene, options = {}) {
+  const grid = new Grid(scene.columns, scene.rows);
+  const { play } = options;
+  const current = play ? new Set(currentStepsOf(scene.steps, play.index)) : void 0;
+  const lookOf2 = (step) => !play ? void 0 : current.has(step) ? "lit" : scene.steps.indexOf(step) < play.index ? "past" : "future";
+  const lit = /* @__PURE__ */ new Set();
+  const failing = /* @__PURE__ */ new Set();
+  for (const step of current ?? []) {
+    lit.add(step.fromServiceId);
+    lit.add(step.toServiceId);
+    if (isErrorStep(step)) failing.add(step.toServiceId);
+  }
+  for (const l of scene.lifelines) for (let y = HEAD_ROWS; y < scene.rows; y++) grid.set(l.x, y, "\u2502", COLOR.fadedMore);
+  for (const f of scene.frames) drawFrame(grid, scene, f);
+  for (const row of scene.messages) drawMessage(grid, scene, row, lookOf2(row.message.step));
+  if (play) for (const step of current) drawPacket(grid, scene, step, play.progress);
+  for (const l of scene.lifelines) drawBox(grid, l, failing.has(l.id) ? COLOR.fail : lit.has(l.id) ? COLOR.pink : play ? COLOR.faded : void 0, options.icons ?? "nerd-font");
+  return grid;
+}
+function drawBox(grid, l, accent, icons2) {
+  const base = l.node ? nodeBaseColor(l.node) : void 0;
+  const color = accent ?? (base ? hex(base) : COLOR.line);
+  const x0 = l.x - Math.floor(l.w / 2);
+  const x1 = x0 + l.w - 1;
+  for (let x = x0 + 1; x < x1; x++) {
+    grid.set(x, 0, "\u2501", color);
+    grid.set(x, HEAD_ROWS - 1, x === l.x ? "\u2533" : "\u2501", color);
+    grid.set(x, 1, " ");
+    grid.set(x, 2, " ");
+  }
+  for (const [x, top, bottom] of [
+    [x0, "\u250F", "\u2517"],
+    [x1, "\u2513", "\u251B"]
+  ]) {
+    grid.set(x, 0, top, color);
+    grid.set(x, 1, "\u2503", color);
+    grid.set(x, 2, "\u2503", color);
+    grid.set(x, HEAD_ROWS - 1, bottom, color);
+  }
+  const icon = l.node ? iconOf(l.node, icons2) : void 0;
+  const room = l.w - 4;
+  const name = icon ? `${icon} ${cut(l.name, room - 2)}` : cut(l.name, room);
+  const centre = (text) => x0 + 2 + Math.max(0, Math.floor((room - [...text].length) / 2));
+  grid.text(centre(name), 1, name, DEFAULT);
+  if (l.tech) grid.text(centre(cut(l.tech, room)), 2, cut(l.tech, room), COLOR.muted);
+}
+function drawFrame(grid, scene, f) {
+  const x0 = f.depth;
+  const x1 = scene.columns - 1 - f.depth;
+  const color = f.par ? COLOR.muted : COLOR.line;
+  for (let x = x0 + 1; x < x1; x++) {
+    grid.set(x, f.top, "\u2500", color);
+    grid.set(x, f.bottom, "\u2500", color);
+    for (const d of f.dividers) grid.set(x, d, "\u254C", color);
+  }
+  grid.set(x0, f.top, "\u256D", color);
+  grid.set(x1, f.top, "\u256E", color);
+  grid.set(x0, f.bottom, "\u2570", color);
+  grid.set(x1, f.bottom, "\u256F", color);
+  for (let y = f.top + 1; y < f.bottom; y++) {
+    const divider = f.dividers.includes(y);
+    grid.set(x0, y, divider ? "\u251C" : "\u2502", color);
+    grid.set(x1, y, divider ? "\u2524" : "\u2502", color);
+  }
+  const title = ` ${cut(f.title, x1 - x0 - 5)} `;
+  grid.text(x0 + 2, f.top, title, f.par ? COLOR.muted : COLOR.note);
+}
+function pathOf(scene, row) {
+  const a = scene.lifelines[row.from].x;
+  if (row.from === row.to) return [a + 1, a + 2, a + 3].map((x) => ({ x, y: row.y + 1 })).concat([{ x: a + 3, y: row.y + 2 }, { x: a + 2, y: row.y + 2 }, { x: a + 1, y: row.y + 2 }]);
+  const b = scene.lifelines[row.to].x;
+  const step = b > a ? 1 : -1;
+  const cells = [];
+  for (let x = a + step; x !== b; x += step) cells.push({ x, y: row.y + 1 });
+  return cells;
+}
+function drawMessage(grid, scene, row, look) {
+  const m = row.message;
+  const color = look === "future" ? COLOR.fadedMore : m.error ? COLOR.fail : look === "lit" ? COLOR.pink : m.kind === "response" ? COLOR.muted : DEFAULT;
+  const heavy = look === "lit";
+  const body = m.kind === "response" ? heavy ? "\u2505" : "\u254C" : heavy ? "\u2501" : "\u2500";
+  const head = m.failed ? "\u2717" : m.async ? m.to === m.from ? "\u25C1" : "" : "";
+  const cells = pathOf(scene, row);
+  const a = scene.lifelines[row.from].x;
+  if (row.from === row.to) {
+    grid.text(a + 1, row.y + 1, `${body}${body}${heavy ? "\u2513" : "\u256E"}`, color);
+    grid.text(a + 1, row.y + 2, `${head || "\u25C4"}${body}${heavy ? "\u251B" : "\u256F"}`, color);
+  } else {
+    const right = scene.lifelines[row.to].x > a;
+    for (const c of cells) grid.set(c.x, c.y, body, color);
+    const last = cells[cells.length - 1];
+    if (last) grid.set(last.x, last.y, head || (m.async ? right ? "\u25B7" : "\u25C1" : right ? "\u25BA" : "\u25C4"), color);
+  }
+  const left = row.from === row.to ? a + 2 : Math.min(a, scene.lifelines[row.to].x) + 2;
+  if (m.kind === "request") {
+    const [number, ...rest] = row.label.split(" ");
+    const chip2 = look === "future" ? COLOR.fadedMore : m.error ? COLOR.fail : COLOR.pink;
+    grid.text(left, row.y, number, look === "lit" ? COLOR.onColor : chip2, Infinity, look === "lit" ? chip2 : void 0);
+    grid.text(left + number.length + 1, row.y, rest.join(" "), look === "future" ? COLOR.fadedMore : DEFAULT);
+  } else grid.text(left, row.y, row.label, look === "future" ? COLOR.fadedMore : m.error ? COLOR.fail : COLOR.muted);
+}
+function drawPacket(grid, scene, step, progress) {
+  if (progress >= 100) return;
+  const request2 = scene.messages.find((r) => r.message.step === step && r.message.kind === "request");
+  if (!request2) return;
+  const response2 = scene.messages.find((r) => r.message.step === step && r.message.kind === "response");
+  const failed = !!step.failed;
+  const roundTrip = !!response2 && !failed;
+  const [row, share2] = failed ? [request2, Math.min(progress, FAIL_AT2) / 100] : roundTrip && progress > 50 ? [response2, (progress - 50) / 50] : [request2, roundTrip ? progress / 50 : progress / 100];
+  const cells = pathOf(scene, row);
+  if (cells.length === 0) return;
+  const at = cells[Math.max(0, Math.min(cells.length - 1, Math.round(share2 * (cells.length - 1))))];
+  const cutOff = failed && progress >= FAIL_AT2;
+  grid.set(at.x, at.y, cutOff ? "\u2717" : "\u25A0", row.message.error || cutOff ? COLOR.fail : COLOR.pink);
+}
+
 // ../frontend/src/hld/hld.ts
 var HOT_UTILIZATION = 0.7;
 function selectorLabel(s) {
@@ -10674,17 +11010,39 @@ function toMermaidSequence(diagram, useCaseId, scenarioId) {
     lines.push(`  Note over ${over}: ${escapeMermaid(`${found.scenario.name}${outcome}${when}`)}`);
   }
   const message = (m, indent) => `${indent}${id(m.from)}${arrow(m)}${id(m.to)}: ${escapeMermaid(m.label) || "#32;"}`;
-  for (const item of sequence.items) {
+  const order = new Map(sequence.participants.map((p, i) => [p.id, i]));
+  const sectioned = sectionedItems(sequence.items);
+  sectioned.forEach((entry, at) => {
+    const indent = "  ".repeat(entry.depth + 1);
+    if (entry.kind === "open") {
+      const inside = [];
+      for (let i = at + 1; i < sectioned.length; i++) {
+        const next = sectioned[i];
+        if (next.kind === "close" && next.depth === entry.depth) break;
+        if (next.kind === "item") inside.push(...sequenceMessages([next.item]));
+      }
+      const used = inside.flatMap((m) => [order.get(m.from) ?? 0, order.get(m.to) ?? 0]);
+      const from = sequence.participants[Math.min(...used)];
+      const to = sequence.participants[Math.max(...used)];
+      lines.push(`${indent}rect rgba(127, 127, 127, 0.1)`);
+      if (from && to) lines.push(`${indent}  Note over ${from === to ? id(from.id) : `${id(from.id)},${id(to.id)}`}: ${escapeMermaid(entry.section.name)}`);
+      return;
+    }
+    if (entry.kind === "close") {
+      lines.push(`${indent}end`);
+      return;
+    }
+    const item = entry.item;
     if (item.kind === "message") {
-      lines.push(message(item.message, "  "));
-      continue;
+      lines.push(message(item.message, indent));
+      return;
     }
     item.branches.forEach((branch, i) => {
-      lines.push(i === 0 ? "  par" : "  and");
-      branch.forEach((m) => lines.push(message(m, "    ")));
+      lines.push(`${indent}${i === 0 ? "par" : "and"}`);
+      branch.forEach((m) => lines.push(message(m, `${indent}  `)));
     });
-    lines.push("  end");
-  }
+    lines.push(`${indent}end`);
+  });
   return lines.join("\n") + "\n";
 }
 function nodeLabel2(node) {
@@ -10952,7 +11310,7 @@ var line = (...segs) => ({ segs: segs.map((s) => typeof s === "string" ? { text:
 var blank = () => line("");
 var heading = (text) => line({ text, bold: true });
 var usd3 = (x) => formatUsd(x).replace("/month", "");
-var cut = (text, room) => text.length <= room ? text : room <= 0 ? "" : `${text.slice(0, Math.max(0, room - 1))}\u2026`;
+var cut2 = (text, room) => text.length <= room ? text : room <= 0 ? "" : `${text.slice(0, Math.max(0, room - 1))}\u2026`;
 function table2(cols, rows, width) {
   const seg = (c) => c === void 0 ? { text: "" } : typeof c === "string" ? { text: c } : c;
   let shown2 = cols.map((_, i) => i);
@@ -10968,7 +11326,7 @@ function table2(cols, rows, width) {
   const row = (cells, header = false) => ({
     segs: shown2.flatMap((i, k) => {
       const s = cells[i];
-      const text = cut(s.text, w(i));
+      const text = cut2(s.text, w(i));
       const padded = cols[i].right ? text.padStart(w(i)) : k === shown2.length - 1 ? text : text.padEnd(w(i));
       return [...k > 0 ? [{ text: "  " }] : [], header ? { text: padded, dim: true } : { ...s, text: padded }];
     })
@@ -11177,7 +11535,7 @@ var FLOAT_EDGES = { top: true, bottom: true };
 
 // ../plugin/src/views/pieces.tsx
 var INLINE_WARNINGS = 2;
-var GLYPH = { copy: "\u29C9", open: "\u2197", focus: "\u26F6", cycle: "\u21E5", collapse: "\u229F", expand: "\u229E", enter: "\u2922", leave: "\u2191", explore: "\u2261" };
+var GLYPH = { copy: "\u29C9", open: "\u2197", focus: "\u26F6", cycle: "\u21E5", collapse: "\u229F", expand: "\u229E", enter: "\u2922", leave: "\u2191", explore: "\u2261", inline: "\u2193" };
 var textLabel = (c) => [c.icon && GLYPH[c.icon], c.label].filter(Boolean).join(" ");
 function noticesOf(doc, lost, reasons, inPane, lead = []) {
   const unknown = lost.filter((name) => !reasons.has(name));
@@ -11211,7 +11569,7 @@ function linkControls(inPane, roomy) {
     { id: "src", icon: "copy", label: roomy ? "Copy source" : "Source" },
     { id: "lnk", icon: "copy", label: roomy ? "Copy share link" : "Link" },
     { id: "open", icon: "open", label: roomy ? "Open in Proschi" : "Open", variant: "primary" },
-    ...inPane ? [] : [{ id: "focus", icon: "focus", label: "Focus" }]
+    ...inPane ? [{ id: "inline", icon: "inline", label: "Inline", hotkey: "i" }] : [{ id: "focus", icon: "focus", label: "Focus" }]
   ];
 }
 function controlsText(ui, controls, key, width, act2) {
@@ -11238,7 +11596,7 @@ var scenarioName = (u, s) => {
   const status = s.outcome === "error" ? s.steps.find(isErrorStep)?.statusCode : void 0;
   return `${u.scenarios.length > 1 ? s.name : "Main flow"}${status ? ` \xB7 ${status}` : ""}`;
 };
-function playerModel(view, doc, pick2, playing, step, isPlaying, ctl) {
+function playerModel(view, doc, pick2, playing, step, isPlaying, ctl, sequence = false) {
   const total = pick2.scenario.steps.length;
   const actions = {
     uc: () => ctl.toggle("uc"),
@@ -11246,6 +11604,10 @@ function playerModel(view, doc, pick2, playing, step, isPlaying, ctl) {
     body: () => playing ? ctl.toggle("body") : void 0,
     explore: () => ctl.toggle("explore"),
     close: () => ctl.close(),
+    view: () => {
+      ctl.close();
+      ctl.toggleView();
+    },
     play: () => {
       ctl.close();
       if (!playing) ctl.start(pick2);
@@ -11276,7 +11638,7 @@ function playerModel(view, doc, pick2, playing, step, isPlaying, ctl) {
   actions[`uc=${EXPLORE_ALL}`] = () => ctl.openMenu("explore");
   for (const s of pick2.useCase.scenarios) actions[`sc=${s.id}`] = () => choose(pickOf(pick2.useCase, s));
   const open = ctl.open;
-  return { pick: pick2, ...playing ? { playing } : {}, step, total, isPlaying, ...open && (open !== "body" || playing) ? { open } : {}, actions, line: stepLine(view, pick2, playing ? step : void 0) };
+  return { pick: pick2, ...playing ? { playing } : {}, step, total, isPlaying, sequence, ...open && (open !== "body" || playing) ? { open } : {}, actions, line: stepLine(view, pick2, playing ? step : void 0) };
 }
 function stepLine(view, pick2, at) {
   const steps = pick2.scenario.steps;
@@ -11323,9 +11685,12 @@ function barPanel(view, doc, m, at, isPlaying) {
     ],
     step: { ...on ? { at: at + 1 } : {}, total },
     line: { ...line2.number !== void 0 ? { number: line2.number } : {}, ...line2.error ? { error: true } : {}, text: line2.spans },
-    body: { id: "body", label: "Body", ...on ? {} : { disabled: true }, ...m.open === "body" ? { active: true } : {} }
+    body: { id: "body", label: "Body", ...on ? {} : { disabled: true }, ...m.open === "body" ? { active: true } : {} },
+    view: { id: "view", label: VIEW_LABELS.picture[m.sequence ? 1 : 0], variant: "quiet", columns: VIEW_COLUMNS, ...key("v") }
   };
 }
+var VIEW_LABELS = { text: ["\u21C5 Sequence", "\u25EB Architecture"], picture: ["Sequence", "Architecture"] };
+var VIEW_COLUMNS = 14;
 var drawerPanel = (view, pick2, at) => ({
   kind: "drawer",
   ...pick2.scenario.condition ? { condition: pick2.scenario.condition } : {},
@@ -11373,7 +11738,7 @@ function playerBarText(view, doc, m) {
   const bar = Math.max(0, Math.min(30, view.width - 4 - used));
   const filled = on && total ? Math.round(bar * (at + 1) / total) : 0;
   const line2 = m.line;
-  return /* @__PURE__ */ h(ui.Box, { key: `bar-${id}`, flexDirection: "column", borderStyle: "round", borderColor: PINK, paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true, color: PINK }, "Use case"), /* @__PURE__ */ h(ui.Select, { key: `uc-${id}`, value: m.pick.useCase.id, options: useCaseOptions(doc).map((o) => ({ value: o.value, label: o.value === EXPLORE_ALL ? "\u2261 Explore all\u2026" : o.label })), onSelect: (v) => m.actions[`uc=${v}`]?.() }), /* @__PURE__ */ h(ui.Select, { key: `sc-${id}`, value: m.pick.scenario.id, options: m.pick.useCase.scenarios.map((s) => ({ value: s.id, label: `${s.outcome === "error" ? "\u2717" : "\u2713"} ${scenarioName(m.pick.useCase, s)}` })), onSelect: (v) => m.actions[`sc=${v}`]?.() }), step("r", "\u21E4", "first", on && at > 0), step("b", "\u2039", "prev", on && at > 0), /* @__PURE__ */ h(ui.Button, { key: `play-${id}`, label: m.isPlaying ? "\u275A\u275A" : " \u25B6", variant: "primary", ...key("p"), onPress: () => m.actions.play() }), step("n", "\u203A", "next", on && at < total - 1), step("e", "\u21E5", "last", on && at < total - 1), step("d", "\u2715", "stop", on), /* @__PURE__ */ h(ui.Text, { bold: on, dimColor: !on }, counter), bar > 0 && /* @__PURE__ */ h(ui.Text, null, /* @__PURE__ */ h(ui.Text, { color: YELLOW }, "\u2501".repeat(filled)), /* @__PURE__ */ h(ui.Text, { dimColor: true }, "\u2501".repeat(bar - filled)))), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1 }, /* @__PURE__ */ h(ui.Box, { flexGrow: 1 }, /* @__PURE__ */ h(ui.Text, { wrap: "truncate-end" }, line2.number !== void 0 && chip(ui, String(line2.number), line2.error ? "#ff3b30" : PINK), line2.number !== void 0 ? " " : "", line2.spans.map((s) => /* @__PURE__ */ h(ui.Text, { bold: s.bold === true, dimColor: s.tone === "muted", color: s.tone === "bad" ? "red" : s.tone === "good" ? "green" : s.tone === "warn" ? "yellow" : s.tone === "info" ? "magenta" : void 0 }, s.text)))), /* @__PURE__ */ h(ui.Button, { key: `body-${id}`, label: m.open === "body" ? "Body \u25B4" : "Body \u25BE", dimColor: !on, onPress: () => m.actions.body() })), m.open === "body" && m.playing && stepRows(ui, view, m.playing.scenario.steps, at).nodes, m.open === "explore" && groupByEndpoint(doc.diagram.useCases).map((g) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, g.label && /* @__PURE__ */ h(ui.Text, { bold: true, color: "cyan" }, g.label), g.useCases.map((u) => /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap", paddingLeft: g.label ? 2 : 0 }, /* @__PURE__ */ h(ui.Text, { bold: u.id === m.pick.useCase.id }, u.name), u.scenarios.map((s) => /* @__PURE__ */ h(ui.Button, { key: `x-${id}-${u.id}-${s.id}`, onPress: () => m.actions[`x-${u.id}-${s.id}`]() }, /* @__PURE__ */ h(ui.Text, { color: s.outcome === "error" ? "red" : "green" }, s.outcome === "error" ? "\u2717" : "\u2713", " ", u.scenarios.length > 1 ? scenarioName(u, s) : "Play"))))))));
+  return /* @__PURE__ */ h(ui.Box, { key: `bar-${id}`, flexDirection: "column", borderStyle: "round", borderColor: PINK, paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true, color: PINK }, "Use case"), /* @__PURE__ */ h(ui.Select, { key: `uc-${id}`, value: m.pick.useCase.id, options: useCaseOptions(doc).map((o) => ({ value: o.value, label: o.value === EXPLORE_ALL ? "\u2261 Explore all\u2026" : o.label })), onSelect: (v) => m.actions[`uc=${v}`]?.() }), /* @__PURE__ */ h(ui.Select, { key: `sc-${id}`, value: m.pick.scenario.id, options: m.pick.useCase.scenarios.map((s) => ({ value: s.id, label: `${s.outcome === "error" ? "\u2717" : "\u2713"} ${scenarioName(m.pick.useCase, s)}` })), onSelect: (v) => m.actions[`sc=${v}`]?.() }), step("r", "\u21E4", "first", on && at > 0), step("b", "\u2039", "prev", on && at > 0), /* @__PURE__ */ h(ui.Button, { key: `play-${id}`, label: m.isPlaying ? "\u275A\u275A" : " \u25B6", variant: "primary", ...key("p"), onPress: () => m.actions.play() }), step("n", "\u203A", "next", on && at < total - 1), step("e", "\u21E5", "last", on && at < total - 1), step("d", "\u2715", "stop", on), /* @__PURE__ */ h(ui.Text, { bold: on, dimColor: !on }, counter), bar > 0 && /* @__PURE__ */ h(ui.Text, null, /* @__PURE__ */ h(ui.Text, { color: YELLOW }, "\u2501".repeat(filled)), /* @__PURE__ */ h(ui.Text, { dimColor: true }, "\u2501".repeat(bar - filled)))), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1 }, /* @__PURE__ */ h(ui.Box, { flexGrow: 1 }, /* @__PURE__ */ h(ui.Text, { wrap: "truncate-end" }, line2.number !== void 0 && chip(ui, String(line2.number), line2.error ? "#ff3b30" : PINK), line2.number !== void 0 ? " " : "", line2.spans.map((s) => /* @__PURE__ */ h(ui.Text, { bold: s.bold === true, dimColor: s.tone === "muted", color: s.tone === "bad" ? "red" : s.tone === "good" ? "green" : s.tone === "warn" ? "yellow" : s.tone === "info" ? "magenta" : void 0 }, s.text)))), /* @__PURE__ */ h(ui.Button, { key: `view-${id}`, label: VIEW_LABELS.text[m.sequence ? 1 : 0].padEnd(Math.max(...VIEW_LABELS.text.map((l) => l.length))), ...key("v"), onPress: () => m.actions.view() }), /* @__PURE__ */ h(ui.Button, { key: `body-${id}`, label: m.open === "body" ? "Body \u25B4" : "Body \u25BE", dimColor: !on, onPress: () => m.actions.body() })), m.open === "body" && m.playing && stepRows(ui, view, m.playing.scenario.steps, at).nodes, m.open === "explore" && groupByEndpoint(doc.diagram.useCases).map((g) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, g.label && /* @__PURE__ */ h(ui.Text, { bold: true, color: "cyan" }, g.label), g.useCases.map((u) => /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap", paddingLeft: g.label ? 2 : 0 }, /* @__PURE__ */ h(ui.Text, { bold: u.id === m.pick.useCase.id }, u.name), u.scenarios.map((s) => /* @__PURE__ */ h(ui.Button, { key: `x-${id}-${u.id}-${s.id}`, onPress: () => m.actions[`x-${u.id}-${s.id}`]() }, /* @__PURE__ */ h(ui.Text, { color: s.outcome === "error" ? "red" : "green" }, s.outcome === "error" ? "\u2717" : "\u2713", " ", u.scenarios.length > 1 ? scenarioName(u, s) : "Play"))))))));
 }
 var FORMAT2 = { JSON: "JSON", XML: "XML", FREE_TEXT: "Text" };
 var LANGUAGE = { JSON: "json", XML: "xml", FREE_TEXT: void 0 };
@@ -11532,9 +11897,13 @@ var paneFile = atom2({ plugin: "proschi", key: "paneFile" }, "");
 var paneSource = atom2({ plugin: "proschi", key: "paneSource" }, NO_SOURCE);
 var players = atom2({ plugin: "proschi", key: "player" }, IDLE);
 var paneTab = atom2({ plugin: "proschi", key: "paneTab" }, "diagram");
+var NO_ROW = {};
+var placedRows = atom2({ plugin: "proschi", key: "placed" }, NO_ROW);
+var prompts = atom2({ plugin: "proschi", key: "prompts" }, 0);
+var INLINE = "inline-";
 var paneAnchor;
-var PANE_KEYS = "1-3 tabs \xB7 p play \xB7 n/b step \xB7 r first \xB7 e last \xB7 d stop \xB7 esc back to the prompt";
-var PICTURE_KEYS = "1-3 tabs \xB7 p play \xB7 n/b step \xB7 r first \xB7 e last \xB7 d stop \xB7 z/x zoom \xB7 0 fit \xB7 esc back to the prompt";
+var PANE_KEYS = "1-3 tabs \xB7 p play \xB7 n/b step \xB7 r first \xB7 e last \xB7 d stop \xB7 v sequence/architecture \xB7 i inline \xB7 esc back to the prompt";
+var PICTURE_KEYS = "1-3 tabs \xB7 p play \xB7 n/b step \xB7 r first \xB7 e last \xB7 d stop \xB7 v sequence/architecture \xB7 z/x zoom \xB7 0 fit \xB7 i inline \xB7 esc back to the prompt";
 var TAB_KEYS = "1-3 tabs \xB7 \u2191\u2193 scroll \xB7 esc back to the prompt";
 var HLD_KEYS = "1-3 tabs \xB7 \u2191\u2193 scroll \xB7 c copy \xB7 esc back to the prompt";
 var SYSTEM_KEYS = "s next system \xB7 o open/close \xB7 f focus in \xB7 u back out";
@@ -11550,8 +11919,10 @@ var layouts = new Lru(32);
 var pending3 = /* @__PURE__ */ new Set();
 var documents2 = new Lru(32);
 var scenes = new Lru(64);
+var sequences = new Lru(32);
 var timers = /* @__PURE__ */ new Map();
 var SITES2 = 64;
+var drawings = new Lru(SITES2);
 var FENCE = /^```proschi[^\n]*\n([\s\S]*?)\n```[ \t]*$/gm;
 function register(on, options) {
   icons = options.icons === "symbols" || options.icons === "none" ? options.icons : "nerd-font";
@@ -11560,7 +11931,11 @@ function register(on, options) {
   on("session.start", async ($, e, next) => {
     if (refused2) $.ui.log(`proschi: ${refused2}`, { to: "debug" });
     void serveRequests($);
-    await $.command.register({ name: "proschi", description: "Proschi diagrams: /proschi view <file.proschi> shows one in a pane", argumentHint: "view [--expand <id>,\u2026] [--focus <id>] <file>" });
+    await $.command.register({ name: "proschi", description: "Proschi diagrams: /proschi view <file.proschi> shows one in a pane, or with --inline in the transcript", argumentHint: "view [--inline] [--expand <id>,\u2026] [--focus <id>] <file>" });
+    return next(e);
+  });
+  on("prompt.submit", async ($, e, next) => {
+    await update2($, prompts, (n) => n + 1);
     return next(e);
   });
   on("session.end", async ($, e, next) => {
@@ -11580,8 +11955,10 @@ function register(on, options) {
     const [verb, ...rest] = e.args.trim().split(/\s+/);
     const words = [];
     const view = {};
+    let inline2 = false;
     for (let i = 0; i < rest.length; i++) {
-      if (rest[i] === "--expand" || rest[i] === "--focus") {
+      if (rest[i] === "--inline") inline2 = true;
+      else if (rest[i] === "--expand" || rest[i] === "--focus") {
         const value = rest[++i];
         if (!value || idList(value).length === 0) return { text: `Missing system id after ${rest[i - 1]}` };
         if (rest[i - 1] === "--expand") view.expanded = [...view.expanded ?? [], ...idList(value)];
@@ -11597,8 +11974,13 @@ function register(on, options) {
       const refused3 = errors.length ? void 0 : viewError(diagram, view);
       if (refused3) return { text: refused3 };
     }
+    const shown2 = { ...IDLE, expanded: view.expanded ?? [], ...view.focus !== void 0 ? { focus: view.focus } : {} };
+    if (inline2) {
+      await placeInline($, { file }, shown2);
+      return { text: `Showing ${file} in the transcript.` };
+    }
     stop(PANE_VIEW);
-    await update2($, memberOf(players, { requestId: PANE_VIEW }), () => ({ ...IDLE, expanded: view.expanded ?? [], ...view.focus !== void 0 ? { focus: view.focus } : {} }));
+    await update2($, memberOf(players, { requestId: PANE_VIEW }), () => shown2);
     await update2($, paneFile, () => file);
     await markOpened($, PANE_VIEW);
     await $.ui.open({ id: PANE, title: `Proschi \xB7 ${basename(file)}` });
@@ -11644,6 +12026,17 @@ function register(on, options) {
     if (!source) return row;
     const view = await drawDiagram($, { ui, requestId: e.requestId, columns: (e.viewport?.columns ?? 120) - 6 }, `${e.requestId}:0`, source, file);
     return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, row, /* @__PURE__ */ h(ui.Box, { paddingLeft: 2 }, "error" in view ? /* @__PURE__ */ h(ui.Text, { dimColor: true }, view.error) : view.element));
+  });
+  on("ui.render", { component: "Placed" }, async ($, e, next) => {
+    if (e.props.plugin !== "proschi" || !e.props.id.startsWith(INLINE)) return next(e);
+    const ui = $.ui.resolve(e);
+    if (e.surface !== "terminal") return /* @__PURE__ */ h(ui.Text, null, "The Proschi drawing draws in a terminal.");
+    const row = await read2($, memberOf(placedRows, { requestId: e.props.id }));
+    if (!row.file && !row.source) return /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Drawing\u2026");
+    const source = row.file ? await readWithImports($, row.file).catch(() => void 0) : { source: row.source, ...row.path ? { path: row.path } : {}, ...row.imports ? { imports: row.imports } : {} };
+    if (!source) return /* @__PURE__ */ h(ui.Text, { color: "red" }, "Cannot read ", row.file, ".");
+    const view = await drawDiagram($, { ui, requestId: e.requestId, columns: (e.viewport?.columns ?? 120) - 4 }, `${e.props.id}:0`, source, row.file);
+    return "error" in view ? /* @__PURE__ */ h(ui.Text, { color: "red" }, view.error) : view.element;
   });
   on("ui.render", { component: "Pane", requestId: PANE }, async ($, e) => {
     if (e.surface !== "terminal") {
@@ -11779,7 +12172,7 @@ function proschiFile(tool, input) {
   const path = input?.file_path;
   return typeof path === "string" && path.endsWith(".proschi") ? path : void 0;
 }
-var USAGE = "Usage: /proschi view [--expand <system>[,<system>\u2026]] [--focus <system>] <file.proschi>, or /proschi perf [count]";
+var USAGE = "Usage: /proschi view [--inline] [--expand <system>[,<system>\u2026]] [--focus <system>] <file.proschi>, or /proschi perf [count]";
 function perfReport(n) {
   const last = pressTimings().slice(-n);
   if (last.length === 0) return "No presses timed yet: press a tab or a control in the pictures, then run /proschi perf again.";
@@ -11878,7 +12271,8 @@ function normal(p) {
     expanded: Array.isArray(p?.expanded) ? p.expanded.filter((id) => typeof id === "string") : [],
     ...typeof p?.focus === "string" ? { focus: p.focus } : {},
     ...typeof p?.selected === "string" ? { selected: p.selected } : {},
-    ...isMoved(zoomOf(p?.zoom)) ? { zoom: zoomOf(p?.zoom) } : {}
+    ...isMoved(zoomOf(p?.zoom)) ? { zoom: zoomOf(p?.zoom) } : {},
+    ...p?.sequence === true ? { sequence: true } : {}
   };
 }
 var BARS_WIDTH = 80;
@@ -11915,6 +12309,7 @@ async function diagramView($, d, viewId, written, file, mode = { kind: "text" },
   const loaded = await documentOf($, viewId, written, file);
   if ("error" in loaded) return loaded;
   const { doc, source, key, player } = loaded;
+  if (d.requestId !== PANE && !drawings.has(viewId)) drawings.set(viewId, { requestId: d.requestId, key: drawnKey(file ? { file } : { source: written.source }) });
   const layout = layouts.get(key);
   if (!layout) {
     requestLayout($, key, source);
@@ -11937,7 +12332,11 @@ async function diagramView($, d, viewId, written, file, mode = { kind: "text" },
   const width = Math.min(Math.max(40, d.columns), Math.max(scene.columns, BARS_WIDTH));
   const systems = selectable(scene, player.focus);
   const selected = systems.find((s) => s.path === player.selected) ?? systems[0];
-  const view = { d, viewId, rasterKey: `d-${viewId}`, anchorKey: `at-${viewId}`, scene, width, overlay: doc.overlay, edges: doc.edges, systems: doc.systems, ...selected ? { selected: selected.id } : {}, inPane: d.requestId === PANE };
+  const sequence = (value) => {
+    const at = picks.find((p2) => p2.value === value) ?? picks[0];
+    return at && sequenceOf(doc, key, at, columns);
+  };
+  const view = { d, viewId, rasterKey: `d-${viewId}`, anchorKey: `at-${viewId}`, scene, width, overlay: doc.overlay, edges: doc.edges, systems: doc.systems, ...selected ? { selected: selected.id } : {}, inPane: d.requestId === PANE, sequence };
   if (playing && player.isPlaying && !timers.has(viewId)) animate($, view, steps);
   const p = {
     doc,
@@ -11961,6 +12360,7 @@ async function diagramView($, d, viewId, written, file, mode = { kind: "text" },
   if (mode.kind === "text") return textView($, p, mode);
   return await pictureView($, p, mode, priority) ?? textView($, p, { kind: "text" });
 }
+var sequenceShown = (p) => p.player.sequence === true && p.pick !== void 0;
 var isWide = (p) => p.view.scene.columns > p.view.d.columns;
 function wideNotice(p, z) {
   if (!isWide(p) || z.level > 1) return [];
@@ -11973,6 +12373,13 @@ async function pictureView($, p, mode, priority) {
   const { d, viewId } = view;
   const hasSystems = p.systems.length > 0 || p.player.focus !== void 0;
   const z = view.inPane ? zoomOf(p.player.zoom) : FIT;
+  if (sequenceShown(p)) {
+    images.delete(viewId);
+    const rows2 = (d.rows ?? INLINE_ROWS) + 16;
+    if (mode.kind === "loading") return { kind: "loading", rows: rows2 };
+    const built2 = pictureParts($, p, noticesOf(doc, p.lost, importReasons, view.inPane, []), void 0);
+    return { kind: "picture", ...built2, rows: rows2, systems: hasSystems };
+  }
   const notices = noticesOf(doc, p.lost, importReasons, view.inPane, wideNotice(p, z));
   const theme2 = await themeOf($);
   const optionsFor = (play, zoomed) => ({
@@ -12036,14 +12443,17 @@ function textView($, p, mode) {
   const { ui } = d;
   const scene = view.scene;
   const steps = playing?.scenario.steps ?? [];
-  const painted = paint(scene, { overlay: doc.overlay, edges: doc.edges, icons, systems: doc.systems, ...view.selected ? { selected: view.selected } : {}, ...steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {} });
-  const wide = view.inPane && painted.columns > d.columns;
+  const seq2 = sequenceShown(p) ? view.sequence?.(pick2.value) : void 0;
+  if (seq2) textCrops.set(viewId, void 0);
+  const sequenced = seq2 ? paintSequence(seq2, { icons, ...steps.length > 0 ? { play: { index: step, progress } } : {} }) : void 0;
+  const painted = sequenced ?? paint(scene, { overlay: doc.overlay, edges: doc.edges, icons, systems: doc.systems, ...view.selected ? { selected: view.selected } : {}, ...steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {} });
+  const wide = !sequenced && view.inPane && painted.columns > d.columns;
   const pan = wide ? textPan($, view, painted, zoomOf(p.player.zoom)) : void 0;
   textCrops.set(viewId, pan ? pan.vp : void 0);
   const grid = pan ? painted.crop(pan.vp.col, 0, pan.vp.columns, painted.rows) : painted;
   const lead = [
     ...mode.hint ? [{ text: TMUX_HINT, tone: "muted" }] : [],
-    ...painted.columns > d.columns ? [
+    ...!sequenced && painted.columns > d.columns ? [
       {
         text: pan ? `\u2194 ${painted.columns} columns wide, wider than the ${d.columns} here: columns ${pan.vp.col + 1}\u2013${pan.vp.col + pan.vp.columns} shown. Drag it, or h and l (\u2190 \u2192 after a click on it), to pan.` : `\u2194 ${painted.columns} columns wide, wider than the ${d.columns} here: \u26F6 Focus opens it in the pane, where it pans.`,
         tone: "muted"
@@ -12051,12 +12461,12 @@ function textView($, p, mode) {
     ] : []
   ];
   const verdict = verdictOf(doc.tests);
-  const sys = systemsOf($, p);
+  const sys = sequenced ? void 0 : systemsOf($, p);
   const links = linksOf($, p);
-  const m = pick2 && playerModel(view, doc, pick2, playing, step, p.player.isPlaying, playerCtl($, view, pick2.scenario.steps));
+  const m = pick2 && playerModel(view, doc, pick2, playing, step, p.player.isPlaying, playerCtl($, view, pick2.scenario.steps), p.player.sequence === true);
   return {
     kind: "text",
-    element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, m && playerBarText(view, doc, m), doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, noticesText(ui, noticesOf(doc, p.lost, importReasons, view.inPane, lead), `notice-${viewId}`), pan ? /* @__PURE__ */ h(ui.Box, { key: `${view.rasterKey}-pan`, flexDirection: "column", width: grid.columns, height: grid.rows }, /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), /* @__PURE__ */ h(ui.Box, { position: "absolute", top: 0, left: 0, width: grid.columns, height: grid.rows }, /* @__PURE__ */ h(ui.Client, { key: pan.overlay, module: "./uiOverlay.js", props: { controls: [], drag: "x" }, width: grid.columns, height: grid.rows })), /* @__PURE__ */ h(ui.Box, { display: "none" }, /* @__PURE__ */ h(ui.Button, { key: `pan-h-${viewId}`, label: "h", hotkey: "h", onPress: pan.keys.left }), /* @__PURE__ */ h(ui.Button, { key: `pan-l-${viewId}`, label: "l", hotkey: "l", onPress: pan.keys.right }))) : /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), doc.edges && !playing && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)), verdict && verdictText(ui, verdict, view.width, viewId, view.inPane ? void 0 : () => focus($, view, p.title, p.what, "hld", "requirements")), sys && systemsText(ui, sys.model, viewId, view.width, (id) => sys.actions[id]?.()), controlsText(ui, links.controls, viewId, view.width, (id, surface) => links.actions[id]?.(surface))),
+    element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, m && playerBarText(view, doc, m), doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, noticesText(ui, noticesOf(doc, p.lost, importReasons, view.inPane, lead), `notice-${viewId}`), sequenced ? /* @__PURE__ */ h(ui.Raster, { key: sequenceKey(viewId), columns: sequenced.columns, rows: sequenced.rows, cells: sequenced.toBase64() }) : pan ? /* @__PURE__ */ h(ui.Box, { key: `${view.rasterKey}-pan`, flexDirection: "column", width: grid.columns, height: grid.rows }, /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), /* @__PURE__ */ h(ui.Box, { position: "absolute", top: 0, left: 0, width: grid.columns, height: grid.rows }, /* @__PURE__ */ h(ui.Client, { key: pan.overlay, module: "./uiOverlay.js", props: { controls: [], drag: "x" }, width: grid.columns, height: grid.rows })), /* @__PURE__ */ h(ui.Box, { display: "none" }, /* @__PURE__ */ h(ui.Button, { key: `pan-h-${viewId}`, label: "h", hotkey: "h", onPress: pan.keys.left }), /* @__PURE__ */ h(ui.Button, { key: `pan-l-${viewId}`, label: "l", hotkey: "l", onPress: pan.keys.right }))) : /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), doc.edges && !playing && !sequenced && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)), verdict && verdictText(ui, verdict, view.width, viewId, view.inPane ? void 0 : () => focus($, view, p.title, p.what, "hld", "requirements")), sys && systemsText(ui, sys.model, viewId, view.width, (id) => sys.actions[id]?.()), controlsText(ui, links.controls, viewId, view.width, (id, surface) => links.actions[id]?.(surface))),
     systems: sys !== void 0
   };
 }
@@ -12105,7 +12515,11 @@ function playerCtl($, view, steps) {
     go: (to, isPlaying = false) => goTo($, view, steps, to, isPlaying),
     pause: () => void setPlayer($, view, (p) => ({ ...p, isPlaying: false })),
     stop: () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })),
-    pick: (pick2) => void setPlayer($, view, (p) => ({ ...p, pick: pick2.value }))
+    pick: (pick2) => void setPlayer($, view, (p) => ({ ...p, pick: pick2.value })),
+    toggleView: () => void setPlayer($, view, (p) => {
+      const { sequence, ...rest } = p;
+      return sequence ? rest : { ...rest, sequence: true };
+    })
   };
 }
 function linksOf($, p) {
@@ -12115,7 +12529,8 @@ function linksOf($, p) {
       src: (surface) => void copy($, surface, p.source.source, "the Proschi source"),
       lnk: (surface) => void copy($, surface, p.link, "the share link"),
       open: (surface) => void openLink($, surface, p.link),
-      focus: () => focus($, p.view, p.title, p.what)
+      focus: () => focus($, p.view, p.title, p.what),
+      inline: () => void toInline($)
     }
   };
 }
@@ -12142,7 +12557,7 @@ function pictureParts($, p, notices, picture, zoomed) {
   const on = (piece, id, fn) => actions[`${piece}/${id}`] = fn;
   let float;
   if (pick2) {
-    const m = playerModel(view, doc, pick2, playing, step, player.isPlaying, playerCtl($, view, pick2.scenario.steps));
+    const m = playerModel(view, doc, pick2, playing, step, player.isPlaying, playerCtl($, view, pick2.scenario.steps), player.sequence === true);
     const bar = barPanel(view, doc, m, playing ? step : void 0, player.isPlaying);
     pieces.push({ id: "bar", panel: bar, columns: W2 });
     for (const [id, fn] of Object.entries(m.actions)) on("bar", id, () => fn());
@@ -12162,11 +12577,20 @@ function pictureParts($, p, notices, picture, zoomed) {
     pieces.push({ id: "title", panel: { kind: "page", blocks: [{ type: "heading", level: 3, text: doc.diagram.title }, ...doc.diagram.summary ? [{ type: "paragraph", small: true, text: doc.diagram.summary }] : []] }, columns: W2 });
   }
   if (notices.length) pieces.push({ id: "warn", panel: { kind: "notices", notices }, columns: W2 });
-  pieces.push({ id: "diagram", ...picture ? { picture } : {} });
+  const sequenced = sequenceShown(p);
+  if (sequenced) {
+    pieces.push({ id: "sequence", panel: sequencePanel(p, pick2, playing ? step : void 0), columns: W2 });
+    if (playing) {
+      for (let i = 0; i < playing.scenario.steps.length; i++) if (i !== step) ahead.push({ panel: sequencePanel(p, playing, i), columns: W2 });
+    }
+  } else {
+    pieces.push({ id: "diagram", ...picture ? { picture } : {} });
+    if (pick2) ahead.push({ panel: sequencePanel(p, pick2, playing ? step : void 0), columns: W2 });
+  }
   const verdict = verdictOf(doc.tests);
   if (verdict) pieces.push({ id: "below", panel: { kind: "notices", verdict, ...!view.inPane ? { details: DETAILS } : {} }, columns: W2 });
   on("below", "details", () => focus($, view, p.title, p.what, "hld", "requirements"));
-  const sys = systemsOf($, p);
+  const sys = sequenced ? void 0 : systemsOf($, p);
   if (sys) {
     pieces.push({ id: "systems", panel: { kind: "systemBar", ...sys.model }, columns: W2 });
     for (const [id, fn] of Object.entries(sys.actions)) on("systems", id, fn);
@@ -12180,6 +12604,28 @@ function pictureParts($, p, notices, picture, zoomed) {
     for (const dir of [1, -1]) ahead.push({ panel: zoomPanel(stepZoom(zoomed.z, dir)), columns: ZOOM_COLUMNS, edges: FLOAT_EDGES });
   }
   return { pieces, actions, ahead, ...float ? { float } : {}, ...zoom ? { corner: zoom.corner, keys: zoom.keys, onDrag: zoom.onDrag } : {} };
+}
+function sequencePanel(p, pick2, step) {
+  const maxRows = p.view.d.rows ?? INLINE_ROWS;
+  const key = `${keyOf(p.source)}\0${pick2.value}\0${step ?? "-"}\0${maxRows}`;
+  let panel = sequencePanels.get(key);
+  if (!panel) {
+    const of = { useCase: pick2.useCase.id, scenario: pick2.scenario.id, ...step !== void 0 ? { step } : {} };
+    panel = { kind: "page", source: p.source, blocks: [{ type: "figure", of, maxRows }] };
+    sequencePanels.set(key, panel);
+  }
+  return panel;
+}
+var sequencePanels = new Lru(64);
+var sequenceKey = (viewId) => `q-${viewId}`;
+function sequenceOf(doc, key, pick2, columns) {
+  const at = `${key}#${pick2.value}@${columns}`;
+  let scene = sequences.get(at);
+  if (!scene) {
+    scene = buildSequenceScene(doc.diagram, pick2.useCase, pick2.scenario, columns);
+    sequences.set(at, scene);
+  }
+  return scene;
 }
 var zoomPanel = (z) => ({
   kind: "zoom",
@@ -12342,6 +12788,59 @@ async function scroll($, args) {
   if (moved.deny) $.ui.log(`proschi: scroll to ${JSON.stringify(args.to)} refused: ${moved.deny}`, { to: "debug" });
   return moved;
 }
+var placedCount = 0;
+async function placeInline($, what, player) {
+  const id = `${INLINE}${Date.now().toString(36)}-${++placedCount}`;
+  const placing = $.ui.place({ id });
+  const stands = await player;
+  const { zoom: _zoom, ...rest } = stands;
+  void _zoom;
+  await update2($, memberOf(players, { requestId: `${id}:0` }), () => ({ ...rest, isPlaying: false }));
+  const drawn = { ...await what, prompt: await read2($, prompts) };
+  await update2($, memberOf(placedRows, { requestId: id }), () => drawn);
+  const placed = await placing;
+  if (!placed.isPlaced) $.ui.toast(`The Proschi drawing is in the transcript but not shown: ${placed.reason}`);
+  else await scroll($, { to: { requestId: placed.requestId }, block: "start" });
+}
+var drawnKey = (what) => what.file ? `file:${what.file}` : `source:${(what.source ?? "").trim()}`;
+async function inLastResponse($, key) {
+  const messages = await $.session.messages().catch(() => []);
+  const prompt = messages.findLastIndex((m) => m.role === "user" && !m.toolResults?.length);
+  const replied = messages.slice(prompt + 1).some(
+    (m) => m.role === "assistant" && (m.toolUses.some((t) => {
+      const file = proschiFile(t.tool, t.input);
+      return file !== void 0 && drawnKey({ file }) === key;
+    }) || [...m.text.matchAll(FENCE)].some((f) => drawnKey({ source: f[1] }) === key))
+  );
+  const now = await read2($, prompts);
+  for (const [viewId, d] of [...drawings.entries()].reverse()) {
+    if (d.key !== key) continue;
+    const placed = viewId.startsWith(INLINE) ? await read2($, memberOf(placedRows, { requestId: viewId.slice(0, -":0".length) })) : void 0;
+    if (placed ? placed.prompt === now : replied) return { viewId, requestId: d.requestId };
+  }
+  return void 0;
+}
+function toInline($) {
+  stop(PANE_VIEW);
+  stop(PANE);
+  menus.delete(PANE_VIEW);
+  const what = (async () => {
+    const file = await read2($, paneFile);
+    if (file) return { file };
+    const { source, path, imports } = await read2($, paneSource);
+    return { source, ...path ? { path } : {}, ...imports ? { imports } : {} };
+  })();
+  const player = read2($, memberOf(players, { requestId: PANE_VIEW })).then(normal);
+  return (async () => {
+    const standing = await inLastResponse($, drawnKey(await what));
+    if (!standing) return placeInline($, what, player);
+    stop(standing.viewId);
+    const { zoom: _zoom, ...stands } = await player;
+    void _zoom;
+    await update2($, memberOf(players, { requestId: standing.viewId }), () => ({ ...stands, isPlaying: false }));
+    await scroll($, { to: { requestId: standing.requestId }, block: "start" });
+  })().then(() => $.ui.close({ id: PANE })).catch((error) => $.ui.log(`proschi: Inline failed: ${error instanceof Error ? error.message : String(error)}`, { to: "debug" }));
+}
 function focus($, view, title, what, tab = "diagram", section) {
   const opened = $.ui.open({ id: PANE, title: `Proschi \xB7 ${title}`, focus: true, closeOnEscape: true });
   paneAnchor = section && hldAnchor(section);
@@ -12401,6 +12900,12 @@ function animate($, view, steps) {
       if (file !== sent) {
         sent = file;
         await $.ui.blit({ requestId: view.d.requestId, key: image.key, source: await sourceOf($, file, image.form) });
+      }
+    } else if (player.sequence) {
+      const seq2 = view.sequence?.(player.pick);
+      if (seq2) {
+        const frame2 = paintSequence(seq2, { icons, play: { index: step, progress } });
+        await $.ui.blit({ requestId: view.d.requestId, key: sequenceKey(view.viewId), cells: frame2.toBase64() }).catch(() => void 0);
       }
     } else {
       const play = playAt(view.scene, steps, step, progress, tick++);

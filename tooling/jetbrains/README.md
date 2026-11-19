@@ -17,10 +17,10 @@ Install it from the
 | Formatting | *Code → Reformat Code* (Ctrl+Alt+L / ⌥⌘L) sends `textDocument/formatting` to the server. It is also in the *Proschi* menu |
 | *Tools → Proschi → Check File* | `proschi check <file>`; the result appears in a notification, with *Show output* for the full text |
 | *Tools → Proschi → Run Tests* | `proschi test <file>`: the file's requirements and test blocks against the simulation |
-| *Tools → Proschi → Show Diagram Preview* | `proschi render --format html` shown in the *Proschi Preview* tool window (JCEF). It renders again each time you save the file, and switches to whichever `.proschi` editor you select while the window is open |
+| *Tools → Proschi → Show Diagram Preview* | `proschi render --format preview-html` shown in the *Proschi Preview* tool window (JCEF): the architecture, a scenario picker, and each use case's description, folded, with `Label: name (detail); …` sentences as tables. It renders again each time you save the file or a `proschi.json`, and switches to whichever `.proschi` editor you select while the window is open |
 | *Tools → Proschi → Open in Proschi* | `proschi share-link <file>` and opens the link: the web editor at proschi.app with the file and its imports. The diagram travels in the link; nothing is uploaded |
 | Status bar | The *Language Services* widget shows the server's state and links to the settings |
-| Settings | *Settings → Languages & Frameworks → Proschi*: turn the language server on or off, and set paths to the server, the CLI and Node.js |
+| Settings | *Settings → Languages & Frameworks → Proschi*: turn the language server on or off, set paths to the server, the CLI and Node.js, and pick the preview's theme (`sketch-light`, `sketch-dark` or `classic`; `sketch` still works as an alias of `sketch-light`; a `"theme"` in the nearest `proschi.json` overrides it) |
 
 The *Proschi* menu also opens from the editor and project view context menus
 on `.proschi` files.
@@ -111,8 +111,25 @@ path is set, its folder goes first on PATH, which `npx` needs.
 
 The VS Code extension renders the preview in-process, as you type, from the
 same renderer as the CLI. Doing that here would mean running Node.js
-alongside, so the plugin runs `proschi render --format html` when you save and
-shows the page in JCEF. If the file has errors, the preview shows them instead.
+alongside, so the plugin runs `proschi render --format preview-html
+--default-theme <setting>` when you save and shows the page in JCEF. If the
+file has errors, the preview shows them instead.
+
+- **Theme.** `--default-theme` applies only when the nearest `proschi.json`
+  names no `"theme"`, so the project's choice wins over the setting, as in
+  VS Code. Changing the setting or saving a `proschi.json` redraws the preview.
+- **Page colours.** The plugin restyles the page for the tool window: one
+  column, diagrams scaled to its width, and the page's background and text
+  from the IDE theme. Each diagram keeps its theme's card: cream in `sketch`,
+  white in `classic`. The page allows styles only by hash, so the restyle's
+  hash is added to its Content-Security-Policy (`withStyle`).
+- **Older CLIs.** A CLI without `preview-html` and `--default-theme` (one
+  released before them) refuses with exit code 2, and the plugin then shows
+  the `--format html` page instead: no picker, no description tables, no
+  theme setting. Update the CLI, or set *CLI* to a newer `cli.cjs`, to get
+  them.
+- **Not kept across saves:** the picked scenario and whether the descriptions
+  are open. The page is loaded again on each render.
 
 ## Build and run
 
@@ -230,6 +247,7 @@ another IDE, change `intellijIdea(...)` in `build.gradle.kts` (for example
 | Reformat Code formats through the server | | | | |
 | Check File / Run Tests notifications; *Show output* | | | | |
 | Preview renders, updates on save, shows errors | | | | |
+| Preview: scenario picker, folded descriptions with tables; `classic` setting draws white; a `"theme"` in `proschi.json` wins; with upstream's CLI it falls back to the html page | | | | |
 | Open in Proschi opens the web editor with the diagram | | | | |
 | Settings: disabling stops the server; a bad path gives an error in the Language Services widget | | | | |
 | No `proschi` on PATH: falls back to npx | | | | |

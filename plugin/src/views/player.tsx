@@ -44,6 +44,8 @@ export interface PlayerCtl {
   stop(): void
   /** Picks a scenario without playing it. */
   pick(pick: Pick): void
+  /** Switches between the architecture and the scenario's sequence diagram. */
+  toggleView(): void
 }
 
 /** A scenario as the editor's scenario tabs name it: the branch (or the main flow), the status an error ends with. */
@@ -65,6 +67,8 @@ export interface PlayerModel {
   step: number
   total: number
   isPlaying: boolean
+  /** The drawing is the scenario's sequence diagram instead of the architecture (the fork's view switch). */
+  sequence: boolean
   open?: Open
   /** What each of the bar's controls (and its menus' options) does, by id: `uc=<id>`, `sc=<id>`, `x-<uc>-<sc>`. */
   actions: Record<string, () => void>
@@ -72,7 +76,7 @@ export interface PlayerModel {
   line: { number?: number; error?: boolean; spans: Span[] }
 }
 
-export function playerModel(view: View, doc: Document, pick: Pick, playing: Pick | undefined, step: number, isPlaying: boolean, ctl: PlayerCtl): PlayerModel {
+export function playerModel(view: View, doc: Document, pick: Pick, playing: Pick | undefined, step: number, isPlaying: boolean, ctl: PlayerCtl, sequence = false): PlayerModel {
   const total = pick.scenario.steps.length
   const actions: Record<string, () => void> = {
     uc: () => ctl.toggle('uc'),
@@ -80,6 +84,10 @@ export function playerModel(view: View, doc: Document, pick: Pick, playing: Pick
     body: () => (playing ? ctl.toggle('body') : undefined),
     explore: () => ctl.toggle('explore'),
     close: () => ctl.close(),
+    view: () => {
+      ctl.close()
+      ctl.toggleView()
+    },
     play: () => {
       ctl.close()
       if (!playing) ctl.start(pick)
@@ -111,7 +119,7 @@ export function playerModel(view: View, doc: Document, pick: Pick, playing: Pick
   actions[`uc=${EXPLORE_ALL}`] = () => ctl.openMenu('explore')
   for (const s of pick.useCase.scenarios) actions[`sc=${s.id}`] = () => choose(pickOf(pick.useCase, s))
   const open = ctl.open
-  return { pick, ...(playing ? { playing } : {}), step, total, isPlaying, ...(open && (open !== 'body' || playing) ? { open } : {}), actions, line: stepLine(view, pick, playing ? step : undefined) }
+  return { pick, ...(playing ? { playing } : {}), step, total, isPlaying, sequence, ...(open && (open !== 'body' || playing) ? { open } : {}), actions, line: stepLine(view, pick, playing ? step : undefined) }
 }
 
 /** The bar's second line: the step at `at` (its call, who calls whom, how) or, before Play, the use case's description. */
@@ -167,8 +175,18 @@ export function barPanel(view: View, doc: Document, m: PlayerModel, at: number |
     step: { ...(on ? { at: at + 1 } : {}), total },
     line: { ...(line.number !== undefined ? { number: line.number } : {}), ...(line.error ? { error: true } : {}), text: line.spans },
     body: { id: 'body', label: 'Body', ...(on ? {} : { disabled: true }), ...(m.open === 'body' ? { active: true } : {}) },
+    view: { id: 'view', label: VIEW_LABELS.picture[m.sequence ? 1 : 0], variant: 'quiet', columns: VIEW_COLUMNS, ...key('v') },
   }
 }
+
+/**
+ * The view switch's labels, naming the view it switches to: the sequence
+ * diagram from the architecture, and back. In text cells with a glyph; in
+ * pictures without (the helper's fonts may not have one), one width.
+ */
+export const VIEW_LABELS = { text: ['⇅ Sequence', '◫ Architecture'], picture: ['Sequence', 'Architecture'] } as const
+/** The wider label's columns as a quiet button (render/ui/kit.ts buttonColumns of `Architecture`), so a switch moves nothing. */
+const VIEW_COLUMNS = 14
 
 /** The drawer's cards for the step at `at`: the step and its parallel siblings with their bodies. */
 export const drawerPanel = (view: View, pick: Pick, at: number): DrawerPanel => ({
@@ -275,6 +293,7 @@ export function playerBarText(view: View, doc: Document, m: PlayerModel): Render
             ))}
           </ui.Text>
         </ui.Box>
+        <ui.Button key={`view-${id}`} label={VIEW_LABELS.text[m.sequence ? 1 : 0].padEnd(Math.max(...VIEW_LABELS.text.map(l => l.length)))} {...key('v')} onPress={() => m.actions.view!()} />
         <ui.Button key={`body-${id}`} label={m.open === 'body' ? 'Body ▴' : 'Body ▾'} dimColor={!on} onPress={() => m.actions.body!()} />
       </ui.Box>
       {m.open === 'body' && m.playing && stepRows(ui, view, m.playing.scenario.steps, at).nodes}

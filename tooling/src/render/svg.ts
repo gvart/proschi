@@ -5,7 +5,8 @@
  * under a strict Content-Security-Policy.
  */
 
-import { CANVAS_FONT, CANVAS_TOKENS } from '../../../frontend/src/utils/canvasColors';
+import { CANVAS_FONT } from '../../../frontend/src/utils/canvasColors';
+import { SKETCH_LIGHT, sketchOf, type RenderTheme, type ThemeColors } from './theme';
 
 /** The editor's font stack (Tailwind's `font-sans`). */
 export const FONT = CANVAS_FONT;
@@ -13,67 +14,89 @@ export const FONT = CANVAS_FONT;
 /** The canvas's monospace font (`--font-mono`), for tech stacks and edge labels. */
 export const MONO = "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
 
+/** The canvas's colourways. Drawing in one draws in its sketch render theme (theme.ts). */
 export type Theme = 'light' | 'dark';
 
-function paletteOf(theme: Theme) {
-  const T = CANVAS_TOKENS[theme];
-  return {
-    background: T.paper,
-    surface: T.surface,
-    text: T.ink,
-    muted: T.muted,
-    line: T.muted,
-    border: T.ink,
-    active: T.accent,
-    error: T.fail,
-    par: T.muted,
-    shadow: T.shadow,
-  };
-}
-
 /**
- * The canvas's design tokens (light unless drawn `withTheme`): paper background, white cards, ink borders; `active` and `error` are what use case playback highlights with.
+ * The design tokens being drawn with (sketch-light unless drawn `withTheme`): paper background, white cards, ink borders; `active` and `error` are what use case playback highlights with.
  * Read at draw time, so code drawing inside `withTheme` gets that theme's values.
  */
-export const COLORS = paletteOf('light');
+export const COLORS: ThemeColors = { ...SKETCH_LIGHT.colors };
 
-let theme: Theme = 'light';
+let active: RenderTheme = SKETCH_LIGHT;
 
-/** The theme being drawn. */
-export const currentTheme = (): Theme => theme;
+/** The colourway being drawn (a classic drawing is light). */
+export const currentTheme = (): Theme => active.colorway;
 
-/** Runs `draw` (synchronous) with COLORS set to `next`'s tokens, then puts the light ones back. */
-export function withTheme<T>(next: Theme, draw: () => T): T {
-  if (next === theme) return draw();
+/** The render theme being drawn: its non-colour tokens (corners, shadows, icon tiles, fonts). */
+export const currentRenderTheme = (): RenderTheme => active;
+
+/**
+ * Runs `draw` (synchronous) with COLORS set to `next`'s tokens, then puts the
+ * ones before back. `next` is a colourway (its sketch theme) or a render theme.
+ */
+export function withTheme<T>(next: Theme | RenderTheme, draw: () => T): T {
+  const th = typeof next === 'string' ? sketchOf(next) : next;
+  if (th === active) return draw();
   const before = { ...COLORS };
-  const was = theme;
-  Object.assign(COLORS, paletteOf(next));
-  theme = next;
+  const was = active;
+  Object.assign(COLORS, th.colors);
+  active = th;
   try {
     return draw();
   } finally {
     Object.assign(COLORS, before);
-    theme = was;
+    active = was;
   }
 }
 
-/** A card as on the canvas: `fill`, an ink border of `stroke` px and the hard 3px shadow (`--sh-sm`); `shade` and `depth` recolour and deepen the shadow. */
-export function card(
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  o: { fill?: string; stroke?: number; rx?: number; shadow?: boolean; line?: string; dash?: string; shade?: string; depth?: number } = {},
-): string {
-  const sw = o.stroke ?? 3;
-  const rx = o.rx ?? 4;
+export interface CardOptions {
+  fill?: string;
+  stroke?: number;
+  rx?: number;
+  shadow?: boolean;
+  line?: string;
+  dash?: string;
+  /** Recolours the hard shadow (drawn even in a soft-shadow theme). */
+  shade?: string;
+  /** How far the hard shadow sits off the card (3). */
+  depth?: number;
+  /** Id of the soft drop-shadow filter (classic); without it a soft-shadow theme draws no shadow. */
+  shadowId?: string;
+}
+
+/**
+ * A card in the theme being drawn: `fill` and a border of `stroke` px, with the
+ * canvas's hard 3px shadow (`--sh-sm`), or classic's soft drop shadow when
+ * `shadowId` names its filter; `shade` and `depth` recolour and deepen the hard shadow.
+ */
+export function card(x: number, y: number, w: number, h: number, o: CardOptions = {}): string {
+  const th = active;
+  const sw = o.stroke ?? th.card.stroke;
+  const rx = o.rx ?? th.card.rx;
   const dash = o.dash ? ` stroke-dasharray="${o.dash}"` : '';
+  const hard = o.shadow !== false && (th.card.shadow === 'hard' || o.shade !== undefined);
+  const soft = o.shadow !== false && !hard && o.shadowId ? ` filter="url(#${o.shadowId})"` : '';
   return [
-    o.shadow === false ? '' : `<rect x="${r(x + (o.depth ?? 3))}" y="${r(y + (o.depth ?? 3))}" width="${r(w)}" height="${r(h)}" rx="${rx}" fill="${o.shade ?? COLORS.shadow}"/>`,
-    `<rect x="${r(x + sw / 2)}" y="${r(y + sw / 2)}" width="${r(w - sw)}" height="${r(h - sw)}" rx="${rx}" fill="${o.fill ?? COLORS.surface}" stroke="${o.line ?? COLORS.border}" stroke-width="${sw}"${dash}/>`,
+    hard ? `<rect x="${r(x + (o.depth ?? 3))}" y="${r(y + (o.depth ?? 3))}" width="${r(w)}" height="${r(h)}" rx="${rx}" fill="${o.shade ?? COLORS.shadow}"/>` : '',
+    `<rect x="${r(x + sw / 2)}" y="${r(y + sw / 2)}" width="${r(w - sw)}" height="${r(h - sw)}" rx="${rx}" fill="${o.fill ?? COLORS.surface}" stroke="${o.line ?? COLORS.border}" stroke-width="${sw}"${dash}${soft}/>`,
   ]
     .filter(Boolean)
     .join('\n');
+}
+
+/** classic's card shadow (the canvas's old `shadow-md`), as a filter with id `id`. */
+export function softShadow(id: string): string {
+  // feDropShadow(dy 3, blur 4, black at 10%) spelled in SVG 1.1 primitives, which Inkscape and librsvg also draw.
+  return [
+    `<filter id="${id}" x="-10%" y="-10%" width="120%" height="140%">`,
+    '<feGaussianBlur in="SourceAlpha" stdDeviation="4"/>',
+    '<feOffset dx="0" dy="3" result="blur"/>',
+    '<feFlood flood-color="#000000" flood-opacity="0.1"/>',
+    '<feComposite in2="blur" operator="in"/>',
+    '<feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>',
+    '</filter>',
+  ].join('');
 }
 
 export function esc(text: string): string {
@@ -151,12 +174,12 @@ export function r(n: number): string {
   return String(Math.round(n * 10) / 10);
 }
 
-/** The outer `<svg>` element with the canvas's paper background, so it reads well in dark viewers too. */
+/** The outer `<svg>` element with the theme's opaque background, so it reads well in dark viewers too. */
 export function svgDocument(width: number, height: number, title: string, body: string[], defs = ''): string {
   const w = Math.ceil(width);
   const h = Math.ceil(height);
   return [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" font-family="${FONT}" role="img">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" font-family="${active.font}" role="img">`,
     `<title>${esc(title)}</title>`,
     defs ? `<defs>${defs}</defs>` : '',
     `<rect width="100%" height="100%" fill="${COLORS.background}"/>`,

@@ -7,8 +7,9 @@ import { formatMs, formatRps } from '../../../frontend/src/sim/format';
 import type { EdgeOverlay, NodeOverlay } from '../../../frontend/src/sim/overlay';
 import { currentStepsOf, isErrorStep } from '../terminal/playback';
 import { loadText, type SystemBadge, type SystemStatus } from '../terminal/systems';
-import { techIcon } from './icons';
-import { COLORS, MONO, card, currentTheme, esc, fit, r, svgDocument, text, textWidth, withTheme, wrap, type Theme } from './svg';
+import { techIcon, typeColor } from './icons';
+import { COLORS, MONO, card, currentRenderTheme, currentTheme, esc, fit, r, softShadow, svgDocument, text, textWidth, withTheme, wrap, type Theme } from './svg';
+import type { RenderTheme } from './theme';
 
 /**
  * The architecture as SVG, drawn like the editor's canvas (canvas.css): the
@@ -18,6 +19,11 @@ import { COLORS, MONO, card, currentTheme, esc, fit, r, svgDocument, text, textW
  * and RoutedEdge's orthogonal edges along the layout's routes (edgePath.ts).
  * Colors follow the canvas's light theme (dsl/palette.ts): category tints,
  * `color`, tags, the legend and the critical badge.
+ *
+ * Colours, corners, shadows and icon tiles come from the render theme drawn
+ * in (theme.ts, through svg.ts's `withTheme`): `sketch-light` as described
+ * above, `sketch-dark` in the canvas's dark colourway, or `classic`, the
+ * earlier look with white rounded cards and type-coloured icon tiles.
  */
 
 const MARGIN = 32;
@@ -30,8 +36,36 @@ const NOTE_FONT = 14;
 const NOTE_LINE = 21;
 
 const ICON = 34;
-// TextNode: `--c-yellow` at 22%.
-const NOTE_FILL = '#FFD23F';
+/** Id of classic's soft card shadow filter (svg.ts softShadow). */
+const SHADOW_ID = 'proschi-arch-shadow';
+
+/** The base colour a card is tinted with: sketch tints by category, classic only by an explicit `color`. */
+function baseColor(node: DiagramNode): string | undefined {
+  return currentRenderTheme().categoryTint ? nodeBaseColor(node) : node.style?.color;
+}
+
+/**
+ * The icon tile left of a card's name: outlined with an ink glyph (sketch), or
+ * filled in the type's colour with a white glyph (classic); lit by playback, in the accent.
+ */
+function iconTile(node: DiagramNode, x: number, y: number, lit?: string): string {
+  if (currentRenderTheme().iconTile === 'filled' && !lit) {
+    return [
+      `<rect x="${r(x)}" y="${r(y)}" width="36" height="36" rx="4" fill="${typeColor(node.type)}"/>`,
+      techIcon(node.techStack, x + 8, y + 8, 20, '#ffffff', node.type),
+    ].join('\n');
+  }
+  return [
+    `<rect x="${r(x + 1)}" y="${r(y + 1)}" width="${ICON - 2}" height="${ICON - 2}" rx="4" fill="${lit ?? COLORS.background}" stroke="${lit ?? COLORS.border}" stroke-width="2"/>`,
+    techIcon(node.techStack, x + 8, y + 8, 18, lit ? ON_ACCENT : COLORS.text, node.type),
+  ].join('\n');
+}
+
+/** A card's second line (tech stack), monospace in sketch. */
+function subtitle(x: number, y: number, content: string, max: number, fill: string): string {
+  const mono = currentRenderTheme().mono;
+  return mono ? text(x, y + 31, fit(content, max, 12), { size: 11, weight: 500, fill, family: mono }) : text(x, y + 32, fit(content, max, 12), { size: 12, fill });
+}
 
 interface Placed {
   node: DiagramNode;
@@ -51,8 +85,8 @@ export interface ArchitectureOptions {
   systems?: Record<string, SystemBadge>;
   /** The load on each card, by node id (terminal/systems.ts viewOverlay): a team's nodes inside an expanded system under what it is sent. */
   nodes?: Record<string, NodeOverlay>;
-  /** The canvas's theme to draw in; light by default. */
-  theme?: Theme;
+  /** The canvas's colourway (its sketch theme) or a render theme (theme.ts) to draw in; sketch-light by default. */
+  theme?: Theme | RenderTheme;
   /**
    * The editor's load overlay (sim/overlay.ts): each edge tinted by the load
    * of the node it feeds with an `rps · +latency` chip, the p99 path bold,
@@ -121,6 +155,7 @@ export function drawArchitecture(laid: ArchitectureLayout, options: Architecture
 
 function draw({ diagram, layout }: ArchitectureLayout, options: ArchitectureOptions): string {
   const theme = currentTheme();
+  const th = currentRenderTheme();
   const play = options.play ? playState(options.play) : undefined;
   const boxes = new Map(layout.nodes.map((b) => [b.id, b]));
 
@@ -163,15 +198,16 @@ function draw({ diagram, layout }: ArchitectureLayout, options: ArchitectureOpti
     if (options.selected === p.node.id) body.push(selectionRing(p.x + dx, p.y + dy, p.width, p.height, 10));
     const x = p.x + dx;
     const y = p.y + dy;
-    const base = nodeBaseColor(p.node);
+    const base = baseColor(p.node);
     const t = base ? tint(base, theme) : undefined;
+    const g = th.group;
     if (p.node.system === p.node.id) {
       // An expanded system: a solid double frame in its status color, its status, team, promise and load after the name.
       const badge = options.systems?.[p.node.id];
-      const color = statusColor(badge?.status) ?? t?.line ?? COLORS.text;
+      const color = statusColor(badge?.status) ?? t?.line ?? g.line;
       body.push(
         `<g data-node="${esc(p.node.id)}" data-kind="system-frame"${badge ? ` data-status="${badge.status}"` : ''}>`,
-        `<rect x="${r(x + 1)}" y="${r(y + 1)}" width="${r(p.width - 2)}" height="${r(p.height - 2)}" rx="10" fill="${t?.groupFill ?? COLORS.text}" fill-opacity="${t ? 1 : 0.03}" stroke="${color}" stroke-width="2"/>`,
+        `<rect x="${r(x + 1)}" y="${r(y + 1)}" width="${r(p.width - 2)}" height="${r(p.height - 2)}" rx="${g.rx}" fill="${t?.groupFill ?? g.fill}" fill-opacity="${t ? 1 : (g.fillOpacity ?? 1)}" stroke="${color}" stroke-width="2"/>`,
         `<rect x="${r(x + 5)}" y="${r(y + 5)}" width="${r(p.width - 10)}" height="${r(p.height - 10)}" rx="7" fill="none" stroke="${color}" stroke-width="1.5"/>`,
         '</g>',
       );
@@ -191,19 +227,29 @@ function draw({ diagram, layout }: ArchitectureLayout, options: ArchitectureOpti
     const dash = p.node.style?.dash ? DASH_ARRAY[p.node.style.dash] : '7 5';
     const frame = t
       ? `fill="${t.groupFill}" stroke="${t.line}" stroke-width="2" stroke-dasharray="${dash}"`
-      : `fill="${COLORS.text}" fill-opacity="0.03" stroke="${COLORS.text}" stroke-opacity="0.45" stroke-width="2" stroke-dasharray="${dash}"`;
+      : `fill="${g.fill}"${g.fillOpacity !== undefined ? ` fill-opacity="${g.fillOpacity}"` : ''} stroke="${g.line}"${g.lineOpacity !== undefined ? ` stroke-opacity="${g.lineOpacity}"` : ''} stroke-width="2" stroke-dasharray="${dash}"`;
     body.push(
       `<g data-node="${esc(p.node.id)}" data-kind="group">`,
-      `<rect x="${r(x + 1)}" y="${r(y + 1)}" width="${r(p.width - 2)}" height="${r(p.height - 2)}" rx="10" ${frame}/>`,
+      `<rect x="${r(x + 1)}" y="${r(y + 1)}" width="${r(p.width - 2)}" height="${r(p.height - 2)}" rx="${g.rx}" ${frame}/>`,
       '</g>',
     );
     if (play) body.push('</g>');
     // The title and description go over the edges (with a halo), so an edge entering the group does not strike them through.
+    const line = t?.line ?? g.line;
     titles.push(
       `<g data-group-title="${esc(p.node.id)}">`,
-      techIcon('Logical Group', x + 14, y + 13, 14, t?.line ?? COLORS.text),
-      halo(text(x + 34, y + 24, fit(p.node.name.toUpperCase(), p.width - 52, 12, true), { size: 12, weight: 700, fill: t?.line ?? COLORS.text, opacity: t ? 1 : 0.8, spacing: 1 })),
-      p.node.description ? halo(text(x + 14, y + 48, fit(p.node.description, p.width - 28, 13), { size: 13, fill: COLORS.muted })) : '',
+      ...(g.title === 'caps'
+        ? [
+            techIcon('Logical Group', x + 14, y + 13, 14, line),
+            halo(text(x + 34, y + 24, fit(p.node.name.toUpperCase(), p.width - 52, 12, true), { size: 12, weight: 700, fill: line, opacity: t ? 1 : 0.8, spacing: 1 })),
+            p.node.description ? halo(text(x + 14, y + 48, fit(p.node.description, p.width - 28, 13), { size: 13, fill: COLORS.muted })) : '',
+          ]
+        : [
+            // classic: GroupNode's folder icon and name in the group's blue, as before the canvas restyle.
+            techIcon('Logical Group', x + 18, y + 22, 20, line),
+            halo(text(x + 46, y + 38, fit(p.node.name, p.width - 64, 18, true), { size: 18, weight: 600, fill: line })),
+            p.node.description ? halo(text(x + 18, y + 72, fit(p.node.description, p.width - 36, 14), { size: 14, fill: COLORS.team })) : '',
+          ]),
       '</g>',
     );
   }
@@ -289,7 +335,8 @@ function draw({ diagram, layout }: ArchitectureLayout, options: ArchitectureOpti
   }
 
   if (diagram.nodes.length === 0) body.push(text(MARGIN, MARGIN + 16, 'Empty diagram', { fill: COLORS.muted }));
-  return svgDocument(maxX - minX + MARGIN * 2, maxY - minY + MARGIN * 2, diagram.title ?? 'Architecture', body.filter(Boolean));
+  const defs = th.card.shadow === 'soft' ? softShadow(SHADOW_ID) : '';
+  return svgDocument(maxX - minX + MARGIN * 2, maxY - minY + MARGIN * 2, diagram.title ?? 'Architecture', body.filter(Boolean), defs);
 }
 
 /** A paper-coloured outline behind the letters, so lines underneath stop short of them. */
@@ -309,8 +356,9 @@ function clearOfHandle(points: Point[], box: { x: number; y: number; width: numb
   return [...points.slice(0, -1), { x: end.x - (end.x - before.x) * k, y: end.y - (end.y - before.y) * k }];
 }
 
-/** React Flow's handle (`.pc-handle`): a 9px square centred on (cx, cy). */
+/** React Flow's handle (`.pc-handle`): a 9px square centred on (cx, cy); none in classic. */
 function handle(cx: number, cy: number): string {
+  if (!currentRenderTheme().handles) return '';
   return `<rect x="${r(cx - 4.5)}" y="${r(cy - 4.5)}" width="9" height="9" rx="1" fill="${COLORS.surface}" stroke="${COLORS.border}" stroke-width="2"/>`;
 }
 
@@ -324,8 +372,9 @@ function drawCard(p: Placed, dx: number, dy: number, load?: NodeOverlay, live: {
   const lift = mark ? 2 : 0;
   const x = p.x + dx - lift;
   const y = p.y + dy - lift;
+  const th = currentRenderTheme();
   const textX = x + PAD_X + ICON + 10;
-  const base = nodeBaseColor(node);
+  const base = baseColor(node);
   const t = base ? tint(base, currentTheme()) : undefined;
   const dash = node.style?.dash ? DASH_ARRAY[node.style.dash].replace(/\d+/g, (n) => String(Number(n) * 1.5)) : undefined;
   // The load, as on the terminal's cards: how busy (or down) after the tech, a bar along the bottom, and the heat as the fill.
@@ -351,14 +400,13 @@ function drawCard(p: Placed, dx: number, dy: number, load?: NodeOverlay, live: {
     `<g data-node="${esc(node.id)}" data-kind="${esc(node.type)}"${busy ? ` data-load="${busy}"` : ''}${mark ? ` data-play="${mark}"` : ''}>`,
     ringed ? bottleneckRing(x, y, width, height) : '',
     stack > 0 ? stackOf(x, y, width, height, stack) : '',
-    card(x, y, width, height, { fill: heat ?? t?.fill, line: mark === 'failing' ? COLORS.error : t?.line, dash, ...(lit ? { shade: lit, depth: 5 } : stack > 0 ? { shadow: false } : {}) }),
-    `<rect x="${r(x + PAD_X + 1)}" y="${r(y + PAD_Y + 1)}" width="${ICON - 2}" height="${ICON - 2}" rx="4" fill="${lit ?? COLORS.background}" stroke="${lit ?? COLORS.border}" stroke-width="2"/>`,
-    techIcon(node.techStack, x + PAD_X + 8, y + PAD_Y + 8, 18, lit ? ON_ACCENT : COLORS.text, node.type),
-    text(textX, y + PAD_Y + 15, fit(node.name, textMax, 14, true), { size: 14, weight: 700, ...(fg !== COLORS.text ? { fill: fg } : {}) }),
-    text(textX, y + PAD_Y + 31, fit(node.techStack, techMax, 12), { size: 11, weight: 500, fill: dim, family: MONO }),
-    busy ? text(x + width - PAD_X, y + PAD_Y + 31, busy, { size: 11, weight: 700, fill: ink, anchor: 'end', family: MONO }) : '',
+    card(x, y, width, height, { fill: heat ?? t?.fill, line: mark === 'failing' ? COLORS.error : t?.line, dash, shadowId: SHADOW_ID, ...(lit ? { shade: lit, depth: 5 } : stack > 0 ? { shadow: false } : {}) }),
+    iconTile(node, x + PAD_X, y + PAD_Y, lit),
+    text(textX, y + PAD_Y + 15, fit(node.name, textMax, 14, true), { size: 14, weight: th.bold, ...(fg !== COLORS.text ? { fill: fg } : {}) }),
+    subtitle(textX, y + PAD_Y, node.techStack, techMax, dim),
+    busy ? text(x + width - PAD_X, y + PAD_Y + 31, busy, { size: 11, weight: 700, fill: ink, anchor: 'end', family: th.mono }) : '',
     bar,
-    node.ownerTeam ? text(x + PAD_X, y + PAD_Y + 60, fit(`Team: ${node.ownerTeam}`, width - PAD_X * 2, 12), { size: 12, fill: dim }) : '',
+    node.ownerTeam ? text(x + PAD_X, y + PAD_Y + 60, fit(`Team: ${node.ownerTeam}`, width - PAD_X * 2, 12), { size: 12, fill: scale?.fill ? fg : COLORS.team }) : '',
     ringed ? bottleneckTag(x, y) : '',
     handle(x + width / 2, y),
     handle(x + width / 2, y + height),
@@ -430,7 +478,8 @@ function drawSystem(p: Placed, dx: number, dy: number, badge: SystemBadge | unde
   const lift = mark ? 2 : 0;
   const x = p.x + dx - lift;
   const y = p.y + dy - lift;
-  const base = nodeBaseColor(node);
+  const th = currentRenderTheme();
+  const base = baseColor(node);
   const t = base ? tint(base, currentTheme()) : undefined;
   const status = badge?.status;
   const lit = mark === 'failing' ? COLORS.error : mark === 'active' ? COLORS.active : undefined;
@@ -442,11 +491,10 @@ function drawSystem(p: Placed, dx: number, dy: number, badge: SystemBadge | unde
   const textMax = width - PAD_X * 2 - ICON - 10;
   const out = [
     `<g data-node="${esc(node.id)}" data-kind="system"${status ? ` data-status="${status}"` : ''}>`,
-    card(x, y, width, height, { fill: heat ?? t?.fill, line, ...(lit ? { shade: lit, depth: 5 } : {}) }),
-    `<rect x="${r(x + 6)}" y="${r(y + 6)}" width="${r(width - 12)}" height="${r(height - 12)}" rx="2" fill="none" stroke="${line}" stroke-width="1.5"/>`,
-    `<rect x="${r(x + PAD_X + 1)}" y="${r(y + PAD_Y + 1)}" width="${ICON - 2}" height="${ICON - 2}" rx="4" fill="${lit ?? COLORS.background}" stroke="${lit ?? COLORS.border}" stroke-width="2"/>`,
-    techIcon(node.techStack, x + PAD_X + 8, y + PAD_Y + 8, 18, lit ? ON_ACCENT : COLORS.text, node.type),
-    text(textX, y + PAD_Y + 15, fit(node.name, textMax, 14, true), { size: 14, weight: 700 }),
+    card(x, y, width, height, { fill: heat ?? t?.fill, line, shadowId: SHADOW_ID, ...(lit ? { shade: lit, depth: 5 } : {}) }),
+    `<rect x="${r(x + 6)}" y="${r(y + 6)}" width="${r(width - 12)}" height="${r(height - 12)}" rx="${Math.max(2, th.card.rx - 4)}" fill="none" stroke="${line}" stroke-width="1.5"/>`,
+    iconTile(node, x + PAD_X, y + PAD_Y, lit),
+    text(textX, y + PAD_Y + 15, fit(node.name, textMax, 14, true), { size: 14, weight: th.bold }),
     text(textX, y + PAD_Y + 31, fit(badge?.team ? `@${badge.team}` : 'system', textMax, 12), { size: 12, weight: 600, fill: COLORS.muted }),
   ];
   if (badge) {
@@ -456,8 +504,8 @@ function drawSystem(p: Placed, dx: number, dy: number, badge: SystemBadge | unde
     out.push(
       `<rect x="${r(x + width - 14 - pill)}" y="${r(y - 9)}" width="${r(pill)}" height="18" rx="9" fill="${COLORS.surface}" stroke="${ink}" stroke-width="1.5"/>`,
       text(x + width - 14 - pill / 2, y + 4, word, { size: 11, weight: 700, fill: ink, anchor: 'middle' }),
-      text(x + PAD_X, y + PAD_Y + 52, fit(badge.promise ? `promise ${badge.promise}` : 'no promise', width - PAD_X * 2, 12), { size: 12, weight: 500, fill: badge.promise ? COLORS.text : COLORS.muted, family: MONO }),
-      text(x + PAD_X, y + PAD_Y + 68, loadText(badge), { size: 12, weight: 600, family: MONO }),
+      text(x + PAD_X, y + PAD_Y + 52, fit(badge.promise ? `promise ${badge.promise}` : 'no promise', width - PAD_X * 2, 12), { size: 12, weight: 500, fill: badge.promise ? COLORS.text : COLORS.muted, family: th.mono }),
+      text(x + PAD_X, y + PAD_Y + 68, loadText(badge), { size: 12, weight: 600, family: th.mono }),
       text(x + width - PAD_X, y + PAD_Y + 68, 'sent / headroom', { size: 11, fill: COLORS.muted, anchor: 'end' }),
     );
     if (Number.isFinite(badge.headroomRps) && badge.headroomRps > 0) {
@@ -470,19 +518,27 @@ function drawSystem(p: Placed, dx: number, dy: number, badge: SystemBadge | unde
     }
   }
   out.push(handle(x + width / 2, y), handle(x + width / 2, y + height), '</g>');
-  return out.join('\n');
+  return out.filter(Boolean).join('\n');
 }
 
 function drawNote(p: Placed, dx: number, dy: number): string {
   const x = p.x + dx;
   const y = p.y + dy;
+  const th = currentRenderTheme();
+  const n = th.note;
+  // sketch: a white card under a 22% wash of yellow (TextNode's `--c-yellow`); classic: TextNode's old yellow sticky note.
+  const paper = n.border
+    ? `<rect x="${r(x + 1)}" y="${r(y + 1)}" width="${r(p.width - 2)}" height="${r(p.height - 2)}" rx="${th.card.rx}" fill="${n.fill}" stroke="${n.border}" stroke-width="2"/>`
+    : [
+        card(x, y, p.width, p.height, { fill: COLORS.surface, stroke: 2 }),
+        `<rect x="${r(x + 2)}" y="${r(y + 2)}" width="${r(p.width - 4)}" height="${r(p.height - 4)}" rx="3" fill="${n.fill}" fill-opacity="0.22"/>`,
+      ].join('\n');
   return [
     `<g data-node="${esc(p.node.id)}" data-kind="text">`,
-    card(x, y, p.width, p.height, { fill: COLORS.surface, stroke: 2 }),
-    `<rect x="${r(x + 2)}" y="${r(y + 2)}" width="${r(p.width - 4)}" height="${r(p.height - 4)}" rx="3" fill="${NOTE_FILL}" fill-opacity="0.22"/>`,
-    techIcon('Sticky Note', x + 18, y + 20, 16, COLORS.text),
-    text(x + 42, y + 33, fit(p.node.name, p.width - 60, 14), { size: 14, weight: 600 }),
-    ...(p.lines ?? []).map((line, i) => text(x + 18, y + 61 + i * NOTE_LINE, line, { size: NOTE_FONT })),
+    paper,
+    techIcon('Sticky Note', x + 18, y + 20, 16, n.icon),
+    text(x + 42, y + 33, fit(p.node.name, p.width - 60, 14), { size: 14, weight: n.border ? 500 : 600, fill: n.title }),
+    ...(p.lines ?? []).map((line, i) => text(x + 18, y + 61 + i * NOTE_LINE, line, { size: NOTE_FONT, fill: n.body })),
     '</g>',
   ].join('\n');
 }
@@ -491,12 +547,14 @@ function drawNote(p: Placed, dx: number, dy: number): string {
 function criticalBadge(cx: number, cy: number): string {
   return [
     `<g data-critical="true">`,
-    `<circle cx="${r(cx + 1)}" cy="${r(cy + 1)}" r="11" fill="${COLORS.shadow}"/>`,
+    currentRenderTheme().card.shadow === 'hard' ? `<circle cx="${r(cx + 1)}" cy="${r(cy + 1)}" r="11" fill="${COLORS.shadow}"/>` : '',
     `<circle cx="${r(cx)}" cy="${r(cy)}" r="10.5" fill="${CRITICAL_FILL}" stroke="${ON_ACCENT}" stroke-width="1.5"/>`,
     `<path d="M${r(cx)},${r(cy - 5.5)} L${r(cx + 5.5)},${r(cy + 4)} L${r(cx - 5.5)},${r(cy + 4)} Z" fill="none" stroke="${ON_ACCENT}" stroke-width="1.6" stroke-linejoin="round"/>`,
     `<path d="M${r(cx)},${r(cy - 1.5)} V${r(cy + 0.8)} M${r(cx)},${r(cy + 2.4)} v0.1" stroke="${ON_ACCENT}" stroke-width="1.6" stroke-linecap="round"/>`,
     '</g>',
-  ].join('\n');
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
 const CRITICAL_FILL = '#FFD23F';
@@ -513,7 +571,7 @@ function legendSize(entries: LegendEntry[]): { width: number; height: number } {
 /** The legend panel (Legend.tsx): a card with one swatch and label per entry. */
 function drawLegend(entries: LegendEntry[], x: number, y: number, width: number): string {
   const { height } = legendSize(entries);
-  const out = [`<g data-legend="true">`, card(x, y, width, height, { stroke: 2 })];
+  const out = [`<g data-legend="true">`, card(x, y, width, height, { stroke: 2, shadowId: SHADOW_ID })];
   out.push(text(x + LEGEND_PAD, y + LEGEND_PAD + 8, 'LEGEND', { size: 10, weight: 700, fill: COLORS.muted, spacing: 1 }));
   entries.forEach((entry, i) => {
     const rowY = y + LEGEND_PAD + 16 + i * LEGEND_ROW;
@@ -538,23 +596,30 @@ function edgeStroke(edge: DiagramEdge): { color?: string; dash?: string } {
 
 /** RoutedEdge: the route with rounded bends and an arrowhead at the target, the label on the line. */
 function drawEdge(id: string, label: string | undefined, points: Point[], at: Point, stroke: { color?: string; dash?: string } = {}): string {
-  const color = stroke.color ?? COLORS.line;
+  const th = currentRenderTheme();
+  const color = stroke.color ?? COLORS.edge;
   const { points: line, head } = withHead(points);
   const out = [
     `<g data-edge="${esc(id)}">`,
-    `<path d="${roundedPath(line)}" fill="none" stroke="${color}" stroke-width="2"${stroke.dash ? ` stroke-dasharray="${stroke.dash}"` : ''}/>`,
+    `<path d="${roundedPath(line)}" fill="none" stroke="${color}" stroke-width="${th.stroke}"${stroke.dash ? ` stroke-dasharray="${stroke.dash}"` : ''}/>`,
   ];
   if (head) out.push(`<path d="${head}" fill="${color}"/>`);
-  if (label) {
-    const shown = fit(label, 200, 11);
-    const w = textWidth(shown, 11) + 12;
-    out.push(
-      `<rect x="${r(at.x - w / 2)}" y="${r(at.y - 9)}" width="${r(w)}" height="18" rx="2" fill="${COLORS.background}"/>`,
-      text(at.x, at.y + 4, shown, { size: 11, weight: 500, fill: COLORS.text, opacity: 0.8, anchor: 'middle', family: MONO }),
-    );
-  }
+  if (label) out.push(edgeLabel(label, at));
   out.push('</g>');
   return out.join('\n');
+}
+
+/** An edge's label on a background-coloured plate: monospace in sketch, the sans font in classic. */
+function edgeLabel(label: string, at: Point): string {
+  const mono = currentRenderTheme().mono;
+  const shown = fit(label, 200, 11);
+  const w = textWidth(shown, 11) + (mono ? 12 : 8);
+  return [
+    `<rect x="${r(at.x - w / 2)}" y="${r(at.y - 9)}" width="${r(w)}" height="18" rx="2" fill="${COLORS.background}"/>`,
+    mono
+      ? text(at.x, at.y + 4, shown, { size: 11, weight: 500, fill: COLORS.text, opacity: 0.8, anchor: 'middle', family: mono })
+      : text(at.x, at.y + 4, shown, { size: 11, fill: COLORS.text, anchor: 'middle' }),
+  ].join('\n');
 }
 
 // ---- Live state: the load overlay, playback and selection (ArchitectureOptions `overlay`, `play`, `selected`).
@@ -667,8 +732,8 @@ const monoWidth = (content: string, size: number) => [...content].length * size 
  */
 function drawLiveEdge(edge: DiagramEdge | undefined, points: Point[], at: Point, load: EdgeOverlay | undefined, move: Move | undefined, opaque = false): string {
   const own = edge ? edgeStroke(edge) : {};
-  let color = own.color ?? COLORS.line;
-  let width = 2;
+  let color = own.color ?? COLORS.edge;
+  let width = currentRenderTheme().stroke;
   let dash = own.dash;
   let casing = false;
   if (load) {
@@ -701,14 +766,7 @@ function drawLiveEdge(edge: DiagramEdge | undefined, points: Point[], at: Point,
         text(at.x, at.y - h / 2 + 13 + i * 14, l, { size: 11, weight: label && i === 0 ? 500 : 600, anchor: 'middle', family: MONO, ...(label && i === 0 ? { opacity: 0.75 } : {}) }),
       ),
     );
-  } else if (label) {
-    const shown = fit(label, 200, 11);
-    const w = textWidth(shown, 11) + 12;
-    out.push(
-      `<rect x="${r(at.x - w / 2)}" y="${r(at.y - 9)}" width="${r(w)}" height="18" rx="2" fill="${COLORS.background}"/>`,
-      text(at.x, at.y + 4, shown, { size: 11, weight: 500, fill: COLORS.text, opacity: 0.8, anchor: 'middle', family: MONO }),
-    );
-  }
+  } else if (label) out.push(edgeLabel(label, at));
   out.push('</g>');
   return out.join('\n');
 }

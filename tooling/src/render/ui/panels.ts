@@ -1,6 +1,6 @@
 import type { ActionBarPanel, Block, Control, DrawerPanel, ExplorerPanel, Item, MenuPanel, NoticesPanel, Panel, PlayerBarPanel, Rich, ScenarioChip, Select, StepCard, SystemBarPanel, TabBarPanel, UiTheme, ZoomPanel } from './contract';
 import { BODY, CODE, CONTROL_ROW, blocks, codeBox, itemsRow, menu, menuColumns, placeButton, upToRow } from './blocks';
-import { CELL, CONTROL, Surface, buttonColumns, chip, drawLaid, drawSelect, icon, layoutRich, line, paragraph, rect, selectColumns, surfaceFrame, tint, txt, width, type Box, type ControlState, type Edges } from './kit';
+import { CELL, CONTROL, Surface, buttonColumns, chip, drawButton, drawLaid, drawSelect, icon, layoutRich, line, paragraph, rect, selectColumns, surfaceFrame, tint, txt, width, type Box, type ControlState, type Edges } from './kit';
 import { clip } from './metrics';
 import { alpha, mix, paletteOf, type Palette } from './theme';
 
@@ -190,11 +190,23 @@ function playerBar(S: Surface, p: PlayerBarPanel): number {
   const cy = CONTROL_ROW + BAR_LINE / 2;
   let x = GUTTER;
   let right = S.width - GUTTER;
+  // From the right, on cells: Body ▾, then the view switch before it.
+  let col = S.columns - 1;
   if (p.body) {
     const b = p.body;
     const columns = selectColumns(b.label ?? 'Body');
-    const box: Box = { x: (S.columns - 1 - columns) * CELL.width, y: cy - 13, w: columns * CELL.width, h: 26 };
+    col -= columns;
+    const box: Box = { x: col * CELL.width, y: cy - 13, w: columns * CELL.width, h: 26 };
     S.place({ control: { id: b.id, kind: 'toggle', ...(b.hotkey ? { hotkey: b.hotkey } : {}), ...(b.disabled ? { disabled: true } : {}) }, box, draw: (state) => (b.disabled ? drawSelect(P, b.label ?? 'Body', box, 'rest', false, undefined, undefined, true) : drawSelect(P, b.label ?? 'Body', box, state, b.active === true)) });
+    right = box.x - 12;
+    col -= 1;
+  }
+  if (p.view) {
+    const v = p.view;
+    const columns = buttonColumns(v);
+    col -= columns;
+    const box: Box = { x: col * CELL.width, y: cy - 13, w: columns * CELL.width, h: 26 };
+    S.place({ control: { id: v.id, kind: 'button', ...(v.hotkey ? { hotkey: v.hotkey } : {}), ...(v.disabled ? { disabled: true } : {}) }, box, draw: (state) => drawButton(P, v, box, state) });
     right = box.x - 12;
   }
   if (p.line.number !== undefined) {

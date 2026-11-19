@@ -13,6 +13,7 @@ import { techIcon } from '../src/render/icons';
 import { PALETTE, tint } from '../../frontend/src/dsl/palette';
 import { SYSTEM_SIZE } from '../../frontend/src/dsl/autoLayout';
 import { COLORS, esc, fit, textWidth } from '../src/render/svg';
+import { getTheme } from '../src/render/theme';
 
 async function capture(argv: string[]) {
   const out: string[] = [];
@@ -100,6 +101,30 @@ describe('proschi render', () => {
     for (const uc of diagram.useCases) for (const s of uc.scenarios) expect(html).toContain(`href="#${uc.id}--${s.id}"`);
     expect(html).not.toMatch(/<script|<link|https?:\/\/(?!www\.w3\.org)/);
     // Each inline SVG has its own marker ids.
+    const ids = [...html.matchAll(/<marker id="([^"]+)"/g)].map((m) => m[1]);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it.each(exampleFiles.map((e) => [e.id, e]))('renders %s as a preview page with a scenario picker', async (_id, example) => {
+    const out = join(dir, 'preview', example.id);
+    const r = await capture(['render', example.file, '--out', out, '--format', 'preview-html']);
+    expect(r.code).toBe(0);
+    expect(r.out).toBe(join(out, `${example.id}.preview.html`));
+    const { diagram } = parse(example.source);
+    const slugs = diagram.useCases.flatMap((uc) => uc.scenarios.map((s) => `${uc.id}--${s.id}`));
+
+    const html = readFileSync(join(out, `${example.id}.preview.html`), 'utf8');
+    expect(html.startsWith('<!doctype html>')).toBe(true);
+    expect(html).toContain('<details open><summary>Architecture</summary>');
+    expect(html.match(/<svg [^>]*font-family=/g)).toHaveLength(1 + slugs.length);
+    for (const slug of slugs) {
+      expect(html).toContain(`<option value="${slug}">`);
+      expect(html).toContain(`data-slug="${slug}"`);
+    }
+    // Only the first scenario shows before the script runs.
+    expect(html.match(/class="scenario" data-slug="[^"]+" hidden>/g) ?? []).toHaveLength(Math.max(0, slugs.length - 1));
+    expect(html).not.toMatch(/<link|https?:\/\/(?!www\.w3\.org)/);
+    expect(html.match(/<script>/g)).toHaveLength(1);
     const ids = [...html.matchAll(/<marker id="([^"]+)"/g)].map((m) => m[1]);
     expect(new Set(ids).size).toBe(ids.length);
   });
@@ -377,6 +402,59 @@ usecase "Create order" {
     expect(reply).not.toContain('<text');
   });
 
+  it('draws section frames with their names, nested and inset, behind the messages in both themes', () => {
+    const d = parse(
+      [
+        'usecase "U" {',
+        '  section "PRE-REQUEST" {',
+        '    section "root.yml before-request" {',
+        '      a -> a : guard',
+        '      a -> b : GET /x',
+        '      b --> a : 200',
+        '    }',
+        '  }',
+        '  section "TESTS" {',
+        '    par {',
+        '      a -> b : GET /y',
+        '      a -> c : GET /z',
+        '    }',
+        '  }',
+        '  a -> a : report',
+        '}',
+      ].join('\n'),
+    ).diagram;
+    for (const theme of ['sketch', 'classic'] as const) {
+      const svg = renderSequenceSvg(d, d.useCases[0], d.useCases[0].scenarios[0], '', getTheme(theme));
+      expect(XMLValidator.validate(svg)).toBe(true);
+      const frames = [...svg.matchAll(/<rect data-kind="section" data-section="([^"]+)" x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)"/g)].map((m) => ({
+        name: m[1],
+        x: Number(m[2]),
+        y: Number(m[3]),
+        w: Number(m[4]),
+        h: Number(m[5]),
+      }));
+      expect(frames.map((f) => f.name)).toEqual(['PRE-REQUEST', 'TESTS', 'root.yml before-request']);
+      const [pre, tests, root] = frames;
+      // The inner frame sits inside the outer one, inset on both sides, and the next section starts below.
+      expect(root.x).toBeGreaterThan(pre.x);
+      expect(root.x + root.w).toBeLessThan(pre.x + pre.w);
+      expect(root.y).toBeGreaterThan(pre.y);
+      expect(root.y + root.h).toBeLessThan(pre.y + pre.h);
+      expect(tests.y).toBeGreaterThan(pre.y + pre.h);
+      // Titles are drawn after the lifelines and before the messages, so nothing crosses them.
+      const titles = [...svg.matchAll(/<g data-kind="section-title">[\s\S]*?<text[^>]*>([^<]*)<\/text>/g)].map((m) => m[1]);
+      expect(titles).toEqual(['PRE-REQUEST', 'TESTS', 'root.yml before-request']);
+      expect(svg.lastIndexOf('data-participant')).toBeLessThan(svg.indexOf('data-kind="section-title"'));
+      expect(svg.lastIndexOf('data-kind="section-title"')).toBeLessThan(svg.indexOf('data-step='));
+      // The par region inside TESTS is inset like a nested section; the last step is outside every frame.
+      const par = /<g data-kind="par">\n<rect x="([\d.]+)" y="([\d.]+)"/.exec(svg)!;
+      expect(Number(par[1])).toBe(root.x);
+      expect(Number(par[2])).toBeGreaterThan(tests.y);
+      const report = stepGroups(svg, 'request').at(-1)!;
+      expect(Number(/<path d="M[\d.]+,([\d.]+)/.exec(report)![1])).toBeGreaterThan(tests.y + tests.h);
+    }
+  });
+
   it('estimates and fits text', () => {
     expect(textWidth('MMMM', 10)).toBeGreaterThan(textWidth('iiii', 10));
     expect(fit('short', 200, 12)).toBe('short');
@@ -405,6 +483,28 @@ describe('VS Code preview', () => {
     expect(html.match(/<script/g)).toHaveLength(1);
     expect(html).toContain('<div id="root"><p>hi</p></div>');
     expect(html).not.toMatch(/https?:\/\//);
+  });
+
+  it('draws use case sections as titled frames in the scenario diagram', async () => {
+    const source = [
+      'runner "Runner" [Actor]',
+      'api "Orders API" [REST API]',
+      'runner -> api : HTTPS',
+      'usecase "Create" {',
+      '  section "REQUEST" {',
+      '    section "inner" {',
+      '      runner -> api : POST /orders',
+      '    }',
+      '    api --> runner : 201',
+      '  }',
+      '}',
+      '',
+    ].join('\n');
+    const content = await renderPreviewContent(source);
+    expect(content.ok).toBe(true);
+    expect(content.html.match(/data-kind="section"/g)).toHaveLength(2);
+    expect(content.html).toContain('data-section="REQUEST"');
+    expect(content.html).toContain('data-section="inner"');
   });
 
   it('renders the architecture and a scenario picker, showing the first scenario', async () => {

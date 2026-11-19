@@ -8,10 +8,11 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
+  Network,
+  ArrowRightLeft,
 } from 'lucide-react';
 import ReactFlow, {
   Background,
-  Controls,
   MiniMap,
   BackgroundVariant,
   ReactFlowProvider,
@@ -28,6 +29,8 @@ import GroupNode from '../Canvas/GroupNode';
 import SystemNode from '../Canvas/SystemNode';
 import { PlaybackClock, PlaybackClockContext, usePlaybackProgress } from './playbackClock';
 import { PLAYBACK_EDGE_TYPES, framesOf, isErrorStep, playbackView, stepIndexOf, type PlaybackView, type PlayedUseCase } from './playbackView';
+import SequenceView, { type SequenceSource } from './SequenceView';
+import { CanvasControls } from '../Diagram/ZoomControls';
 
 const nodeTypes = {
   componentNode: ComponentNode,
@@ -35,6 +38,12 @@ const nodeTypes = {
   groupNode: GroupNode,
   systemNode: SystemNode,
 };
+
+/** `PRE-REQUEST › root.yml`: the sections a step (or its response) is written in, if any. */
+function sectionPath(step: FlowStep, response: boolean): string | undefined {
+  const sections = response ? (step.responseSections ?? step.sections) : step.sections;
+  return sections?.length ? sections.map((s) => s.name).join(' › ') : undefined;
+}
 
 /** How a body format reads in the step card. */
 const FORMAT_LABEL: Record<FlowStep['responseFormat'], string> = { JSON: 'JSON', XML: 'XML', FREE_TEXT: 'Text' };
@@ -63,7 +72,17 @@ interface PlaybackOptions {
    * host shows its own captions.
    */
   bare?: boolean;
+  /**
+   * The scenario being played, as the diagram has it: given, the controls get
+   * an Architecture / Sequence switch, and the sequence view draws the same
+   * steps as a sequence diagram in the canvas's place. Its steps must be the
+   * ones played (`useCase.steps`).
+   */
+  sequence?: SequenceSource;
 }
+
+/** What playback draws: the architecture (the host's canvas) or the scenario's sequence diagram. */
+export type PlaybackLayout = 'architecture' | 'sequence';
 
 interface UseCasePlaybackProps extends PlaybackOptions {
   /** The use case to play; none draws the diagram as it is. A new `id` (or name) starts it over. */
@@ -94,9 +113,12 @@ export function UseCasePlayback({
   onFinished,
   loop = false,
   bare = false,
+  sequence,
   children,
 }: UseCasePlaybackProps) {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  // Kept while playback moves to another use case or scenario: what the reader chose to look at.
+  const [layout, setLayout] = useState<PlaybackLayout>('architecture');
   const [isPlaying, setIsPlaying] = useState(false);
   const [clock] = useState(() => new PlaybackClock());
   const steps = useMemo(() => useCase?.steps ?? [], [useCase]);
@@ -111,15 +133,25 @@ export function UseCasePlayback({
     onBackRef.current = onBack;
   });
 
-  // Escape leaves playback, unless it is meant for a field or an open menu.
+  // Escape leaves playback and V switches between the architecture and the sequence,
+  // unless the key is meant for a field or an open menu.
   const playingSomething = !!useCase;
+  const canSwitch = !!sequence && !bare && steps.length > 0;
+  const canSwitchRef = useRef(canSwitch);
+  useEffect(() => {
+    canSwitchRef.current = canSwitch;
+  });
+  const showSequence = canSwitch && !!useCase && layout === 'sequence';
   useEffect(() => {
     if (bare || !playingSomething) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || e.defaultPrevented) return;
-      const t = e.target as HTMLElement | null;
-      if (t?.closest('input, textarea, select, [contenteditable="true"], [role="menu"], [role="dialog"]')) return;
-      onBackRef.current();
+      if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
+      const toggle = (e.key === 'v' || e.key === 'V') && canSwitchRef.current;
+      if (e.key !== 'Escape' && !toggle) return;
+      const t = e.target;
+      if (t instanceof Element && t.closest('input, textarea, select, [contenteditable="true"], .cm-editor, [role="menu"], [role="dialog"]')) return;
+      if (toggle) setLayout((l) => (l === 'sequence' ? 'architecture' : 'sequence'));
+      else onBackRef.current();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -249,7 +281,24 @@ export function UseCasePlayback({
       )}
 
       <div className="pc-playback__canvas flex-1 min-h-0 relative">
-        <PlaybackClockContext.Provider value={clock}>{children(view)}</PlaybackClockContext.Provider>
+        {/* The canvas stays mounted under the sequence, so switching back neither re-lays-out nor re-fits it. */}
+        <div className="h-full w-full" style={showSequence ? { visibility: 'hidden' } : undefined} aria-hidden={showSequence || undefined}>
+          <PlaybackClockContext.Provider value={clock}>{children(view)}</PlaybackClockContext.Provider>
+        </div>
+        {showSequence && sequence && (
+          <PlaybackClockContext.Provider value={clock}>
+            <SequenceView
+              {...sequence}
+              frame={currentStepIndex}
+              onSelectFrame={(index) => {
+                handlePause();
+                setCurrentStepIndex(index);
+                clock.start();
+              }}
+              className="absolute inset-0"
+            />
+          </PlaybackClockContext.Provider>
+        )}
       </div>
 
       {useCase && !bare && steps.length === 0 && (
@@ -292,6 +341,7 @@ export function UseCasePlayback({
                       {response ? '↩' : steps.indexOf(step) + 1}
                     </div>
                     <div className="flex-1 min-w-0">
+                      {sectionPath(step, response) && <p className="text-xs font-semibold text-muted break-words">{sectionPath(step, response)}</p>}
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="font-semibold text-ink break-words">{response ? `Response to ${step.stepName}` : step.stepName}</h3>
                         {step.failed && (
@@ -430,6 +480,7 @@ export function UseCasePlayback({
                 </PlaybackClockContext.Provider>
               </div>
             </div>
+            {canSwitch && <LayoutSwitch layout={layout} onChange={setLayout} />}
             {!showHeader && (
               <button
                 onClick={onBack}
@@ -444,6 +495,32 @@ export function UseCasePlayback({
         </div>
       </div>
       </>}
+    </div>
+  );
+}
+
+const LAYOUTS: { id: PlaybackLayout; label: string; title: string; icon: typeof Network }[] = [
+  { id: 'architecture', label: 'Architecture', title: 'Play the steps on the architecture (V)', icon: Network },
+  { id: 'sequence', label: 'Sequence', title: 'Show the steps as a sequence diagram (V)', icon: ArrowRightLeft },
+];
+
+/** Architecture or sequence: two pressed-or-not buttons, joined like a segmented control. */
+function LayoutSwitch({ layout, onChange }: { layout: PlaybackLayout; onChange: (layout: PlaybackLayout) => void }) {
+  return (
+    <div role="group" aria-label="Playback view" className="pc-playback__layout inline-flex shrink-0 overflow-hidden rounded-sm border-bw-1 border-ink bg-surface shadow-brutal-sm">
+      {LAYOUTS.map(({ id, label, title, icon: Icon }) => (
+        <button
+          key={id}
+          type="button"
+          aria-pressed={layout === id}
+          onClick={() => onChange(id)}
+          title={title}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm font-semibold text-ink/80 transition-colors duration-d1 [&+&]:border-l-bw-1 [&+&]:border-ink hover:bg-ink/10 hover:text-ink aria-pressed:bg-pop-yellow aria-pressed:text-on-accent aria-pressed:hover:bg-pop-yellow"
+        >
+          <Icon size={15} aria-hidden="true" />
+          <span className="max-sm:sr-only">{label}</span>
+        </button>
+      ))}
     </div>
   );
 }
@@ -496,7 +573,7 @@ function PlayerCanvas({ view, bare }: { view: PlaybackView; bare: boolean }) {
       preventScrolling={false}
     >
       <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-      {!bare && <Controls showInteractive={false} />}
+      {!bare && <CanvasControls />}
       {!bare && <PlaybackMiniMap view={view} />}
     </ReactFlow>
   );

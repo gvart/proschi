@@ -440,6 +440,54 @@ test('pictures shown: Play blits only the tiles a frame changes, asked for once 
   await ui.unmount()
 })
 
+test('pictures: Sequence switches the architecture for the scenario\'s sequence diagram, the player\'s step lit, each step\'s asked for ahead; Architecture switches back', SLOW, async ($, on) => {
+  const clock = mock.clock(on)
+  const h = host(on, clock)
+  let ui = await settle($, clock)
+  type Figure = { type: string; of?: { useCase: string; scenario?: string; step?: number } }
+  const figures = () =>
+    h.requests.flatMap(r => ((r.input.panels ?? []) as { panel: { kind: string; blocks?: Figure[]; source?: unknown } }[]).filter(p => p.panel.kind === 'page' && p.panel.source).flatMap(p => (p.panel.blocks ?? []).filter(b => b.type === 'figure')))
+  const architecture = async () => ((await ui.findAll({ type: 'Image' })) as unknown as NonNullable<Found>[]).some(x => String(x.key).startsWith('img-m1:0'))
+  const until = async (ready: () => Promise<boolean>) => {
+    for (let i = 0; i < 8 && !(await ready()); i++) {
+      await ui.unmount()
+      await clock.advance(250)
+      ui = await $.ui.mount(reply)
+    }
+  }
+  // Before the switch: the architecture alone, the sequence (no step lit before Play) asked for ahead.
+  expect(await ui.find({ key: 'p-m1:0-sequence' })).toBeUndefined()
+  expect(await architecture()).toBe(true)
+  expect(figures().map(f => f.of)).toContainEqual({ useCase: 'place-order', scenario: 'main' })
+
+  await click(ui, 'm1:0', 'bar/view')
+  await ui.unmount()
+  ui = await settle($, clock)
+  await until(async () => (await ui.find({ key: 'p-m1:0-sequence' })) !== undefined)
+  // Switched: the sequence diagram in the architecture's place, the player over it.
+  expect(await ui.find({ key: 'p-m1:0-sequence' })).toBeDefined()
+  expect(await architecture()).toBe(false)
+  expect((await controlsOf(ui, 'm1:0')).map(c => c.id)).toEqual(expect.arrayContaining(['bar/play', 'bar/view']))
+
+  await click(ui, 'm1:0', 'bar/play')
+  await ui.unmount()
+  ui = await settle($, clock, reply, 'm1:0', c => c.some(x => x.id === 'bar/next'))
+  await until(async () => (await ui.find({ key: 'p-m1:0-sequence' })) !== undefined)
+  // Playing: still the sequence, its step lit; every step's asked for, so a step shows it at once.
+  expect(await ui.find({ key: 'p-m1:0-sequence' })).toBeDefined()
+  expect(await architecture()).toBe(false)
+  expect([...new Set(figures().map(f => f.of?.step).filter(s => s !== undefined))].sort()).toEqual([0, 1, 2, 3])
+
+  // Architecture: the diagram back, the scenario still playing over it.
+  await click(ui, 'm1:0', 'bar/view')
+  await ui.unmount()
+  ui = await settle($, clock, reply, 'm1:0', c => c.some(x => x.id === 'bar/next'))
+  await until(architecture)
+  expect(await architecture()).toBe(true)
+  expect(await ui.find({ key: 'p-m1:0-sequence' })).toBeUndefined()
+  await ui.unmount()
+})
+
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /** What a control opens: the floats' controls behind it, by the prefix of their ids. */
@@ -478,8 +526,8 @@ async function tour($: T, clock: Clock, h: ReturnType<typeof host>, props: typeo
     if (floating) for (const id of all) if (!pressed.includes(id)) seen.add(id)
     const left = [...seen].filter(id => !pressed.includes(id))
     const reopens = (id: string) => (OPENS[id] ?? []).some(prefix => left.some(l => l.startsWith(prefix)))
-    // Stop late, then the systems (focusing one stops the player), the tabs last: Body and the step keys are live only while a scenario plays.
-    const rank = (id: string) => (id.startsWith('tabs/') ? 3 : id.startsWith('systems/') ? 2 : id === 'bar/stop' ? 1 : 0)
+    // Stop late, then the systems (focusing one stops the player), then the view switch (the sequence view has no systems row or zoom), the tabs last: Body and the step keys are live only while a scenario plays.
+    const rank = (id: string) => (id.startsWith('tabs/') ? 4 : id === 'bar/view' ? 3 : id.startsWith('systems/') ? 2 : id === 'bar/stop' ? 1 : 0)
     const next = all.filter(id => !pressed.includes(id) || reopens(id)).sort((a, b) => rank(a) - rank(b))[0]
     if (!next && floating) {
       await clickOutside(ui, site)
@@ -507,7 +555,7 @@ async function tour($: T, clock: Clock, h: ReturnType<typeof host>, props: typeo
 }
 
 /** Every control of the player bar. */
-const BAR = ['bar/uc', 'bar/sc', 'bar/first', 'bar/prev', 'bar/play', 'bar/next', 'bar/last', 'bar/stop', 'bar/body']
+const BAR = ['bar/uc', 'bar/sc', 'bar/first', 'bar/prev', 'bar/play', 'bar/next', 'bar/last', 'bar/stop', 'bar/body', 'bar/view']
 
 /** The panels a tour pressed a control of: the piece or page before the control's id. */
 const panelsOf = (pressed: string[]) => [...new Set(pressed.map(id => id.slice(0, id.indexOf('/'))))].sort()

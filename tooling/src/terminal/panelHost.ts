@@ -102,11 +102,11 @@ export async function withFigures(p: Panel, theme: UiTheme): Promise<Panel> {
         laid ??= { diagram: doc.diagram, layout: await layoutOf(p.source) };
         svg = drawArchitecture(laid, { theme, systems: doc.systems, terminal: true, background: paletteOf(theme).wash });
       } else {
-        const { useCase, scenario } = b.of;
+        const { useCase, scenario, step } = b.of;
         const u = doc.diagram.useCases.find((c) => c.id === useCase || c.name === useCase);
         const s = scenario === undefined ? u?.scenarios[0] : u?.scenarios.find((c) => c.id === scenario || c.name === scenario);
         if (!u || !s) throw new Error(`No scenario '${scenario ?? ''}' in '${useCase}'`);
-        svg = withTheme(theme, () => renderSequenceSvg(doc.diagram, u, s, `fig${i}-`));
+        svg = withTheme(theme, () => renderSequenceSvg(doc.diagram, u, s, `fig${i}-`, undefined, step === undefined ? undefined : { step }));
       }
       out.push({ ...b, svg });
     } catch {

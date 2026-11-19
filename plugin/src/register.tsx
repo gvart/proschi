@@ -9,10 +9,11 @@ import { isRemoteSpec } from '../../frontend/src/dsl/imports'
 import { paint } from '../../tooling/src/terminal/paint'
 import { playAt, STEP_MS, TRAVEL_MS } from '../../tooling/src/terminal/playback'
 import { buildScene, type Scene } from '../../tooling/src/terminal/scene'
+import { buildSequenceScene, paintSequence, type SequenceScene } from '../../tooling/src/terminal/sequence'
 import { idList, systemAt, viewError, type SystemsView } from '../../tooling/src/terminal/systems'
 import type { FlowStep } from '../../frontend/src/dsl/types'
 import type { HldSectionKind } from '../../frontend/src/hld/hld'
-import type { PaneSource, PaneTab, Player } from '../types'
+import type { PaneSource, PaneTab, PlacedRow, Player } from '../types'
 import { analysisPage, hldAnchor, hldPage, tabBarPanel } from '../../tooling/src/render/ui/data'
 import { ZOOM_COLUMNS, type Control, type Notice, type Panel } from '../../tooling/src/render/ui/contract'
 import { cellPx, graphicsMode, gridFrame, imageSize, maxWidthPx, mergedGrid, probe, probeKey, probeOf, probeSource, rasterOf, sourceOf, themeChanged, themeOf, TMUX_HINT, type GraphicsMode, type RasterGrid, type RasterRequest } from './graphics'
@@ -35,7 +36,10 @@ import { FLOAT_EDGES, hotkey, panelColumns, pickOf, type Draw, type Pick, type V
  * in a pane. Each drawing is the browser's layout in character cells, with
  * the simulation's numbers on the cards and edges and a player for the use
  * cases; the pane adds the editor's other views as tabs (src/views,
- * docs/design/terminal-mod.md).
+ * docs/design/terminal-mod.md). The player's view switch (`v`) draws the
+ * picked scenario as its sequence diagram in place of the architecture, at
+ * the player's step. A drawing moves between the pane and the transcript (↓ Inline,
+ * ⛶ Focus, `/proschi view --inline`).
  *
  * Built from plugin/src by tooling/build.mjs into hooks/register.js (this
  * module); ELK lays diagrams out in hooks/raster.cjs, which the hooks run in
@@ -60,13 +64,20 @@ const paneFile = atom({ plugin: 'proschi', key: 'paneFile' } as const, '')
 const paneSource = atom({ plugin: 'proschi', key: 'paneSource' } as const, NO_SOURCE)
 const players = atom({ plugin: 'proschi', key: 'player' } as const, IDLE)
 const paneTab = atom({ plugin: 'proschi', key: 'paneTab' } as const, 'diagram' as PaneTab)
+const NO_ROW: PlacedRow = {}
+/** What each row placed in the transcript (`inline-…`) draws: a file, or a block with its imports. */
+const placedRows = atom({ plugin: 'proschi', key: 'placed' } as const, NO_ROW)
+/** How many prompts were submitted this session: a placed row keeps the count it was placed at (`PlacedRow.prompt`). */
+const prompts = atom({ plugin: 'proschi', key: 'prompts' } as const, 0)
+/** The prefix of the ids of the rows the plugin places in the transcript. */
+const INLINE = 'inline-'
 /** The HLD heading the pane opens scrolled to (a failing verdict's Details), until its next render takes it. */
 let paneAnchor: string | undefined
 
 /** The pane's keys, as its Buttons' hotkeys name them; the system keys where the diagram has systems. */
-const PANE_KEYS = '1-3 tabs · p play · n/b step · r first · e last · d stop · esc back to the prompt'
+const PANE_KEYS = '1-3 tabs · p play · n/b step · r first · e last · d stop · v sequence/architecture · i inline · esc back to the prompt'
 /** In pictures the diagram zooms too. */
-const PICTURE_KEYS = '1-3 tabs · p play · n/b step · r first · e last · d stop · z/x zoom · 0 fit · esc back to the prompt'
+const PICTURE_KEYS = '1-3 tabs · p play · n/b step · r first · e last · d stop · v sequence/architecture · z/x zoom · 0 fit · i inline · esc back to the prompt'
 const TAB_KEYS = '1-3 tabs · ↑↓ scroll · esc back to the prompt'
 const HLD_KEYS = '1-3 tabs · ↑↓ scroll · c copy · esc back to the prompt'
 const SYSTEM_KEYS = 's next system · o open/close · f focus in · u back out'
@@ -88,9 +99,13 @@ const layouts = new Lru<string, Layout | { error: string }>(32)
 const pending = new Set<string>()
 const documents = new Lru<string, Document>(32)
 const scenes = new Lru<string, Scene>(64)
+/** Sequence diagrams in text cells, by document, scenario and columns. */
+const sequences = new Lru<string, SequenceScene>(32)
 const timers = new Map<string, { cancel(): void }>()
 /** Per-drawing state (by view id) is kept for the latest SITES drawings. */
 const SITES = 64
+/** Every drawing outside the pane, by its player's id, in the order first drawn: its row and what it draws (`drawnKey`). */
+const drawings = new Lru<string, { requestId: string; key: string }>(SITES)
 
 const FENCE = /^```proschi[^\n]*\n([\s\S]*?)\n```[ \t]*$/gm
 
@@ -103,7 +118,12 @@ export function register(on: On, options: PluginOptions): void {
     if (refused) $.ui.log(`proschi: ${refused}`, { to: 'debug' })
     // Layouts and pictures are asked from this session's task, so no redraw aborts them.
     void serveRequests($)
-    await $.command.register({ name: 'proschi', description: 'Proschi diagrams: /proschi view <file.proschi> shows one in a pane', argumentHint: 'view [--expand <id>,…] [--focus <id>] <file>' })
+    await $.command.register({ name: 'proschi', description: 'Proschi diagrams: /proschi view <file.proschi> shows one in a pane, or with --inline in the transcript', argumentHint: 'view [--inline] [--expand <id>,…] [--focus <id>] <file>' })
+    return next(e)
+  })
+
+  on('prompt.submit', async ($, e, next) => {
+    await update($, prompts, n => n + 1)
     return next(e)
   })
 
@@ -129,8 +149,10 @@ export function register(on: On, options: PluginOptions): void {
     const [verb, ...rest] = e.args.trim().split(/\s+/)
     const words: string[] = []
     const view: SystemsView = {}
+    let inline = false
     for (let i = 0; i < rest.length; i++) {
-      if (rest[i] === '--expand' || rest[i] === '--focus') {
+      if (rest[i] === '--inline') inline = true
+      else if (rest[i] === '--expand' || rest[i] === '--focus') {
         const value = rest[++i]
         if (!value || idList(value).length === 0) return { text: `Missing system id after ${rest[i - 1]}` }
         if (rest[i - 1] === '--expand') view.expanded = [...(view.expanded ?? []), ...idList(value)]
@@ -146,8 +168,13 @@ export function register(on: On, options: PluginOptions): void {
       const refused = errors.length ? undefined : viewError(diagram, view)
       if (refused) return { text: refused }
     }
+    const shown: Player = { ...IDLE, expanded: view.expanded ?? [], ...(view.focus !== undefined ? { focus: view.focus } : {}) }
+    if (inline) {
+      await placeInline($, { file }, shown)
+      return { text: `Showing ${file} in the transcript.` }
+    }
     stop(PANE_VIEW)
-    await update($, memberOf(players, { requestId: PANE_VIEW }), () => ({ ...IDLE, expanded: view.expanded ?? [], ...(view.focus !== undefined ? { focus: view.focus } : {}) }))
+    await update($, memberOf(players, { requestId: PANE_VIEW }), () => shown)
     await update($, paneFile, () => file)
     await markOpened($, PANE_VIEW)
     await $.ui.open({ id: PANE, title: `Proschi · ${basename(file)}` })
@@ -202,6 +229,19 @@ export function register(on: On, options: PluginOptions): void {
         <ui.Box paddingLeft={2}>{'error' in view ? <ui.Text dimColor>{view.error}</ui.Text> : view.element}</ui.Box>
       </ui.Box>
     )
+  })
+
+  // A drawing moved out of the pane (↓ Inline) or placed by `/proschi view --inline`: a row at the transcript's end, as wide as the transcript.
+  on('ui.render', { component: 'Placed' }, async ($, e, next) => {
+    if (e.props.plugin !== 'proschi' || !e.props.id.startsWith(INLINE)) return next(e)
+    const ui = $.ui.resolve(e)
+    if (e.surface !== 'terminal') return <ui.Text>The Proschi drawing draws in a terminal.</ui.Text>
+    const row = await read($, memberOf(placedRows, { requestId: e.props.id }))
+    if (!row.file && !row.source) return <ui.Text dimColor>Drawing…</ui.Text>
+    const source = row.file ? await readWithImports($, row.file).catch(() => undefined) : { source: row.source!, ...(row.path ? { path: row.path } : {}), ...(row.imports ? { imports: row.imports } : {}) }
+    if (!source) return <ui.Text color="red">Cannot read {row.file}.</ui.Text>
+    const view = await drawDiagram($, { ui, requestId: e.requestId, columns: (e.viewport?.columns ?? 120) - 4 }, `${e.props.id}:0`, source, row.file)
+    return 'error' in view ? <ui.Text color="red">{view.error}</ui.Text> : view.element
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
@@ -404,7 +444,7 @@ function proschiFile(tool: string, input: unknown): string | undefined {
   return typeof path === 'string' && path.endsWith('.proschi') ? path : undefined
 }
 
-const USAGE = 'Usage: /proschi view [--expand <system>[,<system>…]] [--focus <system>] <file.proschi>, or /proschi perf [count]'
+const USAGE = 'Usage: /proschi view [--inline] [--expand <system>[,<system>…]] [--focus <system>] <file.proschi>, or /proschi perf [count]'
 
 /** The last `n` presses in pictures, timed (`/proschi perf`): what the user reports when a press feels slow. */
 function perfReport(n: number): string {
@@ -535,6 +575,7 @@ function normal(p: Partial<Player> | undefined): Player {
     ...(typeof p?.focus === 'string' ? { focus: p.focus } : {}),
     ...(typeof p?.selected === 'string' ? { selected: p.selected } : {}),
     ...(isMoved(zoomOf(p?.zoom)) ? { zoom: zoomOf(p?.zoom) } : {}),
+    ...(p?.sequence === true ? { sequence: true as const } : {}),
   }
 }
 
@@ -615,6 +656,8 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
   const loaded = await documentOf($, viewId, written, file)
   if ('error' in loaded) return loaded
   const { doc, source, key, player } = loaded
+  // Drawings outside the pane, so ↓ Inline can find the one the last response drew.
+  if (d.requestId !== PANE && !drawings.has(viewId)) drawings.set(viewId, { requestId: d.requestId, key: drawnKey(file ? { file } : { source: written.source }) })
 
   const layout = layouts.get(key)
   if (!layout) {
@@ -640,7 +683,11 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
   const width = Math.min(Math.max(40, d.columns), Math.max(scene.columns, BARS_WIDTH))
   const systems = selectable(scene, player.focus)
   const selected = systems.find(s => s.path === player.selected) ?? systems[0]
-  const view: View = { d, viewId, rasterKey: `d-${viewId}`, anchorKey: `at-${viewId}`, scene, width, overlay: doc.overlay, edges: doc.edges, systems: doc.systems, ...(selected ? { selected: selected.id } : {}), inPane: d.requestId === PANE }
+  const sequence = (value: string) => {
+    const at = picks.find(p => p.value === value) ?? picks[0]
+    return at && sequenceOf(doc, key, at, columns)
+  }
+  const view: View = { d, viewId, rasterKey: `d-${viewId}`, anchorKey: `at-${viewId}`, scene, width, overlay: doc.overlay, edges: doc.edges, systems: doc.systems, ...(selected ? { selected: selected.id } : {}), inPane: d.requestId === PANE, sequence }
   if (playing && player.isPlaying && !timers.has(viewId)) animate($, view, steps)
 
   const p: Prepared = {
@@ -666,6 +713,9 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
   return (await pictureView($, p, mode, priority)) ?? textView($, p, { kind: 'text' })
 }
 
+/** Whether the drawing is switched to the sequence view (`v`) with a scenario to draw: its sequence diagram stands in place of the architecture. */
+const sequenceShown = (p: Prepared) => p.player.sequence === true && p.pick !== undefined
+
 /** Whether a diagram is wider than its room drawn as text cells, so its picture at fit is too small to read. */
 const isWide = (p: Prepared) => p.view.scene.columns > p.view.d.columns
 
@@ -689,6 +739,14 @@ async function pictureView($: EngineInterface, p: Prepared, mode: Exclude<Mode, 
   const { d, viewId } = view
   const hasSystems = p.systems.length > 0 || p.player.focus !== undefined
   const z = view.inPane ? zoomOf(p.player.zoom) : FIT
+  // Switched to the sequence view: no architecture picture, its sequence diagram's panel in its place (pictureParts), nothing to zoom.
+  if (sequenceShown(p)) {
+    images.delete(viewId)
+    const rows = (d.rows ?? INLINE_ROWS) + 16
+    if (mode.kind === 'loading') return { kind: 'loading', rows }
+    const built = pictureParts($, p, noticesOf(doc, p.lost, importReasons, view.inPane, []), undefined)
+    return { kind: 'picture', ...built, rows, systems: hasSystems }
+  }
   const notices = noticesOf(doc, p.lost, importReasons, view.inPane, wideNotice(p, z))
   const theme = await themeOf($)
   // The same drawing as a picture: what the cells would show, playback's frames included.
@@ -759,15 +817,19 @@ function textView($: EngineInterface, p: Prepared, mode: Extract<Mode, { kind: '
   const { ui } = d
   const scene = view.scene
   const steps = playing?.scenario.steps ?? []
-  const painted = paint(scene, { overlay: doc.overlay, edges: doc.edges, icons, systems: doc.systems, ...(view.selected ? { selected: view.selected } : {}), ...(steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {}) })
+  // Switched to the sequence view: the picked scenario's sequence diagram in place of the architecture, the step lit while it plays.
+  const seq = sequenceShown(p) ? view.sequence?.(pick!.value) : undefined
+  if (seq) textCrops.set(viewId, undefined)
+  const sequenced = seq ? paintSequence(seq, { icons, ...(steps.length > 0 ? { play: { index: step, progress } } : {}) }) : undefined
+  const painted = sequenced ?? paint(scene, { overlay: doc.overlay, edges: doc.edges, icons, systems: doc.systems, ...(view.selected ? { selected: view.selected } : {}), ...(steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {}) })
   // In the pane, a drawing wider than it shows a viewport of it, panned by a drag, h and l, and ← → with the focus on it.
-  const wide = view.inPane && painted.columns > d.columns
+  const wide = !sequenced && view.inPane && painted.columns > d.columns
   const pan = wide ? textPan($, view, painted, zoomOf(p.player.zoom)) : undefined
   textCrops.set(viewId, pan ? pan.vp : undefined)
   const grid = pan ? painted.crop(pan.vp.col, 0, pan.vp.columns, painted.rows) : painted
   const lead: Notice[] = [
     ...(mode.hint ? [{ text: TMUX_HINT, tone: 'muted' as const }] : []),
-    ...(painted.columns > d.columns
+    ...(!sequenced && painted.columns > d.columns
       ? [
           {
             text: pan
@@ -779,9 +841,9 @@ function textView($: EngineInterface, p: Prepared, mode: Extract<Mode, { kind: '
       : []),
   ]
   const verdict = verdictOf(doc.tests)
-  const sys = systemsOf($, p)
+  const sys = sequenced ? undefined : systemsOf($, p)
   const links = linksOf($, p)
-  const m = pick && playerModel(view, doc, pick, playing, step, p.player.isPlaying, playerCtl($, view, pick.scenario.steps))
+  const m = pick && playerModel(view, doc, pick, playing, step, p.player.isPlaying, playerCtl($, view, pick.scenario.steps), p.player.sequence === true)
   return {
     kind: 'text',
     element: (
@@ -795,7 +857,9 @@ function textView($: EngineInterface, p: Prepared, mode: Extract<Mode, { kind: '
         )}
         <ui.Box key={view.anchorKey} flexDirection="column">
           {noticesText(ui, noticesOf(doc, p.lost, importReasons, view.inPane, lead), `notice-${viewId}`)}
-          {pan ? (
+          {sequenced ? (
+            <ui.Raster key={sequenceKey(viewId)} columns={sequenced.columns} rows={sequenced.rows} cells={sequenced.toBase64()} />
+          ) : pan ? (
             <ui.Box key={`${view.rasterKey}-pan`} flexDirection="column" width={grid.columns} height={grid.rows}>
               <ui.Raster key={view.rasterKey} columns={grid.columns} rows={grid.rows} cells={grid.toBase64()} />
               <ui.Box position="absolute" top={0} left={0} width={grid.columns} height={grid.rows}>
@@ -810,7 +874,7 @@ function textView($: EngineInterface, p: Prepared, mode: Extract<Mode, { kind: '
             <ui.Raster key={view.rasterKey} columns={grid.columns} rows={grid.rows} cells={grid.toBase64()} />
           )}
           {/* The load legend, as the picture's badge: on a still, not while a scenario plays. */}
-          {doc.edges && !playing && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)}
+          {doc.edges && !playing && !sequenced && lineView(ui, legendLine(doc.critical, view.width), `legend-${viewId}`)}
         </ui.Box>
         {verdict && verdictText(ui, verdict, view.width, viewId, view.inPane ? undefined : () => focus($, view, p.title, p.what, 'hld', 'requirements'))}
         {sys && systemsText(ui, sys.model, viewId, view.width, id => sys.actions[id]?.())}
@@ -880,6 +944,11 @@ function playerCtl($: EngineInterface, view: View, steps: FlowStep[]): PlayerCtl
     pause: () => void setPlayer($, view, p => ({ ...p, isPlaying: false })),
     stop: () => void setPlayer($, view, p => ({ ...p, mode: 'diagram', isPlaying: false })),
     pick: pick => void setPlayer($, view, p => ({ ...p, pick: pick.value })),
+    toggleView: () =>
+      void setPlayer($, view, p => {
+        const { sequence, ...rest } = p
+        return sequence ? rest : { ...rest, sequence: true }
+      }),
   }
 }
 
@@ -892,6 +961,7 @@ function linksOf($: EngineInterface, p: Prepared): { controls: Control[]; action
       lnk: surface => void copy($, surface, p.link, 'the share link'),
       open: surface => void openLink($, surface, p.link),
       focus: () => focus($, p.view, p.title, p.what),
+      inline: () => void toInline($),
     },
   }
 }
@@ -931,7 +1001,7 @@ function pictureParts($: EngineInterface, p: Prepared, notices: Notice[], pictur
 
   // The player on top, one size whether a scenario plays or not; what it opens floats over the drawing.
   if (pick) {
-    const m = playerModel(view, doc, pick, playing, step, player.isPlaying, playerCtl($, view, pick.scenario.steps))
+    const m = playerModel(view, doc, pick, playing, step, player.isPlaying, playerCtl($, view, pick.scenario.steps), player.sequence === true)
     const bar = barPanel(view, doc, m, playing ? step : undefined, player.isPlaying)
     pieces.push({ id: 'bar', panel: bar, columns: W })
     for (const [id, fn] of Object.entries(m.actions)) on('bar', id, () => fn())
@@ -955,14 +1025,25 @@ function pictureParts($: EngineInterface, p: Prepared, notices: Notice[], pictur
 
   if (notices.length) pieces.push({ id: 'warn', panel: { kind: 'notices', notices }, columns: W })
 
-  pieces.push({ id: 'diagram', ...(picture ? { picture } : {}) })
+  // The architecture, or switched to the sequence view (`v`), the picked scenario's sequence diagram in its place, its step lit as the player moves.
+  const sequenced = sequenceShown(p)
+  if (sequenced) {
+    pieces.push({ id: 'sequence', panel: sequencePanel(p, pick!, playing ? step : undefined), columns: W })
+    // Ahead: every other step's, so a step shows at once.
+    if (playing) for (let i = 0; i < playing.scenario.steps.length; i++) if (i !== step) ahead.push({ panel: sequencePanel(p, playing, i), columns: W })
+  } else {
+    pieces.push({ id: 'diagram', ...(picture ? { picture } : {}) })
+    // Ahead: the sequence view of the moment, so the switch shows it at once.
+    if (pick) ahead.push({ panel: sequencePanel(p, pick, playing ? step : undefined), columns: W })
+  }
 
   // The verdict only when a check fails (the HLD tab's badge says how many), the legend in the diagram's corner.
   const verdict = verdictOf(doc.tests)
   if (verdict) pieces.push({ id: 'below', panel: { kind: 'notices', verdict, ...(!view.inPane ? { details: DETAILS } : {}) }, columns: W })
   on('below', 'details', () => focus($, view, p.title, p.what, 'hld', 'requirements'))
 
-  const sys = systemsOf($, p)
+  // The systems row acts on the architecture: not under the sequence diagram.
+  const sys = sequenced ? undefined : systemsOf($, p)
   if (sys) {
     pieces.push({ id: 'systems', panel: { kind: 'systemBar', ...sys.model }, columns: W })
     for (const [id, fn] of Object.entries(sys.actions)) on('systems', id, fn)
@@ -979,6 +1060,39 @@ function pictureParts($: EngineInterface, p: Prepared, notices: Notice[], pictur
     for (const dir of [1, -1] as const) ahead.push({ panel: zoomPanel(stepZoom(zoomed!.z, dir)), columns: ZOOM_COLUMNS, edges: FLOAT_EDGES })
   }
   return { pieces, actions, ahead, ...(float ? { float } : {}), ...(zoom ? { corner: zoom.corner, keys: zoom.keys, onDrag: zoom.onDrag } : {}) }
+}
+
+/**
+ * The sequence diagram of `pick` as a page with one figure (the helper draws
+ * it from the source: panelHost.ts withFigures), `step` lit, none before
+ * Play; as many rows at most as the architecture it stands in for.
+ */
+function sequencePanel(p: Prepared, pick: Pick, step: number | undefined): Panel {
+  const maxRows = p.view.d.rows ?? INLINE_ROWS
+  // The same object each render, as pageOf keeps the tabs' pages, in a cache of its own: a scenario has a panel a step.
+  const key = `${keyOf(p.source)}\0${pick.value}\0${step ?? '-'}\0${maxRows}`
+  let panel = sequencePanels.get(key)
+  if (!panel) {
+    const of = { useCase: pick.useCase.id, scenario: pick.scenario.id, ...(step !== undefined ? { step } : {}) }
+    panel = { kind: 'page', source: p.source, blocks: [{ type: 'figure', of, maxRows }] }
+    sequencePanels.set(key, panel)
+  }
+  return panel
+}
+const sequencePanels = new Lru<string, Panel>(64)
+
+/** The key of the Raster a text drawing's sequence diagram is in. */
+const sequenceKey = (viewId: string) => `q-${viewId}`
+
+/** A scenario's sequence diagram in text cells `columns` wide, built once per document, scenario and width. */
+function sequenceOf(doc: Document, key: string, pick: Pick, columns: number): SequenceScene {
+  const at = `${key}#${pick.value}@${columns}`
+  let scene = sequences.get(at)
+  if (!scene) {
+    scene = buildSequenceScene(doc.diagram, pick.useCase, pick.scenario, columns)
+    sequences.set(at, scene)
+  }
+  return scene
 }
 
 /** What the pane's zoom adds to its drawing. */
@@ -1212,6 +1326,87 @@ async function scroll($: EngineInterface, args: UiScrollArgs): Promise<{ deny?: 
   return moved
 }
 
+let placedCount = 0
+
+/**
+ * Places a row at the transcript's end that draws `what` with `player`, as
+ * wide as the transcript, and brings it into view. The row is placed before
+ * anything is awaited, while the press or command is still the person's;
+ * what it draws follows.
+ */
+async function placeInline($: EngineInterface, what: PlacedRow | Promise<PlacedRow>, player: Player | Promise<Player>): Promise<void> {
+  const id = `${INLINE}${Date.now().toString(36)}-${++placedCount}`
+  const placing = $.ui.place({ id })
+  const stands = await player
+  // The transcript does not zoom: the row starts at fit.
+  const { zoom: _zoom, ...rest } = stands
+  void _zoom
+  await update($, memberOf(players, { requestId: `${id}:0` }), () => ({ ...rest, isPlaying: false }))
+  const drawn = { ...(await what), prompt: await read($, prompts) }
+  await update($, memberOf(placedRows, { requestId: id }), () => drawn)
+  const placed = await placing
+  if (!placed.isPlaced) $.ui.toast(`The Proschi drawing is in the transcript but not shown: ${placed.reason}`)
+  else await scroll($, { to: { requestId: placed.requestId }, block: 'start' })
+}
+
+/** What a drawing shows, to tell the same one apart wherever it stands: its file, else its block. */
+const drawnKey = (what: { file?: string; source?: string }) => (what.file ? `file:${what.file}` : `source:${(what.source ?? '').trim()}`)
+
+/**
+ * The drawing of `key` that already stands in the model's last response
+ * (what follows the last prompt), the latest drawn, if any: a row placed since
+ * that prompt, or a block or a Write or Edit of the file in its messages.
+ */
+async function inLastResponse($: EngineInterface, key: string): Promise<{ viewId: string; requestId: string } | undefined> {
+  const messages = await $.session.messages().catch(() => [])
+  const prompt = messages.findLastIndex(m => m.role === 'user' && !m.toolResults?.length)
+  const replied = messages.slice(prompt + 1).some(
+    m =>
+      m.role === 'assistant' &&
+      (m.toolUses.some(t => {
+        const file = proschiFile(t.tool, t.input)
+        return file !== undefined && drawnKey({ file }) === key
+      }) ||
+        [...m.text.matchAll(FENCE)].some(f => drawnKey({ source: f[1] }) === key)),
+  )
+  const now = await read($, prompts)
+  for (const [viewId, d] of [...drawings.entries()].reverse()) {
+    if (d.key !== key) continue
+    const placed = viewId.startsWith(INLINE) ? await read($, memberOf(placedRows, { requestId: viewId.slice(0, -':0'.length) })) : undefined
+    if (placed ? placed.prompt === now : replied) return { viewId, requestId: d.requestId }
+  }
+  return undefined
+}
+
+/**
+ * Moves the pane's drawing into the transcript, where its player stood, and
+ * closes the pane. When the model's last response already draws it (Focus came
+ * from there), that drawing takes the player instead of a new row.
+ */
+function toInline($: EngineInterface): Promise<void> {
+  stop(PANE_VIEW)
+  stop(PANE)
+  menus.delete(PANE_VIEW)
+  const what = (async (): Promise<PlacedRow> => {
+    const file = await read($, paneFile)
+    if (file) return { file }
+    const { source, path, imports } = await read($, paneSource)
+    return { source, ...(path ? { path } : {}), ...(imports ? { imports } : {}) }
+  })()
+  const player = read($, memberOf(players, { requestId: PANE_VIEW })).then(normal)
+  return (async () => {
+    const standing = await inLastResponse($, drawnKey(await what))
+    if (!standing) return placeInline($, what, player)
+    stop(standing.viewId)
+    const { zoom: _zoom, ...stands } = await player
+    void _zoom
+    await update($, memberOf(players, { requestId: standing.viewId }), () => ({ ...stands, isPlaying: false }))
+    await scroll($, { to: { requestId: standing.requestId }, block: 'start' })
+  })()
+    .then(() => $.ui.close({ id: PANE }))
+    .catch((error: unknown) => $.ui.log(`proschi: Inline failed: ${error instanceof Error ? error.message : String(error)}`, { to: 'debug' }))
+}
+
 /**
  * Opens the drawing in the pane as a dialog: it takes the keys and Esc closes
  * it (no `holdToasts`: the copy buttons toast). The pane opens first, in the
@@ -1288,6 +1483,13 @@ function animate($: EngineInterface, view: View, steps: FlowStep[]): void {
       if (file !== sent) {
         sent = file
         await $.ui.blit({ requestId: view.d.requestId, key: image.key, source: await sourceOf($, file, image.form) })
+      }
+    } else if (player.sequence) {
+      // Switched to the sequence view: the packet travels the sequence diagram, in its Raster (text cells; in pictures it is a panel a step, and there is no Raster to blit).
+      const seq = view.sequence?.(player.pick)
+      if (seq) {
+        const frame = paintSequence(seq, { icons, play: { index: step, progress } })
+        await $.ui.blit({ requestId: view.d.requestId, key: sequenceKey(view.viewId), cells: frame.toBase64() }).catch(() => undefined)
       }
     } else {
       const play = playAt(view.scene, steps, step, progress, tick++)

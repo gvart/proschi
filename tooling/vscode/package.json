@@ -81,6 +81,23 @@
           "type": "boolean",
           "default": true,
           "description": "Show simulation results above use cases (`p99 38 ms ✓`), whatif blocks and requirements blocks."
+        },
+        "proschi.preview.theme": {
+          "type": "string",
+          "enum": [
+            "sketch-light",
+            "sketch-dark",
+            "classic",
+            "sketch"
+          ],
+          "enumDescriptions": [
+            "Cream paper, ink outlines and hard shadows, as on proschi.app.",
+            "The same look on dark paper: dark cards, light ink and purple shadows.",
+            "White background, rounded light-grey cards, icon tiles coloured by component type and blue request arrows.",
+            "An alias of sketch-light, kept for settings saved before sketch-dark."
+          ],
+          "default": "sketch-light",
+          "markdownDescription": "The look of the diagrams in the preview. A `\"theme\"` in the nearest `proschi.json` overrides this, as it does for `proschi render`."
         }
       }
     },

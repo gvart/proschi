@@ -105,7 +105,7 @@ scripts. They only read the account. `--base <url>` points
 ## Rendering
 
 ```
-proschi render [--out <dir>] [--format svg|md|html|hld-md|hld-html] <file>
+proschi render [--out <dir>] [--format svg|md|html|preview-html|hld-md|hld-html] [--theme sketch-light|sketch-dark|classic] <file>
 ```
 
 - `svg` (default): `architecture.svg`, plus `<usecase>--<scenario>.svg` with a
@@ -114,6 +114,12 @@ proschi render [--out <dir>] [--format svg|md|html|hld-md|hld-html] <file>
   which GitHub and GitLab render natively
 - `html`: `<file>.html`, a single self-contained page with all the SVGs and a
   scenario list
+- `preview-html`: `<file>.preview.html`, the VS Code preview as a page: the
+  architecture (fold it away to make room) and one scenario at a time, picked
+  from a list. The picked scenario is kept in the URL (`#<usecase>--<scenario>`).
+  Above it, the use case's description folds open; a sentence like
+  `Requests: Own ids (public); Other office (broker, office-*)` is shown as a
+  table, with the picked scenario's row marked
 
 `--out` defaults to the current directory; the written paths are printed.
 Imports are followed as for `check`. A document with errors in any of its
@@ -121,6 +127,43 @@ files is not rendered (the errors are printed, exit code 1); warnings don't
 stop it. The SVGs are self-contained, with a white background, and look like
 the web editor's canvas (same layout, cards and icons). The renderer is a
 separate bundle (`dist/render.cjs`), loaded only by `proschi render`.
+
+### Preview server
+
+```
+proschi preview [--port <n>] [--root <dir>] [--theme sketch-light|sketch-dark|classic] [<file>]
+```
+
+Serves the `preview-html` page of any `.proschi` file at
+<http://127.0.0.1:4280/> until Ctrl+C (`--port 0` picks a free port). The
+start page lists the files under `--root` (default: the current directory)
+by directory, with their titles, and has one box that filters the list as
+you type (Enter opens the first match) or takes a pasted path: absolute,
+`~/…`, `file://…` or relative to the root. Every page has a bar with a
+dropdown of those files, previous and next buttons (`[` and `]`), and
+"Open path…" (`/`) for any other file; Esc goes back to the list.
+Files are parsed and rendered on each request, so a reload shows your edits;
+a file with errors shows them instead. With `<file>`, its page's address is
+printed too. The server listens on 127.0.0.1 only, answers only requests
+addressed to `127.0.0.1` or `localhost` (no DNS rebinding), and opens only
+`.proschi` files. The theme comes from `--theme`, else each file's nearest
+`proschi.json`.
+
+`--theme` picks the look of the SVGs (and of the `html`, `preview-html` and `hld-html` pages
+that embed them):
+
+- `sketch-light` (default; `sketch` is an alias): the canvas look, with
+  cream paper, ink outlines, hard shadows and pink step numbers
+- `sketch-dark`: the same look in the canvas's dark colourway, as the Claude
+  Code plugin draws its pictures on a dark terminal: dark paper, light ink,
+  purple shadows
+- `classic`: the earlier look, with a white background, rounded light-grey
+  cards, icon tiles coloured by component type, blue request arrows and step
+  numbers, and grey dashed lifelines
+
+Without the flag, the `"theme"` key of the nearest `proschi.json` applies
+(`{"theme": "classic"}`), so a repository sets it once; the flag overrides
+it. An unknown theme is refused with exit code 2.
 
 Also in this package:
 

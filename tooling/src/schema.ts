@@ -270,8 +270,23 @@ export function diagramSchema() {
             "The target type's operation the label names (its HTTP method or first words), when the target is typed and lists it.",
           ),
           headers: { type: 'array', items: str, description: '`GET /x header Authorization, If-None-Match`: the request headers named in the label.' },
+          sections: {
+            type: 'array',
+            items: { $ref: '#/$defs/stepSection' },
+            description: 'The `section "…" { }` blocks the step is written in, outermost first. Labels only: they never change the step or its number.',
+          },
+          responseSections: {
+            type: 'array',
+            items: { $ref: '#/$defs/stepSection' },
+            description: 'The sections of the `-->` that answered the step, when they differ from `sections` (empty: written outside any section).',
+          },
         },
         ['stepOrder', 'stepName', 'fromServiceId', 'toServiceId', 'protocol', 'httpMethod', 'endpoint', 'requestFormat', 'responseFormat', 'executionType', 'isParallel', 'isConditional', 'access', 'loc'],
+      ),
+      stepSection: object(
+        { name: str, loc: { ...loc, description: 'The section name; tells two sections of the same name apart.' } },
+        ['name', 'loc'],
+        'A `section "Name" { … }` block of a use case.',
       ),
       selector: {
         description: 'A node id, an exact tech stack, every node of a kind (`any cache`), every data store of a consistency (`any strong store`), or a union (`X or Y`).',

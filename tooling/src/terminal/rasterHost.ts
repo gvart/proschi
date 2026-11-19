@@ -258,7 +258,8 @@ export async function rasterize(input: RasterInput, assets: RasterAssets): Promi
 
   const doc = loadDocument({ source, path, imports, view });
   if (doc.errors.length) throw new Error(doc.errors.map((e) => `${e.line}:${e.col} ${e.message}`).join('\n'));
-  const draw: ArchitectureOptions = { theme: options.theme ?? 'light', systems: doc.systems, terminal: true };
+  const theme: Theme = options.theme ?? 'light';
+  const draw: ArchitectureOptions = { theme, systems: doc.systems, terminal: true };
   if (options.selected !== undefined) draw.selected = options.selected;
   if (options.overlay && doc.overlay) {
     draw.nodes = doc.overlay;
@@ -279,7 +280,6 @@ export async function rasterize(input: RasterInput, assets: RasterAssets): Promi
   // ELK takes most of a call (≈2 s for a large design): a worker lays each document out once (layoutOf).
   const layoutKey = hash(JSON.stringify([source, path, imports, view]));
   const laid: ArchitectureLayout = { diagram: doc.diagram, layout: await layoutOf({ source, path, imports, view }) };
-  const theme = draw.theme!;
   const resvgOptions = {
     font: { fontBuffers: fonts, defaultFontFamily: 'Inter', sansSerifFamily: 'Inter', monospaceFamily: 'JetBrains Mono' },
   };

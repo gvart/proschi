@@ -62,7 +62,9 @@ export type Icon =
   | 'check'
   | 'cross'
   | 'warn'
-  | 'bolt';
+  | 'bolt'
+  /** A drawing moved from the pane into the transcript (↓ Inline). */
+  | 'inline';
 
 /**
  * A pressable control. `id` is what the answer's tile names, so the plugin
@@ -160,6 +162,8 @@ export interface PlayerBarPanel {
   line: { number?: number; error?: boolean; text: Rich };
   /** Body ▾ at the second line's end: the request and response drawer. */
   body?: Control;
+  /** Before Body: the switch between the architecture and the scenario's sequence diagram (the fork's), labelled with the view it switches to. */
+  view?: Control;
 }
 
 /** A select's menu floating over the drawing under its select: an option per row, each a control `${id}=${value}`. */
@@ -296,8 +300,12 @@ export type Block =
    */
   | { type: 'figure'; of: Figure; caption?: string; maxRows?: number; svg?: string };
 
-/** What a figure draws: the architecture, or a use case's scenario (its first when none is named) as a sequence. */
-export type Figure = { architecture: true } | { useCase: string; scenario?: string };
+/**
+ * What a figure draws: the architecture, or a use case's scenario (its first
+ * when none is named) as a sequence; with `step`, at that moment of its
+ * playback (0-based), the step lit and the ones to come faded.
+ */
+export type Figure = { architecture: true } | { useCase: string; scenario?: string; step?: number };
 
 /** A tab's body as blocks top to bottom: Analysis, HLD (data.ts builds them). */
 export interface PagePanel {

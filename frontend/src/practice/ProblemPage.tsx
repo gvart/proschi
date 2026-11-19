@@ -1000,6 +1000,7 @@ function DiagramPane({ diagram, nodes, edges, fitKey, layoutBusy, engine, onSele
     () => (current ? { id: current.key, name: current.useCase.name, steps: current.scenario.steps, condition: current.scenario.condition } : undefined),
     [current],
   );
+  const sequence = useMemo(() => (current ? { useCase: current.useCase, scenario: current.scenario, nodes: diagram.nodes } : undefined), [current, diagram]);
 
   return (
     <div className="h-full w-full flex flex-col">
@@ -1030,7 +1031,7 @@ function DiagramPane({ diagram, nodes, edges, fitKey, layoutBusy, engine, onSele
       </ZenCollapse>
       <div className="flex-1 min-h-0 relative">
         {tab === 'playback' && played ? (
-          <UseCasePlayer key={played.id} useCase={played} nodes={nodes} edges={edges} onBack={() => setTab('diagram')} showHeader={false} />
+          <UseCasePlayer key={played.id} useCase={played} nodes={nodes} edges={edges} onBack={() => setTab('diagram')} showHeader={false} sequence={sequence} />
         ) : tab === 'analysis' && analysis ? (
           <AnalysisPanel diagram={diagram} analysis={analysis} onSelect={onSelect} />
         ) : (

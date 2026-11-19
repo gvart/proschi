@@ -1,5 +1,5 @@
 ---
-updated: 2026-11-12
+updated: 2026-11-13
 ---
 
 # Agent skills
@@ -88,7 +88,8 @@ terminal, with the same layout as the browser. It draws:
   architecture or a request flow);
 - a `.proschi` file Claude writes or edits, under the tool call;
 - a file you name with `/proschi view <file>`, in a pane that redraws when
-  the file changes.
+  the file changes, or with `/proschi view --inline <file>`, in the
+  transcript.
 
 A drawing shows the cards, groups and legend. With `traffic` it also shows
 the load as the editor's overlay does: a card's border and bar turn yellow
@@ -104,9 +105,13 @@ tab says so.
 Over the drawing, a player like the editor's: a use case picker (its last
 entry, **≡ Explore all…**, lists every use case and scenario), a scenario
 picker, the step buttons and the step being played, with **Body ▾** to show
-that step's request and response. Under it, buttons copy the source or a
-share link, open the diagram in Proschi, or, with **⛶ Focus**, move it into
-a pane you drive from the keyboard. The pane
+that step's request and response. **⇅ Sequence** in the player swaps the
+architecture for the picked scenario's sequence diagram, with its
+[sections](USE-CASES.md#sections) framed and, while it plays, the step being
+played lit; **◫ Architecture** swaps it back, at the same step. Under it, buttons copy
+the source or a share link, open the diagram in Proschi, or, with
+**⛶ Focus**, move it into a pane you drive from the keyboard. **↓ Inline**
+in the pane moves it back into the transcript where the player stood. The pane
 has tabs: **Diagram**, **Analysis** (cost, the busiest node, load, latency,
 availability and cost per node, percentiles per use case, queues, the cost
 breakdown, single points of failure and the document's
@@ -128,6 +133,8 @@ where you can also explore what-ifs live.
 | `n` / `b` | Next or previous step |
 | `r` / `e` | Restart, or jump to the end |
 | `d` | Back to the diagram |
+| `v` | Switch between the architecture and the sequence diagram |
+| `i` | Move the drawing into the transcript (↓ Inline) |
 | `z` or `+` / `x` or `-` | Pictures: zoom in or out (125% to 300%) |
 | `0` | Pictures: back to fit |
 | `h` `j` `k` `l`, arrows | Pan a zoomed picture, or a text drawing wider than the pane |

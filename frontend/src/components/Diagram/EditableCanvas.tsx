@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import ReactFlow, { Background, BackgroundVariant, Controls, Panel, ReactFlowProvider, useReactFlow } from 'reactflow';
+import ReactFlow, { Background, BackgroundVariant, Panel, ReactFlowProvider, useReactFlow } from 'reactflow';
 import type { Edge, EdgeTypes, Node, NodeChange } from 'reactflow';
 import 'reactflow/dist/style.css';
 import ComponentNode from '../Canvas/ComponentNode';
@@ -23,6 +23,7 @@ import { CanvasMiniMap, CanvasTopBar, MiniMapButton, OverlayTools } from './Canv
 import { finderItemsOf, useOverlayOn, usePinDrag, useTopBarInset, withEdgeLoads, withNodeLoads } from './canvasShared';
 import { useCanvasEdits } from './useCanvasEdits';
 import NodeFinder from './NodeFinder';
+import { CanvasControls } from './ZoomControls';
 
 /**
  * A laid-out canvas that edits its document's text: drag components in from
@@ -400,7 +401,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
         >
           <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
           {overlay && <FlowParticles flows={overlay.flows} nodes={overlay.nodes} />}
-          <Controls showInteractive={false}>{!phone && <MiniMapButton shown={miniMap} onToggle={() => setMiniMap(!miniMap)} />}</Controls>
+          <CanvasControls>{!phone && <MiniMapButton shown={miniMap} onToggle={() => setMiniMap(!miniMap)} />}</CanvasControls>
           {!phone && miniMap && <CanvasMiniMap />}
           <CanvasTopBar
             left={

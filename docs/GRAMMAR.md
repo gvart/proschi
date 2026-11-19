@@ -15,7 +15,7 @@ document     = { line } ;
 line         = [ statement ] [ comment ] newline ;
 
 statement    = title | import | type | node | connection
-             | group-open | system | usecase-open | par-open | alt-open | close
+             | group-open | system | usecase-open | par-open | alt-open | section-open | close
              | traffic | requirements | capacity | entity | decision | test | whatif | legend
              | direction | layout | let ;
 
@@ -61,6 +61,7 @@ tag          = "." , id ;                                (* one token, e.g. .pla
 usecase-open = "usecase" , ( string | id ) , [ string ] , "{" ;
 par-open     = "par" , "{" ;
 alt-open     = "alt" , ( string | id ) , [ "when" , string ] , "{" ;
+section-open = "section" , ( string | id ) , "{" ;     (* labels the steps in it *)
 close        = "}" , [ alt-open ] ;
 
 traffic      = "traffic" , "{" , { string , quantity , [ "peak" , ( replicas | quantity ) ] , [ "mix" , share , { "," , share } ] } , "}" ;
@@ -137,7 +138,7 @@ size-unit    = "B" | "KB" | "MB" | "GB" | "TB" ;
 ## Where each statement may appear
 
 
-| Statement | Top level | In `group` | In `usecase` / `alt` | In `par` |
+| Statement | Top level | In `group` | In `usecase` / `alt` / `section` | In `par` |
 |---|---|---|---|---|
 | `title` | ✓ | | | |
 | `let` | ✓ | | | |
@@ -153,11 +154,14 @@ size-unit    = "B" | "KB" | "MB" | "GB" | "TB" ;
 | `usecase` | ✓ | | | |
 | `par` | | | ✓ | |
 | `alt` | | | ✓ | |
+| `section` | | | ✓ | |
 | `traffic`, `requirements`, `capacity`, `entity`, `decision`, `test`, `whatif` | ✓ | | | |
 
 ## Notes
 
 - `-x` is only valid as a step.
+- `section` is a keyword only as `section "Name" {` (or `section Name {`);
+  elsewhere it is an ordinary id. See [Sections](USE-CASES.md#sections).
 - A `constant` may stand in for any `quantity` and for the integer after
   `shards`. Its value must be of the kind the place expects: a rate where a
   rate goes, a duration where a duration goes. `x$n` takes a plain number

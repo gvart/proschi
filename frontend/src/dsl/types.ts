@@ -32,6 +32,13 @@ export interface FlowStep {
    * plays it then (after `after` steps; in `par` group `group`), not with the request.
    */
   deferredResponse?: { after: number; group?: number };
+  /**
+   * The `section "…" { }` blocks the step is written in, outermost first. Only
+   * labels for the reader: they never change what the step does or its number.
+   */
+  sections?: StepSection[];
+  /** The sections of the `-->` that answered the step, when they differ from `sections`. */
+  responseSections?: StepSection[];
 }
 
 /** 1-based source position of a construct, used for diagnostics and editor links. */
@@ -70,6 +77,12 @@ export type DiagramStep = FlowStep & {
   /** `GET /x header Authorization, If-None-Match`: request headers named in the label. */
   headers?: string[];
 };
+
+/** A `section "Name" { … }` block of a use case; `loc` (its name) tells two sections of the same name apart. */
+export interface StepSection {
+  name: string;
+  loc: SourceLoc;
+}
 
 /**
  * `system` is a team's design as one box (docs/design/team-systems-and-imports.md);

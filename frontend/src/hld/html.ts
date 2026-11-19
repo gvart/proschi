@@ -1,4 +1,4 @@
-import { buildSequence, findScenario, sequenceMessages } from '../dsl/sequence';
+import { buildSequence, findScenario, sectionHeadings, sequenceMessages } from '../dsl/sequence';
 import {
   LOAD_HEADINGS,
   accessText,
@@ -22,7 +22,8 @@ import {
  * `proschi render --format hld-html` passes the architecture and sequence
  * SVGs as `figures`; the browser download has none and lists each scenario's
  * messages instead. Its print styles make it the PDF too (Pro, the HLD
- * tab's PDF button: the browser's print, light whatever the theme).
+ * tab's PDF button: the browser's print, light whatever the theme). `page`
+ * colours the page; the CLI passes its render theme's (HldPageTheme).
  */
 
 export interface HldFigures {
@@ -41,34 +42,58 @@ export const EXPORT_CSP = "default-src 'none'; style-src 'unsafe-inline'; img-sr
 const e = escapeHtml;
 const STATUS: Record<CheckStatus, string> = { pass: '<span class="pass">✓ pass</span>', fail: '<span class="fail">✗ fail</span>', unchecked: '<span class="muted">not checked</span>' };
 
-const PAGE_STYLE = `
-:root { color-scheme: light dark; --bg: #f8fafc; --fg: #1f2937; --muted: #6b7280; --card: #ffffff; --border: #e5e7eb; --link: #2563eb; --pass: #15803d; --fail: #dc2626; --warn: #b45309; }
-@media (prefers-color-scheme: dark) { :root { --bg: #0f172a; --fg: #e5e7eb; --muted: #94a3b8; --card: #1e293b; --border: #334155; --link: #93c5fd; --pass: #4ade80; --fail: #f87171; --warn: #fbbf24; } }
+/**
+ * The colours of the page around the document (not of its figures, which come
+ * drawn): CSS custom properties for a reader in a light colour scheme, then
+ * one in a dark scheme, each setting `--bg`, `--fg`, `--muted`, `--card`
+ * (behind figures), `--border` (figure frames), `--link`, `--error`,
+ * `--surface` (tables and code), `--rule` (table cells, heading underlines),
+ * `--pass` and `--warn`, and optionally `--link-decoration` (nav links; default
+ * none). `figure` is the declarations of a figure's frame.
+ * `proschi render` passes its render theme's; the default is the page's own.
+ */
+export interface HldPageTheme {
+  light: string;
+  dark: string;
+  figure: string;
+}
+
+/** The page's own colours: slate, following the reader's colour scheme. */
+export const DEFAULT_HLD_PAGE: HldPageTheme = {
+  light: '--bg: #f8fafc; --fg: #1f2937; --muted: #6b7280; --card: #ffffff; --border: #e5e7eb; --link: #2563eb; --error: #dc2626; --surface: #ffffff; --rule: #e5e7eb; --pass: #15803d; --warn: #b45309;',
+  dark: '--bg: #0f172a; --fg: #e5e7eb; --muted: #94a3b8; --card: #1e293b; --border: #334155; --link: #93c5fd; --error: #f87171; --surface: #1e293b; --rule: #334155; --pass: #4ade80; --warn: #fbbf24;',
+  figure: 'background: var(--card); border: 1px solid var(--border); border-radius: 8px;',
+};
+
+const pageStyle = (page: HldPageTheme) => `
+:root { color-scheme: light dark; ${page.light} }
+@media (prefers-color-scheme: dark) { :root { ${page.dark} } }
 * { box-sizing: border-box; }
 body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--fg); line-height: 1.5; }
 main { max-width: 1040px; margin: 0 auto; padding: 24px 16px 48px; }
 h1 { margin: 0 0 4px; font-size: 26px; }
-h2 { font-size: 19px; margin: 32px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+h2 { font-size: 19px; margin: 32px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--rule); }
 h3 { font-size: 15px; margin: 20px 0 6px; }
 h4 { font-size: 14px; margin: 14px 0 4px; }
 p { margin: 6px 0; }
 nav { font-size: 14px; margin: 12px 0 0; }
-nav a { color: var(--link); text-decoration: none; margin-right: 12px; }
+nav a { color: var(--link); text-decoration: var(--link-decoration, none); text-underline-offset: 3px; margin-right: 12px; }
 .muted, .about { color: var(--muted); }
-.pass { color: var(--pass); } .fail { color: var(--fail); } .warn { color: var(--warn); }
+.pass { color: var(--pass); } .fail { color: var(--error); } .warn { color: var(--warn); }
 .table { overflow-x: auto; }
-table { border-collapse: collapse; width: 100%; font-size: 13px; background: var(--card); }
-th, td { border: 1px solid var(--border); padding: 4px 8px; text-align: left; vertical-align: top; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; background: var(--surface); }
+th, td { border: 1px solid var(--rule); padding: 4px 8px; text-align: left; vertical-align: top; }
 th { font-weight: 600; }
 code, pre { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
-pre { background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 8px; overflow-x: auto; }
-figure { margin: 8px 0; overflow-x: auto; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
+pre { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 8px; overflow-x: auto; }
+figure { margin: 8px 0; overflow-x: auto; padding: 8px; ${page.figure} }
 figure svg { display: block; max-width: none; }
 ol.messages { font-size: 13px; padding-left: 24px; }
-ol.messages .error { color: var(--fail); }
+ol.messages .error { color: var(--error); }
+ol.messages .section { font-weight: 600; color: var(--muted); margin-top: 4px; }
 ul.risks { padding-left: 20px; }
 @media print {
-  :root { color-scheme: light; --bg: #ffffff; --fg: #111827; --muted: #4b5563; --card: #ffffff; --border: #d1d5db; --link: #1d4ed8; --pass: #15803d; --fail: #b91c1c; --warn: #92400e; }
+  :root { color-scheme: light; --bg: #ffffff; --fg: #111827; --muted: #4b5563; --card: #ffffff; --border: #d1d5db; --link: #1d4ed8; --error: #b91c1c; --surface: #ffffff; --rule: #d1d5db; --pass: #15803d; --warn: #92400e; }
   @page { size: A4; margin: 14mm; }
   body { background: #ffffff; }
   main { max-width: none; padding: 0; }
@@ -92,10 +117,13 @@ function messageList(doc: HldDocument, useCaseId: string, scenarioId: string): s
   if (!found) return '';
   const sequence = buildSequence(found.useCase, found.scenario, doc.diagram.nodes);
   const name = (id: string) => sequence.participants.find((p) => p.id === id)?.name ?? id;
-  return `<ol class="messages">${sequenceMessages(sequence.items)
-    .map((m) => {
+  const messages = sequenceMessages(sequence.items);
+  const headings = sectionHeadings(messages);
+  return `<ol class="messages">${messages
+    .map((m, i) => {
       const arrow = m.kind === 'response' ? '⇠' : m.failed ? '✗→' : m.async ? '⇢' : '→';
-      return `<li${m.error ? ' class="error"' : ''}>${e(name(m.from))} ${arrow} ${e(name(m.to))}${m.label ? `: <code>${e(m.label)}</code>` : ''}</li>`;
+      const heading = headings[i] ? `<div class="section">${e(headings[i])}</div>` : '';
+      return `<li${m.error ? ' class="error"' : ''}>${heading}${e(name(m.from))} ${arrow} ${e(name(m.to))}${m.label ? `: <code>${e(m.label)}</code>` : ''}</li>`;
     })
     .join('')}</ol>`;
 }
@@ -222,7 +250,7 @@ function renderSection(doc: HldDocument, s: HldSection, figures: HldFigures): st
   return out.join('\n');
 }
 
-export function toHtml(doc: HldDocument, figures: HldFigures = {}): string {
+export function toHtml(doc: HldDocument, figures: HldFigures = {}, page: HldPageTheme = DEFAULT_HLD_PAGE): string {
   const nav = doc.sections.map((s) => `<a href="#${s.kind}">${e(s.title)}</a>`).join('');
   const unchecked =
     !doc.checked && doc.sections.some((s) => s.kind === 'requirements' && (s.nonFunctional.length || s.flowTests.length))
@@ -237,7 +265,7 @@ export function toHtml(doc: HldDocument, figures: HldFigures = {}): string {
     `<meta http-equiv="Content-Security-Policy" content="${EXPORT_CSP}">`,
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
     `<title>${e(doc.title)} — High-level design</title>`,
-    `<style>${PAGE_STYLE}</style>`,
+    `<style>${pageStyle(page)}</style>`,
     '</head>',
     '<body>',
     '<main>',

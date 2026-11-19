@@ -1,11 +1,12 @@
 import { useEffect, useRef, type RefObject } from 'react';
 import { getNodesBounds, getViewportForBounds, useNodesInitialized, useReactFlow, useStore, useStoreApi } from 'reactflow';
 
-const PADDING = 0.15;
+/** Room around a fitted diagram, as a share of the pane. */
+export const FIT_PADDING = 0.15;
 /** Fitting never zooms in past this, so a diagram of two nodes is not blown up to fill the pane. */
 export const FIT_MAX_ZOOM = 1.1;
 /** For `<ReactFlow fitView fitViewOptions>`, the first fit before this hook takes over. */
-export const FIT_VIEW_OPTIONS = { padding: PADDING, maxZoom: FIT_MAX_ZOOM };
+export const FIT_VIEW_OPTIONS = { padding: FIT_PADDING, maxZoom: FIT_MAX_ZOOM };
 
 /** Parts of the pane covered by something floating over it (e.g. a tour card docked to a phone's edge). */
 export interface FitInset {
@@ -82,7 +83,7 @@ export function useFitOnChange(key: string, { duration, wrapper, inset, glide = 
       const covered = (top || bottom) && free > height / 4;
       // Beside a floating panel only while that leaves a usable strip; past that the panel is the reader's focus.
       const freeWidth = width - right >= MIN_FIT_WIDTH ? width - right : width;
-      const viewport = getViewportForBounds(getNodesBounds(nodes, nodeOrigin), freeWidth, covered ? free : height, minZoom, Math.min(maxZoom, FIT_MAX_ZOOM), PADDING);
+      const viewport = getViewportForBounds(getNodesBounds(nodes, nodeOrigin), freeWidth, covered ? free : height, minZoom, Math.min(maxZoom, FIT_MAX_ZOOM), FIT_PADDING);
       const next = covered ? { ...viewport, y: viewport.y + top } : viewport;
       target.current = { ...next, at: performance.now() + (ms ?? 0) };
       setViewport(next, { duration: ms });
@@ -92,7 +93,7 @@ export function useFitOnChange(key: string, { duration, wrapper, inset, glide = 
 }
 
 /** Whether the view is not where the last fit left it (after its glide): the reader zoomed or panned since. */
-function movedByHand([x, y, zoom]: [number, number, number], last: { x: number; y: number; zoom: number; at: number } | undefined): boolean {
+export function movedByHand([x, y, zoom]: [number, number, number], last: { x: number; y: number; zoom: number; at: number } | undefined): boolean {
   if (!last || performance.now() < last.at + 50) return false;
   return Math.abs(x - last.x) > 1 || Math.abs(y - last.y) > 1 || Math.abs(zoom - last.zoom) > 0.001;
 }

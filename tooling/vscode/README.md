@@ -41,8 +41,18 @@ them.
 - Formatting (*Format Document*), the same layout as `proschi fmt`
 - A live preview: *Proschi: Open Preview to the Side* (the preview button in
   the editor title bar) shows the architecture and, for the scenario you pick,
-  its sequence diagram. It updates as you type and follows the active
+  its sequence diagram, with each `section` drawn as a titled frame. Above
+  the scenario sits its use case's description, folded, with sentences like
+  `Requests: Own ids (public); Other office (broker)` shown as tables. It
+  updates as you type, keeps the scenario you picked, and follows the active
   `.proschi` editor.
+- Three looks for the preview, set with `proschi.preview.theme`:
+  `sketch-light` (the default; cream paper, ink outlines, hard shadows, as on
+  proschi.app; `sketch` is an alias), `sketch-dark` (the same look on dark
+  paper) or `classic` (white, rounded light-grey cards, icon tiles coloured
+  by component type, blue request arrows). A `"theme"` in the nearest
+  `proschi.json` overrides the setting, as it does for `proschi render`.
+  The preview redraws when either changes.
 
 The validation runs the parser the web editor uses, so the two never disagree.
 See the [language reference](https://github.com/gvart/proschi/blob/main/docs/LANGUAGE.md)

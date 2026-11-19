@@ -1144,6 +1144,20 @@
             "type": "string"
           },
           "description": "`GET /x header Authorization, If-None-Match`: the request headers named in the label."
+        },
+        "sections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/stepSection"
+          },
+          "description": "The `section \"…\" { }` blocks the step is written in, outermost first. Labels only: they never change the step or its number."
+        },
+        "responseSections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/stepSection"
+          },
+          "description": "The sections of the `-->` that answered the step, when they differ from `sections` (empty: written outside any section)."
         }
       },
       "required": [
@@ -1160,6 +1174,24 @@
         "isParallel",
         "isConditional",
         "access",
+        "loc"
+      ],
+      "additionalProperties": false
+    },
+    "stepSection": {
+      "type": "object",
+      "description": "A `section \"Name\" { … }` block of a use case.",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "loc": {
+          "$ref": "#/$defs/loc",
+          "description": "The section name; tells two sections of the same name apart."
+        }
+      },
+      "required": [
+        "name",
         "loc"
       ],
       "additionalProperties": false
