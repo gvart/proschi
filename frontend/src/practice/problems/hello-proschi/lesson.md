@@ -1,5 +1,5 @@
 ```tldr
-A design is **nodes**, **connections** and **use cases** (one request walked step by step, with its response). The given **traffic**, **requirements** and **tests** find your use case by its **exact name**. One copy of anything is a single point of failure: **`x2`** clears 99.9%.
+A design is **nodes**, **connections** and **use cases** (one request walked step by step, with its response). The given **traffic**, **requirements** and **tests** find your use case by its **exact name**. One copy of anything is a single point of failure: two replicas of each node (**`x2`**) clear the 99.9% target.
 ```
 
 ## What you'll learn
@@ -39,7 +39,7 @@ You do not write everything yourself. Your file starts with `import "problem.pro
 | Availability of one API replica | 99.5% | the default for a service |
 | Availability of one database replica | 99.95% | the default for PostgreSQL |
 
-Load is not the problem; availability is. A request needs the API and the database up at once, so multiply: 99.5% × 99.95% ≈ **99.45%**, against a target of 99.9%. Over the roughly 720 hours of a month, that is about four hours down, against 43 minutes allowed.
+Load is not the problem; availability is. A request needs the API and the database up at once, so multiply: 99.5% × 99.95% ≈ **99.45%**, against a target of 99.9%. Over the roughly 720 hours of a month, 0.55% down is about four hours, against the 43 minutes that 99.9% allows.
 
 With two replicas, a part is down only when both are: for the API 0.5% × 0.5% = 0.0025% of the time (99.9975% available), and the database pair is better still. The request comes out near 99.997%, comfortably above the target: the last step of this problem.
 

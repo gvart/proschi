@@ -125,7 +125,7 @@ sliding-window-counter
 
 **What it is.** The limiter runs on several machines, and one client's requests land on any of them. With in-memory counts, a client spread across *n* replicas could make *n* times its limit. So the counters live in one shared, fast store, typically Redis.
 
-**Why atomic.** Take "read, decide, then increment". Two requests from one client reach two limiters at once: both read 99, both allow, both increment, ending at 101. Under a burst, dozens slip through that gap. `INCR` reads and writes in one atomic step and returns the new value, so every caller decides on a distinct number. Token buckets and sliding windows get the same guarantee as a Lua script inside Redis, which runs without interruption.
+**Why atomic.** Take "read, decide, then increment". Two requests from one client reach two limiters at once: both read 99, both allow, both increment, ending at 101. Under a burst, dozens slip through that gap. `INCR` reads and writes in one atomic step and returns the new value, so every caller decides on a distinct number. Token buckets and sliding windows need several reads and writes per check; they get the same guarantee from a Lua script, which Redis runs as one uninterrupted step.
 
 **Trade-offs.** Every call makes a round trip to the store, about a millisecond inside a data centre, and the store becomes a dependency of every request (see failing open, below).
 
@@ -233,7 +233,7 @@ Draw the check *before* the `alt`, because every call is counted, then two scena
 
 **One limiter or one Redis.** A single limiter replica falls short of 99.9% and is a single point of failure; so is a single Redis. Caught by `survive any node failure` and the availability requirement.
 
-**Too few limiter replicas.** Three carry 5k rps on paper, but at that utilisation queueing pushes up p99, and losing one saturates the rest. Caught by the p99 limit or `survive any node failure`.
+**Too few limiter replicas.** Three carry 5k rps on paper, but at 83% busy queueing pushes up p99, and losing one saturates the other two. Caught by the p99 limit or `survive any node failure`.
 
 ## In the interview
 
