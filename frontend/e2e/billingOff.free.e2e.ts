@@ -107,7 +107,7 @@ test('the roadmap and the progress page have no AI picks, report or credits', as
   await page.goto('practice/#/roadmap');
   await expect(page.getByRole('heading', { name: 'Interview prep roadmap' })).toBeVisible();
   // The free, rule-based next steps stay; the AI picks and the way to them don't.
-  await expect(page.getByTestId('next-steps')).toBeVisible();
+  await expect(page.getByTestId('next-for-you')).toBeVisible();
   await expect(page.getByTestId('roadmap-picks')).toHaveCount(0);
   await expect(page.getByTestId('next-for-you-upgrade')).toHaveCount(0);
   await expect(page.getByTestId('account-credits')).toHaveCount(0);

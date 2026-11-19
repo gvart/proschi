@@ -176,7 +176,7 @@ describe('the roadmap', () => {
   const problems = ['a', 'b', 'c'].map((id) => ({ id, title: `Problem ${id}`, summary: '', difficulty: 'easy' as const, tags: [] }));
   const guide = { id: 'approach', title: 'How to approach it', summary: 'Read me.', minutes: 9 };
 
-  it('marks lessons and the guide read, and counts them per stage and in all', () => {
+  it("marks lessons and the guide read, and offers the next step's lesson while unread", () => {
     render(
       <Roadmap
         stages={stages}
@@ -190,11 +190,42 @@ describe('the roadmap', () => {
         read={['a', 'approach', 'elsewhere']}
       />,
     );
-    expect(screen.getByRole('region', { name: 'Your progress' }).textContent).toContain('1 of 3 lessons read');
+    expect(screen.getByRole('region', { name: 'Your progress' }).textContent).toContain('1 of 3 solved');
     const stage = screen.getByRole('listitem', { name: 'Stage 1: One' });
-    expect(stage.textContent).toContain('1 / 2 lessons read');
     expect(within(stage).getByRole('link', { name: /Problem a/ }).textContent).toContain('min readRead');
     expect(within(stage).getByRole('link', { name: /Problem b/ }).textContent).not.toContain('Read');
-    expect(screen.getByRole('link', { name: /How to approach it/ }).textContent).toContain('Read');
+    expect(within(stage).getByRole('link', { name: /How to approach it/ }).textContent).toContain('Read');
+    // One primary action: the next step's lesson, its challenge one smaller link away.
+    const upNext = screen.getByTestId('up-next');
+    expect(within(upNext).getByTestId('up-next-title').textContent).toBe('Problem b');
+    expect(within(upNext).getByRole('link', { name: /Start the lesson/ }).getAttribute('href')).toBe('#/roadmap/b/lesson');
+    expect(within(upNext).getByRole('link', { name: 'or skip to the challenge' }).getAttribute('href')).toBe('#/roadmap/b');
+    // The current stage is open; a locked one is one line that opens on demand, its lessons readable.
+    expect(within(stage).getByRole('button', { name: /One/ }).getAttribute('aria-expanded')).toBe('true');
+    const two = screen.getByRole('listitem', { name: 'Stage 2: Two' });
+    const toggle = within(two).getByRole('button', { name: /Two/ });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(toggle.textContent).toContain('Unlocks after One');
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(within(two).getByRole('link', { name: 'Read the lesson: Problem c' }).getAttribute('href')).toBe('#/roadmap/c/lesson');
+  });
+
+  it('sends a newcomer to the guide first, and past a read lesson to the challenge', () => {
+    const { unmount } = render(<Roadmap stages={stages} problems={problems} progress={{}} access="open" providers={[]} onSignIn={() => {}} lessons={{ a: 5 }} guide={guide} />);
+    expect(screen.getByTestId('up-next-title').textContent).toBe('How to approach it');
+    expect(screen.getByRole('link', { name: /Read the guide/ }).getAttribute('href')).toBe('#/roadmap/approach');
+    unmount();
+    render(<Roadmap stages={stages} problems={problems} progress={{}} access="open" providers={[]} onSignIn={() => {}} lessons={{ a: 5 }} guide={guide} read={['approach', 'a']} />);
+    expect(screen.getByRole('link', { name: /Start the challenge/ }).getAttribute('href')).toBe('#/roadmap/a');
+  });
+
+  it('signed out past the first stage, the one action is to sign in', () => {
+    const onSignIn = vi.fn();
+    render(<Roadmap stages={stages} problems={problems} progress={{ a: { status: 'solved' }, b: { status: 'solved' } }} access="sign-in" providers={['github']} onSignIn={onSignIn} />);
+    expect(screen.getByTestId('up-next-title').textContent).toBe('Sign in to continue with Two');
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in with GitHub' }));
+    expect(onSignIn).toHaveBeenCalledWith('github');
+    expect(screen.queryByTestId('keep-progress')).toBeNull();
   });
 });

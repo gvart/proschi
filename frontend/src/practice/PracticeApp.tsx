@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useHashRoute } from './hashRoute';
 import problems from 'virtual:practice-listings';
 import { guides as guideMinutes, lessons } from 'virtual:practice-lessons';
@@ -10,7 +10,7 @@ import NextForYou from './history/NextForYou';
 import InterviewPlan from './plan/InterviewPlan';
 import { verdictIdOf } from './history/api';
 import { FeaturesContext, useFeatures } from '../components/featureState';
-import { ROADMAP, roadmapAccess, roadmapFor, roadmapHref, roadmapState, roadmapTarget, routeLock } from './roadmap';
+import { lockedSteps, ROADMAP, roadmapAccess, roadmapFor, roadmapHref, roadmapState, roadmapTarget, routeLock } from './roadmap';
 import { findGuide, GUIDES } from './guide/guides';
 import { lessonsRead, loadProgress, markLessonsRead, onLessonsRead, saveProgress, type Progress } from './progress';
 import { useLessonsRead } from './useLessonsRead';
@@ -269,6 +269,10 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
     skills: achievements.state.status === 'ready' ? achievements.state.answer.skills.topics : undefined,
     streak: ready ? summarize(ready).streak.current : undefined,
   };
+  // On the roadmap, "Also today" never suggests a problem locked there.
+  const lockedKey = lockedSteps(roadmapNow, access).join(' ');
+  const lockedNow = useMemo(() => (lockedKey ? lockedKey.split(' ') : []), [lockedKey]);
+  const lockedSet = useMemo(() => new Set(lockedNow), [lockedNow]);
   useEffect(() => {
     // The review, challenge, progress and profile pages name themselves.
     if (onReview || onProgress || onChallenge || onArcade || onProfile || onInterview) return;
@@ -390,12 +394,8 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
                 guide={firstGuide}
                 locked={target && lock && lock.kind !== 'open' ? { id: target.id, lock } : undefined}
                 read={lessonsReadIds}
-                nextForYou={
-                  <>
-                    <InterviewPlan account={account} progress={progress} skills={stepsData.skills} roadmap={roadmapOrder} />
-                    <NextForYou problemTitle={(id) => problems.find((p) => p.id === id)?.title} steps={{ account, ...stepsData }} />
-                  </>
-                }
+                planLink={<InterviewPlan account={account} progress={progress} skills={stepsData.skills} roadmap={roadmapOrder} />}
+                alsoToday={<NextForYou problemTitle={(id) => problems.find((p) => p.id === id)?.title} steps={{ account, ...stepsData, exclude: lockedNow }} locked={lockedSet} current={roadmapNow.next?.id} />}
               />
             )}
           </PracticeHub>

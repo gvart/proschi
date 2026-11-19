@@ -6,8 +6,10 @@ import { dayFromNow, mockPlanApi } from './interviewPlan';
  * The interview-date plan on the roadmap (interview_plan, Max; P55), in the
  * build with accounts and paid plans (API mocked): Max picks a date and gets
  * the days left, a strip of every day and today's list, kept on the account;
- * today's items tick off from what was done. Pro sees a short teaser with
- * the way to Max. With PLAN_SHOTS=<dir>, saves screenshots there.
+ * today's items tick off from what was done. The plan sits behind a small
+ * "Interview plan" link by the roadmap's progress, open once a date is set.
+ * Pro sees that link lead to Max instead. With PLAN_SHOTS=<dir>, saves
+ * screenshots there.
  */
 
 const SHOTS = process.env.PLAN_SHOTS;
@@ -19,6 +21,11 @@ test('Max: picks a date and gets a plan for every day, kept on the account', asy
   const api = await mockPlanApi(page);
   await page.goto('practice/#/roadmap');
   const plan = page.getByRole('region', { name: 'Interview plan' });
+  // No date yet: the plan waits behind its link.
+  const toggle = page.getByTestId('interview-plan-toggle');
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(plan).toBeHidden();
+  await toggle.click();
   await expect(plan.getByText('When is your interview?')).toBeVisible();
   await plan.getByLabel('Interview date').fill(dayFromNow(10));
   await plan.getByLabel('Minutes a day').selectOption('60');
@@ -113,14 +120,15 @@ test('a ticked item: a problem solved today is done', async ({ page }) => {
   await expect(page.getByTestId('plan-day').getByRole('heading')).toContainText('1 of 2 done');
 });
 
-test('Pro: a short teaser with the way to Max, and nothing asked of the plan API', async ({ page }) => {
+test('Pro: a small link to Max, and nothing asked of the plan API', async ({ page }) => {
   await mockSignedIn(page, PRO);
   const asked: string[] = [];
   page.on('request', (r) => r.url().includes('/api/me/interview-plan') && asked.push(r.url()));
   await page.goto('practice/#/roadmap');
   const teaser = page.getByTestId('interview-plan-teaser');
-  await expect(teaser).toContainText('Interview plan · Max');
-  await expect(teaser.getByRole('link', { name: 'Get Max' })).toHaveAttribute('href', /pricing/);
+  await expect(teaser).toHaveText('Interview plan · Max');
+  await expect(teaser).toHaveAttribute('href', /pricing/);
+  await expect(page.getByRole('region', { name: 'Your progress' }).getByTestId('interview-plan-teaser')).toBeVisible();
   await expect(page.getByTestId('interview-plan')).toHaveCount(0);
   if (SHOTS) await teaser.screenshot({ path: `${SHOTS}/pro-teaser.png` });
   expect(asked).toEqual([]);

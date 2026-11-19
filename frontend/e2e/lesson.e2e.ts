@@ -12,8 +12,7 @@ test.describe('lessons', () => {
   test('a roadmap step opens on its stage, with the lesson one click away in the rail', async ({ page }) => {
     await page.goto('practice/#/roadmap');
     const step = page.getByRole('listitem', { name: /^Stage 1: / }).getByRole('link', { name: /Hello, Proschi/ });
-    await expect(step).toContainText('Lesson · Challenge');
-    await expect(step).toContainText(/\d+ min read/);
+    await expect(step).toContainText(/Lesson · \d+ min read/);
     await step.click();
     await expect(page).toHaveURL(/#\/roadmap\/hello-proschi$/);
 
@@ -117,14 +116,12 @@ test.describe('lessons', () => {
   test('a lesson read shows on the roadmap', async ({ page }) => {
     await page.goto('practice/#/roadmap');
     const stage = page.getByRole('listitem', { name: /^Stage 1: / });
-    await expect(stage).toContainText(/0 \/ \d+ lessons read/);
+    await expect(stage.getByRole('link', { name: /Hello, Proschi/ })).not.toContainText('Read');
     await stage.getByRole('link', { name: /Hello, Proschi/ }).click();
     await page.getByRole('navigation', { name: 'Steps' }).getByRole('button', { name: 'Lesson' }).click();
     await page.getByRole('article', { name: 'Lesson' }).getByRole('button', { name: 'Continue: Design' }).click();
     await page.goto('practice/#/roadmap');
-    await expect(stage).toContainText(/1 \/ \d+ lessons read/);
     await expect(stage.getByRole('link', { name: /Hello, Proschi/ })).toContainText('Read');
-    await expect(page.getByRole('region', { name: 'Your progress' })).toContainText(/1 of \d+ lessons read/);
   });
 
     test('the guide is open to everyone and linked from the roadmap', async ({ page }) => {

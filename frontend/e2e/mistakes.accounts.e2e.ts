@@ -6,7 +6,7 @@ import { expect, ONBOARDING_KEY, test, waitForCanvas } from './fixtures';
 /**
  * Known mistakes follow the account (GET and POST /api/me/mistakes, API
  * mocked with one store for both browsers): a mistake a failed run matched
- * in one browser shows as "Retry …" in "Your next steps" in another browser
+ * in one browser shows as "Retry …" in the roadmap's "Also today" in another browser
  * signed in to the same account.
  */
 
@@ -56,7 +56,10 @@ test('a mistake made in one browser shows the retry step in another', async ({ p
   await mockSignedIn(second);
   await mockMistakes(second, store);
   await second.goto('practice/#/roadmap');
-  const steps = second.getByRole('region', { name: 'Your next steps' }).getByTestId('next-steps');
+  const card = second.getByTestId('next-for-you');
+  await expect(card.getByRole('link', { name: 'Retry URL Shortener', exact: true })).toBeVisible();
+  await card.getByRole('button', { name: 'More next steps' }).click();
+  const steps = card.getByTestId('next-steps');
   await expect(steps.getByRole('link').first()).toContainText('Retry URL Shortener');
   await expect(steps).toContainText('You missed: Cache misses that never fill the cache.');
   // Kept in that browser too, for when it is offline.
