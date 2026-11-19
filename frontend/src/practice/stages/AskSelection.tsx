@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactNode } from 'react';
-import { Copy, MessagesSquare } from 'lucide-react';
+import { Copy, MessageCircleQuestionMark, MousePointerClick, X } from 'lucide-react';
 
 /**
  * Select any text on a stage (the brief, the lesson, your notes, a failing
- * test) and ask Design partner about it (docs/design/paid-plans.md P50): a
- * right-click on a selection opens a small menu with "Ask Design partner"
+ * test) and ask the Interview coach about it (docs/design/paid-plans.md P50,
+ * P59): a right-click on a selection opens a small menu with "Ask Interview coach"
  * (and Copy, which the native menu it replaces had), and a selection shows a
  * small floating button under it, for touch. The code editor and the canvas
  * keep their own menus.
@@ -143,8 +143,8 @@ export default function AskSelection({ enabled, onAsk, className, children }: { 
           data-field={chip.field || undefined}
           style={{ left: Math.max(8, Math.min(chip.x, window.innerWidth - 8)), top: Math.min(chip.y, window.innerHeight - 44) }}
         >
-          <MessagesSquare size={14} aria-hidden="true" />
-          Ask Design partner
+          <MessageCircleQuestionMark size={14} aria-hidden="true" />
+          Ask Interview coach
         </button>
       )}
       {menu && (
@@ -157,8 +157,8 @@ export default function AskSelection({ enabled, onAsk, className, children }: { 
           style={{ left: menu.x, top: menu.y }}
         >
           <button type="button" role="menuitem" onClick={() => ask(menu.text)} className={item}>
-            <MessagesSquare size={14} aria-hidden="true" />
-            Ask Design partner
+            <MessageCircleQuestionMark size={14} aria-hidden="true" />
+            Ask Interview coach
           </button>
           <button
             type="button"
@@ -175,5 +175,24 @@ export default function AskSelection({ enabled, onAsk, className, children }: { 
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * The one-line tip under the stage bar that selecting text asks the
+ * Interview coach (P59): shown until it is used once or dismissed
+ * (stages/coach.ts).
+ */
+export function AskTip({ onDismiss }: { onDismiss: () => void }) {
+  return (
+    <p role="note" className="flex shrink-0 items-center gap-2 border-b-bw-1 border-ink/20 bg-pop-yellow/15 py-1 pl-3 pr-1 text-xs text-ink/80" data-testid="ask-tip">
+      <MousePointerClick size={13} className="shrink-0 text-muted" aria-hidden="true" />
+      <span className="min-w-0 flex-1">
+        <strong className="font-semibold text-ink">Tip:</strong> select any text on this stage to ask the Interview coach about it.
+      </span>
+      <button type="button" onClick={onDismiss} aria-label="Dismiss tip" title="Dismiss" className="grid h-7 w-7 shrink-0 place-items-center rounded-sm text-muted hover:bg-ink/10 hover:text-ink">
+        <X size={13} aria-hidden="true" />
+      </button>
+    </p>
   );
 }

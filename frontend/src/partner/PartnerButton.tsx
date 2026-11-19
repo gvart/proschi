@@ -1,4 +1,4 @@
-import { MessagesSquare } from 'lucide-react';
+import { MessageCircleQuestionMark, MessagesSquare } from 'lucide-react';
 import { PARTNER_SHORTCUT } from './shortcut';
 
 interface PartnerButtonProps {
@@ -11,6 +11,8 @@ interface PartnerButtonProps {
    * the edge tab, which would float over the content (the chat's bubbles).
    */
   bar?: boolean;
+  /** Interview prep: the button is the Interview coach's (P59). */
+  coach?: boolean;
 }
 
 /**
@@ -22,20 +24,23 @@ interface PartnerButtonProps {
  * is open (it has its own close, and Ctrl/Cmd+J toggles both ways). On phones
  * it sits in the tab bar instead (`bar`).
  */
-export default function PartnerButton({ open, onToggle, disabledReason, bar }: PartnerButtonProps) {
+export default function PartnerButton({ open, onToggle, disabledReason, bar, coach = false }: PartnerButtonProps) {
+  const name = coach ? 'Interview coach' : 'Design partner';
+  const what = coach ? 'help with answering the interviewer' : 'review, questions and changes';
+  const Icon = coach ? MessageCircleQuestionMark : MessagesSquare;
   if (bar)
     return (
       <button
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        aria-label="Design partner"
+        aria-label={name}
         disabled={!!disabledReason}
-        title={disabledReason ?? 'Design partner: review, questions and changes'}
+        title={disabledReason ?? `${name}: ${what}`}
         data-testid="partner-button"
         className="flex-none inline-flex items-center justify-center w-11 text-ink border-l-bw-1 border-ink hover:bg-pop-lilac/30 disabled:text-muted disabled:hover:bg-transparent"
       >
-        <MessagesSquare size={16} aria-hidden="true" />
+        <Icon size={16} aria-hidden="true" />
       </button>
     );
   if (open) return null;
@@ -45,15 +50,15 @@ export default function PartnerButton({ open, onToggle, disabledReason, bar }: P
         type="button"
         onClick={onToggle}
         aria-expanded={false}
-        aria-label="Design partner"
+        aria-label={name}
         aria-keyshortcuts="Control+J Meta+J"
         disabled={!!disabledReason}
-        title={disabledReason ?? `Design partner: review, questions and changes (${PARTNER_SHORTCUT})`}
+        title={disabledReason ?? `${name}: ${what} (${PARTNER_SHORTCUT})`}
         data-testid="partner-button"
         className="absolute right-0 top-1/2 flex -translate-y-1/2 flex-col items-center gap-2 rounded-l-sm border-bw-1 border-r-0 border-ink bg-surface px-1.5 py-3 text-xs font-semibold text-ink shadow-brutal-sm transition-[padding,background-color] duration-d1 hover:bg-pop-lilac/30 hover:pr-2 focus-visible:pr-2 disabled:cursor-not-allowed disabled:border-ink/30 disabled:text-muted disabled:shadow-none disabled:hover:bg-surface disabled:hover:pr-1.5"
       >
-        <MessagesSquare size={15} aria-hidden="true" />
-        <span className="[writing-mode:vertical-rl] rotate-180 whitespace-nowrap">Design partner</span>
+        <Icon size={15} aria-hidden="true" />
+        <span className="[writing-mode:vertical-rl] rotate-180 whitespace-nowrap">{name}</span>
       </button>
     </div>
   );

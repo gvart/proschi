@@ -55,7 +55,9 @@ import { EMPTY_NOTES, factsOf, goTo as reachStage, labelOf, loadNotes, nextOf, n
 import StageBar, { StageFoot, type StageNext } from './stages/StageBar';
 import { ClarifyStage, EstimateStage, WrapupStage } from './stages/Screens';
 import DesignGuide from './stages/DesignGuide';
-import AskSelection from './stages/AskSelection';
+import AskSelection, { AskTip } from './stages/AskSelection';
+import { askTipDone, markAskTipDone, prepTurnOf } from './stages/coach';
+import type { PrepTurn } from '../partner/prep';
 import { quoteForPartner } from './stages/ask';
 import { track } from '../services/metrics';
 import './practiceLayout.css';
@@ -119,9 +121,9 @@ interface ProblemPageProps {
  * before it shows the facts or the worked answer, and the notes are kept per
  * problem (stages/flow.ts). Design is a whiteboard, with the full editor (the
  * statement, the editor and the diagram side by side in resizable panes, the
- * tests folded under them; tabs on phones) one click away. Design partner
- * coaches in every stage, and any text selected on a stage can be asked
- * about.
+ * tests folded under them; tabs on phones) one click away. The Interview
+ * coach (P59) is there in every stage, and any text selected on a stage can
+ * be asked about. The plain workspace keeps Design partner.
  */
 export default function ProblemPage({ problem, progress, onProgress, engine, account, back = { href: '#/', label: 'Problems' }, banner, openLesson, staged = false }: ProblemPageProps) {
   const [source, setSource] = useState(() => sourceOf(progress, problem));
@@ -364,11 +366,15 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   };
 
   // Design partner (src/partner): coaches on this problem (P29, P30); the interview room has none.
+  // On the interview prep stages it is the Interview coach (P59), with its own conversation.
   const hasPartner = billingEnabled && account.state.status !== 'off';
   const [partnerOpen, setPartnerOpen] = useState(false);
   const togglePartner = useCallback(() => setPartnerOpen((o) => !o), []);
   const closePartner = useCallback(() => setPartnerOpen(false), []);
-  const partnerContext = useMemo(() => ({ kind: 'practice' as const, problemId: problem.id }), [problem.id]);
+  const partnerContext = useMemo(() => ({ kind: staged ? ('prep' as const) : ('practice' as const), problemId: problem.id }), [staged, problem.id]);
+  // The Interview coach gets the stage on screen and the notes with each turn (kept current below).
+  const prepNow = useRef<PrepTurn>(undefined);
+  const getPrep = useCallback(() => prepNow.current, []);
   const applyPartner = useCallback((next: string) => {
     if (editorRef.current) editorRef.current.replace(next);
     else setSource(next);
@@ -380,14 +386,24 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   const redoCanvas = useCallback(() => void editorRef.current?.redo(), []);
   const markAssisted = useCallback(() => onProgress((p) => withAssisted(p, problem.id)), [onProgress, problem.id]);
 
-  // Select text on a stage, then "Ask Design partner": the quote goes into the composer.
+  // Select text on a stage, then "Ask Interview coach": the quote goes into the composer.
   const [partnerPrefill, setPartnerPrefill] = useState<{ id: number; text: string }>();
-  const askPartner = useCallback((text: string) => {
-    const quote = quoteForPartner(text);
-    if (!quote) return;
-    setPartnerPrefill((p) => ({ id: (p?.id ?? 0) + 1, text: quote }));
-    setPartnerOpen(true);
+  // "Tip: select any text…" shows on the stages until it is used once or dismissed.
+  const [askTip, setAskTip] = useState(() => !askTipDone());
+  const doneAskTip = useCallback(() => {
+    markAskTipDone();
+    setAskTip(false);
   }, []);
+  const askPartner = useCallback(
+    (text: string) => {
+      const quote = quoteForPartner(text);
+      if (!quote) return;
+      setPartnerPrefill((p) => ({ id: (p?.id ?? 0) + 1, text: quote }));
+      setPartnerOpen(true);
+      doneAskTip();
+    },
+    [doneAskTip],
+  );
 
   const inLesson = hasLesson && screen === 'lesson';
   // Design in the full editor: the workspace as it always was.
@@ -485,11 +501,11 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
 
   const partnerDock = hasPartner && (
     <>
-    {!phone && <PartnerButton open={partnerOpen} onToggle={togglePartner} />}
-    <PartnerDock open={partnerOpen} phone={phone} onClose={closePartner}>
+    {!phone && <PartnerButton open={partnerOpen} onToggle={togglePartner} coach={staged} />}
+    <PartnerDock open={partnerOpen} phone={phone} onClose={closePartner} label={staged ? 'Interview coach' : 'Design partner'}>
       <Suspense fallback={null}>
         <PartnerPanel
-          storeKey={`practice:${problem.id}`}
+          storeKey={`${staged ? 'prep' : 'practice'}:${problem.id}`}
           context={partnerContext}
           account={account}
           source={source}
@@ -500,6 +516,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
           onAssisted={markAssisted}
           diagramOf={partnerDiagram}
           prefill={partnerPrefill}
+          {...(staged ? { stage: screen, getPrep } : {})}
         />
       </Suspense>
     </PartnerDock>
@@ -524,6 +541,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
             input={() => practiceReviewInput(problem, source, engine)}
             onSelect={goTo}
             onOpenPartner={hasPartner ? () => setPartnerOpen(true) : undefined}
+            coach={staged}
           />
         }
         mistake={
@@ -565,6 +583,9 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   const solved = status === 'solved' || !!run?.result.solved;
   const questions = interview?.estimates ?? [];
   const rows = notes.rows ?? questions.map((e, i) => ({ id: questionRowId(i), label: e.question, expression: '', unit: e.unit }));
+  useEffect(() => {
+    prepNow.current = staged ? prepTurnOf(screen, notes, rows) : undefined;
+  });
   const runDesign = () => {
     runNow();
     setChecksOpen(true);
@@ -795,10 +816,11 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
           onOpen={openStage}
           next={next}
           tools={designTools}
-          partner={phone && hasPartner && !editorView && <PartnerButton bar open={partnerOpen} onToggle={togglePartner} />}
+          partner={phone && hasPartner && !editorView && <PartnerButton bar open={partnerOpen} onToggle={togglePartner} coach />}
           phone={phone}
         />
       )}
+      {staged && hasPartner && askTip && !editorView && <AskTip onDismiss={doneAskTip} />}
 
       {phone && editorView && (
         // The design system's tab look (widgets.css); plain buttons so each tab keeps its data-tour target.
@@ -816,7 +838,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
           </div>
           {!staged && lessonButton('flex-none inline-flex items-center gap-1.5 px-3 text-sm font-semibold text-ink border-l-bw-1 border-ink hover:bg-pop-yellow/30')}
           {/* In the tab bar, not over the panes. */}
-          {hasPartner && <PartnerButton bar open={partnerOpen} onToggle={togglePartner} />}
+          {hasPartner && <PartnerButton bar open={partnerOpen} onToggle={togglePartner} coach={staged} />}
         </div>
       )}
       </ZenCollapse>

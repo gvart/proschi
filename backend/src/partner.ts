@@ -1,10 +1,11 @@
+import { MAX_PREP_CELL, MAX_PREP_ROWS, MAX_PREP_TEXT, PREP_STAGES, type PrepRow, type PrepStage, type PrepTurn } from '../../frontend/src/partner/prep';
 import { MAX_REVIEW_BODY, MAX_REVIEW_IMPORTS, MAX_REVIEW_SOURCE } from '../../frontend/src/review/contract';
 import type { User } from './auth';
 import { WALL_CLOCK_MS } from './ai/budget';
 import { AiError, aiEnabled, createClient, malformed, type MessageRequest, type MessageResult, type ModelUsage } from './ai/client';
 import { approxTokens, problemContext, type ProblemContext } from './ai/context';
 import { checkChange, measure, type ChangeResult, type DesignSite, type Edit } from './ai/partnerChanges';
-import { INTENTS, MAX_TOKENS, parsePartnerAnswer, partnerRequest, repairMessage, type HistoryTurn, type Intent, type PartnerAnswer, type TurnInput } from './ai/partnerPrompt';
+import { INTENTS, MAX_TOKENS, parsePartnerAnswer, partnerRequest, repairMessage, type HistoryTurn, type Intent, type PartnerAnswer, type Persona, type TurnInput } from './ai/partnerPrompt';
 import { serverReviewRequest } from './ai/reviewer';
 import type { Ctx } from './context';
 import type { Env } from './env';
@@ -21,7 +22,7 @@ import { credits, partnerBilling } from './partnerBilling';
  *
  *   POST /api/partner/sessions {context, deep?}                 a new chat: {id}
  *   GET  /api/partner/sessions/<id>                             the chat with its turns
- *   POST /api/partner/sessions/<id>/turns {intent, message, source, files?, changeId?}
+ *   POST /api/partner/sessions/<id>/turns {intent, message, source, files?, changeId?, prep?}
  *                                                               one turn: {turn, credits: {charged, balance}}
  *   POST /api/partner/sessions/<id>/changes/<changeId> {decision}  accepted or rejected: 204, free
  *
@@ -40,7 +41,12 @@ import { credits, partnerBilling } from './partnerBilling';
  * (src/ai/partnerChanges.ts). A change that does not apply gets one repair
  * call; what still fails is sent as `{ok: false, reason}`. On a practice
  * problem the partner coaches (P30): every intent but `solve` has its
- * changes dropped, and a turn with changes is `assisted`.
+ * changes dropped, and a turn with changes is `assisted`. A chat started
+ * with {kind: 'prep'} (a roadmap problem's interview prep stages) is such a
+ * practice chat answered by the Interview coach (P59): its persona is stored
+ * with the session, `build` is refused, and each turn may carry `prep` (the
+ * stage on screen and the candidate's notes), which goes to the model fenced
+ * as data and is never stored.
  */
 
 export const TURN_LEASE_MS = 90_000;
@@ -53,13 +59,14 @@ export const MAX_SESSION_TURNS = 200;
 
 const NO_STORE = { 'Cache-Control': 'no-store' };
 
-type Context = { kind: 'editor' } | { kind: 'practice'; problemId: string };
+type Context = { kind: 'editor' } | { kind: 'practice' | 'prep'; problemId: string };
 
 interface SessionRow {
   id: string;
   user_id: string;
   context_kind: 'editor' | 'practice';
   problem_id: string | null;
+  persona: Persona;
   deep: number;
   created_at: number;
   updated_at: number;
@@ -135,7 +142,8 @@ async function interviewActive(env: Env, userId: string, now: number): Promise<b
 
 const interviewRefused = () => json({ error: 'interview_active', message: 'Design partner is off during a mock interview' }, 409, NO_STORE);
 
-const contextOf = (row: SessionRow): Context => (row.context_kind === 'practice' ? { kind: 'practice', problemId: row.problem_id ?? '' } : { kind: 'editor' });
+const contextOf = (row: SessionRow): Context =>
+  row.context_kind === 'practice' ? { kind: row.persona === 'coach' ? 'prep' : 'practice', problemId: row.problem_id ?? '' } : { kind: 'editor' };
 
 function changeOf(c: ChangeRow): Change {
   return { id: c.id, title: c.title, why: c.why, edits: JSON.parse(c.edits) as Edit[], result: JSON.parse(c.result) as ChangeResult };
@@ -171,12 +179,14 @@ function viewTurns(turns: TurnRow[], changes: ChangeRow[]): Turn[] {
 export const createPartnerSession = partnerRoute(async (request: Request, ctx: Ctx, user: User): Promise<Response> => {
   const body = await readJson(request);
   const context = body.context as Record<string, unknown> | undefined;
-  if (typeof context !== 'object' || context === null) throw new HttpError(400, 'context must be {kind: "editor"} or {kind: "practice", problemId}');
+  if (typeof context !== 'object' || context === null) throw new HttpError(400, 'context must be {kind: "editor"} or {kind: "practice" | "prep", problemId}');
   let problemId: string | null = null;
-  if (context.kind === 'practice') {
+  if (context.kind === 'practice' || context.kind === 'prep') {
     if (typeof context.problemId !== 'string' || !problemContext(context.problemId)) throw new HttpError(400, 'Unknown problem');
     problemId = context.problemId;
-  } else if (context.kind !== 'editor') throw new HttpError(400, 'context.kind must be "editor" or "practice"');
+  } else if (context.kind !== 'editor') throw new HttpError(400, 'context.kind must be "editor", "practice" or "prep"');
+  // Interview prep is a practice chat with the Interview coach (P59), fixed for the session's life.
+  const persona: Persona = context.kind === 'prep' ? 'coach' : 'partner';
   if (body.deep !== undefined && typeof body.deep !== 'boolean') throw new HttpError(400, 'deep must be a boolean');
   const deep = body.deep === true;
   if (deep && !can(user, 'deep_mode', ctx.env).ok) return planRequired('deep_mode');
@@ -184,8 +194,8 @@ export const createPartnerSession = partnerRoute(async (request: Request, ctx: C
   if (await interviewActive(ctx.env, user.id, now)) return interviewRefused();
 
   const id = crypto.randomUUID();
-  await ctx.env.DB.prepare('INSERT INTO partner_sessions (id, user_id, context_kind, problem_id, deep, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
-    .bind(id, user.id, context.kind, problemId, deep ? 1 : 0, now, now)
+  await ctx.env.DB.prepare('INSERT INTO partner_sessions (id, user_id, context_kind, problem_id, persona, deep, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(id, user.id, context.kind === 'editor' ? 'editor' : 'practice', problemId, persona, deep ? 1 : 0, now, now)
     .run();
   return json({ id }, 201, NO_STORE);
 });
@@ -213,11 +223,42 @@ interface TurnBody {
   source: string;
   files: Record<string, string>;
   changeId?: string;
+  prep?: PrepTurn;
 }
 
-function turnBody(body: Record<string, unknown>): TurnBody {
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/** An Interview coach turn's `prep` (the stage on screen and the candidate's notes), checked against the shared caps. */
+export function prepOf(v: unknown): PrepTurn {
+  if (!isRecord(v)) throw new HttpError(400, 'prep must be an object');
+  if (!PREP_STAGES.includes(v.stage as PrepStage)) throw new HttpError(400, `prep.stage must be one of ${PREP_STAGES.join(', ')}`);
+  const text = (field: 'questions' | 'reflection'): string | undefined => {
+    const t = v[field];
+    if (t === undefined) return undefined;
+    if (typeof t !== 'string' || t.length > MAX_PREP_TEXT) throw new HttpError(400, `prep.${field} must be a string of at most ${MAX_PREP_TEXT} characters`);
+    return t;
+  };
+  let worksheet: PrepRow[] | undefined;
+  if (v.worksheet !== undefined) {
+    if (!Array.isArray(v.worksheet) || v.worksheet.length > MAX_PREP_ROWS) throw new HttpError(400, `prep.worksheet must be an array of at most ${MAX_PREP_ROWS} rows`);
+    worksheet = (v.worksheet as unknown[]).map((r) => {
+      const cell = (c: unknown) => typeof c === 'string' && c.length <= MAX_PREP_CELL;
+      if (!isRecord(r) || !cell(r.label) || !cell(r.expression) || !cell(r.unit)) throw new HttpError(400, `each worksheet row must be {label, expression, unit} of at most ${MAX_PREP_CELL} characters each`);
+      const c = r.checked;
+      if (c !== undefined && (!isRecord(c) || typeof c.value !== 'number' || !Number.isFinite(c.value) || typeof c.correct !== 'boolean')) throw new HttpError(400, 'a worksheet row\'s checked must be {value, correct}');
+      return { label: r.label as string, expression: r.expression as string, unit: r.unit as string, ...(c ? { checked: { value: c.value as number, correct: c.correct as boolean } } : {}) };
+    });
+  }
+  const questions = text('questions');
+  const reflection = text('reflection');
+  return { stage: v.stage as PrepStage, ...(questions !== undefined ? { questions } : {}), ...(worksheet ? { worksheet } : {}), ...(reflection !== undefined ? { reflection } : {}) };
+}
+
+function turnBody(body: Record<string, unknown>, persona: Persona): TurnBody {
   if (!INTENTS.includes(body.intent as Intent)) throw new HttpError(400, `intent must be one of ${INTENTS.join(', ')}`);
   const intent = body.intent as Intent;
+  // The Interview coach never designs the system for the candidate (P59).
+  if (persona === 'coach' && intent === 'build') throw new HttpError(400, 'The Interview coach does not build designs');
   const message = body.message ?? '';
   if (typeof message !== 'string') throw new HttpError(400, 'message must be a string');
   if (message.length > MAX_MESSAGE) throw new HttpError(400, `message is over ${MAX_MESSAGE} characters`);
@@ -235,7 +276,9 @@ function turnBody(body: Record<string, unknown>): TurnBody {
     }
   }
   if (intent === 'improve' && typeof body.changeId !== 'string') throw new HttpError(400, 'changeId is required to improve a change');
-  return { intent, message, source: body.source, files, ...(intent === 'improve' ? { changeId: body.changeId as string } : {}) };
+  if (body.prep !== undefined && persona !== 'coach') throw new HttpError(400, 'prep is for an Interview coach chat only');
+  const prep = body.prep !== undefined ? prepOf(body.prep) : undefined;
+  return { intent, message, source: body.source, files, ...(intent === 'improve' ? { changeId: body.changeId as string } : {}), ...(prep ? { prep } : {}) };
 }
 
 const meterUsage = (r: MessageResult): ModelUsage => ({ model: r.model, ...r.usage });
@@ -325,7 +368,7 @@ async function answer(
 export const postPartnerTurn = partnerRoute(async (request: Request, ctx: Ctx, user: User, id: string): Promise<Response> => {
   const { env } = ctx;
   const session = await load(env, user.id, id);
-  const body = turnBody(await readJson(request, MAX_REVIEW_BODY));
+  const body = turnBody(await readJson(request, MAX_REVIEW_BODY), session.persona);
   const now = Date.now();
   if (await interviewActive(env, user.id, now)) return interviewRefused();
   const deep = session.deep === 1;
@@ -370,11 +413,13 @@ export const postPartnerTurn = partnerRoute(async (request: Request, ctx: Ctx, u
       ...(improving ? { improve: changeOf(improving) } : {}),
       feedback: stored.filter((c) => c.decision && !c.fed).map((c) => ({ title: c.title, decision: c.decision as 'accepted' | 'rejected' })),
       ...(context ? { notAsked: context.topics.filter((t) => t.kind === 'clarify').map((t) => t.label) } : {}),
+      ...(body.prep ? { prep: body.prep } : {}),
     };
     const byTurn = new Map<string, { title: string; ok: boolean }[]>();
     for (const c of stored) byTurn.set(c.turn_id, [...(byTurn.get(c.turn_id) ?? []), { title: c.title, ok: (JSON.parse(c.result) as ChangeResult).ok }]);
     const history: HistoryTurn[] = turns.map((t) => ({ role: t.role, intent: t.intent, message: t.message, changes: byTurn.get(t.id) }));
-    const req = partnerRequest(input, history, { deep, context });
+    // The persona is the session's, set when it started: nothing in a turn can change it.
+    const req = partnerRequest(input, history, { deep, context, persona: session.persona });
 
     const estimate = partnerBilling.estimateMc(req.model, MAX_TOKENS, approxInput(req), env);
     const hold = await partnerBilling.hold(env, user.id, estimate, `partner:${id}:${turns.length + 1}`);
@@ -419,7 +464,7 @@ export const postPartnerTurn = partnerRoute(async (request: Request, ctx: Ctx, u
       ...(input.feedback.length ? [DB.prepare('UPDATE partner_changes SET fed = 1 WHERE session_id = ? AND decision IS NOT NULL').bind(id)] : []),
       DB.prepare('UPDATE partner_sessions SET updated_at = ?, turning_until = NULL WHERE id = ?').bind(at, id),
     ]);
-    log('info', 'partner.turn', { requestId: ctx.requestId, userId: user.id, intent: body.intent, deep, changes: changes.length, failed: changes.filter((c) => !c.result.ok).length, chargedMc: charged.chargedMc, usage: result.billed });
+    log('info', 'partner.turn', { requestId: ctx.requestId, userId: user.id, intent: body.intent, persona: session.persona, deep, changes: changes.length, failed: changes.filter((c) => !c.result.ok).length, chargedMc: charged.chargedMc, usage: result.billed });
     const turn: Turn = {
       id: partnerTurn.id,
       role: 'partner',

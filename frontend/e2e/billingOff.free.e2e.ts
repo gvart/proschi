@@ -28,6 +28,7 @@ const noPartner = async (page: Page) => {
   await expect(page.getByTestId('partner-button')).toHaveCount(0);
   await page.keyboard.press('Control+j');
   await expect(page.getByRole('region', { name: 'Design partner' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Interview coach' })).toHaveCount(0);
 };
 
 test('the editor has no Design partner tab or Ctrl+J', async ({ page }) => {
@@ -52,7 +53,7 @@ test('a roadmap problem opened on Design has no Design partner', async ({ page }
 test.describe('on Clarify', () => {
   test.use({ stages: 'fresh' });
 
-  test('selecting text offers no "Ask Design partner"', async ({ page }) => {
+  test('selecting text offers no "Ask Interview coach", and no tip says it would', async ({ page }) => {
     const metered = await open(page);
     // Started (notes saved), so it opens on Clarify, not the lesson (P52).
     await page.addInitScript((key) => {
@@ -64,6 +65,7 @@ test.describe('on Clarify', () => {
     await brief.click();
     await noPartner(page);
     await expect(page.getByTestId('stage-bar')).toBeVisible();
+    await expect(page.getByTestId('ask-tip')).toHaveCount(0);
     await brief.locator('.ps-brief-body p').first().evaluate((node) => {
       const range = document.createRange();
       range.selectNodeContents(node);
@@ -73,7 +75,7 @@ test.describe('on Clarify', () => {
     });
     await brief.getByRole('listitem').first().click({ button: 'right' });
     await expect(page.getByTestId('ask-selection')).toHaveCount(0);
-    await expect(page.getByRole('menuitem', { name: 'Ask Design partner' })).toHaveCount(0);
+    await expect(page.getByRole('menuitem', { name: 'Ask Interview coach' })).toHaveCount(0);
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/problem-clarify.png` });
     expect(metered).toEqual([]);
   });

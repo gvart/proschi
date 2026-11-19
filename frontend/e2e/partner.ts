@@ -21,6 +21,8 @@ export interface TurnBody {
   source: string;
   files?: { name: string; source: string }[];
   changeId?: string;
+  /** Interview coach: the stage on screen and the notes. */
+  prep?: { stage: string; questions?: string; worksheet?: { label: string; expression: string; unit: string; checked?: { value: number; correct: boolean } }[]; reflection?: string };
 }
 
 type Turn = Record<string, unknown> & { id: string; role: 'user' | 'partner' };
@@ -111,6 +113,8 @@ export class PartnerMock {
           const answer = await this.reply(body);
           if ('status' in answer && typeof answer.status === 'number') return route.fulfill(answer as { status: number; json: unknown });
           const turn = answer as Turn;
+          // The Interview coach (P59) never returns changes except on solve, as the server drops them.
+          if ((session.context as { kind?: string }).kind === 'prep' && body.intent !== 'solve') delete turn.changes;
           session.turns.push({ id: `u${this.n}`, role: 'user', message: body.message, at: Date.now() }, turn);
           return route.fulfill({ json: { turn, credits: { charged: 3.42, balance: 812.4 } } });
         }
