@@ -1,0 +1,38 @@
+frontend/src/practice/problems/media-processing/interview.md
+  s_91ba69d9cbae8d::t_2783ca7808bdd5 62-68,74
+frontend/src/practice/problems/video-streaming/lesson.md
+  s_91ba69d9cbae8d::t_2783ca7808bdd5 68,72,120,199
+frontend/src/practice/problems/file-storage/lesson.md
+  s_91ba69d9cbae8d::t_9780c1486a4402 83,96,101,181,213,236
+frontend/src/practice/problems/video-streaming/interview.md
+  s_91ba69d9cbae8d::t_2783ca7808bdd5 3,5,7,9,11,13,15,17,19,39,41,43,48,53,58,63-65,67,81
+frontend/src/practice/problems/github-repo-replication/interview.md
+  s_91ba69d9cbae8d::t_fd0a9854a96abb 33-44,53,58,67-74
+frontend/src/practice/problems/github-repo-replication/lesson.md
+  s_91ba69d9cbae8d::t_a512cf685c6ec3 96
+  s_91ba69d9cbae8d::t_fd0a9854a96abb 49,58,60,208-209
+frontend/src/practice/problems/github-repo-replication/problem.md
+  s_91ba69d9cbae8d::t_fd0a9854a96abb 86-90,92-94
+frontend/src/practice/problems/media-processing/lesson.md
+  s_91ba69d9cbae8d::t_2783ca7808bdd5 101,143
+frontend/src/practice/problems/file-storage/interview.md
+  s_91ba69d9cbae8d::t_9780c1486a4402 21-32,53
+frontend/src/practice/problems/collaborative-docs/lesson.md
+  s_91ba69d9cbae8d::t_fd0a9854a96abb 40,64,69,157,168,174,202,224,229
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7b7cda836df63a5a9ac555735bee148d01ee37ac",
+  "prompts": {},
+  "sessions": {
+    "s_91ba69d9cbae8d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fe8c51ce-b526-4c6e-949d-867e4a8bd64a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
