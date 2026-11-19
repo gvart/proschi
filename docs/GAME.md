@@ -4,7 +4,7 @@ updated: 2026-11-09
 
 # Writing game scenarios
 
-**Scale or Fail** is the system design game in the practice page's More practice menu (Arcade)
+**Scale or Fail** is the system design game in the practice page's Daily menu (Arcade)
 ([play it](https://proschi.app/practice/#/arcade)). You
 pick a scenario, place components on a board by tapping or dragging, and keep
 the system up while traffic grows, new use cases arrive and the requirements

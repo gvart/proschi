@@ -220,8 +220,8 @@ account are joined. The reading badges count them (docs/CARDS.md,
 
 ### The steps
 
-A problem opened from **Interview prep** (the roadmap) is worked through in
-steps; one opened from the **Problems** list stays the plain workspace of
+A problem opened from the **Roadmap** (the guided path) is worked through in
+steps; one opened from **All problems** (the open list) stays the plain workspace of
 the lesson section above (the statement, editor and diagram, Run tests, the
 Interview mode and Guided walkthrough buttons, Design partner), like a
 coding-practice site, with no step bar. Solved state and saved code are
@@ -238,8 +238,9 @@ P52 and P58.
 
 ## `interview.md`
 
-The mock interview has pages of its own: **Interview prep › Mock
-interview** (`practice/#/interview`), or **Practice this as a mock
+The mock interview has pages of its own: the **Mock interview** tab
+(`practice/#/interview`, its set-up keeps the practice tabs; the room has
+none), or **Practice this as a mock
 interview** in a problem's Wrap-up, which opens it with that problem chosen. It goes in three steps.
 
 1. **Set up.** The problem is **Surprise me** by default: a random one you

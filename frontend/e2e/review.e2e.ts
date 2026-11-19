@@ -21,7 +21,7 @@ async function expectType(c: Locator, type: string, text: RegExp | string): Prom
 
 test.describe('daily review', () => {
   test('a session with every card type, kept in the browser', async ({ page }) => {
-    // The practice page's More practice menu leads to daily review.
+    // The practice page's Daily menu leads to daily review.
     await page.goto('practice/');
     await (await sectionLink(page, 'Review cards')).click();
     await expect(page).toHaveURL(/#\/review$/);

@@ -1,12 +1,12 @@
 import { loadJson, saveJson } from '../../services/storage';
 import { isSafeKey } from '../../playground/sanitize';
 import { statusOf, type Progress } from '../progress';
-import { roadmapHref, stepLock, type RoadmapAccess, type RoadmapState } from '../roadmap';
+import { roadmapHref } from '../roadmap';
 
 /**
  * "Continue" on the practice home: the last problem opened, while it is not
- * solved yet, else (for interview prep) the next step of the roadmap. The last problem is
- * remembered in this browser only (docs/PRIVACY.md lists the key).
+ * solved yet (the roadmap's next step is the roadmap's own "Up next"). The
+ * last problem is remembered in this browser only (docs/PRIVACY.md lists the key).
  */
 
 /** The last problem opened on the practice page, `{ id, roadmap }`. */
@@ -31,38 +31,20 @@ export function saveLastProblem(last: LastProblem): void {
 
 export interface ContinueTarget {
   href: string;
-  /** Why this one: picked up where you left off, or the roadmap's next step. */
-  kind: 'last' | 'roadmap';
   id: string;
 }
 
-/**
- * Where "Continue" leads, or undefined when there is nothing to continue (the
- * roadmap is done and the last problem solved). A roadmap step that needs a
- * sign-in or an earlier solve leads to the roadmap, which says what unlocks it.
- */
+/** Where "Continue" leads: the last problem opened, where it was opened, while it is unsolved; else nowhere. */
 export function continueTarget({
   last,
   progress,
   known,
-  roadmap,
-  access,
-  roadmapStep = true,
 }: {
   last?: LastProblem;
   progress: Progress;
   /** The problem ids this build has. */
   known: ReadonlySet<string>;
-  roadmap: RoadmapState;
-  access: RoadmapAccess;
-  /** Fall back to the roadmap's next step (interview prep); otherwise only an unsolved last problem continues. */
-  roadmapStep?: boolean;
 }): ContinueTarget | undefined {
-  if (last && known.has(last.id) && statusOf(progress, last.id) !== 'solved') {
-    return { kind: 'last', id: last.id, href: last.roadmap ? roadmapHref(last.id) : `#/${last.id}` };
-  }
-  const next = roadmap.next;
-  if (!next || !roadmapStep) return undefined;
-  const open = stepLock(roadmap, next.id, access).kind === 'open';
-  return { kind: 'roadmap', id: next.id, href: open ? roadmapHref(next.id) : '#/roadmap' };
+  if (!last || !known.has(last.id) || statusOf(progress, last.id) === 'solved') return undefined;
+  return { id: last.id, href: last.roadmap ? roadmapHref(last.id) : `#/${last.id}` };
 }

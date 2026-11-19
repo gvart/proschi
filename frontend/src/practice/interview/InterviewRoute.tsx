@@ -37,13 +37,15 @@ interface InterviewRouteProps {
   engine?: Engine;
   /** The site's header, over the set-up and the result (the room has its own bar). */
   header: ReactNode;
+  /** Wraps the set-up in the practice sections' bar (the room and the result stay without it). */
+  hub?: (setup: ReactNode) => ReactNode;
   /** The learner's progress (useAchievements): the result shows what the interview added to it. */
   achievements?: Achievements;
   /** Signed in: an interview on your own also goes to the account. */
   signedIn?: boolean;
 }
 
-export default function InterviewRoute({ problemId, query, engine = defaultEngine, header, achievements, signedIn = false }: InterviewRouteProps) {
+export default function InterviewRoute({ problemId, query, engine = defaultEngine, header, hub = (setup) => setup, achievements, signedIn = false }: InterviewRouteProps) {
   useEffect(() => {
     document.title = 'Mock interview · Proschi practice';
   }, []);
@@ -51,7 +53,7 @@ export default function InterviewRoute({ problemId, query, engine = defaultEngin
     const w = query.get('with');
     return (
       <Page header={header}>
-        <Setup preselect={query.get('problem') ?? undefined} prefer={w === 'solo' ? 'solo' : w === 'mock' || w === 'ai' ? 'mock' : undefined} onStarted={(p) => (window.location.hash = roomHref(p))} />
+        {hub(<Setup preselect={query.get('problem') ?? undefined} prefer={w === 'solo' ? 'solo' : w === 'mock' || w === 'ai' ? 'mock' : undefined} onStarted={(p) => (window.location.hash = roomHref(p))} />)}
       </Page>
     );
   }
