@@ -42,15 +42,21 @@ Somewhere cheap: buyers who wait must not reach the app servers or the database 
 
 p99 of a product page under **50 ms**, of a placed order under **150 ms**.
 
+### Can we add shards or a bigger database just for the sale?
+- kind: good
+- fact: The shop lives on one pod
+
+No. **The shop lives on one pod**, and a flash sale is no time to move it. The load has to be shaped before it reaches the database.
+
 ### Should the page show a countdown animation?
 - kind: weak
 
 A front-end detail. Ask how many buyers arrive and what checkout can take.
 
-### Can we buy a bigger database just for the day?
+### Should checkout be its own microservice?
 - kind: weak
 
-The pod is fixed by the problem; ask what it can take and design admission around it.
+Service boundaries do not change the bottleneck. Ask how many writes the database takes and how many buyers checkout can serve.
 
 ### Which payment provider do we use?
 - kind: weak
@@ -72,6 +78,13 @@ It does not change the bottleneck, which is the inventory rows.
 - range: 3000 to 5000
 
 80k × 5% = **4,000 a second** reach the app servers.
+
+### Checkout admits 500 buyers a second: 350 place an order (two writes each) and 150 find it sold out (one write). How many writes a second reach the pod?
+- answer: 850
+- unit: writes/s
+- range: 750 to 950
+
+350 × 2 + 150 × 1 = **850 writes a second**, about 43% of the 2k the primary manages. Let all 10k attempts in with the same split and it would be about 17k, more than eight times its capacity: this is why the throttle exists.
 
 ### At 350 orders a second, how many orders in the first ten minutes?
 - answer: 210k

@@ -6,7 +6,7 @@ The crowd is about **twenty times** what checkout can serve, and checkout sits o
 
 ## What you'll learn
 
-- How to reason about a crowd that is a hundred times bigger than what checkout can take.
+- How to reason about a crowd that is twenty times bigger than what checkout can take.
 - **Admission control**: why the place that turns people away matters as much as the decision to turn them away.
 - How to serve almost all reads from the edge, and what an edge page cache costs you.
 - Why a conditional `UPDATE` in the same database as the order beats a fast counter in Redis.
@@ -147,7 +147,7 @@ cache-cannot-decide
 
 **1. Scope.** One shop, one product drop, one unit per checkout, no seat selection. Confirm the guarantees (no overselling, no unit without an order, order durable before `201`) and the numbers: 80k page views and 10k checkout attempts a second, checkout capacity about 500 a second, the pod's 2k writes.
 
-**2. High level.** Buyers hit an edge tier (load balancers), which forwards to the app servers (the Rails monolith), which talk to the pod. Draw both flows end to end without optimisation, then ask of each arrow "how many requests a second cross this?" The answers (80k to the app, 17k writes to the pod) show the naive design fails by an order of magnitude.
+**2. High level.** Buyers hit an edge tier (load balancers), which forwards to the app servers (the Rails monolith), which talk to the pod. Draw both flows end to end without optimisation, then ask of each arrow "how many requests a second cross this?" The answers (90k to the app, about 17k writes to the pod) show the naive design fails by an order of magnitude.
 
 **3. Deep dive.** Take the load away tier by tier.
 

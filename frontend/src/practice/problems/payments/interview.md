@@ -45,17 +45,17 @@ A queue, never the shopper's request.
 ### Which currencies do we show?
 - kind: weak
 
-Display detail; it does not change idempotency.
+A display detail: it does not change how a retry is recognised. Ask how often clients retry and what a retry must get back.
 
 ### Should we build our own card network?
 - kind: weak
 
-Far out of scope.
+Far out of scope: the gateway is given. Ask how slow it is and how often its calls fail or time out.
 
 ### What does the checkout button look like?
 - kind: weak
 
-A UI question.
+A UI question. Ask what the shopper should get when the outcome of a charge is unknown.
 
 ## Estimates
 
@@ -72,5 +72,12 @@ A UI question.
 - range: 4 to 7
 
 1k × 0.5% = **5 a second**, each retried from a queue.
+
+### How many writes a second reach the payments store, if every checkout inserts its key and every charged one is then marked succeeded?
+- answer: 1945
+- unit: writes/s
+- range: 1800 to 2100
+
+Inserts: all **1,000** checkouts, replays included (the insert is how a replay is detected). Updates: the 94.5% that are charged, **945**. Together about **1.95k writes a second**, roughly 40% of the 5k a relational primary takes: one primary is enough, and the replica is for failover.
 
 Numbers: [Numbers to know](../docs/numbers/).

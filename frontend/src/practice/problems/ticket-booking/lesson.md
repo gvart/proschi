@@ -34,7 +34,7 @@ The given file fixes two nodes: the `fan` (the client) and the `payments` provid
 - A confirmation reads the strong store before calling `payments`, never waits for an eventual store, and the "Hold expired" scenario never reaches `payments`.
 - In "Paid", the strong store is written **after** the payment and before the response.
 
-The latency, failure and cost limits check the design is sized to carry them.
+The latency, failure and cost limits then check that the design is sized for that traffic.
 
 ## Back-of-the-envelope
 
@@ -77,10 +77,10 @@ A **conditional write** puts the check inside the write, so the database does bo
 
 ```sql
 UPDATE seats SET status = 'held', held_by = :fan, hold_expires = now() + interval '10 minutes'
-WHERE seat_id = :s AND (status = 'free' OR hold_expires < now());
+WHERE seat_id = :s AND (status = 'free' OR (status = 'held' AND hold_expires < now()));
 ```
 
-One row changed: you hold the seat; zero rows: someone else got it first. The row lock runs two concurrent `UPDATE`s one after the other, and the second re-checks the `WHERE` clause after the first commits, finding the seat taken.
+One row changed: you hold the seat; zero rows: someone else got it first. The `status = 'held'` check matters: without it, a *booked* seat would look free again once its old deadline passed. The row lock runs two concurrent `UPDATE`s one after the other, and the second re-checks the `WHERE` clause after the first commits, finding the seat taken.
 
 ```callout takeaway
 This only works in a **strongly consistent** store, one where a condition sees every write committed before it. In an eventually consistent store, two replicas can each accept a write the other has not seen yet.
@@ -120,7 +120,7 @@ cache-cannot-decide
 
 ### Holds that expire by themselves
 
-A hold is a **lease**: a lock with a deadline. It can end through a background job that scans for expired holds and releases them, or through a deadline in the row that the conditional write treats as free once passed (the `OR hold_expires < now()` above).
+A hold is a **lease**: a lock with a deadline. It can end through a background job that scans for expired holds and releases them, or through a deadline in the row that the conditional write treats as free once passed (the `hold_expires < now()` branch above).
 
 The deadline has no moving parts. If a sweeper is late or down, seats stay stuck; with a deadline, the next fan simply overwrites the expired hold. A tidy-up job may still run, but correctness never depends on it.
 
@@ -212,7 +212,7 @@ Classic mistakes beyond the tests: holding a `SELECT … FOR UPDATE` lock while 
 Likely follow-ups and short answers:
 
 - *Two fans click in the same millisecond?* The row lock serialises the updates; the second re-evaluates the condition, changes zero rows and returns `409`.
-- *The payment succeeds but the booking write fails?* Retry the write; it is idempotent on the hold id. If the hold is truly gone, refund with the same idempotency key, and log it for reconciliation.
+- *The payment succeeds but the booking write fails?* Retry the write; it is idempotent on the hold id. If the hold is truly gone, refund the charge (a separate request with its own idempotency key), and log it for reconciliation.
 - *The crowd is 10× bigger.* Put a virtual waiting room in front of the sale so only as many fans enter as the booking path can serve (see the Flash Sale lesson), and add shards.
 - *Why not one shard per event?* The hottest event is the one that matters, and it would sit on one primary.
 - *General admission (no seat numbers)?* Then it is a counter, not a set of rows: flash-sale territory, one hot row, so shape the load before it reaches the database.

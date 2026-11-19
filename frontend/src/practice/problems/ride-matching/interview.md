@@ -45,17 +45,17 @@ p99 of a location update under **50 ms**, of a ride request under **300 ms**.
 ### Which car models are supported?
 - kind: weak
 
-A product detail.
+A product detail that does not change the load. Ask how many drivers are online and how often each reports its position.
 
 ### How is surge pricing computed?
 - kind: weak
 
-A different system; stay on matching.
+A different system; stay on matching. Ask how many ride requests a second there are and how many find no driver.
 
 ### Which map provider do we use?
 - kind: weak
 
-A vendor choice that does not change the design.
+A vendor choice that does not change the design. Ask what must happen when two riders are matched to the same driver.
 
 ## Estimates
 

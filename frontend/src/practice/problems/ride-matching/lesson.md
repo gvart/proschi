@@ -23,7 +23,7 @@ The non-functional requirements:
 
 - p99 (the latency 99% of requests beat) under 50 ms for a location update, 300 ms for a ride request.
 - Ride requests available 99.9% of the time.
-- A trip is never lost once the rider was told about it, and lives in a database (it is billed later). It is the driver's "lock", so the store is strongly consistent.
+- A trip is never lost once the rider was told about it, and lives in a database (it is billed later). It also acts as the driver's lock (two riders must not get the same driver), so the store is strongly consistent.
 - The offer goes through a queue.
 - Losing any machine, a node of the location store included, must not stop matching.
 - At most $10,000 a month.
@@ -88,7 +88,7 @@ Separate indexes on `lat` and `lng` cannot answer "drivers within 3 km": a B-tre
 |---|---|---|
 | **Geohash** | Interleaves the bits of latitude and longitude into a string. A shared prefix means the same rectangular cell, so "nearby" is "same prefix", plus neighbouring cells for edges. | Simple; fits any key-value store |
 | **Quadtree** | Splits a square into four, recursively, until each leaf holds few points. | Adapts to density (tiny cells in Manhattan, huge in the desert); needs rebalancing as drivers move |
-| **S2** (Google) | Projects the sphere onto a cube and numbers cells along a space-filling curve: a 64-bit id per cell, at many resolutions. Uber's early dispatch used S2 cells to shard supply and demand. | Same as geohash |
+| **S2** (Google) | Projects the sphere onto a cube and numbers cells along a space-filling curve: a 64-bit id per cell, at many resolutions. Uber's early dispatch used S2 cells to shard supply and demand. | Cells of nearly equal area anywhere on Earth; tight coverings of a circle |
 | **H3** (Uber, open source) | Hexagons, whose neighbours are all the same distance from the centre, so rings of nearby cells and smoothing are simpler than with squares. | Best for analytics and pricing over areas |
 
 Redis's `GEO` commands keep points in a sorted set scored by a 52-bit geohash; `GEOSEARCH … BYRADIUS 3 km ASC` returns members within a radius, nearest first. In an interview, name one index, explain cells plus neighbours, and move on.
@@ -109,7 +109,7 @@ Positions and trips look like "driver data", but they have opposite needs:
 | On loss | the next update in 4 s fixes it | money and trust lost |
 | Consistency | latest wins | two riders must not get one driver |
 
-Positions go to an **in-memory, overwrite-in-place** store (a key per driver, a TTL so offline drivers disappear). Trips go to a **durable, strongly consistent** database, written before the rider hears back.
+Positions go to an **in-memory, overwrite-in-place** store: one entry per driver, replaced by every update. Drivers who stop reporting must drop out; Redis cannot expire a single member of a geo set, so keep a last-seen time per driver and sweep stale members, or rotate sets by time bucket. Trips go to a **durable, strongly consistent** database, written before the rider hears back.
 
 ```callout takeaway The trip is the lock
 A unique constraint on "the active trip of driver d7" makes the trip itself the lock: when two matching requests pick the same driver, one insert wins and the other fails cleanly and tries the next candidate.
@@ -189,7 +189,7 @@ Classic mistakes beyond the tests:
 - Two live-map nodes "for redundancy" that cannot carry the load alone after one fails.
 - Searching only the rider's own geohash cell and missing a driver 50 m away across the cell boundary.
 - Polling for offers from the driver app instead of pushing over the open connection.
-- Keeping every position forever in the hot store, instead of a TTL and an async archive.
+- Keeping every position forever in the hot store, instead of removing stale drivers and archiving asynchronously.
 
 ```quiz
 geohash-neighbours

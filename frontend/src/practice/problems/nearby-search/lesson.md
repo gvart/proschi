@@ -22,7 +22,7 @@ The problem has three use cases:
 
 - **Recommend**: the app asks the API, the API asks the geo router (`router`), and the router searches 3 geoshards. In `"Dense metro"` they belong to the `metro` group, in `"Elsewhere"` to the `regional` group.
 - **Update location**: the app's new location is written to `profiles`, a change event goes to a stream, and the app hears back.
-- **Index location**: an indexer consumes the event and upserts the user in the geoshard that owns their new cell; in `"Moved geoshard"` it first deletes them from the old one.
+- **Index location**: an indexer consumes the event and upserts the user (insert, or update if already there) in the geoshard that owns their new cell; in `"Moved geoshard"` it first deletes them from the old one.
 
 The tests check that searches go through the router and never read `profiles`, that a search stays inside one group, that location updates never call the index, that a move deletes the user from the old geoshard and upserts them into the new one, and that every geoshard has a replica.
 
@@ -120,7 +120,7 @@ hot-partition-key
 
 The **geo router** sits between the API and the index. For each search it covers the circle with S2 cells, looks up each cell's geoshard in a small map that every router instance keeps in memory, sends the search to those geoshards in parallel, and merges what comes back. Tinder's posts call this an abstraction layer; it also hides the geoshard layout, so the layout can change without touching the recommendation service.
 
-A search near the middle of a large regional geoshard may read only one; one in a metro, where geoshards are small, reads several. Geoshards that are too small would make every search read many and hurt the P99, which is why Tinder kept 40 to 100 worldwide; in their example a 100-mile search reads 3 of 55. The problem assumes about 3 per search. That is the whole gain: 3 geoshard searches instead of 7 shard searches, and each geoshard holds only nearby users, so each search scans less.
+A search near the middle of a large regional geoshard may read only one; one in a metro, where geoshards are small, reads several. Geoshards that are too small would make every search read many and hurt the P99 (the latency 99% of searches beat), which is why Tinder kept 40 to 100 worldwide; in their example a 100-mile search reads 3 of 55. The problem assumes about 3 per search. That is the whole gain: 3 geoshard searches instead of 7 shard searches, and each geoshard holds only nearby users, so each search scans less.
 
 ```quiz
 geo-partitioning
@@ -141,7 +141,7 @@ three-replicas-parallel
 
 A location update has one job on the request path: save the location in `profiles` and answer. The index follows from a stream. The API publishes a change event; an indexer consumes it, computes the user's new cell and geoshard, and upserts the user there. A busy geoshard then slows only the indexer, never the app.
 
-Moves are the interesting case. When the new cell belongs to another geoshard, the indexer must **delete the user from the old geoshard and insert them into the new one**: two writes on two indexes, not atomic. Two quick moves applied out of order could put the user back where they were, or in two geoshards at once. Keying the stream by user id puts all of one user's changes in one partition, read in order by one consumer; Tinder keys its Kafka partitions this way because a Passport move can follow another within milliseconds. Failed writes are retried with exponential backoff and jitter, and refeeding from `profiles` repairs whatever still slips through.
+Moves are the interesting case. When the new cell belongs to another geoshard, the indexer must **delete the user from the old geoshard and insert them into the new one**: two writes on two indexes, not atomic. Two quick moves applied out of order could put the user back where they were, or in two geoshards at once. Keying the stream by user id puts all of one user's changes in one partition, read in order by one consumer; Tinder keys its Kafka partitions this way because one move can follow another within milliseconds (Passport, for example, lets a user set their location to another city). Failed writes are retried with exponential backoff and jitter, and refeeding from `profiles` repairs whatever still slips through.
 
 ```quiz
 nearby-search-move-between-geoshards
@@ -170,7 +170,7 @@ transactional-outbox
 
 - **Name the query first.** "Everyone within R of a point, filtered" decides the shard key; say so before drawing shards.
 - **Expect "what about New York?"** That is the hot-spot question. Answer with load-balanced geoshards: smaller geoshards where users are dense, more copies where searches are heavy.
-- **Expect "what if the radius is huge?"** A wide circle covers more cells and more geoshards; the router caps the fan-out or widens the cell level, and a remote area's geoshard is large anyway.
+- **Expect "what if the radius is huge?"** A wide circle covers more geoshards, so cap the radius (Tinder's limit is 100 miles) and keep geoshards large enough that a maximum-radius search still reads only a few. A remote area's geoshard is large anyway.
 - **Expect "what happens when someone travels?"** Delete from the old geoshard, insert into the new, in order per user through a keyed stream, with a background resync.
 - **Expect "how do you rebalance?"** Recompute cell scores, regroup cells into new geoshards, build the new indexes alongside the old ones and switch the router's map once they have caught up.
 
