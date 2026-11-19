@@ -1,0 +1,68 @@
+frontend/src/practice/hub/continue.ts
+  s_c7a1e1fd017f82::t_2c21c7ff18381d 4,8-9,37,48-49
+frontend/src/practice/hub/HomeExtras.tsx
+  s_c7a1e1fd017f82::t_c3e16938c7c9bf 2,6,16-18,32,48,62,138-139,142-154
+frontend/e2e/challenge.e2e.ts
+  s_c7a1e1fd017f82::t_be9c3affb3e1e3 76
+docs/PRACTICE.md
+  s_c7a1e1fd017f82::t_e5962c2dabf7d0 223-224,241-243
+frontend/src/practice/ProblemList.tsx
+  s_c7a1e1fd017f82::t_d2fe5e26b88c9d 49-55
+frontend/src/practice/hub/tabs.ts
+  s_c7a1e1fd017f82::t_3736b026f90986 7-9,12,17-18,25-27,34-36,38,43-44,48,53-58,62-63
+frontend/src/practice/interview/InterviewRoute.tsx
+  s_c7a1e1fd017f82::t_b2aa48584a21ff 40-41,48,56
+frontend/src/practice/hub/hub.test.tsx
+  s_c7a1e1fd017f82::t_8b6772b153d3c3 5-6,9,12-13,19-21,29,37-38,45,49-50,53-57,76-84
+  s_c7a1e1fd017f82::t_ea58257b96abd8 22
+  s_c7a1e1fd017f82::t_eb4d47afb59c58 85-86
+frontend/e2e/fixtures.ts
+  s_c7a1e1fd017f82::t_ef595559d2dcc6 39,41-43,46
+frontend/e2e/prep.e2e.ts
+  s_c7a1e1fd017f82::t_9a397b001a36d1 81-82
+  s_c7a1e1fd017f82::t_2b65e68500ea00 33-35
+  s_c7a1e1fd017f82::t_d9a5c55593a00f 7-12,36-40,54,58-59,94-110,112,114-115,125,144,147-148
+frontend/e2e/README.md
+  s_c7a1e1fd017f82::t_e8f35a449f380c 36
+docs/GAME.md
+  s_c7a1e1fd017f82::t_e26482becaf577 7
+docs/CARDS.md
+  s_c7a1e1fd017f82::t_e26482becaf577 224
+frontend/e2e/mobile.e2e.ts
+  s_c7a1e1fd017f82::t_be9c3affb3e1e3 191,203-210,216,278
+frontend/src/practice/hub/goal.ts
+  s_c7a1e1fd017f82::t_f4baf305cbe8d9 6-9,52-57
+  s_c7a1e1fd017f82::t_0506cb4dc5988c 58
+frontend/src/practice/hub/PracticeHub.tsx
+  s_c7a1e1fd017f82::t_2c27a360a1703e 2-3,6-13,16,36,41,45-46,50-58,65-66,75,118,124
+  s_c7a1e1fd017f82::t_6108c34430bb7c 19-20
+  s_c7a1e1fd017f82::t_fd0bb847a42dba 142
+frontend/e2e/nextSteps.e2e.ts
+  s_c7a1e1fd017f82::t_be9c3affb3e1e3 59-60
+frontend/src/practice/profile/AccountSections.tsx
+  s_c7a1e1fd017f82::t_998bec370d3efa 138
+frontend/e2e/challenge.accounts.e2e.ts
+  s_c7a1e1fd017f82::t_be9c3affb3e1e3 104
+frontend/src/practice/PracticeApp.tsx
+  s_c7a1e1fd017f82::t_631d720830436a 35,256,261,338-350
+frontend/e2e/review.e2e.ts
+  s_c7a1e1fd017f82::t_be9c3affb3e1e3 24
+frontend/src/practice/main.tsx
+  s_c7a1e1fd017f82::t_f4baf305cbe8d9 9,15-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "af1a8695d595c99f270a2cb650f321e85a0a26f5",
+  "prompts": {},
+  "sessions": {
+    "s_c7a1e1fd017f82": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ed156a01-4429-4375-ab31-67f4834d10ab",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
