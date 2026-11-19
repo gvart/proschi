@@ -14,9 +14,9 @@ Keep the **read path** (diners querying a search cluster) and the **write path**
 
 ## The problem, explained
 
-A food delivery app's search box answers "tacos near me, open now". The answer comes from stores, menus and items that merchants and operators edit all day, plus ranking scores and tags that a nightly job computes for every item. A relational database is the right home for those edits, with transactions and constraints, and the wrong tool for ranked text and location search over every menu. So the data lives twice: in the database as the **source of truth**, and in a search engine as an **index** built from it.
+A food delivery app's search box answers "tacos near me, open now". The answer comes from stores, menus and items that merchants and operators edit all day, plus ranking scores and tags that a nightly ETL job (extract, transform, load: a batch job over the data warehouse) computes for every item. A relational database is the right home for those edits, with transactions and constraints, and the wrong tool for ranked text and location search over every menu. So the data lives twice: in the database as the **source of truth**, and in a search engine as an **index** built from it.
 
-The hard part is keeping the copy in step. DoorDash's first indexing system did it slowly and unreliably: reindexing all of the changes could take up to a week, mismatches between the index and the database had to be fixed by hand, and a full reindex job typically took a month. Their rebuild, on Kafka, Flink and Elasticsearch, made the index follow changes as they happen, cut the reindex of existing stores and items from a week to two hours, and cut the store and item backfills (one and two weeks) to 6.5 hours each.
+The hard part is keeping the copy in step. DoorDash's first indexing system did it slowly and unreliably: reindexing all of the changes could take up to a week, mismatches between the index and the database had to be fixed by hand, and a full reindex job typically took a month. Their rebuild, on Kafka (the change stream), Flink (a stream processor, which runs the indexing jobs) and Elasticsearch (the search cluster), made the index follow changes as they happen, cut the reindex of existing stores and items from a week to two hours, and cut the store and item backfills (one and two weeks) to 6.5 hours each.
 
 The problem has four use cases:
 
@@ -26,6 +26,8 @@ The problem has four use cases:
 - **Backfill**: the nightly ETL's rows enter the same stream through the given `loader` and reach the index in bulk too.
 
 The tests check that searches never touch `db`, that an edit publishes to a broker and never calls the search cluster, that both indexing use cases come from the stream, that only flushes write the index, and that every shard has a replica.
+
+The limits: p99 (the latency 99% of requests beat) under 120 ms for a search and 150 ms for an edit, both with the backfill running; searches available 99.95% of the time and edits 99.9%; no single machine whose loss breaks a latency limit; and at most $8,000 a month.
 
 ## Back-of-the-envelope
 
@@ -46,9 +48,9 @@ The numbers are assumptions for the exercise; DoorDash did not publish its rates
 | Index change | 2k/s | indexers, `db` (reads); 20 bulk requests/s to the cluster |
 | Backfill | 10k/s | Kafka, indexers; 100 bulk requests/s to the cluster |
 
-**The search cluster.** At about 3k requests a second per node, the queries alone need 10k ÷ 3k ≈ 3.3 nodes. If every change were its own write, the cluster would take another 12k a second: 22k in total, more than seven nodes' worth before any headroom. With bulk requests the writes fall to about 120 a second, almost nothing.
+**The search cluster.** At about 3k requests a second per node, the queries alone need 10k ÷ 3k ≈ 3.3 nodes. If every change were its own write, the cluster would take another 12k a second: 22k in total, more than seven nodes' worth before any headroom. A *bulk request* writes about 100 documents in one call, so with bulk requests the writes fall to about 120 a second, almost nothing.
 
-**Shards and copies.** Three shards with three copies each is nine nodes. Each shard serves a third of the queries, 3.3k a second over three copies: about 37% busy, and about 56% after losing one copy. Nine Elasticsearch nodes at $400 is $3,600, the largest line of the budget.
+**Shards and copies.** A *shard* is one piece of the index, and each shard is kept in several copies on different nodes (both are explained under Concepts). Three shards with three copies each is nine nodes: 27k requests a second of capacity for 10k queries, about 37% busy. The simulation gives each shard a third of the queries, 3.3k a second over its three copies, so losing a node leaves that shard at about 56%. That is a little optimistic: a real query visits one copy of *every* shard. Nine Elasticsearch nodes at $400 is $3,600, the largest line of the budget.
 
 **The rest.** The Search API at 2k a second per instance needs 10k ÷ 2k = 5 instances; 8 keep it near 62% and 71% after a loss. The indexers handle 12k messages a second: 10 instances at 60%. The database sees 2k writes and 2k reads a second, well within one primary.
 
@@ -147,10 +149,10 @@ three-replicas-parallel
 ## In the interview
 
 - **Start from the two sides.** Writers and readers, their rates and their needs, then the stream between them. Saying "the read model is eventually consistent, the database decides" early frames everything that follows.
-- **Expect "how fresh?"** Seconds, in this exercise (DoorDash's post says "as quickly as possible" without a figure): the edit commits, the event is consumed within a second or two, and the bulk flush timer bounds the rest. Mention the refresh interval of the search engine as the last step.
+- **Expect "how fresh?"** Seconds, in this exercise (DoorDash's post says "as quickly as possible" without a figure): the edit commits, the event is consumed within a second or two, and the bulk flush timer bounds the rest. Mention the search engine's refresh interval as the last step: Elasticsearch makes newly written documents searchable on a refresh, by default about once a second.
 - **Expect "what if an event is lost?"** Ids-only events and a full reindex make the index self-healing; an outbox or log-based capture closes the publish gap.
 - **Expect "how do you reindex everything?"** Stream every row through the same pipeline at a throttled rate, or build a new index alongside and switch an alias once it has caught up. DoorDash's rebuild brought the reindex of existing stores and items from a week to two hours.
-- **Expect "shards or replicas?"** Shards for size and indexing spread, replicas for query throughput and failures; count nodes as shards × copies.
+- **Expect "shards or replicas?"** Shards for the size of the data and to spread indexing, replicas for query throughput and failures; count nodes as shards × copies.
 
 ## Further reading
 

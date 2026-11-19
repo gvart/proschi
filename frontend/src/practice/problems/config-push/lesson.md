@@ -1,7 +1,7 @@
 # Config Distribution: write once, copy everywhere, read locally
 
 ```tldr
-Configuration is **read on every request** but **changed rarely**. Keep a full copy on **every edge server** and read it there, so requests never leave the machine and survive the core going away. Write each change **once, to a replicated root**, answer the customer, then copy it **asynchronously down a tree** of main nodes, so no machine has to send it to everyone.
+Configuration is **read on every request** but **changed thousands of times less often**. Keep a full copy on **every edge server** and read it there, so requests never leave the machine and survive the core going away. Write each change **once, to a replicated root**, answer the customer, then copy it **asynchronously down a tree** of main nodes, so no machine has to send it to everyone.
 ```
 
 ## What you'll learn
@@ -23,7 +23,7 @@ Two use cases:
 - **Serve request**: an edge server answers a visitor, reading three settings from its local store.
 - **Change config**: a customer changes a setting and gets `200` once the change is stored; the change then reaches every data center in the background.
 
-The rates are assumptions sized from the post: 1M requests a second at the edge (Cloudflare reports over 14M at peak), 1k changes a second at peak (it reports about 30 million writes a day), 2 KB per change. The limits are a p99 under 20 ms for requests and 100 ms for changes, 99.99% availability, surviving the loss of any machine, the root included, and $5,000 a month.
+The rates are assumptions sized from the post: 1M requests a second at the edge (Cloudflare reports over 14M at peak), 1k changes a second at peak (it reports about 30 million writes a day), 2 KB per change. The limits are a p99 (the latency 99% of requests beat) under 20 ms for requests and 100 ms for changes, 99.99% availability, surviving the loss of any machine, the root included, and $5,000 a month.
 
 **What the tests check**: requests read `local` in every scenario and never `root` or `mains`; a change is written to `root` before the answer and the customer never waits for `mains` or `local`; the root sends to the main nodes, the main nodes to the local stores, and nothing goes from the root straight to the edge.
 
@@ -34,6 +34,8 @@ The simulation has no clock for work done after the answer, so it cannot say how
 ## Back-of-the-envelope
 
 The simulation's `[Key-Value Store]` node serves about 20k operations a second, carries 100 MB/s and costs $500 a month. The local store on an edge server takes 50k reads a second.
+
+The table works through the two decisions in order. First, where reads come from: the local store or central nodes. Then, who copies each change to 200 data centers: the **root** (the one store that takes every write) on its own, or a tree in which the root sends to a few **main nodes** and they send on to the data centers.
 
 ```numbers
 3M/s | configuration reads at the edge
@@ -124,7 +126,7 @@ Each change must be copied 200 times. If the root does all the copying, it sends
 
 A **tree** spreads the work. The root sends each change to a handful of **main nodes**; each main node sends it on to its share of data centers. The root's traffic drops to 12 MB/s, and the 400 MB/s that must reach the edge is shared by the main tier. Quicksilver does exactly this: edge nodes replicate from main nodes, which replicate from the top-mains. Each node usually replicates from a close neighbour, so the long links carry one copy per region instead of one per server.
 
-Size the middle tier like any pool. It moves about 412 MB/s (what it sends, plus what it receives); at 100 MB/s a node, five would run at 82% and saturate when one fails, so six it is: 69% normally, 82% with one down.
+Size the middle tier like any pool, by its bottleneck, and here that is bytes, not requests. It moves about 412 MB/s (the 400 it sends, plus the 12 it receives). At 100 MB/s a node, five would run at 82% and pass 100% when one fails, so six it is: 69% normally, 82% with one down.
 
 ```callout tip
 A tree trades a little delay (one more hop) for a lot of headroom: no node sends more than its share, and adding data centers means adding main nodes, not a bigger root.
@@ -186,7 +188,7 @@ Expected follow-ups:
 - **A server was offline for a day. How does it catch up?** It asks for every entry after its last sequence number; keep enough history (Quicksilver's secondary main nodes keep a week), and fall back to a full copy beyond that.
 - **What if a bad configuration change is pushed?** It spreads as fast as a good one. Validate before writing, roll out risky kinds of change in stages, and keep the ability to write the old value back quickly.
 - **Why not a cache with a TTL?** A miss would go to the core on the request path, and a data center cut off from the core would start failing as entries expire.
-- **The root's data center goes down. What happens?** The secondary takes over writes; until then changes queue up, but every edge keeps serving.
+- **The root's primary goes down. What happens?** The secondary takes over writes; until it does, changes wait or fail, but every edge keeps serving the configuration it has. Losing the whole data center that holds the root needs a standby root elsewhere, promoted the same way.
 
 ## Further reading
 

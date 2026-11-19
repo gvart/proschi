@@ -59,6 +59,13 @@ Ranking belongs to the indexer, not the crawler; ask what the crawler must guara
 
 ## Estimates
 
+### How many megabytes a second do the fetchers download?
+- answer: 180
+- unit: MB/s
+- range: 150 to 210
+
+1.8k pages × 100 KB = **180 MB/s**, and the same again on the way to the page store.
+
 ### How many links a second must the seen-URL set check?
 - answer: 90k
 - unit: checks/s
@@ -72,12 +79,5 @@ Ranking belongs to the indexer, not the crawler; ask what the crawler must guara
 - range: 9 to 16
 
 10B × 9.6 bits ≈ 96 Gbit ≈ **12 GB**, against about 80 GB for an exact set of 8-byte hashes.
-
-### How many megabytes a second do the fetchers download?
-- answer: 180
-- unit: MB/s
-- range: 150 to 210
-
-1.8k pages × 100 KB = **180 MB/s**, and the same again on the way to the page store.
 
 Numbers: [Numbers to know](../docs/numbers/).

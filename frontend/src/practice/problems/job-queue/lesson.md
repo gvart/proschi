@@ -18,7 +18,7 @@ Slack ran all its background work through one Redis-backed job queue. When worke
 
 **Who uses it.** Slack's own PHP web app: whenever a request needs slow work done, it enqueues a job and moves on, and workers run it. Nobody outside the company calls this system, but every user feels it when it breaks.
 
-**What went wrong.** The web app pushed jobs straight into Redis lists and workers popped them off. Redis keeps everything in memory: when workers slowed, jobs piled up, Redis hit its memory limit, and every enqueue failed. A slowdown in one place (the workers' database) became an outage everywhere.
+**What went wrong.** The web app pushed jobs straight into Redis lists and workers popped them off. Redis keeps everything in memory: when workers slowed, jobs piled up, Redis hit its memory limit, and every enqueue failed. Worse, taking a job *off* the queue also needed a little free memory, so the queue stayed stuck even after the database recovered. A slowdown in one place (the workers' database) became an outage everywhere.
 
 **Functional requirements.**
 
@@ -68,15 +68,15 @@ The job size is an assumption, but it makes the point: a day of backlog is more 
 replicas needed = load ÷ (capacity per replica × target utilisation)
 ```
 
-A service replica (`[Go]` is a service) handles 2k requests a second, so 33k ÷ 2k = 16.5 replicas would just keep up, saturated. Queueing delay explodes near the limit, and the model flags a node as "hot" above 70%. Divide by 0.7, round up, then check that `survive any node failure` (one replica fewer) still leaves the tier under 100%. The gateway and the relay both carry 33k rps.
+A service replica (`[Go]` is a service) handles 2k requests a second, so 33k ÷ 2k = 16.5 replicas would just keep up, saturated. Queueing delay explodes near the limit, and the model flags a node as "hot" above 70%. So divide by 0.7 and round up: 33k ÷ (2k × 0.7) = 23.6, so **24 replicas** (69% busy). Then check `survive any node failure`: with one replica fewer, 23 still run at 72%, well under 100%. The gateway and the relay both carry 33k rps, so each needs 24.
 
 ```quiz
 servers-for-peak-load
 ```
 
-**What the simulation does with it.** Kafka is a broker node, simulated like a queue with 50k writes per replica, so three brokers are lightly loaded. Redis is a cache with 100k operations per replica and, unlike a relational database in the model, takes writes on every replica. The services are the bottleneck: with the M/M/c queueing formula, a big pool at 70% still answers in about its base 10 ms, a single replica at 70% in more than three times that. Enqueue's p99 (gateway hop plus Kafka hop, with their exponential tails) is comfortably inside 50 ms when nothing is hot.
+**What the simulation does with it.** Kafka is a broker node, simulated like a queue with 50k writes per replica, so three brokers are lightly loaded. Redis is a cache with 100k operations per replica and, unlike a relational database in the model, takes writes on every replica. The services are the bottleneck: with the M/M/c queueing formula, a big pool at 70% still answers in about its base 10 ms, a single replica at 70% in more than three times that. Enqueue's p99 (gateway hop plus Kafka hop, with their exponential tails) is about 43 ms when nothing is hot: inside the 50 ms limit, with little room for a hot tier.
 
-**Cost.** A service replica is $100 a month, a Kafka broker $200, a Redis replica $150. The web app and workers already take $1,200 of the $8,000. The budget deliberately forces you to size, not guess.
+**Cost.** A service replica is $100 a month, a Kafka broker $200, a Redis replica $150. The web app and workers already take $1,200 of the $8,000. Two tiers of 24 add $4,800, three brokers $600 and two Redis replicas $300: $6,900 in all. The budget deliberately forces you to size, not guess.
 
 **Availability.** The Enqueue path is the gateway, then Kafka. A service replica is up 99.5% of the time, but a pool is up while any replica is, so in the model a large pool is effectively always up. 99.99% is easy once nothing on the path is a single replica.
 
@@ -94,13 +94,13 @@ A *queue* in the loose sense is anything that holds work between a producer and 
 
 The key property is *decoupling under failure*: a slow consumer side leaves the producer side working, and the backlog waits on disk.
 
-The trade-offs: a log adds a hop and one more system to operate, and consumers track their own position (the *offset*). It is also a poor fit for per-message delays, priorities or retries, one reason Slack kept Redis behind it rather than pointing workers at Kafka.
+The trade-offs: a log adds a hop and one more system to operate, and each consumer tracks its own position in the log (the *offset*: the number of the next message to read). A log is also a poor fit for per-message delays, priorities or retries. Slack's scheduling, execution and de-duplication logic was all built on Redis, which is why it kept Redis behind Kafka rather than pointing workers at the log.
 
 When *not* to use it: cheap, synchronous work, or volumes small enough for a managed queue with built-in retries (SQS, say).
 
 ### At-least-once delivery: commit after the side effect
 
-A log consumer performs its side effect (here, pushing into Redis) and records that it is done (committing the offset). The order matters:
+A log consumer does two things for each message: it performs its side effect (here, pushing into Redis) and it records that it is done (*committing the offset*, so a restart resumes after that message). The order matters:
 
 - **Commit first, then process**: a crash in between skips the message forever. That is *at-most-once*.
 - **Process first, then commit**: a crash in between processes it again after a restart. That is *at-least-once*.
@@ -223,8 +223,8 @@ Waiting only for the leader, not for all replicas, means a job can be lost if th
 **Other classic mistakes.**
 
 - *One gateway or one Kafka broker.* Fails `survive any node failure`; in the real world a deploy or a dead disk stops all enqueues.
-- *Sizing tiers to exactly 100%.* 17 gateway replicas technically keep up with 33k rps, but that is close to saturated, and losing one tips it over: queueing delay grows sharply as utilisation approaches 1.
-- *Over-provisioning to be safe.* Doubling both stateless tiers blows the $8,000 budget. Sizing is part of the answer.
+- *Sizing tiers to just keep up.* 17 gateway replicas technically handle 33k rps, but at 97% busy, and losing one tips them over 100%: queueing delay grows sharply as utilisation approaches 1.
+- *Over-provisioning to be safe.* Doubling both stateless tiers to 48 replicas each costs $11,700, far over the $8,000 budget. Sizing is part of the answer.
 
 ## In the interview
 
@@ -238,9 +238,9 @@ Likely questions, with short answers:
 
 - *What if Kafka is down?* Then enqueues fail. But Kafka is a replicated cluster built for this role, and disks fill far less readily than RAM. A small local spool on the gateway is a last resort.
 - *Can a job run twice?* Yes: a relay can push to Redis and crash before committing. Make jobs idempotent, for example with a job id the worker checks before a side effect.
-- *How do you keep ordering?* Kafka orders within a partition. Choose a partition key (a team or channel id) when order matters for that key; across keys, do not promise order.
+- *How do you keep ordering?* Kafka orders messages only within a partition (one of the parallel logs a topic is split into). Choose a partition key (a team or channel id) when order matters for that key; across keys, do not promise order.
 - *Why not acknowledgements from all replicas?* Higher latency on every enqueue. Slack chose leader-only acks; revisit that for jobs where loss is unacceptable, such as billing.
-- *How do you run exactly one relay per topic?* Slack used a Consul lock per topic, taken over by another relay if the holder dies. Kafka consumer groups are the more common modern answer.
+- *How do you run exactly one relay per topic?* Slack used a Consul lock per topic, taken over by another relay if the holder dies. A Kafka consumer group, which assigns each partition to one consumer, is the more common answer today.
 - *What do you monitor?* Consumer lag per topic, Redis memory, relay error rate, and enqueue latency at the gateway.
 
 ## Further reading
