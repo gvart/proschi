@@ -40,7 +40,7 @@ p99 of **Send** under **30 ms**, of **Connect** under **60 ms**, of an online **
 - kind: good
 - fact: An accepted message is stored durably before the sender hears back
 
-No: it is stored durably before the sender hears back.
+Not on the way in: it is stored durably before the sender hears back. Delivery is still best effort: a message for a device that is offline, or whose record is stale, is dropped.
 
 ### Do we build iOS or Android first?
 - kind: weak
@@ -64,14 +64,14 @@ An implementation detail.
 - unit: connects/s
 - range: 4000 to 7000
 
-10M ÷ 1,800 s ≈ **5,500 a second**.
+30 minutes is 1,800 s, and in a steady state every connection is replaced once per lifetime: 10M ÷ 1,800 s ≈ 5,556, about **5.5k a second**.
 
-### How many messages a second find the device offline and must wait?
+### How many messages a second find the device offline and are dropped?
 - answer: 7600
 - unit: messages/s
 - range: 6000 to 9000
 
-20k × 38% = **7,600 a second**.
+20k × 38% = **7,600 a second**. Nothing is kept for them: the app fetches fresh data when it next connects.
 
 ### At 10 KB of server memory per connection, how much do 10 million connections take?
 - answer: 100

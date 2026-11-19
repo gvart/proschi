@@ -79,7 +79,7 @@ Count replicas for the **degraded** case, not just the healthy one.
 
 **Sizing the Feed API.** 10.5k requests a second at 2k per service replica is 5.25 replicas at 100%. Divide by a 70% target and check it with one replica lost.
 
-**Latency.** Read feed is load balancer → API → feed cache → post cache: four short hops, two to a 1 ms cache. Publish post is load balancer → API → posts database → queue, then `201`. Everything after the `201` (the graph's 50 ms, the 200 writes) is asynchronous; put the graph call before it and that hop's tail alone threatens the 90 ms limit.
+**Latency.** Read feed is load balancer → API → feed cache → post cache: four short hops, two to a 1 ms cache. Publish post is load balancer → API → posts database → queue, then `201`. Everything after the `201` (the graph's 50 ms, the 200 writes) is asynchronous. Put the graph call and the feed writes before the `201` and the modelled publish p99 passes 200 ms, against a 90 ms limit.
 
 **Database choice.** 500 inserts a second fits one PostgreSQL primary (5k writes/s). Cassandra suits append-only posts keyed by author and grows without resharding. Either way, the database is off the read path.
 
@@ -96,7 +96,7 @@ fanout-write-amplification
 | Approach | On publish | On read | Cost |
 |---|---|---|---|
 | **Fan-out on read (pull)** | Store each post once | Ask the graph who the user follows, fetch their recent posts, merge and sort | Cheap writes; slow, expensive reads that hit the graph and the database on every app open |
-| **Fan-out on write (push)** | Look up the followers, insert the post id into each one's precomputed feed | One lookup | Writes amplified by the follower count |
+| **Fan-out on write (push)** | Look up the followers, insert the post id into each one's precomputed feed | Read the precomputed feed: no graph, no merge | Writes amplified by the follower count |
 
 Pick by the read/write ratio, weighted by the cost of each. Here reads are 20 times more frequent, the read budget is 50 ms and follower counts stop at 5,000: push wins. Twitter's timeline service has long been described this way, inserting tweet ids into each follower's Redis-backed timeline.
 
@@ -142,7 +142,7 @@ celebrity-fanout
 
 Two ordering rules make push safe.
 
-**Store first.** Write the post durably before anything references it: a feed must never point at a missing post. A fan-out that fails halfway is retried from the stored post; a failed store shows the user an error and leaks nothing into feeds.
+**Store first.** Write the post durably before anything references it: a feed must never point at a missing post. A fan-out that fails halfway is retried, and the post it points at is already there; a failed store shows the user an error and leaks nothing into feeds.
 
 **Fan out behind a queue.** After the store, put a `PostCreated` event on a durable queue and answer `201`. A fan-out worker consumes it, calls the graph and writes the feeds, so the author's latency no longer depends on follower count or graph speed.
 
@@ -197,7 +197,7 @@ feed-ids-and-objects
 - *Publish*: load balancer → API → posts database (store) → queue (event) → `201`. Then, asynchronously: queue → fan-out worker → graph (followers) → post cache (the post) → feed cache (200 inserts).
 - *Read*: load balancer → API → feed cache (50 ids) → post cache (50 posts) → `200`.
 
-Say why not fan-out on read: every read would call a 50 ms graph and merge posts from up to 5,000 accounts out of the database. *Reading the feed never queries a database* rules it out, and so would the 50 ms p99.
+Say why not fan-out on read: every read would call a 50 ms graph and merge the posts of every account the user follows out of the database. *Reading the feed never queries a database* rules it out, and so would the 50 ms p99.
 
 **3. Deep dive.**
 
@@ -235,6 +235,7 @@ Likely follow-ups:
 - *What about a user with 10 million followers?* Don't fan out their posts. At read time, merge the precomputed feed with recent posts of the few huge accounts the user follows, from a per-author cache.
 - *How do you handle deletes?* Delete from the posts store and post cache; feeds still holding the id skip it when the lookup comes back empty. Optionally fan out a removal.
 - *A follower unfollows. Do you clean their feed?* Lazily: filter at read time or let old entries age out of the 500-item window.
+- *What if the API crashes after storing the post but before queueing the event?* The post exists but never reaches a feed. Close the gap by deriving the event from the stored row: a transactional outbox, or change data capture (a stream of every database change).
 - *What if the fan-out worker falls behind?* The queue holds the backlog; add workers; monitor consumer lag. Freshness degrades, correctness does not.
 - *How do you rebuild a feed for a user who was inactive for months?* On first read, pull once: ask the graph for followees and merge their recent posts, then keep pushing.
 - *How do you rank instead of sorting by time?* Fetch a few hundred candidate ids, score them with a ranking service, return the top 50.

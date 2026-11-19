@@ -59,18 +59,18 @@ A product detail that does not change how reads reach the database.
 
 ## Estimates
 
+### Without coalescing, each read of the busy channel asks 2 replicas (quorum). How many replicas would those reads need at 10k reads a second each?
+- answer: 8
+- unit: replicas
+- range: 6 to 10
+
+40k reads × 2 replicas = 80k replica reads a second. 80k ÷ 10k = **8 replicas**, but the partition has only 3: they would run at about 270%. Coalescing is not optional.
+
 ### After coalescing, how many queries a second does the busy channel cause?
 - answer: 400
 - unit: queries/s
 - range: 300 to 500
 
-40k × 1% = **400 queries a second**, a small fraction of what its 3 replicas take.
-
-### Without coalescing, how many replicas would the busy channel's reads need at 10k reads a second each?
-- answer: 4
-- unit: replicas
-- range: 3 to 6
-
-40k ÷ 10k = **4 replicas**, but the partition has only 3, and running them near 100% makes the p99 explode. Coalescing is not optional.
+40k × 1% = **400 queries a second**. At quorum that is 800 replica reads, under 3% of the 30k its 3 replicas take.
 
 Numbers: [Numbers to know](../docs/numbers/).
