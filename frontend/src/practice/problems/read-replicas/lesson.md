@@ -39,7 +39,7 @@ The simulation's figures for a MySQL server are 20k reads and 5k writes a second
 ```numbers
 60k rps | catalog reads
 3k rps | writes, 60% of one primary
-155% | primary load if it serves the catalog
+155% | primary load if it serves every read
 5 | replicas, one of them spare
 $3,100 | monthly cost
 ```
@@ -51,13 +51,13 @@ $3,100 | monthly cost
 | Read:write ratio | 62k : 3k | about 20 : 1 |
 | Primary write load | 3k ÷ 5k | 60% |
 | Primary and standby, read capacity | 2 × 20k | 40k rps |
-| Catalog on the primary | 62k ÷ 40k | 155%: saturated |
+| Every read on the primary | 62k ÷ 40k | 155%: saturated |
 | Replicas at 100% | 60k ÷ 20k | 3 |
 | Replicas at 75% | 60k ÷ 15k | 4 |
 | Replicas at 75% with one down | 4 + 1 | 5 |
 | Cost | 5 × $400 + 2 × $400 + 3 × $100 | $3,100 |
 
-The ratio says where the work is: the writes already fit on one primary, so this is a read problem. A primary and its standby serve about 40k reads a second between them; the catalog needs half as much again. Moving the catalog to replicas leaves the primary with 3k writes and 2k order checks, at 60% (the write side, which the model counts for a single-primary store).
+The ratio says where the work is: the writes already fit on one primary, so this is a read problem. A primary and its standby serve about 40k reads a second between them; the catalog alone needs half as much again. Moving the catalog to replicas leaves the primary with 3k writes and 2k order checks. The simulation reports it at 60%: for a single-primary store it shows the busier side, here the writes (3k of 5k), while the 2k reads use 5% of the 40k.
 
 **Why 75%?** A busy server queues. At 75% each read waits a little, and the p99 stays comfortably under 40 ms. At 100% the queue grows without limit and every latency limit breaks. So the pool must stay below about 75% **on its worst day**, which is the day a replica is down.
 
@@ -111,7 +111,7 @@ The primary has room for such reads because the replicas took the bulk away. Tha
 ```
 
 ```deepdive Other ways to get read-your-writes
-Reading from the primary is the simplest fix. Others: route a user's reads to the primary only for a short window after they write; or remember the position of the user's last write and read from a replica only once it has applied that position. MySQL's global transaction ids (GTIDs) make the second possible: Shopify started building it, but decided its use cases did not need that strength, because it requires each replica to report its position to the proxy.
+Reading from the primary is the simplest fix. Others: route a user's reads to the primary only for a short window after they write; or remember the position of the user's last write and read from a replica only once it has applied that position. MySQL's global transaction ids (GTIDs) make the second possible. Shopify considered it and set it aside: it needs software on every replica that reports its position to the proxy, and Shopify's use cases did not need a guarantee that strong.
 ```
 
 ```quiz
@@ -192,7 +192,7 @@ Summarise: replicas for the reads that tolerate lag, the primary for writes and 
 
 **Reading a fresh write from a replica** (`wrong/fresh-read-from-a-replica.proschi`). All reads go to the replicas, including the order status page. The numbers pass, which is what makes the mistake dangerous: in production a lagging replica tells a paying customer their order is missing. It fails "Writes and time-sensitive reads go to the primary".
 
-**Sharding for reads** (`wrong/shard-for-reads.proschi`). Four shards of the primary, no replicas. There is enough read capacity, but it costs eight servers, breaks the budget, and puts the catalog back on the primaries. It fails "Catalog reads go to the replicas" and the cost limit (and the failure test, as one shard is left on one server).
+**Sharding for reads** (`wrong/shard-for-reads.proschi`). Four shards of the primary, no replicas. There is enough read capacity, but it takes eight servers ($3,200, plus the proxies: $3,500), breaks the budget, and puts the catalog back on the primaries. It fails "Catalog reads go to the replicas" and the cost limit. It fails the failure test too: when one server of a shard is lost, its partner takes that shard's reads alone and the catalog's p99 breaks.
 
 ## In the interview
 
@@ -207,7 +207,7 @@ Expected follow-ups:
 - **What if a replica falls far behind?** Monitor lag per replica and have the proxy stop sending reads to one beyond a threshold; Shopify mentions using lag measurements as a tunable factor as future work.
 - **A job reads several related tables and sees inconsistent data. Why, and how do you fix it?** Its queries hit replicas with different lag. Route the series to one replica by hashing a shared id: monotonic reads.
 - **How do you guarantee a user sees their own write?** Read from the primary, at least for a window after the write; or wait until a replica has applied the write's GTID.
-- **The primary fails. What happens?** The standby is promoted; replicas then follow the new primary. Asynchronous replication can lose the last few transactions in that switch unless replication is semi-synchronous.
+- **The primary fails. What happens?** The standby is promoted; replicas then follow the new primary. With asynchronous replication, the last few transactions the old primary confirmed may never have reached the standby and are lost. Semi-synchronous replication closes that gap: the primary waits for one replica to receive each transaction before it answers.
 - **When would you shard?** When writes approach what one primary takes, or the data no longer fits one server.
 
 ## Further reading

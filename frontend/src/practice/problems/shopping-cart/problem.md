@@ -10,7 +10,7 @@ hints:
   - "Which is worse for a shop: a cart that is briefly out of date, or an \"Add to cart\" that fails? The store you pick decides which one you get."
   - "A relational database has one primary per shard: while it fails over, writes wait. A leaderless store (DynamoDB, Cassandra) takes a write on any replica. With three replicas of everything, availability is far above 99.999%."
   - "The price of always accepting writes is that two writes can race and leave two versions. In \"Divergent versions\", read both, merge them (the union of the items) and write the merged cart back before answering."
-  - "Every component needs a second replica to survive losing one machine; three replicas of the store are what keep writes available."
+  - "Every component needs a second replica to survive losing one machine, and five nines asks for more: two replicas of the service give only 99.9975%, so run three. Three replicas of the store are what keep writes available."
 ---
 
 Amazon's shopping cart must take every "Add to cart", even while servers,
