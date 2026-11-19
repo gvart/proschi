@@ -40,11 +40,13 @@ export function renameNode(source: string, id: string, name: string): string {
   return replaceInLine(source, decl.line, end(idToken), end(idToken), ` ${quoted}`);
 }
 
-export function addConnection(source: string, from: string, to: string): string {
+/** Adds `from -> to`, with ` : label` when one is given (a new connection carries its target's protocol). */
+export function addConnection(source: string, from: string, to: string, label?: string): string {
   if (from === to) return source;
   const { diagram } = parse(source);
   if (diagram.edges.some((e) => e.source === from && e.target === to)) return source;
-  return insertDeclaration(source, `${from} -> ${to}`);
+  const clean = label ? cleanLabel(label).trim() : '';
+  return insertDeclaration(source, `${from} -> ${to}${clean ? ` : ${clean}` : ''}`);
 }
 
 export type EditResult = { source: string; error?: undefined } | { source?: undefined; error: string };
