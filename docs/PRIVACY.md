@@ -1,8 +1,12 @@
 ---
-updated: 2026-11-09
+updated: 2026-11-18
 ---
 
 # Privacy
+
+The German [Datenschutzerklärung](DATENSCHUTZ.md) is the binding version. This
+page translates it under [Controller, legal bases and your rights](#controller-legal-bases-and-your-rights)
+and lists every stored field in detail.
 
 Short version: signed out, the editor never sends your diagrams anywhere
 unless you make a short link; signed in, it keeps them in your account
@@ -14,6 +18,48 @@ counts, per day, how often a few things happen (say, "the editor was opened
 practice, short links and keeping your diagrams across devices), and an email
 address is kept only if you sign in with one or ask for email reminders. The rest of this page
 lists exactly what is kept, where, and for how long.
+
+## Controller, legal bases and your rights
+
+**Controller.** The person named in the [Impressum](https://proschi.app/impressum),
+which also gives the contact address for every data protection request.
+
+| Purpose | Data | Legal basis | Kept for |
+|---|---|---|---|
+| Providing the website | IP address (rate limiting only), request logs with path, status and, signed in, user id | Art. 6(1)(f) GDPR (secure operation) | Cloudflare Workers Logs' retention period |
+| Account and sign-in | Provider id, display name, email address, password hash, sessions | Art. 6(1)(b) GDPR | Until the account is deleted; sessions 30 days, renewed with use |
+| Progress, diagrams, short links | What you save in your account | Art. 6(1)(b) GDPR | Until you or the account's deletion removes them |
+| Paid plans and credits | Polar customer and subscription ids, plan, status, credit ledger | Art. 6(1)(b) GDPR | Until the account is deleted; Polar keeps its statutory records |
+| AI features (mock interviews, Design partner) | Your input, your design, transcripts and verdicts | Art. 6(1)(b) GDPR | Transcripts and chats 90 days, verdicts until the account is deleted |
+| Contact form on the Impressum | Name (optional), email address, message, IP address (rate limiting and Turnstile only) | Art. 6(1)(f) GDPR (answering enquiries), Art. 6(1)(b) GDPR where it concerns a contract | Not stored on the server; the email stays in the mailbox until the enquiry is settled |
+| Email reminders and product news | Email address, settings, time zone | Art. 6(1)(a) GDPR (reminders), Art. 6(1)(f) GDPR and § 7(3) UWG (product news) | Until you unsubscribe or delete the account |
+| Preventing abuse of sign-up credits | One-way hashes of sign-in identity and IP address | Art. 6(1)(f) GDPR | IP hash 7 days, identity hash permanently |
+| Operation and security | Audit log, error events | Art. 6(1)(f) GDPR | Audit log 400 days, events 30 days |
+| Usage counts | Daily counters with no personal reference | No personal data | 400 days |
+
+Account data is needed to use an account. The editor, docs and practice work
+without one.
+
+**Cookies and browser storage.** Only technically necessary cookies are set
+(see [Cookies](#with-a-practice-account) below), under § 25(2) no. 2 TDDDG.
+
+**Recipients.** Cloudflare (hosting, database, storage, email delivery, AI
+gateway, speech recognition, Turnstile); Polar as merchant of record for payments,
+invoices and VAT; Anthropic (the Claude model), only when you start an AI feature;
+GitHub and Google, only if you sign in with them.
+
+**Transfers outside the EU.** Some recipients are based in the USA or process data
+there. Transfers rely on an EU adequacy decision (Art. 45 GDPR) where the recipient
+is certified, and otherwise on standard contractual clauses (Art. 46(2)(c) GDPR).
+
+**Your rights.** You have the right of access (Art. 15), rectification (Art. 16),
+erasure (Art. 17), restriction (Art. 18), data portability (Art. 20) and to object
+to processing based on Art. 6(1)(f) GDPR (Art. 21). You can withdraw consent at any
+time with effect for the future (Art. 7(3)). You can also complain to a data
+protection supervisory authority, in particular where you live (Art. 77 GDPR).
+
+**Automated decisions.** No decision with legal effect under Art. 22 GDPR is made
+automatically. The AI interviews' verdicts are practice feedback.
 
 ## In your browser
 

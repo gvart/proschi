@@ -131,6 +131,15 @@ export interface Env {
   CF_ZONE_ID?: string;
   /** `free` or `paid` (default): the Workers plan, when the token can't read the subscriptions. */
   CF_PLAN?: string;
+  /**
+   * The provider's details on /impressum (src/legal.ts), as secrets so they
+   * stay out of the repository. LEGAL_ADDRESS separates its lines with `|`;
+   * the page's contact form emails LEGAL_EMAIL. Without all three the page
+   * answers 404.
+   */
+  LEGAL_NAME?: string;
+  LEGAL_ADDRESS?: string;
+  LEGAL_EMAIL?: string;
 }
 
 /** Whether SESSION_SECRET is set and long enough to sign with. */

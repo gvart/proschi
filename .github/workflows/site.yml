@@ -58,7 +58,7 @@ jobs:
   # (about 11 of them in the tests), at the edge of the timeout.
   e2e:
     name: e2e (${{ matrix.shard }}/2)
-    # Pinned: Playwright 1.56 cannot install Chromium on ubuntu-26.04 (1.61+ can).
+    # Not ubuntu-latest: this Playwright version can't install Chromium on Ubuntu 26.04.
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     strategy:
@@ -133,6 +133,7 @@ jobs:
         working-directory: frontend
         env:
           VITE_ACCOUNTS: 'true'
+          VITE_BILLING: 'true'
       - run: npm ci && npm run deploy:staging
         working-directory: backend
         env:
@@ -169,6 +170,7 @@ jobs:
         working-directory: frontend
         env:
           VITE_ACCOUNTS: 'true'
+          VITE_BILLING: 'true'
       # npm run backup prints the D1 bookmark before migrating, and sets the step output.
       - id: deploy
         run: npm ci && npm run deploy

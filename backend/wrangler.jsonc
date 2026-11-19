@@ -21,7 +21,7 @@
   "assets": {
     "directory": "../frontend/dist",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*", "/auth/*", "/s/*", "/u/*", "/c/*", "/share/*"],
+    "run_worker_first": ["/api/*", "/auth/*", "/s/*", "/u/*", "/c/*", "/share/*", "/impressum", "/impressum/"],
     "not_found_handling": "404-page"
   },
   // Hourly: the email reminders of users whose local time it is (src/reminders.ts);
@@ -108,6 +108,7 @@
   // is TURNSTILE_SITE_KEY, a var (dashboard → Turnstile; README "Email sign-in")
   // ADMIN_EMAIL (where the admin's campaign tests go, src/campaigns.ts; unset: no tests) and
   // optionally CAMPAIGN_DAILY_CAP (campaign emails a UTC day; unset: 500; README "Campaigns")
+  // LEGAL_NAME, LEGAL_ADDRESS (lines separated by |) and LEGAL_EMAIL (/impressum and its contact form, src/legal.ts; unset: 404)
 
   "env": {
     // staging.proschi.app: every deploy goes here first (`npm run deploy:staging`).

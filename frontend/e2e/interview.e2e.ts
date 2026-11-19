@@ -356,7 +356,8 @@ test.describe('an interview as progress', () => {
     await startOn(page, 'URL Shortener', '30 min');
     await toStage(page, 'Design');
     // Eleven minutes of design: past the 10 minutes an interview needs to count.
-    await page.clock.fastForward('11:00');
+    // Not clock.fastForward: Playwright's sync with real time can wind that back as it finishes.
+    await page.clock.setSystemTime((await page.evaluate(() => Date.now())) + 11 * 60_000);
     await toStage(page, 'Wrap-up');
     await rail(page).getByRole('button', { name: 'Finish the interview' }).click();
 
