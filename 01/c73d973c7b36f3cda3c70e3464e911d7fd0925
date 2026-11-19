@@ -1,0 +1,19 @@
+frontend/src/practice/problems/shopping-cart/guided.md
+  s_91ba69d9cbae8d::t_b95906a4b79460 31,37-39
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "01c73d973c7b36f3cda3c70e3464e911d7fd0925",
+  "prompts": {},
+  "sessions": {
+    "s_91ba69d9cbae8d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fe8c51ce-b526-4c6e-949d-867e4a8bd64a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
