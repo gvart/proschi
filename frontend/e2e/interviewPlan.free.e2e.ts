@@ -13,6 +13,8 @@ test('an account on Max set by hand keeps the plan', async ({ page }) => {
   await mockSignedIn(page, { ...SIGNED_IN, user: { ...SIGNED_IN.user, plan: 'max' } });
   await mockPlanApi(page, { date: dayFromNow(12), minutes: 45, start: dayFromNow(0) });
   await page.goto('practice/#/roadmap');
+  // The plan starts closed, under "Up next".
+  await page.getByTestId('interview-plan-toggle').click();
   await expect(page.getByRole('region', { name: 'Interview plan' }).getByTestId('plan-days-left')).toHaveText('12');
 });
 
