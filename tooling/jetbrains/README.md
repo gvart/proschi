@@ -123,12 +123,11 @@ file has errors, the preview shows them instead.
   from the IDE theme. Each diagram keeps its theme's card: cream in `sketch`,
   white in `classic`. The page allows styles only by hash, so the restyle's
   hash is added to its Content-Security-Policy (`withStyle`).
-- **Older CLIs.** `preview-html` and `--default-theme` come from the
-  st22nestrel fork (`tooling/FORK.md`). A CLI without them (upstream's, which
-  `npx` downloads when nothing else is found) refuses with exit code 2, and the
-  plugin then shows the `--format html` page instead: no picker, no
-  description tables, no theme setting. Set *CLI* to the fork's `cli.cjs` to
-  get them.
+- **Older CLIs.** A CLI without `preview-html` and `--default-theme` (one
+  released before them) refuses with exit code 2, and the plugin then shows
+  the `--format html` page instead: no picker, no description tables, no
+  theme setting. Update the CLI, or set *CLI* to a newer `cli.cjs`, to get
+  them.
 - **Not kept across saves:** the picked scenario and whether the descriptions
   are open. The page is loaded again on each render.
 
