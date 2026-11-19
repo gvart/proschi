@@ -70,7 +70,7 @@ Raw ingestion needs five times the cluster before any queries. Queries add only 
 At about 2 bytes per compressed datapoint, 1.6M × 86,400 × 2 bytes ≈ 276 GB a day per copy, about 830 GB with three replicas. Raw, multiply by 25: about 20 TB a day with three replicas. The 2 bytes is an assumption; time series databases compress far better than naive 16-byte timestamp-value pairs.
 ```
 
-**In the simulation.** Above 100% utilisation M3DB saturates and fails the latency limit of every use case touching it, Query included. `survive any node failure` re-runs with one replica fewer, so the flush load must still fit. Availability multiplies across the replicas of every node on the synchronous path. The `"Replica down"` scenario states that a replica outage does not fail the flush.
+**In the simulation.** Above 100% utilisation M3DB saturates and fails the latency limit of every use case touching it, Query included. `survive any node failure` re-runs with one replica fewer, so the flush load must still fit. A use case is only as available as every tier on its synchronous path, so the short emit path (collector → aggregator, nothing else) is what makes 99.99% reachable. The `"Replica down"` scenario states that a replica outage does not fail the flush.
 
 ```quiz
 metrics-ingest-rate
@@ -130,7 +130,7 @@ With majority reads too (R = 2), W + R > N guarantees a read overlaps the latest
 
 The client sends to all three and returns once two answer. The third catches up later (a bootstrapping M3DB node fetches missing blocks from its peers).
 
-**Trade-offs.** A majority write is as slow as the second-fastest replica, and a clean majority needs an odd replica count. **When not to use it:** a single-leader relational database already serialises writes through one primary; quorums belong to leaderless or per-shard replicated stores.
+**Trade-offs.** A majority write is as slow as the second-fastest replica. Use an odd replica count: a fourth replica raises the majority to three and still tolerates only one failure. **When not to use it:** a single-leader relational database already serialises writes through one primary; quorums belong to leaderless or per-shard replicated stores.
 
 ```proschi
 title "Majority write"
