@@ -59,12 +59,12 @@ const share = (n: number) => Math.round(n * 100) / 100;
 export async function loadCertificate(env: Env, id: string): Promise<PublicCertificate | null> {
   if (!ID.test(id)) return null;
   const row = await env.DB.prepare(
-    `SELECT c.id, c.issued_at, u.id AS user_id, u.display_name, u.daily_goal, u.plan, u.comp_until
+    `SELECT c.id, c.issued_at, u.id AS user_id, u.display_name, u.daily_goal, u.plan, u.comp_until, u.comp_plan
      FROM certificates c JOIN users u ON u.id = c.user_id WHERE c.id = ? AND c.public = 1 AND u.blocked_at IS NULL`,
   )
     .bind(id)
-    .first<{ id: string; issued_at: number; user_id: string; display_name: string; daily_goal: number; plan: string; comp_until: number | null }>();
-  if (!row || !can({ plan: effectivePlan(row.plan, row.comp_until) }, 'certificate', env).ok) return null;
+    .first<{ id: string; issued_at: number; user_id: string; display_name: string; daily_goal: number; plan: string; comp_until: number | null; comp_plan: string | null }>();
+  if (!row || !can({ plan: effectivePlan(row.plan, row.comp_until, row.comp_plan) }, 'certificate', env).ok) return null;
   const summary = await learningSummary(env, { id: row.user_id, dailyGoal: row.daily_goal });
   const catalog = catalogSolved(
     (await env.DB.prepare('SELECT problem_id FROM progress WHERE user_id = ? AND solved_at IS NOT NULL').bind(row.user_id).all<{ problem_id: string }>()).results.map(

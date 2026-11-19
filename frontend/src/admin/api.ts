@@ -195,12 +195,19 @@ export interface UserRow {
   providers: string[];
   solved: number;
   hasEmail: boolean;
+  /** The effective plan (a comp counts). */
+  plan: string;
+  /** While a comp runs: its end (Unix seconds) and plan; else null. */
+  compUntil: number | null;
+  compPlan: CompPlan | null;
 }
 
+export type CompPlan = 'pro' | 'max';
 export type UserFilter = 'all' | 'blocked' | 'active' | 'public' | 'email';
+export type UserPlanFilter = 'all' | 'free' | 'pro' | 'max' | 'comped';
 export type UserSort = 'created' | 'seen' | 'name' | 'solved';
 
-export const listUsers = (params: { q: string; filter: UserFilter; sort: UserSort; offset: number }) =>
+export const listUsers = (params: { q: string; filter: UserFilter; plan: UserPlanFilter; sort: UserSort; offset: number }) =>
   api<{ total: number; offset: number; pageSize: number; users: UserRow[] }>(`/api/admin/users?${new URLSearchParams({ ...params, offset: String(params.offset) })}`);
 
 export interface AuditEntry {
@@ -224,9 +231,11 @@ export interface UserDetail {
     blockedReason: string | null;
     /** `users.plan`, e.g. free: what the subscription set. */
     plan: string;
-    /** Pro given by the admin until then; null without. */
+    /** A plan given by the admin until then; null without. */
     compUntil: number | null;
-    /** What the account gets now: its plan while subscribed, Pro while comped (a comp never lowers Max). */
+    /** The plan that comp gives; null without one. */
+    compPlan: CompPlan | null;
+    /** What the account gets now: the higher of its plan and a running comp's (a comp never lowers a plan). */
     effectivePlan: string;
   };
   billing: Subscription | null;
@@ -299,7 +308,7 @@ export const listUserCredits = (id: string, offset: number) =>
 /** `ref` names this one action: sending it again changes nothing. */
 export const adjustCredits = (id: string, body: { kind: 'grant' | 'revoke'; credits: number; ref: string; reason: string }) =>
   api<{ delta: number; duplicate?: boolean }>(`${user(id)}/credits`, { method: 'POST', body });
-export const compUser = (id: string, until: number, reason: string) => api(`${user(id)}/comp`, { method: 'POST', body: { until, reason } });
+export const compUser = (id: string, plan: CompPlan, until: number, reason: string) => api(`${user(id)}/comp`, { method: 'POST', body: { plan, until, reason } });
 export const endComp = (id: string, reason: string) => api(`${user(id)}/comp/end`, { method: 'POST', body: { reason } });
 
 interface Owner {
@@ -332,6 +341,7 @@ export interface Billing {
     plan: 'pro' | 'max';
     source: 'subscription' | 'comp' | 'plan';
     compUntil: number | null;
+    compPlan: CompPlan | null;
     polarCustomerId: string | null;
     status: string | null;
     product: string | null;

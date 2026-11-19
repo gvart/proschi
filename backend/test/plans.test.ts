@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { FREE_LIMITS, limitsFor, PLANS } from '../src/plans';
+import { effectivePlan, effectivePlanSql, FREE_LIMITS, limitsFor, PLANS } from '../src/plans';
 import { call, resetDatabase, signedInUser } from './helpers';
 
 /** Plans and their limits: src/plans.ts and GET /api/me/limits. */
@@ -47,5 +47,30 @@ describe('plans', () => {
     expect(full.status).toBe(409);
     expect(await full.json()).toMatchObject({ error: 'document_limit', limit: 1, used: 1 });
     expect(await (await call('/api/me/documents', { token })).json()).toMatchObject({ limit: 1, used: 1 });
+  });
+
+  it('resolve a comp the same way in TypeScript and in SQL: the higher of the stored plan and the running comp', async () => {
+    const { id } = await signedInUser();
+    const at = 1_000;
+    const rows: [string, number | null, string | null, string][] = [
+      ['free', null, null, 'free'],
+      ['free', at + 1, null, 'pro'],
+      ['free', at + 1, 'pro', 'pro'],
+      ['free', at + 1, 'max', 'max'],
+      ['free', at, 'max', 'free'],
+      ['pro', at + 1, 'max', 'max'],
+      ['pro', at - 1, 'max', 'pro'],
+      ['pro', null, 'max', 'pro'],
+      ['max', at + 1, 'pro', 'max'],
+      ['max', at + 1, null, 'max'],
+      ['gold', at + 1, null, 'pro'],
+      ['gold', at - 1, 'max', 'gold'],
+    ];
+    for (const [plan, compUntil, compPlan, expected] of rows) {
+      await env.DB.prepare('UPDATE users SET plan = ?, comp_until = ?, comp_plan = ? WHERE id = ?').bind(plan, compUntil, compPlan, id).run();
+      const sql = await env.DB.prepare(`SELECT ${effectivePlanSql('u', '?')} AS p FROM users u WHERE u.id = ?`).bind(at, id).first<{ p: string }>();
+      expect([plan, compUntil, compPlan, effectivePlan(plan, compUntil, compPlan, at)]).toEqual([plan, compUntil, compPlan, expected]);
+      expect([plan, compUntil, compPlan, sql?.p]).toEqual([plan, compUntil, compPlan, expected]);
+    }
   });
 });

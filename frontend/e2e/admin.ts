@@ -72,8 +72,8 @@ export const USERS = {
   offset: 0,
   pageSize: 50,
   users: [
-    { id: USER, displayName: 'spammer9000', publicProfile: false, createdAt: 1_800_000_000, lastSeenDay: today, blockedAt: null, blockedReason: null, providers: ['google'], solved: 0, hasEmail: false },
-    { id: PRO_USER, displayName: 'Ada Lovelace', publicProfile: true, createdAt: 1_790_000_000, lastSeenDay: today, blockedAt: null, blockedReason: null, providers: ['github'], solved: 12, hasEmail: true },
+    { id: USER, displayName: 'spammer9000', publicProfile: false, createdAt: 1_800_000_000, lastSeenDay: today, blockedAt: null, blockedReason: null, providers: ['google'], solved: 0, hasEmail: false, plan: 'free', compUntil: null, compPlan: null },
+    { id: PRO_USER, displayName: 'Ada Lovelace', publicProfile: true, createdAt: 1_790_000_000, lastSeenDay: today, blockedAt: null, blockedReason: null, providers: ['github'], solved: 12, hasEmail: true, plan: 'pro', compUntil: null, compPlan: null },
   ],
 };
 
@@ -87,9 +87,11 @@ const LEDGER = [
   { id: 3, kind: 'signup_grant', bucket: 'signup', period: null, credits: 100, item: 'signup', refId: 'signup:…', createdAt: now - 20 * DAY },
 ];
 
-export function userDetail(id: string, state: { blocked?: boolean; compUntil?: number | null } = {}) {
+export function userDetail(id: string, state: { blocked?: boolean; compUntil?: number | null; compPlan?: string | null } = {}) {
   const pro = id === PRO_USER;
   const compUntil = state.compUntil ?? null;
+  const comped = compUntil !== null && compUntil > now;
+  const compPlan = compUntil !== null ? (state.compPlan ?? 'pro') : null;
   return {
     user: {
       id,
@@ -102,7 +104,8 @@ export function userDetail(id: string, state: { blocked?: boolean; compUntil?: n
       blockedReason: state.blocked ? 'spam' : null,
       plan: pro ? 'pro' : 'free',
       compUntil,
-      effectivePlan: pro || (compUntil && compUntil > now) ? 'pro' : 'free',
+      compPlan,
+      effectivePlan: comped && compPlan === 'max' ? 'max' : pro || comped ? 'pro' : 'free',
     },
     billing: pro
       ? { polarCustomerId: 'cus_01JAZ2K7M3', polarSubscriptionId: 'sub_01JAZ2K9P0', status: 'active', product: 'pro_monthly', currentPeriodEnd: now + 18 * DAY, cancelAtPeriodEnd: false, pastDue: false, updatedAt: now - 12 * DAY }
@@ -136,11 +139,11 @@ export const BILLING = {
   offset: 0,
   pageSize: 50,
   pro: [
-    { id: PRO_USER, displayName: 'Ada Lovelace', plan: 'pro', source: 'subscription', compUntil: null, polarCustomerId: 'cus_01JAZ2K7M3', status: 'active', product: 'pro_monthly', currentPeriodEnd: now + 18 * DAY, cancelAtPeriodEnd: false },
-    { id: '44444444-4444-4444-8444-444444444444', displayName: 'Grace Hopper', plan: 'pro', source: 'subscription', compUntil: null, polarCustomerId: 'cus_01JB0Q4T1R', status: 'past_due', product: 'pro_yearly', currentPeriodEnd: now + 2 * DAY, cancelAtPeriodEnd: false },
-    { id: '55555555-5555-4555-8555-555555555555', displayName: 'Katherine Johnson', plan: 'pro', source: 'subscription', compUntil: null, polarCustomerId: 'cus_01JB1C8W5D', status: 'active', product: 'pro_monthly', currentPeriodEnd: now + 9 * DAY, cancelAtPeriodEnd: true },
-    { id: '77777777-7777-4777-8777-777777777777', displayName: 'Margaret Hamilton', plan: 'max', source: 'subscription', compUntil: null, polarCustomerId: 'cus_01JB2M3X6E', status: 'active', product: 'max_monthly', currentPeriodEnd: now + 24 * DAY, cancelAtPeriodEnd: false },
-    { id: '66666666-6666-4666-8666-666666666666', displayName: 'Linus Speaker', plan: 'pro', source: 'comp', compUntil: now + 45 * DAY, polarCustomerId: null, status: null, product: null, currentPeriodEnd: null, cancelAtPeriodEnd: false },
+    { id: PRO_USER, displayName: 'Ada Lovelace', plan: 'pro', source: 'subscription', compUntil: null, compPlan: null, polarCustomerId: 'cus_01JAZ2K7M3', status: 'active', product: 'pro_monthly', currentPeriodEnd: now + 18 * DAY, cancelAtPeriodEnd: false },
+    { id: '44444444-4444-4444-8444-444444444444', displayName: 'Grace Hopper', plan: 'pro', source: 'subscription', compUntil: null, compPlan: null, polarCustomerId: 'cus_01JB0Q4T1R', status: 'past_due', product: 'pro_yearly', currentPeriodEnd: now + 2 * DAY, cancelAtPeriodEnd: false },
+    { id: '55555555-5555-4555-8555-555555555555', displayName: 'Katherine Johnson', plan: 'pro', source: 'subscription', compUntil: null, compPlan: null, polarCustomerId: 'cus_01JB1C8W5D', status: 'active', product: 'pro_monthly', currentPeriodEnd: now + 9 * DAY, cancelAtPeriodEnd: true },
+    { id: '77777777-7777-4777-8777-777777777777', displayName: 'Margaret Hamilton', plan: 'max', source: 'subscription', compUntil: null, compPlan: null, polarCustomerId: 'cus_01JB2M3X6E', status: 'active', product: 'max_monthly', currentPeriodEnd: now + 24 * DAY, cancelAtPeriodEnd: false },
+    { id: '66666666-6666-4666-8666-666666666666', displayName: 'Linus Speaker', plan: 'pro', source: 'comp', compUntil: now + 45 * DAY, compPlan: 'pro', polarCustomerId: null, status: null, product: null, currentPeriodEnd: null, cancelAtPeriodEnd: false },
   ],
   orders: [
     { orderId: 'ord_01JC7N2V8F', credits: 1000, createdAt: now - 1 * DAY, refunded: false, user: owner(PRO_USER, 'Ada Lovelace') },
@@ -445,7 +448,7 @@ export function cfUsage(plan: 'free' | 'paid' = 'paid') {
 
 /** Mocks /api/admin/*; returns every change the page sent, with its body. */
 export async function mockAdmin(page: Page, status: { passkeys: boolean; setupAvailable: boolean; signedIn: boolean }) {
-  const state: { blocked: boolean; compUntil: number | null } = { blocked: false, compUntil: null };
+  const state: { blocked: boolean; compUntil: number | null; compPlan: string | null } = { blocked: false, compUntil: null, compPlan: null };
   const posts: { method: string; path: string; body: unknown }[] = [];
   await page.route(
     (url) => url.pathname.startsWith('/api/admin/'),
@@ -456,8 +459,8 @@ export async function mockAdmin(page: Page, status: { passkeys: boolean; setupAv
         const body = request.postDataJSON() as Record<string, unknown> | null;
         posts.push({ method: request.method(), path, body });
         if (path.endsWith('/block')) state.blocked = true;
-        if (path.endsWith('/comp')) state.compUntil = body?.until as number;
-        if (path.endsWith('/comp/end')) state.compUntil = null;
+        if (path.endsWith('/comp')) Object.assign(state, { compUntil: body?.until as number, compPlan: (body?.plan as string) ?? 'pro' });
+        if (path.endsWith('/comp/end')) Object.assign(state, { compUntil: null, compPlan: null });
         if (path.endsWith('/credits')) return route.fulfill({ json: { delta: body?.kind === 'revoke' ? -Number(body.credits) : Number(body?.credits), credits: {} } });
         if (request.method() === 'PATCH' && path.startsWith('/api/admin/feedback/')) return route.fulfill({ json: { status: body?.status, note: body?.note ?? null } });
         return route.fulfill({ status: 204 });

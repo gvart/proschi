@@ -381,6 +381,7 @@ interface Candidate extends PrefsRow {
   daily_goal: number;
   plan: string;
   comp_until: number | null;
+  comp_plan: string | null;
 }
 
 interface PlanRow {
@@ -446,7 +447,7 @@ export async function sendReminders(env: Env, t = now()): Promise<number> {
     for (;;) {
       const rows = (
         await DB.prepare(
-          `SELECT p.*, u.daily_goal, u.plan, u.comp_until FROM email_prefs p JOIN users u ON u.id = p.user_id
+          `SELECT p.*, u.daily_goal, u.plan, u.comp_until, u.comp_plan FROM email_prefs p JOIN users u ON u.id = p.user_id
            WHERE p.confirmed_at IS NOT NULL AND p.paused_at IS NULL AND u.blocked_at IS NULL AND p.time_zone IN (${marks(chunk.length)}) AND p.user_id > ?
            ORDER BY p.user_id LIMIT ${PAGE}`,
         )
@@ -518,7 +519,7 @@ async function processPage(env: Env, rows: Candidate[], t: number, origin: strin
       }
       if (!kind && row.cards_on === 1 && dueCards >= DUE_CARDS_MIN) [kind, data] = ['cards', { due: dueCards, topics: await dueTopics(DB, row.user_id, t) }];
       // The interview-date plan (Max): named in either, or its own reminder while something is left today.
-      const plan = can({ plan: effectivePlan(row.plan, row.comp_until, t) }, 'interview_plan', env).ok ? planToday(planBy.get(row.user_id), day) : undefined;
+      const plan = can({ plan: effectivePlan(row.plan, row.comp_until, row.comp_plan, t) }, 'interview_plan', env).ok ? planToday(planBy.get(row.user_id), day) : undefined;
       if (plan && kind) data = { ...data, plan };
       else if (plan && (plan.items === undefined || plan.items.length > 0)) [kind, data] = ['plan', { plan }];
     }

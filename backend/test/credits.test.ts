@@ -76,6 +76,27 @@ describe('plans and buckets', () => {
     expect(await creditsView(env, id, Date.parse('2027-01-02T00:00:00Z'))).toMatchObject({ balance: 0, monthly: null });
   });
 
+  it("follow an admin's comp at the month's grant: a Max comp gives Max's allowance, never a mid-month top-up or a clawback (P32)", async () => {
+    const comp = (id: string, plan: string | null, until: number | null) => env.DB.prepare('UPDATE users SET comp_until = ?, comp_plan = ? WHERE id = ?').bind(until, plan, id).run();
+    const running = Math.floor(Date.now() / 1000) + 400 * 86_400;
+    // A free account has no base grant (its allowance is 0), so a comp's first month is granted in full on its next read.
+    const free = await signedInUser();
+    expect((await buckets(env, free.id, NOV)).monthly).toBe(0);
+    await comp(free.id, 'max', running);
+    expect((await buckets(env, free.id, NOV)).monthly).toBe(2_200_000);
+    // A Pro account already granted this month: a Max comp adds nothing until next month, then gives Max's allowance.
+    const { id } = await signedInUser();
+    await setPlan(id, 'pro');
+    expect((await buckets(env, id, NOV)).monthly).toBe(800_000);
+    await comp(id, 'max', running);
+    expect((await buckets(env, id, NOV)).monthly).toBe(800_000);
+    expect((await buckets(env, id, DEC)).monthly).toBe(2_200_000);
+    // Ending it takes nothing back; the next month is the subscription's plan again.
+    await comp(id, null, null);
+    expect((await buckets(env, id, DEC)).monthly).toBe(2_200_000);
+    expect((await buckets(env, id, Date.parse('2027-01-02T00:00:00Z'))).monthly).toBe(800_000);
+  });
+
   it('give sign-up credits once per account and once per identity, also after the account is deleted', async () => {
     const { id } = await signedInUser();
     expect(await grantSignupCredits(env, id, 'github\n42')).toBe('granted');

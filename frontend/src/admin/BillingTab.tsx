@@ -4,7 +4,7 @@ import { getBilling, type Billing, type PolarDashboard } from './api';
 import { polarCustomerUrl, polarOrderUrl } from './polarLinks';
 import { formatDate, formatDateTime, formatNumber, humanize } from './format';
 import { useLoad, useSort } from './hooks';
-import { Empty, ErrorNote, PageHeader, Pager, Section, Skeleton, SortHeader, Stat, UserLink } from './ui';
+import { Empty, ErrorNote, PageHeader, Pager, PlanBadge, Section, Skeleton, SortHeader, Stat, UserLink } from './ui';
 
 function OrderLink({ dashboard, orderId }: { dashboard: PolarDashboard; orderId: string }) {
   return (
@@ -176,8 +176,10 @@ function ProTable({ rows, dashboard, onOpenUser }: { rows: Billing['pro']; dashb
               <td>
                 <UserLink user={p} onOpenUser={onOpenUser} />
               </td>
-              <td>{humanize(p.plan)}</td>
-              <td>{p.source === 'subscription' ? humanize(p.product ?? 'subscription') : p.source === 'comp' ? `Comp until ${formatDate(p.compUntil)}` : 'Plan set by hand'}</td>
+              <td>
+                <PlanBadge plan={p.plan} />
+              </td>
+              <td>{p.source === 'subscription' ? humanize(p.product ?? 'subscription') : p.source === 'comp' ? `${humanize(p.compPlan ?? 'pro')} comp until ${formatDate(p.compUntil)}` : 'Plan set by hand'}</td>
               <td className="adm-badges">
                 {p.status && <span className={`ps-badge ps-badge--${p.status === 'past_due' ? 'yellow' : p.source === 'subscription' ? 'pass' : 'neutral'}`}>{humanize(p.status)}</span>}
                 {p.cancelAtPeriodEnd && <span className="ps-badge ps-badge--neutral">canceling</span>}

@@ -1,11 +1,11 @@
 import { useCallback, useState } from 'react';
 import { confirm, prompt } from '../design/dialogs';
-import { blockUser, deleteUser, deleteUserEmail, getUser, listUsers, patchUser, signOutUser, unblockUser, type UserFilter, type UserSort } from './api';
+import { blockUser, deleteUser, deleteUserEmail, getUser, listUsers, patchUser, signOutUser, unblockUser, type UserFilter, type UserPlanFilter, type UserSort } from './api';
 import { formatBytes, formatDate, formatDateTime, formatDayAgo, formatNumber, humanize } from './format';
 import { useAction, useLoad, type SortDir } from './hooks';
 import UserBilling from './UserBilling';
 import UserSignIn from './UserSignIn';
-import { Empty, ErrorNote, PageHeader, Pager, SearchBox, Section, Skeleton, SortHeader, Stat } from './ui';
+import { Empty, ErrorNote, PageHeader, Pager, PlanBadge, SearchBox, Section, Skeleton, SortHeader, Stat } from './ui';
 import Select from '../design/Select';
 
 const FILTERS: { id: UserFilter; label: string }[] = [
@@ -14,6 +14,14 @@ const FILTERS: { id: UserFilter; label: string }[] = [
   { id: 'blocked', label: 'Blocked' },
   { id: 'public', label: 'Public profile' },
   { id: 'email', label: 'Email reminders' },
+];
+
+const PLAN_FILTERS: { id: UserPlanFilter; label: string }[] = [
+  { id: 'all', label: 'Any plan' },
+  { id: 'free', label: 'Free' },
+  { id: 'pro', label: 'Pro' },
+  { id: 'max', label: 'Max' },
+  { id: 'comped', label: 'Comped' },
 ];
 
 /** The orders the server sorts accounts in: names A to Z, the rest newest or most first. */
@@ -28,9 +36,10 @@ export default function UsersTab({ userId, onOpen, onSignedOut }: { userId?: str
 function UserList({ onOpen, onSignedOut }: { onOpen: (id: string) => void; onSignedOut: () => void }) {
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState<UserFilter>('all');
+  const [plan, setPlan] = useState<UserPlanFilter>('all');
   const [sort, setSort] = useState<UserSort>('created');
   const [offset, setOffset] = useState(0);
-  const users = useLoad(() => listUsers({ q, filter, sort, offset }), [q, filter, sort, offset], onSignedOut);
+  const users = useLoad(() => listUsers({ q, filter, plan, sort, offset }), [q, filter, plan, sort, offset], onSignedOut);
   const search = useCallback((value: string) => {
     setQ(value);
     setOffset(0);
@@ -56,12 +65,19 @@ function UserList({ onOpen, onSignedOut }: { onOpen: (id: string) => void; onSig
             onChange={(v) => (setFilter(v as UserFilter), setOffset(0))}
             options={FILTERS.map((f) => ({ value: f.id, label: f.label }))}
           />
+          <Select
+            size="sm"
+            aria-label="Plan"
+            value={plan}
+            onChange={(v) => (setPlan(v as UserPlanFilter), setOffset(0))}
+            options={PLAN_FILTERS.map((f) => ({ value: f.id, label: f.label }))}
+          />
         </div>
         <ErrorNote>{users.error}</ErrorNote>
         {!users.data ? (
           !users.error && <Skeleton rows={8} what="accounts" />
         ) : users.data.users.length === 0 ? (
-          <Empty>{q || filter !== 'all' ? 'No accounts match. Try another search or filter.' : 'No accounts yet.'}</Empty>
+          <Empty>{q || filter !== 'all' || plan !== 'all' ? 'No accounts match. Try another search or filter.' : 'No accounts yet.'}</Empty>
         ) : (
           <div className={users.loading ? 'adm-refetching' : undefined}>
             <div className="adm-scroll">
@@ -69,6 +85,7 @@ function UserList({ onOpen, onSignedOut }: { onOpen: (id: string) => void; onSig
                 <thead>
                   <tr>
                     <SortHeader label="Name" {...sortBy('name')} />
+                    <th scope="col">Plan</th>
                     <th scope="col">Sign-in</th>
                     <SortHeader label="Joined" {...sortBy('created')} />
                     <SortHeader label="Last seen" {...sortBy('seen')} />
@@ -83,6 +100,9 @@ function UserList({ onOpen, onSignedOut }: { onOpen: (id: string) => void; onSig
                         <button type="button" className="adm-link" onClick={() => onOpen(u.id)}>
                           {u.displayName}
                         </button>
+                      </td>
+                      <td className="adm-nowrap" title={u.compUntil !== null ? `${humanize(u.compPlan ?? 'pro')} comp until ${formatDate(u.compUntil)}` : undefined}>
+                        <PlanBadge plan={u.plan} comped={u.compPlan === u.plan} />
                       </td>
                       <td>{u.providers.join(', ')}</td>
                       <td className="adm-nowrap">{formatDate(u.createdAt)}</td>
@@ -142,8 +162,12 @@ function UserDetailView({ id, onBack, onSignedOut }: { id: string; onBack: () =>
       <Section title="Profile">
         <div className="adm-badges">
           {blocked && <span className="ps-badge ps-badge--fail">blocked {formatDate(user.blockedAt)}</span>}
-          <span className={`ps-badge ps-badge--${user.effectivePlan === 'pro' ? 'blue' : 'neutral'}`}>{user.effectivePlan} plan</span>
-          {user.compUntil !== null && user.compUntil * 1000 > Date.now() && <span className="ps-badge ps-badge--yellow">comped until {formatDate(user.compUntil)}</span>}
+          <PlanBadge plan={user.effectivePlan} />
+          {user.compUntil !== null && user.compUntil * 1000 > Date.now() && (
+            <span className="ps-badge ps-badge--yellow">
+              {humanize(user.compPlan ?? 'pro')} comp until {formatDate(user.compUntil)}
+            </span>
+          )}
           {user.publicProfile ? <span className="ps-badge ps-badge--blue">public profile</span> : <span className="ps-badge ps-badge--neutral">private profile</span>}
           {data.identities.map((i) => (
             <span key={i.provider} className="ps-badge ps-badge--neutral" title={`${i.provider} user id ${i.subject}`}>
