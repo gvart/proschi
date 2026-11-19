@@ -565,7 +565,7 @@ provider is offered and `/auth/<provider>/…` answers 503.
 ### Design partner
 
 The AI chat beside the editor and on practice problems (`src/partner.ts`,
-migrations 0025 and 0037, docs/design/paid-plans.md P29 to P31 and P59), feature
+migrations 0025 and 0038, docs/design/paid-plans.md P29 to P31 and P59), feature
 `design_partner`, paid in [credits](#credits). Credits in requests and
 answers are decimals with up to 3 places (the ledger stores millicredits).
 The page's types are `frontend/src/partner/contract.ts`.

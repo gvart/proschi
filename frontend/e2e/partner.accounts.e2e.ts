@@ -117,7 +117,8 @@ test('accepting a change edits the code as one undo step; Undo and Ctrl+Z take i
   await expect(large).toHaveCount(0);
   // The code is folded under the picture.
   await expect(card.getByTestId('change-diff')).toHaveCount(0);
-  await card.getByRole('button', { name: /Code/ }).click();
+  // Anchored: a "Code cache" node in the preview is a button too.
+  await card.getByRole('button', { name: /^Code \+/ }).click();
   await expect(card.getByTestId('change-diff').locator('[data-kind="add"]').first()).toContainText('# cached');
 
   await card.getByRole('button', { name: 'Accept' }).click();
