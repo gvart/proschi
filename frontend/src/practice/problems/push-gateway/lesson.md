@@ -54,7 +54,7 @@ The tests refer to nodes by id, so the push servers must be called `push` and th
 
 Start from the statement's two numbers: 10 million concurrent connections, each living at most about 30 minutes.
 
-**Connects per second.** If every connection is replaced at least every 1,800 seconds, with reconnects spread randomly, the steady-state connect rate is 10,000,000 / 1,800 ≈ 5,600 per second; the statement uses 5.5k. Netflix's Zuul wiki gives a registry TTL of 1,800 seconds and a "dither" window that randomises each client's lifetime, which keeps this rate smooth instead of spiky.
+**Connects per second.** If every connection is replaced at least every 1,800 seconds, with reconnects spread randomly, the steady-state connect rate is 10,000,000 / 1,800 ≈ 5,556 per second; the statement rounds it to 5.5k. Netflix's Zuul wiki gives a registry TTL of 1,800 seconds and a "dither" window that randomises each client's lifetime, which keeps this rate smooth instead of spiky.
 
 ```callout takeaway
 The **reconnect rate**, not the number of open sockets, is what turns into requests.
@@ -81,7 +81,7 @@ Push servers never see offline messages (the processor drops them), and in the m
 
 **Replicas.** Proschi's default service profile handles about 2k requests per second per replica; replicas needed = load / per-replica capacity:
 
-- Push servers: 17.5k / 2k ≈ 9 replicas just to stay under 100%. With headroom below the 70% "hot" line and one replica lost, you need noticeably more than 9.
+- Push servers: 17.5k / 2k ≈ 9 replicas just to stay under 100%. Divide by 0.7 instead to stay below the 70% "hot" line, then add a spare so losing one replica changes nothing: noticeably more than 9.
 - Processors: 20k / 2k = 10 at 100%; the same reasoning pushes you higher.
 - Registry: a Redis-class cache takes about 100k operations per replica, so 25.5k is a small fraction of one node. You add replicas for failure, not load.
 - PostgreSQL as the registry: its single primary takes about 5k writes a second, so 5.5k connects a second is 110%. Read replicas do not help writes.
@@ -112,7 +112,7 @@ The Zuul wiki describes a two-step lookup. A **global registry**, off the box, m
 |---|---|
 | **Low read latency** | Every single message reads it |
 | **Expiry (TTL)** | Servers die without cleaning up; a record nobody renews must vanish on its own |
-| **Sharding** | Tens of millions of records and thousands of writes a second outgrow one machine |
+| **Sharding** | At Netflix's real scale (hundreds of millions of connections) the records and writes outgrow one machine; this problem's 10 million still fit on one |
 | **Replication** | Losing it means nobody can route anything |
 
 Redis (Netflix used Dynomite, a sharding and replication layer over Redis), Cassandra or DynamoDB all fit. A relational database fits poorly: no native expiry, and every connect is a write to a single primary.
@@ -187,6 +187,8 @@ usecase "Consume" {
 ### Best-effort delivery and stale routes
 
 Push messages at Netflix are hints ("there are new recommendations"), not the data itself. An offline device fetches fresh data when it next connects, so there is nothing to store and redeliver. That choice separates this problem from **Chat**, where every message must be stored and delivered later.
+
+The *durable* requirement covers only the hand-over: an accepted message is safe in the queue until a processor takes it, and the processor may then drop it.
 
 Best effort still has to fail cleanly. A registry record can outlive its server: it crashed, its connections are gone, and the TTL has not fired. The processor's call fails, and the right behaviour is to drop the message and move on, not retry forever or crash.
 
@@ -273,7 +275,7 @@ Likely follow-ups and short answers:
 
 - *What if a push server dies?* Clients reconnect elsewhere and re-register; old records expire. Jitter reconnects to avoid a herd; autoscale by connection count.
 - *How do you deliver to a customer with three devices?* Store a set of server ids per customer (or a record per device) and fan out to each.
-- *Do you guarantee delivery?* No, best effort by design; the app refreshes on reconnect. For guaranteed messages, add an inbox store and use push as a doorbell.
+- *Do you guarantee delivery?* No, best effort by design: the queue guarantees a message is not lost before a processor handles it, not that it reaches a device. The app refreshes on reconnect. For guaranteed messages, add an inbox store and use push as a doorbell.
 - *Why Kafka rather than direct calls?* Fast durable acknowledgement for senders, burst absorption, per-customer ordering by partition, and senders that know nothing about the fleet.
 
 ## Further reading

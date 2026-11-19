@@ -16,7 +16,7 @@ An `@everyone` ping sends tens of thousands of identical reads a second to **one
 
 Discord stores every message ever sent, trillions of them, in a wide-column database (Cassandra, later ScyllaDB). Messages are **partitioned by channel and a time bucket**: one channel's messages from a 10-day window sit together in one partition, copied to three nodes. The common read, "open a channel and show the latest 50 messages", is one cheap query on one partition.
 
-It works until someone in a huge server pings `@everyone`, and hundreds of thousands of people open the same channel within seconds. Every read targets the same partition, so the same three replicas: a **hot partition**, a small part of the cluster taking a huge share of the load while the other 69 nodes sit mostly idle. Because reads run at quorum (each waits for a majority of the replicas), those nodes slow down for every query they serve, not only the busy channel's.
+It works until someone in a huge server pings `@everyone`, and hundreds of thousands of people open the same channel within seconds. Every read targets the same partition, so the same three replicas: a **hot partition**, a small part of the cluster taking a huge share of the load while the other 69 nodes sit mostly idle. The overloaded nodes slow down for every query they serve, not only the busy channel's: reads run at quorum (each waits for a majority of the replicas, two of three), so other channels' queries often have to wait for one of the slow nodes.
 
 The three use cases:
 
@@ -76,12 +76,12 @@ Ways to deal with it, from cheapest to most invasive:
 
 | Fix | How | Cost |
 |---|---|---|
-| **Absorb the reads** before the database | Request coalescing, or a cache | A cache's costs, below |
+| **Absorb the reads** before the database | Request coalescing, or a cache | Coalescing needs a routing layer; a cache needs invalidation (both below) |
 | **Split the key** | Add a time bucket (Discord does, to keep partitions a manageable size) or salt the key into sub-keys, reading all and merging | Helps writes and size, but "latest 50" still targets the newest bucket |
 | **Replicate the hot data more widely** | Read replicas of just that key | Consistency and complexity |
 
 ```callout takeaway Adding nodes does not cool a hot partition
-More nodes means more partitions per cluster, but the same three replicas still own the hot one.
+More nodes spread the *other* partitions thinner. The hot one still lives on exactly three replicas.
 ```
 
 ```quiz
@@ -162,7 +162,7 @@ Coalescing gives most of the benefit for the burst case (many identical reads at
 **4. Wrap up.** Mention what else the layer enables: per-query concurrency limits that protect the database, metrics per query, and one place to change how queries run.
 
 ```deepdive What Discord measured
-Discord's post reports fewer nodes and much lower, steadier tail latency after the change. The migration also moved from Cassandra to ScyllaDB, to avoid garbage-collection pauses.
+Discord made two changes: the data services, and a migration from Cassandra to ScyllaDB (written in C++, so no garbage-collection pauses). The post's numbers describe the migration: 177 Cassandra nodes became 72 ScyllaDB nodes, the p99 of reading history fell from 40–125 ms to 15 ms, and of inserting from 5–70 ms to a steady 5 ms. The data services are what keep a ping storm from undoing that.
 ```
 
 ## Common mistakes
@@ -190,7 +190,7 @@ Classic mistakes beyond the tests:
 
 Likely follow-ups:
 
-- *What if the leader query fails?* Every subscriber gets the error (or the service retries once for them); the in-flight entry is removed so the next request starts fresh.
+- *What if the first query (the one the others joined) fails?* Every subscriber gets the error (or the service retries once for them); the in-flight entry is removed so the next request starts fresh.
 - *What if a message is sent while a coalesced read is in flight?* Joiners get the result of a query started a few milliseconds earlier. The new message arrives over the real-time gateway anyway; the history read is not the delivery channel.
 - *How does consistent hashing help when instances change?* Only channels on the affected part of the ring move; most in-flight groups and routing stay put.
 - *Why ScyllaDB over Cassandra?* Same data model and query language, in C++ without a garbage-collected runtime, so fewer latency spikes; Discord reported far lower, steadier p99s after the move.

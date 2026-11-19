@@ -71,13 +71,13 @@ A nice tool, but it does not change the delivery path.
 - unit: messages/s
 - range: 10 to 20
 
-1% of all events: 1,500 × 1% = **15 a second**.
+1% of all events (one SMS in eleven): 1,500 × 1% = **15 a second**. The other 150 SMS a second go out through the primary.
 
 ### With providers taking 200 ms a call, how many calls are in flight at 1,500 a second?
 - answer: 300
 - unit: calls
 - range: 200 to 450
 
-Little's law: 1,500/s × 0.2 s = **300 calls** in flight; workers must hold that many.
+Little's law (in flight = arrival rate × time each takes): 1,500/s × 0.2 s = **300 calls** in flight. The workers must hold that many open at once.
 
 Numbers: [Numbers to know](../docs/numbers/).

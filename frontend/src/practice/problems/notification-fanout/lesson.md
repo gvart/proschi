@@ -62,12 +62,12 @@ Peak is 1,500 events a second, each accepted and delivered once, split 55% email
 | SMS sends | 10% × 1,500 | 150 rps, plus 15 calls that time out (limit 500) |
 | SMS failover: backup sends | 1% × 1,500 | 15 rps (limit 500) |
 | Opted out: nothing sent | 4% × 1,500 | 60 events/s |
-| Provider calls in flight | 1,500/s × ~0.2 s (Little's law) | about 300 at once |
+| Provider calls in flight | 1,500/s × ~0.2 s (Little's law, below) | about 300 at once |
 | Backlog if all providers are down for 10 minutes | 1,500/s × 600 s | 900,000 events |
 
 **Rate limits.** Every channel is under its provider's limit at peak; email is the closest, at about 40%. If the Order Service also called a provider inline, that load would come on top and could push email over its limit.
 
-**Concurrency.** *Little's law*: requests in flight = arrival rate × time in the system. With 200 ms provider calls, workers hold about 300 calls open, so they need asynchronous I/O or a big enough pool. Proschi does not model a worker waiting on a slow dependency (a service replica is one server with a 10 ms service time): point this out yourself.
+**Concurrency.** *Little's law*: requests in flight = arrival rate × time in the system. With 200 ms provider calls, workers hold about 300 calls open (a little fewer, since the 4% opted out call nobody), so they need asynchronous I/O or a big enough pool. Proschi does not model a worker waiting on a slow dependency (a service replica is one server with a 10 ms service time): point this out yourself.
 
 ```quiz
 littles-law-concurrency
@@ -83,7 +83,7 @@ littles-law-concurrency
 Deliver has no latency requirement; the providers decide its p99. A provider is a single server in the model, so at 41% busy the email provider takes around 340 ms on average because of queueing: exactly the slow tail you keep off your caller's path.
 ```
 
-**Availability.** Notify's is the queue's, and two replicas of a 99.99% queue are effectively always up in the model. Deliver's is capped by the providers (99.9% each), which is fine: the queue holds events until delivered.
+**Availability.** Notify's availability is the queue's, and two replicas of a 99.99% queue are effectively always up in the model. Deliver's is capped by the providers (99.9% each), which is fine: the queue holds events until delivered.
 
 **Cost.** The given services cost $700 a month ($100 per service replica); a queue replica is $200. There is room for a sensible design, not for doubling every tier.
 
@@ -135,7 +135,7 @@ beat-your-dependency
 
 ### At-least-once delivery and idempotency keys
 
-Queues like SQS deliver *at least once*. A message is hidden for a *visibility timeout* while a worker handles it, and deleted only when the worker says so; if the worker crashes, it reappears for another worker. Occasionally a message arrives twice even without a crash, so the SQS documentation says to make consumers *idempotent* (safe to run twice).
+Queues like SQS deliver *at least once*: every message arrives, and a few arrive more than once. A message is hidden for a *visibility timeout* while a worker handles it, and deleted only when the worker says so; if the worker crashes, it reappears for another worker. Occasionally a message arrives twice even without a crash, so the SQS documentation says to make consumers *idempotent* (safe to run twice).
 
 Here a duplicate means a customer gets the same text twice. The defence is an *idempotency key*: a unique id (the event id) that the worker passes to the provider or records itself, so a repeated send does nothing. Stripe's write-up on idempotency explains the pattern for APIs in general.
 
@@ -196,7 +196,7 @@ Name and reject the alternative, the Order Service calling providers itself: it 
 
 - *Scenarios.* The preference answer decides the branch: one per channel, a failover branch where the SMS call fails with `-x` and the backup is called, and an opted-out branch that only deletes the message. Spell the names exactly as the problem does; the traffic mix refers to them.
 - *Ordering of steps.* Preferences, then provider. Delete the message only after the provider accepted it (or after deciding not to send), so a crash causes a retry, not a loss.
-- *Sizing.* Two queue replicas, and enough workers for 1,500 events a second at well under 70%, still fine with one lost. Nothing needs to be big; $700 of the $2,000 is already spent.
+- *Sizing.* Two queue replicas, and enough workers for 1,500 events a second at well under 70%, still fine with one lost. Nothing needs to be big, and nothing should be: $700 of the $2,000 is already spent.
 - *Duplicates.* Use the event id as the provider's idempotency key; mention it though the model does not simulate redelivery.
 
 **4. Wrap-up.** Check: Notify is one queue write; no path from the Order Service to a provider; the failover scenario covers an SMS outage; every node you run has two or more replicas; the bill fits. Then extend: priority queues for urgent messages, per-user rate limits so nobody gets twenty texts in a minute, a dead-letter queue for events that keep failing, and provider delivery receipts to track what arrived.
