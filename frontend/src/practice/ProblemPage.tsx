@@ -120,8 +120,8 @@ interface ProblemPageProps {
  * problem (stages/flow.ts). Design is a whiteboard, with the full editor (the
  * statement, the editor and the diagram side by side in resizable panes, the
  * tests folded under them; tabs on phones) one click away. Design partner
- * coaches in every stage, and any text selected on a stage can be asked
- * about.
+ * coaches in the full editor only, where any selected text can be asked
+ * about; the other stages are the visitor's own work.
  */
 export default function ProblemPage({ problem, progress, onProgress, engine, account, back = { href: '#/', label: 'Problems' }, banner, openLesson, staged = false }: ProblemPageProps) {
   const [source, setSource] = useState(() => sourceOf(progress, problem));
@@ -372,7 +372,9 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   const inLesson = hasLesson && screen === 'lesson';
   // Design in the full editor: the workspace as it always was.
   const editorView = screen === 'design' && (!staged || notes.editor);
-  usePartnerShortcut(togglePartner, hasPartner);
+  // Design partner is offered in the full editor only, not on the interview prep stages; hidden, not unmounted, so the conversation survives.
+  const partnerHere = hasPartner && editorView;
+  usePartnerShortcut(togglePartner, partnerHere);
   const lessonButton = (className: string) =>
     hasLesson && (
       <button type="button" onClick={() => setDrawer(true)} aria-haspopup="dialog" aria-expanded={drawer} className={className} title="Open the lesson beside your work">
@@ -465,8 +467,8 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
 
   const partnerDock = hasPartner && (
     <>
-    {!phone && <PartnerButton open={partnerOpen} onToggle={togglePartner} />}
-    <PartnerDock open={partnerOpen} phone={phone} onClose={closePartner}>
+    {!phone && partnerHere && <PartnerButton open={partnerOpen} onToggle={togglePartner} />}
+    <PartnerDock open={partnerOpen && partnerHere} phone={phone} onClose={closePartner}>
       <Suspense fallback={null}>
         <PartnerPanel
           storeKey={`practice:${problem.id}`}
@@ -503,7 +505,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
             source={source}
             input={() => practiceReviewInput(problem, source, engine)}
             onSelect={goTo}
-            onOpenPartner={hasPartner ? () => setPartnerOpen(true) : undefined}
+            onOpenPartner={partnerHere ? () => setPartnerOpen(true) : undefined}
           />
         }
         mistake={
@@ -781,7 +783,6 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
           onOpen={openStage}
           next={next}
           tools={designTools}
-          partner={phone && hasPartner && !editorView && <PartnerButton bar open={partnerOpen} onToggle={togglePartner} />}
           phone={phone}
         />
       )}
@@ -807,7 +808,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
       )}
       </ZenCollapse>
 
-      <AskSelection enabled={hasPartner && staged} onAsk={askPartner} className="flex flex-1 min-h-0">
+      <AskSelection enabled={partnerHere && staged} onAsk={askPartner} className="flex flex-1 min-h-0">
         <div ref={main} className="flex min-w-0 flex-1 flex-col">
           {body && (
             <div key={editorView ? 'editor' : screen} className={`flex min-h-0 flex-1 flex-col ${editorView ? '' : 'ps-stage-enter'}`}>
