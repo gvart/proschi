@@ -1,0 +1,54 @@
+backend/src/scopes.ts
+  s_c7a1e1fd017f82::t_805db9ddb6da3a 67
+frontend/src/practice/interview/Setup.tsx
+  s_c7a1e1fd017f82::t_ea79c3571862de 2,14-15,106,145-159,363-365
+  s_c7a1e1fd017f82::t_09d2f88447a0b1 366
+frontend/src/practice/modes/store.test.ts
+  s_c7a1e1fd017f82::t_36b4aef549b061 1-43
+frontend/src/practice/progress.ts
+  s_c7a1e1fd017f82::t_d0b498f1aee857 81-91
+backend/src/index.ts
+  s_c7a1e1fd017f82::t_805db9ddb6da3a 69,158,346
+frontend/e2e/mobile.e2e.ts
+  s_c7a1e1fd017f82::t_7f31eff3845170 309
+frontend/src/practice/practice.test.ts
+  s_c7a1e1fd017f82::t_88ae9d762157c7 7,255-262
+  s_c7a1e1fd017f82::t_bf76d3241b404d 263-264
+backend/test/api.test.ts
+  s_c7a1e1fd017f82::t_2cf0b7ee939920 88-104
+frontend/src/practice/useAccount.ts
+  s_c7a1e1fd017f82::t_797337ddaccb68 27-28,164-171
+frontend/src/practice/interview/stages.ts
+  s_c7a1e1fd017f82::t_a8faa3f5bc6236 223-229
+frontend/src/practice/stages/flow.test.ts
+  s_c7a1e1fd017f82::t_88ae9d762157c7 27-34
+backend/src/progress.ts
+  s_c7a1e1fd017f82::t_a23c1ac5339427 437-447
+  s_c7a1e1fd017f82::t_158c7faa36e40d 436
+frontend/src/practice/ProblemPage.tsx
+  s_c7a1e1fd017f82::t_d1c141dcf40ea2 20,54,329-334,336-350,776-785,869
+frontend/src/practice/modes/store.ts
+  s_c7a1e1fd017f82::t_a8faa3f5bc6236 4-5,35-48
+  s_c7a1e1fd017f82::t_39d7a65c46b5b8 49-50
+frontend/e2e/reset.accounts.e2e.ts
+  s_c7a1e1fd017f82::t_651e8eb6819683 1-59
+frontend/e2e/interview.e2e.ts
+  s_c7a1e1fd017f82::t_3383237cb2f7d1 103-107,127-132
+  s_c7a1e1fd017f82::t_d6fb07bc98ab99 101-102,108-126,133-134
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7910f7dea0f9358e3f0c3b099201faa72ee7bc96",
+  "prompts": {},
+  "sessions": {
+    "s_c7a1e1fd017f82": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ed156a01-4429-4375-ab31-67f4834d10ab",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
