@@ -1,0 +1,76 @@
+frontend/src/practice/stages/AskSelection.tsx
+  s_c7a1e1fd017f82::t_bae358dc539f5f 6-7,146,160
+  s_c7a1e1fd017f82::t_874c98d8c3da56 180-198
+  s_c7a1e1fd017f82::t_0bcc6adf66bc95 2
+  s_c7a1e1fd017f82::t_59c6ca58c48bb9 147,161
+backend/README.md
+  s_c7a1e1fd017f82::t_c2edb19e5f1fd7 568,575,577,589-602
+docs/PRACTICE.md
+  s_c7a1e1fd017f82::t_80355bf7c56488 2,236-246
+frontend/e2e/stages.accounts.e2e.ts
+  s_c7a1e1fd017f82::t_7cdeb07c9fe31a 7-12,19-20,33,35,49,60,66,72,87,90-91,93,102-130,132-160
+  s_c7a1e1fd017f82::t_c5da649c13aa99 92,131
+frontend/e2e/partner.ts
+  s_c7a1e1fd017f82::t_88c14be62030d0 24-25,116-117
+backend/src/partner.ts
+  s_c7a1e1fd017f82::t_798896e4e1c23b 1
+  s_c7a1e1fd017f82::t_f705ebddd1156b 8,25,44-49,62,69,145-146,182,184,187-189,197-198,226,229-257,260-261,279-281,371,416,421-422,467
+frontend/src/practice/stages/ask.ts
+  s_c7a1e1fd017f82::t_a57e9711be6fa7 1,5
+frontend/src/practice/stages/coach.test.ts
+  s_c7a1e1fd017f82::t_b0113adc510b6d 1-58
+docs/PRIVACY.md
+  s_c7a1e1fd017f82::t_80355bf7c56488 2,85,460-467
+frontend/src/practice/stages/coach.ts
+  s_c7a1e1fd017f82::t_12f3ec253f4a4a 1-49
+frontend/src/practice/ProblemPage.tsx
+  s_c7a1e1fd017f82::t_155e597732f627 58-60,124-126,369,374-377,389,391-395,397-406,504-505,508,519,544,586-588,819,823,841
+frontend/src/partner/PartnerButton.tsx
+  s_c7a1e1fd017f82::t_bae358dc539f5f 1,14-15,27-30,37,39,43,53,56,60-61
+backend/src/ai/partnerPrompt.ts
+  s_c7a1e1fd017f82::t_97acc5ce4aae6c 104-140
+  s_c7a1e1fd017f82::t_628e2941453bfb 256-272,289,308-311,313,318,325
+  s_c7a1e1fd017f82::t_798896e4e1c23b 2
+frontend/src/partner/prep.ts
+  s_c7a1e1fd017f82::t_798896e4e1c23b 1-38
+frontend/src/partner/PartnerDock.tsx
+  s_c7a1e1fd017f82::t_bae358dc539f5f 8-9,19,47
+docs/design/paid-plans.md
+  s_c7a1e1fd017f82::t_c58de988c3dec2 682-709
+backend/migrations/0037_partner_persona.sql
+  s_c7a1e1fd017f82::t_6f3eaaf87a7a01 1-8
+frontend/src/partner/PartnerPanel.tsx
+  s_c7a1e1fd017f82::t_414e025a869f36 2,19-20,33-35,39,61,63-66,69,71,111,114,119,128,131,142-143,146-147,149-150,153,161-166,242-247,272,301,303-305,314,351,354,366,419-450,457-465,482,533,535,662,666-672
+  s_c7a1e1fd017f82::t_250134601a623e 70
+  s_c7a1e1fd017f82::t_f936d5330f069a 234-236,302
+frontend/src/partner/usePartner.ts
+  s_c7a1e1fd017f82::t_e5524079370691 4,35,42-45,56,62,65,151-152,174,180
+backend/test/partner.test.ts
+  s_c7a1e1fd017f82::t_e0c500fb854ebe 451-601
+  s_c7a1e1fd017f82::t_dc35098fb30757 5
+frontend/src/review/ReviewPanel.tsx
+  s_c7a1e1fd017f82::t_0f45c79ad10aaa 20-21,48,89,92
+frontend/src/partner/contract.ts
+  s_c7a1e1fd017f82::t_09d481806a20a8 13-20
+  s_c7a1e1fd017f82::t_15b07bf471ab0e 76-77
+  s_c7a1e1fd017f82::t_1c09ed98e5a923 154
+  s_c7a1e1fd017f82::t_798896e4e1c23b 2
+frontend/e2e/billingOff.free.e2e.ts
+  s_c7a1e1fd017f82::t_a1d9a1a7fee541 31,56,68,78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b9eb30e3bc3537a73ce55a3e6cf5fdf7e3ff4e97",
+  "prompts": {},
+  "sessions": {
+    "s_c7a1e1fd017f82": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ed156a01-4429-4375-ab31-67f4834d10ab",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
