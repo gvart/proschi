@@ -1,22 +1,22 @@
 ## Questions
 
-### How many uploads, and how big?
-- kind: good
-- fact: 2 uploads per second (about 170k videos a day), about 2 GB each
-
-**2 uploads a second** (about 170k videos a day), about **2 GB** each.
-
-### How many video pages are opened?
-- kind: good
-- fact: 5k rps of video page opens, 95% of them for popular videos
-
-**5k a second**, **95%** for popular videos.
-
 ### How many segment requests, and how big?
 - kind: good
 - fact: 10k rps of segment requests, about 4 MB each; 99% are for segments already at the edge
 
 **10k a second**, about **4 MB** each; **99%** already at the edge.
+
+### Is there a budget?
+- kind: good
+- fact: At most $2.5M / month, bandwidth and the transcoding fleet included
+
+At most **$2.5M a month**, bandwidth and the transcoding fleet included.
+
+### How many uploads, and how big?
+- kind: good
+- fact: 2 uploads per second (about 170k videos a day), about 2 GB each
+
+**2 uploads a second** (about 170k videos a day), about **2 GB** each.
 
 ### Can the creator wait for transcoding?
 - kind: good
@@ -36,35 +36,35 @@ No: the creator uploads to storage directly.
 
 A 4-second segment: p99 under **600 ms**, the transfer included.
 
-### Is there a budget?
+### How many video pages are opened?
 - kind: good
-- fact: At most $2.5M / month, bandwidth and the transcoding fleet included
+- fact: 5k rps of video page opens, 95% of them for popular videos
 
-At most **$2.5M a month**, bandwidth and the transcoding fleet included.
+**5k a second**, **95%** for popular videos.
 
 ### What should the player skin look like?
 - kind: weak
 
-A UI detail.
+A UI detail that changes nothing behind the player. Ask how many segments are requested a second and how big they are: the bytes drive the design.
 
 ### Do we support comments?
 - kind: weak
 
-A separate feature.
+A separate feature with a small design of its own. Stay with upload and playback: ask about sizes, rates and the budget.
 
 ### Which codec is best?
 - kind: weak
 
-It matters later; the bandwidth and the pipeline come first.
+It matters later, as a way to send fewer bytes, but it does not change the architecture. Ask first how much is streamed and what sending it costs.
 
 ## Estimates
 
 ### How much upload data arrives a day?
-- answer: 346T
-- unit: bytes
-- range: 250T to 450T
+- answer: 346
+- unit: TB
+- range: 250 to 450
 
-2 × 2 GB × 86,400 ≈ **346 TB a day**.
+2 uploads × 2 GB = 4 GB/s, × 86,400 s ≈ **346 TB a day**. Large, but it comes in for free: the bytes that cost money are the ones going out.
 
 ### How much do 10k segments a second of 4 MB send in a month?
 - answer: 104
@@ -78,6 +78,6 @@ It matters later; the bandwidth and the pipeline come first.
 - unit: USD/month
 - range: 1.6M to 2.6M
 
-104M GB × $0.02 ≈ **$2.1M a month**; from storage at $0.09 it would be $9.4M.
+104M GB × $0.02 ≈ **$2.1M a month**; from storage at $0.09 it would be about $9.3M, almost four times the budget.
 
 Numbers: [Numbers to know](../docs/numbers/).

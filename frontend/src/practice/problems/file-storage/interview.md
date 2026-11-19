@@ -6,12 +6,6 @@
 
 **500 downloads**, **2k folder listings** and **200 uploads** a second.
 
-### Are most downloads for the same files?
-- kind: good
-- fact: 90% of them for files that were fetched recently
-
-Yes: **90%** of downloads are for files that were fetched recently.
-
 ### How big is a file?
 - kind: good
 - fact: The average file is 1 MB
@@ -23,6 +17,18 @@ The average file is **1 MB**; a user's connection moves about 10 MB/s.
 - fact: $0.09 per GB from the bucket or any other component you run, $0.02 per GB from the CDN
 
 **$0.09 per GB** from the bucket or anything you run, **$0.02 per GB** from a CDN; copies inside the system are free.
+
+### Is there a budget?
+- kind: good
+- fact: At most $45,000 / month, egress included
+
+At most **$45,000 a month**, egress included: about 1.3 PB leaves the system every month.
+
+### Are most downloads for the same files?
+- kind: good
+- fact: 90% of them for files that were fetched recently
+
+Yes: **90%** of downloads are for files that were fetched recently.
 
 ### When can an upload be acknowledged?
 - kind: good
@@ -36,12 +42,6 @@ Only once its bytes are stored durably, and a pending file is recorded before it
 
 No, clients never reach the metadata store directly.
 
-### Is there a budget?
-- kind: good
-- fact: At most $45,000 / month, egress included
-
-At most **$45,000 a month**, egress included: about 1.3 PB leaves the system every month.
-
 ### Is the client a desktop app or a web page?
 - kind: weak
 
@@ -50,7 +50,7 @@ Either uploads the same bytes. Ask about sizes, rates and costs.
 ### Which file types do we support?
 - kind: weak
 
-Bytes are bytes to the storage layer; the type does not change the design.
+Bytes are bytes to the storage layer; the type does not change the design. Ask how big files are and how often they are downloaded.
 
 ### Should we write our own storage engine?
 - kind: weak

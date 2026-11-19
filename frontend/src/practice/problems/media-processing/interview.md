@@ -59,12 +59,19 @@ A product detail that changes the number of outputs, not the architecture. Ask h
 
 ## Estimates
 
+### How many thumbnail workers are fully busy with 1k uploads a second?
+- answer: 10
+- unit: workers
+- range: 8 to 12
+
+1,000 thumbnails ÷ 100 per worker = **10 workers** at 100%. About 15 keep the pool near 70%, even with one lost.
+
 ### How many preview workers are fully busy with 600 pre-warmed previews and 40 generated on view each second?
 - answer: 16
 - unit: workers
 - range: 14 to 20
 
-(600 + 40) ÷ 40 previews per worker = **16 workers** at 100%. With headroom for a burst and a lost worker, about 24.
+600 is 60% of the 1k pre-warms, 40 is 2% of the 2k preview opens. (600 + 40) ÷ 40 previews per worker = **16 workers** at 100%. With headroom for a burst and a lost worker, about 24.
 
 ### If thumbnails were rendered again on every edge miss, how many extra renders a second would views add?
 - answer: 2500
@@ -72,10 +79,3 @@ A product detail that changes the number of outputs, not the architecture. Ask h
 - range: 2000 to 3000
 
 50,000 views × 5% edge misses = **2,500 renders a second**, more than twice the 1,000 a second that uploads create. Storing each output once keeps that at zero.
-
-### How many thumbnail workers are fully busy with 1k uploads a second?
-- answer: 10
-- unit: workers
-- range: 8 to 12
-
-1,000 thumbnails ÷ 100 per worker = **10 workers** at 100%. About 15 keep the pool near 70%, even with one lost.

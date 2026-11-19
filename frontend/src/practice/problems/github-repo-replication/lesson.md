@@ -46,7 +46,7 @@ $5,200 | left for proxy and file servers
 |---|---|---|
 | Requests at the proxy | 1k + 20k | 21k rps |
 | Fetch reads on `fs` | 20k × 1 replica | 20k rps |
-| Push prepares on `fs` | 1k × 3 replicas | 3k rps (reads) |
+| Push prepares on `fs` | 1k × 3 replicas | 3k rps (writes) |
 | Push commits on `fs` | 1k × 3 replicas | 3k rps (writes) |
 | Total on `fs` | 20k + 3k + 3k | 26k rps |
 | Same, if a fetch read all three | 60k + 6k | 66k rps |
@@ -55,9 +55,9 @@ $5,200 | left for proxy and file servers
 
 **Fetches dominate.** Twenty fetches for every push: anything that multiplies read cost (reading every replica, reading `routes` many times) multiplies the biggest number in the table.
 
-**A push costs six calls**: a prepare and a commit to every replica. The simulation counts `PREPARE` as a read and `COMMIT` as a write (only write verbs such as INSERT, UPDATE, COMMIT count as writes).
+**A push costs six calls**: a prepare and a commit to every replica. `given.proschi` declares both `PREPARE` and `COMMIT` as writes on the file servers, so 1k pushes put 6k writes a second on `fs`, next to the 20k reads from fetches.
 
-**Sizing the file servers.** A generic NoSQL kind: 20k reads and 20k writes per replica, sharing the machine, so utilisation is the sum of both shares. One set of three takes 26k of 60k, about 43%.
+**Sizing the file servers.** The model gives a file server 20k reads or 20k writes a second. Both share the machine, so utilisation is the sum of the two shares. One set of three takes 26k of 60k, about 43%.
 
 ```callout pitfall 43% looks fine until you remove a server
 The same load on two servers is 65%. The push path visits `fs` twice, so it queues enough to cross 100 ms. Adding sets (shards of three) spreads repositories over more servers.
@@ -93,7 +93,7 @@ With N copies, a **write quorum** W means a write succeeds once W copies have it
 
 Spokes uses `N = 3, W = 2`. A push succeeds on any two servers, so it survives one failure, and is never acknowledged on fewer than two, so one disk failure cannot lose it. Reads use `R = 1`, breaking the overlap rule (1 + 2 is not more than 3), but not blindly: the checksums in `routes` say which replicas have the latest state, and that lookup replaces the extra read.
 
-To make the two-of-three commit atomic, the proxy runs a **commit protocol**: first ask every replica whether it can apply the update (a vote), then tell them to commit or roll back. GitHub describes it as a three-phase commit.
+To make the two-of-three commit atomic, the proxy runs a **commit protocol**: first ask every replica whether it can apply the update (a vote), then tell them to commit or roll back. GitHub calls its protocol a three-phase commit; this problem models the two steps that matter for load and latency, `PREPARE` and `COMMIT`.
 
 ```callout takeaway
 Never acknowledge a write before a quorum has durably applied it.
@@ -205,8 +205,8 @@ Expected follow-ups:
 ## Further reading
 
 - [Introducing DGit](https://github.blog/engineering/architecture-optimization/introducing-dgit/), GitHub blog, 2016: why GitHub moved from DRBD pairs to three Git-level replicas.
-- [Building resilience in Spokes](https://github.blog/engineering/infrastructure/building-resilience-in-spokes/), GitHub blog: the three-phase commit, the two-replica minimum and the checksums that track which replicas are in sync.
-- [Stretching Spokes](https://github.blog/engineering/infrastructure/stretching-spokes/), GitHub blog, 2017: Spokes across data centers, quorum votes and reads from the closest in-sync replica.
+- [Building resilience in Spokes](https://github.blog/engineering/infrastructure/building-resilience-in-spokes/), GitHub blog, 2016: the two-replica minimum for every write, how a failed or lagging replica is detected and repaired, and routing to the replicas that are up to date.
+- [Stretching Spokes](https://github.blog/engineering/infrastructure/stretching-spokes/), GitHub blog, 2017: the three-phase commit, the per-replica checksums, Spokes across data centers and reads from the closest in-sync replica.
 - [System Design Primer: Replication](https://github.com/donnemartin/system-design-primer#replication): master-slave and master-master replication as availability patterns.
 - [System Design Primer: Consistency patterns](https://github.com/donnemartin/system-design-primer#consistency-patterns): weak, eventual and strong consistency, the vocabulary for "may a fetch be stale?".
 - [awesome-scalability](https://github.com/binhnguyennus/awesome-scalability): "Distributed Repositories, Dependencies, and Configurations Management" lists the DGit post among related designs.
