@@ -1,0 +1,74 @@
+frontend/e2e/roadmap.e2e.ts
+  s_c7a1e1fd017f82::t_e8e62e2670d00b 7-9,19,22,24,31-36,38-40,42,64-67,70,91,93-99,106-108
+  s_c7a1e1fd017f82::t_45ac5ef4ca8665 100
+frontend/e2e/billingOff.free.e2e.ts
+  s_c7a1e1fd017f82::t_be90ef3ee6e942 110
+docs/PRACTICE.md
+  s_c7a1e1fd017f82::t_f94e14df982819 2,214-215,677-696,715-717,719
+frontend/src/practice/plan/InterviewPlan.tsx
+  s_c7a1e1fd017f82::t_8f1c5b0dcb8a6b 56
+  s_c7a1e1fd017f82::t_53102e334ef8f6 1-2,5,7,12-14,17-24,31,33-35,38,42-55,57-61
+  s_c7a1e1fd017f82::t_8e821b9032416c 62-63
+frontend/src/practice/hub/stepHref.ts
+  s_c7a1e1fd017f82::t_4cd1a29144724d 1-9
+frontend/src/practice/roadmap.test.ts
+  s_c7a1e1fd017f82::t_0c86cc5351b892 3
+  s_c7a1e1fd017f82::t_ded28a319786a4 224-260
+frontend/src/practice/PracticeApp.tsx
+  s_c7a1e1fd017f82::t_48df64fa634ed3 1,13,273,397
+  s_c7a1e1fd017f82::t_42314a2ebdaabc 272,274-275,398
+frontend/e2e/nextSteps.e2e.ts
+  s_c7a1e1fd017f82::t_b392b8175a76fa 18,21-26,28-32,38-41,44
+frontend/src/practice/RoadmapView.tsx
+  s_c7a1e1fd017f82::t_050cfea4558f46 1-2,5-6,9,14-15,34-37,50-56,59,62-64,70-71,75-76,80-94,96,98-100,102-103,108,114,118,126-302,305,311,315,318,325-326,330-331,333-336,344-365,407-416,418-427,429-430,432-451,454,459-464,467,469-483,485-489
+  s_c7a1e1fd017f82::t_84fde08fd402bd 366-367,384-403,405-406
+  s_c7a1e1fd017f82::t_a4adbfda1908cc 368-377,379-383
+frontend/e2e/roadmap.accounts.e2e.ts
+  s_c7a1e1fd017f82::t_03614975e5a153 57-71
+  s_c7a1e1fd017f82::t_f2f9b27477b1d8 32-33,43-45,50
+frontend/src/practice/roadmap.ts
+  s_c7a1e1fd017f82::t_806d76d2c7f983 170-208
+frontend/src/practice/history/NextForYou.tsx
+  s_c7a1e1fd017f82::t_2a80af62c67510 169-170
+  s_c7a1e1fd017f82::t_027bdd1745e37f 1-2,6,10,17-19,28-37,45,70,73-75,80-84,86-90,92,98,103-105,107-115,120-142,144-153,155-165,188,191,204-205,207-226
+  s_c7a1e1fd017f82::t_4cd1a29144724d 7-8
+  s_c7a1e1fd017f82::t_1e6b8e011f18c7 143
+  s_c7a1e1fd017f82::t_42314a2ebdaabc 76-78,85,91,96,106,166-168,171-182,184-185,189,192,198,206
+frontend/e2e/lesson.e2e.ts
+  s_c7a1e1fd017f82::t_be90ef3ee6e942 15,119
+frontend/src/practice/hub/NextSteps.tsx
+  s_c7a1e1fd017f82::t_9d242bc5ef284a 18
+  s_c7a1e1fd017f82::t_e1828c3dff23a6 2-3,19-60
+  s_c7a1e1fd017f82::t_4cd1a29144724d 4
+  s_c7a1e1fd017f82::t_d661c697478345 61
+frontend/e2e/interviewPlan.accounts.e2e.ts
+  s_c7a1e1fd017f82::t_be90ef3ee6e942 9-12,24-28,123,129-131
+frontend/src/practice/LessonBlocks.test.tsx
+  s_c7a1e1fd017f82::t_1037bc01dddef7 179,193,197-229
+frontend/e2e/history.accounts.e2e.ts
+  s_c7a1e1fd017f82::t_be90ef3ee6e942 166-167,180-182,184,189-190,200-201,211-212
+frontend/e2e/nextSteps.accounts.e2e.ts
+  s_c7a1e1fd017f82::t_b392b8175a76fa 5-6,9,29-33,35
+frontend/e2e/mistakes.accounts.e2e.ts
+  s_c7a1e1fd017f82::t_be90ef3ee6e942 9,59-62
+frontend/src/practice/hub/RuleSteps.tsx
+  s_c7a1e1fd017f82::t_e1828c3dff23a6 2,28-29,48
+  s_c7a1e1fd017f82::t_a99da8ac7f7e30 26
+  s_c7a1e1fd017f82::t_60445e503fd135 27,32,44,46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "402defd132836cf5c27dfac6fd990b8b79fe0a2f",
+  "prompts": {},
+  "sessions": {
+    "s_c7a1e1fd017f82": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ed156a01-4429-4375-ab31-67f4834d10ab",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
