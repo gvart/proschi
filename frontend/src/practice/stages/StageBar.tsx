@@ -19,6 +19,8 @@ interface StageBarProps {
   next?: StageNext;
   /** The stage's tools (Design: Run tests, Show code, the full editor). */
   tools?: ReactNode;
+  /** Phones: Design partner's button, at the bar's end. */
+  partner?: ReactNode;
   phone: boolean;
 }
 
@@ -29,7 +31,7 @@ interface StageBarProps {
  * right, the stage's tools and its Next; on phones Next sits in a bar at the
  * foot of the screen (StageFoot).
  */
-export default function StageBar({ notes, shown, hasLesson, onOpen, next, tools, phone }: StageBarProps) {
+export default function StageBar({ notes, shown, hasLesson, onOpen, next, tools, partner, phone }: StageBarProps) {
   const stages = STAGES.filter((s) => hasLesson || s.id !== 'lesson');
   const reachedAt = stageAt(notes.reached);
   return (
@@ -69,6 +71,7 @@ export default function StageBar({ notes, shown, hasLesson, onOpen, next, tools,
           <ArrowRight size={15} aria-hidden="true" />
         </button>
       )}
+      {partner}
     </div>
   );
 }
