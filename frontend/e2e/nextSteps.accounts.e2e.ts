@@ -2,11 +2,11 @@ import { expect, test } from './fixtures';
 
 /**
  * Signed out, in the build with accounts and paid plans (API mocked), the
- * free "Your next steps" still come from this browser's progress, on the
- * roadmap (never on the home).
+ * free next steps ("Also today") still come from this browser's progress, on
+ * the roadmap (never on the home), and never name a problem locked there.
  */
 
-test('signed out: the rule-based steps from this browser’s progress', async ({ page, errors }) => {
+test('signed out: the rule-based steps from this browser’s progress, without the locked retry', async ({ page, errors }) => {
   await page.route(
     (url) => /^\/(api|auth)\//.test(url.pathname),
     (route) => {
@@ -26,10 +26,13 @@ test('signed out: the rule-based steps from this browser’s progress', async ({
   await expect(page.getByText('Your next steps')).toHaveCount(0);
 
   await page.goto('practice/#/roadmap');
-  const roadmap = page.getByRole('region', { name: 'Your next steps' });
-  await expect(roadmap.getByTestId('next-steps').getByRole('link').first()).toContainText('Retry Pastebin');
-  await expect(roadmap.getByTestId('next-steps').getByRole('link').first()).toHaveAttribute('href', '#/interview?problem=pastebin');
+  // Signed out, Pastebin is locked on the roadmap (URL Shortener comes first): no retry of it; today's challenge is there.
+  const roadmap = page.getByTestId('next-for-you');
+  await expect(roadmap.getByRole('link', { name: 'Daily challenge', exact: true })).toHaveAttribute('href', '#/challenge');
+  await expect(roadmap.getByRole('link', { name: /Pastebin/ })).toHaveCount(0);
+  await roadmap.getByRole('button', { name: 'More next steps' }).click();
   await expect(roadmap.getByTestId('next-steps').getByRole('link').filter({ hasText: 'Do today’s daily challenge' })).toHaveAttribute('href', '#/challenge');
+  await expect(roadmap.getByTestId('next-steps')).not.toContainText('Pastebin');
   await expect(roadmap.getByTestId('roadmap-picks')).toHaveCount(0);
 
   // Signed out, GET /api/me answers 401, which Chromium logs as a failed resource load; the unmocked API calls 404.

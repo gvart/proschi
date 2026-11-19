@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { problems } from './catalog';
-import { OPTIONAL_STEPS, ROADMAP, requiredStages, roadmapAccess, roadmapFor, roadmapState, roadmapTarget, readFirstPending, routeLock, stepLock, validateRoadmap, type RoadmapStage } from './roadmap';
+import { lockedSteps, OPTIONAL_STEPS, ROADMAP, requiredStages, roadmapAccess, roadmapFor, roadmapState, roadmapTarget, readFirstPending, routeLock, stepLock, upNext, validateRoadmap, type RoadmapAccess, type RoadmapStage } from './roadmap';
 import type { Progress } from './progress';
 import { roadmapAfterSolve } from './solveSummary';
 import { ruleProgress, type StatsSnapshot } from '../learn/achievements';
@@ -219,5 +219,42 @@ describe('readFirstPending', () => {
   it('is off once a problem is solved, or with no guide', () => {
     expect(readFirstPending('approach', [], state('a'))).toBe(false);
     expect(readFirstPending(undefined, [], state())).toBe(false);
+  });
+});
+
+describe('upNext', () => {
+  const roadmap = stages(['a', 'b'], ['c']);
+  const up = (progress: Progress, access: RoadmapAccess, read: string[] = ['approach'], lessons = ['a', 'b', 'c']) =>
+    upNext({ state: roadmapState(roadmap, progress), access, guideId: 'approach', read, hasLesson: (id) => lessons.includes(id) });
+
+  it('waits while the sign-in is checked', () => expect(up({}, 'checking', [])).toEqual({ kind: 'checking' }));
+
+  it('sends a newcomer to the guide, with the first step to skip to', () => {
+    expect(up({}, 'open', [])).toMatchObject({ kind: 'guide', next: { id: 'a' } });
+    expect(up({}, 'sign-in', [])).toMatchObject({ kind: 'guide', next: { id: 'a' } });
+  });
+
+  it('then the next step: its lesson while unread, else its challenge', () => {
+    expect(up({}, 'open')).toMatchObject({ kind: 'lesson', next: { id: 'a' } });
+    expect(up({}, 'open', ['approach', 'a'])).toMatchObject({ kind: 'challenge', next: { id: 'a' } });
+    expect(up(solved('a'), 'open', ['approach'], ['a'])).toMatchObject({ kind: 'challenge', next: { id: 'b' } });
+  });
+
+  it('signed out past the first stage, a sign-in', () => {
+    expect(up(solved('a', 'b'), 'sign-in')).toMatchObject({ kind: 'sign-in', next: { id: 'c' } });
+    expect(up(solved('a', 'b'), 'open')).toMatchObject({ kind: 'lesson', next: { id: 'c' } });
+  });
+
+  it('nothing once every step is solved', () => expect(up(solved('a', 'b', 'c'), 'open')).toEqual({ kind: 'done' }));
+});
+
+describe('lockedSteps', () => {
+  const roadmap = stages(['a', 'b'], ['c']);
+
+  it('lists the challenges that may not be opened now', () => {
+    expect(lockedSteps(roadmapState(roadmap, {}), 'open')).toEqual(['b', 'c']);
+    expect(lockedSteps(roadmapState(roadmap, solved('a', 'b')), 'open')).toEqual([]);
+    // Signed out, the stages after the first wait for a sign-in.
+    expect(lockedSteps(roadmapState(roadmap, solved('a', 'b')), 'sign-in')).toEqual(['c']);
   });
 });

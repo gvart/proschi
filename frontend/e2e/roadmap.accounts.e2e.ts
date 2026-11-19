@@ -29,7 +29,8 @@ test('signed out, the first stage opens and sign-in is optional', async ({ page,
   await mockSignedOut(page);
   await page.goto('practice/#/roadmap');
 
-  const keep = page.getByRole('region', { name: 'Keep your progress' });
+  // Within the first stage, signing in is a quiet line in "Up next", not its one action.
+  const keep = page.getByTestId('up-next').getByTestId('keep-progress');
   await expect(keep).toContainText('Stage 1 is open without an account');
   await expect(keep.getByRole('button', { name: 'Sign in with GitHub' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Your progress', exact: true })).toContainText(/0 of \d+ solved/);
@@ -39,14 +40,32 @@ test('signed out, the first stage opens and sign-in is optional', async ({ page,
   const first = stage1.getByRole('link').first();
   await expect(first).toBeVisible();
   const stage2 = page.getByRole('listitem', { name: /^Stage 2:/ });
+  await expect(stage2).toContainText('Unlocks when you sign in');
+  await stage2.getByRole('button').first().click();
+  await expect(stage2).toContainText('Sign in to open this stage');
   // Only their lessons open: reading is never gated.
   await expect(stage2.getByRole('link', { name: /^(?!Read the lesson)/ })).toHaveCount(0);
   await expect(stage2.getByRole('img', { name: 'Locked' }).first()).toBeVisible();
 
-  await page.getByRole('link', { name: /^or start / }).click();
+  await page.getByRole('link', { name: /^or skip to / }).click();
   await expect(page).toHaveURL(/#\/roadmap\/[a-z0-9-]+$/);
   await expect(page.getByRole('region', { name: 'Roadmap' })).toContainText('Stage 1 of');
 
   // Signed out, GET /api/me answers 401, which Chromium logs as a failed resource load.
+  for (let i = errors.length - 1; i >= 0; i--) if (/status of 401/.test(errors[i])) errors.splice(i, 1);
+});
+
+test('signed out with the first stage done, the one thing up next is to sign in', async ({ page, errors }) => {
+  await mockSignedOut(page);
+  await page.addInitScript(() =>
+    localStorage.setItem('proschi.practice', JSON.stringify(Object.fromEntries(['url-shortener', 'pastebin', 'shopping-cart', 'snowflake-ids'].map((id) => [id, { status: 'solved' }])))),
+  );
+  await page.goto('practice/#/roadmap');
+  const upNext = page.getByTestId('up-next');
+  await expect(upNext.getByTestId('up-next-title')).toHaveText('Sign in to continue with Caching and the edge');
+  await expect(upNext.getByRole('button', { name: 'Sign in with GitHub' })).toBeVisible();
+  await expect(upNext.getByTestId('keep-progress')).toHaveCount(0);
+  // Nothing suggests a problem the roadmap keeps locked.
+  await expect(upNext.getByRole('link', { name: /Rate Limiter|Load Shedding/ })).toHaveCount(0);
   for (let i = errors.length - 1; i >= 0; i--) if (/status of 401/.test(errors[i])) errors.splice(i, 1);
 });

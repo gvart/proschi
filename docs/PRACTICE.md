@@ -1,5 +1,5 @@
 ---
-updated: 2026-11-10
+updated: 2026-11-19
 ---
 
 # Writing practice problems
@@ -211,8 +211,8 @@ quiz naming a card that does not exist.
 
 A lesson counts as read once its end comes into view or its challenge is
 started; a guide once its end comes into view. The roadmap shows a **Read**
-chip on each lesson and guide read and counts the lessons read per stage and
-in all. Reads are kept in the browser (`proschi.lessons`) and, signed in,
+chip on each lesson and guide read, and its "Up next" offers the next step's
+lesson until it is read. Reads are kept in the browser (`proschi.lessons`) and, signed in,
 sent to the account (`POST /api/me/lessons`, the `lesson_reads` table), so
 they show on every device; on sign-in the reads of the browser and of the
 account are joined. The reading badges count them (docs/CARDS.md,
@@ -674,10 +674,26 @@ browser or synced when signed in); the problem list itself stays open. A
 problem opened from the roadmap (`practice/#/roadmap/<id>`) shows its stage
 and, once solved, a link to the next one.
 
-Anyone can see the stages, but starting the roadmap takes an account: signed
-out, the page lists the problems without links and offers the sign-in buttons,
-and `practice/#/roadmap/<id>` shows the roadmap instead of the problem (sign-in
-returns to that address). The exception is `OPTIONAL_STEPS` in `roadmapStages.ts`:
+The page answers "what do I do now" first. Under the title, one line holds
+the progress (solved, a bar, the current stage) and, on Max, the interview
+plan's link. Then one **Up next** card with one primary button, by one rule
+(`upNext` in `roadmap.ts`): for a newcomer, the unread "Read first" guide
+(the first problem one smaller link away); else the next step, its lesson
+while unread (the challenge one link away), then its challenge; signed out
+past stage 1, a sign-in. At its foot, **Also today** lists the day's chores
+(a retry of a recent mistake, the cards due, the daily challenge) and
+**More** opens the rest of the rule-based next steps with their reasons, the
+Pro picks or the way to Pro. These never suggest a problem locked on the
+roadmap (`lockedSteps`). The stages follow: the current one open, the others
+one line each (done, or how many problems and what unlocks them), any of them
+opened on demand; what a stage waits for is said once, and a locked
+problem's lesson stays a link.
+
+Anyone can see the stages and work through the first one signed out, with
+the progress kept in the browser; the stages after it take an account:
+signed out, they open only their lessons, "Up next" offers the sign-in once
+stage 1 is done, and `practice/#/roadmap/<id>` of a later step shows the
+roadmap instead of the problem (sign-in returns to that address). The exception is `OPTIONAL_STEPS` in `roadmapStages.ts`:
 the first step, `hello-proschi`, a tutorial that teaches the language one
 idea per test (nodes, connections, a use case's request and response, the
 traffic, requirements, a replica), opens signed out too. It is optional:
@@ -696,11 +712,11 @@ topic (with your mastery) by id; it only picks from those, and the server
 drops any pick whose id is not a real problem or topic. The verdict never
 waits on the picks: they are made after it is answered, and the page shows
 "Picking your next steps…" and asks again about 2, 5 and 10 s later, then
-says quietly if none came. A failed pick never fails the verdict. The card under the roadmap's progress links each pick to
-its roadmap step (`practice/#/roadmap/<id>`) or its card deck
-(`practice/#/review/<topic>`); the verdict links the same picks, and the
+says quietly if none came. A failed pick never fails the verdict. On the roadmap, **More** in "Also today" links each pick to
+its roadmap step (`practice/#/roadmap/<id>`, or its lesson while the step is
+still locked) or its card deck (`practice/#/review/<topic>`); the verdict links the same picks, and the
 progress page's "What to do next" shows them in place of its own suggestions. Signed in
-without Pro, with billing on, the card shows the way to Pro instead. Without
+without Pro, with billing on, it shows the way to Pro instead. Without
 an Anthropic key on the server (`GET /api/roadmap/next` answers 501), or with no picks
 yet, the roadmap keeps its own order (backend `src/roadmap.ts`,
 `src/ai/roadmap.ts`).

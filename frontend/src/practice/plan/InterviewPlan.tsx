@@ -1,51 +1,63 @@
-import { Suspense, lazy } from 'react';
-import { CalendarDays } from 'lucide-react';
+import { Suspense, lazy, useId, useState } from 'react';
+import { CalendarDays, ChevronDown } from 'lucide-react';
 import { Feature } from '../../components/Feature';
-import { eyebrow } from '../../components/Playground/ui';
 import UpgradeHint from '../../components/UpgradeHint';
+import { localDay } from '../../learn/review';
 import type { PlanPanelProps } from './PlanPanel';
+import { usePlanState } from './planStore';
 
 // The plan needs the whole deck: loaded after the page shows.
 const PlanPanel = lazy(() => import('./PlanPanel'));
 
+const link =
+  'inline-flex min-h-[32px] items-center gap-1 rounded-sm text-sm font-semibold text-ink underline decoration-pop-yellow decoration-2 underline-offset-2 hover:decoration-ink focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-pop-blue';
+
 /**
  * The interview-date plan on the roadmap (feature `interview_plan`, Max;
- * docs/design/paid-plans.md P55): the plan with the feature; else, where
- * paid plans are on, a short teaser with the way to Max; else nothing. It
- * costs nothing to run, so a build without paid plans follows the server
- * for it (an account on Max set by hand gets it), like interview_report.
+ * docs/design/paid-plans.md P55), a small link beside the roadmap's progress:
+ * with the feature it shows and hides the plan, open from the start once a
+ * date is set (the panel stays mounted either way, so it keeps syncing the
+ * account's plan and today's list); else, where paid plans are on, the way to
+ * Max; else nothing. It costs nothing to run, so a build without paid plans
+ * follows the server for it (an account on Max set by hand gets it), like
+ * interview_report. Placed in a wrapping flex row: the plan takes a row of
+ * its own.
  */
 export default function InterviewPlan(props: Omit<PlanPanelProps, 'sync'> & { base?: string }) {
   const { base = '../', ...rest } = props;
-  const signedIn = rest.account.state.status === 'signed-in';
   return (
     <Feature
       name="interview_plan"
-      pro={
-        <Suspense fallback={null}>
-          <PlanPanel {...rest} sync={signedIn} />
-        </Suspense>
-      }
+      pro={<PlanToggle {...rest} />}
       hint={
-        <UpgradeHint base={base} testId="interview-plan-upgrade" className="mt-2 inline-flex items-start gap-1 text-sm font-semibold text-ink underline decoration-pop-yellow decoration-2 underline-offset-2 hover:decoration-ink">
-          Get Max
+        <UpgradeHint base={base} testId="interview-plan-teaser" icon={false} className={link}>
+          <CalendarDays size={14} aria-hidden="true" />
+          Interview plan <span className="text-muted">· Max</span>
         </UpgradeHint>
       }
-      free={(hint) =>
-        hint && (
-          <section aria-labelledby="interview-plan-teaser" className="mt-6 rounded-brutal border-bw-2 border-dashed border-ink/60 bg-surface px-4 py-3" data-testid="interview-plan-teaser">
-            <h2 id="interview-plan-teaser" className={`flex items-center gap-1.5 ${eyebrow}`}>
-              <CalendarDays size={13} aria-hidden="true" />
-              Interview plan · Max
-            </h2>
-            <p className="mt-1 max-w-2xl text-sm text-ink/80">
-              Pick your interview date and get a plan for every day until then: problems for your weakest skills, mock interviews, then review. Today’s list ticks
-              itself off as you practise.
-            </p>
-            {hint}
-          </section>
-        )
-      }
+      free={(hint) => hint}
     />
+  );
+}
+
+function PlanToggle(props: Omit<PlanPanelProps, 'sync'>) {
+  const id = useId();
+  const plan = usePlanState();
+  const [override, setOverride] = useState<boolean>();
+  // Open by default once a date is set, also when the account's plan arrives after the page shows.
+  const open = override ?? (!!plan.settings && plan.settings.date >= localDay(new Date()));
+  return (
+    <>
+      <button type="button" aria-expanded={open} aria-controls={id} onClick={() => setOverride(!open)} className={link} data-testid="interview-plan-toggle">
+        <CalendarDays size={14} aria-hidden="true" />
+        Interview plan
+        <ChevronDown size={14} aria-hidden="true" className={`transition-transform duration-d1 motion-reduce:transition-none ${open ? 'rotate-180' : ''}`} />
+      </button>
+      <div id={id} hidden={!open} className="min-w-0 basis-full">
+        <Suspense fallback={null}>
+          <PlanPanel {...props} sync={props.account.state.status === 'signed-in'} />
+        </Suspense>
+      </div>
+    </>
   );
 }

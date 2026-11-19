@@ -163,7 +163,8 @@ test.describe('Picks made after the verdict is answered', () => {
     await mockSignedIn(page, PRO);
     await mockHistory(page, { full: true, total: 0, sessions: [] }, { arriveOn: 1 });
     await page.goto('practice/#/roadmap');
-    const card = page.getByRole('region', { name: 'Your next steps' });
+    const card = page.getByTestId('next-for-you');
+    await card.getByRole('button', { name: 'More next steps' }).click();
     await expect(card.getByTestId('picks-picking')).toBeVisible();
     await page.clock.runFor(2_100);
     await expect(card.getByTestId('roadmap-picks').getByRole('link')).toHaveCount(3);
@@ -176,14 +177,17 @@ test.describe('Your next steps', () => {
     await mockHistory(page, { full: true, total: 0, sessions: [] });
     await page.goto('practice/#/roadmap');
 
-    const card = page.getByRole('region', { name: 'Your next steps' });
+    // Under "More" in "Also today", in the roadmap's "Up next" card.
+    const card = page.getByTestId('next-for-you');
+    await card.getByRole('button', { name: 'More next steps' }).click();
     await expect(card.getByText('Picked after your last mock interview')).toBeVisible();
-    const picks = card.getByRole('link');
+    const picks = card.getByTestId('roadmap-picks').getByRole('link');
     await expect(picks).toHaveCount(3);
     await expect(picks.nth(0)).toContainText('Pastebin');
     await expect(picks.nth(0)).toContainText('size five years of pastes');
     await expect(picks.nth(1)).toContainText('Estimation');
-    await expect(picks.nth(2)).toHaveAttribute('href', '#/roadmap/rate-limiter');
+    // Rate Limiter is still locked on the roadmap: the pick leads to its lesson, which is open.
+    await expect(picks.nth(2)).toHaveAttribute('href', '#/roadmap/rate-limiter/lesson');
     await picks.nth(1).click();
     await expect(page).toHaveURL(/#\/review\/estimation$/);
   });
@@ -193,7 +197,8 @@ test.describe('Your next steps', () => {
     await mockHistory(page, { full: true, total: 0, sessions: [] });
     await page.route('**/api/roadmap/next', (route) => route.fulfill({ json: { next: null } }));
     await page.goto('practice/#/roadmap');
-    const card = page.getByRole('region', { name: 'Your next steps' });
+    const card = page.getByTestId('next-for-you');
+    await card.getByRole('button', { name: 'More next steps' }).click();
     await expect(card.getByText('After your next mock interview, your next 3 steps are picked for you here')).toBeVisible();
     await expect(card.getByText(/Pro picks/)).toHaveCount(0);
     await expect(card.getByTestId('next-for-you-upgrade')).toHaveCount(0);
@@ -203,7 +208,8 @@ test.describe('Your next steps', () => {
     await mockSignedIn(page, FREE);
     const asked = await mockHistory(page, { full: false, total: 0, sessions: [] });
     await page.goto('practice/#/roadmap');
-    const card = page.getByRole('region', { name: 'Your next steps' });
+    const card = page.getByTestId('next-for-you');
+    await card.getByRole('button', { name: 'More next steps' }).click();
     await expect(card.getByTestId('next-for-you-upgrade')).toHaveAttribute('href', '../pricing/');
     await expect(card.getByTestId('roadmap-picks')).toHaveCount(0);
     expect(asked.filter((p) => p.startsWith('/api/roadmap'))).toEqual([]);

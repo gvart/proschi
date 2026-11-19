@@ -167,6 +167,45 @@ export function stepLock(state: RoadmapState, id: string, access: RoadmapAccess)
   return { kind: 'open' };
 }
 
+/**
+ * The one thing the roadmap's "Up next" card offers, by one rule: nothing
+ * while the sign-in is checked; for a newcomer, the unread "Read first" guide
+ * (readFirstPending); signed out past the first stage, a sign-in; else the
+ * next step: its lesson while unread, then its challenge; `done` once every
+ * step is solved.
+ */
+export type UpNext =
+  | { kind: 'checking' }
+  | { kind: 'guide'; next?: RoadmapStep }
+  | { kind: 'sign-in'; next: RoadmapStep }
+  | { kind: 'lesson'; next: RoadmapStep }
+  | { kind: 'challenge'; next: RoadmapStep }
+  | { kind: 'done' };
+
+export function upNext({
+  state,
+  access,
+  guideId,
+  read,
+  hasLesson,
+}: {
+  state: RoadmapState;
+  access: RoadmapAccess;
+  guideId?: string;
+  read: readonly string[];
+  hasLesson: (id: string) => boolean;
+}): UpNext {
+  if (access === 'checking') return { kind: 'checking' };
+  if (readFirstPending(guideId, read, state)) return state.next ? { kind: 'guide', next: state.next } : { kind: 'guide' };
+  const next = state.next;
+  if (!next) return { kind: 'done' };
+  if (stepLock(state, next.id, access).kind === 'sign-in') return { kind: 'sign-in', next };
+  return { kind: hasLesson(next.id) && !read.includes(next.id) ? 'lesson' : 'challenge', next };
+}
+
+/** The roadmap problems whose challenge may not be opened now (stepLock): never suggested as a next step. */
+export const lockedSteps = (state: RoadmapState, access: RoadmapAccess): string[] => state.steps.filter((s) => stepLock(state, s.id, access).kind !== 'open').map((s) => s.id);
+
 /** The lock on a roadmap address: a lesson (`roadmap/<id>/lesson`) is always open, a challenge as stepLock says. */
 export function routeLock(state: RoadmapState, target: { id: string; lesson: boolean }, access: RoadmapAccess): StepLock {
   return target.lesson ? { kind: 'open' } : stepLock(state, target.id, access);
