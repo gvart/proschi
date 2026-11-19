@@ -5,8 +5,8 @@ difficulty: medium
 
 ## Text
 
-All the spans of one request share a {{trace id|trace ID}}. Each span has
-its own {{span id|span ID}} and records its {{parent|parent span}}'s, which
+All the spans of one request share a {{trace id|trace ID|traceid|trace identifier}}. Each span has
+its own {{span id|span ID|spanid|span identifier}} and records its {{parent|parent span}}'s, which
 is how the tracing system rebuilds the call tree.
 
 ## Why

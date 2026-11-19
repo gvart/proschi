@@ -8,7 +8,7 @@ distinct-from: [read-repair]
 
 ## Text
 
-In a {{Merkle tree|hash tree}}, every parent holds a hash of its children's
+In a {{Merkle tree|hash tree|Merkle}}, every parent holds a hash of its children's
 hashes. Two replicas compare their {{root}} hashes first and descend only
 into the subtrees whose hashes differ.
 

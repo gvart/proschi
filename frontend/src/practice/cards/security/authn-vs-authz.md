@@ -7,7 +7,7 @@ tags: [api-design]
 ## Text
 
 Checking **who** is calling is {{authentication|authn}}; checking **what**
-that caller is allowed to do is {{authorization|authz}}.
+that caller is allowed to do is {{authorization|authz|authorisation}}.
 
 ## Why
 

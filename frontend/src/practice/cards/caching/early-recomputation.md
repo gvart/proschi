@@ -9,7 +9,7 @@ distinct-from: [cache-stampede]
 
 To keep a hot key from expiring under load, a reader can refresh it at random
 shortly before its TTL ends, more likely the closer expiry is. This is
-{{probabilistic early expiration|probabilistic early recomputation|early recomputation|XFetch}}.
+{{probabilistic early expiration|probabilistic early recomputation|early recomputation|XFetch|probabilistic early refresh|probabilistic early expiry|early expiration|early expiry|early refresh}}.
 
 ## Why
 

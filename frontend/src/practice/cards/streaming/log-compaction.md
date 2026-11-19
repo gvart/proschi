@@ -8,7 +8,7 @@ distinct-from: [kafka-retention]
 
 ## Text
 
-A Kafka topic with {{log compaction|compaction}} keeps at least the latest
+A Kafka topic with {{log compaction|compaction|cleanup.policy=compact|compact cleanup policy}} keeps at least the latest
 message for each key and removes older ones, so the topic stays a complete
 snapshot of current values.
 

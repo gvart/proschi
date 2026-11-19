@@ -8,7 +8,7 @@ tags: [realtime]
 
 Before a client can send its first HTTPS request, a TCP handshake plus a
 TLS 1.3 handshake cost {{2|two}} round trips. QUIC (HTTP/3) combines them into
-{{1|one}}.
+{{1|one|one round trip|1 RTT}}.
 
 ## Why
 

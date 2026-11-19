@@ -6,10 +6,10 @@ distinct-from: [raft-term, raft-vote-restriction]
 
 ## Text
 
-Raft followers wait a {{randomized|random}} election timeout (for example
+Raft followers wait a {{randomized|random|randomised|jittered}} election timeout (for example
 150–300 ms) without hearing from a leader before starting an election, so
 that usually one node times out first and wins before the others try, which
-avoids repeated {{split votes|split vote|tied elections}}.
+avoids repeated {{split votes|split vote|tied elections|tied votes|ties|vote splits}}.
 
 ## Why
 

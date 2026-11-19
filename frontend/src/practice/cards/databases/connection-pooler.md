@@ -8,7 +8,7 @@ tags: [resilience]
 
 Postgres starts a process for each connection, so thousands of app instances
 should share a small number of connections through a pooler such as
-{{PgBouncer|RDS Proxy|pgpool}}.
+{{PgBouncer|pg bouncer|RDS Proxy|pgpool|pgpool-II|Odyssey|PgCat|Supavisor|pgagroal}}.
 
 ## Why
 

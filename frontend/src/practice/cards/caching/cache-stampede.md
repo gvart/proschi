@@ -9,9 +9,9 @@ related: [social-graph-cache]
 ## Text
 
 When a hot key expires and thousands of requests miss at once and all hit the
-database, it is a {{cache stampede|thundering herd|dogpile}}. Letting one
+database, it is a {{cache stampede|thundering herd|dogpile|stampede|thundering herd problem|dogpile effect|dog-pile|dogpiling}}. Letting one
 request rebuild the value while the others wait for it is called
-{{request coalescing|single flight|singleflight|coalescing}}.
+{{request coalescing|single flight|singleflight|coalescing|request collapsing|request deduplication|locking|cache locking|mutex}}.
 
 ## Why
 

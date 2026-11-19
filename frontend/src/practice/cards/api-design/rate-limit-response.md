@@ -8,8 +8,8 @@ related: [rate-limiter]
 ## Text
 
 A client over its rate limit should get HTTP status
-{{429|429 Too Many Requests|Too Many Requests}}, ideally with a
-{{Retry-After}} header saying when to try again.
+{{429|429 Too Many Requests|Too Many Requests|HTTP 429}}, ideally with a
+{{Retry-After|RetryAfter}} header saying when to try again.
 
 ## Why
 

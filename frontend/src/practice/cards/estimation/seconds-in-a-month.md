@@ -5,8 +5,8 @@ difficulty: easy
 
 ## Text
 
-A 30-day month has about {{2.6 million|2.5 million|2,600,000|2.6M}} seconds,
-so 100 million requests a month average about {{40|38|39}} requests a second.
+A 30-day month has about {{~2.6 million}} seconds,
+so 100 million requests a month average about {{~40}} requests a second.
 
 ## Why
 

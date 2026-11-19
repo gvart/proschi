@@ -10,7 +10,7 @@ related: [shopping-cart, collaborative-docs]
 Data types such as grow-only counters and add-wins sets, which merge
 concurrent updates from different replicas automatically and always converge
 to the same value, are called
-{{CRDTs|CRDT|conflict-free replicated data types|conflict-free replicated data type}}.
+{{CRDTs|CRDT|conflict-free replicated data types|conflict-free replicated data type|convergent replicated data types|commutative replicated data types}}.
 
 ## Why
 

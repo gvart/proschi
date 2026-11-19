@@ -104,6 +104,7 @@ describe('cardFromFile', () => {
     ['caching/x.md', '---\ntype: estimate\ndifficulty: easy\nanswer: 3\nunit: GB\ntolerance: 1\n---\n## Question\nQ\n## Solution\nS\n', /'tolerance' is a factor/],
     ['caching/x.md', '---\ntype: cloze\ndifficulty: easy\n---\n## Text\nNo gaps here.\n', /1 to 3 gaps/],
     ['caching/x.md', '---\ntype: cloze\ndifficulty: easy\n---\n## Text\nA {{a|}} gap.\n', /Empty answer/],
+    ['caching/x.md', '---\ntype: cloze\ndifficulty: easy\n---\n## Text\nA {{~40|forty}} gap.\n', /must be a number/],
   ])('rejects %s (%#)', (file, text, message) => {
     expect(error(file, text).message).toMatch(message);
   });
@@ -132,6 +133,22 @@ describe('grading', () => {
     expect(gradeCloze(cloze, 0, 'stampede')).toBe(false);
     expect(gradeCloze(cloze, 0, '')).toBe(false);
     expect(gradeCloze(cloze, 1, 'cache stampede')).toBe(false);
+  });
+
+  it('compares numbers in a cloze gap by value, within 10% when the gap is approximate', () => {
+    const cloze = cardFromFile(
+      'estimation/x.md',
+      '---\ntype: cloze\ndifficulty: easy\n---\n## Text\nA month has {{~2.6 million}} seconds, a status is {{429|Too Many Requests}}, a hop takes {{150 ms}}.\n',
+    ) as ClozeCard;
+    expect(cloze.blanks[0]).toEqual(['2.6 million']);
+    expect(cloze.approximate).toEqual([true, false, false]);
+    for (const typed of ['2.6M', '2,600,000', '2600000', '2.5kk', '2500000', '2.592 million', '2.8M']) expect(gradeCloze(cloze, 0, typed), typed).toBe(true);
+    for (const typed of ['2.2M', '3M', '26 million', 'lots']) expect(gradeCloze(cloze, 0, typed), typed).toBe(false);
+    expect(gradeCloze(cloze, 1, '429')).toBe(true);
+    expect(gradeCloze(cloze, 1, '429.0')).toBe(true);
+    expect(gradeCloze(cloze, 1, '430')).toBe(false);
+    for (const typed of ['150 ms', '150ms', '150', '150 MS']) expect(gradeCloze(cloze, 2, typed), typed).toBe(true);
+    for (const typed of ['150 s', '150 µs', '1,5', '149 ms']) expect(gradeCloze(cloze, 2, typed), typed).toBe(false);
   });
 });
 

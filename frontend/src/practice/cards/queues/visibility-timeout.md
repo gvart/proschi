@@ -7,8 +7,8 @@ tags: [resilience]
 ## Text
 
 In SQS, a message a consumer has received is hidden from other consumers for
-the {{visibility timeout}}. If the consumer does not delete it before that
-ends, the message becomes visible and is {{redelivered|delivered again|retried}}.
+the {{visibility timeout|invisibility timeout}}. If the consumer does not delete it before that
+ends, the message becomes visible and is {{redelivered|delivered again|retried|re-delivered|received again|reprocessed|processed again}}.
 
 ## Why
 

@@ -5,9 +5,9 @@ difficulty: easy
 
 ## Text
 
-For every service, the RED method tracks the {{rate|request rate|requests}}
-of requests, the {{errors|error rate|failures}} and their
-{{duration|latency}}. For resources like CPUs, disks and pools, the USE method
+For every service, the RED method tracks the {{rate|request rate|requests|throughput}}
+of requests, the {{errors|error rate|failures|failed requests|failure rate}} and their
+{{duration|latency|latencies|response time}}. For resources like CPUs, disks and pools, the USE method
 tracks utilization, saturation and errors.
 
 ## Why
