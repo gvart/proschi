@@ -6,7 +6,7 @@ difficulty: easy
 ## Text
 
 Several workers pulling from one queue, so that each message is handled by
-only one of them, is the {{competing consumers|competing consumer}} pattern.
+only one of them, is the {{competing consumers|competing consumer|competing workers|work queue|task queue}} pattern.
 
 ## Why
 

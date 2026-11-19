@@ -8,7 +8,7 @@ tags: [availability]
 
 Replication protects against lost disks, but not against a buggy job deleting
 objects, because the delete is replicated too. Protect against that with
-object {{versioning|backups|snapshots}}.
+object {{versioning|backups|snapshots|versions|version history|lock}}.
 
 ## Why
 

@@ -8,7 +8,7 @@ tags: [resilience]
 
 Storing "this key does not exist" in the cache, so repeated lookups for a
 missing item do not all reach the database, is called
-{{negative caching|caching negative results|negative cache}}.
+{{negative caching|caching negative results|negative cache|negative result caching|caching negative responses|caching misses}}.
 
 ## Why
 

@@ -8,7 +8,7 @@ tags: [consistency]
 ## Text
 
 A user updates their profile, reloads, and sees the old version because the
-read went to a lagging replica. That breaks {{read-your-writes|read your writes|read-your-own-writes|read your own writes}}
+read went to a lagging replica. That breaks {{read-your-writes|read your writes|read-your-own-writes|read your own writes|read-after-write|read-my-writes|RYW}}
 consistency.
 
 ## Why

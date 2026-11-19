@@ -6,7 +6,7 @@ related: [video-streaming, file-storage]
 
 ## Text
 
-Large files go to S3 with {{multipart upload|multipart|multi-part upload}}:
+Large files go to S3 with {{multipart upload|multipart|multi-part upload|multi-part|chunked upload|MPU}}:
 the file is sent in parts that upload in {{parallel}}, and a failed part is
 retried on its own.
 

@@ -7,7 +7,7 @@ tags: [databases]
 ## Text
 
 A search engine keeps, for each word, the list of documents that contain it.
-This structure is an {{inverted index|inverted}}.
+This structure is an {{inverted index|inverted|inverted file}}.
 
 ## Why
 

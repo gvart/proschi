@@ -7,7 +7,7 @@ tags: [databases]
 ## Text
 
 Making sure two people cannot register the same username at the same moment
-needs a {{linearizable|strongly consistent|consensus}} operation, such as a
+needs a {{linearizable|linearisable|strongly consistent|consensus}} operation, such as a
 unique constraint or a compare-and-set.
 
 ## Why

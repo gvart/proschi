@@ -115,7 +115,7 @@ describe('card pages', () => {
     expect(html.match(/class="card-blank"/g)).toHaveLength(3)
     expect(html).toContain('<strong>ETag</strong>')
     expect(html).toContain('<strong>If-Match</strong>')
-    expect(html).toContain('Also accepted: <em>412 Precondition Failed</em>')
+    expect(html).toContain('<em>412 Precondition Failed</em>, <em>Precondition Failed</em>, <em>HTTP 412</em> for <strong>412</strong>')
     expect(questionText(card)).toContain('returns an _____ with the resource')
   })
 

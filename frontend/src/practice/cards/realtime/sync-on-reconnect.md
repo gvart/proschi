@@ -7,9 +7,10 @@ related: [chat, collaborative-docs]
 
 ## Text
 
-After reconnecting, a chat client asks for every message after the last
-{{sequence number|message id|cursor|offset}} it has seen, so nothing that
-arrived while it was offline is lost.
+After reconnecting, a chat client sends the
+{{sequence number|message id|cursor|offset|id|sequence id|sequence|seq|position}}
+of the last message it has seen and asks for everything after it, so nothing
+that arrived while it was offline is lost.
 
 ## Why
 

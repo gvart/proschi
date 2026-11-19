@@ -8,7 +8,7 @@ tags: [availability]
 
 Placing each user's data in a region near them, which also helps meet
 data-residency laws, is called
-{{geo-partitioning|geo-sharding|geographic partitioning|geographic sharding}}.
+{{geo-partitioning|geo-sharding|geographic partitioning|geographic sharding|geopartitioning|geosharding|geographical partitioning|geographical sharding|regional partitioning|regional sharding}}.
 
 ## Why
 

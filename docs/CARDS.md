@@ -1,5 +1,5 @@
 ---
-updated: 2026-11-09
+updated: 2026-11-19
 ---
 
 # Writing practice cards
@@ -138,6 +138,13 @@ Text with 1–3 gaps written `{{answer}}`. List other accepted answers after
 `|`: `{{cache stampede|thundering herd}}`. The first one is shown as the
 answer. Typed answers are compared ignoring case, punctuation and a trailing
 "s", so list real alternatives, not spellings.
+
+Numbers are compared by value, so `{{2.6 million}}` also takes `2.6M`,
+`2,600,000` and `2600000`. A unit after the number (`{{150 ms}}`) must match
+when one is typed, but can be left out. Start a gap with `~` for an
+approximate number: `{{~2.6 million}}` takes anything within 10%, so
+`2.5 million` counts too. Every answer in a `~` gap must be a number. Keep
+exact facts, like a status code or a count, without `~`.
 
 ```markdown
 ## Text

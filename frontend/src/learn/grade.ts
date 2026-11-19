@@ -1,41 +1,11 @@
 import { gradeCloze, gradeEstimate, type ChoiceCard, type ClozeCard, type EstimateCard } from './cards';
 
+export { parseNumber } from './cards';
+
 /**
  * Grading the answers a reviewer types or taps: reading a typed number, how
  * far an estimate is off, a choice card's option order. Pure, like cards.ts.
  */
-
-const SUFFIX: Record<string, number> = {
-  k: 1e3,
-  K: 1e3,
-  thousand: 1e3,
-  M: 1e6,
-  mn: 1e6,
-  million: 1e6,
-  B: 1e9,
-  bn: 1e9,
-  billion: 1e9,
-  T: 1e12,
-  trillion: 1e12,
-};
-
-/**
- * A typed number: `2300`, `2,300`, `2 300`, `2.3k`, `1e6`, `5M`, `1.5 billion`.
- * A lowercase `m` is refused (million or minutes?); `M` is a million.
- * Undefined for anything else.
- */
-export function parseNumber(text: string): number | undefined {
-  const m = /^\s*([+-]?)(\d{1,3}(?:[, _]\d{3})+|\d*\.?\d+)(?:[eE]([+-]?\d+))?\s*([A-Za-z]+)?\s*$/.exec(text);
-  if (!m) return undefined;
-  const [, sign, digits, exponent, suffix] = m;
-  let factor = 1;
-  if (suffix !== undefined) {
-    if (!Object.prototype.hasOwnProperty.call(SUFFIX, suffix)) return undefined;
-    factor = SUFFIX[suffix];
-  }
-  const value = Number(digits.replace(/[, _]/g, '')) * 10 ** Number(exponent ?? 0) * factor * (sign === '-' ? -1 : 1);
-  return Number.isFinite(value) ? value : undefined;
-}
 
 export interface EstimateResult {
   correct: boolean;

@@ -6,8 +6,8 @@ related: [chat]
 
 ## Text
 
-Chat apps show "sent" when the {{server}} has stored a message, "delivered"
-when it reached the recipient's {{device|phone|client}}, and "read" when the
+Chat apps show "sent" when the {{server|backend|chat server}} has stored a message, "delivered"
+when it reached the recipient's {{device|phone|client|app}}, and "read" when the
 recipient opened it.
 
 ## Why

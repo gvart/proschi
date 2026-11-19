@@ -6,7 +6,7 @@ difficulty: medium
 ## Text
 
 A query that cannot be routed by the partition key is sent to every shard and
-the results merged. This is a {{scatter-gather|scatter gather|fan-out}} query,
+the results merged. This is a {{scatter-gather|scatter gather|fan-out|fanout|scatter and gather|cross-shard|multi-shard}} query,
 and its latency is set by the {{slowest}} shard.
 
 ## Why

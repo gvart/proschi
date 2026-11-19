@@ -8,7 +8,7 @@ tags: [networking]
 
 Passing the time a request has left along with each downstream call, so
 services stop work the original caller has already given up on, is called
-{{deadline propagation|deadline passing|deadlines}}.
+{{deadline propagation|deadline passing|deadlines|timeout propagation|propagating deadlines}}.
 
 ## Why
 

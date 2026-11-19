@@ -7,8 +7,8 @@ distinct-from: [event-time]
 ## Text
 
 A stream processor's running estimate that no more events older than time T
-will arrive is called a {{watermark}}. Events older than it that arrive anyway
-are {{late events|late event|late data|stragglers}}.
+will arrive is called a {{watermark|low watermark}}. Events older than it that arrive anyway
+are {{late events|late event|late data|stragglers|late|late arrivals|late-arriving events|late records}}.
 
 ## Why
 

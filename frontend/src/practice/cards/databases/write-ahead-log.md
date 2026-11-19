@@ -7,7 +7,7 @@ tags: [storage]
 ## Text
 
 Before acknowledging a commit, a database appends the change to its
-{{write-ahead log|WAL|redo log|commit log}} and flushes it to disk, so a crash
+{{write-ahead log|WAL|redo log|commit log|transaction log|journal}} and flushes it to disk, so a crash
 can be recovered by replaying it.
 
 ## Why

@@ -81,6 +81,8 @@ export interface ClozeCard extends CardBase {
   text: string;
   /** The accepted answers of each gap, the first one shown as the answer. */
   blanks: string[][];
+  /** Per gap, whether it was written `{{~answer}}`: numbers within 10% count. Absent when no gap is. */
+  approximate?: boolean[];
 }
 
 export type Card = FlipCard | ChoiceCard | EstimateCard | ClozeCard;
@@ -148,11 +150,74 @@ function sections(file: string, body: string, bodyLine: number): Map<string, { t
   return out;
 }
 
-/** The accepted answers in a gap: `{{consistent hashing|ring hashing}}`. */
-function gapAnswers(file: string, inner: string, line: number): string[] {
-  const answers = inner.split('|').map((a) => a.trim());
+const SUFFIX: Record<string, number> = {
+  k: 1e3,
+  K: 1e3,
+  thousand: 1e3,
+  M: 1e6,
+  kk: 1e6,
+  mln: 1e6,
+  mn: 1e6,
+  million: 1e6,
+  B: 1e9,
+  bn: 1e9,
+  billion: 1e9,
+  T: 1e12,
+  trillion: 1e12,
+};
+
+/**
+ * A typed number: `2300`, `2,300`, `2 300`, `2.3k`, `1e6`, `5M`, `1.5 billion`, `2.5kk`.
+ * A lowercase `m` is refused (million or minutes?); `M` is a million.
+ * Undefined for anything else.
+ */
+export function parseNumber(text: string): number | undefined {
+  const m = /^\s*([+-]?)(\d{1,3}(?:[, _]\d{3})+|\d*\.?\d+)(?:[eE]([+-]?\d+))?\s*([A-Za-z]+)?\s*$/.exec(text);
+  if (!m) return undefined;
+  const [, sign, digits, exponent, suffix] = m;
+  let factor = 1;
+  if (suffix !== undefined) {
+    if (!Object.prototype.hasOwnProperty.call(SUFFIX, suffix)) return undefined;
+    factor = SUFFIX[suffix];
+  }
+  const value = Number(digits.replace(/[, _]/g, '')) * 10 ** Number(exponent ?? 0) * factor * (sign === '-' ? -1 : 1);
+  return Number.isFinite(value) ? value : undefined;
+}
+
+/** The accepted answers in a gap: `{{consistent hashing|ring hashing}}`, and whether it is approximate: `{{~2.6 million}}`. */
+function gapAnswers(file: string, inner: string, line: number): { answers: string[]; approximate: boolean } {
+  const approximate = inner.trimStart().startsWith('~');
+  const answers = inner.trimStart().replace(/^~/, '').split('|').map((a) => a.trim());
   if (answers.some((a) => a === '')) throw new CardFileError(file, `Empty answer in the gap {{${inner}}}`, line);
-  return answers;
+  if (approximate && answers.some((a) => numberAnswer(a) === undefined)) throw new CardFileError(file, `Every answer in an approximate gap {{${inner}}} must be a number`, line);
+  return { answers, approximate };
+}
+
+/** A unit as compared: lowercase, µ as u, a plural s dropped from a word ("seconds", not "ms"). */
+function normalizeUnit(unit: string): string {
+  const u = normalizeAnswer(unit.replace(/[µμ]/g, 'u'));
+  return u.length > 2 ? u.replace(/s$/, '') : u;
+}
+
+/** An answer as a number and its unit: `2.6 million` is 2.6e6 and no unit, `150 ms` is 150 and `ms`. Undefined when it does not start with a number. */
+function numberAnswer(text: string): { value: number; unit: string } | undefined {
+  const trimmed = text.trim();
+  for (let i = trimmed.length; i > 0; i--) {
+    const rest = trimmed.slice(i);
+    if (!/^(\s*[A-Za-zµμ%/].*)?$/.test(rest)) continue;
+    const value = parseNumber(trimmed.slice(0, i));
+    if (value !== undefined) return { value, unit: normalizeUnit(rest) };
+  }
+  return undefined;
+}
+
+/** Whether a typed number matches an accepted one: the same value (within 10% when approximate), and the same unit when both have one. */
+function sameNumber(typed: string, accepted: string, approximate: boolean): boolean {
+  const t = numberAnswer(typed);
+  const a = numberAnswer(accepted);
+  if (!t || !a) return false;
+  if (t.unit && a.unit && t.unit !== a.unit) return false;
+  return Math.abs(t.value - a.value) <= Math.abs(a.value) * (approximate ? 0.1 : 1e-9);
 }
 
 /**
@@ -268,13 +333,16 @@ export function cardFromFile(file: string, text: string): Card {
     case 'cloze': {
       const { text: raw, line } = parts.get('text')!;
       const blanks: string[][] = [];
+      const approximate: boolean[] = [];
       const text = raw.replace(GAP, (_, inner: string) => {
-        blanks.push(gapAnswers(file, inner, line));
+        const gap = gapAnswers(file, inner, line);
+        blanks.push(gap.answers);
+        approximate.push(gap.approximate);
         return `{{${blanks.length - 1}}}`;
       });
       if (/\{\{|\}\}/.test(text.replace(/\{\{\d+\}\}/g, ''))) fail('Unbalanced "{{" or "}}" in the text', line);
       if (blanks.length < 1 || blanks.length > 3) fail(`A cloze card has 1 to 3 gaps written {{answer}}, not ${blanks.length}`, line);
-      return { ...base, type, text, blanks };
+      return { ...base, type, text, blanks, ...(approximate.some(Boolean) ? { approximate } : {}) };
     }
   }
 }
@@ -322,10 +390,15 @@ export function normalizeAnswer(s: string): string {
     .trim();
 }
 
-/** Whether `typed` fills gap `index` of a cloze card: any accepted answer, ignoring case, punctuation and a trailing "s". */
+/**
+ * Whether `typed` fills gap `index` of a cloze card: any accepted answer,
+ * ignoring case, punctuation and a trailing "s", or the same number in any
+ * format (`2.6M`, `2,600,000`), within 10% for an approximate gap.
+ */
 export function gradeCloze(card: ClozeCard, index: number, typed: string): boolean {
   const t = normalizeAnswer(typed).replace(/s$/, '');
-  return (card.blanks[index] ?? []).some((a) => normalizeAnswer(a).replace(/s$/, '') === t && t !== '');
+  const approximate = card.approximate?.[index] ?? false;
+  return (card.blanks[index] ?? []).some((a) => (normalizeAnswer(a).replace(/s$/, '') === t && t !== '') || sameNumber(typed, a, approximate));
 }
 
 /** Whether an estimate is within the card's tolerance factor of its answer. */

@@ -7,8 +7,8 @@ tags: [networking]
 ## Text
 
 A network round trip inside one data center takes about
-{{0.5 ms|half a millisecond|500 µs|500 microseconds}}, while a round trip from
-California to Europe takes about {{150 ms|150 milliseconds}}.
+{{~0.5|1}} ms, while a round trip from California to Europe takes about
+{{~150}} ms.
 
 ## Why
 
