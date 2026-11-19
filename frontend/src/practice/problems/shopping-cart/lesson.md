@@ -1,5 +1,5 @@
 ```tldr
-"Never reject an add" makes the cart **available over consistent (AP)**. A single-primary database caps writes at **99.995%**, below five nines, so carts go to a **leaderless, replicated store** where any replica takes a write. Concurrent writes leave versions; reads **merge them by union and write the result back**, so no add is lost.
+"Never reject an add" makes the cart **available over consistent (AP)**. A single-primary database rejects writes while it fails over: **99.995%** at best in this simulation, below five nines. So carts go to a **leaderless, replicated store** where any replica takes a write. Concurrent writes leave versions; reads **merge them by union and write the result back**, so no add is lost.
 ```
 
 ## What you'll learn
@@ -54,7 +54,7 @@ The non-functional requirements:
 | Reads from the store | 1,000 views | 1,000 rps |
 | Five nines, per year | 525,600 min × 0.001% | ≈ 5.3 minutes of downtime |
 | Five nines, per month | 43,200 min × 0.001% | ≈ 26 seconds of downtime |
-| Cart data (assumption) | 50 M carts × 2 KB | ≈ 100 GB |
+| Cart data (assumption) | 100 M carts × 2 KB | ≈ 200 GB (600 GB in three copies) |
 
 The cart count and size are assumptions to show the method; far more still fits one store with replicas.
 
@@ -74,6 +74,8 @@ Availability per component, with the simulation's default numbers:
 The last row is the key insight. In the model, as in real life, a relational database has **one primary per shard** taking every write. Replicas serve reads and can be promoted when the primary dies, but writes wait out the promotion. The simulation keeps 10% of the primary's downtime for that, so writes reach 99.995% however many replicas you add: **below five nines, by design.**
 
 A leaderless store takes a write on any replica, so each added replica cuts its unavailability by another factor. Path availability is the product of its nodes: with enough replicas of each, Add to cart comes out far above 99.999%.
+
+The store is not the only link to check. The service is the least reliable machine on the path (99.5%), and two replicas of it give 99.9975%: **already below five nines**, whatever the store does. It needs three.
 
 Load and latency:
 
@@ -183,7 +185,7 @@ usecase "Read doc" {
 ````
 
 ```deepdive Dynamo is not DynamoDB
-The 2007 Dynamo paper and today's Amazon DynamoDB service are not the same system. DynamoDB doesn't hand you vector clocks or sibling versions; you'd use conditional writes instead. In Proschi, `[DynamoDB]` simply stands for a leaderless, eventually consistent store, which is the property this problem is about.
+The 2007 Dynamo paper and today's Amazon DynamoDB service are not the same system. DynamoDB isn't leaderless: each partition elects a leader replica (with Multi-Paxos) that takes its writes. It doesn't hand you vector clocks or sibling versions either; you'd use conditional writes instead. The open-source store closest to the paper is Riak, which keeps sibling versions. Cassandra shares the leaderless replication but settles conflicts by timestamp: last write wins. In Proschi, `[DynamoDB]` simply stands for a leaderless, eventually consistent store, which is the property this problem is about.
 ```
 
 ```quiz
@@ -217,7 +219,7 @@ The third fits the requirement, and the tests check that adds never touch a stro
 
 **The view.** Read every version. `"One version"` needs nothing more. In `"Divergent versions"`, merge (union of items), **write the merged cart back**, then answer; otherwise every future read sees the conflict again and versions pile up.
 
-**Replication.** How many replicas of the store does five nines take? Use the table above and multiply the path, then do the same for the service and the load balancer. `survive any node failure` removes one replica of each node and re-checks saturation and latency, so a node with one replica fails it.
+**Replication.** How many replicas of each node does five nines take? Use the table above and multiply along the path: load balancer × service × store. The service decides it: two replicas (99.9975%) miss the target on their own, three pass. `survive any node failure` removes one replica of each node and re-checks saturation and latency, so a node with one replica fails it.
 
 ```callout tip The simulation's arithmetic is the floor
 The real-world argument often asks for more. With quorum writes (W=2), a store with only two copies of a key can't take a quorum write while one of them is down, which is why Dynamo-style stores usually run N=3. Decide which argument you're making and say it out loud.
@@ -233,13 +235,15 @@ The real-world argument often asks for more. With quorum writes (W=2), a store w
 
 **Carts in PostgreSQL** (`wrong/carts-in-postgres`). The most natural first answer, and wrong here. Every add goes to one primary per shard; when it fails, adds are rejected until a replica is promoted: in the real world, a burst of failed adds during every failover and every primary maintenance window. Caught twice: **Adds go to an eventually consistent store that is always writable** (PostgreSQL is a strong store) and **availability of Add to cart ≥ 99.999%** (writes reach 99.995% at best).
 
-**Carts in Redis** (`wrong/carts-in-redis`). Fast and always writable, so tempting. But a cache keeps data in memory: a restart, an eviction or a failover with asynchronous replication can drop adds the shopper already saw confirmed. Caught by **Add to cart is durable**.
+**Carts in Redis** (`wrong/carts-in-redis`). Fast and always writable, so tempting. But a cache keeps data in memory: a restart, an eviction or a failover with asynchronous replication can drop adds the shopper already saw confirmed. Caught by **Add to cart is durable**; both flow tests fail too, because they ask for a database and a cache is not one.
 
 **Last write wins** (`wrong/last-write-wins`). The design reads both versions and keeps the newest, writing nothing back. Two tabs (or one shopper on phone and laptop) add different items at the same moment, and one add silently disappears; clock skew between servers makes "newest" unreliable too. Caught by **Divergent versions are merged and written back**.
 
 **Merging without writing back.** The view looks right, but the conflict is never resolved: every reader pays for the merge and versions accumulate. Also caught by **Divergent versions are merged and written back**.
 
 **A single store replica.** A single point of failure: 99.99% alone, short of five nines before the rest of the path counts. Caught by **availability of Add to cart ≥ 99.999%** and `survive any node failure`. Two replicas pass the simulation's arithmetic; a real quorum system wants a third, so a write quorum survives losing one copy.
+
+**Two service replicas.** "Two of everything" feels safe and survives a node failure, but two replicas at 99.5% each give 99.9975%, under five nines before the store is even counted. Caught by **availability of Add to cart ≥ 99.999%**. The least reliable component on the path sets how many replicas you need, and here that is the service, not the store.
 
 ## In the interview
 
@@ -249,10 +253,10 @@ The real-world argument often asks for more. With quorum writes (W=2), a store w
 
 Follow-up questions:
 
-- **"What are N, R and W, and what would you pick?"** N=3, W=2, R=2 is the common balance; an always-writable cart might lower W to 1, accepting writes with one replica reachable, at the cost of staler reads.
+- **"What are N, R and W, and what would you pick?"** N=3, W=2, R=2 is the common balance; an always-writable cart might lower W to 1, accepting writes with one replica reachable. The cost: staler reads, and an add that sits on a single disk until it replicates.
 - **"How do you detect concurrent versions?"** Vector clocks: if neither clock descends from the other, the versions are concurrent.
 - **"Why not last write wins?"** Timestamps across machines aren't reliable, and LWW discards one of two concurrent adds by design.
-- **"How do you handle deletes?"** A deleted item can come back after a merge. If that's unacceptable, record deletes as entries (tombstones) the merge can see: the idea behind CRDTs (conflict-free replicated data types).
+- **"How do you handle deletes?"** A deleted item can come back after a merge. If that's unacceptable, record deletes as entries (tombstones) the merge can see. That is how CRDTs (conflict-free replicated data types) make a set mergeable without losing removes.
 - **"Where do you need strong consistency?"** At checkout: prices, stock and payment go through a strongly consistent order system.
 - **"How do replicas catch up after an outage?"** Hinted handoff for writes accepted elsewhere, read repair when a read finds a stale replica, and background anti-entropy (Merkle trees) for the rest.
 

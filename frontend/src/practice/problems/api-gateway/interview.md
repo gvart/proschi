@@ -45,7 +45,7 @@ At most **$2,800 a month**, the four backend services included.
 ### Should the gateway be written in Go or Java?
 - kind: weak
 
-Uber moved from Node.js to Go and Java, but the language does not change the design. Ask what each gateway instance and the auth service can take.
+Uber rewrote its gateway from Node.js to Go, but the language does not change the design. Ask what each gateway instance and the auth service can take.
 
 ### Which fields does a fare estimate return?
 - kind: weak

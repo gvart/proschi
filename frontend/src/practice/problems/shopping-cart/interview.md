@@ -1,23 +1,5 @@
 ## Questions
 
-### How many adds and views a second?
-- kind: good
-- fact: 500 adds and 1k cart views per second at peak
-
-**500 adds** and **1k cart views** a second at peak.
-
-### How often do concurrent writes leave several versions?
-- kind: good
-- fact: 99.94% of reads saw exactly one version
-
-Rarely: **99.94%** of reads saw exactly one version in Amazon's measurement.
-
-### Which latency percentile matters?
-- kind: good
-- fact: The 99.9th percentile of both use cases under 300 ms
-
-The **99.9th** percentile of both use cases under **300 ms**.
-
 ### What availability do adds need?
 - kind: good
 - fact: Add to cart available 99.999% of the time
@@ -36,20 +18,38 @@ No: carts live in an eventually consistent store, since a strongly consistent on
 
 Once the shopper hears `200`.
 
+### How many adds and views a second?
+- kind: good
+- fact: 500 adds and 1k cart views per second at peak
+
+**500 adds** and **1k cart views** a second at peak.
+
+### How often do concurrent writes leave several versions?
+- kind: good
+- fact: 99.94% of reads saw exactly one version
+
+Rarely: **99.94%** of reads saw exactly one version in Amazon's measurement.
+
+### Which latency percentile matters?
+- kind: good
+- fact: The 99.9th percentile of both use cases under 300 ms
+
+The **99.9th** percentile of both use cases under **300 ms**.
+
 ### Do we show recommendations in the cart?
 - kind: weak
 
-A product feature, not the cart's storage design.
+A product feature that does not change how the cart is stored. Ask what an add that fails costs the business, and how available adds must be.
 
 ### Which currency do prices show in?
 - kind: weak
 
-A display detail.
+A display detail; prices belong to checkout, not the cart store. Ask whether a cart read may be briefly out of date.
 
 ### Should the cart icon animate?
 - kind: weak
 
-A UI detail.
+A UI detail. Ask how many adds and views arrive each second, and when an add counts as saved.
 
 ## Estimates
 
@@ -58,7 +58,7 @@ A UI detail.
 - unit: minutes
 - range: 4 to 7
 
-0.001% of 525,600 minutes ≈ **5.3 minutes a year**.
+A year has 525,600 minutes, and 0.001% of that is ≈ **5.3 minutes a year**. That is about 26 seconds a month, less than a single database failover takes.
 
 ### How many cart views a second see divergent versions?
 - answer: 0.6

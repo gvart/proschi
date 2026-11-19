@@ -38,9 +38,9 @@ The traffic mix already holds those shares: the simulation cannot decide them fo
 $1,200 | a month for the reference design
 ```
 
-**Without shedding.** 6k + 4k + 10k = 20k requests a second, against 8 × 2k = 16k: 125%. A saturated service misses every latency limit, the critical one included.
+**Without shedding.** 6k + 4k + 10k = 20k requests a second, against 8 × 2k = 16k: 125%. A saturated service misses every latency limit, playback's included.
 
-**With shedding.** Playback 6k, half the progress markers 2k, a tenth of the logs 1k: 9k a second, 56% of 16k. Losing one instance leaves 14k: 64%, still comfortable. Shedding 10k of the 20k requests barely changes what members see: the logs and half the pause markers.
+**With shedding.** Playback 6k, half the progress markers 2k, a tenth of the logs 1k: 9k a second, 56% of 16k. Losing one instance leaves 14k: 64%, still comfortable. Zuul sheds 11k of the 20k requests (9k logs, 2k progress markers), and members barely notice: nobody misses a log, and a lost pause marker only means resuming a little off.
 
 **Zuul.** Every request arrives at Zuul, shed or not: 20k a second. At 10k per instance, two are at 100%; four run at 50%, and 67% after losing one.
 
@@ -62,7 +62,7 @@ servers-for-peak-load
 
 ### Load shedding
 
-**Load shedding** is rejecting some requests, early and cheaply, so the rest are served at normal speed. A service at 150% of its capacity that accepts everything serves nobody well: queues grow, latency climbs past every client's timeout, and the work done for requests that time out is wasted. A service that rejects a third of its requests at once serves the other two thirds as if nothing were wrong.
+**Load shedding** is rejecting some requests, early and cheaply, so the rest are served at normal speed. A service at 150% of its capacity that accepts everything serves nobody well: queues grow, latency climbs past every client's timeout, and the work done for requests that time out is wasted. If it rejects half of its requests at once, it runs at 75% and serves the other half as if nothing were wrong.
 
 What it costs: the rejected requests fail. That is only acceptable if the client can live with it, which is why *which* requests to reject matters more than how many.
 
@@ -112,7 +112,7 @@ load-shedding-at-the-gateway
 Shedding is not on or off. The further past its limits a backend is, the higher the threshold goes. Netflix uses a cubic curve: with mild overload only the very lowest scores go, and the threshold climbs steeply as overload approaches its maximum. At the moment this problem models, all but a tenth of the logs and half of the progress markers are shed, and no play request.
 
 ````deepdive The curve in Netflix's post
-The post's chart reads roughly like this: about 35% overload still keeps the threshold in the mid-90s, about 80% brings it to 50, and about 95% to 10. Each step up gives up a slice of less important traffic before touching the next. A cubic keeps the gateway gentle at low overload and decisive near the top.
+The post's numbers read roughly like this: about 35% overload still keeps the threshold in the mid-90s, about 80% brings it to 50, and about 95% to 10. The number falls as overload grows, so on the post's scale the threshold seems to count down from 100 towards the most important requests; this lesson calls the same movement the bar *rising*. Either way the shape is what matters: each step gives up a slice of less important traffic before touching the next, gently at low overload and decisively near the top.
 ````
 
 ### The shedder must not fall over
@@ -199,9 +199,9 @@ Likely follow-ups:
 
 ## Further reading
 
-- Manuel Correa, Arthur Gonigberg and Daniel West, [Keeping Netflix Reliable Using Prioritized Load Shedding](https://netflixtechblog.com/keeping-netflix-reliable-using-prioritized-load-shedding-6cc827b02f94) (Netflix TechBlog, 2020) — the priority buckets, progressive shedding at Zuul and how it was tested.
-- [Zuul](https://github.com/Netflix/zuul) — Netflix's open-source gateway.
-- David Yanacek, [Using load shedding to avoid overload](https://aws.amazon.com/builders-library/using-load-shedding-to-avoid-overload/) (Amazon Builders' Library) — why overloaded servers waste work and how to reject cheaply.
-- [Google SRE book: Handling Overload](https://sre.google/sre-book/handling-overload/) — client-side throttling, criticality levels and retry budgets.
-- [Google SRE book: Addressing Cascading Failures](https://sre.google/sre-book/addressing-cascading-failures/) — how overload spreads, and load shedding as a defence.
-- Michael T. Nygard, *Release It!*, chapter "Stability Patterns" — bulkheads, circuit breakers and shedding load.
+- Manuel Correa, Arthur Gonigberg and Daniel West, [Keeping Netflix Reliable Using Prioritized Load Shedding](https://netflixtechblog.com/keeping-netflix-reliable-using-prioritized-load-shedding-6cc827b02f94) (Netflix TechBlog, 2020): the priority buckets, progressive shedding at Zuul and how it was tested.
+- [Zuul](https://github.com/Netflix/zuul): Netflix's open-source gateway.
+- David Yanacek, [Using load shedding to avoid overload](https://aws.amazon.com/builders-library/using-load-shedding-to-avoid-overload/) (Amazon Builders' Library): why overloaded servers waste work and how to reject cheaply.
+- [Google SRE book: Handling Overload](https://sre.google/sre-book/handling-overload/): client-side throttling, criticality levels and retry budgets.
+- [Google SRE book: Addressing Cascading Failures](https://sre.google/sre-book/addressing-cascading-failures/): how overload spreads, and load shedding as a defence.
+- Michael T. Nygard, *Release It!*, chapter "Stability Patterns": bulkheads, circuit breakers and shedding load.

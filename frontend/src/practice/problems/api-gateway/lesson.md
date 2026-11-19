@@ -53,7 +53,7 @@ All the traffic numbers are assumptions for the exercise; Uber publishes its arc
 
 **The gateway.** One instance serves about 10k calls a second in the simulation. Four would run at 100%. Five run at 80% and pass on a normal day, but losing one puts the other four at 100%. To stay under about 70% busy with one instance gone, you need 40k ÷ 7k ≈ 6 instances left, so **7** in the pool (57% busy normally, 67% after a failure).
 
-**The cache.** 40k reads and 2k writes a second, on Redis instances that take 100k each: two of them, for redundancy more than for load.
+**The cache.** 40k reads (one per call) and 2k writes (one per miss) a second, on Redis instances that take 100k each: two of them, for redundancy more than for load.
 
 **Cost.** The four services are fixed at $1,500. Two load balancers ($100), seven gateway instances ($700) and two cache nodes ($300) add $1,100, so $2,600 in all. The budget leaves room for two more gateway instances, not for a pool sized by guesswork.
 
@@ -174,7 +174,7 @@ circuit-breaker
 
 **Apps calling each service directly** (`wrong/apps-call-services-directly`). No edge at all: each service validates tokens itself. Every service carries its own copy of the auth logic, the auth service still gets every call, and the app depends on every service's address. Caught by **"Every call enters through the edge"** and **"The session is checked before the call is routed"**.
 
-**A gateway pool with no headroom** (`wrong/gateway-no-headroom`). Five instances handle 40k calls at 80% and pass on a normal day. Losing one puts the remaining four at 100%, and every endpoint in the app fails together. Caught by **survive any node failure**.
+**A gateway pool with no headroom** (`wrong/gateway-no-headroom`). Five instances handle 40k calls at 80% and pass on a normal day. Losing one puts the remaining four at 100%, and every endpoint in the app fails together. Caught by **survive any node failure**. Even before a gateway is lost the pool is too tight: at 80% it queues enough that losing a single `trips` instance pushes Request trip's p99 past 100 ms.
 
 **Backends checking the ban list** (`wrong/backend-checks-bans`). The gateway authenticates but leaves bans to each service, so a blocked rider's call is routed to `pricing` before anyone says no. Caught by **"Blocked riders never reach a backend"**.
 
@@ -194,7 +194,7 @@ Say early that the gateway sits on every request's path. That one fact explains 
 Likely follow-ups:
 
 - *A user logs out. How soon does the token stop working?* Within one TTL of the cached session, unless logout deletes the entry. Bans take effect on the next call, because the ban list is read every time.
-- *The cache is down. What now?* Fall back to the auth service for a short time and shed load if it cannot keep up, or fail closed for sensitive endpoints. Two cache nodes make this rare, and the choice is per endpoint.
+- *The cache is down. What now?* Not a blind fallback to the auth service: 40k calls a second would sink a service built for 6k, and every endpoint with it. Let through only what the auth service can take and shed the rest, or fail closed for sensitive endpoints. Two cache nodes make this rare, and the choice is per endpoint.
 - *How do you rate limit across a pool of gateways?* Counters in a shared store, or a local limit per instance set to the global limit divided by the pool size; Uber can change quotas without redeploying.
 - *Why not JWTs and no auth calls at all?* Signed tokens remove the lookup but cannot be revoked before they expire, so you still need a ban or revocation list: the same cache, checked every call.
 - *How do teams add endpoints without the gateway team?* Uber's teams publish configuration (path, schema, target service, middleware) through a UI backed by Git, and the gateway is generated from it.

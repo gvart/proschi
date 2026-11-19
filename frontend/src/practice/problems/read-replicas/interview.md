@@ -59,18 +59,18 @@ A UI question; ask how many reads a second the page causes.
 
 ## Estimates
 
+### If the primary and its standby (20k reads each) also served the catalog and the order checks, how busy would they be?
+- answer: 155
+- unit: % utilisation
+- range: 140 to 170
+
+60k + 2k = 62k reads ÷ 40k of capacity = **155%**: saturated, which is why the catalog moves to replicas.
+
 ### One MySQL server serves about 20k reads a second. How many replicas do 60k catalog reads need at 75% utilisation, with one replica allowed to fail?
 - answer: 5
 - unit: replicas
 - range: 5 to 6
 
 At 75% a replica carries 15k reads, so 60k ÷ 15k = 4 must be running; add one spare: **5 replicas**.
-
-### If the primary and its standby (20k reads each) also served the catalog and the order checks, how busy would they be?
-- answer: 155
-- unit: % utilisation
-- range: 140 to 170
-
-62k reads ÷ 40k of capacity ≈ **155%**: saturated, which is why the catalog moves to replicas.
 
 Numbers: [Numbers to know](../docs/numbers/).
