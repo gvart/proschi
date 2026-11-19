@@ -37,9 +37,9 @@ The simulation's numbers for a PostgreSQL replica are 20k reads and 5k writes pe
 ```numbers
 100k rps | writes (edits)
 5k rps | write capacity of one primary
-20 | primaries needed at 100%
-60% | PgBouncer load
-2,000% | monolith write utilisation
+2,000% | write utilisation of one primary, however many replicas
+20 | primaries needed at 100% busy
+72 | Postgres machines the budget pays for
 ```
 
 | Quantity | Arithmetic | Result |
@@ -55,9 +55,19 @@ The simulation's numbers for a PostgreSQL replica are 20k reads and 5k writes pe
 
 This is a write problem: 100k writes need at least 20 primaries just to avoid saturation, and replicas add zero write capacity.
 
-**How many shards, then?** Not twenty at 100%. The simulation queues each shard's writes on its one primary (one server, so the classic `1 ÷ (1 − ρ)` slowdown): at 50% busy a hop takes twice its base latency, at 70% over three times. With a 70 ms p99 limit and an idle hop's p99 about 2.8 times its mean, the primaries must stay well below 70% busy. Write utilisation per shard is `100k ÷ (5k × shards)`: 20 shards give 100%, 25 give 80%. Add shards until the p99 holds, then check the budget.
+**How many shards, then?** Not twenty at 100%. The simulation queues each shard's writes on its one primary (one server, so the classic `1 ÷ (1 − ρ)` slowdown): at 50% busy a hop takes twice its base latency, at 70% over three times. With a 70 ms p99 limit and an idle hop's p99 about 2.8 times its mean, the primaries must stay below 70% busy. Write utilisation per shard is `100k ÷ (5k × shards)`:
 
-**Cost.** Each replica of each shard costs $400 a month, PgBouncer $100 per instance. So `shards × replicas × $400 + $1,000 ≤ $30,000`, which caps `shards × replicas` at 72. Two replicas per shard (a primary and a standby for failover) fits a shard count in the 30s; three cut the affordable count to 24, too few for the write rate.
+| Shards | Write utilisation per primary |
+|---|---|
+| 20 | 100%, saturated |
+| 24 | 83% |
+| 28 | 71% |
+| 32 | 63% |
+| 36 | 56% |
+
+Add shards until the p99 holds, then check the budget.
+
+**Cost.** Each replica of each shard costs $400 a month, PgBouncer $100 per instance. So `shards × replicas × $400 + $1,000 ≤ $30,000`, which caps `shards × replicas` at 72. Two machines per shard (a primary and a standby for failover) allow up to 36 shards. Three per shard allow only 24, whose primaries run at 83%: enough capacity on paper, too slow at p99.
 
 **Availability and failure.** With a replica, a failed Postgres primary is replaced by promotion; the model charges writes 10% of the primary's downtime for the failover, which still clears 99.95%. `survive any node failure` takes one instance out of one shard: writes keep a primary, reads lose a replica. At 200k reads spread over dozens of shards, one shard's reads fit comfortably on one remaining replica.
 
@@ -181,7 +191,7 @@ Summarise: shard by workspace ID across enough primaries to keep writes around t
 
 **Direct connections** (`wrong/direct-connections.proschi`). The API servers connect to Postgres directly: with hundreds of API processes and dozens of databases, thousands of connections, each a Postgres backend process with its own memory. It fails "Queries go through PgBouncer".
 
-**Three replicas per shard.** Tempting for safety, but at a shard count that handles the writes, it breaks the $30,000 budget. One standby per shard is enough to survive a single failure.
+**Three replicas per shard.** Tempting for safety, but the budget pays for 72 machines: at three per shard that is 24 shards, whose primaries run at 83% and miss the p99. A shard count that keeps the p99 breaks the $30,000 budget instead. One standby per shard is enough to survive a single failure.
 
 ## In the interview
 

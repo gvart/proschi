@@ -22,28 +22,30 @@ Instagram's Explore tab shows each person a grid of posts from accounts they do 
 
 The problem has two use cases. **Load Explore** runs the funnel while the user waits. **Refresh features** is the offline pipeline that reads the warehouse and refills the feature store and the embedding index. The tests check that retrieval runs before the first ranker and that the rankers run from cheapest to heaviest, that features are read from the online store and never from the warehouse while a user waits, and that users reach only the Explore API.
 
+The limits: 1k Explore loads a second, p99 (the latency 99% of requests beat) under 300 ms with all three passes included, 99.95% availability, no latency limit broken by losing any single machine, and at most $20,000 a month, the warehouse and the pipeline included. The statement also gives each model's speed and price: one `light` machine scores 100k items a second for $200 a month, one `medium` machine 25k for $300, one `heavy` machine 5k for $600.
+
 ## Back-of-the-envelope
 
 ```numbers
 500k / s | items for the first pass
 50k / s | items for the deep model
-100 | machines to run the deep model on everything
-15 | machines it needs in the funnel
+140 | machines to run the deep model on all 500 candidates, near 70% busy
+15 | machines it needs in the funnel, with the same headroom
 $16,100 | a month for the reference design
 ```
 
 The request rate and the model speeds are assumptions for the exercise; the funnel's sizes are Meta's.
 
-| Pass | Items per request | Items a second | Per machine | Machines (no headroom) |
-|---|---|---|---|---|
-| `light` (distilled) | 500 | 500k | 100k | 5 |
-| `medium` (lightweight network) | 150 | 150k | 25k | 6 |
-| `heavy` (deep network) | 50 | 50k | 5k | 10 |
-| `heavy` on every candidate | 500 | 500k | 5k | 100 |
+| Pass | Items per request | Items a second | Per machine | Machines (no headroom) | Machines with headroom |
+|---|---|---|---|---|---|
+| `light` (distilled) | 500 | 500k | 100k | 5 | 8 |
+| `medium` (lightweight network) | 150 | 150k | 25k | 6 | 10 |
+| `heavy` (deep network) | 50 | 50k | 5k | 10 | 15 |
+| `heavy` on every candidate | 500 | 500k | 5k | 100 | about 140 (at 70% busy) |
 
 **The deep model on everything.** 1k requests × 500 candidates = 500k scores a second. At 5k a machine that is 100 machines before any headroom, about 140 to stay near 70% busy: some $85,000 a month at $600 each, four times the whole budget.
 
-**The funnel.** The deep model sees only 50 items per request: 50k a second, 10 machines, 15 for headroom (67% busy, 71% after losing one). The two cheaper passes add 8 and 10 machines. All three pools together cost $13,600, a sixth of the deep model alone on everything.
+**The funnel.** The deep model sees only 50 items per request: 50k a second, 10 machines, 15 for headroom (67% busy, 71% after losing one). The two cheaper passes add 8 and 10 machines (63% and 60% busy). All three pools together cost $13,600, a sixth of the deep model alone on everything.
 
 **Latency.** The page waits for each pass in turn, so their latencies add: about 10 ms for the API, 10 ms for retrieval plus 15 ms for the index, 1 ms for the features, then 5, 10 and 40 ms for the three passes. That is about 90 ms idle, a little more under load, and about 260 ms at p99 in the simulation, under the 300 ms limit. A warehouse query, at half a second, would not fit even once.
 
@@ -107,12 +109,12 @@ servers-for-peak-load
 3. **Features.** Add the online `features` store. The API reads the features of the 500 posts and of the user in one batched call before ranking.
 4. **The three passes.** Add `light`, `medium` and `heavy`, and call them in that order. Use a fan-out label for the items each one scores, such as `x500 SCORE`, so that each pass carries the load of its batch.
 5. **The offline pipeline.** Write "Refresh features": the given `pipeline` reads the `warehouse`, then writes `features` and `embeddings`. The serving path never touches the warehouse.
-6. **Size every pool.** From the table above: about 8, 10 and 15 machines for the passes, two or three of everything else, and a look at the budget, where the deep model is more than half of the bill.
+6. **Size every pool.** From the table in *Back-of-the-envelope*: 8, 10 and 15 machines for the passes, two or three of everything else, and a look at the budget, where the deep model is more than half of the bill.
 7. **Explain the trade-offs** in `decision` blocks: why a funnel, why precomputed features, why one pool per model.
 
 ## Common mistakes
 
-- **The deep model on every candidate.** Retrieval hands all 500 posts straight to the best model. It needs about a hundred and twenty machines, several times the budget, and the funnel test fails because no cheaper pass comes first. It fails *Retrieval first, then ranking from the cheapest model to the heaviest* and the cost limit.
+- **The deep model on every candidate.** Retrieval hands all 500 posts straight to the best model. Its pool needs 100 machines before any headroom (the wrong design runs 120, at 83% busy, for $72,000 a month), several times the budget, and no cheaper pass comes first. It fails *Retrieval first, then ranking from the cheapest model to the heaviest* and the cost limit.
 - **A funnel that never narrows.** Three passes in the right order, but each one re-scores all 500. The early passes save the later ones nothing, and the deep pool is as large as above. Only the cost limit catches it: the order is right, the numbers are not. Each pass must keep only its best.
 - **Features from the warehouse.** The API queries the warehouse for the features of 500 posts on every request. At about half a second a query and a few hundred queries a second per node, the warehouse saturates and the p99 runs to seconds. It fails *Features are precomputed and read from an online store* and the p99 limit.
 - **The same pool size for every model.** The funnel is right, but every pass gets ten machines. The deep model's 50k scores a second fill its ten machines completely, requests queue there, and losing one machine makes it worse. It fails the p99 limit and *survive any node failure*. Size each pool from its own load.
@@ -128,7 +130,7 @@ servers-for-peak-load
 - **Expect "doesn't the first pass drop good items?"** Yes, that is the trade-off. Distillation trains the cheap model to imitate the expensive one, and offline replay measures how many of the final model's picks survive the earlier cuts.
 - **Expect "how fresh are the features?"** Batch features are hours old; real-time signals (the last few taps) come from a streaming job into the same online store. Embeddings are rebuilt daily.
 - **Expect "what if the ranking path is down?"** Serve a precomputed page: Meta's 2023 post mentions precomputing some users' recommendations off peak. Popular posts are a last resort.
-- **Expect "how do you know it works?"** Online A/B tests on engagement, and offline metrics such as NDCG, which the distilled model is trained on.
+- **Expect "how do you know it works?"** Online A/B tests on engagement, and offline ranking metrics such as NDCG. Meta trains the distilled model on exactly that: an NDCG loss against the main models' output.
 
 ## Further reading
 

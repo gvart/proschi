@@ -45,26 +45,33 @@ At most **$30,000 a month**, PgBouncer included.
 ### Which ORM do the API servers use?
 - kind: weak
 
-An ORM does not change how many writes one primary takes.
+An ORM does not change how many writes one primary takes. Ask for the read and write rates instead.
 
 ### What does a block look like in the editor?
 - kind: weak
 
-A UI question; ask about rates and limits.
+A UI question. Ask what a page load reads and how many loads and edits a second there are.
 
 ### Can we rewrite the editor in Rust?
 - kind: weak
 
-The client is not the bottleneck here.
+The client is not the bottleneck here; the one Postgres primary is. Ask whether the data must stay in Postgres and what the latency limit is.
 
 ## Estimates
 
-### If one Postgres primary takes about 5k writes a second, how many shards do 100k edits a second need?
+### If one Postgres primary takes about 5k writes a second, what is the smallest number of shards that can take 100k edits a second?
 - answer: 20
 - unit: shards
-- range: 15 to 30
+- range: 20 to 34
 
-100k ÷ 5k = **20 shards** at full load; leave headroom and you want more.
+100k ÷ 5k = **20 shards**, each primary 100% busy. That is the floor, not the design: with headroom for the p99 you want about 30.
+
+### With 32 shards, each primary taking 5k writes a second, how busy is a primary at 100k edits a second?
+- answer: 63
+- unit: % utilisation
+- range: 58 to 68
+
+32 primaries take 32 × 5k = 160k writes a second; 100k ÷ 160k = **about 63%**, near the two-thirds that keeps the p99 under 70 ms. Replicas do not change this number: only primaries take writes.
 
 ### At 1 KB per edit, how much is written in a day at the peak rate?
 - answer: 8.6T

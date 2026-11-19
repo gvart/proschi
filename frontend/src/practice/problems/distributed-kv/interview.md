@@ -55,7 +55,7 @@ The protocol does not change partitioning, quorums or sizing; ask about value si
 ### Can we use DynamoDB?
 - kind: weak
 
-The problem is to build what DynamoDB provides; ask what guarantees the store must give instead.
+The problem is to build such a store, not to rent one; ask what guarantees the store must give instead.
 
 ## Estimates
 
@@ -78,6 +78,6 @@ Twelve nodes share 60k reads and 30k writes: 5k reads (25% of 20k) plus 2.5k wri
 - unit: coordinators
 - range: 25 to 35
 
-40,000 ÷ (2,000 × 0.7) ≈ **29**; with one lost the rest must still stay under 100%, so about 30.
+At 70% a coordinator carries 1,400 requests a second: 40,000 ÷ 1,400 ≈ 28.6, so **29**. Run 30, and losing one still leaves 29 under 70%.
 
 Numbers: [Numbers to know](../docs/numbers/).
