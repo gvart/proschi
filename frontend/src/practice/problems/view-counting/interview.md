@@ -1,5 +1,11 @@
 ## Questions
 
+### How fresh and exact must counts be?
+- kind: good
+- fact: a view is counted within seconds, and the count may be off by a few percent
+
+Near real time: a view is counted within seconds, and the count may be off by a few percent.
+
 ### How many view events a second, and are all counted?
 - kind: good
 - fact: 20k view events per second at peak; about 10% are filtered out
@@ -18,12 +24,6 @@ About 20k posts change in any 10 seconds: **2k counter writes a second**.
 
 **10k a second**.
 
-### How fresh and exact must counts be?
-- kind: good
-- fact: a view is counted within seconds, and the count may be off by a few percent
-
-Near real time: a view is counted within seconds, and the count may be off by a few percent.
-
 ### What does recording a view do before answering?
 - kind: good
 - fact: A view event is written durably (to Kafka) before the client hears back
@@ -39,17 +39,17 @@ p99 of **Record view** and **Read count** under **60 ms**.
 ### Should counts show as 1.2K or 1,234?
 - kind: weak
 
-A display detail.
+A display detail that changes nothing behind the API. Ask how exact the count must be: "within a few percent" is what allows an approximate counter.
 
 ### Which dashboard should the analytics team use?
 - kind: weak
 
-Not part of this problem.
+Not part of this problem, which ends at the number next to the post. Ask how many views and count reads arrive each second.
 
 ### Which language is the consumer written in?
 - kind: weak
 
-An implementation detail.
+An implementation detail: any language can read Kafka. Ask what recording a view must do before it answers, and how fast views arrive.
 
 ## Estimates
 
@@ -72,6 +72,13 @@ An implementation detail.
 - unit: views
 - range: 600M to 1.2B
 
-10k × 86,400 ≈ **864 million a day**.
+Half of the 20k peak is 10k a second: 10k × 86,400 ≈ **864 million a day**.
+
+### A post has 10 million unique viewers. How much memory does an exact set of 8-byte user ids take?
+- answer: 80
+- unit: MB
+- range: 60 to 100
+
+10M × 8 bytes = **80 MB**, for one post. A HyperLogLog takes at most 12 KB whatever the count, thousands of times less, for an error under 1%.
 
 Numbers: [Numbers to know](../docs/numbers/).

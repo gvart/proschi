@@ -45,17 +45,17 @@ p99 of **Post tweet** under **80 ms**, of **Get trends** under **50 ms**.
 ### Do emoji count as topics?
 - kind: weak
 
-A tokenizer detail.
+A tokenizer detail: whatever counts as a term, the pipeline is the same. Ask how many counters one tweet updates.
 
 ### Should trends be personalised with machine learning?
 - kind: weak
 
-A different product; settle the counting pipeline first.
+A different product; settle the counting pipeline first. Ask how many locations get their own list and how often it is published.
 
 ### Which language is the detector written in?
 - kind: weak
 
-An implementation detail.
+An implementation detail. Ask whether counting may call a cache or a database, and how many tweets arrive each second.
 
 ## Estimates
 

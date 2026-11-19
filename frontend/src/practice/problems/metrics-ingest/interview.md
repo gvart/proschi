@@ -45,17 +45,17 @@ p99 of **Emit metrics** under **40 ms**, of **Query** under **80 ms**.
 ### Which language are the collectors written in?
 - kind: weak
 
-It does not change the data path.
+It does not change the data path. Ask how many datapoints they send each second and in what batch size.
 
 ### Could we use Prometheus instead of M3?
 - kind: weak
 
-The store is given; ask what it can take.
+The store is given and fixed, so the choice is not yours to make. Ask what the cluster can take per replica.
 
 ### How long do we keep application logs?
 - kind: weak
 
-Logs are not metrics, and not part of this problem.
+Logs are not metrics, and not part of this problem. Ask how many datapoints a second arrive and how many of them must be kept.
 
 ## Estimates
 

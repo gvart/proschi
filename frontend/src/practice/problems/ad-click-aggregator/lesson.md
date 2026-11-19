@@ -7,7 +7,7 @@ Ad clicks are billed, so each one must count **exactly once**. The app's request
 ## What you'll learn
 
 - Why the request that reports a click should do nothing but append it to a durable log.
-- How **pre-aggregating in tumbling windows** turns 20k events a second into about 500 records a second, and why that is what makes the OLAP store and the billing path affordable.
+- How **pre-aggregating in tumbling windows** turns 20k events a second into about 500 records a second, and why that is what makes billing and the OLAP store (the analytics database behind the dashboards) affordable.
 - What **exactly once** really means in a stream pipeline: checkpoints for the job's state, **transactions committed at the checkpoint** for its output, and **idempotent sinks** for everyone downstream.
 - Why billing and dashboards should read the **same** committed numbers.
 - How to size a stream pipeline: the ingest and aggregation tiers for the event rate, the sinks for the aggregate rate.
@@ -45,7 +45,7 @@ $7,500 | a month for the reference design
 
 **Pinot.** 500 writes and 1k dashboard queries a second, at 2k of each per server, is 0.75 of a server. 3 servers run at 25%, and 38% after losing one. Loading the raw events instead would be 20k writes plus the queries: at least 16 servers to stay under 70% after losing one, $9,600 a month for Pinot alone.
 
-**Freshness.** A one-minute window closes, and its record waits for the next checkpoint (every two minutes) to be committed: an aggregate is visible one to three minutes after its events.
+**Freshness.** A one-minute window closes, and its record waits for the next checkpoint (every two minutes) to be committed. An event waits up to a minute for its window to close, then up to two more for the commit: an aggregate is visible **at most three minutes** after its events.
 
 | Tier | Load | Replicas | Busy |
 |---|---|---|---|
@@ -92,7 +92,7 @@ oltp-vs-olap
 
 ### Partition by ad, size for the event rate
 
-Each window's count lives in the state of one Flink task. To keep every event of an ad in the same task, key the stream by ad: the ingest service produces with the ad as the Kafka key, so one partition and one task see all of that ad's events. A topic can be read by at most one consumer per partition, so the partition count caps the aggregation job's parallelism: give the raw topic enough partitions for the event rate, with headroom, from day one.
+Each window's count lives in the state of one Flink task. To keep every event of an ad in the same task, key the stream by ad: the ingest service produces with the ad as the Kafka key, so one partition and one task see all of that ad's events. Within one consumer group, each partition is read by a single consumer at a time, so the partition count caps the aggregation job's parallelism. Give the raw topic enough partitions for the event rate, with headroom, from day one.
 
 Size each tier for what it receives. The ingest tier and the aggregation job see every event; Pinot and the budget service see only aggregates. A job sized for its output instead of its input falls behind, its consumer lag grows, and the budget service paces with stale numbers. The simulation has no lag, so this problem asks the job to keep **Aggregate events** under 50 ms at p99 instead.
 
@@ -102,9 +102,9 @@ Size each tier for what it receives. The ingest tier and the aggregation job see
 
 1. **The job's state.** Flink periodically takes a **checkpoint**: a snapshot of every task's state (open windows, the event ids it has seen for deduplication) together with the Kafka offsets it had read up to, stored durably. After a crash it restores the last checkpoint and re-reads from those offsets, so every event is reflected in the state once.
 2. **The job's output.** Restoring state does not unsend records. If the job published a window's aggregate and then crashed before the next checkpoint, it would replay the same events and publish the aggregate again. So Flink writes its output into a **Kafka transaction** and commits it only when the checkpoint completes: a two-phase commit between the checkpoint and the topic. After a crash, the uncommitted transaction is aborted and the records are produced again from the restored state.
-3. **The readers.** Consumers read with `read_committed`, so they never see records of an aborted transaction. And because any consumer can itself crash between applying a record and committing its offset, every aggregate carries a **record UUID**: the budget service applies each UUID once, Pinot upserts by it, and Hive deduplicates by it.
+3. **The readers.** Consumers read with `read_committed`, so they never see records of an aborted transaction. And because any consumer can itself crash between applying a record and committing its offset, every aggregate carries a **record UUID**: the budget service applies each UUID once, Pinot upserts by it, and Hive (Uber's data warehouse) deduplicates by it.
 
-What it costs is **delay**. Readers see nothing until the checkpoint commits, so the checkpoint interval is the pipeline's latency. Uber checkpoints every two minutes instead of Flink's default ten, and says plainly that the result is not quite real time, but fast enough for pacing and reporting.
+What it costs is **delay**. Readers see nothing until the checkpoint commits, so the checkpoint interval is the pipeline's latency. Uber checkpoints every two minutes instead of the ten-minute default its post mentions (Flink itself leaves checkpointing off until you set an interval), and says plainly that the result is not quite real time, but fast enough for pacing and reporting.
 
 ```callout pitfall Exactly-once delivery is not enough
 Each hop needs its own guarantee: checkpointed state, transactional output, and an idempotent sink.
@@ -160,7 +160,7 @@ The advertiser never queries Pinot directly: a report service checks who is aski
 
 **Counting in the request** (`wrong/count-in-the-request`). The ingest service increments a counter row per event before it answers. 20k writes a second saturate the database and the app waits on them; a retried request counts twice. Caught by **"Recording an event only appends it to Kafka"** and **Record event's p99**.
 
-**Storing every raw event in Pinot** (`wrong/raw-events-into-pinot`). The job inserts each cleaned event and dashboards sum at query time. Pinot takes 20k writes a second instead of 500 and needs four times the servers. Caught by **"Events are aggregated in the stream, in memory"** and the **budget**.
+**Storing every raw event in Pinot** (`wrong/raw-events-into-pinot`). The job inserts each cleaned event and dashboards sum at query time. Pinot takes 20k writes a second instead of 500 and needs at least four times the servers. Caught by **"Events are aggregated in the stream, in memory"** and the **budget**.
 
 **Charging the budget from raw clicks** (`wrong/charge-budget-per-raw-click`). The budget service reads the raw events topic, so it charges for invalid and duplicate clicks the job would have dropped, and for redelivered ones after a restart; billing and the dashboard disagree. Caught by **"Pinot and the budget read only committed aggregates"**.
 
@@ -170,7 +170,7 @@ Classic mistakes beyond the tests:
 
 - Too few partitions on the raw topic, so the aggregation job cannot scale past them when traffic grows.
 - Keying windows by arrival time, so late events land in the wrong minute.
-- A checkpoint interval of ten minutes (Flink's default), so every dashboard and the pacing lag by up to ten minutes.
+- A long checkpoint interval (ten minutes was the default Uber started from), so every dashboard and the pacing lag by up to ten minutes.
 - No reconciliation: without a periodic batch recount of the raw events to compare against, a bug in the stream job misbills quietly.
 
 ## In the interview
@@ -183,7 +183,7 @@ Likely follow-ups:
 
 - *What if the aggregation job crashes?* It restores the last checkpoint and replays from its offsets; the uncommitted transaction is aborted, so readers never saw its records.
 - *Why not count in Redis with `INCR`?* A retry after a timeout counts twice, and Redis can lose acknowledged increments on failover. For billing, that is not acceptable.
-- *How fresh are the numbers?* One window plus up to one checkpoint interval: one to three minutes here. Shorter checkpoints cost more overhead.
+- *How fresh are the numbers?* Up to one window plus one checkpoint interval: at most three minutes here. Shorter checkpoints are fresher but cost more overhead.
 - *How do you know the counts are right?* Reconcile against a daily batch recount of the raw events in the warehouse, and alert on the difference.
 - *What about click fraud?* Filtering invalid events is the aggregation job's first step; richer fraud detection can run as another consumer of the raw topic and feed back adjustments.
 

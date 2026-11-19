@@ -194,7 +194,7 @@ Draw three flows, one per use case.
 - **Search**: user → load balancer → Search API → search cluster, plus an async append to the query log.
 - **Rebuild**: scheduler → index builder → reads the query log → writes the suggestion store.
 
-Dismiss the starter's wildcard query on Elasticsearch, natural because the cluster exists, with numbers: 100k rps against a 9k-rps cluster. The second is computing suggestions from a database (`LIKE 'ipho%' ORDER BY count DESC LIMIT 10`), which reads many rows per keystroke on the hottest path.
+Dismiss two tempting designs with numbers. The first is the starter's prefix query on Elasticsearch, natural because the cluster exists: 100k rps against a 9k-rps cluster. The second is computing suggestions from a database (`LIKE 'ipho%' ORDER BY count DESC LIMIT 10`), which reads and sorts many rows per keystroke on the hottest path.
 
 What wins is to **precompute and cache twice**: the lists live in memory, and the most popular are also cached at the edge.
 
