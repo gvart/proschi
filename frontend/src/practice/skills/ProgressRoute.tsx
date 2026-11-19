@@ -372,9 +372,10 @@ function Summary({
 
 function Headline({ label, value, unit }: { label: string; value: number; unit?: string }) {
   return (
-    <div className="min-w-0 rounded-sm border-bw-1 border-ink/25 bg-paper px-3 py-2">
-      <dt className={`truncate ${eyebrow}`}>{label}</dt>
-      <dd className="font-display text-2xl font-extrabold tabular-nums text-ink">
+    <div className="flex min-w-0 flex-col rounded-sm border-bw-1 border-ink/25 bg-paper px-3 py-2">
+      {/* Wraps rather than truncates; the value sits at the foot so a row's values line up. */}
+      <dt className={`${eyebrow} leading-tight`}>{label}</dt>
+      <dd className="mt-auto font-display text-2xl font-extrabold tabular-nums text-ink">
         {value}
         {unit && <span className="ml-1 text-sm font-semibold text-muted">{unit}</span>}
       </dd>
