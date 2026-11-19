@@ -1,0 +1,44 @@
+frontend/src/practice/problems/snowflake-ids/lesson.md
+  s_91ba69d9cbae8d::t_c7fd34cedcef0a 38,52,65,89,209,254
+  s_91ba69d9cbae8d::t_98d400e777b226 110,139,219
+  s_91ba69d9cbae8d::t_8c4c6fc112c377 87
+frontend/src/practice/problems/pastebin/lesson.md
+  s_91ba69d9cbae8d::t_c7fd34cedcef0a 2,145,175
+  s_91ba69d9cbae8d::t_98d400e777b226 177,280
+frontend/src/practice/problems/rate-limiter/interview.md
+  s_91ba69d9cbae8d::t_c7fd34cedcef0a 7-8,15-16,22-23,29-31,37-38,49-51,56-57,62-63,72,79-80,87-88
+frontend/src/practice/problems/url-shortener/lesson.md
+  s_91ba69d9cbae8d::t_8c4c6fc112c377 89
+  s_91ba69d9cbae8d::t_98d400e777b226 68-69,279
+  s_91ba69d9cbae8d::t_c7fd34cedcef0a 79,262,264,277
+frontend/src/practice/problems/hello-proschi/interview.md
+  s_91ba69d9cbae8d::t_c7fd34cedcef0a 22-23,25
+frontend/src/practice/problems/pastebin/interview.md
+  s_91ba69d9cbae8d::t_c7fd34cedcef0a 7-8,14-15,21,27-28,40-41,47-48,53-54,59-60,65-66,75,82,89
+frontend/src/practice/problems/rate-limiter/lesson.md
+  s_91ba69d9cbae8d::t_c7fd34cedcef0a 128,236
+frontend/src/practice/problems/hello-proschi/lesson.md
+  s_91ba69d9cbae8d::t_c7fd34cedcef0a 2,42
+frontend/src/practice/problems/url-shortener/interview.md
+  s_91ba69d9cbae8d::t_8c4c6fc112c377 42-43
+  s_91ba69d9cbae8d::t_c7fd34cedcef0a 54-56,71-73
+frontend/src/practice/problems/snowflake-ids/interview.md
+  s_91ba69d9cbae8d::t_8c4c6fc112c377 34-35
+  s_91ba69d9cbae8d::t_c7fd34cedcef0a 20-21,27-28,41-42,48-49,54-55,60-61,66-67,76,83,90-91
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3535cddf8b1f51a2a1b945a458ee310f28ed1128",
+  "prompts": {},
+  "sessions": {
+    "s_91ba69d9cbae8d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fe8c51ce-b526-4c6e-949d-867e4a8bd64a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
