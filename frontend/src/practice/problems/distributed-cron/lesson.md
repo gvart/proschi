@@ -23,7 +23,9 @@ You build the same shape, in two use cases:
 - **Fire** starts at the `clock`, the minute tick. The scheduler looks up the script's active runs; in `"Enqueued"` there are none, so it records a new run and enqueues it; in `"Already running"` the last run has not finished and nothing is enqueued.
 - **Run script** starts at the queue: a worker takes the run, marks it in progress, does the work against `backend` (Slack's systems), and marks it done.
 
-The tests check that the scheduler never reaches `backend`, that a run is inserted (`INSERT`) into a database before it is enqueued and updated (`UPDATE`) before and after the script runs, and that the scheduler has a standby; the requirements add latency, availability, losing any machine and a budget.
+The tests check that the scheduler never reaches `backend`, that a run is inserted (`INSERT`) into a database before it is enqueued and updated (`UPDATE`) before and after the script runs, and that the scheduler has a standby.
+
+The requirements add numbers: p99 of Fire under 100 ms and of Run script under 110 ms (p99 is the latency 99% of requests beat), Fire available 99.9% of the time, no single machine whose loss stops scheduling or running, and at most $5,500 a month. Run script's limit covers the worker's handling of a run, not the script's own run time: it climbs when the pool is too busy, so it stands for "a due script starts without waiting for a free worker".
 
 ## Back-of-the-envelope
 
@@ -37,7 +39,7 @@ The scale numbers are assumptions: Slack did not publish how many scripts it run
 30 | workers with headroom and a spare
 ```
 
-**Bursts, not averages.** Cron strings have minute resolution, so every script due in a minute is due at its first second, and round times like `0 * * * *` pile up. That is also why Slack keeps the scheduler from going down at the top of a minute when it can. Here: 200 runs a second at peak against 50 over the whole minute, a 4× burst.
+**Bursts, not averages.** Cron strings have minute resolution, so every script due in a minute is due at its first second, and round times like `0 * * * *` (every hour, on the hour) pile up. Here: 200 runs a second at peak against 50 over the whole minute, a 4× burst.
 
 **The pool.** A worker replica completes about 10 runs a second (most scripts are short; how long each holds a worker is folded into that rate). At the peak:
 
@@ -48,7 +50,7 @@ The scale numbers are assumptions: Slack did not publish how many scripts it run
 | 22 | 91% | 95% |
 | 30 | 67% | 69% |
 
-Twenty is the bare minimum and saturates the moment one machine goes. Thirty keeps the pool under 70% busy and still under 100% with one lost.
+Twenty is the bare minimum and saturates the moment one machine goes. Queueing delay climbs steeply as a pool nears 100%, so aim for under 70% busy: 200 ÷ (10 × 0.7) = 28.6, so 29 workers, and 30 stays under 70% even with one lost.
 
 **The run table.** Every Fire reads the script's active runs and, when it enqueues, inserts a row: 200 reads and about 200 writes a second. Every run updates its row twice: 400 more writes. Six hundred writes a second is nothing for a primary that takes about 5,000; two replicas are for availability, not load.
 
@@ -70,7 +72,7 @@ A second, identical box is no answer either: two daemons reading one crontab fir
 
 The two halves need opposite things. Scheduling is tiny: parse a few thousand cron strings, compare them with the clock once a minute, and send out messages. It must be **always up and on time**. Running scripts is heavy, varied and slow: some take a second, some an hour, some need lots of memory. It needs **many machines** and does not care which one a script lands on.
 
-So the scheduler does nothing but decide and hand off. It writes each due run to a **queue**, and a pool of **workers** reads the queue and runs the scripts (the competing-consumers pattern: each message goes to exactly one worker). Slack did not even build the second half: its job queue (Kafka for durability, Redis for the jobs being worked on, then job workers) already ran billions of jobs a day, and each cron run became one more job.
+So the scheduler does nothing but decide and hand off. It writes each due run to a **queue**, and a pool of **workers** reads the queue and runs the scripts (the competing-consumers pattern: each message goes to one worker, not to all of them). Slack did not even build the second half: its job queue (Kafka for durability, Redis for the jobs being worked on, then job workers) already ran billions of jobs a day, and each cron run became one more job.
 
 The scheduler stays small, so it fails over in seconds and a heavy script cannot delay the next minute. Losing a worker loses only the runs on it. The pool scales with the scripts without touching the scheduler. The cost: a run now waits in a queue, and its state is spread over three machines, which is why the next two concepts exist.
 
@@ -85,7 +87,7 @@ The scheduler must not be a new single point of failure, yet two schedulers firi
 
 Slack runs several scheduler pods on Kubernetes and uses Kubernetes leader election, which is built on a **lease**: the leader holds a record that expires unless renewed every few seconds. If the leader dies, the lease runs out and a standby takes it. This is **active-passive**: the standby does no scheduling until it leads. Slack decided against keeping several schedulers in sync: a new leader takes over quickly enough that downtime is unlikely, and with the scripts moved off, a pod has only scheduling to do.
 
-The trade-off: a failover takes a few seconds, and runs due in that window fire late (or, if the scheduler does not catch up, are skipped). Timing matters: losing the leader just before the top of the minute is the worst moment, so planned restarts avoid it.
+The trade-off: a failover takes a few seconds, and runs due in that window fire late (or, if the scheduler does not catch up, are skipped). Timing matters: losing the leader just before the top of the minute is the worst moment, so Slack keeps a scheduler pod from going down then when it can.
 
 ```deepdive Why leases and not a lock held forever
 A lock held until released never frees itself when the leader crashes or is cut off; someone would have to prove the leader dead. A lease expires on its own. Its weakness is a leader that pauses (a long garbage collection, a frozen VM) and wakes after its lease ran out, still believing it leads, so two schedulers briefly fire together. A run table that refuses a second active run limits the damage; fencing tokens are the general fix.
@@ -122,7 +124,13 @@ at-least-once-needs-idempotency
 
 ### Sizing the worker pool
 
-The rate that matters is the **peak**: the top of the minute. Divide it by what one worker completes, then add headroom so the pool is not running hot, and one spare so that losing a machine does not tip it over. Little's law is the same idea from the other side: the number of runs in flight equals the arrival rate times how long each run takes, and every run in flight needs a slot on some worker.
+The rate that matters is the **peak**: the top of the minute. Divide it by what one worker completes, then add headroom so the pool is not running hot, and one spare so that losing a machine does not tip it over:
+
+```callout tip The sizing formula
+workers = peak rate ÷ (rate per worker × 0.7), plus one spare
+```
+
+Little's law is the same idea from the other side: the number of runs in flight equals the arrival rate times how long each run takes, and every run in flight needs a slot on some worker.
 
 A pool sized for the average fills up at every burst. Runs then wait in the queue, scripts start late, and the backlog grows each minute if the burst never fully drains. In the simulation, the workers saturate and the p99 of Run script climbs past its limit.
 
@@ -158,10 +166,10 @@ Open with the failure that motivates the design: "one cron box is a single point
 - *How do you stop two schedulers from firing at once?* Leader election with a lease; the run table refusing a second active run is a backstop.
 - *What if a worker dies mid-script?* The row stays in progress; time it out, and make scripts safe to retry.
 - *Why not a cache for run state?* It must survive a restart and be visible to every machine.
-- *Why one job per script run?* Slack's job queue runs work fastest when each kind of work is isolated on its own queue, so one slow script does not hold up the others.
+- *Why reuse the job queue, with one job per script?* It already carried the load, so there was nothing new to operate, and it runs work fastest when each kind of work is isolated on its own queue: one slow script does not hold up the others.
 ```
 
-Have two numbers ready: the peak-to-average ratio, and workers = peak ÷ per-worker rate.
+Have two numbers ready: the peak-to-average ratio (4×), and workers = peak ÷ per-worker rate (20 at full load, 30 with headroom and a spare).
 
 ## Further reading
 

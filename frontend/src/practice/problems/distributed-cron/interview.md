@@ -59,6 +59,13 @@ Naming a product skips the design. Ask what has to survive a machine failure, an
 
 ## Estimates
 
+### What is the peak-to-average ratio of runs?
+- answer: 4
+- unit: ×
+- range: 3 to 5
+
+200 runs a second at the top of the minute ÷ 50 a second averaged over the minute = **4×**. A pool sized for the average saturates at every burst.
+
 ### How many workers does the peak need at 100% busy?
 - answer: 20
 - unit: workers
@@ -72,10 +79,3 @@ Naming a product skips the design. Ask what has to survive a machine failure, an
 - range: 400 to 800
 
 Each Fire that enqueues inserts a row (about 200 a second), and each run updates its row twice, to in progress and to done (400 a second): about **600 writes a second**, far below what one primary takes.
-
-### What is the peak-to-average ratio of runs?
-- answer: 4
-- unit: ×
-- range: 3 to 5
-
-200 runs a second at the top of the minute ÷ 50 a second averaged over the minute = **4×**. A pool sized for the average saturates at every burst.

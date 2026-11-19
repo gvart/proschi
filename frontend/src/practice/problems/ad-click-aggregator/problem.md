@@ -130,7 +130,7 @@ Pinot, the report service, the connections and the seven use cases.
   counts clicks and impressions per ad in one-minute tumbling windows,
   Kafka transactions committed by a two-phase commit at each checkpoint,
   `read_committed` consumers, a checkpoint every two minutes rather than
-  Flink's default ten, 3-day topic retention, record UUIDs used as
+  the ten-minute default the post mentions, 3-day topic retention, record UUIDs used as
   idempotency keys by the Ad Budget Service, as upsert keys in Pinot and
   for deduplication in Hive, the Attribution and Union and Load jobs, two
   regions, and hundreds of millions of ad events a week.

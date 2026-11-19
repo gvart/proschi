@@ -59,19 +59,19 @@ A protocol detail that does not change where caches go or how much reaches the o
 
 ## Estimates
 
-### How many requests a second reach the origin?
-- answer: 2000
-- unit: requests/s
-- range: 1500 to 2500
-
-10% miss the edge, and the upper tier answers 60% of those: 50k × 10% × 40% = **2,000 a second**, half of what the 4 origin servers take (and two thirds once one of them is down).
-
 ### How many requests a second reach the upper tier?
 - answer: 5000
 - unit: requests/s
 - range: 4000 to 6000
 
 Every edge miss: 50k × 10% = **5,000 a second**.
+
+### How many requests a second reach the origin?
+- answer: 2000
+- unit: requests/s
+- range: 1500 to 2500
+
+Of the 5,000 edge misses, the upper tier answers 60%, so 40% go on: 5k × 40% = **2,000 a second**. That is half of what the 4 origin servers take (two thirds once one of them is down). Without an upper tier all 5,000 would arrive: 125%.
 
 ### How many purge messages a second do the edge data centers receive in total?
 - answer: 15000

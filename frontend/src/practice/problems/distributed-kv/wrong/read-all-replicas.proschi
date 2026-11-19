@@ -1,6 +1,6 @@
 # expect-fail: cost ≤ $9,500/month
 # mistake: Reading every replica on every Get
-# explain: With W = 2, a read of two replicas already overlaps every acknowledged write (R + W > N). Reading all three adds a third more replica reads on the busiest path, and carrying them takes another replica group, which breaks the budget. Read a quorum, R = 2.
+# explain: With W = 2, a read of two replicas already overlaps every acknowledged write (R + W > N). Reading all three adds half again as many replica reads (60k to 90k a second) on the busiest path, and carrying them takes another replica group, which breaks the budget. Read a quorum, R = 2.
 # lesson: replication-and-quorums
 # cards: quorum-read-size, quorum-replica-load, leaderless-replication
 # Every Get reads all three replicas (R = 3): five shards to carry the extra reads.

@@ -45,7 +45,7 @@ At most **$4,000 a month**.
 ### Should we support stickers and GIFs?
 - kind: weak
 
-A feature that rides on the same send path. Settle the scale and the delivery guarantees first.
+Asking what is in scope is fine, but ask it broadly (groups, media, receipts?) and move on. A single feature that rides on the same send path changes nothing: settle the scale and the delivery guarantees first.
 
 ### Which websocket library should we use?
 - kind: weak
@@ -71,6 +71,6 @@ A UI question; the interview is about how a message gets from one server to anot
 - unit: GB
 - range: 150 to 600
 
-10k ÷ 3 ≈ 3.3k a second × 86,400 s ≈ 288M messages × 1 KB ≈ **290 GB a day**, about 100 TB a year.
+10k ÷ 3 ≈ 3.3k messages a second. 3.3k × 86,400 s ≈ 288M messages a day. 288M × 1 KB ≈ **290 GB a day**, about 100 TB a year.
 
 Numbers: [Numbers to know](../docs/numbers/).

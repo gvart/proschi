@@ -1,5 +1,5 @@
 ```tldr
-A view count is a **distinct count at stream rate** with loose accuracy. Append each view to **Kafka** and answer; **filter** and **count** in separate stages; keep a **HyperLogLog** per post in Redis (**≤ 12 KB, ~0.81% error**) and back changed counters up to the database **every 10 seconds**.
+A view count is a count of **unique viewers** (a distinct count), at tens of thousands of events a second, where a few percent of error is fine. Append each view to **Kafka** and answer; **filter** and **count** in separate stages; keep a **HyperLogLog** per post in Redis (**≤ 12 KB, ~0.81% error**) and back changed counters up to the database **every 10 seconds**.
 ```
 
 "How many people saw this post?" sounds like `count += 1`. It is not: a Reddit view count counts **unique** viewers within a time window, filters out bots and refreshes, and keeps up with tens of thousands of events a second. This lesson follows Reddit's 2017 design: a pipeline plus a 12 KB sketch rather than a table.
@@ -40,7 +40,7 @@ The given file contains only the `reader` actor plus traffic, requirements and t
 18k / s | counted after the filter
 2k / s | database writes from 10-second persistence
 80 MB vs 12 KB | exact set vs HyperLogLog, 10M viewers
-≈ 1.6 billion | rows a day, the naive way
+≈ 1.6 billion | rows a day at the peak rate, the naive way
 ```
 
 **Event rates.** 20k views a second arrive; about 10% are filtered, so 18k a second are counted. About 1% of those find their counter evicted: 180 database reads a second. Roughly 20k posts change in any 10-second window, so persisting costs 20k / 10 = 2k database writes a second. Reads are 10k a second.
@@ -70,7 +70,7 @@ Then add headroom: Proschi marks anything above 70% as hot, and "survive any nod
 
 **Cost.** Services $100 per replica, Redis $150, Kafka $200, Cassandra $500, the load balancer $50. Four service tiers with headroom are most of the bill, leaving little room for spare tiers or a bigger database.
 
-**Rows per day, the naive way.** 18k rows a second × 86,400 seconds ≈ 1.6 billion new rows a day, forever. Keep that number handy for the interview.
+**Rows per day, the naive way.** 18k rows a second × 86,400 seconds ≈ 1.6 billion new rows a day if the peak held all day, and still hundreds of millions on an average day, forever. Keep that number handy for the interview.
 
 ## Concepts
 
@@ -239,7 +239,7 @@ Likely follow-ups:
 
 - *What if Redis loses a counter?* Restore it from the database snapshot (at most 10 seconds stale), or rebuild from Kafka if retention allows.
 - *How do you stop bots?* Rules in the filter stage using recent-activity state: rate per user, per IP, known bad agents. As a separate stage, rules tighten without touching counting.
-- *Exactly-once?* Not needed: PFADD is idempotent, so a replayed event changes nothing.
+- *Exactly-once?* Not needed: PFADD is idempotent, so a replayed event changes nothing in the counter. A replay in the filter can at worst drop or re-pass a few views, well inside the few percent allowed.
 - *Can you show daily and all-time counts?* Keep one HLL per post per day and merge them for longer ranges; HLL merges are lossless.
 - *Hot post?* One key is one shard. Its PFADD rate is fine for Redis, but you can split it into several keys and merge on read if needed.
 

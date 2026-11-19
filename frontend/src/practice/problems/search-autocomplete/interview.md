@@ -39,17 +39,17 @@ p99 of a suggestion under **50 ms**, of a search under **300 ms**.
 ### Should suggestions show images?
 - kind: weak
 
-A UI choice.
+A UI choice that does not change the request path. Ask how many suggestion requests arrive and how many of them a CDN can answer.
 
 ### Which keyboard layouts do we support?
 - kind: weak
 
-Client-side; it does not change the design.
+Client-side; it does not change the design. Ask how many distinct prefixes there are: that decides whether the data fits in memory.
 
 ### Which font should the dropdown use?
 - kind: weak
 
-A UI detail.
+A UI detail. Ask what latency a suggestion needs: it decides how many hops the path can afford.
 
 ## Estimates
 
@@ -60,10 +60,17 @@ A UI detail.
 
 100k × 20% = **20,000 a second** must be answered from memory.
 
+### How many Suggest Service replicas do those misses need at about 50% busy, at 2k rps per replica?
+- answer: 20
+- unit: replicas
+- range: 15 to 25
+
+20k ÷ (2k × 50%) = **20 replicas**. Ten would run at 100%: half busy keeps queueing, and so the p99, small. Without the CDN the same sum is 100 replicas.
+
 ### At 30 bytes per completion, how much memory do 5 million prefixes with ten completions take?
-- answer: 1.5B
-- unit: bytes
-- range: 700M to 5B
+- answer: 1.5
+- unit: GB
+- range: 0.7 to 5
 
 5M × 10 × 30 bytes = **1.5 GB**: fits on one machine, replicate it.
 

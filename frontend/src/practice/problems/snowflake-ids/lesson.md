@@ -35,7 +35,7 @@ The non-functional requirements:
 - **Fault tolerance**: losing any single machine doesn't stop id generation.
 - **Budget**: $4,000 a month, including the existing ZooKeeper cluster.
 
-`given.proschi` fixes the caller, `tweets` (four replicas), and `zk`, an existing three-node ZooKeeper cluster you pay for. You add the generators, connections and both use cases.
+`given.proschi` fixes the caller, `tweets` (four replicas), and `zk`, an existing three-node ZooKeeper cluster. Both are on your bill. You add the generators, connections and both use cases.
 
 The tests, in plain words:
 
@@ -49,7 +49,7 @@ The tests, in plain words:
 ≈ 69.7 years | of 41-bit millisecond timestamps
 1,024 | workers addressable with 10 bits
 4,096 | ids per worker per millisecond
-400% | of a MySQL ticket table's capacity
+4× | the writes one MySQL primary can take
 ```
 
 | Quantity | Arithmetic | Result |
@@ -62,7 +62,7 @@ The tests, in plain words:
 | Ids per worker per second, theoretical | 4,096 × 1,000 | ≈ 4 million |
 | Generator starts | 1 per minute | ≈ 0.017 per second |
 
-```callout takeaway Two takeaways
+```callout takeaway Plenty of bits, nothing shared per id
 The bit budget is comfortable: 70 years of timestamps, a thousand generators, a per-worker ceiling far above any realistic load. Startup traffic to ZooKeeper is tiny; per-id traffic is what would hurt if sent anywhere shared.
 ```
 
@@ -84,9 +84,9 @@ The generators themselves are services. A `[gRPC]` service handles about 2,000 r
 
 Other numbers in the Analysis tab:
 
-- **Latency.** Get ID is a single hop, caller to generator, about 10 ms idle. The 40 ms p99 catches queueing (a fleet run too hot) and extra round trips (asking a store or ZooKeeper per id).
+- **Latency.** Get ID is a single hop, caller to generator, about 10 ms idle. The 40 ms p99 catches queueing (a fleet run too hot, or a saturated MySQL primary) and a slow extra round trip (asking ZooKeeper per id). A 1 ms Redis hop slips under it, which is why a flow test, not the latency limit, forbids shared storage.
 - **Availability.** One service replica is up 99.5% in the model, far short of 99.99%. Two give 99.9975%; a fleet is effectively always up, because any generator can answer.
-- **Cost.** About $100 per service replica per month, plus the given ZooKeeper cluster's three nodes. Work out what that leaves before sizing the generators.
+- **Cost.** About $100 per service replica per month. The given nodes count too: ZooKeeper's three at about $400 each and the Tweet Service's four at $100 each, $1,600 before you add anything. That leaves $2,400 for generators.
 
 ## Concepts
 
@@ -107,7 +107,7 @@ Other numbers in the Analysis tab:
 
 **Why it sorts by time.** The timestamp is in the high bits, so comparing ids compares times first. Ids from different workers in the same millisecond are ordered by worker id, not by the real order of events. That's *roughly* (or *k-sorted*): sorted to within the clock skew between machines.
 
-**Trade-offs.** It depends on clocks: if NTP steps a clock backwards, a worker could repeat timestamps, so the original Snowflake refuses to make ids until the clock passes the last timestamp it used. Ids also leak the creation time, and roughly how busy a worker is.
+**Trade-offs.** It depends on clocks: if NTP (the protocol that keeps machine clocks in sync) steps a clock backwards, a worker could repeat timestamps, so the original Snowflake refuses to make ids until the clock passes the last timestamp it used. Ids also leak the creation time, and roughly how busy a worker is.
 
 **When not to use it.** When ids must be unguessable (use random tokens), strictly ordered (you need a single sequencer), or dense with no gaps (invoice numbers).
 
@@ -136,7 +136,7 @@ snowflake-clock-backwards
 
 **Why ZooKeeper.** ZooKeeper is a small, strongly consistent store built for exactly this kind of agreement:
 
-- An **ephemeral** node disappears automatically when the process's session ends. Created under a path like `/snowflake/workers/`, the claim lives while the process lives; if it dies, the worker id is released for reuse.
+- An **ephemeral** node disappears automatically when the session of the process that created it ends (its connection to ZooKeeper, kept alive by heartbeats). Created under a path like `/snowflake/workers/`, the claim lives while the process lives; if it dies, the worker id is released for reuse.
 - A **sequential** node gets a unique, increasing suffix, a convenient way to hand out numbers. In practice you'd map it into the 0–1,023 range, or try to create `/workers/<n>` for the lowest free `n`.
 
 **Trade-offs.** If ZooKeeper is down, *new* generators can't start, but running ones keep serving: coordination is off the hot path, so its outages and latency don't touch tweets. The risk is a process that loses its session but keeps running: it must stop serving ids, or another could claim the same worker id.
@@ -206,7 +206,7 @@ Pin the properties: unique, 64-bit, roughly time-ordered, fast, highly available
 
 ### Step 2: High-level design
 
-Start from the simplest thing that works and break it on purpose: "Auto-increment works, but 20k writes a second to one primary is four times what it takes, and it's a single point of failure." Try Redis `INCR`: fast enough, but every tweet now depends on one key on one cache, and a failover with asynchronous replication can hand out the same number twice.
+Start from the simplest thing that works and break it on purpose: "Auto-increment works, but 20k writes a second to one primary is four times the 5k it takes, and it's a single point of failure." Try Redis `INCR`: fast enough, but every tweet now depends on one key on one cache, and a failover with asynchronous replication can hand out the same number twice.
 
 Then introduce the composite id. The Tweet Service calls the generators directly; any generator can answer any request, so no load balancer is needed. Connect the generators to ZooKeeper and write two use cases: Get ID (one hop, made in memory) and Start generator (one write to ZooKeeper).
 
@@ -216,7 +216,7 @@ Then introduce the composite id. The Tweet Service calls the generators directly
 
 **Sequence overflow.** A worker that hands out 4,096 ids in one millisecond waits for the next. At 20k ids per second spread over a fleet, that never happens; say so.
 
-**Clocks.** Run NTP, configured to slew rather than step backwards, and have the generator refuse to make ids if its clock is behind the last timestamp it used: a brief error for callers, never a duplicate.
+**Clocks.** Run NTP, configured to slew (slow the clock down until it is right) rather than step backwards, and have the generator refuse to make ids if its clock is behind the last timestamp it used: a brief error for callers, never a duplicate.
 
 **Worker ids.** Claimed in ZooKeeper at startup with an ephemeral node; released when the process dies. In Start generator, the write to `zk` comes before the generator responds (or serves anything).
 
@@ -251,7 +251,7 @@ Follow-up questions:
 - **"What if the clock goes backwards?"** Refuse to generate until the clock catches up (or wait if it's a few milliseconds), alert, and run NTP in slew mode.
 - **"What if two processes get the same worker id?"** They could produce duplicates. That's why claims are ephemeral nodes in a strongly consistent store, and why a process that loses its session must stop serving.
 - **"How many ids per second can one worker make?"** Up to 4,096 per millisecond, about 4 million per second, before it waits for the next millisecond.
-- **"When do you run out?"** 41 bits of milliseconds last about 69 years from the custom epoch.
+- **"When do you run out?"** 41 bits of milliseconds last about 70 years from the custom epoch.
 - **"Can clients tell when an id was created?"** Yes: shift right by 22 bits and add the epoch. Fine for tweets; for private objects, a leak.
 - **"Could you skip the service and generate ids in the caller?"** Yes, as a library, if each caller process gets a unique worker id; Instagram did it inside the database. A service is easier to version and monitor.
 

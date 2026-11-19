@@ -57,7 +57,7 @@ Follow 50k requests a second down the hierarchy.
 **With an upper tier the origin runs at 2k ÷ 4k = 50%. Without it, at 5k ÷ 4k = 125%: saturated.** You cannot add origin servers, so the only lever is to send fewer requests there.
 ```
 
-Why does an upper tier cut misses so much? A flat CDN with N data centers fetches each asset up to N times, once per cold cache; with an upper tier, the upper tier fetches it once and the edges fill from it. Cloudflare reported a 60% or greater drop in the cache miss rate from tiering, the number this problem uses.
+Why does an upper tier cut misses so much? A flat CDN with N data centers fetches each asset up to N times, once per cold cache; with an upper tier, the upper tier fetches it once and the edges fill from it. Cloudflare's launch post promised customers a 60% drop in their cache miss rate from tiering, the number this problem uses.
 
 ```deepdive How the simulation sees it
 At 50% utilisation the four origin servers queue a little: the 50 ms base becomes a bit over 54 ms. At 125% the node is saturated and every latency requirement of a use case that loads it fails. The upper-tier miss path is edge (5 ms) + upper tier (5 ms) + origin (about 54 ms), around 64 ms on average; because only 4% of requests take it, the use case's p99 lands well under 150 ms. The flat design's p99, with a saturated origin, is several hundred milliseconds.
@@ -75,7 +75,7 @@ A **cache hierarchy** puts caches in layers: small caches near users, fewer bigg
 
 Why it works: miss rates multiply. If the edge misses 10% and the upper tier misses 40% of what reaches it, the origin sees 10% × 40% = 4%. The upper tier also hits far more often than any single edge, because it aggregates all edges' misses: an asset requested once in Tokyo and once in Paris is two edge misses but one upper-tier miss.
 
-Trade-offs: an upper-tier hit adds a hop (often a long one, since the upper tier sits near the origin, not the visitor): tiering slightly slows misses to make the origin's life much easier. It also concentrates load on a few data centers, so the upper tier must be redundant. Skip tiering with one cache location, uncacheable content (personalised pages), or an origin that is itself a scalable store such as S3 that does not care about load.
+Trade-offs: an upper-tier hit adds a hop, often a long one, since the upper tier sits near the origin, not the visitor. Tiering slows edge misses a little to make the origin's life much easier. It also concentrates load on a few data centers, so the upper tier must be redundant. Tiering buys nothing with a single cache location or with uncacheable content (personalised pages). It buys less when the origin is a scalable store such as S3: load no longer matters there, though every fetch from it is still egress you pay for.
 
 ````deepdive The pattern in Proschi
 ```proschi
@@ -111,7 +111,7 @@ usecase "Get" {
 
 ### Failover without stampedes
 
-When a cache layer fails, the tempting fallback is "go straight to the source": safe for a tiny cache, dangerous for a big one. The cache existed because the source cannot take the full load; the moment it disappears, the source receives everything it was shielded from, at once. This is a **thundering herd**: many clients missing on the same thing at the same time.
+When a cache layer fails, the tempting fallback is "go straight to the source": safe for a tiny cache, dangerous for a big one. The cache existed because the source cannot take the full load; the moment it disappears, the source receives everything it was shielded from, at once. This is a **thundering herd** (or cache stampede): a crowd of requests the cache used to absorb, all arriving at the source together.
 
 The right failover keeps the shape of the hierarchy: a **second member of the same tier** (a fallback upper-tier data center in another location), not a path that skips the tier. Cloudflare's later work on Smart Tiered Cache describes exactly this: a primary and a fallback upper tier for each origin. The origin can then lock its firewall to the upper tier's addresses, which is why the tests forbid any path from the edge or the visitor to it.
 
@@ -157,7 +157,7 @@ Then add a purge service for the owner: owner → purge API → upper tier, then
 
 ### 3. Deep dive
 
-**Redundancy at every tier.** Every node you run must survive losing one replica: for the edge and the purge API, two replicas. For the upper tier, resist the fallback-to-origin idea and give the tier a second data center. Check the analysis: no single points of failure, and the origin at the same utilisation after a failure.
+**Redundancy at every tier.** Every node you run must survive losing one replica: for the edge and the purge API, two replicas. For the upper tier, resist the fallback-to-origin idea and give the tier a second data center. Check the analysis: no single points of failure, and the origin still at 50% after an upper-tier data center is lost.
 
 **The purge.** Clear the upper tier first, then fan out to every edge with an `x300` step, then answer the owner; the flow test asks for upper before edge. The purge never calls the origin.
 
@@ -171,11 +171,11 @@ Summarise: two tiers, so 96% of requests never reach the origin; a redundant upp
 
 ## Common mistakes
 
-**Every edge fills from the origin** (`wrong/every-edge-fills-from-origin.proschi`). The flat CDN: no upper tier, edges go straight to the origin. It is most CDNs' default setup, and works while the origin is big enough for the number of edges; when it is not, cold caches after a deploy or a purge overload it. Here it fails three ways: "Edge misses go to the upper tier, not the origin", "Only the upper tier talks to the origin", and p99, because 5k rps saturates a 4k-rps origin.
+**Every edge fills from the origin** (`wrong/every-edge-fills-from-origin.proschi`). The flat CDN: no upper tier, edges go straight to the origin. It is how a CDN behaves with tiering switched off, and it works while the origin is big enough for the number of edges; when it is not, cold caches after a deploy or a purge overload it. Here it fails three ways: "Edge misses go to the upper tier, not the origin", "Only the upper tier talks to the origin", and p99, because 5k rps saturates a 4k-rps origin.
 
 **One upper-tier data center** (`wrong/single-upper-tier.proschi`). Everything flows correctly, but the upper tier has one replica and no fallback: when it fails, no edge miss can be filled. It fails `survive any node failure`. In production this is a single "shield POP" whose failure is a global outage for cache misses.
 
-**Upper tier down, so go to the origin** (`wrong/upper-down-goes-to-origin.proschi`). A single upper tier with a `-x` failure scenario that falls back to the origin. It sounds resilient, but with the upper tier down the origin takes every edge miss, the very overload the tier prevents, and can no longer restrict who talks to it. It fails "Only the upper tier talks to the origin", because the design now has an edge-to-origin connection.
+**Upper tier down, so go to the origin** (`wrong/upper-down-goes-to-origin.proschi`). A single upper tier with a `-x` failure scenario that falls back to the origin. It sounds resilient, but with the upper tier down the origin takes every edge miss, the very overload the tier prevents, and can no longer restrict who talks to it. It fails "Only the upper tier talks to the origin", because the design now has an edge-to-origin connection, and `survive any node failure`, because the lone upper tier is still a single point of failure for purges.
 
 **Purging the edge first** (`wrong/purge-edge-first.proschi`). Same design, purge order reversed: between the two purges an edge can refill the stale copy from the upper tier, and it survives the purge. It fails "A purge clears the upper tier before the edge".
 
@@ -187,7 +187,7 @@ Summarise: two tiers, so 96% of requests never reach the origin; a redundant upp
 "With hundreds of edge caches, the origin sees each asset's first request hundreds of times. I'd add a shield tier near the origin so it sees each asset roughly once."
 ```
 
-Then show the hit-rate arithmetic: 10% edge misses times 40% upper-tier misses equals 4% at the origin, half of its capacity.
+Then show the miss-rate arithmetic: 10% edge misses times 40% upper-tier misses equals 4% at the origin, 2k of 50k requests a second and half of its capacity.
 
 Expected follow-ups:
 

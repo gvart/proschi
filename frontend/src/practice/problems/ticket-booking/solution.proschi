@@ -37,7 +37,7 @@ entity Booking in db "A paid seat, on the shard of its seat" {
 }
 
 decision "Holds are conditional writes in PostgreSQL" {
-  because "UPDATE … WHERE status = 'free' OR holdExpires < now() is atomic and strongly consistent: of two fans racing for a seat exactly one row update wins, the other gets 409"
+  because "UPDATE … WHERE status = 'free' OR (status = 'held' AND holdExpires < now()) is atomic and strongly consistent: of two fans racing for a seat exactly one row update wins, the other gets 409"
   rejected "Check the seat map cache, then write" "The cache is seconds stale and two fans read 'free' at the same moment; both would get the seat"
   rejected "Redis SET NX with a TTL as the lock" "Fast and expires by itself, but a failover can drop the lock and the seat sells twice"
 }
@@ -80,7 +80,7 @@ usecase "View seats" "Load the seat map of an event" {
 usecase "Hold seat" "Hold one seat for 10 minutes" {
   fan -> lb  : POST /events/e1/holds json {"seat": "A-12"}
   lb  -> api : POST /events/e1/holds
-  api -> db  : UPDATE seat SET held, holdExpires = now() + 10 min WHERE free OR holdExpires < now()
+  api -> db  : UPDATE seat SET held, holdExpires = now() + 10 min WHERE free OR (held AND holdExpires < now())
 
   alt "Held" when "the seat was free or its hold expired" {
     db  --> api : 1 row

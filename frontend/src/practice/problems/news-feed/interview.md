@@ -64,13 +64,13 @@ Formatting is a detail of the post body; it does not change the fan-out.
 - unit: writes/s
 - range: 80k to 120k
 
-500 posts × 200 followers = **100,000 feed writes a second**.
+500 posts a second × 200 followers = **100,000 feed writes a second**: ten times the 10k feed reads, so the feed cache is write-heavy.
 
 ### How much memory do 20 million feeds of 500 post ids take at 8 bytes an id?
 - answer: 80
 - unit: GB
 - range: 50 to 120
 
-20M × 500 × 8 bytes = **80 GB**: a few cache nodes.
+500 ids × 8 bytes = 4 KB a feed. 20M × 4 KB = **80 GB** of raw ids; a cache's overhead per entry makes it several times that in practice.
 
 Numbers: [Numbers to know](../docs/numbers/).

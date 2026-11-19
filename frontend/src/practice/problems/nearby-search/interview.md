@@ -77,9 +77,9 @@ Every search asks all 7 shards: 6k × 7 = 42k shard searches, ÷ 7 = **6k a seco
 - unit: requests/s
 - range: 7000 to 10000
 
-Searches: 6k × 40% × 3 geoshards = 7.2k. Writes: 3k updates × 45% (staying in a metro, or moving into one) = 1.35k. Together about **8.6k a second**, close to 3 nodes of pure work before any headroom.
+Searches: 6k × 40% × 3 geoshards = 7.2k. Writes: 3k updates × 45% (staying in a metro, or moving into one) = 1.35k. Together **8.55k a second**, close to 3 nodes of pure work (at 3k each) before any headroom.
 
-### With 3 metro geoshards of 3 copies, how busy is a geoshard's last two copies after losing one?
+### With 3 metro geoshards of 3 copies, how busy are a geoshard's last two copies after losing one?
 - answer: 48
 - unit: percent
 - range: 40 to 55

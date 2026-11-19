@@ -1,7 +1,7 @@
 # Chat: store before the ack, deliver after it
 
 ```tldr
-**Store, ack, then deliver.** The ack is a **durability** promise, so the message reaches a replicated store before the sender sees it; delivery comes after. **Presence** says whether the recipient is online and on which gateway, **pub/sub** carries the message there, and offline users get a **push notification**. Size gateways for sends *and* deliveries (17k rps) and the store for **10k writes a second**.
+**Store, ack, then deliver.** The ack is a **durability** promise, so the message reaches a replicated store before the sender sees it; delivery comes after. **Presence** says whether the recipient is online and on which gateway, **pub/sub** carries the message there, and offline users get a **push notification**. Size the gateways for sends *and* deliveries (10k + 7k = 17k rps) and the store for **10k writes a second**.
 ```
 
 One-to-one chat mixes three ideas that each look simple alone: a durable write, a long-lived connection, and routing a message to whichever server holds the recipient. Get the order wrong and you either lose messages or make every sender wait for the slowest phone on the network.
@@ -50,7 +50,7 @@ One-to-one chat mixes three ideas that each look simple alone: a durable write, 
 10k rps | sends, each one write and one presence lookup
 17k rps | gateway work (sends + deliveries)
 3k rps | push notifications (limit 10k)
-≈ 170 GB/day | messages, upper bound
+≈ 290 GB/day | messages stored (1 KB each, average a third of peak)
 ```
 
 | Quantity | Arithmetic | Result |
@@ -62,16 +62,16 @@ One-to-one chat mixes three ideas that each look simple alone: a durable write, 
 | Message writes | one per send | 10k rps |
 | Gateway work | 10k sends + 7k deliveries | 17k rps |
 | History reads | given | 2k rps |
-| Messages per day, upper bound | 10k/s × 86,400 s | 864M |
-| Storage per day (assume ~200 bytes each) | 864M × 200 B | about 170 GB/day, about 63 TB/year |
+| Messages per day (assume the average is a third of the peak) | 10k/s ÷ 3 × 86,400 s | about 290M |
+| Storage per day (assume ~1 KB stored per message) | 290M × 1 KB | about 290 GB/day, about 100 TB/year |
 
-The storage line is an upper bound, but it shows the shape: data grows forever, writes are constant, reads want recent messages in one conversation.
+The storage line rests on two assumptions (the statement gives neither the average rate nor a message size), but it shows the shape: data grows forever, writes never stop, and reads want the recent messages of one conversation.
 
-**Gateways do two jobs.** A gateway receives the sender's message *and* delivers to users connected to it, so every online delivery passes through a gateway twice. At 2k requests a second per service replica, 17k rps needs 8.5 replicas at 100%; divide by a 70% target and check one replica fewer stays under 100%.
+**Gateways do two jobs.** A message to an online recipient touches the gateway tier twice: once on the way in (the sender's gateway) and once on the way out (the recipient's gateway). That is 10k sends plus 7k deliveries. At 2k requests a second per service replica, 17k rps needs 8.5 replicas at 100%; divide by a 70% target, and check that the tier still copes with one replica lost.
 
-**The store must take 10k writes a second.** A modelled relational database is single-primary: 5k writes a second per shard, whatever the replica count, so 10k saturates it unless sharded. Cassandra accepts 20k writes a second on every replica, so two are lightly loaded. Real chat systems (Discord is the famous write-up) chose wide-column stores for this append-heavy, partition-by-conversation pattern.
+**The store must take 10k writes a second.** A modelled relational database has one primary that takes every write: 5k writes a second per shard, however many read replicas you add, so 10k saturates it unless you shard. Cassandra is a *wide-column store* (rows grouped into partitions by a key, sorted inside each partition) in which every replica accepts writes, 20k a second each in the model, so two are lightly loaded. Real chat systems chose such stores for this append-heavy, partition-by-conversation pattern; Discord's write-up is the famous one.
 
-**Latency.** The ack path is load balancer → gateway → message store → ack: a 2 ms hop, a 10 ms gateway, a 5 ms write, plus queueing and tails. That fits 100 ms easily; the push provider's 200 ms before the ack would not.
+**Latency.** The ack path is load balancer → gateway → message store → ack: a 2 ms hop, a 10 ms gateway, a 5 ms write, plus queueing and tails. That fits 100 ms easily. One 200 ms call to the push provider before the ack would not.
 
 **Connections, not just requests.** A real gateway is also sized by open connections and memory per connection. With tens of millions online at peak you need enough gateways to hold them all: mention it, though the simulation counts only requests.
 
@@ -145,7 +145,7 @@ The sender is on gateway 3, the recipient on gateway 7. Two pieces get the messa
 - **Presence**: a fast key-value store (Redis) mapping user id to the gateway holding their connection, written on connect and kept alive by heartbeats with a short expiry. One lookup answers *is the user online?* and *where?*
 - **Pub/sub**: a message bus (NATS, Redis pub/sub, Kafka) where each gateway subscribes to its own subject. To reach Bob, publish to `gateway.7`; gateway 7 writes it to Bob's socket.
 
-If nobody is connected, send a push notification instead. Presence can be slightly stale (a phone that just lost signal looks online for a few seconds), which is fine: the message is stored, fetched on the next app open, and deduplicated by message id.
+If nobody is connected, send a push notification instead. Presence can be stale: a phone that just lost signal looks online until its key expires. That is fine, because the message is stored: the app fetches it when it next opens and deduplicates by message id. Real systems also send the push when the recipient's device does not confirm the delivery.
 
 Trade-offs: presence is one more store to keep available, and very large groups need fan-out to many gateways. Slack's real-time messaging uses the same split: gateway servers hold connections, separate servers track presence.
 
@@ -186,7 +186,7 @@ push-when-offline
 
 ## Designing it step by step
 
-**1. Scope.** Ask: one-to-one or groups (one-to-one)? Guarantees (never lose after ack; at-least-once delivery, twice possibly but never zero times, with client deduplication)? Ordering (per conversation, by time)? Multi-device (history anywhere)? Receipts, typing indicators, media (out of scope; name them)? Confirm 10k sends a second, 70% of recipients online, 2k history loads a second.
+**1. Scope.** Ask: one-to-one or groups (one-to-one)? Guarantees (never lost after the ack; delivered *at least once*, so a message may arrive twice but never zero times, and the client deduplicates)? Ordering (per conversation, by time)? Multi-device (history anywhere)? Receipts, typing indicators, media (out of scope; name them)? Confirm 10k sends a second, 70% of recipients online, 2k history loads a second.
 
 **2. High-level design.** Draw three paths.
 
@@ -203,7 +203,7 @@ History uses a separate stateless API: it is ordinary request/response and shoul
 - *Sizing.* Gateways for sends plus deliveries; presence, broker, store and load balancer with at least two replicas; history for 2k rps with headroom.
 - *Failure.* A dead gateway's users reconnect elsewhere and re-register presence; in-flight messages are stored and will be fetched. A lost broker node is carried by the survivors.
 
-**4. Wrap-up.** Walk the requirements: the ack follows the write; delivery follows the ack in both scenarios; nothing is single; the budget fits. Then extensions: time-ordered message ids, delivery and read receipts as reverse-direction messages, groups with per-group fan-out, end-to-end encryption, and syncing a user's other devices by having each subscribe through presence.
+**4. Wrap-up.** Walk the requirements: the ack follows the write; delivery follows the ack in both scenarios; nothing is single; the budget fits. Then extensions: time-ordered message ids, delivery and read receipts as reverse-direction messages, groups with per-group fan-out, end-to-end encryption, and syncing a user's other devices by listing every connected device in presence and delivering to each.
 
 ## Common mistakes
 
@@ -219,7 +219,7 @@ In the model the recipient is an actor with no latency, so p99 only rises from a
 - *Sending push to everyone, online or not.* Notifications for messages already on screen, and push volume more than triples. Fails *Online recipients get the message over their connection*.
 - *Delivering without a presence lookup* (broadcasting to every gateway). Every gateway processes every message: cost grows with the gateway count. Fails *Presence decides how a message is delivered*.
 - *PostgreSQL without shards for messages.* 10k writes a second on a 5k-writes primary saturates it, and `p99 "Send message"` fails, because a saturated node fails every latency requirement that loads it.
-- *Gateways sized for sends only.* Forgetting the 7k deliveries makes them far hotter than planned, too hot with one replica lost.
+- *Gateways sized for sends only.* Forgetting the 7k deliveries makes them 70% busier than planned (17k instead of 10k), and too hot with one replica lost.
 
 ## In the interview
 

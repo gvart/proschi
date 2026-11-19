@@ -1,11 +1,11 @@
 ```tldr
-Twitter's trends list is fifty terms per place, read by millions. **Counting and serving share nothing but a published list**: posts hand tweets to a **firehose**; a stream detector counts terms **in memory** (sliding windows, **count-min sketch**, **top-k heap**) and ranks growth over a baseline. Every five seconds it **precomputes** each location's top fifty into a cache, so a read is one key lookup.
+A trends list is a few dozen terms per place (fifty here), read by millions. **Counting and serving share nothing but a published list**: posts hand tweets to a **firehose**; a stream detector counts terms **in memory** (sliding windows, **count-min sketch**, **top-k heap**) and ranks growth over a baseline. Every five seconds it **precomputes** each location's top fifty into a cache, so a read is one key lookup.
 ```
 
 ## What you'll learn
 
 - How to keep heavy counting work off the write path of the product (posting a tweet) with a firehose topic.
-- Sliding windows, the **count-min sketch** and a **top-k heap**: counting heavy hitters in bounded memory.
+- Sliding windows, the **count-min sketch** and a **top-k heap**: finding the most frequent terms (the **heavy hitters**) in bounded memory.
 - Why a "trend" is growth over a baseline, not raw volume.
 - How **precomputing** a small answer and serving it from a cache turns an expensive query into a key lookup.
 
@@ -183,7 +183,7 @@ usecase "Read" {
 The tempting answer is a Redis sorted set per location with `ZINCRBY` per term. Multiply it out: 240k network writes a second on a shared store, which is also the store readers depend on. Counts inside the detector's memory remove all of that; only 200 ranked lists a second leave it.
 ```
 
-*What if a detector dies?* Its windows are lost, but Kafka still holds the recent tweets: a replacement replays the last window's worth of offsets and rebuilds. Trends for that slice are briefly off, which is acceptable.
+*What if a detector dies?* Its windows are lost, but Kafka still holds the recent tweets: a replacement replays the last window's worth of offsets and rebuilds. Trends for that slice are briefly off, which is acceptable. A long baseline (yesterday's counts) is too much to replay, so snapshot it to durable storage from time to time.
 
 *Which store backs the cache?* Tiny data (one row per location), written 200 times a second: a small relational database with a replica is plenty, read only on the 1% of misses.
 

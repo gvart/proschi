@@ -83,11 +83,12 @@ and the choice of the *closest* replica are not modelled.
   servers, replication at the Git level instead of RAID and DRBD, reads
   load-balanced over the replicas without synchronisation, and new copies
   made automatically when a server fails.
-- [Building resilience in Spokes](https://github.blog/engineering/infrastructure/building-resilience-in-spokes/),
-  GitHub blog: over 38 million repositories and 36 million gists, at least
-  three copies of each, a three-phase commit that refuses writes it cannot
-  commit to at least two replicas, and checksums that tell which replicas
-  are in sync.
+- Patrick Reynolds, [Building resilience in Spokes](https://github.blog/engineering/infrastructure/building-resilience-in-spokes/),
+  GitHub blog, September 2016: over 38 million repositories and 36 million
+  gists, at least three copies of each, writes refused unless a majority of
+  replicas (always at least two) can commit them, and routing that returns
+  the replicas that are up to date.
 - Michael Haggerty, [Stretching Spokes](https://github.blog/engineering/infrastructure/stretching-spokes/),
-  GitHub blog, October 2017: Spokes across data centers, the quorum vote,
-  and reads routed to the closest replica that is in sync.
+  GitHub blog, October 2017: Spokes across data centers, the three-phase
+  commit and the quorum, a checksum computed for every replica after every
+  update, and reads routed to the closest replica that is in sync.

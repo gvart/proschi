@@ -1,7 +1,7 @@
 # Social Graph Cache: a million reads a second over MySQL
 
 ```tldr
-**1M reads a second** at a 96.4% hit rate still send **36k a second to MySQL**. **Followers** face the web tier, **one leader per shard** is the only path to MySQL, writes go through the leader, which **invalidates the other followers asynchronously**, and the **degraded shard** sets the shard count.
+**1M reads a second** at a 96.4% hit rate still send **36k a second to MySQL**. Split the cache into two tiers: **followers** answer the web tier, and **one leader per shard** is the only path to MySQL, so caches cannot race each other. Writes go through the leader, which **invalidates the other followers asynchronously**. Size the MySQL shards for the day **one of them loses a replica**.
 ```
 
 ## What you'll learn
@@ -62,10 +62,10 @@ TAO's published workload is 99.8% reads and 0.2% writes, with an overall cache h
 **Shards from the failure rule.** Spread 36k reads over N shards of two replicas each. With every replica up, each shard's utilisation is `36k ÷ (N × 40k)`. But `survive any node failure` removes one replica from one shard, and keys cannot move to another shard, so that shard carries `36k ÷ N` on a single 20k replica.
 
 ```callout takeaway The degraded shard decides
-Two shards put 18k on one replica, 90% busy: the read p99 breaks. Pick the smallest N that keeps the degraded shard comfortably below that.
+Size for the shard that has lost a replica, not for the healthy fleet. Two shards put 18k on one replica, 90% busy: the read p99 breaks. Three put 12k on it, 60%. Pick the smallest N that leaves the degraded shard room to spare.
 ```
 
-**Followers.** Ten replicas would run at 100%; for well under 70% you need noticeably more: `load ÷ (100k × target)`. Count the invalidations each write sends to other followers.
+**Followers.** Ten replicas would run at 100%. To stay under 70% busy you need `load ÷ (100k × 0.7)`: 1M ÷ 70k ≈ 14.3, so at least 15, and one more so that losing a follower still leaves the tier under 70%. The invalidations each write sends to other followers count too, but at 2k writes a second they are a rounding error.
 
 **Leaders.** They see only misses and writes, 38k ops a second, so two cache replicas are plenty. Their job is not throughput but being the single gate to each shard.
 
@@ -205,7 +205,7 @@ Summarise: followers absorb the reads, a leader per shard is the only path to My
 
 **No invalidation** (`wrong/no-invalidation.proschi`). Writes update the writer's follower and nothing else. The writer sees their change, but every other follower serves the old list until it expires: on a social graph, a friend's comment invisible for minutes. It fails "The leader updates the other followers after the commit".
 
-**Too few shards** (`wrong/too-few-shards.proschi`). With two shards everything passes while all replicas are up. Remove one MySQL replica and its shard carries 18k reads on one 20k replica, 90% busy, and the read p99 more than doubles past its 25 ms limit. It fails `survive any node failure`.
+**Too few shards** (`wrong/too-few-shards.proschi`). With two shards everything passes while all replicas are up. Remove one MySQL replica and its shard carries 18k reads on one 20k replica, 90% busy, and queueing there pushes the read p99 past its 25 ms limit. It fails `survive any node failure`.
 
 ```callout pitfall
 This is the cluster that runs fine for months in production and falls over during the first routine host replacement.

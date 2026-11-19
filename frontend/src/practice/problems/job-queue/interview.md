@@ -6,18 +6,6 @@
 
 **1.4 billion jobs** on the busiest days, at a peak of **33k a second**.
 
-### Can enqueueing write to Redis?
-- kind: good
-- fact: An enqueue never touches Redis
-
-No: an enqueue never touches Redis, and the web app has no connection to it.
-
-### Can the web app write to Kafka itself?
-- kind: good
-- fact: The web app never talks to Kafka directly
-
-No, the web app never talks to Kafka directly.
-
 ### When is a job accepted?
 - kind: good
 - fact: The job is written to Kafka before the web app hears back
@@ -29,6 +17,18 @@ Once it is written to Kafka, before the web app hears back.
 - fact: p99 of Enqueue under 50 ms
 
 p99 of **Enqueue** under **50 ms**, available **99.99%** of the time.
+
+### Can enqueueing write to Redis?
+- kind: good
+- fact: An enqueue never touches Redis
+
+No: an enqueue never touches Redis, and the web app has no connection to it.
+
+### Can the web app write to Kafka itself?
+- kind: good
+- fact: The web app never talks to Kafka directly
+
+No, the web app never talks to Kafka directly.
 
 ### How often can Redis not take a job?
 - kind: good
@@ -45,21 +45,21 @@ At most **$8,000 a month**, the web app and the workers included.
 ### Which language are the jobs written in?
 - kind: weak
 
-It does not change how jobs are accepted and handed over.
+The language does not change how jobs are accepted and handed over. Ask how many jobs arrive and when a job counts as accepted.
 
 ### Could cron run the jobs instead?
 - kind: weak
 
-Cron schedules work; it does not take 33k jobs a second durably.
+Cron starts work on a schedule; it does not accept 33k jobs a second and keep them safe. Ask what must happen to a job when the workers fall behind.
 
 ### What should the queue dashboard show?
 - kind: weak
 
-Monitoring matters, but first settle the rates and guarantees.
+Monitoring matters, but it comes at the end. First settle the rates and the guarantees: how many jobs, and what an accepted job is promised.
 
 ## Estimates
 
-### What is the average rate on a busiest day of 1.4 billion jobs?
+### On the busiest day, 1.4 billion jobs, what is the average rate?
 - answer: 16k
 - unit: jobs/s
 - range: 12k to 20k

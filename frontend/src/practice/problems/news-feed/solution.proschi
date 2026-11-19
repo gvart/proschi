@@ -40,7 +40,7 @@ entity CachedPost in postCache "A post as the feed shows it" {
 
 decision "Fan-out on write" {
   because "Reads outnumber posts 20:1; building each feed when a post is published makes every read two cache lookups"
-  rejected "Fan-out on read" "Every read would ask the graph for up to 5,000 followees and merge their posts from the database"
+  rejected "Fan-out on read" "Every read would ask the graph for every account the reader follows and merge their posts from the database"
 }
 decision "Fan-out behind a queue" {
   because "Listing followers alone takes 50 ms and each post goes to ~200 feeds; the author gets 201 once the post is stored and the event is queued"

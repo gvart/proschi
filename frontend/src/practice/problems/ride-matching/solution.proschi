@@ -18,7 +18,7 @@ match   -> offers  : produce
 offers  -> gateway : consume
 gateway -> driver  : push
 
-entity DriverPosition in geo "Where an online driver is now; expires 30 s after the last update" {
+entity DriverPosition in geo "Where an online driver is now; swept out 30 s after the last update" {
   driverId string key
   lat      float
   lng      float

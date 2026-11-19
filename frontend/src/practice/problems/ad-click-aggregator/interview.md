@@ -1,5 +1,11 @@
 ## Questions
 
+### Can a click be counted twice, or lost?
+- kind: good
+- fact: Aggregates are written in a Kafka transaction that is committed only after the checkpoint covering them is stored
+
+Neither: clicks are billed. Aggregates are written in a Kafka transaction committed only after the checkpoint covering them is stored, and readers see committed records only.
+
 ### How many ad events arrive at peak?
 - kind: good
 - fact: 20k ad events per second at peak, impressions and clicks together
@@ -17,12 +23,6 @@ Counts **per ad and minute** are enough: hours and days are sums of minutes. Abo
 - fact: 1k dashboard queries per second from advertisers
 
 About **1k dashboard queries a second**.
-
-### Can a click be counted twice, or lost?
-- kind: good
-- fact: Aggregates are written in a Kafka transaction that is committed only after the checkpoint covering them is stored
-
-Neither: clicks are billed. Aggregates are written in a Kafka transaction committed only after the checkpoint covering them is stored, and readers see committed records only.
 
 ### What may the app's request do?
 - kind: good

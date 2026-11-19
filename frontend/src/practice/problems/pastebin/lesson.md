@@ -1,5 +1,5 @@
 ```tldr
-**Text in object storage**, a small **row per paste in a database**, and **expiry checked on the row** before the body is fetched. A **CDN** in front answers 90% of reads at the edge, and is the only way to fit **egress** into the $6,000 budget.
+**Text in object storage**, a small **row per paste in a database**, and **expiry checked on the row** before the body is fetched. A **CDN** in front answers 90% of reads at the edge, and is the only way to fit **egress** (the per-gigabyte charge for data sent to readers) into the $6,000 budget.
 ```
 
 ## What you'll learn
@@ -142,7 +142,7 @@ metadata-vs-content
 
 **When not to use it.** Personalised or private responses (unless you are careful with cache keys and auth), and content that is read once.
 
-**Egress, the hidden reason.** Data leaving the provider's network is billed per gigabyte (traffic between your own services is cheap or free), and at high read rates it can cost more than all your servers, as here. CDNs charge far less per GB and absorb repeated reads: cheaper as well as faster. For tiny responses egress hardly matters, so check the bytes first.
+**Egress, the hidden reason.** Data leaving the provider's network is billed per gigabyte (traffic between your own services is cheap or free), and at high read rates it can cost more than all your servers, as here. A CDN at this volume charges far less per GB (here $0.02 against $0.09; real list prices start closer together and fall with volume) and absorbs repeated reads: cheaper as well as faster. For tiny responses egress hardly matters, so check the bytes first.
 
 ```proschi
 title "Pull CDN"
@@ -172,9 +172,9 @@ cdn-cache-control
 
 ### Expiry: check small before fetching big
 
-**What it is.** A job could delete expired bodies, but a read can't wait for it. So the read path checks the row's `expiresAt` first and answers `404` for an expired paste without fetching the body.
+**What it is.** A paste must stop being readable the moment it expires, but the job that deletes expired bodies runs later. So the read path checks the row's `expiresAt` first and answers `404` for an expired paste without fetching the body.
 
-**Why it works.** The row is tiny and indexed; the body may be 10 MB in slower storage. Checking the cheap thing first saves a storage read per expired request, and deletion can run lazily (an index on `expiresAt` makes it a range scan), or through object storage lifecycle rules.
+**Why it works.** The row is tiny and indexed; the body may be 10 MB in slower storage. Checking the cheap thing first saves a storage read per expired request, and deletion can run lazily (an index on `expiresAt` makes it a range scan), or through object storage *lifecycle rules*, where the store deletes objects of a given age by itself.
 
 ```callout pitfall The CDN wrinkle
 If the origin tells the edge to cache a paste for 5 minutes, an expired paste can stay visible for up to 5 minutes past its expiry. An acceptable, explicit bound here; for a revoked secret you'd purge the edge or not cache at all.
@@ -277,7 +277,7 @@ Common follow-ups:
 - **"How do you generate the id?"** As for a URL shortener: a Base62 counter, or random. Random is better here: pastes may hold things people would rather not have enumerated.
 - **"How do you delete expired pastes?"** Lazily on read (the `404` path), plus a background job scanning the `expiresAt` index and deleting rows and objects, or object lifecycle rules on storage.
 - **"What if a paste must disappear immediately?"** Purge it from the CDN, or don't let the edge cache it (`Cache-Control: no-store`) and accept the origin load.
-- **"What about 10 MB pastes?"** Upload straight to object storage with a pre-signed URL, bypassing your API, which only writes the row.
+- **"What about 10 MB pastes?"** Upload straight to object storage with a *pre-signed URL* (a short-lived link, signed by your API, that lets the client write one object). The bytes bypass your API, which only writes the row.
 - **"Why not Redis?"** It speeds up the origin, but the request still crosses your stack and the bytes still leave at the expensive rate. The CDN removes both.
 - **"How would you add view counts?"** CDN logs or an async event per origin read, aggregated off the read path.
 

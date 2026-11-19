@@ -39,7 +39,8 @@ machine must not take the service down: no component with one instance.
 - kind: good
 - fact: At most $3,000 / month
 
-At most **$3,000 a month** for the whole service.
+At most **$3,000 a month** for the whole service. Every replica has a
+monthly price, so count them before adding more.
 
 ### Which programming language should the API be written in?
 - kind: weak
@@ -50,8 +51,9 @@ The language barely changes the architecture. Ask about the numbers
 ### Should the short codes be six or seven characters long?
 - kind: weak
 
-A detail you can settle yourself in a sentence (62⁷ is 3.5 trillion codes).
-Early in the interview, spend your questions on load and constraints.
+A detail you can settle yourself in a sentence once you know the write
+rate (62⁷ is 3.5 trillion codes). Ask how many links are created a second
+instead, and spend the rest of your questions on load and constraints.
 
 ### Can I use Kubernetes?
 - kind: weak
@@ -66,8 +68,9 @@ the system must do and at what scale, then pick components that meet it.
 - unit: codes
 - range: 1.5B to 6B
 
-100/s × 86,400 s/day ≈ 8.6M a day; × 365 ≈ **3.2 billion a year**. Seven
-base-62 characters (3.5 trillion codes) last for centuries.
+100/s × 86,400 s/day ≈ 8.6M a day; × 365 ≈ **3.2 billion a year**. Six
+base-62 characters (57 billion codes) last about 18 years at that rate;
+seven (3.5 trillion) about a thousand.
 
 Numbers: [Numbers to know](../docs/numbers/).
 
