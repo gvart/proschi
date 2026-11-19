@@ -65,11 +65,11 @@ Request rates are modest here. Bytes are not.
 Under $2.5M, only CDN egress works. A load balancer in front of storage does not help: the bytes still leave from something you run, at the higher price. Traffic between your own nodes (a CDN filling from storage, a transcoder reading an original) is free in the model.
 ```
 
-**Transfer time.** The model adds payload size ÷ the slower end's bandwidth to every percentile. At a viewer's 10 MB/s a 4 MB segment takes 400 ms to arrive, leaving about 200 ms of the 600 ms p99 for everything else. The CDN's 5 ms is fine; one extra slow hop is not.
+**Transfer time.** The model adds payload size ÷ the slower end's bandwidth to every percentile. At a viewer's 10 MB/s (the model's default for a client's connection) a 4 MB segment takes 400 ms to arrive, leaving about 200 ms of the 600 ms p99 for everything else. The CDN's 5 ms is fine; one extra slow hop is not.
 
 For the upload, 2 GB at 10 MB/s is **200 seconds**: before the `201`, the 1 s limit is impossible. So the creator gets the `201` first and sends the bytes after the response, outside the request's latency.
 
-**Transcoding.** 2 uploads a second × 60 s = 120 videos in flight on average. The fleet takes 10 × 0.5 = 5 jobs a second, so 2 is 40%. Real uploads come in bursts (a creator conference, a time zone waking up); the queue holds what the fleet cannot take right away.
+**Transcoding.** 2 uploads a second × 60 s = 120 videos in flight on average. A worker starts a job every two seconds and each job runs for 60 s, so one worker has about 30 jobs in progress at once. The fleet takes 10 × 0.5 = 5 jobs a second, so 2 a second keeps it 40% busy. Real uploads come in bursts (a creator conference, a time zone waking up); the queue holds what the fleet cannot take right away.
 
 **The rest is small.**
 
@@ -117,7 +117,7 @@ multipart-upload
 
 ### Transcoding pipelines
 
-**Transcoding** decodes the original, re-encodes it at several resolutions and bitrates, and cuts each rendition into short segments with a manifest (a playlist) listing them. It takes minutes of CPU per video: a textbook background job.
+**Transcoding** decodes the original, re-encodes it at several resolutions and bitrates, and cuts each rendition into short segments with a manifest (a playlist) listing them. It takes a minute of machine time per video here, and far longer for a feature film: a textbook background job.
 
 The robust shape:
 
@@ -196,7 +196,7 @@ hls-segments-cache
 
 **Upload through the API** (`wrong/upload-through-api`). The API receives the 2 GB and writes it to storage: servers spend their bandwidth copying files, the request lasts minutes, and one failure restarts the upload. Caught by **"The file goes straight to object storage, never through a server"**; the 2 GB on the request also breaks the upload and page latencies.
 
-**The upload request carries the file** (`wrong/upload-request-carries-file`). Subtler: the design is otherwise right, but the 2 GB rides on the initial `POST`, putting 200 seconds of transfer on the critical path. Caught by **p99 of Upload video < 1000 ms**.
+**The upload request carries the file** (`wrong/upload-request-carries-file`). Subtler: the design is otherwise right, but the 2 GB rides on the initial `POST`, putting 200 seconds of transfer on the critical path. Caught by **p99 of Upload video < 1000 ms**. The 4 GB/s of uploads also saturates the load balancer, so page opens miss their 75 ms too.
 
 **Transcode while the creator waits** (`wrong/transcode-while-waiting`). The API calls the transcoder before answering. In production the request times out, and a burst of uploads needs a fleet sized for the peak. Caught by **"Transcoding is queued, never in the request path"**, and the minute-long call blows the upload p99.
 

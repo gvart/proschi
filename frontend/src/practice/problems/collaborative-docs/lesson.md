@@ -37,7 +37,7 @@ Two people type into the same paragraph at once. Each sees their own letter imme
 | Availability | Editing 99.95%; any machine can fail |
 | Budget | At most $6,500 a month |
 
-**What is given, and why.** Only the two kinds of browsers, the editor and the collaborators. Everything between is yours; the tests describe guarantees, not boxes.
+**What is given, and why.** The two kinds of browsers, the editor and the collaborators, and a `SessionServer` type for the servers that hold their WebSockets. Everything between is yours; the tests describe guarantees, not boxes.
 
 **What the tests check.**
 
@@ -61,12 +61,12 @@ Two people type into the same paragraph at once. Each sees their own letter imme
 | Messages in from editors | 4k edits + 8k cursors | 12k/s |
 | Messages out to collaborators | 12k × 2 | 24k/s |
 | Session server messages | 12k in + 24k delivered | 36k/s |
-| Session servers at 2k/s, under 70% | 36k ÷ (2k × 0.7) | about 26 |
+| Session servers at 2k/s each (the model's figure), under 70% | 36k ÷ (2k × 0.7) | about 26 |
 | Log appends | one per edit | 4k/s |
 | Operations a day | 4k × 86,400 | about 350 million |
 | Log size a day | 350M × ~200 bytes | about 70 GB |
 | Snapshot reads | 500 opens × 50 KB | 25 MB/s |
-| Replaying a long history instead | 500 × ~2 MB | 1 GB/s |
+| Replaying a history of 10k operations instead | 500 × (10k × ~200 bytes = 2 MB) | 1 GB/s |
 
 **The session servers carry the fan-out.** Every message arrives at one session server and leaves through others: 36k a second, three times the incoming rate.
 
@@ -154,7 +154,7 @@ ack-after-store
 
 ### Fan-out through pub/sub
 
-The load balancer spreads WebSocket connections over many session servers, so collaborators are almost never on one. After the ack, the collab service publishes the operation on the document's subject of a pub/sub bus (NATS, Redis pub/sub, Kafka). Each session server with a connection to the document subscribes while it is open and pushes operations to its connections.
+The load balancer spreads WebSocket connections over many session servers, so collaborators are almost never on one. After the ack, the collab service publishes the operation on the document's subject of a pub/sub bus (NATS or Redis pub/sub; a million short-lived subjects is a poor fit for Kafka topics). Each session server with a connection to the document subscribes while it is open and pushes operations to its connections.
 
 The editor waits for none of this, or a slow browser would slow everyone's typing. A collaborator that misses a message (a brief disconnect) sees a gap in revision numbers and fetches the missing operations from the log.
 
@@ -165,13 +165,13 @@ sync-on-reconnect
 
 ### Presence is ephemeral
 
-Cursors, selections and "who is here" are presence: they change constantly (twice as often as the text here) and are worthless a second later. Send them over the same bus, never through the log, which they would double and bury in noise.
+Cursors, selections and "who is here" are presence: they change constantly (twice as often as the text here) and are worthless a second later. Send them over the same bus, never through the log: they would triple its writes (12k a second instead of 4k) and bury the edits in noise.
 
 Clients throttle cursor updates to a few a second, and a reconnecting client just waits for the next update. Who is in the document is often kept with a heartbeat and a short expiry, so a closed laptop disappears on its own.
 
 ### Snapshots and compaction
 
-A document edited for a year has hundreds of thousands of operations. Replaying them on open means megabytes per open: at 500 opens a second, a gigabyte a second from the log. So every hundred or so operations, a snapshotter folds them into a new full copy in object storage.
+A *snapshot* is the full text of a document at one revision. Without one, opening a document means reading and replaying its log from the start. Just 10,000 operations at about 200 bytes each is 2 MB per open, and a document edited for a year has far more. At 500 opens a second that is a gigabyte a second from the log. So every hundred or so operations, a snapshotter folds them into a new snapshot in object storage.
 
 Opening reads the latest snapshot and the short tail after it: about 50 KB and a few dozen rows. The log can then be trimmed or archived behind the snapshot, keeping only what version history needs.
 
@@ -199,7 +199,7 @@ Opening reads the latest snapshot and the short tail after it: about 50 KB and a
 
 **Delivering only from the editor's session server** (`wrong/same-server-delivery`). It works in a demo with one server. With 26 servers, almost every collaborator is connected elsewhere and never sees the edit. It fails the pub/sub test.
 
-**Storing cursors** (`wrong/cursors-in-the-log`). Every cursor move becomes a sequenced, stored operation: twice the writes, a collab tier that saturates, and a log full of noise. It fails *Cursor moves are broadcast, never stored*, both p99 limits and `survive any node failure`.
+**Storing cursors** (`wrong/cursors-in-the-log`). Every cursor move becomes a sequenced, stored operation: three times the writes (12k a second instead of 4k), a collab tier that saturates, and a log full of noise. It fails *Cursor moves are broadcast, never stored*, both p99 limits and `survive any node failure`.
 
 **Replaying the whole log** (`wrong/replay-whole-log`). Without snapshots, every open reads megabytes of operations, saturating the log's and the API's bandwidth. It fails the snapshot test and the p99 of Open document, and drags Edit down with it.
 
@@ -221,9 +221,9 @@ Likely follow-ups:
 
 ## Further reading
 
-- [What's different about the new Google Docs: Making collaboration fast](https://drive.googleblog.com/2010/09/whats-different-about-new-google-docs_22.html), Google Drive Blog, 2010: why Google Docs moved to operational transformation, and how a server orders operations.
+- [What's different about the new Google Docs: Making collaboration fast](https://drive.googleblog.com/2010/09/whats-different-about-new-google-docs.html), Google Drive Blog, 2010: why Google Docs moved to operational transformation, and how a server orders operations.
 - [How Figma's multiplayer technology works](https://www.figma.com/blog/how-figmas-multiplayer-technology-works/), Figma, 2019: one server process per document, why not OT, and CRDT-inspired properties.
 - [Operational Transformation](https://en.wikipedia.org/wiki/Operational_transformation), Wikipedia: the transformation functions, consistency models and the systems that use them.
 - [Conflict-free Replicated Data Types](https://crdt.tech/), crdt.tech: papers, libraries (Yjs, Automerge) and talks on CRDTs.
 - [System Design Primer: Asynchronism](https://github.com/donnemartin/system-design-primer#asynchronism): queues and back pressure behind the broadcast.
-- *Designing Data-Intensive Applications* (Martin Kleppmann), chapter 5 "Replication", section "Handling Write Conflicts", on collaborative editing as multi-leader replication.
+- *Designing Data-Intensive Applications* (Martin Kleppmann), chapter 5 "Replication", section "Multi-Leader Replication", on collaborative editing as multi-leader replication and on handling write conflicts.

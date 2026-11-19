@@ -98,7 +98,7 @@ hit-rate-to-db-load
 
 ### Sizing a worker pool
 
-A worker pool is sized like any server pool: the rate it must handle divided by what one worker handles, then headroom. Here a preview worker turns out 40 previews a second, so 640 a second keeps 16 of them fully busy. At 16 they would run at 100%, with no room for a burst or a lost machine. Aim for about 70%: 24 workers run at 67%, and with one lost, 23 run at 70%.
+A worker pool is sized like any server pool: the rate it must handle divided by what one worker handles, then headroom. Here a preview worker turns out 40 previews a second, so 640 a second keeps 16 of them fully busy. At 16 they would run at 100%, with no room for a burst or a lost machine. Aim for about 70%: 16 ÷ 0.7 is 23, plus one to lose. 24 workers run at 67%, and with one lost, 23 run at 70%.
 
 Thumbnails are the same arithmetic with different numbers: 1,000 a second at 100 per worker is 10 busy workers, about 15 with headroom. The two pools come out different sizes because their jobs differ by an order of magnitude in cost, which is the case for keeping them separate.
 
@@ -140,7 +140,7 @@ fingerprinted-assets
 
 **Render again on every edge miss** (`wrong/transform-on-every-view`). The thumbnail is made but never kept, so each CDN miss reads the original and calls the thumbnail pool. The pool's load grows with views, 2,500 extra renders a second, and saturates. It fails *Views are served from stored outputs* and the thumbnail view's p99.
 
-**Size the preview pool like the thumbnail pool** (`wrong/preview-pool-sized-like-thumbnails`). Fifteen workers is right for thumbnails, but a preview worker does 40 a second, not 100, so 15 of them can do 600 against 640 needed. The pool saturates and both pre-warms and on-view previews blow their latency limits.
+**Size the preview pool like the thumbnail pool** (`wrong/preview-pool-sized-like-thumbnails`). Fifteen workers is right for thumbnails, but a preview worker does 40 a second, not 100, so 15 of them can do 600 against 640 needed. The pool saturates before any worker is even lost, and everything that waits for a preview queues behind it. It fails the p99 of Pre-warm and of Open preview, and `survive any node failure`.
 
 **Serve thumbnails through the API** (`wrong/thumbnails-through-the-api`). Every thumbnail view goes through your own servers to the store. Those saturate at 50,000 requests a second, and sizing them for it costs more than the budget, for bytes a CDN would serve at the edge. It fails *Views are served from stored outputs* and the thumbnail view's p99.
 

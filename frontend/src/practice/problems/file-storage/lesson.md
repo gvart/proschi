@@ -19,7 +19,7 @@ A small Dropbox is not a CRUD app with big rows: with files from 10 KB to 2 GB, 
 **Functional requirements.**
 
 - **List files**: open a folder, get names, sizes and a signed download link for each file.
-- **Start upload**: the API records the file as *pending* in the metadata store and answers `201` with a pre-signed URL that permits one `PUT` into the bucket.
+- **Start upload**: the API records the file as *pending* in the metadata store and answers `201` with a pre-signed URL that permits a `PUT` of that one object into the bucket.
 - **Upload**: the client `PUT`s the bytes straight into object storage. The file must then be marked *ready* without the client's help, because the client may already be offline.
 - **Download**: the client fetches through its signed link, which points at a CDN. Two scenarios: `"CDN hit"` (the edge has it) and `"CDN miss"` (the edge fetches from the bucket).
 
@@ -80,7 +80,7 @@ egress-bill
 ```
 
 ```deepdive How the model sees each piece
-**Capacity per replica.** A load balancer takes 100k rps, a service 2k, PostgreSQL 20k reads but 5k writes on its single primary, a queue 50k, a function 10k, storage 5k. At 2.2k API requests a second about two service replicas would be fully busy: divide by your target utilisation, and check that one replica fewer survives. Metadata writes are far below one primary's capacity, so no sharding.
+**Capacity per replica.** A load balancer takes 100k rps, a service 2k, PostgreSQL 20k reads but 5k writes on its single primary, a queue 50k, a function 10k, storage 5k. 2.2k API requests a second is 1.1 replicas' worth of work. Divide by your target utilisation (about 70%), then check that one replica fewer still copes: three replicas run at 37%, and two at 55% when one is lost. Metadata writes (400 a second) are far below one primary's 5k, so no sharding.
 
 **Bandwidth.** Object storage and CDNs "scale out behind one name": the model never saturates them on bandwidth, as in reality.
 
@@ -93,12 +93,12 @@ egress-bill
 
 *Object storage* (S3, GCS, Azure Blob) stores immutable blobs under keys. It is cheap per byte, extremely durable, and scales request rates and bandwidth for you. It is not a database you can query, nor a file system with cheap renames.
 
-A *pre-signed URL* carries a signature made with your credentials. It allows one operation (say, a `PUT` to one key) and expires after a few minutes. Your API decides who may upload what, signs the URL locally (no network call), and the client then talks to the bucket directly. Your servers never see the bytes, so they need neither the bandwidth nor the long-lived connections a 2 GB upload would hold.
+A *pre-signed URL* carries a signature made with your credentials. It allows one kind of operation on one key (say, a `PUT` of `9a1`) and expires after a few minutes. Your API decides who may upload what, signs the URL locally (no network call), and the client then talks to the bucket directly. Your servers never see the bytes, so they need neither the bandwidth nor the long-lived connections a 2 GB upload would hold.
 
 **Trade-offs.** You cannot inspect the bytes on the way in, so virus scanning and transcoding happen later, on an event. And something must tell your system the upload happened: the next concept. **When not to use it:** tiny payloads that are really part of an API call (an avatar crop, a 2 KB JSON), where an extra round trip costs more than proxying.
 
 ```callout pitfall Signed URLs leak
-Anyone holding the URL can use it until it expires. Keep expiry short and scope each URL to one key.
+A signed URL is a bearer token: anyone holding it can use it, as often as they like, until it expires. Keep expiry short and scope each URL to one key.
 ```
 
 ```proschi
@@ -178,7 +178,7 @@ A *CDN* is a fleet of caching proxies near users. On a *hit*, the edge serves th
 
 ## Designing it step by step
 
-**1. Scope.** Ask about file sizes (up to 2 GB, so streaming through servers is out), the read/write ratio (downloads plus listings far outnumber uploads), sharing (yes, by link, hence signed URLs) and cost. Confirm sync, versioning and conflict resolution are out of scope: great follow-ups, not this problem.
+**1. Scope.** Ask about file sizes (up to 2 GB, so streaming through servers is out), the read/write ratio (downloads plus listings far outnumber uploads), who may fetch a file (only someone holding a signed, short-lived link) and what egress costs. Confirm sync, versioning and conflict resolution are out of scope: great follow-ups, not this problem.
 
 **2. High-level design.** Separate *metadata* from *content*. Metadata (folder, name, size, status, object key) is small, structured and queried by folder: a relational database behind an API, behind a load balancer. Content lives in the bucket and only moves between the user, the bucket and the CDN.
 
@@ -210,7 +210,7 @@ Without `~1MB` on those steps the model sees no transfer time and no egress, and
 
 **Downloading straight from the bucket** (`wrong/download-from-bucket`). Simple and correct, but every byte leaves at $0.09/GB: the model puts the bill around $119k a month, far over $45k. It fails *Downloads are served by the CDN* and `cost ≤ $45,000/month`.
 
-**A load balancer where the CDN should be** (`wrong/load-balancer-instead-of-cdn`). A load balancer caches nothing, so every download still reaches the origin and egress is billed at the higher rate. It fails *Downloads are served by the CDN*: the selector `any cdn` does not match a load balancer.
+**A load balancer where the CDN should be** (`wrong/load-balancer-instead-of-cdn`). A load balancer caches nothing, so every download still reaches the origin, and the bytes leave from a component you run at $0.09/GB: about $119k a month again. It fails *Downloads are served by the CDN* (the selector `any cdn` does not match a load balancer) and `cost ≤ $45,000/month`.
 
 **Other classic mistakes.**
 
@@ -233,7 +233,7 @@ Likely follow-ups:
 - *What if the event is delivered twice, or late?* The finisher's update is idempotent; late is fine because the client sees "processing" until it lands.
 - *What about a pending file whose upload never arrived?* A periodic job deletes pending rows older than the URL's expiry.
 - *How would you add sync across devices?* A per-user change log in metadata, and a notification channel (long polling or websockets) that tells devices to pull changes.
-- *How do you deduplicate?* Hash content on the client; if the hash exists, skip the upload and reference the existing object.
+- *How do you deduplicate?* Hash content on the client; if the hash exists, skip the upload and reference the existing object. Across users, first make the client prove it holds the bytes, or knowing a hash becomes a way to fetch someone else's file.
 
 ## Further reading
 
