@@ -53,6 +53,13 @@ The encoding matters less than its size; ask how large a change is on the wire.
 
 ## Estimates
 
+### How many configuration reads a second does the edge make in all?
+- answer: 3M
+- unit: reads/s
+- range: 2.5M to 3.5M
+
+1M requests × 3 settings = **3M reads a second**, 15k per data center: easy for a local store, 150 central nodes' worth if they went to the core.
+
 ### Each change is about 2 KB, 1k changes arrive a second, and every change must reach 200 data centers. How many bytes a second reach the edge?
 - answer: 400
 - unit: MB/s
@@ -65,13 +72,6 @@ The encoding matters less than its size; ask how large a change is on the wire.
 - unit: main nodes
 - range: 6 to 7
 
-Five would leave four carrying 412 MB/s against 400: saturated. **Six** run at 69%, and 82% with one down.
-
-### How many configuration reads a second does the edge make in all?
-- answer: 3M
-- unit: reads/s
-- range: 2.5M to 3.5M
-
-1M requests × 3 settings = **3M reads a second**, 15k per data center: easy for a local store, 150 central nodes' worth if they went to the core.
+With one down, five nodes leave four carrying about 410 MB/s against 400: saturated. **Six** run at 69%, and 82% with one down.
 
 Numbers: [Numbers to know](../docs/numbers/).

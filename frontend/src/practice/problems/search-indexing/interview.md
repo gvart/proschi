@@ -71,7 +71,7 @@ The language does not change the load. Ask how many changes a second reach the i
 - unit: nodes
 - range: 3 to 5
 
-10k ÷ 3k ≈ **3.3, so 4 nodes**. With 3 shards of 3 copies (9 nodes), each shard takes 3.3k over 3 nodes, about 37% busy, and still about 56% after losing one.
+10k ÷ 3k ≈ **3.3, so 4 nodes**. With 3 shards of 3 copies (9 nodes), the simulation gives each shard a third of the queries: 3.3k over 3 nodes, about 37% busy, and still about 56% after losing one.
 
 ### How busy are 8 Search API instances at 2k requests a second each?
 - answer: 62

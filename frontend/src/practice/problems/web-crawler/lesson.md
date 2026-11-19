@@ -64,11 +64,11 @@ A crawler looks like the simplest program in the world: download a page, find it
 
 **Throughput is the goal, not latency.** The p99 limits catch saturation: a fetcher pool or seen set that cannot keep up shows as a growing queue, and in the model as exploding latency.
 
-**The fetchers move bytes.** Each page crosses a fetcher twice, in from the website and out to the page store: 360 MB/s through the pool, against 200 MB/s per service replica in the model. Bandwidth, not request count, sizes the fetchers. Little's law (in flight = rate × time each takes) gives about 540 fetches at once, so each fetcher holds many connections open with asynchronous I/O.
+**The fetchers move bytes.** Each page crosses a fetcher twice, in from the website and out to the page store: 360 MB/s through the pool, against 200 MB/s per service replica in the model. Bandwidth, not request count, sizes the fetchers: two replicas would run at 90%, four run at 45%, and at 60% with one lost. Little's law (in flight = rate × time each takes) gives about 540 fetches at once, so each fetcher holds many connections open with asynchronous I/O.
 
-**The seen set is the busiest component.** 90k checks a second is close to one Redis node's 100k in the model, so it takes several nodes, enough to survive losing one. A database doing 90k conditional inserts a second costs several times more.
+**The seen set is the busiest component.** 90k checks a second is close to one Redis node's 100k in the model, so it takes several nodes, enough to survive losing one: three run at 30%, and at 45% with one lost. A database doing 90k conditional inserts a second costs several times more.
 
-**The frontier grows.** 5.4k URLs a second go in, 1.8k come out. A real crawl never empties it; it prioritises (important URLs, often-changing pages) and drops or postpones the rest.
+**The frontier grows.** 5.4k new URLs a second go in, and only 1.8k a second leave for good. A real crawl never empties it; it prioritises (important URLs, often-changing pages) and drops or postpones the rest.
 
 ```quiz
 littles-law-concurrency
@@ -80,7 +80,9 @@ littles-law-concurrency
 
 The frontier is the crawler's to-do list and its most valuable state: weeks of discovery, billions of URLs. It must survive restarts, and hand work to many fetchers in parallel without giving one host to two of them.
 
-A log such as Kafka partitioned by host does this: a host's URLs share a partition, one consumer owns each partition, so one fetcher owns each host. A URL not yet due goes back into the log with a due time (or into a delay queue).
+A log such as Kafka, partitioned by host, does this. The host is the partition key: many hosts share a partition (there are 100 million of them), but all of one host's URLs land in the same one. One consumer owns each partition, so one fetcher owns each host.
+
+A log has no built-in "deliver later". A URL that is not yet due is written back to the log with a due time, and comes round again; a real crawler often adds a delay queue for these.
 
 ```deepdive Mercator's two-layer frontier
 The classic design (Mercator's) has two layers. *Front queues* order URLs by priority. *Back queues* hold one host each, and a fetcher thread drains one back queue at a time, so the frontier itself enforces one request per host. A log partitioned by host gives you much of that.
@@ -96,7 +98,7 @@ Your crawler is a guest. Three rules keep it welcome:
 
 | Rule | What it means |
 |---|---|
-| **robots.txt** | Fetch each host's robots.txt, cache it for a day or so, and never fetch what it disallows. It may also set a crawl delay. |
+| **robots.txt** | Fetch each host's robots.txt, cache it for a day or so, and never fetch what it disallows. Many sites also set a `Crawl-delay` in it: not part of the standard, but a polite crawler honours it. |
 | **One connection per host, with a delay** | Commonly a few seconds, or a multiple of how long the last response took: a slow site gets crawled more slowly. |
 | **Back off on errors** | A host that answers 429 or 503, or times out, gets its delay doubled. |
 
@@ -141,7 +143,7 @@ Deduplicate **before** the frontier, when links are found. Checking at fetch tim
 *Normalise* each URL (lowercase the host, drop the fragment, sort or strip tracking parameters), hash it, and ask: seen before?
 
 - An **exact set** of 8-byte hashes for 10 billion URLs is about 80 GB before overhead: possible across several cache nodes.
-- A **Bloom filter** answers with a bit array and k hash functions: "definitely not seen" or "probably seen". At a 1% false-positive rate it needs about 9.6 bits per URL, about 12 GB for 10 billion. A false positive skips one new URL: cheap, since a page that matters is usually linked from elsewhere too.
+- A **Bloom filter** is a bit array with k hash functions. Adding a URL sets its k bits; checking one reads them. Any bit still 0 means "definitely not seen"; all 1 means "probably seen", because other URLs may have set those bits. At a 1% false-positive rate it needs about 9.6 bits per URL, about 12 GB for 10 billion. A false positive skips one new URL: cheap, since a page that matters is usually linked from elsewhere too. It never lets a seen URL through as new.
 
 A database table of seen URLs works, expensively: 90k conditional inserts a second need many nodes, paying for durability the set does not need, since a lost filter can be rebuilt from the frontier and the page store.
 
