@@ -81,7 +81,7 @@ edge (load balancers with a page cache and the throttle), the app servers,
 the connections and the two use cases.
 
 Unlike **Ticket Booking**, buyers do not pick a particular item and hold it:
-the problem is a crowd a hundred times bigger than checkout can take.
+the problem is a crowd twenty times bigger than checkout can take.
 
 ## Based on
 

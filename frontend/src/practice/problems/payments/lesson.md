@@ -49,7 +49,7 @@ The given file declares the `shopper`, the external `gateway` (250 ms per call, 
 ```numbers
 1k/s | checkouts at peak
 ≈ 1.95k/s | writes to the payments store, ~40% of one primary
-≈ 950/s | gateway calls, about 19% of its limit
+≈ 955/s | gateway calls, about 19% of its limit
 ≈ $2,000 | a lean design with two of everything
 ≈ 43 GB | payment rows a day
 ```
@@ -66,7 +66,7 @@ The retry worker handles the 5 a second that went pending.
 
 **Writes to the payments store.** Every checkout inserts its key, replays included (the insert is how a replay is detected), and every charged one marks the row succeeded: 1,000 + 945 ≈ 1.95k writes a second, plus a handful from the retry worker. A relational primary takes about 5k writes a second in the model, so one runs at roughly 40%. Replicas add failover, not write capacity; no sharding needed.
 
-**Gateway.** 945 charges plus 5 retries ≈ 950 calls a second against a 5k limit: about 19% busy. As one external system it follows the single-server queueing curve: at 19% its 250 ms becomes a little over 300 ms on average.
+**Gateway.** 945 charges, 5 calls that fail and 5 retries from the queue ≈ 955 calls a second against a 5k limit: about 19% busy. As one external system it follows the single-server queueing curve: at 19% its 250 ms becomes a little over 300 ms on average.
 
 **Latency budget.** A charged checkout is load balancer + API + insert + gateway + ledger + update; the gateway dominates, the rest is tens of milliseconds. With a heavy-tailed hop model (an idle hop's p99 is about 2.8× its mean), the charged path lands around a second at p99, inside 1.5 s. A failed gateway call costs a fixed 1,000 ms timeout. A replay must skip the gateway to fit under 100 ms.
 
@@ -84,11 +84,11 @@ beat-your-dependency
 
 ### Idempotency keys under a unique constraint
 
-An operation is **idempotent** if doing it twice has the same effect as once. `GET` and `PUT` are by definition; `POST /payments` is not. An idempotency key makes it so: the client generates a unique value per logical attempt (say, a UUID per checkout) and sends it with every retry. The server stores the key with the outcome and answers a seen key with the stored outcome instead of acting again.
+An operation is **idempotent** if doing it twice has the same effect as once. `GET`, `PUT` and `DELETE` are by definition; `POST /payments` is not. An idempotency key makes it so: the client generates a unique value per logical attempt (say, a UUID per checkout) and sends it with every retry. The server stores the key with the outcome and answers a seen key with the stored outcome instead of acting again.
 
 Two details decide whether this works:
 
-- **Insert, do not check.** "`SELECT` the key, then `INSERT` it if it is missing" has a race: two retries arriving together both see nothing and both charge. `INSERT … ON CONFLICT DO NOTHING RETURNING …` on a primary key is atomic: exactly one request wins the insert, the other gets a conflict and reads the stored row.
+- **Insert, do not check.** "`SELECT` the key, then `INSERT` it if it is missing" has a race: two retries arriving together both see nothing and both charge. `INSERT … ON CONFLICT DO NOTHING RETURNING …` on a primary key is atomic: exactly one request wins the insert and gets its row back. The other gets **zero rows**, which means "seen before", and reads the stored row.
 - **Strong and durable storage.** An asynchronously replicated cache can lose a key on failover, and an evicting one can forget it under memory pressure; the next retry then looks new and charges again. The key belongs in the same transactional store as the payment.
 
 Trade-offs: every request costs a write, keys need a retention policy, and clients must generate keys correctly (a new key per *checkout*, not per *retry*). Naturally idempotent operations (set a value, delete by id) need no keys.
@@ -110,7 +110,9 @@ usecase "Create order" {
     db    --> api    : inserted
     api   --> client : 201
   } alt "Seen before" {
-    db    --> api    : conflict, stored response
+    db    --> api    : 0 rows (conflict)
+    api    -> db     : SELECT response of that key
+    db    --> api    : stored response
     api   --> client : 200 stored response
   }
 }
@@ -216,7 +218,7 @@ Start with: "The client retries, and a timeout does not tell us whether the card
 
 Likely follow-ups:
 
-- *Two retries arrive at the same millisecond?* The unique constraint lets exactly one insert win; the other reads the stored row (or sees pending and returns `202`/`409`).
+- *Two retries arrive at the same millisecond?* The unique constraint lets exactly one insert win; the other reads the stored row. If that row is still pending, it answers `202` (or `409`) and does not charge.
 - *What if the key is reused with a different amount?* Store a hash of the request with the key and reject a mismatch.
 - *Why not Redis for speed?* The insert costs milliseconds next to a 250 ms gateway, and correctness needs durable, strongly consistent storage.
 - *How does the shopper learn the result?* Poll the payment, or get a webhook or push when the worker finishes.
