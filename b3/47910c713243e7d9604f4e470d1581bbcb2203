@@ -1,0 +1,42 @@
+frontend/src/practice/problems/ride-matching/interview.md
+  s_91ba69d9cbae8d::t_d2615046064be7 48,53,58
+frontend/src/practice/problems/flash-sale/problem.md
+  s_91ba69d9cbae8d::t_f769f9c7114ec5 84
+frontend/src/practice/problems/flash-sale/lesson.md
+  s_91ba69d9cbae8d::t_f769f9c7114ec5 9,150
+frontend/src/practice/problems/payments/interview.md
+  s_91ba69d9cbae8d::t_94170efebd274b 48,53,58,76-81
+  s_91ba69d9cbae8d::t_833d9622bab1a2 82
+frontend/src/practice/problems/ticket-booking/interview.md
+  s_91ba69d9cbae8d::t_52cae2fb73b010 42,47,52,77-82
+  s_91ba69d9cbae8d::t_d18b3f6642e5e2 83
+frontend/src/practice/problems/payments/lesson.md
+  s_91ba69d9cbae8d::t_94170efebd274b 52,69,87,91,113-115,221
+frontend/src/practice/problems/nearby-search/interview.md
+  s_91ba69d9cbae8d::t_d2615046064be7 80,82
+frontend/src/practice/problems/nearby-search/lesson.md
+  s_91ba69d9cbae8d::t_d2615046064be7 25,123,144,173
+frontend/src/practice/problems/ticket-booking/lesson.md
+  s_91ba69d9cbae8d::t_52cae2fb73b010 37,80,83,123,215
+frontend/src/practice/problems/ride-matching/lesson.md
+  s_91ba69d9cbae8d::t_d2615046064be7 26,91,112,192
+frontend/src/practice/problems/flash-sale/interview.md
+  s_91ba69d9cbae8d::t_f769f9c7114ec5 45-50,56,59,82-87
+  s_91ba69d9cbae8d::t_000fdab968b871 88
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b347910c713243e7d9604f4e470d1581bbcb2203",
+  "prompts": {},
+  "sessions": {
+    "s_91ba69d9cbae8d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "fe8c51ce-b526-4c6e-949d-867e4a8bd64a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
