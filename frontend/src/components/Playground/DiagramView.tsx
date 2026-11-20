@@ -390,8 +390,16 @@ export default function DiagramView({
     if (lastAdded === id) setLastAdded(next);
     if (selection.nodes.some((n) => n.id === id)) setPendingSelect([next]);
   };
-  const nodeActions: NodeActions | null =
-    playing || crumbs.length > 1 ? null : { editing, onName: finishName, onAddAfter: canAdd ? (id, at) => setAddAfter({ from: id, ...at }) : undefined };
+  // The same object while nothing in it changes, so the nodes (memo) don't all render again on every pan and glide.
+  const finishNameRef = useRef(finishName);
+  useLayoutEffect(() => {
+    finishNameRef.current = finishName;
+  });
+  const readOnly = playing || crumbs.length > 1;
+  const nodeActions = useMemo<NodeActions | null>(
+    () => (readOnly ? null : { editing, onName: (id, name) => finishNameRef.current(id, name), onAddAfter: canAdd ? (id, at) => setAddAfter({ from: id, ...at }) : undefined }),
+    [readOnly, editing, canAdd],
+  );
 
   const deleteSelection = () => {
     if (playing || (selection.nodes.length === 0 && selection.edges.length === 0)) return;

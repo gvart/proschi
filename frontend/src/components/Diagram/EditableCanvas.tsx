@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import ReactFlow, { Background, BackgroundVariant, Controls, Panel, ReactFlowProvider, useReactFlow } from 'reactflow';
 import type { Edge, EdgeTypes, Node, NodeChange } from 'reactflow';
 import 'reactflow/dist/style.css';
@@ -365,7 +365,12 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
     />
   );
 
-  const nodeActions: NodeActions = { editing, onName: finishName, onAddAfter: (id, at) => setAddAfter({ from: id, ...at }) };
+  // The same object while nothing in it changes, so the nodes (memo) don't all render again on every pan and glide.
+  const finishNameRef = useRef(finishName);
+  useLayoutEffect(() => {
+    finishNameRef.current = finishName;
+  });
+  const nodeActions = useMemo<NodeActions>(() => ({ editing, onName: (id, name) => finishNameRef.current(id, name), onAddAfter: (id, at) => setAddAfter({ from: id, ...at }) }), [editing]);
 
   return (
     <div
