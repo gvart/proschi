@@ -229,6 +229,7 @@ test.describe('editing on the Flows pane', () => {
     await option(page, 2).click({ modifiers: ['Shift'] });
     await expect(option(page, 1)).toHaveAttribute('aria-selected', 'true');
     await expect(option(page, 2)).toHaveAttribute('aria-selected', 'true');
+    await expect(option(page, 2)).toBeFocused();
     const selected = flows(page).getByRole('region', { name: 'Selected steps' });
     await expect(selected).toContainText('2 steps selected');
     await selected.getByRole('button', { name: 'Run at the same time' }).click();

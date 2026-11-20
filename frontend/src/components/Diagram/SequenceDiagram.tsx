@@ -434,7 +434,11 @@ function Message({ m, name, selected, focusable, onSelect }: { m: MessageBox; na
       title={step.label ? `${m.n}. ${step.label}` : undefined}
       // Shift-click picks a range, so it selects no text.
       onMouseDown={(e) => e.shiftKey && e.preventDefault()}
-      onClick={(e) => onSelect(e.shiftKey ? 'range' : e.metaKey || e.ctrlKey ? 'toggle' : 'only')}
+      onClick={(e) => {
+        // The one clicked has the focus, a Shift-click's too.
+        e.currentTarget.focus({ preventScroll: true });
+        onSelect(e.shiftKey ? 'range' : e.metaKey || e.ctrlKey ? 'toggle' : 'only');
+      }}
       className={`group/msg pointer-events-auto absolute flex scroll-mt-16 cursor-pointer select-none justify-center rounded-sm outline-hidden focus-visible:ring-2 focus-visible:ring-ink ${self ? '!justify-start pl-[52px]' : ''}`}
       style={{ left, width, top: m.y - SEQ.row / 2 + 1, height: SEQ.row - 2 }}
     >

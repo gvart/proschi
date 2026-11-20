@@ -129,7 +129,9 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   /** The one step selected, whose form the column shows. */
   const chosen = followed.length === 1 ? followed[0] : undefined;
   /** Where the composer is open on the diagram, and how many messages are drawn before it. */
-  const [composing, setComposing] = useState<{ slot: Slot; index: number } | null>(null);
+  const [composing, setComposing] = useState<{ slot: Slot; index: number; useCase?: string } | null>(null);
+  // Another use case chosen (here or in the top bar): the composer was for the last one.
+  if (composing && composing.useCase !== current) setComposing(null);
   /** Changed to put the focus back on the diagram's selected message after an edit. */
   const [focusKey, setFocusKey] = useState(0);
   /** The steps the tab draws, in order. */
@@ -160,7 +162,10 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   /** Shows a tab (the main flow, or a scenario); a step selected in another scenario is let go. */
   const chooseLane = (next: string) => {
     setLane(next);
-    setComposing(null);
+    if (composing) {
+      setComposing(null);
+      onPick(null);
+    }
     if (outline && followed.some((s) => (scenarioOfStep(outline.items, s.line) ?? next) !== next)) clearSelection();
   };
   /** In the pane, each step's number as the diagram draws the tab shown; the rail numbers the main flow's. */
@@ -222,7 +227,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   const openComposer = (slot: Slot, index: number, stepEnds?: { from: string; to: string }) => {
     setError(undefined);
     setSel([]);
-    setComposing({ slot, index });
+    setComposing({ slot, index, useCase: current });
     // From where the step before it went.
     onPick(stepEnds ?? { from: drawn[index - 1]?.to });
   };
