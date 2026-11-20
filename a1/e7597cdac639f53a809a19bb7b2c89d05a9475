@@ -1,0 +1,51 @@
+frontend/e2e/canvas-editing.e2e.ts
+  s_733d66441cadaa::t_0b381fcd059a1a 138-140
+  s_733d66441cadaa::t_c26946949ed725 2
+frontend/e2e/canvas-parity.e2e.ts
+  s_733d66441cadaa::t_0b381fcd059a1a 98-99
+  s_733d66441cadaa::t_c26946949ed725 2
+frontend/e2e/visual-editing.e2e.ts
+  s_733d66441cadaa::t_c26946949ed725 2
+  s_733d66441cadaa::t_bb1154148e9853 187
+  s_733d66441cadaa::t_75ae7504eb1b54 309-310,385,401
+  s_733d66441cadaa::t_fda5aa9b63fdaf 22-28,96,131,134-136,138-186,188-216,334
+  s_733d66441cadaa::t_d4195ebc4a7284 386,400,402
+frontend/src/components/Diagram/EditableCanvas.tsx
+  s_733d66441cadaa::t_7cbd37ebb94f43 485
+frontend/src/components/Diagram/CanvasTools.tsx
+  s_733d66441cadaa::t_ab4ac44a9e99a7 92-93,98-102
+  s_733d66441cadaa::t_74436e696967cc 97
+frontend/e2e/fixtures.ts
+  s_733d66441cadaa::t_22b1fe811d70f3 341-342
+  s_733d66441cadaa::t_07e40aeb2d2cbb 336
+frontend/src/components/Diagram/paletteGroups.ts
+  s_733d66441cadaa::t_467550235365d6 64-70
+frontend/src/components/Canvas/ComponentNode.tsx
+  s_733d66441cadaa::t_5150bbc2407742 94-106
+  s_733d66441cadaa::t_dde69ad1e79f05 1,114
+frontend/src/components/Playground/DiagramView.tsx
+  s_733d66441cadaa::t_7cbd37ebb94f43 762
+frontend/src/components/Diagram/canvasShared.ts
+  s_733d66441cadaa::t_5d6cc23774c8d7 139-140
+frontend/src/components/Diagram/paletteGroups.test.ts
+  s_733d66441cadaa::t_075f5672513992 2,29-35
+  s_733d66441cadaa::t_b4ea1805284ed7 36
+frontend/src/components/Diagram/Palette.tsx
+  s_733d66441cadaa::t_2ed5f9d41ff539 5,43
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a1e7597cdac639f53a809a19bb7b2c89d05a9475",
+  "prompts": {},
+  "sessions": {
+    "s_733d66441cadaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9649973d-f497-4440-b031-a92483a592e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
