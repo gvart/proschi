@@ -68,6 +68,8 @@ export function useFitOnChange(key: string, { duration, wrapper, inset, glide = 
   const fitted = useRef<string | undefined>(undefined);
   /** The base key of the last fit, to tell a glide-only change. */
   const fittedBase = useRef<string | undefined>(undefined);
+  /** The key of the last fit, to tell a change of only the covered parts (an inset). */
+  const fittedKey = useRef<string | undefined>(undefined);
   /** The viewport the last fit went to, and when: a different one since means the reader zoomed or panned. */
   const target = useRef<{ x: number; y: number; zoom: number; at: number } | undefined>(undefined);
   /** The nodes of the last fit, to tell an addition; and the node it followed (see `added`). */
@@ -85,9 +87,12 @@ export function useFitOnChange(key: string, { duration, wrapper, inset, glide = 
       if (!domNode?.offsetWidth || Math.abs(domNode.offsetWidth - width) > 1 || Math.abs(domNode.offsetHeight - height) > 1) return;
       const reduced = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       const glideOnly = fittedBase.current === baseKey;
+      // Only what covers the pane changed (a bar's height, a docked card): like a glide, it leaves a view the reader moved.
+      const coverOnly = fittedKey.current === key;
       fitted.current = fitKey;
       fittedBase.current = baseKey;
-      if (glideOnly && movedByHand(store.getState().transform, target.current)) return;
+      fittedKey.current = key;
+      if ((glideOnly || coverOnly) && movedByHand(store.getState().transform, target.current)) return;
       const ms = glideOnly && !reduced ? GLIDE_MS : duration;
       const nodes = getNodes().filter((n) => !n.hidden);
       if (nodes.length === 0) return;
@@ -120,7 +125,7 @@ export function useFitOnChange(key: string, { duration, wrapper, inset, glide = 
       setViewport(next, { duration: ms });
     });
     return () => cancelAnimationFrame(frame);
-  }, [fitKey, baseKey, measured, sized, paneSize, setViewport, duration, wrapper, store, top, bottom, right, addedId]);
+  }, [fitKey, baseKey, key, measured, sized, paneSize, setViewport, duration, wrapper, store, top, bottom, right, addedId]);
 }
 
 /** Whether the view is not where the last fit left it (after its glide): the reader zoomed or panned since. */

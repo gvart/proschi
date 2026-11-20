@@ -23,6 +23,7 @@ const node = (page: Page, name: string) => canvasNodes(page).filter({ hasText: n
 
 /** Waits until the canvas stops moving nodes around (layout runs after every edit). */
 async function layoutSettled(page: Page) {
+  await expect(page.locator('[data-layout-busy]')).toHaveCount(0);
   let last = '';
   await expect
     .poll(async () => {
@@ -218,6 +219,8 @@ test.describe('connecting by drag', () => {
 
   test('at half zoom, a drop on the middle of a node connects with its type’s protocol, and a duplicate says why', async ({ page }) => {
     await newDiagram(page, 'api "API" [REST API] pos 0,0\ndb "Orders DB" [PostgreSQL] pos 0,300\n', 2);
+    // The first layout's fit comes once it settles; zooming before that would be undone.
+    await layoutSettled(page);
     for (let zoom = await zoomOf(page); zoom > 0.55; zoom = await zoomOf(page)) {
       await page.getByRole('button', { name: 'zoom out' }).click();
       await expect.poll(() => zoomOf(page)).toBeLessThan(zoom);
