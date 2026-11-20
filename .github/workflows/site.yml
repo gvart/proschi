@@ -58,10 +58,15 @@ jobs:
   # (about 11 of them in the tests), at the edge of the timeout.
   e2e:
     name: e2e (${{ matrix.shard }}/2)
-    # Not ubuntu-latest: this Playwright version can't install Chromium on Ubuntu 26.04.
-    runs-on: ubuntu-24.04
-    # Room for a slow apt mirror on top of the ~10 minutes a shard takes.
-    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    # Playwright's own image has Chromium and every OS package it needs, so the
+    # job installs nothing: apt mirrors and cdn.playwright.dev have each crawled
+    # for 10+ minutes and failed the job. The tag must match @playwright/test in
+    # frontend/package-lock.json (checked below).
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.1-noble
+      options: --user 1001
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -82,33 +87,10 @@ jobs:
       - run: npm run build:accounts
       # Sign-in without paid plans: e2e/*.free.e2e.ts checks nothing metered shows.
       - run: npm run build:accounts-free
-      # Chromium is cached per Playwright version: the download from
-      # cdn.playwright.dev can crawl for minutes and eat the job's timeout.
-      - id: playwright
-        run: |
+      # A Playwright upgrade must move the image tag above with it.
+      - run: |
           version=$(node -p "require('@playwright/test/package.json').version")
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-      - id: browsers
-        uses: actions/cache/restore@v6
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
-      # The OS packages the browser needs (apt): never cut short, since a killed
-      # apt-get keeps the dpkg lock and the next install fails on it.
-      - timeout-minutes: 10
-        run: npx playwright install-deps chromium
-      # The browser itself: a slow download fails after 3 minutes and is tried
-      # once more, rather than running into the job's timeout. Stopping a
-      # download midway is harmless.
-      - if: steps.browsers.outputs.cache-hit != 'true'
-        timeout-minutes: 7
-        run: timeout 3m npx playwright install chromium || timeout 3m npx playwright install chromium
-      # Saved straight away, so a run whose tests fail still fills the cache.
-      - if: steps.browsers.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v6
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ steps.browsers.outputs.cache-primary-key }}
+          test "$version" = "1.56.1" || { echo "::error::@playwright/test is $version: update the e2e container image to v$version-noble"; exit 1; }
       - run: npm run e2e -- --shard=${{ matrix.shard }}/2
       - uses: actions/upload-artifact@v7
         if: failure()
