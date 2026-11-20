@@ -706,7 +706,15 @@ export default function DiagramView({
   const barInset = useTopBarInset(wrapperRef, `${nodes.length > 0}:${playing}:${crumbs.length}:${canOverlay}:${!!overlay}:${hasPinnedNodes}:${!!diagram.legend}`);
   const narrow = useNarrow(wrapperRef);
   const fitInset = useMemo(() => (barInset > (inset?.top ?? 0) ? { top: barInset, bottom: inset?.bottom } : inset), [barInset, inset]);
-  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { wrapper: wrapperRef, inset: fitInset, glide: `${playing ? 'playing' : ''}:${glideKey}:${paletteOpen}:${flowsOpen}:${railOpen}:${paneMoves}`, added: lastAdded });
+  // A phone's sheet takes half of the canvas at once: the diagram is fitted to what is left before it is drawn, not glided there.
+  const railKey = `${paletteOpen}:${flowsOpen}:${railOpen}`;
+  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, {
+    wrapper: wrapperRef,
+    inset: fitInset,
+    glide: `${playing ? 'playing' : ''}:${glideKey}:${phone ? '' : railKey}:${paneMoves}`,
+    still: phone ? railKey : undefined,
+    added: lastAdded,
+  });
   useKeepInView(playing ? undefined : singleNode?.id, railOpen);
 
   const handleEdgesChange = useCallback(

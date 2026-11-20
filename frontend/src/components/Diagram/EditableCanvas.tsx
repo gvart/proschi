@@ -503,7 +503,15 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
   const cover = railOpen && floating ? FLOATING_RAIL : 0;
   // Below the top bar's buttons, tools and folded legend, so no node of the fit sits under them.
   const barInset = useTopBarInset(canvasRef, `${nodes.length > 0}:${canOverlay}:${!!overlay}:${pinned}:${!!diagram.legend}`);
-  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { glide: `${paletteOpen}:${flowsOpen}:${railOpen}:${paneMoves}`, right: cover, inset: barInset ? { top: barInset } : undefined, added: lastAdded });
+  // A phone's sheet takes half of the canvas at once: the diagram is fitted to what is left before it is drawn, not glided there.
+  const railKey = `${paletteOpen}:${flowsOpen}:${railOpen}`;
+  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, {
+    glide: `${phone ? '' : railKey}:${paneMoves}`,
+    still: phone ? railKey : undefined,
+    right: cover,
+    inset: barInset ? { top: barInset } : undefined,
+    added: lastAdded,
+  });
   useKeepInView(current?.kind === 'node' ? current.id : undefined, railOpen);
   // A component just added keeps its settings closed (the palette stays for the next add), but where the Selection
   // tab is already showing, it shows them rather than "Nothing selected".
