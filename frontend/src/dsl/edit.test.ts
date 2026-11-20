@@ -21,6 +21,7 @@ import {
   setTech,
   uniqueId,
 } from './edit';
+import { builtinTypes } from './index';
 import { parse } from './parser';
 
 describe('setNodePosition', () => {
@@ -97,6 +98,23 @@ describe('addConnection', () => {
 
   it('keeps use cases last', () => {
     expect(addConnection('a\nusecase U {\n}', 'a', 'b')).toBe('a\na -> b\nusecase U {\n}');
+  });
+
+  it('writes a label after the target', () => {
+    expect(addConnection('a\nb\n', 'a', 'b', 'SQL')).toBe('a\nb\na -> b : SQL\n');
+    expect(addConnection('a\nb\n', 'a', 'b', '  ')).toBe('a\nb\na -> b\n');
+    // A label cannot open a block or a payload.
+    expect(addConnection('a\nb\n', 'a', 'b', 'x {')).toBe('a\nb\na -> b : x\n');
+  });
+
+  it('writes every stdlib protocol as a label the parser reads back without a problem', () => {
+    const protocols = new Set([...builtinTypes().values()].flatMap((t) => (t.protocol ? [t.protocol] : [])));
+    expect(protocols).toContain('SQL');
+    for (const protocol of protocols) {
+      const { diagram, diagnostics } = parse(addConnection('a [REST API]\nb [PostgreSQL]\n', 'a', 'b', protocol));
+      expect(diagram.edges[0].label, protocol).toBe(protocol);
+      expect(diagnostics, protocol).toEqual([]);
+    }
   });
 });
 

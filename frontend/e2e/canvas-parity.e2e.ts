@@ -105,7 +105,7 @@ test.describe('the practice canvas', () => {
     const finder = page.getByRole('dialog', { name: 'Connect Links API to' });
     await finder.getByRole('combobox').fill('api2');
     await page.keyboard.press('Enter');
-    await expect.poll(() => editorText(page)).toMatch(/^api -> api2$/m);
+    await expect.poll(() => editorText(page)).toMatch(/^api -> api2 : HTTP$/m);
   });
 
   test('Ctrl+D duplicates the selection and / finds a component', async ({ page }) => {

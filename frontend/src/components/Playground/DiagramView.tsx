@@ -19,6 +19,7 @@ import FlowsPanel, { type StepPick } from '../Diagram/FlowsPanel';
 import { CanvasMenu, ConnectHint, FlowsToggle, PaletteDock, PaletteToggle, type CanvasMenuActions, type CanvasMenuState } from '../Diagram/CanvasEditing';
 import { canvasKey, historyKey, useConnectHint, useMiniMap, usePaletteOpen, type CanvasKey } from '../Diagram/canvasEditState';
 import Inspector from '../Diagram/Inspector';
+import { ConnectAtAnyZoom, connectionLabels, useConnectDrop } from '../Diagram/connect';
 import NodeFinder from '../Diagram/NodeFinder';
 import { FIT_MAX_ZOOM, FIT_VIEW_OPTIONS, useFitOnChange, type FitInset } from '../Diagram/useFitOnChange';
 import FlowParticles from '../Overlay/FlowParticles';
@@ -207,6 +208,14 @@ export default function DiagramView({
   const [menu, setMenu] = useState<CanvasMenuState | null>(null);
   const closeMenu = useCallback(() => setMenu(null), []);
   const [hintSeen, dismissHint] = useConnectHint();
+  const connectDrop = useConnectDrop(
+    diagram,
+    (from, to) => {
+      dismissHint();
+      onConnectNodes(from, to);
+    },
+    onNotice,
+  );
   const [miniMap, setMiniMap] = useMiniMap();
   /** The node finder: to jump to a node, or to pick the one to connect `from` to. */
   const [finder, setFinder] = useState<{ connectFrom?: string } | null>(null);
@@ -547,6 +556,7 @@ export default function DiagramView({
       key={single.id}
       node={selectedNode}
       edge={selectedNode ? undefined : selectedEdge}
+      labels={!selectedNode && selectedEdge ? connectionLabels(diagram, selectedEdge) : undefined}
       capacity={selectedNode ? diagram.capacity?.find((c) => c.node === selectedNode.id) : undefined}
       importedFrom={selectedNode ? importedNodes.get(selectedNode.id) : selectedEdge?.loc.file}
       system={selectedNode ? (nodes.find((n) => n.id === selectedNode.id)?.data as SystemNodeData | undefined)?.system : undefined}
@@ -626,11 +636,11 @@ export default function DiagramView({
         onNodeDragStop={pinDrag.onNodeDragStop}
         // While a Flows step is picked, a click picks its end instead of selecting.
         onNodeClick={(_event, node) => picking && pickNode(node.id)}
-        onConnect={(connection) => {
-          if (!connection.source || !connection.target) return;
-          dismissHint();
-          onConnectNodes(connection.source, connection.target);
-        }}
+        // A connection drops anywhere on a node's body; one it can't take is refused, saying why.
+        isValidConnection={connectDrop.isValidConnection}
+        onConnectStart={connectDrop.onConnectStart}
+        onConnect={connectDrop.onConnect}
+        onConnectEnd={connectDrop.onConnectEnd}
         onNodeContextMenu={(event, node) => {
           if (playing) return;
           event.preventDefault();
@@ -651,6 +661,8 @@ export default function DiagramView({
           if (playing || edge.id.startsWith('step:') || !connection.source || !connection.target) return;
           onReconnect(edge.id, connection.source, connection.target);
         }}
+        onReconnectStart={connectDrop.onReconnectStart}
+        onReconnectEnd={connectDrop.onReconnectEnd}
         // A system box opens its team design; renaming it stays in its settings and the selection bar.
         onNodeDoubleClick={(_event, node) => {
           if (playing) return;
@@ -667,6 +679,7 @@ export default function DiagramView({
         proOptions={{ hideAttribution: true }}
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
+        <ConnectAtAnyZoom />
         {overlay && !playing && <FlowParticles flows={overlay.flows} nodes={overlay.nodes} />}
         <Controls showInteractive={false}>
           {/* The minimap is for wide screens; on a phone it would cover the diagram. */}
@@ -748,9 +761,9 @@ export default function DiagramView({
           </Panel>
         )}
         {/* The minimap takes this corner. */}
-        {nodes.length > 0 && !playing && !miniMap && !(hasSelection && !showSettings) && (
+        {nodes.length > 0 && !playing && !miniMap && !notice && !(hasSelection && !showSettings) && (
           <Panel position="bottom-right" className="hidden md:block text-xs text-muted bg-paper/85 rounded-sm px-2 py-1">
-            {narrow ? '? for shortcuts' : 'Drag to pin · select to edit · drag dot to dot to connect · right-click for more · ? for shortcuts'}
+            {narrow ? '? for shortcuts' : 'Drag to pin · select to edit · drag from a dot onto a component to connect · right-click for more · ? for shortcuts'}
           </Panel>
         )}
       </ReactFlow>

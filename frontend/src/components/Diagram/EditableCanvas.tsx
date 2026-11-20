@@ -22,6 +22,7 @@ import { canvasKey, historyKey, useConnectHint, useMiniMap, usePaletteOpen, type
 import { CanvasMiniMap, CanvasTopBar, MiniMapButton, OverlayTools } from './CanvasTools';
 import { finderItemsOf, useOverlayOn, usePinDrag, useTopBarInset, withEdgeLoads, withNodeLoads } from './canvasShared';
 import { useCanvasEdits } from './useCanvasEdits';
+import { ConnectAtAnyZoom, connectionLabels, newConnection, useConnectDrop } from './connect';
 import NodeFinder from './NodeFinder';
 
 /**
@@ -189,9 +190,11 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
 
   const connect = (from: string, to: string) => {
     dismissHint();
-    if (from === to || diagram.edges.some((e) => e.source === from && e.target === to)) return;
-    onChange(addConnection(source, from, to));
+    const { error, label } = newConnection(diagram, from, to);
+    if (error !== undefined) return setNotice(error);
+    onChange(addConnection(source, from, to, label));
   };
+  const connectDrop = useConnectDrop(diagram, connect, setNotice);
 
   const remove = () => {
     if (node) {
@@ -304,6 +307,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
       key={current.id}
       node={node}
       edge={node ? undefined : edge}
+      labels={!node && edge ? connectionLabels(diagram, edge) : undefined}
       capacity={node ? diagram.capacity?.find((c) => c.node === node.id) : undefined}
       importedFrom={node ? imported.get(node.id) : edge?.loc.file}
       problemCapacity={problemCapacity}
@@ -377,10 +381,16 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
           // Dragging an end of a connection onto another node moves that end, in the text.
           edgesUpdatable
           onReconnect={(ed, c) => c.source && c.target && edits.reconnect(ed.id, c.source, c.target)}
+          onReconnectStart={connectDrop.onReconnectStart}
+          onReconnectEnd={connectDrop.onReconnectEnd}
           onNodeClick={(_e, n) => (pick && flowsOpen ? pickNode(n.id) : select({ kind: 'node', id: n.id }))}
           onEdgeClick={(_e, ed) => select({ kind: 'edge', id: ed.id })}
           onPaneClick={() => (pick ? undefined : setSelected(null))}
-          onConnect={(c) => c.source && c.target && connect(c.source, c.target)}
+          // A connection drops anywhere on a node's body; one it can't take is refused, saying why.
+          isValidConnection={connectDrop.isValidConnection}
+          onConnectStart={connectDrop.onConnectStart}
+          onConnect={connectDrop.onConnect}
+          onConnectEnd={connectDrop.onConnectEnd}
           onNodeContextMenu={(e, n) => {
             e.preventDefault();
             select({ kind: 'node', id: n.id });
@@ -399,6 +409,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
           proOptions={{ hideAttribution: true }}
         >
           <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
+          <ConnectAtAnyZoom />
           {overlay && <FlowParticles flows={overlay.flows} nodes={overlay.nodes} />}
           <Controls showInteractive={false}>{!phone && <MiniMapButton shown={miniMap} onToggle={() => setMiniMap(!miniMap)} />}</Controls>
           {!phone && miniMap && <CanvasMiniMap />}

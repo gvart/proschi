@@ -133,15 +133,65 @@
   border: 2px solid rgb(var(--c-ink)) !important;
   background: rgb(var(--c-surface)) !important;
 }
-/* On a canvas that edits (.pc-editable), a node's dots grow and fill on hover: they are where a connection starts. */
+/*
+ * On a canvas that edits (.pc-editable), a node's dots grow and fill on hover or selection: they are
+ * where a connection starts. They keep about 10px on screen down to half zoom, and an invisible pad
+ * around them takes the pointer, both sized by the zoom (--pc-zoom, set by ConnectAtAnyZoom).
+ */
 .pc-editable .pc-handle {
+  /* Capped, so that zoomed far out a dot and its pad never cover the middle of the node, which is for clicks and drags. */
+  width: clamp(9px, calc(10px / var(--pc-zoom, 1)), 18px) !important;
+  height: clamp(9px, calc(10px / var(--pc-zoom, 1)), 18px) !important;
   cursor: crosshair;
   transition: scale 120ms ease-out, background-color 120ms ease-out;
 }
+.pc-editable .pc-handle::after {
+  content: '';
+  position: absolute;
+  inset: max(calc(-8px / var(--pc-zoom, 1)), -10px);
+  border-radius: 50%;
+}
 .pc-editable .react-flow__node:hover .pc-handle,
-.pc-editable .pc-handle.connectingto {
+.pc-editable .react-flow__node.selected .pc-handle {
   scale: 1.45;
   background: rgb(var(--c-yellow)) !important;
+}
+/*
+ * The whole node takes a dropped connection (BodyTarget): invisible, and out of the pointer's way
+ * until a connection is dragged; then it outlines the node under the pointer.
+ */
+.react-flow__handle.pc-body-target {
+  inset: -4px;
+  width: auto;
+  height: auto;
+  min-width: 0;
+  min-height: 0;
+  transform: none;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  pointer-events: none;
+}
+/* Connections start at the bottom dot and drop on the body, so the top dot (where edges arrive) is not drawn to grab. */
+.pc-editable .pc-handle--in {
+  opacity: 0;
+  pointer-events: none;
+}
+/* Over the dots too: at a low zoom they cover much of a node. */
+.pc-connecting .react-flow__handle.pc-body-target {
+  z-index: 2;
+  pointer-events: all;
+  cursor: crosshair;
+}
+.react-flow__handle.pc-body-target[data-connect='valid'] {
+  outline: calc(3px / var(--pc-zoom, 1)) solid rgb(var(--c-pink));
+  outline-offset: 2px;
+  background: rgb(var(--c-pink) / 0.1);
+}
+.react-flow__handle.pc-body-target[data-connect='invalid'] {
+  outline: calc(3px / var(--pc-zoom, 1)) dashed rgb(var(--c-fail));
+  outline-offset: 2px;
+  cursor: not-allowed;
 }
 @media (prefers-reduced-motion: reduce) {
   .pc-editable .pc-handle {
