@@ -93,16 +93,24 @@ of the way.
 1. Pick a use case in the editor's header. The Flows bar shows its name:
    click it to rename it. Its **⋯** menu adds a new use case or deletes
    this one. (In practice and the interview, the bar has its own picker.)
-2. Click **Add a step** in the bar. Then click the component it
-   starts at and the one it goes to: on the map, on its lane's header or
-   lifeline, or in the form.
-3. Pick the kind: **Request**, **Response**, **Message** (sent without
-   waiting) or **Fails** (a call that never gets an answer).
-4. Pick an operation from the list and click **Add step**.
+   With no use case yet, the view asks you to **Name the first use case**.
+2. Click **Add step** under the last arrow, or press **N**. A dashed arrow
+   starts where the last step ended. An empty use case starts it at the
+   user, with every component shown as a dashed lane.
+3. Click the component it goes to: its lane, its header or the map. Clicking
+   the start's own lane starts over, so you can pick a different start.
+4. Type the label on the arrow, or pick an operation from the list. The kind
+   (**Request**, **Response**, **Message** or **Fails**) sits under it.
+5. Press **Enter** to add the step. The next arrow starts where this one
+   went, so you can chain a whole flow. **Escape** stops.
 
-The form stays open for the next step, from where the last one ended.
-**Reply** answers the open request in one click. Warnings show before you
-add the step. On a scenario's tab, steps go into that scenario.
+While a request waits for its answer, a **Reply to …** button under the
+arrow (or **Enter**) adds the answer back. Warnings show before you add the
+step. On a scenario's tab, steps go into that scenario.
+
+**+ Lane**, after the last lane's header, adds a lane for a component the
+flow doesn't use yet. A new arrow, or the end of a selected one, can then go
+there. Its last choice, **New component…**, goes back to the architecture.
 
 The operations come from the target's type: PostgreSQL offers `SELECT` and
 `INSERT`, a REST API its HTTP methods, a response its statuses. **Headers,
@@ -113,13 +121,13 @@ operations of its own** writes a [type](TYPES.md#declare-a-type) from the
 steps you used, so the next ones are checked.
 
 To add a step in the middle, hover the diagram and click a **+** between
-two arrows, or drag from one lifeline to another. A small form opens there,
-starting where the step before it ended. **Goes to** lists every component,
-and one that is not in the use case yet gets its own lane. A step can't go
-from a component to itself.
+two arrows, or drag from one lifeline to another. The same dashed arrow
+starts there, from where the step before it ended, or with both ends when
+you dragged.
 
-Click an arrow to select it, and a small toolbar shows over it. Every change
-is written at once, with no Save:
+Click an arrow to select it, and a small toolbar shows under it. The arrows
+below move down to make room, so nothing is covered. Every change is written
+at once, with no Save:
 
 - **Request**, **Response**, **Message** and **Fails** change its kind.
 - Double-click the arrow, or press **Enter**, to edit its label in place,
@@ -135,8 +143,8 @@ is written at once, with no Save:
 Shift-click or Ctrl-click (**⌘**-click) to select several steps. **Run at
 the same time** puts them in a [parallel block](SCENARIOS.md#parallel-steps).
 They must follow each other in one flow or scenario, or the view says why.
-A block's **Ungroup** runs its steps one after another again, and **Add
-alongside** adds one more step to it.
+A block's **Ungroup** runs its steps one after another again, and its **Add
+alongside** row adds one more step to it.
 
 With a scenario's tab open, the pencil and bin beside its tab rename or
 delete that scenario.
@@ -161,7 +169,12 @@ Click the canvas first. **?** lists every shortcut.
 | **R** | Lay out again, when you have dragged components into place. |
 | **F** | Switch between the architecture and Flows. |
 
-In the Flows view, click a step first. **↑** and **↓** select the next
+In the Flows view, **N** adds a step: at the end, or after the selected
+step (**Shift+N** before it). While you pick its target, **←** and **→**
+aim at a lane and **Enter** takes it. In its label, **Enter** adds the step
+and starts the next, and **Escape** stops.
+
+To edit a step, click it first. **↑** and **↓** select the next
 step, **Shift+↑** and **Shift+↓** select several, and **Escape** lets it
 go. **Enter** edits its label. **1** to **4** set its kind (request,
 response, message, fails), **R** adds its reply, **D** opens its details
