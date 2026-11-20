@@ -27,7 +27,7 @@ function shortcutSections(partner: boolean): Section[] {
   return [
     {
       title: 'Canvas',
-      note: 'Click the diagram first. In Code mode the diagram is view-only: edit there in the code.',
+      note: 'Click the diagram first. In Code mode the diagram is view-only: edit there in the code. Undo and redo work on it in both modes.',
       bindings: [
         { keys: [['A'], [MOD_KEY, 'K']], action: 'Add a component or run an action, in plain words' },
         { keys: [['/'], [MOD_KEY, 'F']], action: 'Find a component' },
