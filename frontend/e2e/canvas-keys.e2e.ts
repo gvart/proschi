@@ -1,8 +1,8 @@
 import type { Page } from '@playwright/test';
 import lz from 'lz-string';
-import { canvasNodes, editorText, expect, test, waitForCanvas } from './fixtures';
+import { appendCode, canvasNodes, editorText, expect, test, waitForCanvas } from './fixtures';
 
-// The command bar and the canvas keys are Visual mode's; the last test checks Code mode leaves them alone.
+// The command bar and the canvas keys are Visual mode's; the last tests check Code mode leaves them alone, all but undo and redo.
 test.use({ mode: 'visual' });
 
 /**
@@ -162,5 +162,28 @@ test.describe('in Code mode', () => {
     await page.keyboard.press('Tab');
     await expect(selected(page)).toContainText('Orders API');
     expect(await editorText(page)).toBe(before);
+  });
+
+  test('undo and redo on the diagram are the code editor’s', async ({ page }) => {
+    await open(page);
+    const before = await editorText(page);
+    await appendCode(page, 'cache "Cache" [Redis]\n');
+    await expect.poll(() => editorText(page)).toContain('cache "Cache" [Redis]');
+    await waitForCanvas(page, 4);
+    const pane = page.locator('.react-flow__pane');
+    const box = (await pane.boundingBox())!;
+    await pane.click({ position: { x: 6, y: box.height / 2 } });
+    // The keys reach the diagram, not the code editor (which would undo on its own).
+    expect(await page.evaluate(() => !!document.activeElement?.closest('.react-flow') || !!document.activeElement?.querySelector('.react-flow'))).toBe(true);
+    expect(await page.evaluate(() => !!document.activeElement?.closest('.cm-editor'))).toBe(false);
+
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect.poll(() => editorText(page)).toBe(before);
+    await page.keyboard.press('ControlOrMeta+Shift+z');
+    await expect.poll(() => editorText(page)).toContain('cache "Cache" [Redis]');
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect.poll(() => editorText(page)).toBe(before);
+    await page.keyboard.press('Control+y');
+    await expect.poll(() => editorText(page)).toContain('cache "Cache" [Redis]');
   });
 });

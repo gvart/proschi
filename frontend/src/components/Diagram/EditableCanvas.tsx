@@ -23,7 +23,7 @@ import FlowsPanel, { type StepPick } from './FlowsPanel';
 import { nextPick } from './flows';
 import { canvasKey, historyKey, scalable, stepNode, stepReplicas, useConnectHint, useMiniMap, usePaletteOpen, type CanvasKey } from './canvasEditState';
 import { CanvasMiniMap, CanvasTopBar, MiniMapButton, OverlayTools } from './CanvasTools';
-import { finderItemsOf, useLateOpen, useOverlayOn, usePinDrag, useTopBarInset, withEdgeLoads, withNodeLoads } from './canvasShared';
+import { finderItemsOf, railRowClass, useKeepInView, useLateOpen, useOverlayOn, usePinDrag, useTopBarInset, withEdgeLoads, withNodeLoads } from './canvasShared';
 import { useCanvasEdits } from './useCanvasEdits';
 import { ConnectAtAnyZoom, connectionLabels, newConnection, useConnectDrop } from './connect';
 import NodeFinder from './NodeFinder';
@@ -184,14 +184,14 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
    * clicking away does not open and close the rail (and move the canvas) every time.
    */
   const [selectionTab, setSelectionTab] = useState(false);
-  const selectionShown = !phone && !viewOnly && (showSettings || selectionTab);
+  const selectionShown = !viewOnly && (showSettings || selectionTab);
   useEffect(() => {
-    if (showSettings && !phone && !paletteOpen && !flowsOpen) setSelectionTab(true);
-  }, [showSettings, phone, paletteOpen, flowsOpen]);
+    if (showSettings && !paletteOpen && !flowsOpen) setSelectionTab(true);
+  }, [showSettings, paletteOpen, flowsOpen]);
   const railTab: RailTab = selectionShown ? 'selection' : flowsOpen ? 'flows' : 'components';
   // Opened by a selection alone, the rail waits for the click to finish (useLateOpen) before it narrows the canvas.
   const selectionOpens = useLateOpen(selectionShown && !paletteOpen && !flowsOpen);
-  const railOpen = !phone && (paletteOpen || flowsOpen || selectionOpens);
+  const railOpen = paletteOpen || flowsOpen || selectionOpens;
   /** The type picker T asked for: the component's, opened in its settings until a type is picked or it closes. */
   const [typeRequest, setTypeRequest] = useState<{ id: string; n: number } | null>(null);
   /** The command bar (A, or Ctrl/Cmd+K). */
@@ -477,6 +477,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
   // Below the top bar's buttons, tools and folded legend, so no node of the fit sits under them.
   const barInset = useTopBarInset(canvasRef, `${nodes.length > 0}:${canOverlay}:${!!overlay}:${pinned}:${!!diagram.legend}`);
   useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { glide: `${paletteOpen}:${flowsOpen}:${railOpen}`, right: cover, inset: barInset ? { top: barInset } : undefined, added: lastAdded });
+  useKeepInView(current?.kind === 'node' ? current.id : undefined, railOpen);
   // A component just added keeps its settings closed (the palette stays for the next add), but where the Selection
   // tab is already showing, it shows them rather than "Nothing selected".
   const inspector = (showSettings || (selectionShown && !!current)) && current && (
@@ -489,7 +490,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
       capacity={node ? diagram.capacity?.find((c) => c.node === node.id) : undefined}
       importedFrom={node ? imported.get(node.id) : edge?.loc.file}
       problemCapacity={problemCapacity}
-      docked={!phone}
+      docked
       typeRequest={typeRequest?.id === current.id ? typeRequest.n : undefined}
       onTypeDone={() => {
         setTypeRequest(null);
@@ -513,10 +514,10 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
 
   return (
     <div
-      className="flex h-full"
+      className={railRowClass(phone)}
       onKeyDown={(e) => {
-        // Code mode's undo is the code editor's own.
-        const step = viewOnly ? null : historyKey(e);
+        // In Code mode too: the view-only diagram edits nothing, but undoes and redoes the code it shows.
+        const step = historyKey(e);
         if (!step) return;
         e.preventDefault();
         if (step === 'undo') onUndo();
@@ -524,7 +525,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
       }}
     >
       <PaletteDock
-        open={phone ? paletteOpen : railOpen}
+        open={railOpen}
         tab={railTab}
         onTab={showTab}
         offersFlows={flows}
@@ -623,8 +624,8 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
               !viewOnly && (
                 <>
                   {/* Each shows its tab of the rail, or hides the rail when its tab is the one shown. */}
-                  <PaletteToggle open={paletteOpen && railTab === 'components'} onToggle={() => (phone || (paletteOpen && railTab === 'components') ? togglePalette() : showTab('components'))} />
-                  {flows && <FlowsToggle open={flowsOpen && railTab === 'flows'} onToggle={() => (phone || (flowsOpen && railTab === 'flows') ? toggleFlows() : showTab('flows'))} />}
+                  <PaletteToggle open={paletteOpen && railTab === 'components'} onToggle={() => (paletteOpen && railTab === 'components' ? togglePalette() : showTab('components'))} />
+                  {flows && <FlowsToggle open={flowsOpen && railTab === 'flows'} onToggle={() => (flowsOpen && railTab === 'flows' ? toggleFlows() : showTab('flows'))} />}
                 </>
               )
             }
@@ -645,17 +646,6 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
           )}
         </ReactFlow>
         </NodeActionsContext.Provider>
-        {/* A phone has no rail: the settings are a card over the bottom of the canvas. */}
-        {inspector && phone && (
-          <div className="pointer-events-none absolute inset-x-2 bottom-2 z-10 flex max-h-[55%]">
-            {inspector}
-          </div>
-        )}
-        {phone && flowsPanel && (
-          <div data-testid="flows-sheet" className="absolute inset-x-0 bottom-0 z-20 flex max-h-[55%] flex-col overflow-hidden rounded-t-brutal border-t-bw-2 border-ink bg-surface shadow-brutal-lg">
-            {flowsPanel}
-          </div>
-        )}
         {nodes.length === 0 && <EmptyCanvas viewOnly={viewOnly} />}
         {addAfter && (
           <AddAfterPicker
