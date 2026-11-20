@@ -19,10 +19,12 @@ import FlowsPanel, { type StepPick } from '../Diagram/FlowsPanel';
 import { nextPick } from '../Diagram/flows';
 import { AddAfterPicker, CanvasMenu, ConnectHint, FlowsToggle, PaletteDock, PaletteToggle, SelectionEmpty, type AddAfterState, type CanvasMenuActions, type CanvasMenuState, type RailTab } from '../Diagram/CanvasEditing';
 import { NodeActionsContext, type NodeActions } from '../Canvas/nodeActions';
-import { canvasKey, historyKey, useConnectHint, useMiniMap, usePaletteOpen, type CanvasKey } from '../Diagram/canvasEditState';
+import { canvasKey, historyKey, scalable, stepNode, stepReplicas, useConnectHint, useMiniMap, usePaletteOpen, type CanvasKey } from '../Diagram/canvasEditState';
 import Inspector from '../Diagram/Inspector';
 import { ConnectAtAnyZoom, connectionLabels, useConnectDrop } from '../Diagram/connect';
 import NodeFinder from '../Diagram/NodeFinder';
+import QuickAdd from '../Diagram/QuickAdd';
+import { canvasActions, promptUseCase } from '../Diagram/quickItems';
 import { FIT_MAX_ZOOM, FIT_VIEW_OPTIONS, useFitOnChange, type FitInset } from '../Diagram/useFitOnChange';
 import FlowParticles from '../Overlay/FlowParticles';
 import { PlaybackMiniMap } from '../UseCases/UseCasePlayback';
@@ -252,6 +254,10 @@ export default function DiagramView({
   const [pendingSelect, setPendingSelect] = useState<string[] | null>(null);
   /** The node or connection whose settings were closed, so they stay closed until something else is selected. */
   const [closedSettings, setClosedSettings] = useState<string | null>(null);
+  /** The type picker T asked for: the component's, opened in its settings until a type is picked or it closes. */
+  const [typeRequest, setTypeRequest] = useState<{ id: string; n: number } | null>(null);
+  /** The command bar (A, or Ctrl/Cmd+K). */
+  const [quick, setQuick] = useState(false);
   const single = selection.nodes.length + selection.edges.length === 1 ? (selection.nodes[0] ?? selection.edges[0]) : undefined;
   const selectedNode = selection.nodes.length === 1 ? diagram.nodes.find((n) => n.id === selection.nodes[0].id) : undefined;
   const selectedEdge = selection.edges.length === 1 ? diagram.edges.find((e) => e.id === selection.edges[0].id) : undefined;
@@ -433,22 +439,98 @@ export default function DiagramView({
     const added = onDuplicateNodes(ids);
     if (added?.length) setPendingSelect(added);
   };
-  /** Ctrl/Cmd+C, V and D, and `/` or Ctrl/Cmd+F; false when the key is left to the browser (Ctrl+C with nothing selected). */
+  /** Opens the "+" type picker beside a node, to add one connected from it (C). */
+  const addAfterNode = (id: string): boolean => {
+    const box = wrapperRef.current?.querySelector(`.react-flow__node[data-id="${CSS.escape(id)}"]`)?.getBoundingClientRect();
+    if (!box) return false;
+    setAddAfter({ from: id, x: box.right, y: box.top + box.height / 2 });
+    return true;
+  };
+  /** The canvas's keys (canvasEditState.ts); false when the key is left to the browser (Ctrl+C or Tab with nothing selected). */
   const runCanvasKey = (key: CanvasKey): boolean => {
     const ids = selection.nodes.map((n) => n.id);
-    if (key === 'copy') {
-      if (ids.length === 0) return false;
-      onCopyNodes(ids);
-    } else if (key === 'paste') {
-      const added = onPasteNodes();
-      if (added?.length) setPendingSelect(added);
-    } else if (key === 'duplicate') {
-      if (ids.length > 0) duplicate(ids);
-    } else if (key === 'rename') {
-      if (!singleNode) return false;
-      void promptRename(singleNode);
-    } else setFinder({});
-    return true;
+    const node = singleNode && diagram.nodes.find((n) => n.id === singleNode.id);
+    const own = node && !importedNodes.has(node.id);
+    switch (key) {
+      case 'copy':
+        if (ids.length === 0) return false;
+        onCopyNodes(ids);
+        return true;
+      case 'paste': {
+        const added = onPasteNodes();
+        if (added?.length) setPendingSelect(added);
+        return true;
+      }
+      case 'duplicate':
+        if (ids.length > 0) duplicate(ids);
+        return true;
+      case 'rename':
+        if (!singleNode) return false;
+        void promptRename(singleNode);
+        return true;
+      case 'find':
+        setFinder({});
+        return true;
+      case 'quick':
+        if (!canAdd) return false;
+        setQuick(true);
+        return true;
+      case 'next':
+      case 'previous': {
+        if (ids.length === 0) return false;
+        const drawn = getNodes().filter((n) => !n.hidden && n.type !== 'groupNode');
+        const next = stepNode(drawn.map((n) => ({ id: n.id, ...(n.positionAbsolute ?? n.position) })), singleNode?.id, key === 'previous');
+        if (!next) return false;
+        selectOnly(next);
+        setClosedSettings(null);
+        return true;
+      }
+      case 'connect':
+        return canAdd && !!node && (node.kind === 'component' || node.kind === 'system') && addAfterNode(node.id);
+      case 'type':
+        if (!node || node.kind !== 'component' || !own) return false;
+        setClosedSettings(null);
+        setSelectionTab(true);
+        setTypeRequest({ id: node.id, n: (typeRequest?.n ?? 0) + 1 });
+        return true;
+      case 'more':
+      case 'fewer':
+        if (!node || !scalable(node) || !own) return false;
+        onEdit((src) => stepReplicas(src, node.id, key === 'more' ? 1 : -1));
+        return true;
+      case 'layout':
+        // Laying out again only unpins: without a pinned node the layout is already the automatic one.
+        if (!hasPinnedNodes) return false;
+        onResetLayout();
+        return true;
+    }
+  };
+  const closeQuick = () => {
+    setQuick(false);
+    wrapperRef.current?.focus({ preventScroll: true });
+  };
+  /** The command bar's actions, those the canvas can do now. */
+  const quickActions = () => {
+    const local = flows?.diagram.useCases.some((u) => u.loc.file === undefined);
+    const from = chainFrom;
+    return canvasActions({
+      newUseCase: flows
+        ? async () => {
+            const added = await promptUseCase(flows.source);
+            if (!added) return;
+            flows.onChange(added.source);
+            flows.onUseCase(added.id);
+            showTab('flows');
+          }
+        : undefined,
+      addStep: flows && local ? () => {
+        showTab('flows');
+        setPick({ from });
+      } : undefined,
+      rename: singleNode && (() => void promptRename(singleNode)),
+      remove: selectionCount > 0 ? deleteSelection : undefined,
+      fit: () => void fitView({ ...FIT_VIEW_OPTIONS, duration: 300 }),
+    });
   };
   /** The nodes the finder offers: those drawn, without groups and notes when connecting. */
   const finderItems = () => finderItemsOf(diagram, nodes, finder?.connectFrom);
@@ -671,7 +753,11 @@ export default function DiagramView({
       importedFrom={selectedNode ? importedNodes.get(selectedNode.id) : selectedEdge?.loc.file}
       system={selectedNode ? (nodes.find((n) => n.id === selectedNode.id)?.data as SystemNodeData | undefined)?.system : undefined}
       docked={!phone}
-      onTypeDone={() => wrapperRef.current?.focus({ preventScroll: true })}
+      typeRequest={typeRequest?.id === single.id ? typeRequest.n : undefined}
+      onTypeDone={() => {
+        setTypeRequest(null);
+        wrapperRef.current?.focus({ preventScroll: true });
+      }}
       onEdit={onEdit}
       onDelete={deleteSelection}
       onClose={closeSelection}
@@ -914,6 +1000,15 @@ export default function DiagramView({
       )}
       {menu && (
         <CanvasMenu menu={menu} onSettings={viewOnly ? undefined : () => setClosedSettings(null)} onDelete={viewOnly ? undefined : deleteSelection} onClose={closeMenu} actions={menuActions()} />
+      )}
+      {quick && (
+        <QuickAdd
+          types={diagram.types ?? []}
+          actions={quickActions()}
+          connectFrom={chainFrom ? (diagram.nodes.find((n) => n.id === chainFrom)?.name ?? chainFrom) : undefined}
+          onAdd={(tech) => addComponent(tech, undefined, chainFrom)}
+          onClose={closeQuick}
+        />
       )}
       {finder && (
         <NodeFinder

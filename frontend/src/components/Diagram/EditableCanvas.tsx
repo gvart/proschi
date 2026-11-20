@@ -21,12 +21,14 @@ import { addComponent, nameNode, namedElsewhere } from './addFlow';
 import { NodeActionsContext, type NodeActions } from '../Canvas/nodeActions';
 import FlowsPanel, { type StepPick } from './FlowsPanel';
 import { nextPick } from './flows';
-import { canvasKey, historyKey, useConnectHint, useMiniMap, usePaletteOpen, type CanvasKey } from './canvasEditState';
+import { canvasKey, historyKey, scalable, stepNode, stepReplicas, useConnectHint, useMiniMap, usePaletteOpen, type CanvasKey } from './canvasEditState';
 import { CanvasMiniMap, CanvasTopBar, MiniMapButton, OverlayTools } from './CanvasTools';
 import { finderItemsOf, useLateOpen, useOverlayOn, usePinDrag, useTopBarInset, withEdgeLoads, withNodeLoads } from './canvasShared';
 import { useCanvasEdits } from './useCanvasEdits';
 import { ConnectAtAnyZoom, connectionLabels, newConnection, useConnectDrop } from './connect';
 import NodeFinder from './NodeFinder';
+import QuickAdd from './QuickAdd';
+import { canvasActions, promptUseCase } from './quickItems';
 
 /**
  * A laid-out canvas that edits its document's text: drag components in from
@@ -89,7 +91,7 @@ const NO_MOVES: ReadonlyMap<string, XY> = new Map();
 
 function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKey, layoutBusy, problemCapacity, paletteKey, phone, flows: offersFlows = false, simulate, overlayKey = 'proschi.practice.overlay', viewOnly = false }: EditableCanvasProps) {
   const flows = offersFlows && !viewOnly;
-  const { fitView } = useReactFlow();
+  const { fitView, getNodes } = useReactFlow();
   const [selected, setSelected] = useState<Selected>(null);
   const [settingsClosed, setSettingsClosed] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -190,6 +192,10 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
   // Opened by a selection alone, the rail waits for the click to finish (useLateOpen) before it narrows the canvas.
   const selectionOpens = useLateOpen(selectionShown && !paletteOpen && !flowsOpen);
   const railOpen = !phone && (paletteOpen || flowsOpen || selectionOpens);
+  /** The type picker T asked for: the component's, opened in its settings until a type is picked or it closes. */
+  const [typeRequest, setTypeRequest] = useState<{ id: string; n: number } | null>(null);
+  /** The command bar (A, or Ctrl/Cmd+K). */
+  const [quick, setQuick] = useState(false);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   /**
@@ -346,20 +352,100 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
     const name = await prompt({ title: 'Rename', label: 'Display name', defaultValue: target.name, confirmLabel: 'Rename' });
     if (name !== null) onChange(renameNode(source, id, name));
   };
-  /** Ctrl/Cmd+C, V and D, and `/` or Ctrl/Cmd+F; false when the key is left to the browser (Ctrl+C with nothing selected). */
+  /** Opens the "+" type picker beside a node, to add one connected from it (C). */
+  const addAfterNode = (id: string): boolean => {
+    const box = canvasRef.current?.querySelector(`.react-flow__node[data-id="${CSS.escape(id)}"]`)?.getBoundingClientRect();
+    if (!box) return false;
+    setAddAfter({ from: id, x: box.right, y: box.top + box.height / 2 });
+    return true;
+  };
+  /** Says why a node of the problem's file can't be changed here; true when it can. */
+  const ownNode = (id: string) => {
+    const file = imported.get(id);
+    if (file) setNotice(`"${diagram.nodes.find((n) => n.id === id)?.name ?? id}" is part of ${file}; it stays.`);
+    return !file;
+  };
+  /** The canvas's keys (canvasEditState.ts); false when the key is left to the browser (Ctrl+C or Tab with nothing selected). */
   const runCanvasKey = (key: CanvasKey): boolean => {
     const ids = current?.kind === 'node' ? [current.id] : [];
-    if (key === 'copy') {
-      if (ids.length === 0) return false;
-      edits.copy(ids);
-    } else if (key === 'paste') selectNew(edits.paste());
-    else if (key === 'duplicate') {
-      if (ids.length > 0) selectNew(edits.duplicate(ids));
-    } else if (key === 'rename') {
-      if (ids.length === 0) return false;
-      void rename(ids[0]);
-    } else setFinder({});
-    return true;
+    switch (key) {
+      case 'copy':
+        if (ids.length === 0) return false;
+        edits.copy(ids);
+        return true;
+      case 'paste':
+        selectNew(edits.paste());
+        return true;
+      case 'duplicate':
+        if (ids.length > 0) selectNew(edits.duplicate(ids));
+        return true;
+      case 'rename':
+        if (ids.length === 0) return false;
+        void rename(ids[0]);
+        return true;
+      case 'find':
+        setFinder({});
+        return true;
+      case 'quick':
+        setQuick(true);
+        return true;
+      case 'next':
+      case 'previous': {
+        if (!node) return false;
+        const drawn = getNodes().filter((n) => !n.hidden && n.type !== 'groupNode');
+        const next = stepNode(drawn.map((n) => ({ id: n.id, ...(n.positionAbsolute ?? n.position) })), node.id, key === 'previous');
+        if (!next) return false;
+        select({ kind: 'node', id: next });
+        return true;
+      }
+      case 'connect':
+        return !!node && (node.kind === 'component' || node.kind === 'system') && addAfterNode(node.id);
+      case 'type':
+        if (!node || node.kind !== 'component') return false;
+        if (ownNode(node.id)) {
+          setSettingsClosed(false);
+          setSelectionTab(true);
+          setTypeRequest({ id: node.id, n: (typeRequest?.n ?? 0) + 1 });
+        }
+        return true;
+      case 'more':
+      case 'fewer':
+        if (!node || !scalable(node)) return false;
+        if (ownNode(node.id)) onChange(stepReplicas(source, node.id, key === 'more' ? 1 : -1));
+        return true;
+      case 'layout':
+        // Laying out again only unpins: without a pinned node the layout is already the automatic one.
+        if (!pinned) return false;
+        edits.resetLayout();
+        return true;
+    }
+  };
+  const closeQuick = () => {
+    setQuick(false);
+    canvasRef.current?.focus({ preventScroll: true });
+  };
+  /** The command bar's actions, those the canvas can do now. */
+  const quickActions = () => {
+    const from = chainFrom;
+    const selectedId = current?.id;
+    return canvasActions({
+      newUseCase: flows
+        ? async () => {
+            const added = await promptUseCase(source);
+            if (!added) return;
+            onChange(added.source);
+            setFlowsUseCase(added.id);
+            showTab('flows');
+          }
+        : undefined,
+      addStep: flows && diagram.useCases.some((u) => u.loc.file === undefined) ? () => {
+        showTab('flows');
+        setPick({ from });
+      } : undefined,
+      rename: current?.kind === 'node' && selectedId ? () => void rename(selectedId) : undefined,
+      remove: current ? remove : undefined,
+      fit: () => void fitView({ ...FIT_VIEW_OPTIONS, duration: 300 }),
+    });
   };
   const pickFound = (id: string) => {
     if (finder?.connectFrom) return connect(finder.connectFrom, id);
@@ -402,7 +488,11 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
       importedFrom={node ? imported.get(node.id) : edge?.loc.file}
       problemCapacity={problemCapacity}
       docked={!phone}
-      onTypeDone={() => canvasRef.current?.focus({ preventScroll: true })}
+      typeRequest={typeRequest?.id === current.id ? typeRequest.n : undefined}
+      onTypeDone={() => {
+        setTypeRequest(null);
+        canvasRef.current?.focus({ preventScroll: true });
+      }}
       onEdit={(edit) => onChange(edit(source))}
       onDelete={remove}
       onClose={closeSelection}
@@ -577,6 +667,15 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
           />
         )}
         {menu && <CanvasMenu menu={menu} onSettings={() => setSettingsClosed(false)} onDelete={remove} onClose={closeMenu} actions={menuActions()} />}
+        {quick && (
+          <QuickAdd
+            types={diagram.types ?? []}
+            actions={quickActions()}
+            connectFrom={chainFrom ? (diagram.nodes.find((n) => n.id === chainFrom)?.name ?? chainFrom) : undefined}
+            onAdd={(tech) => add(tech, { from: chainFrom })}
+            onClose={closeQuick}
+          />
+        )}
         {finder && (
           <NodeFinder
             items={finderItemsOf(diagram, nodes, finder.connectFrom)}

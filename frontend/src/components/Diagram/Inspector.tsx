@@ -16,6 +16,7 @@ import {
 } from '../../dsl/edit';
 import type { CapacityOverride, Diagram, DiagramEdge, DiagramNode, InstanceSize } from '../../dsl/types';
 import { getTechStackIcon } from '../../utils/iconMapping';
+import { scalable } from './canvasEditState';
 import TypePicker, { TypeCard } from './TypePicker';
 import { eyebrow, field, iconButton } from '../Playground/ui';
 import type { SystemSummary } from '../Canvas/systemSummary';
@@ -155,10 +156,9 @@ function NodeFields({
   onEdit: (edit: Edit) => void;
 }) {
   const id = node.id;
-  const kind = kindOf(node);
   // Clients, notes and groups have no capacity to set.
-  const simulated = kind !== 'client' && kind !== 'other';
-  const store = isDataStore(kind);
+  const simulated = scalable(node);
+  const store = isDataStore(kindOf(node));
   const replicas = node.replicas ?? 1;
   return (
     <>
