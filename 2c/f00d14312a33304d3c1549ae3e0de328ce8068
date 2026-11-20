@@ -1,0 +1,42 @@
+frontend/src/practice/stages/StageBar.tsx
+  s_733d66441cadaa::t_905485cca909f4 20
+frontend/src/practice/interview/MockRoom.tsx
+  s_733d66441cadaa::t_5cac52e3fe9109 19
+frontend/src/components/Diagram/EditableCanvas.tsx
+  s_733d66441cadaa::t_0ad562e9222b15 491,507
+  s_733d66441cadaa::t_5d201fc6d027ef 492-506
+  s_733d66441cadaa::t_9e05a379cda4c3 75-79,91-92,111,146,358,379-382,388-389,410,413,419,425,431-432,442,446,449,454,465-466,472,490,508,510,537
+frontend/src/practice/ProblemPage.tsx
+  s_733d66441cadaa::t_601c7048957dbf 9-11,148-153,162-164,364
+  s_733d66441cadaa::t_41dc7f989e830a 365,491-507,509,524,526,547,658,665,667,687,712-715,721-730,738,748-749,754,757,838-844,875,885-887
+  s_733d66441cadaa::t_9e05a379cda4c3 1073-1074,1078,1140
+  s_733d66441cadaa::t_00f5e5213e1613 421,425,690-709,796,798-801,889
+  s_733d66441cadaa::t_34e0fe8d6d807e 888
+frontend/src/practice/interview/Room.tsx
+  s_733d66441cadaa::t_5cac52e3fe9109 2,6-8,27-30,70,76-81,108,114,117,155,168-169,175-184,215,258-262,264,341,377,379,382,385,458-464,514
+docs/PRACTICE.md
+  s_733d66441cadaa::t_bcb7352ff4ac81 2,265-267
+docs/STYLING.md
+  s_733d66441cadaa::t_97bcac394742e5 2,119-125
+  s_733d66441cadaa::t_9bf5eeb3dfbd29 126
+frontend/src/practice/interview/SoloRoom.tsx
+  s_733d66441cadaa::t_5cac52e3fe9109 12
+frontend/src/onboarding/PracticeTour.tsx
+  s_733d66441cadaa::t_039b4101720c7c 55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2cf00d14312a33304d3c1549ae3e0de328ce8068",
+  "prompts": {},
+  "sessions": {
+    "s_733d66441cadaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9649973d-f497-4440-b031-a92483a592e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
