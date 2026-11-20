@@ -530,7 +530,7 @@ export interface OutlineStep {
   label: string;
 }
 
-/** A `par { … }` block of the main flow: steps that run at the same time. */
+/** A `par { … }` block of the main flow or of a scenario: steps that run at the same time. */
 export interface OutlineParallel {
   /** The line of `par {`, and of the `}` that closes it. */
   line: number;
@@ -548,9 +548,13 @@ export interface OutlineBranch {
   /** The branch opens on the line that closes the one before (`} alt "B" {`). */
   shared: boolean;
   steps: OutlineStep[];
-  /** Statements in it that are not plain steps (a nested block), left to the code. */
+  /** Statements in it that are not plain steps (a nested block, a `par` block too), left to the code. */
   other: number;
+  /** Its plain steps and `par` blocks in the order written (the `par` blocks are also counted in `other`). */
+  items: OutlineBranchItem[];
 }
+
+export type OutlineBranchItem = { kind: 'step'; step: OutlineStep } | { kind: 'parallel'; block: OutlineParallel };
 
 export type OutlineItem =
   | { kind: 'step'; step: OutlineStep }
@@ -613,10 +617,10 @@ export function outlineOf(source: string, name: string): UseCaseOutline | undefi
   let group: OutlineBranch[] | undefined;
   /** The branch being read, if any. */
   let branch: OutlineBranch | undefined;
-  /** The main flow's `par` block being read, if any. */
+  /** The `par` block being read (of the main flow or of the branch), if any. */
   let parallel: OutlineParallel | undefined;
   const openBranch = (tokens: Token[], at: number, shared: boolean) => {
-    branch = { name: tokens[1]?.value ?? '', line: at + 1, endLine: at + 1, shared, steps: [], other: 0 };
+    branch = { name: tokens[1]?.value ?? '', line: at + 1, endLine: at + 1, shared, steps: [], other: 0, items: [] };
     if (!group) {
       group = [];
       items.push({ kind: 'scenarios', branches: group });
@@ -645,10 +649,15 @@ export function outlineOf(source: string, name: string): UseCaseOutline | undefi
       openBranch(tokens, i, false);
       continue;
     }
-    if (first.kind === 'ident' && first.value === 'par' && tokens[1]?.kind === 'lbrace' && !branch && !parallel) {
-      group = undefined;
+    if (first.kind === 'ident' && first.value === 'par' && tokens[1]?.kind === 'lbrace' && !parallel) {
       parallel = { line: i + 1, endLine: i + 1, steps: [], other: 0 };
-      items.push({ kind: 'parallel', block: parallel });
+      if (branch) {
+        branch.other++;
+        branch.items.push({ kind: 'parallel', block: parallel });
+      } else {
+        group = undefined;
+        items.push({ kind: 'parallel', block: parallel });
+      }
       continue;
     }
     const step = readStep(tokens, i + 1);
@@ -657,8 +666,10 @@ export function outlineOf(source: string, name: string): UseCaseOutline | undefi
       if (step) parallel.steps.push(step);
       else parallel.other++;
     } else if (branch) {
-      if (step) branch.steps.push(step);
-      else branch.other++;
+      if (step) {
+        branch.steps.push(step);
+        branch.items.push({ kind: 'step', step });
+      } else branch.other++;
     } else {
       // Anything between two alt blocks ends their scenarios.
       group = undefined;
@@ -756,8 +767,23 @@ function withConnection(source: string, step: NewStep, design?: Diagram): string
 /** Every step of an outline: the main flow's, each scenario's and each parallel block's. */
 function stepsOf(outline: UseCaseOutline): OutlineStep[] {
   return outline.items.flatMap((item) =>
-    item.kind === 'step' ? [item.step] : item.kind === 'scenarios' ? item.branches.flatMap((b) => b.steps) : item.kind === 'parallel' ? item.block.steps : [],
+    item.kind === 'step'
+      ? [item.step]
+      : item.kind === 'scenarios'
+        ? item.branches.flatMap((b) => [...b.steps, ...parallelsIn(b.items).flatMap((p) => p.steps)])
+        : item.kind === 'parallel'
+          ? item.block.steps
+          : [],
   );
+}
+
+function parallelsIn(items: (OutlineItem | OutlineBranchItem)[]): OutlineParallel[] {
+  return items.flatMap((item) => (item.kind === 'parallel' ? [item.block] : []));
+}
+
+/** Every `par` block of an outline: the main flow's and each scenario's. */
+function parallelsOf(outline: UseCaseOutline): OutlineParallel[] {
+  return [...parallelsIn(outline.items), ...outline.items.flatMap((item) => (item.kind === 'scenarios' ? item.branches.flatMap((b) => parallelsIn(b.items)) : []))];
 }
 
 /** The use case (in this document's own text) with a step on `line`. */
@@ -792,7 +818,7 @@ export function moveStep(source: string, line: number, direction: 'up' | 'down')
   const range = (start: number, end: number) => ({ start, end });
   const stepRange = (s: OutlineStep) => range(s.line, statementEnd(lines, s.line - 1) + 1);
   // The sibling ranges (1-based, inclusive) of the step's own block.
-  const inBlock = outline.items.flatMap((item) => (item.kind === 'scenarios' ? item.branches.map((b) => b.steps) : item.kind === 'parallel' ? [item.block.steps] : [])).find((steps) => steps.some((s) => s.line === line));
+  const inBlock = [...parallelsOf(outline).map((p) => p.steps), ...outline.items.flatMap((item) => (item.kind === 'scenarios' ? item.branches.map((b) => b.steps) : []))].find((steps) => steps.some((s) => s.line === line));
   const siblings = inBlock
     ? inBlock.map(stepRange)
     : outline.items.map((item) =>
@@ -913,6 +939,114 @@ export function removeScenario(source: string, useCase: string, name: string): E
     lines.splice(branch.line - 1, branch.endLine - branch.line);
   } else lines.splice(branch.line - 1, branch.endLine - branch.line + 1);
   return { source: lines.join('\n') };
+}
+
+// ---------------------------------------------------------------------------
+// Steps that run at the same time: `par { … }` blocks, in a use case's main
+// flow or in one of its scenarios. A `par` holds steps only, of any kind
+// (requests, responses, messages, failed calls), and no `alt` or `par`.
+
+/** The block a step is written in: the line that opens it (the use case's, a scenario's or a `par`'s), and whether it is a `par`. */
+function blockOfStep(outline: UseCaseOutline, line: number): { opener: number; parallel: boolean } | undefined {
+  const has = (steps: OutlineStep[]) => steps.some((s) => s.line === line);
+  const parallel = parallelsOf(outline).find((p) => has(p.steps));
+  if (parallel) return { opener: parallel.line, parallel: true };
+  const branch = outline.items.flatMap((item) => (item.kind === 'scenarios' ? item.branches : [])).find((b) => has(b.steps));
+  if (branch) return { opener: branch.line, parallel: false };
+  if (outline.items.some((item) => item.kind === 'step' && item.step.line === line)) return { opener: outline.line, parallel: false };
+  return undefined;
+}
+
+/** The `par` block opened at `line`, with the line that opens the block it is in. */
+function findParallel(source: string, line: number): { block: OutlineParallel; opener: number } | undefined {
+  for (const u of parse(source).diagram.useCases) {
+    if (u.loc.file !== undefined) continue;
+    const outline = outlineOf(source, u.name);
+    if (!outline) continue;
+    const main = parallelsIn(outline.items).find((p) => p.line === line);
+    if (main) return { block: main, opener: outline.line };
+    for (const b of outline.items.flatMap((item) => (item.kind === 'scenarios' ? item.branches : []))) {
+      const block = parallelsIn(b.items).find((p) => p.line === line);
+      if (block) return { block, opener: b.line };
+    }
+  }
+  return undefined;
+}
+
+/** What `inner` indents by more than `outer`, or two spaces when it is not deeper. */
+function indentStep(inner: string, outer: string): string {
+  return inner.length > outer.length && inner.startsWith(outer) ? inner.slice(outer.length) : '  ';
+}
+
+/**
+ * Wraps the steps written at `lines` (their first lines; multi-line payloads
+ * move whole) in a `par { … }` block, so they run at the same time. They must
+ * be two or more steps that follow each other in the same flow or scenario,
+ * none of them in a `par` already.
+ */
+export function groupParallel(source: string, lines: number[]): EditResult {
+  const starts = [...new Set(lines)].sort((a, b) => a - b);
+  if (starts.length < 2) return { error: 'Choose at least two steps to run at the same time.' };
+  const outline = outlineWithStep(source, starts[0]);
+  const blocks = starts.map((line) => (outline ? blockOfStep(outline, line) : undefined));
+  for (const [i, block] of blocks.entries()) {
+    if (block) continue;
+    return outlineWithStep(source, starts[i]) ? { error: 'Only steps of the same flow or scenario can run at the same time.' } : { error: `There is no step on line ${starts[i]}.` };
+  }
+  if (blocks.some((b) => b!.parallel)) return { error: 'A step you chose already runs at the same time as others; ungroup that block first.' };
+  if (blocks.some((b) => b!.opener !== blocks[0]!.opener)) return { error: 'Only steps of the same flow or scenario can run at the same time.' };
+  const text = source.split('\n');
+  for (let k = 0; k + 1 < starts.length; k++) {
+    // Only blank lines and comments may lie between two of them.
+    for (let i = statementEnd(text, starts[k] - 1) + 1; i < starts[k + 1] - 1; i++) {
+      if (tokenizeLine(text[i], i + 1).tokens.length > 0) return { error: 'Only steps that follow each other can run at the same time.' };
+    }
+  }
+  const from = starts[0] - 1;
+  const to = statementEnd(text, starts.at(-1)! - 1);
+  const indent = indentOf(text[from]);
+  const step = indentStep(indent, indentOf(text[blocks[0]!.opener - 1]));
+  const body = text.slice(from, to + 1).map((l) => (l.trim() === '' ? l : `${step}${l}`));
+  text.splice(from, to - from + 1, `${indent}par {`, ...body, `${indent}}`);
+  return { source: text.join('\n') };
+}
+
+/** Removes the `par {` at `parLine` and its `}`, so its steps run one after another again. */
+export function ungroupParallel(source: string, parLine: number): EditResult {
+  const found = findParallel(source, parLine);
+  if (!found) return { error: 'There are no steps that run at the same time on that line.' };
+  const { block } = found;
+  const text = source.split('\n');
+  if (tokenizeLine(text[block.endLine - 1], block.endLine).tokens.length > 1) return { error: 'This block closes on a line with more code; ungroup it in the code.' };
+  const outer = indentOf(text[block.line - 1]);
+  const body = text.slice(block.line, block.endLine - 1);
+  const first = body.find((l) => l.trim() !== '');
+  const step = first === undefined ? '' : indentStep(indentOf(first), outer);
+  const dedent = (l: string) => {
+    if (!l.startsWith(outer)) return l;
+    let n = 0;
+    while (n < step.length && l[outer.length + n] === step[n]) n++;
+    return outer + l.slice(outer.length + n);
+  };
+  text.splice(block.line - 1, block.endLine - block.line + 1, ...body.map(dedent));
+  return { source: text.join('\n') };
+}
+
+/**
+ * Appends a step to the `par` block opened at `parLine`, so it runs at the
+ * same time as the steps there. It is written and connected as addStep does.
+ */
+export function addParallelStep(source: string, parLine: number, step: NewStep, design?: Diagram): EditResult {
+  if (step.from === step.to) return { error: 'A step goes from one component to another.' };
+  const found = findParallel(source, parLine);
+  if (!found) return { error: 'There are no steps that run at the same time on that line.' };
+  const { block, opener } = found;
+  const lines = source.split('\n');
+  const outer = indentOf(lines[block.line - 1]);
+  const first = block.steps[0];
+  const indent = first ? indentOf(lines[first.line - 1]) : `${outer}${indentStep(outer, indentOf(lines[opener - 1]))}`;
+  lines.splice(block.endLine - 1, 0, `${indent}${stepText(step)}`);
+  return { source: withConnection(lines.join('\n'), step, design) };
 }
 
 /**
