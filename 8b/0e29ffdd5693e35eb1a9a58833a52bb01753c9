@@ -1,0 +1,26 @@
+frontend/src/components/Playground/DiagramView.tsx
+  s_733d66441cadaa::t_b95714bf368088 709-717
+frontend/e2e/mobile.e2e.ts
+  s_733d66441cadaa::t_24ec3b7e6f4839 387-443
+frontend/src/components/Diagram/useFitOnChange.ts
+  s_733d66441cadaa::t_888d47853f8693 89,91,95,99,101-145,162
+  s_733d66441cadaa::t_02135bd35088b9 1,34-39,62,73,84-88,90,92-94,96-98,100,146-157,160
+frontend/src/components/Diagram/EditableCanvas.tsx
+  s_733d66441cadaa::t_1f22b3f793a845 506-514
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8b0e29ffdd5693e35eb1a9a58833a52bb01753c9",
+  "prompts": {},
+  "sessions": {
+    "s_733d66441cadaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9649973d-f497-4440-b031-a92483a592e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
