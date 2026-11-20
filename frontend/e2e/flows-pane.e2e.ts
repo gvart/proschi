@@ -155,6 +155,11 @@ test.describe('the Flows pane', () => {
     await steps.getByRole('button', { name: 'Edit step: Checkout API to Orders DB: SELECT cart' }).click();
     await expect(flows(page).getByRole('tab', { name: 'Cart expired' })).toHaveAttribute('aria-selected', 'true');
     await expect(sequence(page).getByRole('option', { name: /SELECT cart/ })).toHaveAttribute('aria-selected', 'true');
+    // Numbered in the list as the diagram numbers the tab shown.
+    await expect(sequence(page).getByRole('option', { name: /SELECT cart/ })).toHaveAccessibleName(/^4\. /);
+    await expect(steps.getByRole('listitem', { name: 'Cart cache answers Checkout API: nil' })).toHaveText(/^3/);
+    await expect(steps.getByRole('listitem', { name: 'Cart cache answers Checkout API: cart' })).not.toHaveText(/^\d/);
+    await expect(steps.getByRole('listitem', { name: 'Checkout API to Orders DB: INSERT order' })).toHaveText(/^5/);
 
     // Closed, the pane lets the canvas go.
     await flows(page).getByRole('button', { name: 'Close the flows' }).click();
@@ -274,6 +279,13 @@ test.describe('the Flows pane', () => {
     await canvasNodes(page).filter({ hasText: 'Shortener API' }).click();
     await step.getByRole('combobox', { name: 'Operation' }).fill('GET /abc');
     await step.getByRole('button', { name: 'Add step' }).click();
-    await expect(pane.getByRole('listbox', { name: 'Sequence of Try it' }).getByRole('option')).toHaveText(['1GET /abc']);
+    const option = pane.getByRole('listbox', { name: 'Sequence of Try it' }).getByRole('option');
+    await expect(option).toHaveText(['1GET /abc']);
+    // Selected, it lights up on the practice canvas too.
+    await step.getByRole('button', { name: 'Done' }).click();
+    await option.click();
+    await expect(option).toHaveAttribute('aria-selected', 'true');
+    expect(await page.locator('.react-flow__node.pc-active').evaluateAll((els) => els.map((e) => e.getAttribute('data-id')).sort())).toEqual(['api', 'visitor']);
+    await expect(page.locator('.react-flow__edge.pc-active')).toHaveCount(1);
   });
 });

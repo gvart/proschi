@@ -11,7 +11,7 @@ import { composeLabel, isHttpHead, splitLabel, type LabelParts } from './stepLab
 import { accessOf } from '../../dsl/access';
 import Select from '../../design/Select';
 import SequenceDiagram from './SequenceDiagram';
-import { followStep, scenarioOfStep } from './sequenceLayout';
+import { entrySteps, followStep, scenarioOfStep, sequenceEntries } from './sequenceLayout';
 
 /**
  * The Flows builder (docs/design/paid-plans.md P46): use cases and their
@@ -111,6 +111,8 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
     setLane(next);
     if (chosen && outline && (scenarioOfStep(outline.items, chosen.line) ?? next) !== next) setChosenStep(undefined);
   };
+  /** In the pane, each step's number as the diagram draws the tab shown; the rail numbers the main flow's. */
+  const drawnNumbers = useMemo(() => (pane && outline ? new Map(entrySteps(sequenceEntries(outline.items, laneNow)).map((s, i) => [s.line, i + 1])) : undefined), [pane, outline, laneNow]);
   const ends = chosen ? `${chosen.from}\n${chosen.to}` : '';
   useEffect(() => {
     const [from, to] = ends.split('\n');
@@ -233,13 +235,14 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
     const shown = (
       <StepRow
         key={step.line}
-        n={n}
+        n={drawnNumbers ? drawnNumbers.get(step.line) : n}
         step={step}
         name={name}
-        selected={step.line === chosen?.line}
+        selected={pane && step.line === chosen?.line}
         onHighlight={onHighlight}
         onEdit={() => {
-          selectStep(step);
+          // In the pane, the step being edited is the one selected (in the diagram and on the canvas); the rail is as it was.
+          if (pane) selectStep(step);
           setEditing({ line: step.line, insert: false });
           onPick({ from: step.from, to: step.to });
         }}
@@ -467,14 +470,15 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   if (pane)
     return (
       <section role="region" aria-label="Flows" className="@container flex h-full min-h-0 flex-col bg-surface text-ink">
-        <div className="flex min-h-12 shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-b border-ink/15 py-1.5 pl-3 pr-1.5">
+        <div className="flex min-h-12 shrink-0 items-center gap-3 border-b border-ink/15 py-1.5 pl-3 pr-1.5">
           <h2 className="flex shrink-0 items-center gap-1.5 text-sm font-bold">
             <Workflow size={15} aria-hidden="true" />
-            Flows
+            {/* Named by the region in a narrow pane, where the room goes to the tabs. */}
+            <span className="sr-only @5xl:not-sr-only">Flows</span>
           </h2>
-          <div className="min-w-0">{picker}</div>
+          <div className="min-w-0 shrink-0">{picker}</div>
           {current && outline && (
-            <div className="flex min-w-0 items-center gap-1.5">
+            <div className="flex min-w-0 flex-1 items-center gap-1.5">
               <div role="tablist" aria-label="Scenarios" className="flex min-w-0 items-center gap-1 overflow-x-auto">
                 {[MAIN, ...scenarios].map((s) => (
                   <button
@@ -493,7 +497,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
               <AddScenario suggestions={missingScenarios(diagram, current, scenarios)} onAdd={newScenario} />
             </div>
           )}
-          <button type="button" aria-label="Close the flows" title="Close the flows" onClick={onClose} className={`${iconButton} ml-auto !h-8 !w-8`}>
+          <button type="button" aria-label="Close the flows" title="Close the flows" onClick={onClose} className={`${iconButton} ml-auto !h-8 !w-8 shrink-0`}>
             <X size={16} />
           </button>
         </div>
