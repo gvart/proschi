@@ -146,6 +146,12 @@
       "description": "What Proschi's simulation models (load, replicas, queueing, percentiles, availability, cost), what it leaves out, and how far to trust its numbers."
     },
     {
+      "slug": "visual-editor",
+      "title": "Visual editor: build diagrams without code",
+      "source": "VISUAL-EDITOR.md",
+      "description": "Build a Proschi diagram on the canvas: add and connect components, set types, build use cases step by step, and switch between Code and Visual."
+    },
+    {
       "slug": "editors",
       "title": "Editor support: VS Code, IntelliJ, Neovim",
       "source": "EDITORS.md",
@@ -291,6 +297,7 @@
     {
       "title": "Tools",
       "items": [
+        { "page": "visual-editor", "label": "Visual editor" },
         { "page": "editors", "label": "Editor support" },
         { "page": "editors", "anchor": "ci", "label": "CLI and CI" },
         { "page": "editors", "anchor": "formatting", "label": "Formatting" },

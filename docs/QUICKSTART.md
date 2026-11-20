@@ -1,12 +1,13 @@
 ---
-updated: 2026-11-01
+updated: 2026-11-20
 ---
 
 # Your first diagram in 2 minutes
 
 You will end with a diagram, a request you can play, a failure path and a
 requirement that checks itself. Every example is live: **Open in editor**
-takes it to the [editor](https://proschi.app/app/).
+takes it to the [editor](https://proschi.app/app/). To build on the canvas
+instead, without code, see [the visual editor](VISUAL-EDITOR.md).
 
 ## 1. Two boxes and an arrow
 
