@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { outlineOf } from '../../dsl/edit';
 import { clampPaneHeight, PANE_MIN, stepEdge } from './flows';
-import { allSteps, entrySteps, followStep, laneOrder, layoutSequence, scenarioOfStep, SEQ, sequenceEntries, type Measure } from './sequenceLayout';
+import { allSteps, entrySteps, followStep, inParallel, laneOrder, layoutSequence, scenarioOfStep, SEQ, sequenceEntries, type Measure } from './sequenceLayout';
 
 const SRC = [
   'web "Web" [Browser]',
@@ -70,6 +70,11 @@ describe('what a tab of the sequence shows', () => {
     expect(scenarioOfStep(outline.items, 9)).toBe('Hit');
     expect(scenarioOfStep(outline.items, 13)).toBe('Miss');
     expect(scenarioOfStep(outline.items, 7)).toBeUndefined();
+  });
+
+  it('tells a step in a par block, of the main flow or of a scenario', () => {
+    expect([13, 14, 18, 19].map((line) => inParallel(outline.items, line))).toEqual([true, true, true, true]);
+    expect([7, 9, 11, 21].map((line) => inParallel(outline.items, line))).toEqual([false, false, false, false]);
   });
 });
 

@@ -30,7 +30,7 @@ import { accessOf } from '../../dsl/access';
 import Select from '../../design/Select';
 import { MOD_KEY } from '../Playground/modKey';
 import SequenceDiagram, { type SelectMode } from './SequenceDiagram';
-import { allSteps, entrySteps, followStep, scenarioOfStep, sequenceEntries, type Slot } from './sequenceLayout';
+import { allSteps, entrySteps, followStep, inParallel, scenarioOfStep, sequenceEntries, type Slot } from './sequenceLayout';
 import { insertAt, insertedStep, movedStep, samePlaces, unanswered } from './sequenceEdit';
 
 /**
@@ -229,7 +229,15 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
       return step ? [step] : [];
     }, focus);
   };
-  const group = () => commit(groupParallel(source, followed.map((s) => s.line)), (after) => samePlaces(steps, after, followed), true);
+  /** A selected step already in a par block, which groupParallel refuses: the selection is not offered to run at the same time. */
+  const grouped = outline ? followed.find((s) => inParallel(outline.items, s.line)) : undefined;
+  const canGroup = followed.length > 1 && !grouped;
+  // The new block's first step is selected, so the action is not offered again for steps that now run at the same time.
+  const group = () =>
+    commit(groupParallel(source, followed.map((s) => s.line)), (after) => {
+      const placed = samePlaces(steps, after, followed);
+      return placed && [placed.reduce((a, b) => (b.line < a.line ? b : a))];
+    }, true);
   const ungroup = (line: number) => commit(ungroupParallel(source, line), (after) => samePlaces(steps, after, followed), true);
   const openComposer = (slot: Slot, index: number, stepEnds?: { from: string; to: string }) => {
     setError(undefined);
@@ -632,7 +640,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
         <section aria-label="Selected steps" className="space-y-2">
           <p className="text-sm font-semibold">{followed.length} steps selected</p>
           <div className="flex flex-wrap gap-1.5">
-            {runTogether}
+            {canGroup && runTogether}
             <button type="button" onClick={() => deleteSelected(true)} className={`${toolButton} !px-2 !py-1 text-xs text-red-700 dark:text-red-300`}>
               <Trash2 size={13} aria-hidden="true" />
               Delete them
@@ -641,7 +649,11 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
               Clear
             </button>
           </div>
-          <p className="text-xs text-muted">Steps that follow each other in one flow or scenario can run at the same time.</p>
+          <p className="text-xs text-muted">
+            {grouped
+              ? `Step ${drawnNumbers?.get(grouped.line)} already runs at the same time as others: ungroup its block first.`
+              : 'Steps that follow each other in one flow or scenario can run at the same time.'}
+          </p>
         </section>
       ) : chosen ? (
         <section aria-label="Selected step" className="space-y-2">
@@ -790,8 +802,8 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
               <AddScenario suggestions={missingScenarios(diagram, current, scenarios)} onAdd={newScenario} />
             </div>
           )}
-          {followed.length > 1 && <div className="ml-auto shrink-0">{runTogether}</div>}
-          <button type="button" aria-label="Close the flows" title="Close the flows" onClick={onClose} className={`${iconButton} ${followed.length > 1 ? '' : 'ml-auto'} !h-8 !w-8 shrink-0`}>
+          {canGroup && <div className="ml-auto shrink-0">{runTogether}</div>}
+          <button type="button" aria-label="Close the flows" title="Close the flows" onClick={onClose} className={`${iconButton} ${canGroup ? '' : 'ml-auto'} !h-8 !w-8 shrink-0`}>
             <X size={16} />
           </button>
         </div>

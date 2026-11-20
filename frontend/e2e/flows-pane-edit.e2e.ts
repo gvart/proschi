@@ -244,10 +244,10 @@ test.describe('editing on the Flows pane', () => {
     await expect.poll(() => useCase(page)).toBe(original);
 
     // Steps that can't run at the same time say why, in the pane; Cmd/Ctrl-click adds one to the selection, and the header has the action too.
-    await option(page, 2).click();
-    await option(page, 3).click({ modifiers: ['ControlOrMeta'] });
+    await option(page, 1).click();
+    await option(page, 5).click({ modifiers: ['ControlOrMeta'] });
     await flows(page).getByRole('button', { name: 'Run at the same time' }).first().click();
-    await expect(flows(page).getByRole('alert')).toHaveText(/already runs at the same time/);
+    await expect(flows(page).getByRole('alert')).toHaveText(/follow each other/);
     expect(await useCase(page)).toBe(original);
 
     // A par frame's actions: one more step alongside, then ungroup.
@@ -263,6 +263,31 @@ test.describe('editing on the Flows pane', () => {
     await flows(page).getByRole('button', { name: 'Ungroup' }).click();
     await expect.poll(() => useCase(page)).toContain('  }\n  api -> db : INSERT order\n  api ->> events : PUBLISH OrderPlaced\n  api -> cache : DEL cart\n  api --> shopper : 201\n');
     await expect(flows(page).locator('[data-frame="parallel"]')).toHaveCount(0);
+  });
+
+  test('after Run at the same time the block\'s first step is selected, and steps already in a block are never offered it', async ({ page }) => {
+    await openPane(page);
+    const run = flows(page).getByRole('button', { name: 'Run at the same time' });
+    await option(page, 1).click();
+    await option(page, 2).click({ modifiers: ['Shift'] });
+    await expect(run).toHaveCount(2);
+    await run.first().click();
+    await expect.poll(() => useCase(page)).toContain('  par {\n    shopper -> api : POST /checkout\n    api -> cache : GET cart\n  }\n');
+    // The block's first step, alone: the action is gone from the header and the column.
+    await expect(option(page, 1)).toHaveAttribute('aria-selected', 'true');
+    await expect(option(page, 2)).toHaveAttribute('aria-selected', 'false');
+    await expect(flows(page).getByRole('region', { name: 'Selected step' })).toContainText('Step 1');
+    await expect(run).toHaveCount(0);
+    // Both steps of the new block, selected again: not offered, and the column says why.
+    await option(page, 2).click({ modifiers: ['Shift'] });
+    await expect(flows(page).getByRole('region', { name: 'Selected steps' })).toContainText('2 steps selected');
+    await expect(run).toHaveCount(0);
+    await expect(flows(page).getByRole('region', { name: 'Selected steps' })).toContainText('already runs at the same time as others: ungroup its block first');
+    // A step of the block with one outside it: not offered either.
+    await option(page, 5).click();
+    await option(page, 4).click({ modifiers: ['ControlOrMeta'] });
+    await expect(flows(page).getByRole('region', { name: 'Selected steps' })).toContainText('Step 4 already runs at the same time');
+    await expect(run).toHaveCount(0);
   });
 
   test('Add reply answers a selected request right after it, before the block that follows', async ({ page }) => {

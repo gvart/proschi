@@ -84,6 +84,12 @@ export function scenarioOfStep(items: OutlineItem[], line: number): string | und
   return undefined;
 }
 
+/** Whether the step on `line` is in a `par` block (of the main flow or of a scenario), so it already runs at the same time as others. */
+export function inParallel(items: OutlineItem[], line: number): boolean {
+  const inBlock = (i: OutlineItem | OutlineBranchItem) => i.kind === 'parallel' && i.block.steps.some((s) => s.line === line);
+  return items.some((item) => inBlock(item) || (item.kind === 'scenarios' && item.branches.some((b) => b.items.some(inBlock))));
+}
+
 const sameEnds = (a: OutlineStep, b: OutlineStep) => a.from === b.from && a.to === b.to && a.kind === b.kind;
 
 /**
