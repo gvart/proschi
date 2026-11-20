@@ -208,7 +208,10 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   };
   const move = (direction: 'up' | 'down') => {
     if (!chosen) return;
-    commit(moveStep(source, chosen.line, direction), (after) => [movedStep(after, chosen, direction) ?? chosen]);
+    const result = moveStep(source, chosen.line, direction);
+    // At its block's edge it stays (and a twin elsewhere is not it).
+    if (result.source === source) return;
+    commit(result, (after) => [movedStep(after, chosen, direction) ?? chosen]);
   };
   /** Deletes the selected steps; the step drawn next (or else the one before) is selected in place of one. */
   const deleteSelected = (focus = false) => {
@@ -737,7 +740,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
                 button="Add step"
                 autoFocus
                 check={(st) => problemsOf(insertAt(source, current, composing.slot, st, diagram))}
-                onGiveOps={giveOps}
+                // No types from here: one written above the use case would move the step this adds before.
                 onAdd={(st) => {
                   const slot = composing.slot;
                   const done = commit(insertAt(source, current, slot, st, diagram), (after) => {

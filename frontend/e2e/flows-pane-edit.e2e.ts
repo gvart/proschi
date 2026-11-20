@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import lz from 'lz-string';
-import { canvasNodes, chooseOption, editorText, expect, test, waitForCanvas } from './fixtures';
+import { canvasNodes, chooseOption, codeEditor, editorText, expect, setMode, test, waitForCanvas } from './fixtures';
 
 test.use({ mode: 'visual' });
 
@@ -353,4 +353,17 @@ test.describe('the Flows list on a phone', () => {
     await expect(reply.getByLabel('Starts at')).toHaveAttribute('data-value', 'mail');
     await expect(reply.getByLabel('Goes to')).toHaveAttribute('data-value', 'api');
   });
+});
+
+test('a group made on the pane is in the code editor\'s history: Code mode undoes it', async ({ page }) => {
+  await openPane(page);
+  const original = await useCase(page);
+  await option(page, 1).click();
+  await option(page, 2).click({ modifiers: ['Shift'] });
+  await flows(page).getByRole('region', { name: 'Selected steps' }).getByRole('button', { name: 'Run at the same time' }).click();
+  await expect.poll(() => useCase(page)).toContain('  par {\n    shopper -> api : POST /checkout\n');
+  await setMode(page, 'code');
+  await codeEditor(page).click();
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect.poll(() => useCase(page)).toBe(original);
 });
