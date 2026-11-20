@@ -78,7 +78,7 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
   return (
     <div className="relative min-w-full" style={{ width: layout.width }}>
       {/* The lane headers: each component's icon and name, like its node on the canvas. */}
-      <div className="sticky top-0 z-20 border-b border-ink/15 bg-surface/95 backdrop-blur-[2px]" style={{ height: HEADER, width: layout.width, minWidth: '100%' }} aria-hidden="true">
+      <div className="sticky top-0 z-20 border-b border-ink/15 bg-surface" style={{ height: HEADER, width: layout.width, minWidth: '100%' }} aria-hidden="true">
         {layout.lanes.map((lane) => {
           const node = nodes.get(lane.id);
           return (
@@ -136,7 +136,7 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
                       onClick={() => onScenario(n)}
                       aria-label={`Show the scenario ${n}`}
                       title={`Show the steps of ${n}`}
-                      className="rounded-full border-bw-1 border-ink/40 bg-surface px-2 py-0.5 text-xs font-semibold text-ink hover:border-ink hover:bg-pop-yellow/30"
+                      className="scroll-mt-16 rounded-full border-bw-1 border-ink/40 bg-surface px-2 py-0.5 text-xs font-semibold text-ink hover:border-ink hover:bg-pop-yellow/30"
                     >
                       {n}
                     </button>
@@ -151,7 +151,7 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
             )}
           </div>
         ))}
-        <div ref={listRef} role="listbox" aria-label={`Sequence of ${outline.name}`} aria-orientation="vertical" onKeyDown={onKey} className="absolute inset-0">
+        <div ref={listRef} role="listbox" aria-label={`Sequence of ${outline.name}`} aria-orientation="vertical" onKeyDown={onKey} className="pointer-events-none absolute inset-0">
           {layout.messages.map((m) => (
             <Message key={m.step.line} m={m} name={name} selected={m.step.line === selected} focusable={m.step.line === focusable} onSelect={() => onSelect(m.step)} />
           ))}
@@ -181,7 +181,7 @@ function Message({ m, name, selected, focusable, onSelect }: { m: MessageBox; na
       tabIndex={focusable ? 0 : -1}
       title={step.label ? `${m.n}. ${step.label}` : undefined}
       onClick={onSelect}
-      className={`group/msg absolute flex scroll-mt-16 cursor-pointer justify-center rounded-sm outline-hidden focus-visible:ring-2 focus-visible:ring-ink ${self ? '!justify-start pl-[52px]' : ''}`}
+      className={`group/msg pointer-events-auto absolute flex scroll-mt-16 cursor-pointer justify-center rounded-sm outline-hidden focus-visible:ring-2 focus-visible:ring-ink ${self ? '!justify-start pl-[52px]' : ''}`}
       style={{ left, width, top: m.y - SEQ.row / 2 + 1, height: SEQ.row - 2 }}
     >
       <span
