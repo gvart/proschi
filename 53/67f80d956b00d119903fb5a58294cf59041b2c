@@ -1,0 +1,25 @@
+frontend/e2e/flows-pane-edit.e2e.ts
+  s_733d66441cadaa::t_08a3e6baac66d0 338-364
+frontend/src/components/Canvas/canvas.css
+  s_733d66441cadaa::t_7c8b4e49096489 251-257
+frontend/src/components/Playground/DiagramView.tsx
+  s_733d66441cadaa::t_7c8b4e49096489 242-243,437-439,834-835,870-871,902,911
+frontend/src/components/Diagram/EditableCanvas.tsx
+  s_733d66441cadaa::t_7c8b4e49096489 117-118,131,538-540,574-575,607,611,614,618-619,621
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5367f80d956b00d119903fb5a58294cf59041b2c",
+  "prompts": {},
+  "sessions": {
+    "s_733d66441cadaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9649973d-f497-4440-b031-a92483a592e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
