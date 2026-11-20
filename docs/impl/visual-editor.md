@@ -51,7 +51,7 @@ scratchpad (`editor-review/*.png`).
 - [ ] **S9 Docs and tour.** A visual editor docs page (`docs/`, `docs/site.json`), tour steps. verify: `docs.e2e.ts`, `onboarding.e2e.ts`. depends on: S1–S8
 - [ ] **S10a Editor modes.** Code | Visual switch in the editor header, stored in localStorage (default Visual); Visual = canvas + rail + View code drawer; Code = editor + read-only diagram. verify: e2e both modes, switch keeps the document and undo; no editing affordances in Code mode's diagram. depends on: S6
 - [ ] **S10b Practice modes.** The practice and interview workspaces use the same switch instead of their Code toggle. verify: practice/interview e2e. depends on: S10a
-- [ ] **S10c Mode-aware AI.** Partner and coach requests carry the mode; the backend prompt asks for component-level answers without code in Visual; ChangeCard shows only the diagram preview in Visual. verify: backend prompt tests, partner unit/e2e. depends on: —
+- [x] **S10c Mode-aware AI.** Partner and coach requests carry the mode; the backend prompt asks for component-level answers without code in Visual; ChangeCard shows only the diagram preview in Visual. verify: backend prompt tests, partner unit/e2e. depends on: —
 - [ ] **Ship.** Full CLAUDE.md checks, PR `feat(editor): …`, merge, watch deploy.
 - [ ] **Blog.** Post on the new editor with GIFs and a before/after video; LinkedIn gets one 4-panel image.
 
