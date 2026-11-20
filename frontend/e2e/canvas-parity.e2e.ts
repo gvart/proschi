@@ -167,17 +167,14 @@ test.describe('the editor canvas', () => {
 
     await page.getByRole('button', { name: 'Flows' }).click();
     const flows = page.getByRole('region', { name: 'Flows' });
-    // With none yet, a button starts one in a name field: Escape goes back, Enter adds. Then the bar's title is its name, and its menu starts another.
-    await flows.getByRole('button', { name: 'New use case' }).first().click();
-    const name = flows.getByRole('textbox', { name: 'New use case' });
-    await expect(name).toBeFocused();
-    await name.press('Escape');
-    await expect(name).toHaveCount(0);
-    await flows.getByRole('button', { name: 'New use case' }).first().click();
-    await name.fill('Browse');
-    await name.press('Enter');
+    // With none yet, the view asks the first one's name: Enter adds it. Then the bar's title is its name, and its menu starts another.
+    const first = flows.getByRole('textbox', { name: 'Name the first use case' });
+    await expect(first).toBeFocused();
+    await first.fill('Browse');
+    await first.press('Enter');
     await expect.poll(() => editorText(page)).toContain('usecase "Browse"');
     await expect(flows.getByRole('button', { name: 'Rename the use case Browse' })).toBeVisible();
+    const name = flows.getByRole('textbox', { name: 'New use case' });
     await flows.getByRole('button', { name: 'Use case actions' }).click();
     await page.getByRole('menuitem', { name: 'New use case…' }).click();
     await expect(name).toBeFocused();
@@ -194,24 +191,22 @@ test.describe('the editor canvas', () => {
     await expect(topBar).toHaveAttribute('data-value', 'search');
     await chooseOption(topBar, 'Browse');
     await expect(flows.getByRole('button', { name: 'Rename the use case Browse' })).toBeVisible();
-    await flows.getByRole('button', { name: 'Add a step' }).click();
-    const step = flows.getByRole('form', { name: 'New step' });
-    await expect(step.getByRole('status')).toHaveText('Click the component the step starts at.');
-    await onMap(page, 'User').click();
-    await expect(step.getByRole('status')).toHaveText('Now click the component it goes to.');
+    // With no steps, its draft is already there, from the actor: a click on the map picks what it calls.
+    const draft = flows.locator('[data-draft]');
+    await expect(draft.locator('[data-draft-status]')).toHaveText('User starts. Click what it calls.');
     await onMap(page, 'API').click();
-    await expect(step.getByLabel('Starts at')).toHaveAttribute('data-value', 'user');
-    await expect(step.getByLabel('Goes to')).toHaveAttribute('data-value', 'api');
     // Picking selects nothing, so no settings open in the builder's place.
     await expect(page.getByRole('region', { name: /settings/ })).toHaveCount(0);
     // The operations come from the API's type: pick GET, then type the path.
-    const label = step.getByRole('combobox', { name: 'Operation' });
-    await label.click();
+    const label = draft.getByRole('combobox', { name: 'Operation' });
+    await expect(label).toBeFocused();
     await page.getByRole('listbox', { name: 'Labels' }).getByRole('option', { name: /^GET\b/ }).click();
     await expect(label).toHaveValue('GET /');
     await label.pressSequentially('items');
-    await step.getByRole('button', { name: 'Add step' }).click();
+    await label.press('Enter');
     await expect.poll(() => editorText(page)).toMatch(/user -> api : GET \/items/);
+    await page.keyboard.press('Escape');
+    await expect(draft).toHaveCount(0);
 
     // On a wide screen the Flows view is over the canvas and its rail; back on the architecture, the palette is a click away.
     await expect(page.getByRole('button', { name: 'Add component' })).toBeHidden();
@@ -235,39 +230,39 @@ test.describe('the editor canvas', () => {
 
     await page.getByRole('button', { name: 'Flows' }).click();
     const flows = page.getByRole('region', { name: 'Flows' });
-    // With no use case yet, starting one is a visible button.
-    await flows.getByRole('button', { name: 'New use case' }).first().click();
-    const name = flows.getByRole('textbox', { name: 'New use case' });
-    await name.fill('Order');
-    await name.press('Enter');
-    await flows.getByRole('button', { name: 'Add a step' }).click();
-    const step = flows.getByRole('form', { name: 'New step' });
-    const label = (kind: 'Operation' | 'Answer') => step.getByRole('combobox', { name: kind });
+    // With no use case yet, the view asks the first one's name.
+    const first = flows.getByRole('textbox', { name: 'Name the first use case' });
+    await first.fill('Order');
+    await first.press('Enter');
+    const draft = flows.locator('[data-draft]');
+    const status = draft.locator('[data-draft-status]');
+    const label = (kind: 'Operation' | 'Answer') => draft.getByRole('combobox', { name: kind });
 
-    await onMap(page, 'Web').click();
+    // It starts at the web, the flow's caller: one click picks where it goes.
+    await expect(status).toHaveText('Web starts. Click what it calls.');
     await onMap(page, 'API').click();
     await label('Operation').fill('POST /orders');
     await label('Operation').press('Enter');
     // The next step starts at the API: one click picks where it goes.
-    await expect(step.getByLabel('Starts at')).toHaveAttribute('data-value', 'api');
+    await expect(status).toHaveText('Added. Next from API: click where it goes. Escape to stop.');
     await onMap(page, 'DB').click();
     // An operation PostgreSQL does not have warns before it is added.
     await label('Operation').fill('persist order');
-    await expect(step.getByRole('list', { name: 'Problems with this step' })).toContainText("PostgreSQL has no operation 'persist'");
+    await expect(draft.getByRole('note', { name: 'Problems with this step' })).toContainText("PostgreSQL has no operation 'persist'");
     await label('Operation').fill('INSERT order');
-    await expect(step.getByRole('list', { name: 'Problems with this step' })).toHaveCount(0);
+    await expect(draft.getByRole('note', { name: 'Problems with this step' })).toHaveCount(0);
     await label('Operation').press('Enter');
-    // Reply answers the latest open request: the DB back to the API, then the API back to the web.
-    await step.getByRole('button', { name: 'Reply: DB answers API' }).click();
+    // A reply answers the latest open request: the DB back to the API, then the API back to the web.
+    await draft.getByRole('button', { name: 'Reply to 2: DB answers API' }).click();
     await label('Answer').fill('1 row');
     await label('Answer').press('Enter');
-    await step.getByRole('button', { name: 'Reply: API answers Web' }).click();
+    await draft.getByRole('button', { name: 'Reply to 1: API answers Web' }).click();
     await label('Answer').fill('201');
     await label('Answer').press('Enter');
     await expect.poll(() => editorText(page)).toMatch(/web -> api : POST \/orders\n\s+api -> db : INSERT order\n\s+db --> api : 1 row\n\s+api --> web : 201\n/);
     await expect(flows.getByRole('listbox', { name: 'Sequence of Order' }).getByRole('option')).toHaveCount(4);
-    await step.getByRole('button', { name: 'Done' }).click();
-    await expect(step).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(draft).toHaveCount(0);
   });
 
   test('edits, moves and inserts steps, shows parallel blocks and failed calls, and renames a use case', async ({ page }) => {
@@ -307,12 +302,12 @@ test.describe('the editor canvas', () => {
     // Insert a step before the response: it starts where the step before it went.
     await message(/POST \/orders/).hover();
     await flows.getByRole('button', { name: 'Add a step before step 4' }).click();
-    const insert = flows.getByRole('dialog', { name: 'Add a step here' });
-    await expect(insert.getByLabel('Starts at')).toHaveAttribute('data-value', 'db');
+    await expect(flows.locator('[data-draft-status]')).toHaveText('From DB. Click where it goes.');
     await onMap(page, 'API').click();
-    await insert.getByRole('combobox', { name: 'Answer' }).fill('done');
-    await insert.getByRole('button', { name: 'Add step' }).click();
+    await flows.locator('[data-draft-field]').getByRole('combobox', { name: 'Answer' }).fill('done');
+    await page.keyboard.press('Enter');
     await expect.poll(() => editorText(page)).toMatch(/ {2}db --> api : done\n {2}api --> web : 201/);
+    await page.keyboard.press('Escape');
 
     // Rename the use case.
     await flows.getByRole('button', { name: 'Rename the use case Order' }).click();
@@ -334,24 +329,31 @@ test.describe('the editor canvas', () => {
     await waitForCanvas(page, 3);
     await page.getByRole('button', { name: 'Flows' }).click();
     const flows = page.getByRole('region', { name: 'Flows' });
-    await flows.getByRole('button', { name: 'Add a step' }).click();
-    const step = flows.getByRole('form', { name: 'New step' });
-    await onMap(page, 'Web').click();
+    const draft = flows.locator('[data-draft]');
+    // The empty use case's draft starts at the web.
     await onMap(page, 'API').click();
-    await step.getByRole('combobox', { name: 'Operation' }).fill('POST /orders');
-    await step.getByText('Headers, payload and fan-out').click();
+    await draft.getByRole('combobox', { name: 'Operation' }).fill('POST /orders');
+    await page.keyboard.press('Enter');
+    await expect.poll(() => editorText(page)).toContain('  web -> api : POST /orders\n');
+    await page.keyboard.press('Escape');
+    // Its headers, payload and fan-out are in its details card.
+    await flows.getByRole('listbox', { name: 'Sequence of Order' }).getByRole('option').first().click();
+    await page.keyboard.press('d');
+    const card = flows.getByRole('dialog', { name: 'Details of step 1' });
     // The headers are the REST API type's own.
-    await step.getByPlaceholder('Filter headers').fill('author');
-    await step.getByRole('button', { name: '+ Authorization' }).click();
-    await step.getByLabel('Payload or note').fill('{"sku": 7}');
-    await step.getByLabel('Calls per request').fill('2');
-    await step.getByRole('button', { name: 'Add step' }).click();
+    await card.getByPlaceholder('Filter headers').fill('author');
+    await card.getByRole('button', { name: '+ Authorization' }).click();
+    await card.getByLabel('Payload or note').fill('{"sku": 7}');
+    await card.getByLabel('Calls per request').fill('2');
+    await card.getByLabel('Calls per request').press('Tab');
     await expect.poll(() => editorText(page)).toContain('  web -> api : x2 POST /orders header Authorization {"sku": 7}\n');
+    await page.keyboard.press('Escape');
 
-    // A Worker takes any label; the builder offers to give it operations of its own.
+    // A Worker takes any label; the draft offers to give it operations of its own.
+    await page.keyboard.press('n');
     await onMap(page, 'Payments').click();
-    await step.getByRole('combobox', { name: 'Operation' }).fill('charge card');
-    await step.getByRole('button', { name: /^Give Payments operations of its own/ }).click();
+    await draft.getByRole('combobox', { name: 'Operation' }).fill('charge card');
+    await draft.getByRole('button', { name: /^Give Payments operations of its own/ }).click();
     await expect.poll(() => editorText(page)).toMatch(/type Payments extends Worker \{\n {2}op write charge\n\}/);
     await expect.poll(() => editorText(page)).toContain('pay "Payments" [Payments]');
   });

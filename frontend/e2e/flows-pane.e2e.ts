@@ -277,7 +277,7 @@ test.describe('the Flows view', () => {
     const view = flows(page);
     await expect(view).toBeVisible();
     await expect(page.locator('.react-flow').first()).toBeHidden();
-    // A use case the problem asks for, and its first step from the map, drawn in the diagram.
+    // A new use case: its draft starts at the visitor, and the map picks what it calls.
     const picker = view.getByRole('combobox', { name: 'Use case' });
     await expect(picker).toBeVisible();
     await view.getByRole('button', { name: 'New use case' }).first().click();
@@ -285,16 +285,15 @@ test.describe('the Flows view', () => {
     await name.fill('Try it');
     await name.press('Enter');
     await expect(picker).toHaveText(/Try it/);
-    await view.getByRole('button', { name: 'Add a step', exact: true }).click();
-    const step = view.getByRole('form', { name: 'New step' });
-    await map(page).getByRole('button', { name: 'Visitor', exact: true }).click();
+    const draft = view.locator('[data-draft]');
+    await expect(draft.locator('[data-draft-status]')).toHaveText(/^Visitor starts\./);
     await map(page).getByRole('button', { name: 'Shortener API', exact: true }).click();
-    await step.getByRole('combobox', { name: 'Operation' }).fill('GET /abc');
-    await step.getByRole('button', { name: 'Add step' }).click();
+    await draft.getByRole('combobox', { name: 'Operation' }).fill('GET /abc');
+    await page.keyboard.press('Enter');
     const option = view.getByRole('listbox', { name: 'Sequence of Try it' }).getByRole('option');
     await expect(option).toHaveText(['1GET /abc']);
     // Selected, it lights up on the map.
-    await step.getByRole('button', { name: 'Done' }).click();
+    await page.keyboard.press('Escape');
     await option.click();
     await expect(option).toHaveAttribute('aria-selected', 'true');
     await expect.poll(() => litNodes(page)).toEqual(['api', 'visitor']);
@@ -348,10 +347,13 @@ test.describe('one scrolling surface', () => {
     await page.keyboard.press('Escape');
     await flows(page).locator('[data-lane]').first().hover();
     await flows(page).getByRole('button', { name: 'Add a step before step 3', exact: true }).click();
-    await expect(flows(page).getByRole('dialog', { name: 'Add a step here' })).toBeVisible();
+    // The draft, with its label's list open: still one.
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('listbox', { name: 'Labels' })).toBeVisible();
     expect(await scrollers()).toEqual(['surface']);
     await page.keyboard.press('Escape');
-
+    await expect(flows(page).locator('[data-draft]')).toHaveCount(0);
     // The surface scrolls both ways; scrolled, the lane headers stay at its top.
     const surface = page.locator('[data-flows-scroller]');
     const size = await surface.evaluate((el) => ({ down: el.scrollHeight > el.clientHeight, across: el.scrollWidth > el.clientWidth, top: el.getBoundingClientRect().top }));

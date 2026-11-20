@@ -1,6 +1,6 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
-import { Plus, Ungroup } from 'lucide-react';
-import type { OutlineStep, UseCaseOutline } from '../../dsl/edit';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { CornerDownLeft, Plus, Ungroup } from 'lucide-react';
+import type { OutlineStep, StepKind, UseCaseOutline } from '../../dsl/edit';
 import type { Diagram } from '../../dsl/types';
 import { shorten } from '../../dsl/sequence';
 import { getTechStackIcon } from '../../utils/iconMapping';
@@ -18,16 +18,37 @@ import { MOD_KEY } from '../Playground/modKey';
  * place. The messages are a list box: a click or Up and Down select a step,
  * which the architecture map lights up; Shift or Cmd/Ctrl select several. It
  * is edited in place (FlowsPanel.tsx does the edits): the selected step has
- * a toolbar over it, its label is edited on its arrow (Enter or a double
- * click), and its ends are dragged by their handles to other lanes (or moved
- * with Alt+Left and Right); a "+" between the rows, or a drag from one
- * lifeline to another, opens the composer there; Alt+Up and Down move the
- * selected step, Delete removes it, and a `par` frame can be ungrouped or
- * added to.
+ * a toolbar under it, in room the rows below make for it (and for its
+ * details card), so nothing of the diagram is ever covered; its label is
+ * edited on its arrow (Enter or a double click), and its ends are dragged by
+ * their handles to other lanes (or moved with Alt+Left and Right). Steps are
+ * added by one draft arrow, drawn in place: an "Add step" row at the end of
+ * the flow and of each frame, a "+" between the rows or a drag from one
+ * lifeline to another starts it; its ends are picked by a click on a lane
+ * (or the arrow keys and Enter), and its label is typed on it.
  */
 
 /** How a click or a key changes the selection: to the one step, the steps from the anchor to it, or with it added or taken out. */
 export type SelectMode = 'only' | 'range' | 'toggle';
+
+/** A step being drafted at an insertion point (FlowsPanel.tsx keeps it): the arrow drawn in place. */
+export interface DraftView {
+  slot: Slot;
+  from?: string;
+  to?: string;
+  kind: StepKind;
+  /** The hint under its row. */
+  status: string;
+  /** The label's field on the arrow, once both ends are known. */
+  field?: ReactNode;
+  /** Under the hint, once both ends are known: its kind. */
+  toolbar?: ReactNode;
+  /** An answer to the request waiting for one, offered while the draft has no target: Enter takes it. */
+  reply?: { text: string; onTake: () => void };
+  /** A lane chosen for it (a click on its row, or the arrow keys and Enter): its start while it has none, else where it goes. */
+  onLane: (id: string) => void;
+  onCancel: () => void;
+}
 
 interface SequenceDiagramProps {
   outline: UseCaseOutline;
@@ -39,37 +60,50 @@ interface SequenceDiagramProps {
   onSelect: (step: OutlineStep, mode: SelectMode) => void;
   /** Opens a folded scenario's tab. */
   onScenario: (name: string) => void;
-  /** Opens the composer at an insertion point (`index`: how many messages are drawn before it), with the step's ends when a drag drew them. */
+  /** Starts a draft at an insertion point (`index`: how many messages are drawn before it), with both ends when a drag drew them. */
   onInsert?: (slot: Slot, index: number, ends?: { from: string; to: string }) => void;
-  /** The keys on a selected step: Alt+Up and Down move it, Delete removes the selection, Enter goes to its form, Escape lets go. */
+  /** The keys on a selected step: Alt+Up and Down move it, Delete removes the selection, Enter edits its label, Escape lets go. */
   onMove?: (direction: 'up' | 'down') => void;
   onDelete?: () => void;
   onEdit?: () => void;
   onClear?: () => void;
   /** A `par` frame's Ungroup, by the line that opens it. */
   onUngroup?: (line: number) => void;
-  /** The open composer, drawn at its insertion point; or a card (`card`) under a step's row, such as its details. */
-  composer?: { slot: Slot; node: ReactNode; card?: boolean };
-  /** Over the selected step (the one in focus): its toolbar. */
+  /** Under the selected step (the one in focus): its toolbar, and under that its details card. */
   toolbar?: ReactNode;
+  card?: ReactNode;
   /** The selected step's label being edited: the field, drawn on its arrow in place of the label. */
   editing?: { line: number; node: ReactNode };
   /** A step's end dragged to another lane (FlowsPanel moves them with Alt+Left and Right too). */
   onRetarget?: (step: OutlineStep, end: 'from' | 'to', id: string) => void;
-  /** The keys on a selected step that FlowsPanel acts on (its kind, its ends, reply, details); true when it did. */
+  /** The keys on a selected step that FlowsPanel acts on (its kind, its ends, reply, details, a new step); true when it did. */
   onStepKey?: (e: KeyboardEvent) => boolean;
   /** Changed to put the focus back on the selected message (after an edit took it away). */
   focusKey?: number;
   /** While a step's ends are being picked: a click on a lane's header or lifeline picks its component, as a click on the map does. */
   onPickLane?: (id: string) => void;
-  /** The width the lanes fit in (the Flows view's, less its column); narrower lanes are centred in it. */
+  /** The width the lanes fit in (the Flows view's); narrower lanes are centred in it. */
   fitWidth?: number;
+  /** Lanes no step uses yet (added with + Lane, a draft's ends), drawn dashed after the others. */
+  extraLanes?: string[];
+  /** More lanes to show while the use case has no steps (the design's components, in the order they connect), as many as fit. */
+  candidates?: string[];
+  /** The "+ Lane" control, at the end of the lane headers. */
+  laneAdder?: ReactNode;
+  /** The step being drafted. */
+  draft?: DraftView;
 }
 
 /** The arrow sits under its label, this far below the row's centre. */
 const LINE_DY = 8;
 /** The lane headers' strip, which stays at the top as the diagram scrolls. */
 const HEADER = 52;
+/** The room "+ Lane" takes after the last lane. */
+const ADDER_W = 96;
+/** A draft's row: the arrow and its label, the hint, and under it the kind or a reply. */
+const DRAFT_H = SEQ.row + 64;
+/** What is under a selected step keeps this far from the row boundaries (and their "+"s) above and below it. */
+const UNDER_GAP = 12;
 
 export default function SequenceDiagram({
   outline,
@@ -84,50 +118,120 @@ export default function SequenceDiagram({
   onEdit,
   onClear,
   onUngroup,
-  composer,
   focusKey,
   onPickLane,
   fitWidth,
   toolbar,
+  card,
   editing,
   onRetarget,
   onStepKey,
+  extraLanes = [],
+  candidates = [],
+  laneAdder,
+  draft,
 }: SequenceDiagramProps) {
   const nodes = useMemo(() => new Map(diagram.nodes.map((n) => [n.id, n])), [diagram]);
   const name = (id: string) => nodes.get(id)?.name ?? id;
-  const lanes = useMemo(() => laneOrder(outline), [outline]);
-  const entries = useMemo(() => sequenceEntries(outline.items, scenario), [outline, scenario]);
+  const own = useMemo(() => laneOrder(outline), [outline]);
   const rootRef = useRef<HTMLDivElement>(null);
-  const empty = lanes.length === 0;
   /** The width the diagram has (the Flows view's, else its box's), which the labels give room back to fit. */
   const [measured, setMeasured] = useState<number>();
   const fit = fitWidth ?? measured;
-  const layout = useMemo(() => layoutSequence(entries, lanes, (id) => nodes.get(id)?.name ?? id, undefined, fit), [entries, lanes, nodes, fit]);
-  /** The height of the diagram in sight (what scrolls it), for the composer to open under or over its "+". */
-  const [view, setView] = useState<number>();
+  const roomy = laneAdder ? ADDER_W : 0;
+  const extraKey = extraLanes.join(' ');
+  const candidateKey = candidates.join(' ');
+  /** The steps' lanes, then the extra ones; with no steps yet, as many of the candidates as fit. */
+  const lanes = useMemo(() => {
+    const more = extraLanes.filter((id, i) => nodes.has(id) && !own.includes(id) && extraLanes.indexOf(id) === i);
+    if (own.length) return [...own, ...more];
+    const room = Math.max(2, Math.floor(((fit ?? 1000) - roomy - 2 * SEQ.margin - 120) / SEQ.minGap) + 1);
+    const fill = candidates.filter((id) => nodes.has(id) && !more.includes(id));
+    return [...more, ...fill.slice(0, Math.max(0, room - more.length))];
+    // By what they hold: the arrays are new on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [own, extraKey, candidateKey, nodes, fit, roomy]);
+  const entries = useMemo(() => sequenceEntries(outline.items, scenario), [outline, scenario]);
+  const primary = selected.at(-1);
+
+  // What goes under the selected step (its toolbar, its card) and under a label being edited (its warnings): the rows
+  // below move down to make room for it, so it covers nothing.
+  const underRef = useRef<HTMLDivElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
+  const [under, setUnder] = useState(0);
+  const [editorExtra, setEditorExtra] = useState(0);
+  const hasUnder = (toolbar !== undefined && toolbar !== null && toolbar !== false) || !!card;
+  // Clear of the "+"s on the row boundaries above and below it.
+  const room = primary !== undefined && (hasUnder || editing?.line === primary) ? { line: primary, below: (hasUnder ? under + UNDER_GAP * 2 : 0) + editorExtra } : undefined;
+  const draftSlot = draft?.slot;
+  /** The draft's row is as tall as what it shows (its field may grow with warnings). */
+  const [draftHeight, setDraftHeight] = useState(DRAFT_H);
+  const layout = useMemo(
+    () =>
+      layoutSequence(entries, lanes, (id) => nodes.get(id)?.name ?? id, undefined, fit === undefined ? undefined : fit - roomy, {
+        room,
+        draft: draftSlot && { slot: draftSlot, height: draftHeight },
+        // While a step is drafted, it is the one place a step is added: no "Add step" row besides it.
+        adds: !!onInsert && !draftSlot,
+      }),
+    // `room` by what it holds.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [entries, lanes, nodes, fit, roomy, room?.line, room?.below, draftSlot, draftHeight, onInsert],
+  );
+  const hasDraft = !!draft;
+  useLayoutEffect(() => {
+    const el = draftBodyRef.current;
+    if (!el) return;
+    const measure = () => setDraftHeight(Math.max(DRAFT_H, el.offsetHeight + 12));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasDraft]);
+  useLayoutEffect(() => {
+    const el = underRef.current;
+    if (!el) {
+      setUnder(0);
+      return;
+    }
+    const measure = () => setUnder(el.offsetHeight);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasUnder, primary]);
+  useLayoutEffect(() => {
+    const el = editorRef.current;
+    if (!el) {
+      setEditorExtra(0);
+      return;
+    }
+    const measure = () => setEditorExtra(Math.max(0, el.offsetHeight + 1 - SEQ.row));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [editing?.line]);
+
   useLayoutEffect(() => {
     const root = rootRef.current;
     const box = root?.parentElement;
     if (!root || !box) return;
-    const scroller = scrollerOf(root);
-    const measure = () => {
-      setMeasured(box.clientWidth || undefined);
-      setView(scroller.clientHeight || undefined);
-    };
+    const measure = () => setMeasured(box.clientWidth || undefined);
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(box);
-    observer.observe(scroller);
     return () => observer.disconnect();
-  }, [empty]);
+  }, []);
+  const width = layout.width + roomy;
   /** Lanes narrower than the width they have are centred in it. */
-  const offset = fit && layout.width < fit ? Math.floor((fit - layout.width) / 2) : 0;
+  const offset = fit && width < fit ? Math.floor((fit - width) / 2) : 0;
   const listRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const composerRef = useRef<HTMLDivElement>(null);
+  const draftRef = useRef<HTMLDivElement>(null);
+  const draftBodyRef = useRef<HTMLDivElement>(null);
   /** The selection was moved with the keyboard, so the focus follows it. */
   const moved = useRef(false);
-  const primary = selected.at(-1);
   const shown = entrySteps(entries);
   const focusable = shown.some((s) => s.line === primary) ? primary : shown[0]?.line;
 
@@ -142,7 +246,12 @@ export default function SequenceDiagram({
     if (moved.current) option.focus({ preventScroll: true });
     moved.current = false;
   }, [primary, primaryAt]);
-  // After an edit that took the focus away (its button or the composer is gone), back on the message.
+  // What is under the selected step in sight when it opens or grows (a details card).
+  useEffect(() => {
+    if (!card) return;
+    underRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [card, under]);
+  // After an edit that took the focus away (its button or the draft is gone), back on the message.
   const lastFocusKey = useRef(focusKey);
   useEffect(() => {
     if (focusKey === lastFocusKey.current) return;
@@ -154,66 +263,6 @@ export default function SequenceDiagram({
   useEffect(() => {
     if (listFocused.current && (document.activeElement === document.body || document.activeElement === null)) listRef.current?.querySelector<HTMLElement>('[role="option"][tabindex="0"]')?.focus({ preventScroll: true });
   }, [layout]);
-  // The composer's height, measured before paint, so it is placed (under or over its insertion point) before it shows.
-  const composerAt = composer && slotKey(composer.slot);
-  const [composerHeight, setComposerHeight] = useState(0);
-  useLayoutEffect(() => {
-    const el = composerRef.current;
-    if (!el) return;
-    setComposerHeight(el.offsetHeight);
-    const observer = new ResizeObserver(() => setComposerHeight(el.offsetHeight));
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [composerAt]);
-
-  /** Where the composer goes: its insertion point, and the row it is anchored to (a reply's request), which it never covers. */
-  const placement = ((): { x: number; top: number; bottom: number } | undefined => {
-    if (!composer) return undefined;
-    const { slot } = composer;
-    const drawn = layout.slots.find((b) => sameSlot(b.slot, slot));
-    const m = slot.kind === 'after' ? layout.messages.find((msg) => msg.step.line === slot.line) : undefined;
-    // A card under the row (and under the toolbar, where the first row has it below).
-    if (m && composer.card) return { x: Math.max(2, Math.min(m.x1, m.x2) - 8), top: m.y - SEQ.row / 2, bottom: m.y + SEQ.row / 2 + 6 + (toolbarBelow(m) ? TOOLBAR_H : 0) };
-    if (m) {
-      // After a step (a reply to it): under its row, which is the anchor; where no "+" is drawn, at the row's foot.
-      const box = drawn ?? layout.slots.find((b) => b.slot.kind === 'before' && b.slot.line === m.step.line);
-      return { x: box?.x ?? 2, top: m.y - SEQ.row / 2, bottom: drawn?.y ?? m.y + SEQ.row / 2 };
-    }
-    if (drawn) return { x: drawn.x, top: drawn.y, bottom: drawn.y };
-    const last = layout.slots.at(-1);
-    return last && { x: last.x, top: last.y, bottom: last.y };
-  })();
-  // Under its insertion point; over it (and over the row it is anchored to) only when there is no room under it and there is over it.
-  const roomBelow = placement ? Math.max(layout.height, (view ?? 0) - HEADER) - placement.bottom : 0;
-  const above = !!placement && composerHeight > 0 && roomBelow < composerHeight + 8 && placement.top >= composerHeight + 8;
-  const composerTop = placement && (above ? placement.top - 4 - composerHeight : placement.bottom + 4);
-
-  // Wholly in sight when it opens or grows: below the sticky headers, its buttons first, then its top, then the row it answers.
-  useLayoutEffect(() => {
-    const el = composerRef.current;
-    const root = rootRef.current;
-    if (!composerAt || !el || !root || !contentRef.current) return;
-    const scroller = scrollerOf(root);
-    const s = scroller.getBoundingClientRect();
-    const c = el.getBoundingClientRect();
-    const content = contentRef.current.getBoundingClientRect().top;
-    const a = placement ? { top: content + placement.top, bottom: content + placement.bottom } : { top: c.top, bottom: c.bottom };
-    // Under the sticky lane headers.
-    const lo = s.top + HEADER + 4;
-    const hi = s.top + scroller.clientHeight - 4;
-    // How far to scroll down (up when negative).
-    let d = Math.max(0, c.bottom - hi);
-    if (c.top - d < lo) d = Math.max(c.top - lo, c.bottom - hi);
-    if (a.top - d < lo && c.bottom - (a.top - lo) <= hi) d = a.top - lo;
-    else if (a.bottom - d > hi && c.top - (a.bottom - hi) >= lo) d = a.bottom - hi;
-    if (d) scroller.scrollTop += d;
-    // Sideways, on the same surface (short of the column beside the diagram).
-    const right = Math.min(s.left + scroller.clientWidth, root.getBoundingClientRect().right);
-    if (c.right > right - 4) scroller.scrollLeft += Math.min(c.right - right + 4, c.left - s.left - 4);
-    else if (c.left < s.left + 4) scroller.scrollLeft -= s.left + 4 - c.left;
-    // Measured, not its inputs: it runs when the composer opens, is placed or grows.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [composerAt, composerHeight, composerTop]);
 
   /** A drag from a lifeline: the lane it started at, and where the pointer went down (a press that hardly moves is a click). */
   const [drag, setDrag] = useState<{ from: string; x1: number; x: number; y: number; x0: number; y0: number } | null>(null);
@@ -232,10 +281,25 @@ export default function SequenceDiagram({
     return () => window.removeEventListener('keydown', onKey, true);
   }, [dragged]);
 
-  // The toolbar over the selected step, kept in sight across the width the diagram is shown in.
+  // The draft without a target: the lane the pointer or the arrow keys aim at, and where the pointer is.
+  const [aim, setAim] = useState<string>();
+  const [pointerX, setPointerX] = useState<number>();
+  const choosing = !!draft && !draft.to;
+  const draftKey = draft ? `${slotKey(draft.slot)}|${draft.from ?? ''}|${draft.to ?? ''}` : '';
+  // A new draft, or one that changed ends, starts with nothing aimed at; one choosing a lane has the focus, and is in sight.
+  useEffect(() => {
+    setAim(undefined);
+    setPointerX(undefined);
+    if (!draftKey) return;
+    draftRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    if (choosing) draftRef.current?.querySelector<HTMLElement>('[data-draft-band]')?.focus({ preventScroll: true });
+    // On the draft's slot and ends only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftKey]);
+
+  // The toolbar under the selected step, kept in sight across the width the diagram is shown in.
   const toolbarRef = useRef<HTMLDivElement>(null);
   const [toolbarWidth, setToolbarWidth] = useState(0);
-  const hasToolbar = toolbar !== undefined && toolbar !== null && toolbar !== false;
   useLayoutEffect(() => {
     const el = toolbarRef.current;
     if (!el) return;
@@ -243,30 +307,7 @@ export default function SequenceDiagram({
     const observer = new ResizeObserver(() => setToolbarWidth(el.offsetWidth));
     observer.observe(el);
     return () => observer.disconnect();
-  }, [hasToolbar, primary]);
-
-  if (empty) {
-    return (
-      <div ref={rootRef} className="flex h-full min-h-32 flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-sm text-muted">
-        <p className="max-w-sm">
-          <span className="block font-semibold text-ink">No steps yet</span>
-          Add the first request, from where the user starts. Each step is drawn here, with a lane per component.
-        </p>
-        {composer ? (
-          <div className="w-80 max-w-full text-left">
-            {composer.node}
-          </div>
-        ) : (
-          onInsert && (
-            <button type="button" onClick={() => onInsert({ kind: 'end' }, 0)} className="inline-flex items-center gap-1.5 rounded-sm border-bw-1 border-ink bg-surface px-2.5 py-1 text-xs font-semibold text-ink shadow-brutal-sm hover:bg-pop-yellow/40">
-              <Plus size={13} aria-hidden="true" />
-              Add the first step
-            </button>
-          )
-        )}
-      </div>
-    );
-  }
+  }, [hasUnder, primary]);
 
   const onKey = (e: KeyboardEvent) => {
     if ((e.target as Element).getAttribute('role') !== 'option') return;
@@ -311,17 +352,20 @@ export default function SequenceDiagram({
     }
   };
 
-  // A drag from one lifeline to another: the lane nearest the pointer, if it is close enough and not the one it started at.
-  const pointerAt = (e: ReactPointerEvent) => {
+  const pointerAt = (e: { clientX: number; clientY: number }) => {
     const r = contentRef.current!.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   };
+  const nearest = (x: number, except?: string) =>
+    layout.lanes.filter((l) => l.id !== except).reduce<(typeof layout.lanes)[number] | undefined>((best, l) => (!best || Math.abs(l.x - x) < Math.abs(best.x - x) ? l : best), undefined);
+  // A drag from one lifeline to another: the lane nearest the pointer, if it is close enough and not the one it started at.
   const dropLane = (x: number, from: string) => {
-    const near = layout.lanes.reduce((best, l) => (Math.abs(l.x - x) < Math.abs(best.x - x) ? l : best), layout.lanes[0]);
+    const near = nearest(x);
     return near && near.id !== from && Math.abs(near.x - x) <= 48 ? near : undefined;
   };
   const target = drag ? dropLane(drag.x, drag.from) : undefined;
   const ghostSlot = drag && target ? slotNear(layout.slots, drag.y) : undefined;
+  const laneX = (id?: string) => (id === undefined ? undefined : layout.lanes.find((l) => l.id === id)?.x);
 
   const number = (line: number) => layout.messages.find((m) => m.step.line === line)?.n;
 
@@ -329,75 +373,129 @@ export default function SequenceDiagram({
   const focused = layout.messages.find((m) => m.step.line === primary);
   // Only for the step it started on, while it is still the one selected.
   const endDrag = dragged && focused && dragged.line === focused.step.line && selected.length === 1 ? dragged : null;
-  const toolbarBox = (() => {
-    if (!focused || !hasToolbar) return undefined;
+  const span = Math.max(width, (fit ?? width) - offset);
+  const toolbarLeft = (() => {
+    if (!focused) return 0;
     const centre = focused.x1 === focused.x2 ? focused.x1 + SEQ.loop + 40 : (focused.x1 + focused.x2) / 2;
-    const above = toolbarTop(focused);
     // In the width the diagram is shown in: from the left of the view (the lanes may be centred in it) to its right.
-    const lo = 4 - offset;
-    const hi = Math.max(layout.width, (fit ?? layout.width) - offset) - toolbarWidth - 4;
-    return { left: Math.max(lo, Math.min(hi, centre - toolbarWidth / 2)), top: toolbarBelow(focused) ? focused.y + LINE_DY + 14 : above, below: toolbarBelow(focused) };
+    return Math.max(4 - offset, Math.min(span - toolbarWidth - 4, centre - toolbarWidth / 2));
   })();
   const editBox = editing && layout.messages.find((m) => m.step.line === editing.line);
   /** The lane an end is dragged to: the nearest, near enough; the step's other end (a step to itself) is refused. */
   const endTarget = (() => {
     if (!endDrag || !focused) return undefined;
-    const near = layout.lanes.reduce((best, l) => (Math.abs(l.x - endDrag.x) < Math.abs(best.x - endDrag.x) ? l : best), layout.lanes[0]);
+    const near = nearest(endDrag.x);
     if (!near || Math.abs(near.x - endDrag.x) > 48) return undefined;
     const other = endDrag.end === 'from' ? focused.step.to : focused.step.from;
     return { lane: near, refused: near.id === other };
   })();
 
+  // The draft: its row, its ends, and the lane it aims at (the pointer's, near enough, or the keys').
+  const box = layout.draft;
+  const fromX = laneX(draft?.from);
+  const pointerLane = draft && choosing && pointerX !== undefined ? nearest(pointerX, draft.from) : undefined;
+  const aimed = aim ?? (pointerLane && Math.abs(pointerLane.x - pointerX!) <= 48 ? pointerLane.id : undefined);
+  // With nothing aimed at, a short arrow leaves its start, inwards.
+  const stub = fromX === undefined ? undefined : fromX + (fromX > layout.width - 120 ? -72 : 72);
+  const toX = draft?.to ? laneX(draft.to) : aimed ? laneX(aimed) : (pointerX ?? stub);
+  const draftY = box ? box.top + SEQ.row / 2 : 0;
+  const lanePick = (id: string) => (draft ? draft.onLane(id) : onPickLane?.(id));
+  const onDraftKey = (e: KeyboardEvent) => {
+    if (!draft) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      draft.onCancel();
+      return;
+    }
+    const choices = layout.lanes.filter((l) => l.id !== draft.from);
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      e.preventDefault();
+      if (!choices.length) return;
+      const at = choices.findIndex((l) => l.id === aimed);
+      const d = e.key === 'ArrowRight' ? 1 : -1;
+      // From the start, the first press goes to the lane beside it on that side.
+      const from = fromX ?? -Infinity;
+      const next = at >= 0 ? choices[(at + d + choices.length) % choices.length] : d > 0 ? (choices.find((l) => l.x > from) ?? choices[0]) : ([...choices].reverse().find((l) => l.x < from) ?? choices.at(-1)!);
+      setAim(next.id);
+      return;
+    }
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (aimed) draft.onLane(aimed);
+      else draft.reply?.onTake();
+    }
+  };
+  const lit = (id: string) =>
+    target?.id === id || drag?.from === id || (endTarget && !endTarget.refused && endTarget.lane.id === id) || (!!draft && (draft.from === id || draft.to === id || aimed === id));
+  const dashed = (id: string) => !own.includes(id);
+  const move = 'transition-[top,height] duration-[120ms] ease-out motion-reduce:transition-none';
+
   return (
-    <div ref={rootRef} className="group/seq relative min-w-full" style={{ width: layout.width }}>
+    <div ref={rootRef} className="group/seq relative min-w-full" style={{ width }}>
       {/* The lane headers: each component's icon and name, like its node on the canvas, and while a step's ends are
-          picked, buttons that pick it. Over the composer, which scrolls under them. */}
+          picked, buttons that pick it; a lane no step uses yet is dashed. Then "+ Lane". Over what scrolls under them. */}
       <div
-        role={onPickLane ? 'group' : undefined}
-        aria-label={onPickLane ? 'Lanes' : undefined}
-        aria-hidden={onPickLane ? undefined : true}
+        role={onPickLane || draft ? 'group' : undefined}
+        aria-label="Lanes"
         className="sticky top-0 z-40 border-b border-ink/15 bg-surface"
-        style={{ height: HEADER, width: layout.width, minWidth: '100%' }}
+        style={{ height: HEADER, width, minWidth: '100%' }}
       >
         {layout.lanes.map((lane) => {
           const node = nodes.get(lane.id);
-          const Tag = onPickLane ? 'button' : 'div';
+          const picks = !!onPickLane || !!draft;
+          const Tag = picks ? 'button' : 'div';
           return (
             <Tag
               key={lane.id}
               data-lane={lane.id}
-              {...(onPickLane ? { type: 'button' as const, 'aria-label': `Pick ${name(lane.id)}`, onClick: () => onPickLane(lane.id) } : {})}
-              title={onPickLane ? `Pick ${name(lane.id)} for the step` : node ? `${node.name} (${node.techStack})` : lane.id}
-              className={`absolute top-2 flex h-9 -translate-x-1/2 items-center gap-1.5 rounded-sm border-bw-1 border-ink bg-surface py-1 pl-1 pr-2 text-ink shadow-brutal-sm ${
-                onPickLane ? 'cursor-pointer outline-hidden hover:bg-pop-yellow focus-visible:bg-pop-yellow focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-1' : ''
+              data-dashed={dashed(lane.id) || undefined}
+              {...(picks ? { type: 'button' as const, 'aria-label': `Pick ${name(lane.id)}`, onClick: () => lanePick(lane.id) } : { 'aria-hidden': true })}
+              title={picks ? `Pick ${name(lane.id)} for the step` : node ? `${node.name} (${node.techStack})` : lane.id}
+              className={`absolute top-2 flex h-9 -translate-x-1/2 items-center gap-1.5 rounded-sm border-bw-1 py-1 pl-1 pr-2 text-ink ${move} ${
+                dashed(lane.id) ? 'border-dashed border-ink/50 bg-surface/80' : 'border-ink bg-surface shadow-brutal-sm'
+              } ${lit(lane.id) ? '!border-pop-pink' : ''} ${
+                picks ? 'cursor-pointer outline-hidden hover:bg-pop-yellow focus-visible:bg-pop-yellow focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-1' : ''
               }`}
               style={{ left: lane.x + offset, maxWidth: lane.width }}
             >
-              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-sm border-bw-1 border-ink bg-paper [&_svg]:h-3.5 [&_svg]:w-3.5">
+              <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-sm border-bw-1 bg-paper [&_svg]:h-3.5 [&_svg]:w-3.5 ${dashed(lane.id) ? 'border-ink/40' : 'border-ink'}`}>
                 {node ? getTechStackIcon(node.techStack, node.type) : null}
               </span>
-              <span className="truncate text-[13px] font-bold">{name(lane.id)}</span>
+              <span className={`truncate text-[13px] font-bold ${dashed(lane.id) ? 'text-ink/70' : ''}`}>{name(lane.id)}</span>
             </Tag>
           );
         })}
+        {laneAdder && (
+          <div className="absolute top-2.5" style={{ left: (layout.lanes.at(-1) ? layout.lanes.at(-1)!.x + layout.lanes.at(-1)!.width / 2 + 16 : SEQ.margin) + offset }}>
+            {laneAdder}
+          </div>
+        )}
       </div>
-      {/* As tall as the composer reaches too, so what scrolls the diagram (its own box, or the column on a narrow pane) takes it in. */}
-      <div ref={contentRef} className="relative" style={{ marginLeft: offset, marginTop: TOP_ROOM, width: layout.width, height: Math.max(layout.height, composerTop === undefined ? 0 : composerTop + composerHeight + 8) }}>
-        {/* Frames under everything: a par block, the chosen scenario's branch. Their titles (and a par block's actions) go over the lifelines, below. */}
+      <div
+        ref={contentRef}
+        className="relative"
+        style={{ marginLeft: offset, width: layout.width, height: layout.height }}
+        onPointerMove={(e) => choosing && setPointerX(pointerAt(e).x)}
+        onPointerLeave={() => choosing && setPointerX(undefined)}
+      >
+        {/* Frames under everything: a par block, the chosen scenario's branch. Their titles (and a par block's Ungroup) go over the lifelines, below. */}
         {layout.frames.map((f) => (
           <div
             key={`${f.kind}${f.line}`}
             data-frame={f.kind}
-            className={`absolute rounded-sm border-bw-1 ${f.kind === 'parallel' ? 'border-ink/45 bg-ink/[0.025]' : 'border-dashed border-ink/50 bg-pop-yellow/10'}`}
+            className={`absolute rounded-sm border-bw-1 ${move} ${f.kind === 'parallel' ? 'border-ink/45 bg-ink/[0.025]' : 'border-dashed border-ink/50 bg-pop-yellow/10'}`}
             style={{ left: f.x, top: f.y, width: f.width, height: f.height }}
           />
         ))}
         <svg className="pointer-events-none absolute left-0 top-0 overflow-visible" width={layout.width} height={layout.height} aria-hidden="true">
           {layout.lanes.map((lane) => (
-            <line key={lane.id} x1={lane.x} x2={lane.x} y1={0} y2={layout.height} className={target?.id === lane.id || drag?.from === lane.id || (endTarget && !endTarget.refused && endTarget.lane.id === lane.id) ? 'stroke-pop-pink' : 'stroke-ink/25'} strokeWidth={1.5} strokeDasharray="4 5" />
+            <line key={lane.id} x1={lane.x} x2={lane.x} y1={0} y2={layout.height} className={lit(lane.id) ? 'stroke-pop-pink' : dashed(lane.id) ? 'stroke-ink/15' : 'stroke-ink/25'} strokeWidth={1.5} strokeDasharray="4 5" />
           ))}
           {layout.messages.map((m) => (
-            <Arrow key={m.step.line} m={m} selected={selected.includes(m.step.line)} />
+            <g key={m.step.line} style={{ transform: `translateY(${m.y}px)` }} className="transition-transform duration-[120ms] ease-out motion-reduce:transition-none">
+              <Arrow m={{ ...m, y: 0 }} selected={selected.includes(m.step.line)} />
+            </g>
           ))}
           {endDrag && focused && (
             // The arrow as it would be: from the end that stays to the lane it would go to, or the pointer.
@@ -419,6 +517,14 @@ export default function SequenceDiagram({
               {target && <Head x={target.x} y={drag.y} dir={Math.sign(target.x - drag.x1)} kind="request" fill="fill-pop-pink" />}
             </g>
           )}
+          {box && draft && fromX !== undefined && toX !== undefined && toX !== fromX && (
+            // The draft's arrow: dashed, from its start to its target, or to the pointer while it has none.
+            <g data-draft-arrow={draft.to ? 'set' : aimed ? 'lane' : 'free'} className="stroke-pop-pink" fill="none" strokeWidth={2}>
+              <circle cx={fromX} cy={draftY + LINE_DY} r={4} className="fill-pop-pink" stroke="none" />
+              <line x1={fromX} y1={draftY + LINE_DY} x2={toX - Math.sign(toX - fromX) * 6} y2={draftY + LINE_DY} strokeDasharray={draft.to ? undefined : '5 4'} />
+              {(draft.to || aimed) && <Head x={toX} y={draftY + LINE_DY} dir={Math.sign(toX - fromX)} kind={draft.kind} fill="fill-pop-pink" />}
+            </g>
+          )}
         </svg>
         {/* A lifeline's strip, to drag a new step from it to another (the messages leave them clear). */}
         {onInsert &&
@@ -427,8 +533,8 @@ export default function SequenceDiagram({
               key={lane.id}
               data-lifeline={lane.id}
               aria-hidden="true"
-              title={onPickLane ? `Click to pick ${name(lane.id)} for the step, or drag to another lifeline to add a step from it` : `Drag to another lifeline to add a step from ${name(lane.id)}`}
-              className={`absolute top-0 w-3 -translate-x-1/2 touch-none ${onPickLane ? 'cursor-pointer hover:bg-pop-pink/25' : 'cursor-crosshair'}`}
+              title={onPickLane || draft ? `Click to pick ${name(lane.id)} for the step, or drag to another lifeline to add a step from it` : `Drag to another lifeline to add a step from ${name(lane.id)}`}
+              className={`absolute top-0 w-3 -translate-x-1/2 touch-none ${onPickLane || draft ? 'cursor-pointer hover:bg-pop-pink/25' : 'cursor-crosshair'}`}
               style={{ left: lane.x, height: layout.height }}
               onPointerDown={(e) => {
                 if (e.button !== 0) return;
@@ -446,7 +552,7 @@ export default function SequenceDiagram({
                 setDrag(null);
                 if (to && slot) onInsert(slot.slot, slot.index, { from: drag.from, to: to.id });
                 // A click (a press that hardly moved) picks the lane's component while a step's ends are picked.
-                else if (onPickLane && Math.hypot(at.x - drag.x0, at.y - drag.y0) < 4) onPickLane(drag.from);
+                else if ((onPickLane || draft) && Math.hypot(at.x - drag.x0, at.y - drag.y0) < 4) lanePick(drag.from);
               }}
               onPointerCancel={() => setDrag(null)}
             />
@@ -455,37 +561,21 @@ export default function SequenceDiagram({
           <div
             key={`${f.kind}${f.line}`}
             data-frame-title={f.kind}
-            className={`absolute flex items-center rounded-br-sm border-b border-r ${f.kind === 'parallel' ? 'border-ink/45 bg-surface' : 'border-dashed border-ink/50 bg-pop-yellow/30'}`}
+            className={`absolute flex items-center rounded-br-sm border-b border-r ${move} ${f.kind === 'parallel' ? 'border-ink/45 bg-surface' : 'border-dashed border-ink/50 bg-pop-yellow/30'}`}
             style={{ left: f.x + 1, top: f.y + 1 }}
           >
             <span className={`px-1.5 py-0.5 ${eyebrow} !text-ink/75`}>{f.title}</span>
-            {f.kind === 'parallel' && (onInsert || onUngroup) && (
+            {f.kind === 'parallel' && onUngroup && (
               <span className="flex items-center self-stretch border-l border-ink/20">
-                {onInsert && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const box = layout.slots.find((b) => b.slot.kind === 'par' && b.slot.line === f.line);
-                      if (box) onInsert(box.slot, box.index);
-                    }}
-                    title="Add a step that runs at the same time as these"
-                    className="inline-flex h-full items-center gap-0.5 px-1.5 text-[11px] font-semibold text-ink/80 hover:bg-pop-yellow/40 hover:text-ink focus-visible:bg-pop-yellow/40"
-                  >
-                    <Plus size={11} aria-hidden="true" />
-                    Add alongside
-                  </button>
-                )}
-                {onUngroup && (
-                  <button
-                    type="button"
-                    onClick={() => onUngroup(f.line)}
-                    title="Run these one after another again"
-                    className="inline-flex h-full items-center gap-0.5 border-l border-ink/20 px-1.5 text-[11px] font-semibold text-ink/80 hover:bg-pop-yellow/40 hover:text-ink focus-visible:bg-pop-yellow/40"
-                  >
-                    <Ungroup size={11} aria-hidden="true" />
-                    Ungroup
-                  </button>
-                )}
+                <button
+                  type="button"
+                  onClick={() => onUngroup(f.line)}
+                  title={`Run these one after another again (${MOD_KEY}+Shift+G)`}
+                  className="inline-flex h-full items-center gap-0.5 px-1.5 text-[11px] font-semibold text-ink/80 hover:bg-pop-yellow/40 hover:text-ink focus-visible:bg-pop-yellow/40"
+                >
+                  <Ungroup size={11} aria-hidden="true" />
+                  Ungroup
+                </button>
               </span>
             )}
           </div>
@@ -493,7 +583,7 @@ export default function SequenceDiagram({
         {layout.notes.map((note) => (
           <div
             key={`${note.kind}${note.line}`}
-            className={`absolute flex items-center gap-2 rounded-sm px-2.5 text-xs ${note.kind === 'scenarios' ? 'border-bw-1 border-dashed border-ink/35 bg-surface' : 'text-muted'}`}
+            className={`absolute flex items-center gap-2 rounded-sm px-2.5 text-xs ${move} ${note.kind === 'scenarios' ? 'border-bw-1 border-dashed border-ink/35 bg-surface' : 'text-muted'}`}
             style={{ left: note.x, top: note.y, width: note.width, height: note.height }}
           >
             {note.kind === 'scenarios' ? (
@@ -545,17 +635,33 @@ export default function SequenceDiagram({
               editing={editing?.line === m.step.line}
               onSelect={(mode) => onSelect(m.step, mode)}
               onEdit={onEdit}
+              className={move}
             />
           ))}
         </div>
-        {/* Right after the list, so Tab goes from the selected step to its toolbar. Under the sticky lane headers. */}
-        {toolbarBox && (
-          <div ref={toolbarRef} data-step-toolbar={toolbarBox.below ? 'below' : 'above'} className="absolute z-30" style={{ left: toolbarBox.left, top: toolbarBox.top }}>
-            {toolbar}
+        {/* Right after the list, so Tab goes from the selected step to its toolbar. In the room the rows below made. */}
+        {focused && hasUnder && (
+          <div
+            ref={underRef}
+            data-under
+            className="pointer-events-none absolute z-30 flex flex-col items-start gap-1.5"
+            style={{ left: 0, top: focused.y + SEQ.row / 2 + editorExtra + UNDER_GAP, width: span }}
+          >
+            {toolbar && (
+              <div ref={toolbarRef} data-step-toolbar className="pointer-events-auto" style={{ marginLeft: toolbarLeft }}>
+                {toolbar}
+              </div>
+            )}
+            {card && (
+              <div data-card className="pointer-events-auto" style={{ marginLeft: Math.max(4 - offset, Math.min(span - 330, Math.min(focused.x1, focused.x2) - 8)) }}>
+                {card}
+              </div>
+            )}
           </div>
         )}
         {editBox && editing && (
           <div
+            ref={editorRef}
             data-label-editor
             className="absolute z-30"
             style={{
@@ -599,42 +705,92 @@ export default function SequenceDiagram({
               <span className="h-2.5 w-2.5 rounded-full border-2 border-pop-pink bg-surface transition-transform group-hover/end:scale-150" />
             </div>
           ))}
-        {/* The insertion points: a "+" at the left of each row boundary, seen while the pointer is over the diagram or one is focused. */}
+        {/* The insertion points between the rows: a "+" at the left of each boundary, seen while the pointer is over the
+            diagram or one is focused. The ends of the flow and of its frames have their "Add step" rows instead. */}
         {onInsert &&
-          layout.slots.map((box) => (
-            <InsertPoint
-              key={slotKey(box.slot)}
-              box={box}
-              width={layout.width}
-              open={!!composer && !composer.card && sameSlot(composer.slot, box.slot)}
-              label={
-                box.slot.kind === 'before'
-                  ? `Add a step before step ${number(box.slot.line)}`
-                  : box.slot.kind === 'after'
-                    ? `Add a step after step ${number(box.slot.line)}`
-                    : box.slot.kind === 'scenario'
-                    ? `Add a step at the end of ${box.slot.name}`
-                    : box.slot.kind === 'par'
-                      ? 'Add a step at the end of the block, at the same time'
-                      : 'Add a step at the end'
-              }
-              onOpen={() => onInsert(box.slot, box.index)}
-            />
-          ))}
-        {composer && placement && composerTop !== undefined && (
-          <>
-            {!composer.card && (
-              <div aria-hidden="true" className="pointer-events-none absolute border-t-2 border-dashed border-pop-pink" style={{ left: placement.x + 22, top: placement.bottom - 1, width: Math.max(0, layout.width - placement.x - 30) }} />
-            )}
+          layout.slots
+            .filter((b) => b.slot.kind === 'before' || b.slot.kind === 'after')
+            .map((b) => (
+              <InsertPoint
+                key={slotKey(b.slot)}
+                box={b}
+                width={layout.width}
+                open={!!draft && sameSlot(draft.slot, b.slot)}
+                label={`Add a step ${b.slot.kind === 'before' ? 'before' : 'after'} step ${number((b.slot as { line: number }).line)}`}
+                onOpen={() => onInsert(b.slot, b.index)}
+              />
+            ))}
+        {onInsert &&
+          layout.adds.map((a) => {
+            const index = layout.slots.find((s) => sameSlot(s.slot, a.slot))?.index ?? 0;
+            const par = a.slot.kind === 'par';
+            const label = par ? 'Add alongside' : a.slot.kind === 'scenario' ? `Add a step to ${a.slot.name}` : 'Add step';
+            return (
+              <button
+                key={slotKey(a.slot)}
+                type="button"
+                data-add-row={a.slot.kind}
+                aria-label={label}
+                title={par ? 'Add a step that runs at the same time as these' : 'Add a step here, then click where it goes (N)'}
+                onClick={() => onInsert(a.slot, index)}
+                className={`absolute flex scroll-mt-16 items-center gap-1.5 rounded-sm border-bw-1 border-dashed border-ink/35 px-2 text-xs font-semibold text-ink/70 hover:border-ink hover:bg-pop-yellow/30 hover:text-ink focus-visible:border-ink focus-visible:bg-pop-yellow/30 focus-visible:outline-hidden ${move}`}
+                style={{ left: a.x, top: a.y, width: a.width, height: SEQ.add - 6 }}
+              >
+                <span className="grid h-4 w-4 place-items-center rounded-full border-bw-1 border-current">
+                  <Plus size={10} aria-hidden="true" />
+                </span>
+                {par ? 'Add alongside' : 'Add step'}
+              </button>
+            );
+          })}
+        {box && draft && (
+          // The draft's row: a band to click a lane on (the arrow keys and Enter pick one too), its label's field on the
+          // arrow once both ends are known, the hint under it, and under that its kind or a reply.
+          <div ref={draftRef} data-draft className="absolute z-30" style={{ left: 0, top: box.top, width: layout.width, height: box.height }}>
             <div
-              ref={composerRef}
-              data-placement={above ? 'above' : 'below'}
-              className="absolute z-30 w-80 py-1"
-              style={{ left: Math.max(2, placement.x), top: composerTop }}
-            >
-              {composer.node}
+              data-draft-band
+              role="group"
+              tabIndex={choosing ? 0 : -1}
+              aria-label={`New step: ${draft.status}`}
+              aria-keyshortcuts="ArrowLeft ArrowRight Enter Escape"
+              onKeyDown={onDraftKey}
+              onClick={(e) => {
+                if (!choosing) return;
+                const lane = nearest(pointerAt(e).x, draft.from);
+                if (lane) draft.onLane(lane.id);
+              }}
+              className={`absolute inset-x-0 top-0 rounded-sm outline-hidden focus-visible:ring-2 focus-visible:ring-pop-pink ${choosing ? 'cursor-crosshair bg-pop-pink/[0.06]' : ''}`}
+              style={{ height: SEQ.row }}
+            />
+            {/* What it shows, in one column measured for the room its row takes: the field (and its warnings), the hint, the kind or a reply. */}
+            <div ref={draftBodyRef} className="pointer-events-none absolute inset-x-0 top-0 flex flex-col items-start gap-1">
+              {draft.field && fromX !== undefined && toX !== undefined ? (
+                <div data-draft-field className="pointer-events-auto pt-px" style={{ marginLeft: Math.min(fromX, toX) + 6, width: Math.max(260, Math.abs(toX - fromX) - 12), minHeight: SEQ.row - 4 }}>
+                  {draft.field}
+                </div>
+              ) : (
+                <div aria-hidden="true" style={{ height: SEQ.row - 4 }} />
+              )}
+            <div className="pointer-events-auto flex flex-col items-start gap-1" style={{ marginLeft: Math.max(4, Math.min((fromX ?? layout.lanes[0]?.x ?? SEQ.margin) + 8, layout.width - 300)) }}>
+              <p data-draft-status className="flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold text-ink">
+                <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-pop-pink" />
+                {draft.status}
+              </p>
+              {draft.reply && !draft.to && (
+                <button
+                  type="button"
+                  onClick={draft.reply.onTake}
+                  title="Add the answer (Enter)"
+                  className="inline-flex items-center gap-1 rounded-sm border-bw-1 border-ink bg-surface px-1.5 py-0.5 text-xs font-semibold shadow-brutal-sm hover:bg-pop-yellow/40"
+                >
+                  <CornerDownLeft size={12} aria-hidden="true" />
+                  {draft.reply.text}
+                </button>
+              )}
+              {draft.to && draft.toolbar}
             </div>
-          </>
+            </div>
+          </div>
         )}
       </div>
     </div>
@@ -642,19 +798,7 @@ export default function SequenceDiagram({
 }
 
 const KIND_TAG: Partial<Record<OutlineStep['kind'], string>> = { async: 'message', failed: 'fails' };
-/** The step toolbar's height, to put it over the row. */
-const TOOLBAR_H = 34;
-/** Room over the first row, for its toolbar. */
-const TOP_ROOM = 32;
 const ALT_KEY = MOD_KEY === '⌘' ? '⌥' : 'Alt';
-/** Where the toolbar goes over a row; under it where there is no room over it (the first row). */
-const toolbarTop = (m: MessageBox) => m.y - SEQ.row / 2 - TOOLBAR_H + 2;
-const toolbarBelow = (m: MessageBox) => toolbarTop(m) < -TOP_ROOM;
-
-/** What scrolls the diagram: the Flows view's one scrolling surface, else (outside the view) its own box. */
-function scrollerOf(root: HTMLElement): HTMLElement {
-  return root.closest<HTMLElement>('[data-flows-scroller]') ?? root.parentElement!;
-}
 
 const slotKey = (slot: Slot) => `${slot.kind}:${'line' in slot ? slot.line : 'name' in slot ? slot.name : ''}`;
 
@@ -666,9 +810,9 @@ function InsertPoint({ box, width, open, label, onOpen }: { box: SlotBox; width:
         type="button"
         aria-label={label}
         aria-expanded={open}
-        title={label}
+        title={`${label} (Shift+N before the selected step)`}
         onClick={onOpen}
-        className={`peer absolute z-10 grid h-5 w-5 scroll-mt-16 place-items-center rounded-full border-bw-1 border-ink transition-opacity hover:!opacity-100 focus-visible:!opacity-100 ${open ? 'bg-pop-pink text-on-accent' : 'bg-surface text-ink opacity-0 hover:bg-pop-yellow focus-visible:bg-pop-yellow group-hover/seq:opacity-60'}`}
+        className={`peer absolute z-10 grid h-5 w-5 scroll-mt-16 place-items-center rounded-full border-bw-1 border-ink transition-[opacity,top] duration-[120ms] hover:!opacity-100 focus-visible:!opacity-100 motion-reduce:transition-none ${open ? 'bg-pop-pink text-on-accent' : 'bg-surface text-ink opacity-0 hover:bg-pop-yellow focus-visible:bg-pop-yellow group-hover/seq:opacity-60'}`}
         style={{ left: box.x, top: box.y - 10 }}
       >
         <Plus size={12} aria-hidden="true" />
@@ -687,6 +831,7 @@ function Message({
   editing,
   onSelect,
   onEdit,
+  className = '',
 }: {
   m: MessageBox;
   name: (id: string) => string;
@@ -697,6 +842,7 @@ function Message({
   onSelect: (mode: SelectMode) => void;
   /** A double click edits the label. */
   onEdit?: () => void;
+  className?: string;
 }) {
   const { step } = m;
   const self = m.x1 === m.x2;
@@ -724,7 +870,7 @@ function Message({
         if (e.shiftKey || e.metaKey || e.ctrlKey) return;
         onEdit?.();
       }}
-      className={`group/msg pointer-events-auto absolute flex scroll-mt-16 cursor-pointer select-none justify-center rounded-sm outline-hidden focus-visible:ring-2 focus-visible:ring-ink ${self ? '!justify-start pl-[52px]' : ''}`}
+      className={`group/msg pointer-events-auto absolute flex scroll-mt-16 cursor-pointer select-none justify-center rounded-sm outline-hidden focus-visible:ring-2 focus-visible:ring-ink ${className} ${self ? '!justify-start pl-[52px]' : ''}`}
       style={{ left, width, top: m.y - SEQ.row / 2 + 1, height: SEQ.row - 2 }}
     >
       <span

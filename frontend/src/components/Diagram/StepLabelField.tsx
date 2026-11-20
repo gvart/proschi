@@ -296,7 +296,8 @@ export default function StepLabelField({
           } else if (e.key === 'ArrowUp') {
             e.preventDefault();
             setActive(Math.max(index - 1, -1));
-          } else if (e.key === 'Enter' && expanded && index >= 0) {
+            // An option that would leave the label as typed (one under the pointer, say) lets Enter apply it instead.
+          } else if (e.key === 'Enter' && expanded && index >= 0 && withStart(value, rows[index].insert).trim() !== value.trim()) {
             e.preventDefault();
             choose(rows[index]);
           } else if (onKeyDown) {
