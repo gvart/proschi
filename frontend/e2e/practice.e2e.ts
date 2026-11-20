@@ -2,6 +2,9 @@ import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import { appendCode, canvasNodes, chooseOption, codeEditor, editorText, expect, loadReferenceSolution, test, waitForCanvas } from './fixtures';
 
+// These tests type in the code editor, so they run in Code mode (the canvas beside it only looks).
+test.use({ mode: 'code' });
+
 const problemList = (page: Page) => page.getByRole('main').getByRole('list').first();
 
 /** The status line of the tests panel, e.g. "3 / 7 passed". */

@@ -1,5 +1,8 @@
 import type { Page } from '@playwright/test';
-import { answerDialog, appendCode, canvasNodes, codeEditor, editorText, expect, multiSelectClick, multiSelectSetup, test, waitForCanvas } from './fixtures';
+import { appendCode, canvasNodes, codeEditor, editorText, expect, multiSelectClick, multiSelectSetup, setMode, test, waitForCanvas } from './fixtures';
+
+// The canvas edits in Visual mode; each diagram's code is typed in Code mode first (newDiagram).
+test.use({ mode: 'visual' });
 
 /**
  * The canvas's editing basics: copy, paste and duplicate, moving a
@@ -9,12 +12,13 @@ import { answerDialog, appendCode, canvasNodes, codeEditor, editorText, expect, 
 
 async function newDiagram(page: Page, code: string, nodes: number) {
   await page.goto('app/');
-  await expect(codeEditor(page)).toBeVisible();
   await waitForCanvas(page, 1);
   await page.getByRole('button', { name: 'File' }).click();
   await page.getByRole('menuitem', { name: 'New diagram' }).click();
   await expect(canvasNodes(page)).toHaveCount(0);
+  await setMode(page, 'code');
   await appendCode(page, code);
+  await setMode(page, 'visual');
   await waitForCanvas(page, nodes);
   await layoutSettled(page);
 }
@@ -23,6 +27,7 @@ const node = (page: Page, name: string) => canvasNodes(page).filter({ hasText: n
 
 /** Waits until the canvas stops moving nodes around (layout runs after every edit). */
 async function layoutSettled(page: Page) {
+  await expect(page.locator('[data-layout-busy]')).toHaveCount(0);
   let last = '';
   await expect
     .poll(async () => {
@@ -85,6 +90,7 @@ test.describe('canvas editing', () => {
     await expect(page.getByRole('region', { name: 'Cache settings' })).toBeVisible();
     // In the code editor the same keys are the editor's own.
     const before = await editorText(page);
+    await setMode(page, 'code');
     await codeEditor(page).click();
     await page.keyboard.press('ControlOrMeta+d');
     await page.keyboard.press('ControlOrMeta+v');
@@ -131,19 +137,30 @@ test.describe('canvas editing', () => {
     await expect(finder.getByRole('option')).toHaveCount(2);
     await finder.getByRole('combobox').fill('postgres');
     await finder.getByRole('combobox').press('Enter');
-    await expect.poll(() => editorText(page)).toMatch(/^cache -> db$/m);
+    await expect.poll(() => editorText(page)).toMatch(/^cache -> db : SQL$/m);
 
     menu = await open('Cache');
     await menu.getByRole('menuitem', { name: 'Rename…' }).click();
-    await page.locator('.ps-dialog').getByRole('textbox', { name: 'Display name' }).fill('Sessions');
-    await answerDialog(page, 'Rename');
+    // Named in place on the canvas; `cache` is an id the author typed, so it stays.
+    await page.locator('.pc-node__name-field').fill('Sessions');
+    await page.locator('.pc-node__name-field').press('Enter');
     await expect.poll(() => editorText(page)).toMatch(/^cache "Sessions" \[Redis\]$/m);
 
     menu = await open('Sessions');
     await menu.getByRole('menuitem', { name: /Duplicate/ }).click();
     await expect.poll(() => editorText(page)).toMatch(/^cache2 "Sessions" \[Redis\]$/m);
 
+    // In Visual mode the code is View code's: it opens on the declaration.
     menu = await open('API');
+    await menu.getByRole('menuitem', { name: 'Jump to code' }).click();
+    const drawer = page.getByRole('complementary', { name: 'Code, read-only' });
+    await expect(drawer.locator('.cm-selectionBackground').first()).toBeAttached();
+    await drawer.getByRole('button', { name: 'Close the code' }).click();
+
+    // In Code mode, in the code editor, the menu only looks.
+    await setMode(page, 'code');
+    menu = await open('API');
+    await expect(menu.getByRole('menuitem')).toHaveText(['Jump to code']);
     await menu.getByRole('menuitem', { name: 'Jump to code' }).click();
     await expect(codeEditor(page)).toBeFocused();
     const selected = await page.evaluate(() => window.getSelection()?.toString());
@@ -202,12 +219,67 @@ test.describe('canvas editing', () => {
   });
 });
 
+test.describe('connecting by drag', () => {
+  /** The canvas's zoom, from React Flow's viewport transform. */
+  const zoomOf = (page: Page) => page.locator('.react-flow__viewport').evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).a);
+
+  /** Presses the mouse on a node's bottom dot and moves it to the middle of another node's body. */
+  async function dragToBody(page: Page, from: string, to: string) {
+    const dot = (await node(page, from).locator('.react-flow__handle.source').boundingBox())!;
+    const body = (await node(page, to).boundingBox())!;
+    await page.mouse.move(dot.x + dot.width / 2, dot.y + dot.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(body.x + body.width / 2, body.y + body.height / 2, { steps: 12 });
+  }
+
+  test('at half zoom, a drop on the middle of a node connects with its type’s protocol, and a duplicate says why', async ({ page }) => {
+    await newDiagram(page, 'api "API" [REST API] pos 0,0\ndb "Orders DB" [PostgreSQL] pos 0,300\n', 2);
+    // The first layout's fit comes once it settles; zooming before that would be undone.
+    await layoutSettled(page);
+    for (let zoom = await zoomOf(page); zoom > 0.55; zoom = await zoomOf(page)) {
+      await page.getByRole('button', { name: 'zoom out' }).click();
+      await expect.poll(() => zoomOf(page)).toBeLessThan(zoom);
+    }
+    expect(await zoomOf(page)).toBeGreaterThan(0.4);
+
+    await dragToBody(page, 'API', 'Orders DB');
+    // The node under the pointer is outlined while the connection is over it.
+    await expect(node(page, 'Orders DB').locator('.pc-body-target')).toHaveAttribute('data-connect', 'valid');
+    await page.mouse.up();
+    await expect.poll(() => editorText(page)).toMatch(/^api -> db : SQL$/m);
+    expect(await zoomOf(page)).toBeLessThan(0.6);
+
+    await layoutSettled(page);
+    await dragToBody(page, 'API', 'Orders DB');
+    await expect(node(page, 'Orders DB').locator('.pc-body-target')).toHaveAttribute('data-connect', 'invalid');
+    await page.mouse.up();
+    await expect(page.getByRole('status').filter({ hasText: '"API" already connects to "Orders DB".' })).toBeVisible();
+    expect((await editorText(page)).match(/^api -> db/gm)).toHaveLength(1);
+  });
+
+  test('a connection’s settings offer its target’s protocol and the labels the design already uses', async ({ page }) => {
+    await newDiagram(page, PINNED, 3);
+    // Halfway along the connection to the cache.
+    const path = page.getByTestId('rf__edge-api->cache').locator('path.react-flow__edge-interaction');
+    await expect(path).toHaveAttribute('d', /\d/);
+    const at = await path.evaluate((el) => {
+      const line = el as SVGPathElement;
+      const p = line.getPointAtLength(line.getTotalLength() / 2).matrixTransform(line.getScreenCTM()!);
+      return { x: p.x, y: p.y };
+    });
+    await page.mouse.click(at.x, at.y);
+    const suggested = page.getByRole('region', { name: 'api → cache settings' }).getByRole('group', { name: 'Suggested labels' });
+    await expect(suggested.getByRole('button')).toHaveText(['RESP', 'reads']);
+    await suggested.getByRole('button', { name: 'RESP' }).click();
+    await expect.poll(() => editorText(page)).toMatch(/^api -> cache : RESP$/m);
+  });
+});
+
 test.describe('canvas editing on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
   test('there is no minimap to cover the diagram', async ({ page }) => {
     await page.goto('app/');
-    await page.getByRole('tab', { name: 'Preview' }).click();
     await waitForCanvas(page, 2);
     await expect(page.getByRole('button', { name: 'Minimap' })).toHaveCount(0);
     await expect(page.locator('.react-flow__minimap')).toHaveCount(0);

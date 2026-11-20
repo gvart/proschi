@@ -1,5 +1,8 @@
 import type { Page } from '@playwright/test';
-import { addFromPalette, answerDialog, canvasNodes, componentPalette, codeEditor, editorText, expect, test, waitForCanvas } from './fixtures';
+import { addFromPalette, canvasNodes, componentPalette, editorText, expect, test, waitForCanvas } from './fixtures';
+
+// Every edit here is made on the canvas, so the tests run in Visual mode, and read the code from the hidden editor's document.
+test.use({ mode: 'visual' });
 
 /**
  * Editing with the mouse: whatever is done on the canvas has to show up in the
@@ -9,7 +12,6 @@ import { addFromPalette, answerDialog, canvasNodes, componentPalette, codeEditor
 
 async function newEmptyDiagram(page: Page) {
   await page.goto('app/');
-  await expect(codeEditor(page)).toBeVisible();
   await waitForCanvas(page, 1);
   await page.getByRole('button', { name: 'File' }).click();
   await page.getByRole('menuitem', { name: 'New diagram' }).click();
@@ -18,6 +20,13 @@ async function newEmptyDiagram(page: Page) {
 }
 
 const addComponent = addFromPalette;
+
+/** Adds a component with nothing selected, so it comes alone rather than connected from the last one. */
+async function addAlone(page: Page, search: string, name: string) {
+  await page.locator('.react-flow__pane').dispatchEvent('click');
+  await expect(page.locator('.react-flow__node.selected')).toHaveCount(0);
+  await addFromPalette(page, search, name);
+}
 
 const node = (page: Page, name: string) => canvasNodes(page).filter({ hasText: name });
 
@@ -36,13 +45,13 @@ async function layoutSettled(page: Page) {
     .toBe(true);
 }
 
-/** Drags from the bottom (source) dot of one node to the top (target) dot of another. */
+/** Drags from the bottom (source) dot of one node onto the body of another. */
 async function connect(page: Page, from: string, to: string) {
   // Drawn only once the new text is parsed, which starts its layout.
   await expect(node(page, to)).toBeVisible();
   await layoutSettled(page);
   const source = (await node(page, from).locator('.react-flow__handle.source').boundingBox())!;
-  const target = (await node(page, to).locator('.react-flow__handle.target').boundingBox())!;
+  const target = (await node(page, to).boundingBox())!;
   await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
   await page.mouse.down();
   await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 10 });
@@ -86,7 +95,7 @@ test.describe('visual editing', () => {
 
   test('connecting two components writes the connection', async ({ page }) => {
     await addComponent(page, 'redis', 'Redis');
-    await addComponent(page, 'postgres', 'PostgreSQL');
+    await addAlone(page, 'postgres', 'PostgreSQL');
     await expect(canvasNodes(page)).toHaveCount(2);
     expect(await editorText(page)).not.toContain('->');
 
@@ -121,13 +130,113 @@ test.describe('visual editing', () => {
     expect((await editorText(page)).match(/\bpos\b/g)).toHaveLength(1);
   });
 
-  test('renaming a component rewrites its display name', async ({ page }) => {
+  test('renaming a component on the canvas rewrites its name, and its generated id follows', async ({ page }) => {
     await addComponent(page, 'redis', 'Redis');
     await node(page, 'Redis').dblclick();
-    await page.locator('.ps-dialog').getByRole('textbox', { name: 'Display name' }).fill('Session cache');
-    await answerDialog(page, 'Rename');
+    const field = page.locator('.pc-node__name-field');
+    await field.fill('Session cache');
+    await field.press('Enter');
     await expect(node(page, 'Session cache')).toBeVisible();
-    expect(await editorText(page)).toContain('"Session cache" [Redis]');
+    await expect.poll(() => editorText(page)).toContain('session_cache "Session cache" [Redis]');
+    // Escape keeps the name it has.
+    await node(page, 'Session cache').click();
+    await page.keyboard.press('F2');
+    await field.fill('Other');
+    await field.press('Escape');
+    await expect(field).toHaveCount(0);
+    expect(await editorText(page)).toContain('session_cache "Session cache" [Redis]');
+    // F2 and Enter rename it again; the id came from a name now, so it stays.
+    await page.keyboard.press('F2');
+    await field.fill('Primary cache');
+    await field.press('Enter');
+    await expect.poll(() => editorText(page)).toContain('session_cache "Primary cache" [Redis]');
+  });
+
+  test('a name typed and left by clicking the next palette entry is kept, and the chain goes on from it', async ({ page }) => {
+    const palette = await componentPalette(page);
+    const search = palette.getByRole('searchbox', { name: 'Search components' });
+    const field = page.locator('.pc-node__name-field');
+    await search.fill('rest api');
+    await palette.getByRole('button', { name: 'REST API', exact: true }).click();
+    await expect(field).toBeFocused();
+    await field.fill('Orders API');
+    // No Enter: the click on the palette leaves the field, which keeps the name.
+    await search.fill('postgres');
+    await palette.getByRole('button', { name: 'PostgreSQL', exact: true }).click();
+    await expect.poll(() => editorText(page)).toMatch(/^orders_api "Orders API" \[REST API\]$/m);
+    await expect.poll(() => editorText(page)).toMatch(/^orders_api -> postgresql : SQL$/m);
+  });
+
+  test('three palette clicks build a chain, each connection with its target’s protocol', async ({ page }) => {
+    const palette = await componentPalette(page);
+    const search = palette.getByRole('searchbox', { name: 'Search components' });
+    const field = page.locator('.pc-node__name-field');
+    for (const [query, entry] of [['actor', 'Actor'], ['rest api', 'REST API'], ['postgres', 'PostgreSQL']]) {
+      await search.fill(query);
+      await palette.getByRole('button', { name: entry, exact: true }).click();
+      // Selected, with its name ready to type, and the palette stays for the next.
+      await expect(field).toBeFocused();
+      await expect(field).toHaveValue(entry);
+      await expect(palette).toBeVisible();
+    }
+    await expect(canvasNodes(page)).toHaveCount(3);
+    // Typing a name renames the generated id everywhere.
+    await field.fill('Orders DB');
+    await field.press('Enter');
+    await expect.poll(() => editorText(page)).toContain('orders_db "Orders DB" [PostgreSQL]');
+    const text = await editorText(page);
+    expect(text).toMatch(/^actor -> rest_api : HTTP$/m);
+    expect(text).toMatch(/^rest_api -> orders_db : SQL$/m);
+    // No problems: Visual hides the code's list, and the Code switch would count them.
+    await expect(page.getByRole('radio', { name: 'Code', exact: true })).toBeVisible();
+  });
+
+  test('Enter in the palette search adds the first match, connected from the selection', async ({ page }) => {
+    await addComponent(page, 'rest api', 'REST API');
+    const palette = await componentPalette(page);
+    const search = palette.getByRole('searchbox', { name: 'Search components' });
+    await expect(search).toHaveAttribute('placeholder', /Enter adds/);
+    await search.fill('redis');
+    await expect(palette.getByText('adds Redis, connected from REST API.')).toBeVisible();
+    await search.press('Enter');
+    await expect(page.locator('.pc-node__name-field')).toBeFocused();
+    await expect.poll(() => editorText(page)).toMatch(/^rest_api -> redis : RESP$/m);
+  });
+
+  test('the + on a node opens a type picker that adds a connected component', async ({ page }) => {
+    await addComponent(page, 'rest api', 'REST API');
+    await layoutSettled(page);
+    await node(page, 'REST API').hover();
+    await page.getByRole('button', { name: 'Add a component after REST API', exact: true }).click();
+    const picker = page.getByRole('dialog', { name: 'Add after REST API' });
+    await expect(picker).toBeVisible();
+    await picker.getByRole('searchbox', { name: 'Search components' }).fill('kafka');
+    await picker.getByRole('button', { name: 'Kafka', exact: true }).click();
+    await expect(picker).toHaveCount(0);
+    await expect.poll(() => editorText(page)).toMatch(/^rest_api -> kafka\b/m);
+    await expect(page.locator('.pc-node__name-field')).toBeFocused();
+  });
+
+  test('a connection let go on empty canvas opens the type picker', async ({ page }) => {
+    await addComponent(page, 'rest api', 'REST API');
+    await layoutSettled(page);
+    const dot = (await node(page, 'REST API').locator('.react-flow__handle.source').boundingBox())!;
+    await page.mouse.move(dot.x + dot.width / 2, dot.y + dot.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(dot.x + 40, dot.y + 160, { steps: 10 });
+    await page.mouse.up();
+    const picker = page.getByRole('dialog', { name: 'Add after REST API' });
+    await picker.getByRole('searchbox', { name: 'Search components' }).fill('postgres');
+    await picker.getByRole('searchbox', { name: 'Search components' }).press('Enter');
+    await expect.poll(() => editorText(page)).toMatch(/^rest_api -> postgresql : SQL$/m);
+  });
+
+  test('a starter writes a real design', async ({ page }) => {
+    await page.getByRole('region', { name: 'Start a diagram' }).getByRole('button', { name: 'Client → API → Database' }).click();
+    await waitForCanvas(page, 3);
+    const text = await editorText(page);
+    expect(text).toMatch(/^actor -> rest_api : HTTP$/m);
+    expect(text).toMatch(/^rest_api -> postgresql : SQL$/m);
   });
 
   test('deleting a component removes its line and its connections', async ({ page }) => {
@@ -208,7 +317,8 @@ test.describe('visual editing', () => {
     await addComponent(page, 'postgres', 'PostgreSQL');
     await connect(page, 'Redis', 'PostgreSQL');
     await expect.poll(() => editorText(page)).toMatch(/redis\s*->\s*postgresql/);
-    await expect(page.getByText('No problems')).toBeVisible();
+    // No problems: Visual hides the code's list, and the Code switch would count them.
+    await expect(page.getByRole('radio', { name: 'Code', exact: true })).toBeVisible();
   });
 
   test('a component dragged onto the canvas is written, selected, and one Ctrl+Z takes it back', async ({ page }) => {
@@ -220,6 +330,8 @@ test.describe('visual editing', () => {
     await expect(canvasNodes(page)).toHaveCount(1);
     // Selected: its settings take the palette's place.
     await expect(page.getByRole('region', { name: 'Database settings' })).toBeVisible();
+    // Its name is ready to type; Escape keeps it, and the canvas has the keys again.
+    await page.locator('.pc-node__name-field').press('Escape');
 
     await page.keyboard.press('ControlOrMeta+z');
     await expect.poll(() => editorText(page)).not.toContain('Database');
@@ -243,7 +355,7 @@ test.describe('visual editing', () => {
   test('the connect hint shows for two unconnected components, until the first connection', async ({ page }) => {
     await addComponent(page, 'redis', 'Redis');
     await expect(page.getByRole('note').filter({ hasText: 'Connect two components' })).toHaveCount(0);
-    await addComponent(page, 'postgres', 'PostgreSQL');
+    await addAlone(page, 'postgres', 'PostgreSQL');
     const hint = page.getByRole('note').filter({ hasText: 'Connect two components' });
     await expect(hint).toBeVisible();
     await connect(page, 'Redis', 'PostgreSQL');
@@ -279,7 +391,6 @@ test.describe('visual editing', () => {
 test.describe('visual editing in practice', () => {
   test('a cache from the palette goes into the solution; the problem’s own nodes stay', async ({ page }) => {
     await page.goto('practice/#/url-shortener');
-    await expect(codeEditor(page)).toBeVisible();
     await waitForCanvas(page, 2);
     await addFromPalette(page, 'cache', 'Cache');
     await expect.poll(() => editorText(page)).toMatch(/^cache "Cache" \[Cache\]$/m);
@@ -294,6 +405,8 @@ test.describe('visual editing in practice', () => {
 
     // The visitor is declared in problem.proschi: read-only, and Delete leaves it.
     const before = await editorText(page);
+    await layoutSettled(page);
+    await page.getByRole('button', { name: 'fit view' }).click();
     await canvasNodes(page).filter({ hasText: 'Visitor' }).click();
     await expect(page.getByRole('region', { name: 'Visitor settings' }).getByText('Declared in problem.proschi')).toBeVisible();
     await page.keyboard.press('Delete');
@@ -301,12 +414,30 @@ test.describe('visual editing in practice', () => {
     expect(await editorText(page)).toBe(before);
   });
 
+  test('a component added with the API selected is connected from it, and its id follows the name typed', async ({ page }) => {
+    await page.goto('practice/#/url-shortener');
+    await waitForCanvas(page, 2);
+    await canvasNodes(page).filter({ hasText: 'Shortener API' }).click();
+    const palette = await componentPalette(page);
+    const search = palette.getByRole('searchbox', { name: 'Search components' });
+    await search.fill('redis');
+    await search.press('Enter');
+    const field = page.locator('.pc-node__name-field');
+    await expect(field).toBeFocused();
+    await field.fill('Code cache');
+    await field.press('Enter');
+    await expect.poll(() => editorText(page)).toMatch(/^code_cache "Code cache" \[Redis\]$/m);
+    expect(await editorText(page)).toMatch(/^api -> code_cache : RESP$/m);
+  });
+
   for (const key of ['Delete', 'Backspace']) {
     test(`the ${key} key removes a selected connection of the solution`, async ({ page }) => {
       await page.goto('practice/#/url-shortener');
-      await expect(codeEditor(page)).toBeVisible();
       await waitForCanvas(page, 2);
       await addFromPalette(page, 'cache', 'Cache');
+      // The canvas pans to the new component; the whole diagram is a fit away.
+      await layoutSettled(page);
+      await page.getByRole('button', { name: 'fit view' }).click();
       await connect(page, 'Visitor', 'Cache');
       await expect.poll(() => editorText(page)).toMatch(/^visitor\s*->\s*cache$/m);
 
@@ -321,10 +452,9 @@ test.describe('visual editing in practice', () => {
   }
 
   test('in the narrow practice pane the palette floats over the canvas, and the diagram fits beside it unless zoomed by hand', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.setViewportSize({ width: 1024, height: 800 });
     await page.emulateMedia({ colorScheme: 'dark' });
     await page.goto('practice/#/url-shortener');
-    await expect(codeEditor(page)).toBeVisible();
     // Drawn on first load in dark mode too.
     await waitForCanvas(page, 2);
     await expect(canvasNodes(page).first()).toBeInViewport();

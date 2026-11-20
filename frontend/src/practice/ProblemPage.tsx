@@ -6,8 +6,10 @@ import type { Diagnostic, SourceLoc } from '../dsl';
 import type { Engine } from '../hld/engine';
 import CodeEditor, { type CodeEditorHandle } from '../components/Playground/CodeEditor';
 import EditableCanvas from '../components/Diagram/EditableCanvas';
+import ModeSwitch from '../components/Diagram/ModeSwitch';
+import CodeDrawer from '../components/Diagram/CodeDrawer';
+import { useEditorMode } from '../components/Diagram/editorMode';
 import { useDiagramLayout } from '../components/Diagram/useDiagramLayout';
-import { EmptyCanvas } from '../components/Diagram/CanvasEditing';
 import { UseCasePlayer } from '../components/UseCases/UseCasePlayback';
 import AnalysisPanel from '../components/Analysis/AnalysisPanel';
 import Markdown from './Markdown';
@@ -50,7 +52,6 @@ import { parseInterview } from './modes/interviewFile';
 import { questionRowId } from './interview/stages';
 import { setupHref } from './interview/links';
 import { ChecksSheet } from './interview/Room';
-import { useCodePref } from './interview/prefs';
 import { EMPTY_NOTES, factsOf, goTo as reachStage, labelOf, loadNotes, nextOf, notesSaved, openingScreen, saveNotes, stageDone, type StageId, type StageNotes, type WorkStage } from './stages/flow';
 import StageBar, { StageFoot, type StageNext } from './stages/StageBar';
 import { ClarifyStage, EstimateStage, WrapupStage } from './stages/Screens';
@@ -144,7 +145,12 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
     [problem.id],
   );
   const interview = useMemo(() => (problem.interview !== undefined ? parseInterview(problem.interview).interview : undefined), [problem.interview]);
-  const [codeShown, setCodeShown] = useCodePref();
+  /** Code or Visual, as in the editor: the code beside a view-only canvas, or the canvas alone with View code. */
+  const [mode] = useEditorMode();
+  const visual = mode === 'visual';
+  /** Visual mode's View code, open at a line (a test or a problem picked); a new `n` selects it again. */
+  const [codeView, setCodeView] = useState<{ at: { line: number; col: number; length: number; n: number } | null } | null>(null);
+  const closeCodeView = useCallback(() => setCodeView(null), []);
   const [checksOpen, setChecksOpen] = useState(false);
   // Phones, on the Design stage: the guide, the whiteboard or the code.
   const [designTab, setDesignTab] = useState<'guide' | 'board' | 'code'>('board');
@@ -153,8 +159,9 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   // A heading to bring into view once the drawer shows (openLessonAt).
   const [lessonTarget, setLessonTarget] = useState<string>();
   const phone = useIsPhone();
-  // The pane shown on phones.
-  const [pane, setPaneState] = useState<Pane>('statement');
+  // The pane shown on phones; Visual mode has no code pane, so its canvas stands in.
+  const [paneState, setPaneState] = useState<Pane>('statement');
+  const pane = visual && paneState === 'code' ? 'diagram' : paneState;
   // Desktop: the tests are folded to their bar until the first run or until unfolded.
   const testsPanel = usePanelRef();
   const [testsOpen, setTestsOpen] = useState(false);
@@ -354,6 +361,8 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
 
   const goTo = (loc: SourceLoc | Diagnostic) => {
     if (loc.file !== undefined) return;
+    // Visual mode shows it in View code.
+    if (visual) return setCodeView((v) => ({ at: { line: loc.line, col: loc.col, length: loc.length, n: (v?.at?.n ?? 0) + 1 } }));
     setPane('code');
     editorRef.current?.goTo(loc.line, loc.col);
   };
@@ -409,11 +418,11 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   // Design in the full editor: the workspace as it always was.
   const editorView = screen === 'design' && (!staged || notes.editor);
   usePartnerShortcut(togglePartner, hasPartner);
-  const lessonButton = (className: string) =>
+  const lessonButton = (className: string, iconOnly = false) =>
     hasLesson && (
       <button type="button" onClick={() => setDrawer(true)} aria-haspopup="dialog" aria-expanded={drawer} className={className} title="Open the lesson beside your work">
         <GraduationCap size={15} aria-hidden="true" />
-        Lesson
+        <span className={iconOnly ? 'sr-only' : ''}>Lesson</span>
       </button>
     );
 
@@ -479,8 +488,25 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
     </EditorZone>
   );
 
+  const codeDrawer = visual && codeView && (
+    <CodeDrawer source={source} file="solution.proschi" diagnostics={rootDiagnostics} nodeIds={nodeIds} diagram={diagram} at={codeView.at} onClose={closeCodeView} />
+  );
+  const viewCodeButton = (iconOnly: boolean) =>
+    visual && (
+      <button
+        type="button"
+        aria-pressed={!!codeView}
+        onClick={() => setCodeView(codeView ? null : { at: null })}
+        className={`${toolButton} shrink-0 whitespace-nowrap aria-pressed:border-ink aria-pressed:bg-pop-yellow aria-pressed:text-on-accent`}
+        title="The Proschi code behind the canvas, read-only"
+      >
+        <Eye size={15} aria-hidden="true" />
+        <span className={iconOnly ? 'sr-only' : ''}>View code</span>
+      </button>
+    );
+
   const diagramPane = (
-    <section aria-label="Diagram" className="h-full min-w-0 flex flex-col">
+    <section aria-label="Diagram" className="relative h-full min-w-0 flex flex-col">
       <DiagramPane
         diagram={diagram}
         nodes={nodes}
@@ -495,7 +521,9 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
         onUndo={undoCanvas}
         onRedo={redoCanvas}
         phone={phone}
+        viewOnly={!visual}
       />
+      {codeDrawer}
     </section>
   );
 
@@ -516,6 +544,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
           onAssisted={markAssisted}
           diagramOf={partnerDiagram}
           prefill={partnerPrefill}
+          view={mode}
           {...(staged ? { stage: screen, getPrep } : {})}
         />
       </Suspense>
@@ -626,15 +655,16 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
         onRedo={redoCanvas}
         nodes={nodes}
         edges={edges}
-        fitKey={`board:${designTab}:${settled}:${fitTick}:${codeShown}`}
+        fitKey={`board:${designTab}:${settled}:${fitTick}:${mode}`}
         layoutBusy={layoutBusy}
         problemCapacity
         paletteKey="proschi.practice.palette"
         flows
         phone={phone}
         simulate={engine.available ? engine.analyze : undefined}
+        viewOnly={!visual}
       />
-      {nodes.length === 0 && <EmptyCanvas />}
+      {codeDrawer}
       {checksOpen && run && (
         <ChecksSheet run={run.result} stale={run.source !== source} onClose={() => setChecksOpen(false)} />
       )}
@@ -654,44 +684,50 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
       walkthrough={guidedSteps && guidedOn ? guidedPanel : undefined}
     />
   );
+  const designShown = visual && designTab === 'code' ? 'board' : designTab;
   const designStage = phone ? (
     <>
-      <div role="tablist" aria-label="Design" className="ps-tabs ps-tabs--fill flex bg-surface">
-        {(
-          [
-            ['guide', 'Guide', BookOpen],
-            ['board', 'Whiteboard', Presentation],
-            ['code', 'Code', Code2],
-          ] as const
-        ).map(([id, label, Icon]) => (
-          <button key={id} role="tab" aria-selected={designTab === id} onClick={() => setDesignTab(id)} className="ps-tab !px-2">
-            <Icon size={15} className="hidden min-[420px]:block" aria-hidden="true" />
-            {label}
-          </button>
-        ))}
+      <div className="flex items-stretch border-b-bw-1 border-ink bg-surface">
+        <div role="tablist" aria-label="Design" className="ps-tabs ps-tabs--fill flex min-w-0 flex-1 !border-b-0">
+          {(
+            [
+              ['guide', 'Guide', BookOpen],
+              ['board', 'Whiteboard', Presentation],
+              ...(visual ? [] : ([['code', 'Code', Code2]] as const)),
+            ] as const
+          ).map(([id, label, Icon]) => (
+            <button key={id} role="tab" aria-selected={designShown === id} onClick={() => setDesignTab(id)} className="ps-tab !px-2">
+              <Icon size={15} className="hidden min-[420px]:block" aria-hidden="true" />
+              {label}
+            </button>
+          ))}
+        </div>
+        {/* The stage bar above has no room on a phone. */}
+        <div className="flex flex-none items-center gap-1 border-l-bw-1 border-ink px-1.5">
+          <ModeSwitch compact problems={rootDiagnostics.length} />
+          {viewCodeButton(true)}
+        </div>
       </div>
       <div className="min-h-0 flex-1">
-        <div className={designTab === 'guide' ? 'h-full' : 'hidden'}>{guide}</div>
-        <div className={designTab === 'board' ? 'h-full' : 'hidden'}>{whiteboard}</div>
-        {designTab === 'code' && editor}
+        <div className={designShown === 'guide' ? 'h-full' : 'hidden'}>{guide}</div>
+        <div className={designShown === 'board' ? 'h-full' : 'hidden'}>{whiteboard}</div>
+        {/* Mounted in Visual too, hidden: the whiteboard's undo and redo are its history. */}
+        <div className={designShown === 'code' ? 'h-full' : 'hidden'}>{editor}</div>
       </div>
     </>
   ) : (
     <div className="flex min-h-0 flex-1">
       <div className="min-w-0 flex-1">
-        {codeShown ? (
-          <Group orientation="horizontal" className="h-full" onLayoutChanged={refit}>
-            <Panel id="design-code" defaultSize="38%" minSize="22%" maxSize="60%">
-              {editor}
-            </Panel>
-            <Separator className="ps-splitter w-[var(--bw-1)]" aria-label="Resize the code and the whiteboard" />
-            <Panel id="design-board" minSize="30%">
-              {whiteboard}
-            </Panel>
-          </Group>
-        ) : (
-          whiteboard
-        )}
+        {/* Visual mode hides the code, still mounted: the whiteboard's undo and redo are its history. */}
+        <Group orientation="horizontal" className="h-full [&>[data-mode-hidden]]:!hidden" onLayoutChanged={refit}>
+          <Panel id="design-code" defaultSize="38%" minSize="22%" maxSize="60%" data-mode-hidden={visual || undefined}>
+            {editor}
+          </Panel>
+          <Separator className="ps-splitter w-[var(--bw-1)]" aria-label="Resize the code and the whiteboard" data-mode-hidden={visual || undefined} />
+          <Panel id="design-board" minSize="30%">
+            {whiteboard}
+          </Panel>
+        </Group>
       </div>
       <div className="w-[340px] shrink-0 border-l-bw-1 border-ink xl:w-[380px]">{guide}</div>
     </div>
@@ -699,6 +735,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
 
   const workspace = phone ? (
     <div className="flex-1 min-h-0 flex flex-col">
+      {/* The code stays mounted in Visual mode, hidden: the canvas's undo and redo are its history. */}
       {([['statement', statement], ['code', editor], ['diagram', diagramPane], ['tests', testPanel(false)]] as const).map(([id, content]) => (
         <div key={id} className={pane === id ? 'flex-1 min-h-0' : 'hidden'}>
           {content}
@@ -708,15 +745,16 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   ) : (
     <Group orientation="vertical" className="flex-1 min-h-0 min-w-0" onLayoutChanged={refit}>
       <Panel id="workspace" minSize="25%">
-        <Group orientation="horizontal" className="h-full" onLayoutChanged={refit}>
+        {/* Visual mode hides the code, still mounted: the canvas's undo and redo are its history. */}
+        <Group orientation="horizontal" className="h-full [&>[data-mode-hidden]]:!hidden" onLayoutChanged={refit}>
           <Panel id="statement" defaultSize="30%" minSize="18%" maxSize="55%">
             {statement}
           </Panel>
           <Separator className="ps-splitter w-[var(--bw-1)]" aria-label="Resize the problem and the editor" />
-          <Panel id="code" defaultSize="36%" minSize="20%">
+          <Panel id="code" defaultSize="36%" minSize="20%" data-mode-hidden={visual || undefined}>
             {editor}
           </Panel>
-          <Separator className="ps-splitter w-[var(--bw-1)]" aria-label="Resize the editor and the diagram" />
+          <Separator className="ps-splitter w-[var(--bw-1)]" aria-label="Resize the editor and the diagram" data-mode-hidden={visual || undefined} />
           <Panel id="diagram" minSize="16%">
             {diagramPane}
           </Panel>
@@ -755,11 +793,12 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
       </button>
     ) : (
       <>
+        {/* On phones the switch is in the Design tabs' bar. */}
         {!phone && (
-          <button type="button" aria-label="Show code" aria-pressed={codeShown} onClick={() => setCodeShown(!codeShown)} className={`${toolButton} shrink-0 aria-pressed:border-ink aria-pressed:bg-pop-yellow aria-pressed:text-on-accent`} title="The design as Proschi code, beside the whiteboard">
-            <Code2 size={15} aria-hidden="true" />
-            Code
-          </button>
+          <>
+            <ModeSwitch problems={rootDiagnostics.length} />
+            {viewCodeButton(false)}
+          </>
         )}
         <button type="button" aria-label="Open the full editor" onClick={() => setEditor(true)} className={`${toolButton} shrink-0`} title="The full editor: code, tests, scenario playback and the capacity analysis, side by side">
           <PanelsTopLeft size={15} aria-hidden="true" />
@@ -796,6 +835,13 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
         )}
         {/* From sm up Reset and Help have their own buttons; on phones they share "More", so the row does not wrap. */}
         <span className={`hidden sm:flex items-center gap-1 ml-auto`}>
+          {/* The full editor's switch; on the stages it is in the stage bar, on phones in the tab bar. */}
+          {editorView && !phone && (
+            <>
+              <ModeSwitch problems={rootDiagnostics.length} />
+              {viewCodeButton(false)}
+            </>
+          )}
           {!staged && lessonButton(outlineButton)}
           <button onClick={reset} className={toolButton} aria-label="Reset" title="Reset: start this problem over (your work goes; a solve and your XP stay)">
             <RotateCcw size={14} />
@@ -826,7 +872,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
         // The design system's tab look (widgets.css); plain buttons so each tab keeps its data-tour target.
         <div className="flex items-stretch bg-surface border-b-bw-1 border-ink">
           <div role="tablist" aria-label="View" className="ps-tabs ps-tabs--fill flex-1 min-w-0 !border-b-0">
-            {PANES.map(({ id, label, icon }) => {
+            {PANES.filter((p) => !visual || p.id !== 'code').map(({ id, label, icon }) => {
               const Icon = icon;
               return (
                 <button key={id} role="tab" data-tour={`tab-${id}`} aria-selected={pane === id} onClick={() => setPane(id)} className="ps-tab !px-2">
@@ -836,7 +882,11 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
               );
             })}
           </div>
-          {!staged && lessonButton('flex-none inline-flex items-center gap-1.5 px-3 text-sm font-semibold text-ink border-l-bw-1 border-ink hover:bg-pop-yellow/30')}
+          <div className="flex flex-none items-center gap-1 border-l-bw-1 border-ink px-1.5">
+            <ModeSwitch compact problems={rootDiagnostics.length} />
+            {viewCodeButton(true)}
+          </div>
+          {!staged && lessonButton('flex-none inline-flex items-center gap-1.5 px-3 text-sm font-semibold text-ink border-l-bw-1 border-ink hover:bg-pop-yellow/30', true)}
           {/* In the tab bar, not over the panes. */}
           {hasPartner && <PartnerButton bar open={partnerOpen} onToggle={togglePartner} coach={staged} />}
         </div>
@@ -1020,10 +1070,12 @@ interface DiagramPaneProps {
   onUndo: () => void;
   onRedo: () => void;
   phone: boolean;
+  /** Code mode: the canvas only looks (EditableCanvas `viewOnly`). */
+  viewOnly: boolean;
 }
 
 /** The design as a diagram, one scenario played step by step, or its capacity analysis. */
-function DiagramPane({ diagram, nodes, edges, fitKey, layoutBusy, engine, onSelect, zen, source, onChange, onUndo, onRedo, phone }: DiagramPaneProps) {
+function DiagramPane({ diagram, nodes, edges, fitKey, layoutBusy, engine, onSelect, zen, source, onChange, onUndo, onRedo, phone, viewOnly }: DiagramPaneProps) {
   const [tab, setTab] = useState<'diagram' | 'playback' | 'analysis'>('diagram');
   const analysis = useMemo(() => (tab === 'analysis' ? engine.analyze(diagram) : undefined), [tab, engine, diagram]);
   const options = useMemo(
@@ -1085,9 +1137,9 @@ function DiagramPane({ diagram, nodes, edges, fitKey, layoutBusy, engine, onSele
             flows
             phone={phone}
             simulate={engine.available ? engine.analyze : undefined}
+            viewOnly={viewOnly}
           />
         )}
-        {nodes.length === 0 && tab === 'diagram' && <EmptyCanvas />}
       </div>
     </div>
   );

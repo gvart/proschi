@@ -3,6 +3,9 @@ import { mockSignedIn, SIGNED_IN } from './accounts';
 import { answerDialog, canvasNodes, codeEditor, copiedText, editorText, expect, mockClipboard, test, waitForCanvas } from './fixtures';
 import { Account, ORDERS, seed } from './versions';
 
+// These tests type in the code editor, so they run in Code mode (the canvas beside it only looks).
+test.use({ mode: 'code' });
+
 /**
  * Live share links in the build with accounts (API mocked): the read-only
  * page at /share/<token> for anyone, signed out included, and the editor's

@@ -89,11 +89,17 @@ export function CanvasMiniMap() {
  * across the canvas, so in a narrow pane (practice's diagram column, the editor with the Flows builder docked)
  * the right side wraps below the left instead of covering it.
  */
-export function CanvasTopBar({ left, right }: { left?: ReactNode; right?: ReactNode }) {
-  if (!left && !right) return null;
+export function CanvasTopBar({ left, right, hint }: { left?: ReactNode; right?: ReactNode; hint?: ReactNode }) {
+  if (!left && !right && !hint) return null;
   return (
     <Panel position="top-left" style={{ right: 0 }} data-canvas-topbar className="pointer-events-none flex flex-wrap items-start gap-2">
       {left && <div className="pointer-events-auto flex flex-wrap gap-2">{left}</div>}
+      {/* After the buttons, wrapping below them in a narrow pane rather than covering them; it does not move the fit (useTopBarInset). */}
+      {hint && (
+        <div data-topbar-passing className="pointer-events-auto">
+          {hint}
+        </div>
+      )}
       {right && (
         <div data-topbar-right className="pointer-events-auto ml-auto flex flex-col items-end gap-2">
           {right}

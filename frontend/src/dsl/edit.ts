@@ -1,6 +1,6 @@
 import { bracketDepth, tokenizeLine, type Token } from './lexer';
 import { parse } from './parser';
-import type { CapacityOverride, DiagramNode, InstanceSize } from './types';
+import type { CapacityOverride, Diagram, DiagramNode, InstanceSize } from './types';
 
 /**
  * Source-to-source edits used when the diagram is changed on the canvas. Each
@@ -40,11 +40,13 @@ export function renameNode(source: string, id: string, name: string): string {
   return replaceInLine(source, decl.line, end(idToken), end(idToken), ` ${quoted}`);
 }
 
-export function addConnection(source: string, from: string, to: string): string {
+/** Adds `from -> to`, with ` : label` when one is given (a new connection carries its target's protocol). */
+export function addConnection(source: string, from: string, to: string, label?: string): string {
   if (from === to) return source;
   const { diagram } = parse(source);
   if (diagram.edges.some((e) => e.source === from && e.target === to)) return source;
-  return insertDeclaration(source, `${from} -> ${to}`);
+  const clean = label ? cleanLabel(label).trim() : '';
+  return insertDeclaration(source, `${from} -> ${to}${clean ? ` : ${clean}` : ''}`);
 }
 
 export type EditResult = { source: string; error?: undefined } | { source?: undefined; error: string };
@@ -509,22 +511,33 @@ function end(token: Token): number {
 // ---------------------------------------------------------------------------
 // Use cases and scenarios (the canvas's Flows builder, docs/design/paid-plans.md P46).
 // A use case is read as an outline of its own text: its steps, and its
-// scenarios (`alt` branches that follow each other) with theirs. Anything else
-// in it (a `par` block, an `alt` inside a branch) is kept and counted as
-// written in code. The edits add or remove whole lines, so the rest stays as it is.
+// scenarios (`alt` branches that follow each other) with theirs, and its `par`
+// blocks with theirs. Anything else in it (a block inside a branch) is kept and
+// counted as written in code. The edits add, replace, move or remove whole
+// lines, so the rest stays as it is.
 
-/** How a step is drawn: a request `->`, its response `-->`, or a message nobody waits for `->>`. */
-export type StepKind = 'request' | 'response' | 'async';
+/** How a step is drawn: a request `->`, its response `-->`, a message nobody waits for `->>`, or a call that fails `-x`. */
+export type StepKind = 'request' | 'response' | 'async' | 'failed';
 
-const STEP_ARROW: Record<StepKind, string> = { request: '->', response: '-->', async: '->>' };
+const STEP_ARROW: Record<StepKind, string> = { request: '->', response: '-->', async: '->>', failed: '-x' };
 
 export interface OutlineStep {
   /** 1-based line of the step (its first line, for a multi-line payload). */
   line: number;
   from: string;
   to: string;
-  kind: StepKind | 'failed';
+  kind: StepKind;
   label: string;
+}
+
+/** A `par { … }` block of the main flow: steps that run at the same time. */
+export interface OutlineParallel {
+  /** The line of `par {`, and of the `}` that closes it. */
+  line: number;
+  endLine: number;
+  steps: OutlineStep[];
+  /** Statements in it that are not plain steps, left to the code. */
+  other: number;
 }
 
 export interface OutlineBranch {
@@ -539,7 +552,11 @@ export interface OutlineBranch {
   other: number;
 }
 
-export type OutlineItem = { kind: 'step'; step: OutlineStep } | { kind: 'scenarios'; branches: OutlineBranch[] } | { kind: 'other'; line: number };
+export type OutlineItem =
+  | { kind: 'step'; step: OutlineStep }
+  | { kind: 'scenarios'; branches: OutlineBranch[] }
+  | { kind: 'parallel'; block: OutlineParallel }
+  | { kind: 'other'; line: number };
 
 export interface UseCaseOutline {
   name: string;
@@ -596,6 +613,8 @@ export function outlineOf(source: string, name: string): UseCaseOutline | undefi
   let group: OutlineBranch[] | undefined;
   /** The branch being read, if any. */
   let branch: OutlineBranch | undefined;
+  /** The main flow's `par` block being read, if any. */
+  let parallel: OutlineParallel | undefined;
   const openBranch = (tokens: Token[], at: number, shared: boolean) => {
     branch = { name: tokens[1]?.value ?? '', line: at + 1, endLine: at + 1, shared, steps: [], other: 0 };
     if (!group) {
@@ -609,6 +628,11 @@ export function outlineOf(source: string, name: string): UseCaseOutline | undefi
     const { tokens } = tokenizeLine(lines[i], i + 1);
     if (tokens.length === 0) continue;
     const first = tokens[0];
+    if (first.kind === 'rbrace' && parallel) {
+      parallel.endLine = i + 1;
+      parallel = undefined;
+      continue;
+    }
     if (first.kind === 'rbrace') {
       if (!branch) break;
       branch.endLine = i + 1;
@@ -617,13 +641,22 @@ export function outlineOf(source: string, name: string): UseCaseOutline | undefi
       if (tokens[1]?.kind === 'ident' && tokens[1].value === 'alt') openBranch(tokens.slice(1), i, true);
       continue;
     }
-    if (first.kind === 'ident' && first.value === 'alt' && !branch) {
+    if (first.kind === 'ident' && first.value === 'alt' && !branch && !parallel) {
       openBranch(tokens, i, false);
+      continue;
+    }
+    if (first.kind === 'ident' && first.value === 'par' && tokens[1]?.kind === 'lbrace' && !branch && !parallel) {
+      group = undefined;
+      parallel = { line: i + 1, endLine: i + 1, steps: [], other: 0 };
+      items.push({ kind: 'parallel', block: parallel });
       continue;
     }
     const step = readStep(tokens, i + 1);
     const end = step ? statementEnd(lines, i) : tokens.some((t) => t.kind === 'lbrace') ? blockEnd(lines, i) : i;
-    if (branch) {
+    if (parallel) {
+      if (step) parallel.steps.push(step);
+      else parallel.other++;
+    } else if (branch) {
       if (step) branch.steps.push(step);
       else branch.other++;
     } else {
@@ -676,25 +709,169 @@ function indentOf(line: string | undefined): string {
 /**
  * Appends a step to a use case: at the end of its main flow, or of its
  * scenario `scenario`. A request or message between two components that are
- * not connected yet connects them too, as the step needs.
+ * not connected yet connects them too, as the step needs, labelled with the
+ * target's protocol.
  */
-export function addStep(source: string, useCase: string, step: NewStep, scenario?: string): EditResult {
+export function addStep(source: string, useCase: string, step: NewStep, scenario?: string, before?: number, design?: Diagram): EditResult {
   const outline = outlineOf(source, useCase);
   if (!outline) return { error: `There is no use case "${useCase}" in this design.` };
   if (step.from === step.to) return { error: 'A step goes from one component to another.' };
   const lines = source.split('\n');
   let at = outline.endLine - 1;
   let indent = `${indentOf(lines[outline.line - 1])}  `;
-  if (scenario !== undefined) {
+  if (before !== undefined) {
+    // Before the step written at line `before`, in its block.
+    if (!stepsOf(outline).some((s) => s.line === before)) return { error: 'There is no step on that line of this use case.' };
+    at = before - 1;
+    indent = indentOf(lines[at]);
+  } else if (scenario !== undefined) {
     const branch = outline.items.flatMap((item) => (item.kind === 'scenarios' ? item.branches : [])).find((b) => b.name === scenario);
     if (!branch) return { error: `"${useCase}" has no scenario "${scenario}".` };
     at = branch.endLine - 1;
     indent = `${indentOf(lines[branch.line - 1])}  `;
   }
+  lines.splice(at, 0, `${indent}${stepText(step)}`);
+  return { source: withConnection(lines.join('\n'), step, design) };
+}
+
+/** `a -> b : label`, the label kept on one line. */
+function stepText(step: NewStep): string {
   const label = step.label ? cleanLabel(step.label) : '';
-  lines.splice(at, 0, `${indent}${step.from} ${STEP_ARROW[step.kind]} ${step.to}${label ? ` : ${label}` : ''}`);
-  const next = lines.join('\n');
-  return { source: step.kind === 'response' ? next : addConnection(next, step.from, step.to) };
+  return `${step.from} ${STEP_ARROW[step.kind]} ${step.to}${label ? ` : ${label}` : ''}`;
+}
+
+/**
+ * The connection a request, message or failed call needs, labelled with its
+ * target's protocol as one drawn on the canvas is. `design` is the whole
+ * design with its imports (a practice problem's given): a connection or type
+ * declared there counts, which the text alone can't see.
+ */
+function withConnection(source: string, step: NewStep, design?: Diagram): string {
+  if (step.kind === 'response') return source;
+  if (design?.edges.some((e) => e.source === step.from && e.target === step.to)) return source;
+  const target = design?.nodes.find((n) => n.id === step.to) ?? parse(source).diagram.nodes.find((n) => n.id === step.to);
+  return addConnection(source, step.from, step.to, target?.resolvedType?.protocol);
+}
+
+/** Every step of an outline: the main flow's, each scenario's and each parallel block's. */
+function stepsOf(outline: UseCaseOutline): OutlineStep[] {
+  return outline.items.flatMap((item) =>
+    item.kind === 'step' ? [item.step] : item.kind === 'scenarios' ? item.branches.flatMap((b) => b.steps) : item.kind === 'parallel' ? item.block.steps : [],
+  );
+}
+
+/** The use case (in this document's own text) with a step on `line`. */
+function outlineWithStep(source: string, line: number): UseCaseOutline | undefined {
+  for (const u of parse(source).diagram.useCases) {
+    if (u.loc.file !== undefined) continue;
+    const outline = outlineOf(source, u.name);
+    if (outline && stepsOf(outline).some((s) => s.line === line)) return outline;
+  }
+  return undefined;
+}
+
+/** Replaces the step written at `line` (its whole payload too) with `step`, in the same place. */
+export function setStep(source: string, line: number, step: NewStep, design?: Diagram): EditResult {
+  if (step.from === step.to) return { error: 'A step goes from one component to another.' };
+  if (!outlineWithStep(source, line)) return { error: 'There is no step on that line.' };
+  const lines = source.split('\n');
+  const last = statementEnd(lines, line - 1);
+  lines.splice(line - 1, last - line + 2, `${indentOf(lines[line - 1])}${stepText(step)}`);
+  return { source: withConnection(lines.join('\n'), step, design) };
+}
+
+/**
+ * Moves the statement at `line` one place up or down among its siblings: a
+ * step of the main flow past the step, scenarios or block next to it; a step
+ * of a scenario or parallel block past the step next to it there.
+ */
+export function moveStep(source: string, line: number, direction: 'up' | 'down'): EditResult {
+  const outline = outlineWithStep(source, line);
+  if (!outline) return { error: 'There is no step on that line.' };
+  const lines = source.split('\n');
+  const range = (start: number, end: number) => ({ start, end });
+  const stepRange = (s: OutlineStep) => range(s.line, statementEnd(lines, s.line - 1) + 1);
+  // The sibling ranges (1-based, inclusive) of the step's own block.
+  const inBlock = outline.items.flatMap((item) => (item.kind === 'scenarios' ? item.branches.map((b) => b.steps) : item.kind === 'parallel' ? [item.block.steps] : [])).find((steps) => steps.some((s) => s.line === line));
+  const siblings = inBlock
+    ? inBlock.map(stepRange)
+    : outline.items.map((item) =>
+        item.kind === 'step'
+          ? stepRange(item.step)
+          : item.kind === 'scenarios'
+            ? range(item.branches[0].line, item.branches.at(-1)!.endLine)
+            : item.kind === 'parallel'
+              ? range(item.block.line, item.block.endLine)
+              : range(item.line, blockEnd(lines, item.line - 1) + 1),
+      );
+  const i = siblings.findIndex((r) => r.start === line);
+  const j = direction === 'up' ? i - 1 : i + 1;
+  if (i < 0 || j < 0 || j >= siblings.length) return { source };
+  const [a, b] = i < j ? [siblings[i], siblings[j]] : [siblings[j], siblings[i]];
+  const text = (r: { start: number; end: number }) => lines.slice(r.start - 1, r.end);
+  // Swap the two ranges, keeping whatever lies between them (blank lines, comments).
+  const swapped = [...lines.slice(0, a.start - 1), ...text(b), ...lines.slice(a.end, b.start - 1), ...text(a), ...lines.slice(b.end)];
+  return { source: swapped.join('\n') };
+}
+
+/** The `"name"` string token that follows a line's leading keyword (`usecase "A"`, `alt "B"`), as its column range. */
+function nameAfter(line: string, number: number, keyword: string): { from: number; to: number; value: string } | undefined {
+  const tokens = tokenizeLine(line, number).tokens.filter((t) => t.kind !== 'rbrace');
+  const [k, name] = tokens;
+  if (k?.kind !== 'ident' || k.value !== keyword || name?.kind !== 'string') return undefined;
+  return { from: name.col - 1, to: end(name), value: name.value };
+}
+
+/**
+ * Renames a use case: its `usecase` line, and wherever a string names it
+ * outside a declaration (the traffic block, tests, what-ifs).
+ */
+export function renameUseCase(source: string, from: string, to: string): EditResult {
+  const clean = cleanText(to);
+  if (!clean) return { error: 'Name the use case.' };
+  if (clean === from) return { source };
+  const useCases = parse(source).diagram.useCases.filter((u) => u.loc.file === undefined);
+  if (!useCases.some((u) => u.name === from)) return { error: `There is no use case "${from}" in this design.` };
+  if (useCases.some((u) => u.name === clean)) return { error: `There is a use case "${clean}" already.` };
+  const lines = source.split('\n').map((text, i) => {
+    const tokens = tokenizeLine(text, i + 1).tokens;
+    // `id "Name" …`, `title "…"`, `alt "…"`: a string right after a leading word names something else, unless the word is usecase.
+    const declares = tokens[0]?.kind === 'ident' && tokens[0].value !== 'usecase' && tokens[1]?.kind === 'string';
+    let out = text;
+    for (const t of [...tokens].reverse()) {
+      if (t.kind !== 'string' || t.value !== from || (declares && t === tokens[1])) continue;
+      out = `${out.slice(0, t.col - 1)}${quote(clean)}${out.slice(end(t))}`;
+    }
+    return out;
+  });
+  return { source: lines.join('\n') };
+}
+
+/** Renames a scenario of a use case: its `alt` line, and its share in the use case's traffic mix. */
+export function renameScenario(source: string, useCase: string, from: string, to: string): EditResult {
+  const clean = cleanText(to);
+  if (!clean) return { error: 'Name the scenario.' };
+  const outline = outlineOf(source, useCase);
+  if (!outline) return { error: `There is no use case "${useCase}" in this design.` };
+  const branches = outline.items.flatMap((item) => (item.kind === 'scenarios' ? item.branches : []));
+  const branch = branches.find((b) => b.name === from);
+  if (!branch) return { error: `"${useCase}" has no scenario "${from}".` };
+  if (clean === from) return { source };
+  if (branches.some((b) => b.name === clean)) return { error: `"${useCase}" already has a scenario "${clean}".` };
+  const lines = source.split('\n');
+  const at = branch.line - 1;
+  const name = nameAfter(lines[at], at + 1, 'alt');
+  if (!name) return { error: `"${from}" is written in a way the builder can't rename; rename it in the code.` };
+  lines[at] = `${lines[at].slice(0, name.from)}${quote(clean)}${lines[at].slice(name.to)}`;
+  // `"Use case" … mix "A" 90%, "B" 10%` in the traffic block.
+  for (let i = 0; i < lines.length; i++) {
+    const tokens = tokenizeLine(lines[i], i + 1).tokens;
+    if (tokens[0]?.kind !== 'string' || tokens[0].value !== useCase || !tokens.some((t) => t.kind === 'ident' && t.value === 'mix')) continue;
+    for (const t of [...tokens].reverse()) {
+      if (t.kind === 'string' && t !== tokens[0] && t.value === from) lines[i] = `${lines[i].slice(0, t.col - 1)}${quote(clean)}${lines[i].slice(end(t))}`;
+    }
+  }
+  return { source: lines.join('\n') };
 }
 
 /** Removes the step written at `line` (its whole payload too). */
@@ -736,6 +913,30 @@ export function removeScenario(source: string, useCase: string, name: string): E
     lines.splice(branch.line - 1, branch.endLine - branch.line);
   } else lines.splice(branch.line - 1, branch.endLine - branch.line + 1);
   return { source: lines.join('\n') };
+}
+
+/**
+ * Gives a component a type of its own with operations (docs/TYPES.md): writes
+ * `type Name extends Parent { op … }` before the first declaration (after the
+ * title and imports) and makes `node` one of it. For a component whose type
+ * takes any label, so its steps get checked and their reads and writes known.
+ */
+export function giveOperations(source: string, node: string, name: string, parent: string, ops: { name: string; access: 'read' | 'write' }[]): EditResult {
+  const clean = cleanText(name).replace(/[[\]{}"]/g, '');
+  if (!clean) return { error: 'Name the type.' };
+  const { diagram } = parse(source);
+  if (!diagram.nodes.some((n) => n.id === node)) return { error: `There is no component '${node}' in this design.` };
+  if ((diagram.types ?? []).some((t) => t.name.toLowerCase() === clean.toLowerCase())) return { error: `There is a type "${clean}" already.` };
+  const names = (access: 'read' | 'write') => [...new Set(ops.filter((o) => o.access === access).map((o) => (/^[A-Za-z_]\w*$/.test(o.name) ? o.name : quote(o.name))))];
+  const typeName = /^[A-Za-z_]\w*$/.test(clean) ? clean : `[${clean}]`;
+  const block = [`type ${typeName} extends ${/^[A-Za-z_]\w*$/.test(parent) ? parent : `[${parent}]`} {`, ...(['write', 'read'] as const).flatMap((a) => (names(a).length ? [`  op ${a} ${names(a).join(', ')}`] : [])), '}', ''];
+  const lines = source.split('\n');
+  let at = 0;
+  while (at < lines.length && /^\s*(title\b|import\b|#|$)/.test(lines[at])) at++;
+  // Keep a blank line after the title and imports, if there is one.
+  while (at > 0 && lines[at - 1].trim() === '') at--;
+  lines.splice(at, 0, ...(at > 0 ? ['', ...block.slice(0, -1)] : block));
+  return { source: setTech(lines.join('\n'), node, clean) };
 }
 
 // ---------------------------------------------------------------------------
@@ -796,4 +997,63 @@ export function scaleTraffic(source: string, factor: number): string {
     lines[entry.loc.line - 1] = text.slice(0, rate.col - 1) + rateText(entry.rps * factor) + text.slice(end(rate));
   }
   return lines.join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Renaming a node's id (the canvas's "ids follow names"). Every reference is an
+// identifier token, so the text is read token by token: strings, labels,
+// payloads and comments are never touched.
+
+/** Blocks whose lines name no node of this document: a type's ops, an entity's fields, a decision, a system's team file. */
+const NO_REFERENCES = new Set(['type', 'entity', 'decision', 'system']);
+
+/** What a line that opens a block opens, from its first words (`} alt "Next" {` opens an alt). */
+function blockKind(tokens: Token[]): string {
+  const [first, second] = tokens;
+  if (first?.kind === 'rbrace') return second?.kind === 'ident' ? second.value : 'other';
+  if (first?.kind !== 'ident') return 'other';
+  if (first.value === 'abstract' && second?.kind === 'ident' && second.value === 'type') return 'type';
+  return first.value;
+}
+
+/** Whether a node may take `id`: an identifier no node uses, not a keyword or a replica count (see uniqueId). */
+function isFreeId(source: string, id: string, taken: Iterable<string> = []): boolean {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(id) || RESERVED.has(id) || /^x\d+$/.test(id)) return false;
+  return !new Set([...parse(source).diagram.nodes.map((n) => n.id), ...taken]).has(id);
+}
+
+/**
+ * Renames the node `oldId` to `newId` everywhere this document names it: its
+ * declaration, connections and steps (`old.port` too), group membership,
+ * capacity, entities, tests and what-ifs. Refused when `newId` is not free
+ * (`taken` adds ids the text alone does not show), or this document has no `oldId`.
+ */
+export function renameId(source: string, oldId: string, newId: string, taken?: Iterable<string>): EditResult {
+  if (oldId === newId) return { source };
+  if (!parse(source).diagram.nodes.some((n) => n.id === oldId && n.loc.file === undefined)) return { error: `There is no '${oldId}' here.` };
+  if (!isFreeId(source, newId, taken)) return { error: `'${newId}' can't be used as an id here.` };
+  const lines = source.split('\n');
+  /** The kinds of the blocks open at this line, innermost last. */
+  const blocks: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const { tokens } = tokenizeLine(lines[i], i + 1);
+    if (tokens.length === 0) continue;
+    const inside = blocks.some((b) => NO_REFERENCES.has(b));
+    const kind = blockKind(tokens);
+    const opens = tokens[tokens.length - 1].kind === 'lbrace';
+    if (tokens[0].kind === 'rbrace') blocks.pop();
+    if (opens) blocks.push(kind);
+    // A type's header names types, `let` a constant, `import` a file; an entity's header names the entity, then the node it is `in`;
+    // `any cache` names a kind.
+    if (!inside && kind !== 'type' && kind !== 'let' && kind !== 'import') {
+      const isNode = (at: number) => !(kind === 'entity' && at === 1) && !(tokens[at - 1]?.kind === 'ident' && tokens[at - 1].value === 'any');
+      const named = tokens.filter((t, at) => t.kind === 'ident' && t.value === oldId && isNode(at));
+      let text = lines[i];
+      for (const t of named.reverse()) text = text.slice(0, t.col - 1) + newId + text.slice(end(t));
+      lines[i] = text;
+    }
+    // A payload over several lines is text.
+    i = statementEnd(lines, i);
+  }
+  return { source: lines.join('\n') };
 }

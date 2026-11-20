@@ -1,5 +1,5 @@
 ---
-updated: 2026-11-09
+updated: 2026-11-20
 ---
 
 # Colors, legend and layout
@@ -116,14 +116,23 @@ goes where its edges pull it, which can be between two ranks.
 The text is the source of truth. Canvas edits are written back into it,
 changing only their part of the line, so comments and alignment survive.
 
+The editor has two modes, switched with **Code | Visual** in its header
+(or **Ctrl+\\**, **⌘\\** on a Mac) and remembered in the browser. **Visual**
+gives the canvas the whole page, with the edits below; **View code** shows
+the text it writes, read-only. **Code** puts the text editor beside the
+diagram, which then only looks: select a node to find its line, pan, zoom,
+play a use case, but edit in the text. Practice and the mock interview use
+the same switch. [Build a diagram without code](VISUAL-EDITOR.md) walks
+through Visual mode step by step.
+
 | On the canvas | In the text |
 |---|---|
 | Drag a node or group | `pos x,y` is added or updated. Positions inside a group are relative to the group. |
-| Double-click a node | Its display name changes. |
-| Drag from one node's dot to another's | A connection is added. |
-| **Add component** shows the components, grouped by what they do; click one | A declaration is added above the first use case. |
+| Double-click a node | Its display name changes, and a generated id (`rest_api`) follows it. |
+| Drag from one node's dot and drop anywhere on another | A connection is added, labelled with the target type's protocol. |
+| **Add component** shows the components, grouped by what they do; click one | A declaration is added above the first use case, connected from the selected node if there is one. |
 | Drag a component from that list onto the canvas | The declaration gets the `pos x,y` it was dropped at, and its settings open. |
-| Select a node, then change its settings | Name, tech stack, replicas, owner and description change its declaration. Capacity, latency, availability, cost and shards change its [capacity](HLD.md#capacity) line, which is added when there is none. |
+| Select a node, then change its settings in the **Selection** tab | Name, tech stack, replicas, owner and description change its declaration. Capacity, latency, availability, cost and shards change its [capacity](HLD.md#capacity) line, which is added when there is none. |
 | Select a connection, then change its label | The label changes, unless it has a JSON or XML payload. |
 | Select, then **Delete** (or right-click, **Delete**) | The node and its connections, or the connection, are removed. |
 | **Ctrl+Z** (**⌘Z** on a Mac) on the canvas | The last edit is undone, as in the code: each canvas edit is one undo step. |

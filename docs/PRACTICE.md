@@ -1,5 +1,5 @@
 ---
-updated: 2026-11-19
+updated: 2026-11-20
 ---
 
 # Writing practice problems
@@ -262,8 +262,9 @@ interview** in a problem's Wrap-up, which opens it with that problem chosen. It 
    visual canvas, takes the page: add components from the palette, connect
    them, change their settings, and add each use case's steps and scenarios
    under **Flows**. **Check my design** runs the problem's tests on it. The
-   code is hidden; **Show code** opens it beside the whiteboard and is
-   remembered. The rail on the right holds the problem, and the
+   **Code | Visual** switch is the editor's, and remembered with it: Visual
+   (the default) shows the code read-only under **View code**; Code puts it
+   beside the whiteboard, which then only looks. The rail on the right holds the problem, and the
    conversation or the phase's questions; on phones it is its own tab, the
    first one. The top bar has the four phases (**Clarify**, **Estimate**,
    **Design**, **Wrap-up**, 10/10/70/10 of the time), the clock and the

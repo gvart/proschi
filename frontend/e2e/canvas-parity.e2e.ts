@@ -1,5 +1,8 @@
 import type { Page } from '@playwright/test';
-import { answerDialog, appendCode, canvasNodes, chooseOption, codeEditor, editorText, expect, expectTopBarClear, test, waitForCanvas } from './fixtures';
+import { appendCode, canvasNodes, chooseOption, editorText, expect, expectTopBarClear, setMode, test, waitForCanvas } from './fixtures';
+
+// The canvas edits in Visual mode; the code a test starts from is typed in Code mode first.
+test.use({ mode: 'visual' });
 
 /**
  * The practice canvas and the editor's behave the same (6.1): the practice
@@ -34,7 +37,6 @@ async function drag(page: Page, name: string, dx: number, dy: number) {
 
 async function openProblem(page: Page) {
   await page.goto('practice/#/url-shortener');
-  await expect(codeEditor(page)).toBeVisible();
   await waitForCanvas(page, 2);
   await layoutSettled(page);
 }
@@ -95,8 +97,8 @@ test.describe('the practice canvas', () => {
 
     await node(page, 'Shortener API').first().click({ button: 'right' });
     await page.getByRole('menuitem', { name: 'Rename…' }).click();
-    await page.locator('.ps-dialog').getByRole('textbox').fill('Links API');
-    await answerDialog(page, 'Rename');
+    await page.locator('.pc-node__name-field').fill('Links API');
+    await page.locator('.pc-node__name-field').press('Enter');
     await expect.poll(() => editorText(page)).toMatch(/^api "Links API" \[REST API\]/m);
     await layoutSettled(page);
 
@@ -105,7 +107,7 @@ test.describe('the practice canvas', () => {
     const finder = page.getByRole('dialog', { name: 'Connect Links API to' });
     await finder.getByRole('combobox').fill('api2');
     await page.keyboard.press('Enter');
-    await expect.poll(() => editorText(page)).toMatch(/^api -> api2$/m);
+    await expect.poll(() => editorText(page)).toMatch(/^api -> api2 : HTTP$/m);
   });
 
   test('Ctrl+D duplicates the selection and / finds a component', async ({ page }) => {
@@ -151,12 +153,13 @@ test.describe('the interview whiteboard', () => {
 test.describe('the editor canvas', () => {
   test('has the Flows builder: a use case and a step picked on the canvas', async ({ page }) => {
     await page.goto('app/');
-    await expect(codeEditor(page)).toBeVisible();
     await waitForCanvas(page, 1);
     await page.getByRole('button', { name: 'File' }).click();
     await page.getByRole('menuitem', { name: 'New diagram' }).click();
     await expect(canvasNodes(page)).toHaveCount(0);
+    await setMode(page, 'code');
     await appendCode(page, 'user "User" [Actor]\napi "API" [REST API]\nuser -> api\n');
+    await setMode(page, 'visual');
     await waitForCanvas(page, 2);
     await layoutSettled(page);
 
@@ -194,7 +197,12 @@ test.describe('the editor canvas', () => {
     await expect(step.getByLabel('Goes to')).toHaveAttribute('data-value', 'api');
     // Picking selects nothing, so no settings open in the builder's place.
     await expect(page.getByRole('region', { name: /settings/ })).toHaveCount(0);
-    await step.getByRole('textbox', { name: 'Label' }).fill('GET /items');
+    // The operations come from the API's type: pick GET, then type the path.
+    const label = step.getByRole('combobox', { name: 'Operation' });
+    await label.click();
+    await step.getByRole('option', { name: /^GET\b/ }).click();
+    await expect(label).toHaveValue('GET /');
+    await label.pressSequentially('items');
     await step.getByRole('button', { name: 'Add step' }).click();
     await expect.poll(() => editorText(page)).toMatch(/user -> api : GET \/items/);
 
@@ -204,7 +212,143 @@ test.describe('the editor canvas', () => {
     await expect(page.getByRole('region', { name: 'Components' })).toBeVisible();
   });
 
+  test('builds a flow in a row: each step starts where the last went, Reply answers, a warning shows before adding', async ({ page }) => {
+    await page.goto('app/');
+    await waitForCanvas(page, 1);
+    await page.getByRole('button', { name: 'File' }).click();
+    await page.getByRole('menuitem', { name: 'New diagram' }).click();
+    await expect(canvasNodes(page)).toHaveCount(0);
+    await setMode(page, 'code');
+    await appendCode(page, 'web "Web" [Browser]\napi "API" [REST API]\ndb "DB" [PostgreSQL]\nweb -> api\napi -> db\n');
+    await setMode(page, 'visual');
+    await waitForCanvas(page, 3);
+    await layoutSettled(page);
+
+    await page.getByRole('button', { name: 'Flows' }).click();
+    const flows = page.getByRole('region', { name: 'Flows' });
+    // With no use case yet, starting one is a visible button.
+    await flows.getByRole('button', { name: 'New use case' }).first().click();
+    const name = flows.getByRole('textbox', { name: 'New use case' });
+    await name.fill('Order');
+    await name.press('Enter');
+    await flows.getByRole('button', { name: 'Add a step' }).click();
+    const step = flows.getByRole('form', { name: 'New step' });
+    const label = (kind: 'Operation' | 'Answer') => step.getByRole('combobox', { name: kind });
+
+    await node(page, 'Web').click();
+    await node(page, 'API').click();
+    await label('Operation').fill('POST /orders');
+    await label('Operation').press('Enter');
+    // The next step starts at the API: one click picks where it goes.
+    await expect(step.getByLabel('Starts at')).toHaveAttribute('data-value', 'api');
+    await node(page, 'DB').click();
+    // An operation PostgreSQL does not have warns before it is added.
+    await label('Operation').fill('persist order');
+    await expect(step.getByRole('list', { name: 'Problems with this step' })).toContainText("PostgreSQL has no operation 'persist'");
+    await label('Operation').fill('INSERT order');
+    await expect(step.getByRole('list', { name: 'Problems with this step' })).toHaveCount(0);
+    await label('Operation').press('Enter');
+    // Reply answers the latest open request: the DB back to the API, then the API back to the web.
+    await step.getByRole('button', { name: 'Reply: DB answers API' }).click();
+    await label('Answer').fill('1 row');
+    await label('Answer').press('Enter');
+    await step.getByRole('button', { name: 'Reply: API answers Web' }).click();
+    await label('Answer').fill('201');
+    await label('Answer').press('Enter');
+    await expect.poll(() => editorText(page)).toMatch(/web -> api : POST \/orders\n\s+api -> db : INSERT order\n\s+db --> api : 1 row\n\s+api --> web : 201\n/);
+    await expect(flows.getByRole('list', { name: 'Steps' }).getByRole('listitem')).toHaveCount(4);
+    await step.getByRole('button', { name: 'Done' }).click();
+    await expect(step).toHaveCount(0);
+  });
+
+  test('edits, moves and inserts steps, shows parallel blocks and failed calls, and renames a use case', async ({ page }) => {
+    await page.goto('app/');
+    await waitForCanvas(page, 1);
+    await page.getByRole('button', { name: 'File' }).click();
+    await page.getByRole('menuitem', { name: 'New diagram' }).click();
+    await expect(canvasNodes(page)).toHaveCount(0);
+    await setMode(page, 'code');
+    await appendCode(
+      page,
+      'web "Web" [Browser]\napi "API" [REST API]\ndb "DB" [PostgreSQL]\nweb -> api\napi -> db\nusecase "Order" {\n  web -> api : POST /orders\n  par {\n    api -> db : INSERT order\n    api -x db : SELECT order\n  }\n  api --> web : 201\n}\n',
+    );
+    await setMode(page, 'visual');
+    await waitForCanvas(page, 3);
+    await page.getByRole('button', { name: 'Flows' }).click();
+    const flows = page.getByRole('region', { name: 'Flows' });
+    const steps = flows.getByRole('list', { name: 'Steps' });
+    await expect(flows.getByRole('group', { name: 'At the same time' })).toContainText('INSERT order');
+    await expect(steps.getByRole('listitem', { name: /API to DB: SELECT order/ })).toContainText('(fails)');
+
+    // Click a step to change it in place.
+    await steps.getByRole('button', { name: 'Edit step: API to DB: INSERT order' }).click();
+    const edit = flows.getByRole('form', { name: 'Edit step' });
+    await edit.getByRole('combobox', { name: 'Operation' }).fill('UPDATE order');
+    await edit.getByRole('button', { name: 'Save step' }).click();
+    await expect.poll(() => editorText(page)).toContain('    api -> db : UPDATE order\n');
+
+    // Move the first step down, past the parallel block, and back with the keyboard.
+    await steps.getByRole('listitem', { name: 'Web to API: POST /orders' }).hover();
+    await steps.getByRole('button', { name: 'Move down: Web to API: POST /orders' }).click();
+    await expect.poll(() => editorText(page)).toMatch(/ {2}\}\n {2}web -> api : POST \/orders\n {2}api --> web : 201/);
+    await steps.getByRole('button', { name: 'Edit step: Web to API: POST /orders' }).press('Alt+ArrowUp');
+    await expect.poll(() => editorText(page)).toMatch(/usecase "Order" \{\n {2}web -> api : POST \/orders\n {2}par \{/);
+
+    // Insert a step before the response.
+    await steps.getByRole('listitem', { name: 'API answers Web: 201' }).hover();
+    await steps.getByRole('button', { name: 'Insert a step before: API answers Web: 201' }).click();
+    const insert = flows.getByRole('form', { name: 'New step' });
+    await expect(insert.getByLabel('Starts at')).toHaveAttribute('data-value', 'api');
+    await node(page, 'DB').click();
+    await insert.getByRole('combobox', { name: 'Operation' }).fill('COMMIT');
+    await insert.getByRole('button', { name: 'Insert step' }).click();
+    await expect.poll(() => editorText(page)).toMatch(/ {2}api -> db : COMMIT\n {2}api --> web : 201/);
+
+    // Rename the use case.
+    await flows.getByRole('button', { name: 'Rename the use case Order' }).click();
+    const rename = flows.getByRole('textbox', { name: 'Rename the use case Order' });
+    await rename.fill('Place order');
+    await rename.press('Enter');
+    await expect.poll(() => editorText(page)).toContain('usecase "Place order" {');
+  });
+
+  test("composes a step's headers, payload and fan-out, and gives an untyped component operations", async ({ page }) => {
+    await page.goto('app/');
+    await waitForCanvas(page, 1);
+    await page.getByRole('button', { name: 'File' }).click();
+    await page.getByRole('menuitem', { name: 'New diagram' }).click();
+    await expect(canvasNodes(page)).toHaveCount(0);
+    await setMode(page, 'code');
+    await appendCode(page, 'web "Web" [Browser]\napi "API" [REST API]\npay "Payments" [Worker]\nweb -> api\napi -> pay\nusecase "Order" {\n}\n');
+    await setMode(page, 'visual');
+    await waitForCanvas(page, 3);
+    await page.getByRole('button', { name: 'Flows' }).click();
+    const flows = page.getByRole('region', { name: 'Flows' });
+    await flows.getByRole('button', { name: 'Add a step' }).click();
+    const step = flows.getByRole('form', { name: 'New step' });
+    await node(page, 'Web').click();
+    await node(page, 'API').click();
+    await step.getByRole('combobox', { name: 'Operation' }).fill('POST /orders');
+    await step.getByText('Headers, payload and fan-out').click();
+    // The headers are the REST API type's own.
+    await step.getByPlaceholder('Filter headers').fill('author');
+    await step.getByRole('button', { name: '+ Authorization' }).click();
+    await step.getByLabel('Payload or note').fill('{"sku": 7}');
+    await step.getByLabel('Calls per request').fill('2');
+    await step.getByRole('button', { name: 'Add step' }).click();
+    await expect.poll(() => editorText(page)).toContain('  web -> api : x2 POST /orders header Authorization {"sku": 7}\n');
+
+    // A Worker takes any label; the builder offers to give it operations of its own.
+    await node(page, 'Payments').click();
+    await step.getByRole('combobox', { name: 'Operation' }).fill('charge card');
+    await step.getByRole('button', { name: /^Give Payments operations of its own/ }).click();
+    await expect.poll(() => editorText(page)).toMatch(/type Payments extends Worker \{\n {2}op write charge\n\}/);
+    await expect.poll(() => editorText(page)).toContain('pay "Payments" [Payments]');
+  });
+
   test('with Flows open the canvas is narrow: the legend folds, no node sits under the top bar, the hint shortens clear of the controls', async ({ page }) => {
+    // Visual mode's canvas has the whole width: a smaller window makes it narrow beside Flows.
+    await page.setViewportSize({ width: 900, height: 800 });
     await page.goto('app/');
     await waitForCanvas(page, 3);
     await layoutSettled(page);

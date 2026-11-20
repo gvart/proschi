@@ -2,6 +2,9 @@ import { mockSignedIn, SIGNED_IN } from './accounts';
 import { codeEditor, expect, test } from './fixtures';
 import { PartnerMock } from './partner';
 
+// These tests type in the code editor, so they run in Code mode (the canvas beside it only looks).
+test.use({ mode: 'code' });
+
 /** The pinned diagrams sidebar folds into its rail while the Design partner is open, so the diagram keeps its width. */
 test('opening the Design partner folds the pinned sidebar, and closing it brings it back', async ({ page }) => {
   await mockSignedIn(page, SIGNED_IN);

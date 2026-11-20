@@ -60,7 +60,53 @@ export const LESSONS_KEY = 'proschi.lessons';
 /** The key prefix src/practice/stages/flow.ts keeps each problem's stage notes under. */
 export const STAGES_KEY = 'proschi.practice.stages.';
 
-export const test = base.extend<{ errors: string[]; onboarding: 'seen' | 'fresh'; onboardingSeen: void; lessons: 'skip' | 'fresh'; lessonsSkipped: void; stages: 'editor' | 'fresh'; stagesSkipped: void }>({
+/** The key src/components/Diagram/editorMode.ts keeps the editor's mode (Code or Visual) in. */
+export const MODE_KEY = 'proschi.editor.mode';
+
+/** Switches the editor, practice or interview workspace to `mode` with its Code | Visual switch (remembered, as a click is). */
+export async function setMode(page: Page, mode: 'code' | 'visual'): Promise<void> {
+  const radio = page.getByRole('radiogroup', { name: 'Editor mode' }).getByRole('radio', { name: mode === 'code' ? 'Code' : 'Visual' });
+  await radio.click();
+  await expect(radio).toBeChecked();
+}
+
+export const test = base.extend<{
+  errors: string[];
+  onboarding: 'seen' | 'fresh';
+  onboardingSeen: void;
+  lessons: 'skip' | 'fresh';
+  lessonsSkipped: void;
+  stages: 'editor' | 'fresh';
+  stagesSkipped: void;
+  mode: 'code' | 'visual' | 'fresh';
+  modeSet: void;
+}>({
+  /**
+   * The editor's mode (Code or Visual), shared by the editor, practice and the
+   * interview. A first visit lands in Visual, which is the default here too
+   * (`fresh`). A spec that types code picks `test.use({ mode: 'code' })`; one
+   * that edits on the canvas `visual`. It is set before the first load only
+   * when nothing is stored, so a switch in the test is remembered across reloads.
+   */
+  mode: ['fresh', { option: true }],
+  modeSet: [
+    async ({ context, mode }, use) => {
+      if (mode !== 'fresh') {
+        await context.addInitScript(
+          ([key, value]) => {
+            try {
+              if (window.localStorage.getItem(key) === null) window.localStorage.setItem(key, JSON.stringify(value));
+            } catch {
+              // Storage blocked: the page opens in Visual.
+            }
+          },
+          [MODE_KEY, mode] as const,
+        );
+      }
+      await use();
+    },
+    { auto: true },
+  ],
   /**
    * First-run tours would cover the pages most tests look at, so by default
    * every page starts with them marked as seen. Tests of the tours themselves
@@ -224,13 +270,17 @@ export async function appendCode(page: Page, text: string): Promise<void> {
 }
 
 /**
- * The whole text of the visible editor, read from CodeMirror's state: the DOM
- * only holds the lines in view. This mirrors EditorView.findFromDOM (newer
- * @codemirror/view links DOM to its tree as `cmTile`, older as `cmView`), and
- * throws rather than guessing if neither is there after an upgrade.
+ * The whole text of the document's editor, read from CodeMirror's state: the
+ * DOM only holds the lines in view. That is the visible editor, else (Visual
+ * mode keeps it mounted but hidden) the hidden one; never the read-only View
+ * code drawer. This mirrors EditorView.findFromDOM (newer @codemirror/view
+ * links DOM to its tree as `cmTile`, older as `cmView`), and throws rather
+ * than guessing if neither is there after an upgrade.
  */
 export async function editorText(page: Page): Promise<string> {
-  return codeEditor(page).evaluate((el) => {
+  const editors = page.locator('.cm-content:not([data-testid="code-drawer"] .cm-content)');
+  const visible = editors.filter({ visible: true });
+  return ((await visible.count()) > 0 ? visible : editors).first().evaluate((el) => {
     type Doc = { state: { doc: { toString(): string } } };
     const node = el as HTMLElement & { cmTile?: { root?: { view?: Doc } }; cmView?: { view?: Doc; root?: { view?: Doc } } };
     const view = node.cmTile?.root?.view ?? node.cmView?.root?.view ?? node.cmView?.view;
@@ -333,11 +383,13 @@ export async function componentPalette(page: Page): Promise<Locator> {
   return palette;
 }
 
-/** Adds a component from the palette by searching for it; `name` is the palette entry. */
+/** Adds a component from the palette by searching for it, connected from the selected one if any; `name` is the palette entry. */
 export async function addFromPalette(page: Page, search: string, name: string): Promise<void> {
   const palette = await componentPalette(page);
   await palette.getByRole('searchbox', { name: 'Search components' }).fill(search);
   await palette.getByRole('button', { name, exact: true }).click();
+  // The new component's name is ready to type on the canvas; Escape keeps the one it has.
+  await page.locator('.pc-node__name-field').press('Escape');
 }
 
 /** Opens one of the design system's selects (src/design/Select.tsx) and picks the option with this exact label. */

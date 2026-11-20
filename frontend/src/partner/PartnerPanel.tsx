@@ -11,7 +11,7 @@ import { partnerText } from '../pricing/planValue';
 import { formatCredits, formatRange } from '../services/credits';
 import ChangeCard from './ChangeCard';
 import type { Diagram } from '../dsl/types';
-import { estimateFor, type Intent, type PartnerContext, type Question, type Turn } from './contract';
+import { estimateFor, type EditorView, type Intent, type PartnerContext, type Question, type Turn } from './contract';
 import { confirm } from '../design/dialogs';
 import { useToastClearance } from '../design/toastClearance';
 import { PARTNER_SHORTCUT } from './shortcut';
@@ -64,6 +64,8 @@ export interface PartnerPanelProps {
   stage?: PrepStage;
   /** Interview coach: the stage and the notes, sent with each turn. */
   getPrep?: () => PrepTurn | undefined;
+  /** The editor's mode: in Visual the answers talk in components and a change shows as its diagram only. */
+  view?: EditorView;
 }
 
 /** Who answers in a context: the Interview coach on interview prep (P59), else Design partner. */
@@ -158,12 +160,12 @@ function PanelHeader({ context, onClose, children }: { context: PartnerContext; 
   );
 }
 
-function Conversation({ storeKey, context, account, base = '../', source, getSource, getFiles, apply, undo, onClose, onAssisted, diagramOf, prefill, stage, getPrep, deepAllowed }: PartnerPanelProps & { deepAllowed: boolean }) {
+function Conversation({ storeKey, context, account, base = '../', source, getSource, getFiles, apply, undo, onClose, onAssisted, diagramOf, prefill, stage, getPrep, view, deepAllowed }: PartnerPanelProps & { deepAllowed: boolean }) {
   // The Problems tab's workspace and interview prep both coach first (P30); interview prep is the Interview coach (P59).
   const practice = context.kind !== 'editor';
   const coach = context.kind === 'prep';
   const name = partnerName(context);
-  const { state, send, decide, reset, dismiss } = usePartner({ storeKey, context, enabled: true, getSource, getFiles, getPrep, name, onAssisted });
+  const { state, send, decide, reset, dismiss } = usePartner({ storeKey, context, enabled: true, getSource, getFiles, getPrep, name, onAssisted, view });
   const estimates = useEstimates(account.state.status === 'signed-in');
   const [deepChoice, setDeepChoice] = useState(false);
   const [draft, setDraft] = useState('');
@@ -336,6 +338,7 @@ function Conversation({ storeKey, context, account, base = '../', source, getSou
                       onImprove={(message) => ask('improve', message, c.id)}
                       improved={state.improved.includes(c.id)}
                       diagramOf={diagramOf}
+                      visual={view === 'visual'}
                     />
                   ))}
                 </PartnerMessage>

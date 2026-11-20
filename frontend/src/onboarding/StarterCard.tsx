@@ -1,25 +1,40 @@
 import { BookOpen, FileCode, GraduationCap } from 'lucide-react';
 import { STARTER_TEMPLATE } from './template';
+import { STARTERS, type Starter } from '../components/Diagram/addFlow';
 
 interface StarterCardProps {
   /** Replaces the empty diagram with the starter template. */
   onTemplate: (source: string) => void;
   onExamples: () => void;
+  /** Adds a small starting design to the canvas (addFlow.ts STARTERS). */
+  onStarter: (starter: Starter) => void;
 }
 
 const optionClass =
   'group flex w-full items-start gap-3 rounded-sm border-bw-1 border-ink bg-paper p-3 text-left hover:bg-pop-yellow/25 hover:shadow-brutal-sm hover:-translate-x-px hover:-translate-y-px focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-pop-blue motion-safe:transition';
 
-/** What an empty diagram shows instead of a blank canvas: three ways to start. */
-export default function StarterCard({ onTemplate, onExamples }: StarterCardProps) {
+/** What an empty diagram shows in Visual mode instead of a blank canvas: ways to start, none of them code. */
+export default function StarterCard({ onTemplate, onExamples, onStarter }: StarterCardProps) {
   return (
-    <section aria-labelledby="starter-title" className="pointer-events-auto w-full max-w-md rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-brutal-md">
+    <section aria-labelledby="starter-title" className="pointer-events-auto w-full max-w-sm rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-brutal-md">
       <h2 id="starter-title" className="font-display text-xl font-extrabold tracking-[-0.02em] text-ink">
         Start a diagram
       </h2>
       <p className="mt-0.5 text-sm text-muted">
-        Drag a component here from Add component or describe it in code, e.g. <code className="rounded-sm bg-ink/5 px-1">api -&gt; db</code>. Or pick a start:
+        Add components from Add component, or start with:
       </p>
+      <div role="group" aria-label="Starters" className="mt-3 flex flex-wrap gap-1.5">
+        {STARTERS.map((starter) => (
+          <button
+            key={starter.label}
+            type="button"
+            onClick={() => onStarter(starter)}
+            className="rounded-full border-bw-1 border-ink bg-paper px-3 py-1 text-sm font-semibold text-ink hover:bg-pop-yellow hover:text-on-accent focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-pop-blue"
+          >
+            {starter.label}
+          </button>
+        ))}
+      </div>
       <div className="mt-3 space-y-2">
         <button type="button" onClick={() => onTemplate(STARTER_TEMPLATE)} className={optionClass}>
           <FileCode size={20} className="mt-0.5 shrink-0 text-pop-blue" />

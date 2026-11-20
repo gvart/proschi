@@ -1,6 +1,9 @@
 import type { Page } from '@playwright/test';
 import { codeEditor, expect, loadReferenceSolution, test, waitForCanvas } from './fixtures';
 
+// These tests type in the code editor, so they run in Code mode (the canvas beside it only looks).
+test.use({ mode: 'code' });
+
 /** The editor's focus themes (src/components/Playground/editorThemes.ts), as computed backgrounds. */
 const FOCUS_DARK = 'rgb(22, 23, 27)';
 const FOCUS_LIGHT = 'rgb(255, 253, 246)';

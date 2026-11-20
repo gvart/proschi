@@ -4,6 +4,9 @@ import { mockSignedIn } from './accounts';
 import { appendCode, codeEditor, editorText, expect, mockClipboard, copiedText, test } from './fixtures';
 import { Account, ORDERS, seed } from './versions';
 
+// These tests type in the code editor, so they run in Code mode (the canvas beside it only looks).
+test.use({ mode: 'code' });
+
 /**
  * Saved versions and `cloud:` sources in the editor, signed in (the build
  * with accounts), against the in-memory account of e2e/versions.ts.

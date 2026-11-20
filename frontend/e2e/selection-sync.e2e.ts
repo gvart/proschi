@@ -1,6 +1,9 @@
 import type { Page } from '@playwright/test';
 import { appendCode, canvasNodes, codeEditor, editorText, expect, multiSelectClick, multiSelectSetup, test, waitForCanvas } from './fixtures';
 
+// These tests type in the code editor, so they run in Code mode (the canvas beside it only looks).
+test.use({ mode: 'code' });
+
 /**
  * Two-way selection sync: a canvas selection shows its declaration in the code
  * pane without taking the focus, and the code's cursor marks what its line
@@ -73,11 +76,11 @@ test.describe('selection sync', () => {
     await page.waitForTimeout(400);
     await expect(page.locator('.pc-linked')).toHaveCount(0);
     await expect(page.locator('.react-flow__node.selected')).toHaveCount(1);
-    // The canvas's keys still work.
+    // In Code mode the canvas only looks: its Ctrl+D copies nothing.
+    const before = await editorText(page);
     await page.keyboard.press('ControlOrMeta+d');
-    await expect.poll(() => editorText(page)).toContain('db2 "Orders DB" [PostgreSQL]');
-    await waitForCanvas(page, 4);
-    await settled(page);
+    await page.waitForTimeout(300);
+    expect(await editorText(page)).toBe(before);
 
     // A connection selects its line too.
     await page.locator('.react-flow__edge').filter({ hasText: 'reads' }).first().click({ force: true });
@@ -147,40 +150,19 @@ test.describe('selection sync', () => {
     await expect.poll(() => inside(target)).toBe(true);
     expect(await scale()).toBeCloseTo(zoom, 3);
   });
-  test('a ringed node under the settings card is panned clear of it, at the same zoom', async ({ page }) => {
-    await newDiagram(page, PINNED, 3);
-    await node(page, 'API').click();
-    const card = page.getByRole('region', { name: 'API settings' });
-    await expect(card).toBeVisible();
-    await settled(page);
-    const cardBox = (await card.boundingBox())!;
-    const clear = async () => {
-      const box = (await node(page, 'Cache').boundingBox())!;
-      const x = box.x + box.width / 2;
-      return x < cardBox.x;
-    };
-    expect(await clear()).toBe(false);
-    const scale = () => page.locator('.react-flow__viewport').evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).a);
-    const zoom = await scale();
-    await clickLine(page, 'cache "Cache"');
-    await expect(node(page, 'Cache')).toHaveClass(/pc-linked/);
-    await expect.poll(clear).toBe(true);
-    await settled(page);
-    expect(await scale()).toBeCloseTo(zoom, 3);
-  });
 });
 
 test.describe('selection sync on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
-  test('selecting on the Diagram pane does not switch to the Code pane', async ({ page }) => {
+  test('selecting on the Preview does not switch to the code', async ({ page }) => {
     await page.goto('./');
     await page.goto((await page.locator('a[data-example="url-shortener"]').getAttribute('href'))!);
-    await page.getByRole('tab', { name: 'Preview' }).click();
+    const preview = page.getByRole('button', { name: 'Preview' });
+    await expect(preview).toHaveAttribute('aria-pressed', 'true');
     await page.locator('.react-flow__node').first().click();
-    await expect(page.getByRole('region', { name: /settings$/ })).toBeVisible();
     await page.waitForTimeout(300);
-    await expect(page.getByRole('tab', { name: 'Preview' })).toHaveAttribute('aria-selected', 'true');
+    await expect(preview).toHaveAttribute('aria-pressed', 'true');
     await expect(page.locator('.cm-content:visible')).toHaveCount(0);
   });
 });

@@ -1,6 +1,6 @@
-import { useEffect, useId, useState } from 'react';
-import { Minus, Plus, Power, PowerOff, Trash2, X } from 'lucide-react';
-import { componentCatalog } from '../../catalog/componentCatalog';
+import { useEffect, useState } from 'react';
+import { ChevronDown, Minus, Plus, Power, PowerOff, Trash2, X } from 'lucide-react';
+import { findTech } from '../../catalog/componentCatalog';
 import { isDataStore, kindOf } from '../../dsl/kinds';
 import {
   CAPACITY_FIELD,
@@ -14,7 +14,10 @@ import {
   setTech,
   type CapacityPart,
 } from '../../dsl/edit';
-import type { CapacityOverride, DiagramEdge, DiagramNode, InstanceSize } from '../../dsl/types';
+import type { CapacityOverride, Diagram, DiagramEdge, DiagramNode, InstanceSize } from '../../dsl/types';
+import { getTechStackIcon } from '../../utils/iconMapping';
+import { scalable } from './canvasEditState';
+import TypePicker, { TypeCard } from './TypePicker';
 import { eyebrow, field, iconButton } from '../Playground/ui';
 import type { SystemSummary } from '../Canvas/systemSummary';
 import { formatRps } from '../../sim';
@@ -23,8 +26,12 @@ import Select from '../../design/Select';
 type Edit = (source: string) => string;
 
 interface InspectorProps {
+  /** The parsed document: its own types for the type picker, and the type table for the type card. */
+  diagram: Diagram;
   node?: DiagramNode;
   edge?: DiagramEdge;
+  /** Labels to pick for the connection (connectionLabels): its target's protocol, then those the document uses. */
+  labels?: string[];
   /** The node's line in the `capacity` block, if any. */
   capacity?: CapacityOverride;
   /** The file a node or connection is declared in, when it is not this document: it is then read-only here. */
@@ -33,8 +40,12 @@ interface InspectorProps {
   system?: SystemSummary;
   /** Practice: the problem sets each component's capacity, so only a store's shards can be set here. */
   problemCapacity?: boolean;
-  /** Shown in the side panel in place of the palette, rather than as a card over the canvas. */
+  /** In the rail's Selection tab, rather than a card over the canvas (a phone's). */
   docked?: boolean;
+  /** Changes to open the type picker (the canvas's T). */
+  typeRequest?: number;
+  /** The type picker closed: the canvas takes its keys back. */
+  onTypeDone?: () => void;
   /** Applies a text edit to the document. */
   onEdit: (edit: Edit) => void;
   /** Deletes the node or connection from the text. */
@@ -44,8 +55,6 @@ interface InspectorProps {
   onSimulateDown?: () => void;
   down?: boolean;
 }
-
-const TECHS = componentCatalog.filter((c) => c.type !== 'group').map((c) => c.techStack);
 
 const CAPACITY_ROWS: { part: CapacityPart; label: string; unit: string; storeOnly?: boolean }[] = [
   { part: 'rate', label: 'Capacity', unit: 'rps' },
@@ -59,7 +68,7 @@ const CAPACITY_ROWS: { part: CapacityPart; label: string; unit: string; storeOnl
  * The settings of the selected node or connection. Every change is a small
  * edit of the text, which stays the source of truth.
  */
-export default function Inspector({ node, edge, capacity, importedFrom, system, problemCapacity = false, docked = false, onEdit, onDelete, onClose, onSimulateDown, down = false }: InspectorProps) {
+export default function Inspector({ diagram, node, edge, labels = [], capacity, importedFrom, system, problemCapacity = false, docked = false, typeRequest, onTypeDone, onEdit, onDelete, onClose, onSimulateDown, down = false }: InspectorProps) {
   const title = node ? node.name : edge ? `${edge.source} → ${edge.target}` : '';
   const readOnly = importedFrom !== undefined;
   return (
@@ -93,29 +102,63 @@ export default function Inspector({ node, edge, capacity, importedFrom, system, 
         {node && node.kind === 'system' ? (
           <SystemFields node={node} system={system} readOnly={readOnly} onEdit={onEdit} />
         ) : (
-          node && <NodeFields node={node} capacity={capacity} readOnly={readOnly} problemCapacity={problemCapacity} onEdit={onEdit} />
+          node && (
+            <NodeFields node={node} diagram={diagram} capacity={capacity} readOnly={readOnly} problemCapacity={problemCapacity} typeRequest={typeRequest} onTypeDone={onTypeDone} onEdit={onEdit} />
+          )
         )}
-        {edge && (
-          <TextField
-            label="Label or protocol"
-            value={edge.label ?? ''}
-            placeholder="e.g. HTTPS, gRPC, reads"
-            disabled={readOnly || /[{[<]/.test(edge.label ?? '')}
-            onCommit={(label) => onEdit((src) => setEdgeLabel(src, edge.id, label || null))}
-          />
-        )}
+        {edge && <EdgeLabelField edge={edge} labels={labels} disabled={readOnly || /[{[<]/.test(edge.label ?? '')} onEdit={onEdit} />}
       </div>
     </aside>
   );
 }
 
-function NodeFields({ node, capacity, readOnly, problemCapacity, onEdit }: { node: DiagramNode; capacity?: CapacityOverride; readOnly: boolean; problemCapacity: boolean; onEdit: (edit: Edit) => void }) {
-  const listId = useId();
+/** A connection's label: typed, or picked from its target type's protocol and the labels the document already uses. */
+function EdgeLabelField({ edge, labels, disabled, onEdit }: { edge: DiagramEdge; labels: string[]; disabled: boolean; onEdit: (edit: Edit) => void }) {
+  const write = (label: string) => onEdit((src) => setEdgeLabel(src, edge.id, label || null));
+  return (
+    <div>
+      <TextField label="Label or protocol" value={edge.label ?? ''} placeholder="e.g. HTTPS, gRPC, reads" disabled={disabled} onCommit={write} />
+      {!disabled && labels.length > 0 && (
+        <div role="group" aria-label="Suggested labels" className="mt-1.5 flex flex-wrap gap-1">
+          {labels.map((label) => (
+            <button
+              key={label}
+              type="button"
+              onClick={() => write(label)}
+              className="rounded-sm border border-ink/30 bg-paper px-1.5 py-0.5 font-mono text-xs text-ink hover:border-ink hover:bg-ink/10"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NodeFields({
+  node,
+  diagram,
+  capacity,
+  readOnly,
+  problemCapacity,
+  typeRequest,
+  onTypeDone,
+  onEdit,
+}: {
+  node: DiagramNode;
+  diagram: Diagram;
+  capacity?: CapacityOverride;
+  readOnly: boolean;
+  problemCapacity: boolean;
+  typeRequest?: number;
+  onTypeDone?: () => void;
+  onEdit: (edit: Edit) => void;
+}) {
   const id = node.id;
-  const kind = kindOf(node);
   // Clients, notes and groups have no capacity to set.
-  const simulated = kind !== 'client' && kind !== 'other';
-  const store = isDataStore(kind);
+  const simulated = scalable(node);
+  const store = isDataStore(kindOf(node));
   const replicas = node.replicas ?? 1;
   return (
     <>
@@ -129,23 +172,7 @@ function NodeFields({ node, capacity, readOnly, problemCapacity, onEdit }: { nod
           onEdit((src) => renameNode(src, id, name));
         }}
       />
-      {node.kind !== 'group' && (
-        <>
-          <TextField
-            label="Tech"
-            value={node.techStack === 'Rectangle' ? '' : node.techStack}
-            list={listId}
-            placeholder="Redis, PostgreSQL…"
-            disabled={readOnly}
-            onCommit={(tech) => onEdit((src) => setTech(src, id, tech || null))}
-          />
-          <datalist id={listId}>
-            {TECHS.map((t) => (
-              <option key={t} value={t} />
-            ))}
-          </datalist>
-        </>
-      )}
+      {node.kind !== 'group' && <TypeField node={node} diagram={diagram} readOnly={readOnly} request={typeRequest} onDone={onTypeDone} onEdit={onEdit} />}
       {simulated && (
         <div>
           <span className={eyebrow}>Replicas</span>
@@ -162,6 +189,7 @@ function NodeFields({ node, capacity, readOnly, problemCapacity, onEdit }: { nod
           </div>
         </div>
       )}
+      {node.resolvedType && <TypeCard type={node.resolvedType} diagram={diagram} />}
       <TextField label="Owner team" value={node.ownerTeam ?? ''} placeholder="e.g. payments" disabled={readOnly} onCommit={(team) => onEdit((src) => setOwner(src, id, team || null))} />
       <TextField label="Description" value={node.description ?? ''} disabled={readOnly} onCommit={(text) => onEdit((src) => setDescription(src, id, text || null))} />
       {simulated && problemCapacity && store && (
@@ -224,6 +252,47 @@ function NodeFields({ node, capacity, readOnly, problemCapacity, onEdit }: { nod
   );
 }
 
+/** The component's type: a button that opens the type picker. */
+function TypeField({ node, diagram, readOnly, request, onDone, onEdit }: { node: DiagramNode; diagram: Diagram; readOnly: boolean; request?: number; onDone?: () => void; onEdit: (edit: Edit) => void }) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (request) setOpen(true);
+  }, [request]);
+  const type = node.resolvedType;
+  const name = type?.name ?? (node.techStack === 'Rectangle' ? '' : node.techStack);
+  const icon = type?.icon ?? node.techStack;
+  return (
+    <div>
+      <span className={eyebrow}>Type</span>
+      <div className="mt-1">
+        {open && !readOnly ? (
+          <TypePicker
+            types={diagram.types ?? []}
+            current={name}
+            onPick={(tech) => onEdit((src) => setTech(src, node.id, tech))}
+            onClose={() => {
+              setOpen(false);
+              onDone?.();
+            }}
+          />
+        ) : (
+          <button
+            type="button"
+            aria-label={`Type: ${name || 'none'}. Change type`}
+            disabled={readOnly}
+            onClick={() => setOpen(true)}
+            className={`${field} flex w-full items-center gap-2 text-left hover:bg-ink/5`}
+          >
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center [&_svg]:h-4 [&_svg]:w-4">{getTechStackIcon(icon, findTech(icon)?.type ?? node.type)}</span>
+            <span className="min-w-0 flex-1 truncate">{name || 'None'}</span>
+            <ChevronDown size={14} className="shrink-0 text-muted" aria-hidden="true" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** A system box: its name, and what its team promises and what it is sent (its own settings are in its block in the text). */
 function SystemFields({ node, system: s, readOnly, onEdit }: { node: DiagramNode; system?: SystemSummary; readOnly: boolean; onEdit: (edit: Edit) => void }) {
   return (
@@ -280,7 +349,6 @@ interface TextFieldProps {
   value: string;
   unit?: string;
   placeholder?: string;
-  list?: string;
   inputMode?: 'decimal';
   disabled?: boolean;
   /** Called on Enter or blur with a changed value; returning false rejects it. */
@@ -288,7 +356,7 @@ interface TextFieldProps {
 }
 
 /** An input that keeps its own text while typing and writes it on Enter or blur. */
-function TextField({ label, value, unit, placeholder, list, inputMode, disabled, onCommit }: TextFieldProps) {
+function TextField({ label, value, unit, placeholder, inputMode, disabled, onCommit }: TextFieldProps) {
   const [text, setText] = useState(value);
   const [invalid, setInvalid] = useState(false);
   useEffect(() => {
@@ -307,7 +375,6 @@ function TextField({ label, value, unit, placeholder, list, inputMode, disabled,
       <span className="mt-1 flex items-center gap-1.5">
         <input
           value={text}
-          list={list}
           inputMode={inputMode}
           placeholder={placeholder}
           disabled={disabled}

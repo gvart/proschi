@@ -20,16 +20,23 @@ interface Section {
 /**
  * Every key the editor page answers to. Keep in step with the handlers: the
  * canvas's (canvasEditState.ts, DiagramView.tsx), the page's (Playground.tsx,
- * useZenMode.ts, partner/shortcut.ts) and the code editor's (CodeEditor.tsx:
+ * useZenMode.ts, partner/shortcut.ts, Diagram/editorMode.ts) and the code editor's (CodeEditor.tsx:
  * CodeMirror's basicSetup, tabKeymap.ts and format).
  */
 function shortcutSections(partner: boolean): Section[] {
   return [
     {
       title: 'Canvas',
-      note: 'Click the diagram first.',
+      note: 'Click the diagram first. In Code mode the diagram is view-only: edit there in the code.',
       bindings: [
+        { keys: [['A'], [MOD_KEY, 'K']], action: 'Add a component or run an action, in plain words' },
         { keys: [['/'], [MOD_KEY, 'F']], action: 'Find a component' },
+        { keys: [['Tab'], ['Shift', 'Tab']], action: 'Select the next or previous component' },
+        { keys: [['C']], action: 'Add a component connected from the selected one' },
+        { keys: [['F2']], action: 'Rename the selected component' },
+        { keys: [['T']], action: 'Change its type' },
+        { keys: [['+'], ['-']], action: 'More or fewer replicas' },
+        { keys: [['R']], action: 'Lay out again, unpinning dragged components' },
         { keys: [[MOD_KEY, 'C']], action: 'Copy the selected components and the connections between them' },
         { keys: [[MOD_KEY, 'V']], action: 'Paste them (pinned ones a little lower right)' },
         { keys: [[MOD_KEY, 'D']], action: 'Duplicate the selection' },
@@ -67,6 +74,7 @@ function shortcutSections(partner: boolean): Section[] {
       title: 'Everywhere',
       bindings: [
         { keys: [[MOD_KEY, 'P']], action: 'Go to a diagram' },
+        { keys: [[MOD_KEY, '\\']], action: 'Switch between Code and Visual' },
         { keys: [[MOD_KEY, '.']], action: 'Zen mode: only the code and the diagram' },
         ...(partner ? [{ keys: [[MOD_KEY, 'J']], action: 'Open or close the Design partner' }] : []),
         { keys: [['?']], action: 'These shortcuts' },

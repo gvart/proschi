@@ -2,6 +2,9 @@ import type { Page } from '@playwright/test';
 import { mockSignedIn, planAnswer } from './accounts';
 import { answerDialog, codeEditor, expect, test } from './fixtures';
 
+// These tests type in the code editor, so they run in Code mode (the canvas beside it only looks).
+test.use({ mode: 'code' });
+
 /**
  * Plans and credits (backend/src/billing.ts, docs/design/paid-plans.md P26)
  * in the build with accounts and billing (`npm run build:accounts` sets

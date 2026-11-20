@@ -52,7 +52,7 @@ export default function PracticeTour({ setPane, runs, runTests, onClose }: Pract
         onEnter: () => setPane('code'),
         body: (
           <p>
-            Your design goes in the editor; the starter already imports the problem. Add components, connections and use cases, then{' '}
+            Build your design on the canvas or in the code; the starter already imports the problem. Add components, connections and use cases, then{' '}
             <strong>Run tests</strong>{phone ? ' in the Tests tab' : ''}. The starter fails on purpose.
           </p>
         ),

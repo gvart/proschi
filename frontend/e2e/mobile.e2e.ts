@@ -239,6 +239,20 @@ test.describe('no sideways scrolling on a phone', () => {
     await eachTab(page, 'practice/#/url-shortener');
   });
 
+  test.describe('in Code mode', () => {
+    // The code's tabs and the peek at the diagram, which Visual (the default above) has not.
+    test.use({ mode: 'code' });
+
+    test('the editor and a problem, every tab', async ({ page }) => {
+      await visit(page, 'app/');
+      await page.getByRole('button', { name: 'Preview' }).click();
+      await expectNoHorizontalOverflow(page, 'app/ (Code), Preview');
+      await eachTab(page, 'app/ (Code)');
+      await visit(page, 'practice/#/url-shortener');
+      await eachTab(page, 'practice/#/url-shortener (Code)');
+    });
+  });
+
   test('a static problem page', async ({ page }) => {
     await visit(page, 'practice/url-shortener/');
   });
@@ -318,13 +332,13 @@ test.describe('a problem header at 500px', () => {
 });
 
 test.describe('editor diagram on a phone', () => {
-  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  // Visual mode: the canvas is the pane, and it edits.
+  test.use({ mode: 'visual', viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
-  /** Opens the URL shortener example on the Diagram pane and selects its first component. */
+  /** Opens the URL shortener example on the canvas and selects its first component. */
   async function selectNode(page: Page): Promise<void> {
     await page.goto('./');
     await page.goto((await page.locator('a[data-example="url-shortener"]').getAttribute('href'))!);
-    await page.getByRole('tab', { name: 'Preview' }).click();
     await page.locator('.react-flow__node').first().click();
     await expect(page.getByRole('region', { name: /settings$/ })).toBeVisible();
   }

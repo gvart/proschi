@@ -3,6 +3,9 @@ import lz from 'lz-string';
 import { droneLink } from './drone';
 import { codeEditor, expect, test, waitForCanvas } from './fixtures';
 
+// The docs show the code beside the diagram, as Code mode lays them out.
+test.use({ mode: 'code' });
+
 /**
  * The editor screenshots in the docs (docs/images/screens), retaken by
  * `npm run docs:screenshots` (screens.config.ts). Each shot is the editor at
