@@ -22,25 +22,21 @@ usecase "Place order" {
 }
 ```
 
-This is what the steps below write: a starter, two names, and a use case
-from the **Flows** tab.
-
 > **Try it:** press **Open in editor**, click **Orders API**, press **A**,
 > type `redis` and press **Enter**. A Redis box appears, connected from
 > Orders API with the label `RESP`.
 
 ## 1. Pick Visual or Code
 
-The editor has two modes. The **Code | Visual** switch in the header changes
-between them, and so does **Ctrl+\\** (**⌘\\** on a Mac). Your first visit
-opens in Visual, and the browser remembers the mode you pick after that.
-Practice and the mock interview use the same switch.
+The **Code | Visual** switch in the header, or **Ctrl+\\** (**⌘\\** on a
+Mac), changes the mode. A first visit opens in Visual. Practice and the
+mock interview use the same switch.
 
 - **Visual** gives the page to the canvas, with a rail of three tabs:
-  **Components**, **Flows** and **Selection**. **View code** shows the text
-  read-only, to read or copy.
+  **Components**, **Flows** and **Selection**. **View code** shows the text,
+  read-only.
 - **Code** puts the text editor beside the diagram. The diagram only looks:
-  you can select, pan, zoom and play, but you edit in the text.
+  select, pan, zoom and play, but edit in the text.
 
 ## 2. Add components
 
@@ -51,7 +47,7 @@ left) for the **Components** tab:
 - Click a component to add it. With a component selected, the new one is
   connected from it.
 - Type in the search and press **Enter** to add the first match.
-- Drag a component onto the canvas to drop it at that spot.
+- Drag one onto the canvas to place it.
 - Hover a component and click its **+**, or let go of a new connection on
   empty canvas. A small picker adds the next component, connected.
 
@@ -75,10 +71,9 @@ the **Type** field, or press **T**, for a type picker that lists the
 design's own [types](TYPES.md) first, under "In this design", then the
 catalog.
 
-The type card in the same tab says what the component is: the types it
-extends, its protocol, and the operations it **Reads**, **Writes** and
-**Passes on**, then the statuses it **Answers** with. These are the words a
-use case step to it can use.
+The type card below lists its protocol, the operations it **Reads**,
+**Writes** and **Passes on**, and the statuses it **Answers** with: the
+words a step to it can use.
 
 ## 5. Build a use case
 
@@ -104,10 +99,9 @@ operations of its own** writes a [type](TYPES.md#declare-a-type) from the
 steps you used, so the next ones are checked.
 
 You can edit, move, delete or insert before any step, rename use cases and
-[scenarios](SCENARIOS.md) in place, and start a new path with **Add
-scenario**. The builder shows
-[parallel blocks](SCENARIOS.md#parallel-steps) and edits their steps, but
-it can't create one: write `par` in Code mode.
+[scenarios](SCENARIOS.md), and start a new path with **Add scenario**. The
+builder shows [parallel blocks](SCENARIOS.md#parallel-steps) and edits
+their steps, but it can't create one: write `par` in Code mode.
 
 ## 6. Work from the keyboard
 
@@ -132,9 +126,8 @@ Code they show the code change.
 
 ## Go further
 
-- [Colors, legend and layout](STYLING.md#editing-on-the-canvas): what each
-  canvas edit writes in the text.
-- [Use cases](USE-CASES.md) and [scenarios](SCENARIOS.md): the steps in
-  text.
+- [Editing on the canvas](STYLING.md#editing-on-the-canvas): what each
+  edit writes.
+- [Use cases](USE-CASES.md): the steps as text.
 - [Component types](TYPES.md): operations, statuses and headers.
-- [Your first diagram in 2 minutes](QUICKSTART.md): the same design, in code.
+- [Quickstart](QUICKSTART.md): a first diagram in code.
