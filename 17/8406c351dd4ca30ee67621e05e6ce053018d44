@@ -1,0 +1,22 @@
+blog/2026-11-20-visual-editor/index.md
+  s_733d66441cadaa::t_b4b3f6a756d0ce 10-12,49,73-74
+  s_733d66441cadaa::t_9883f8a00b4a4a 1-9,13-34,37-48,50-71,75-119
+  s_733d66441cadaa::t_6273a3eb51ad35 72
+  s_733d66441cadaa::t_497b8aeb8481c3 35-36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "178406c351dd4ca30ee67621e05e6ce053018d44",
+  "prompts": {},
+  "sessions": {
+    "s_733d66441cadaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9649973d-f497-4440-b031-a92483a592e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
