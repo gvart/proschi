@@ -138,6 +138,7 @@ describe('Design partner: access', () => {
     expect((await turn(token, id, { message: 'x'.repeat(4001) })).status).toBe(400);
     expect((await turn(token, id, { source: 'x'.repeat(64 * 1024 + 1) })).status).toBe(413);
     expect((await turn(token, id, { files: [{ name: 'a' }] })).status).toBe(400);
+    expect((await turn(token, id, { view: 'canvas' })).status).toBe(400);
     expect((await turn(token, id, { intent: 'improve', message: 'more' })).status).toBe(400);
     expect((await turn(token, id, { intent: 'improve', message: 'more', changeId: 'nope' })).status).toBe(404);
   });

@@ -36,11 +36,14 @@ interface ChangeCardProps {
   improved?: boolean;
   /** The diagram of a source, for the preview; without it the card shows no picture. */
   diagramOf?: (source: string) => Diagram;
+  /** The editor is in Visual mode: the change shows as its diagram, never as code. */
+  visual?: boolean;
 }
 
 type CardStatus = 'ready' | 'applied' | 'rejected' | 'stale' | 'present' | 'improved';
 
-export default function ChangeCard({ change, source, decision, onAccept, onReject, onUndo, onImprove, busy, improved, diagramOf }: ChangeCardProps) {
+export default function ChangeCard({ change, source, decision, onAccept, onReject, onUndo, onImprove, busy, improved, diagramOf, visual = false }: ChangeCardProps) {
+  const yours = visual ? 'design' : 'code';
   // What Accept wrote, and what it replaced, so Undo can tell whether the code is still as Accept left it.
   const [accepted, setAccepted] = useState<{ before: string; after: string }>();
   const [improving, setImproving] = useState(false);
@@ -125,7 +128,7 @@ export default function ChangeCard({ change, source, decision, onAccept, onRejec
           {change.why && <p className="px-3 pt-2 text-sm leading-relaxed text-ink/80">{change.why}</p>}
           <MetricsDelta before={result.before} after={result.after} />
           {preview && preview.after.nodes.length > 0 && <ChangePreview before={preview.before} after={preview.after} onAccept={accept} />}
-          <SourceDiff hunks={hunks} folded={!!preview} />
+          {!visual && <SourceDiff hunks={hunks} folded={!!preview} />}
         </>
       )}
       {status === 'stale' && <div className="h-2" />}
@@ -145,7 +148,7 @@ export default function ChangeCard({ change, source, decision, onAccept, onRejec
               <WandSparkles size={14} aria-hidden="true" />
               Improve this
             </button>
-            {!sameAsChecked && <p className="basis-full text-xs text-muted">Your code changed since this was checked; the edits still fit, the numbers are from before.</p>}
+            {!sameAsChecked && <p className="basis-full text-xs text-muted">Your {yours} changed since this was checked; the edits still fit, the numbers are from before.</p>}
           </>
         )}
         {status === 'applied' && (
@@ -168,19 +171,19 @@ export default function ChangeCard({ change, source, decision, onAccept, onRejec
         {status === 'present' && (
           <p className="flex items-center gap-1.5 text-sm text-muted">
             <Check size={14} className="text-pass" aria-hidden="true" />
-            Already in your code
+            Already in your {yours}
           </p>
         )}
         {status === 'rejected' && <p className="text-sm text-muted">Rejected</p>}
         {status === 'stale' && (
           <>
             <p className="text-sm text-ink/80">
-              <strong className="font-semibold text-ink">Out of date</strong> — your code changed since.
+              <strong className="font-semibold text-ink">Out of date</strong> — your {yours} changed since.
             </p>
             <button
               type="button"
               disabled={busy}
-              onClick={() => void onImprove('My code changed since you proposed this. Please redo this change for the code as it is now.')}
+              onClick={() => void onImprove(`My ${yours} changed since you proposed this. Please redo this change for the ${yours} as it is now.`)}
               className={`${toolButton} ml-auto`}
             >
               <RefreshCw size={14} aria-hidden="true" />

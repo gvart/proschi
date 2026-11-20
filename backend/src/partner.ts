@@ -224,6 +224,7 @@ interface TurnBody {
   files: Record<string, string>;
   changeId?: string;
   prep?: PrepTurn;
+  view?: 'visual' | 'code';
 }
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -278,7 +279,9 @@ function turnBody(body: Record<string, unknown>, persona: Persona): TurnBody {
   if (intent === 'improve' && typeof body.changeId !== 'string') throw new HttpError(400, 'changeId is required to improve a change');
   if (body.prep !== undefined && persona !== 'coach') throw new HttpError(400, 'prep is for an Interview coach chat only');
   const prep = body.prep !== undefined ? prepOf(body.prep) : undefined;
-  return { intent, message, source: body.source, files, ...(intent === 'improve' ? { changeId: body.changeId as string } : {}), ...(prep ? { prep } : {}) };
+  if (body.view !== undefined && body.view !== 'visual' && body.view !== 'code') throw new HttpError(400, 'view must be "visual" or "code"');
+  const view = body.view as TurnBody['view'];
+  return { intent, message, source: body.source, files, ...(intent === 'improve' ? { changeId: body.changeId as string } : {}), ...(prep ? { prep } : {}), ...(view ? { view } : {}) };
 }
 
 const meterUsage = (r: MessageResult): ModelUsage => ({ model: r.model, ...r.usage });
@@ -414,6 +417,7 @@ export const postPartnerTurn = partnerRoute(async (request: Request, ctx: Ctx, u
       feedback: stored.filter((c) => c.decision && !c.fed).map((c) => ({ title: c.title, decision: c.decision as 'accepted' | 'rejected' })),
       ...(context ? { notAsked: context.topics.filter((t) => t.kind === 'clarify').map((t) => t.label) } : {}),
       ...(body.prep ? { prep: body.prep } : {}),
+      ...(body.view ? { view: body.view } : {}),
     };
     const byTurn = new Map<string, { title: string; ok: boolean }[]>();
     for (const c of stored) byTurn.set(c.turn_id, [...(byTurn.get(c.turn_id) ?? []), { title: c.title, ok: (JSON.parse(c.result) as ChangeResult).ok }]);

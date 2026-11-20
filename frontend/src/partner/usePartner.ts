@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createSession, decide as postDecision, getSession, NoCreditsError, sendTurn, SignedOutError, TurnInProgressError } from './api';
-import type { Intent, PartnerContext, Turn, TurnRequest } from './contract';
+import type { EditorView, Intent, PartnerContext, Turn, TurnRequest } from './contract';
 import type { PrepTurn } from './prep';
 import { reportBalance } from '../services/useCredits';
 import { loadStored, saveStored, type Decision } from './store';
@@ -45,6 +45,8 @@ interface Options {
   name?: string;
   /** A turn came with assisted: true (practice). */
   onAssisted?: () => void;
+  /** The editor's mode, sent with each turn. */
+  view?: EditorView;
 }
 
 const POLL_MS = 2500;
@@ -53,8 +55,12 @@ const POLL_FOR_MS = 120_000;
 const EMPTY: PartnerState = { sessionDeep: false, turns: [], charges: {}, status: 'idle', decisions: {}, improved: [] };
 
 /** Design partner's conversation for one document or problem: resume, send, decide. */
-export function usePartner({ storeKey, context, enabled, getSource, getFiles, getPrep, name = 'Design partner', onAssisted }: Options) {
+export function usePartner({ storeKey, context, enabled, getSource, getFiles, getPrep, name = 'Design partner', onAssisted, view }: Options) {
   const [state, setState] = useState<PartnerState>(EMPTY);
+  const viewRef = useRef(view);
+  useEffect(() => {
+    viewRef.current = view;
+  }, [view]);
   const stateRef = useRef(state);
   const onAssistedRef = useRef(onAssisted);
   const contextRef = useRef(context);
@@ -149,7 +155,7 @@ export function usePartner({ storeKey, context, enabled, getSource, getFiles, ge
         }
         const files = getFiles?.();
         const prep = getPrepRef.current?.();
-        const request: TurnRequest = { intent, message, source: getSource(), ...(files?.length ? { files } : {}), ...(opts.changeId ? { changeId: opts.changeId } : {}), ...(prep ? { prep } : {}) };
+        const request: TurnRequest = { intent, message, source: getSource(), ...(files?.length ? { files } : {}), ...(opts.changeId ? { changeId: opts.changeId } : {}), ...(prep ? { prep } : {}), ...(viewRef.current ? { view: viewRef.current } : {}) };
         const answer = await sendTurn(id, request);
         // Another document or problem opened meanwhile: the answer belongs to the conversation left behind.
         if (keyRef.current !== storeKey) return true;

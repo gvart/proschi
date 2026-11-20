@@ -255,7 +255,13 @@ export interface TurnInput {
   notAsked?: string[];
   /** Interview coach: the stage on screen and the candidate's notes (checked by the route), fenced as data. */
   prep?: PrepTurn;
+  /** The editor's mode: in `visual` the user edits the diagram and sees no code (absent means code). */
+  view?: 'visual' | 'code';
 }
+
+/** Said in a turn whose user works on the diagram, not the code (the editor's Visual mode). */
+export const VISUAL_VIEW_NOTE =
+  "<view>\nThe user is in Visual mode: they build the design on the diagram and do not see its code. Talk about components, connections, use cases and steps by their names. Do not show Proschi code, quote its lines or name its syntax, unless this message asks for code. Your changes are still edits of the design source; the user sees each one as a diagram preview to accept.\n</view>";
 
 /** The candidate's stage notes as plain text for <candidate_notes>; empty when they wrote nothing yet. */
 export function prepNotesText(p: PrepTurn): string {
@@ -288,6 +294,7 @@ export function turnMessage(t: TurnInput): string {
       : []),
     ...(t.prep ? [fence('stage', t.prep.stage), prepNotesText(t.prep) ? fence('candidate_notes', prepNotesText(t.prep)) : 'The candidate has no stage notes yet.'] : []),
     ...(t.notAsked?.length ? [`<not_asked>\nThe clarifying questions behind the hidden facts. Answer one only if the user's message asks it (or something close); otherwise keep its facts hidden:\n${t.notAsked.map((q) => `- ${q}`).join('\n')}\n</not_asked>`] : []),
+    ...(t.view === 'visual' ? [VISUAL_VIEW_NOTE] : []),
     `Intent: ${t.intent}.`,
     t.message.trim() ? fence('user_message', t.message) : 'The user sent no message.',
   ];

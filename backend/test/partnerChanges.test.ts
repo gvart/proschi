@@ -121,6 +121,14 @@ describe('the request', () => {
     expect(req.system[1].cache_control).toEqual({ type: 'ephemeral' });
   });
 
+  it('tells the model when the user works on the diagram, so it answers without code', () => {
+    expect(turnMessage(input({ view: 'visual' }))).toContain('The user is in Visual mode');
+    expect(turnMessage(input({ view: 'code' }))).not.toContain('<view>');
+    expect(turnMessage(input())).not.toContain('<view>');
+    // In the turn, not the cached system prompt, so switching modes keeps the cache.
+    expect(JSON.stringify(partnerRequest(input({ view: 'visual' }), [], { deep: false }).system)).not.toContain('Visual mode');
+  });
+
   it('sends the history from a user turn, then the new turn', () => {
     const req = partnerRequest(
       input(),

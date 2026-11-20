@@ -75,7 +75,12 @@ export interface TurnRequest {
   changeId?: string;
   /** Interview coach only. */
   prep?: PrepTurn;
+  /** The editor's mode: in `visual` the answer talks in components and shows no code. */
+  view?: EditorView;
 }
+
+/** The editor's two modes: building on the diagram, or writing the code. */
+export type EditorView = 'visual' | 'code';
 
 export interface TurnAnswer {
   turn: Turn;
