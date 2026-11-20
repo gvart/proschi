@@ -1,0 +1,34 @@
+frontend/src/components/Diagram/CanvasEditing.tsx
+  s_733d66441cadaa::t_3909d698f0e113 118,122
+frontend/src/components/Playground/DiagramView.tsx
+  s_733d66441cadaa::t_21773fcb73d82a 698
+  s_733d66441cadaa::t_9fa175aad9e0e6 71,205,210,935
+frontend/e2e/mobile.e2e.ts
+  s_733d66441cadaa::t_5864d8445d6f0d 377,386-396,409-417
+  s_733d66441cadaa::t_0acbe0df898514 397-407
+  s_733d66441cadaa::t_96970610f2f682 350,352
+  s_733d66441cadaa::t_1cf2c49534c9d7 408
+  s_733d66441cadaa::t_bd6c2b1b3429e2 343
+  s_733d66441cadaa::t_66991233939b5f 418
+frontend/src/components/Diagram/canvasShared.ts
+  s_733d66441cadaa::t_21773fcb73d82a 226
+  s_733d66441cadaa::t_e1c0670337f57c 200-202,204,208,210-212
+frontend/src/components/Diagram/EditableCanvas.tsx
+  s_733d66441cadaa::t_21773fcb73d82a 480
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "18ae6cd8f471f4ee316ccaf31e49af69f80ccbe5",
+  "prompts": {},
+  "sessions": {
+    "s_733d66441cadaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9649973d-f497-4440-b031-a92483a592e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
