@@ -389,11 +389,12 @@ test.describe('editor diagram on a phone', () => {
     await page.goto((await page.locator('a[data-example="url-shortener"]').getAttribute('href'))!);
     await expect(page.locator('.react-flow__node').first()).toBeVisible();
     const viewport = page.locator('.react-flow__viewport');
-    // Settled: the same view twice in a row.
+    // Settled: the layout done (its nodes no longer gliding to their places), and the same view twice in a row.
+    await expect(page.locator('[data-layout-busy]')).toHaveCount(0);
     let last = '';
     await expect
       .poll(async () => {
-        const now = (await viewport.getAttribute('style')) ?? '';
+        const now = await viewport.evaluate((el) => [el, ...Array.from(el.querySelectorAll<HTMLElement>('.react-flow__node'))].map((n) => (n as HTMLElement).style.transform).join(';'));
         const same = now === last;
         last = now;
         return same;
