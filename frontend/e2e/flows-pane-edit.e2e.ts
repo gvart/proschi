@@ -335,6 +335,33 @@ test.describe('editing on the Flows pane', () => {
     await expect(composer(page).getByLabel('Goes to')).toHaveAttribute('data-value', 'events');
   });
 
+  test("while a step's ends are picked, a click anywhere on a small node picks it: its \"+\" and dots are put away", async ({ page }) => {
+    await openPane(page);
+    // The pane at its tallest, so the canvas and its nodes are small.
+    await page.getByRole('separator', { name: 'Resize the flows pane' }).focus();
+    await page.keyboard.press('End');
+    await flows(page).getByRole('button', { name: 'Add a step', exact: true }).click();
+    const step = flows(page).getByRole('form', { name: 'New step' });
+    await expect(step.getByLabel('Starts at')).toHaveAttribute('data-value', 'shopper');
+    const node = canvasNodes(page).filter({ hasText: 'Orders DB' });
+    await expect(node.getByRole('button', { name: 'Add a component after Orders DB' })).toHaveCount(0);
+    // Where the "+" is when nothing is picked: on the node's right edge, half way down.
+    await node.hover();
+    const box = (await node.boundingBox())!;
+    await page.mouse.click(box.x + box.width - 2, box.y + box.height / 2);
+    await expect(page.getByRole('dialog', { name: 'Add after Orders DB' })).toHaveCount(0);
+    await expect(step.getByLabel('Goes to')).toHaveAttribute('data-value', 'db');
+    // Where its dot is, at the bottom: picked too (it starts over), no connection dragged.
+    const cache = canvasNodes(page).filter({ hasText: 'Cart cache' });
+    const at = (await cache.boundingBox())!;
+    await page.mouse.click(at.x + at.width / 2, at.y + at.height - 1);
+    await expect(step.getByLabel('Starts at')).toHaveAttribute('data-value', 'cache');
+    // Done picking, the "+" is back.
+    await step.getByRole('button', { name: 'Cancel' }).click();
+    await node.hover();
+    await expect(node.getByRole('button', { name: 'Add a component after Orders DB' })).toBeVisible();
+  });
+
   test('Add reply answers a selected request right after it, before the block that follows', async ({ page }) => {
     await openPane(page);
     await option(page, 2).click();
