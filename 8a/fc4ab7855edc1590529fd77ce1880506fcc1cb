@@ -1,0 +1,36 @@
+docs/USE-CASES.md
+  s_733d66441cadaa::t_203bd7c79edf3a 2,170-171
+docs/VISUAL-EDITOR.md
+  s_733d66441cadaa::t_f2c9e62c3443c9 7-9,59,61,94-96,106-108,129-131
+  s_733d66441cadaa::t_8b6a75722ad655 58
+  s_733d66441cadaa::t_12c0d8c0565ce9 12,14,19,21,25-26,73-78
+  s_733d66441cadaa::t_9eb726232084c7 1-6,10-11,13,15-18,20,22-24,27-57,60,62-72,79-93,97-105,109-128,132-140
+docs/QUICKSTART.md
+  s_733d66441cadaa::t_203bd7c79edf3a 2
+  s_733d66441cadaa::t_011c75598736b6 9-10
+frontend/docs/visual-editor/index.html
+  s_733d66441cadaa::t_8b6a75722ad655 1-35
+docs/STYLING.md
+  s_733d66441cadaa::t_dd710903720aad 125-126,131-133,135
+docs/site.json
+  s_733d66441cadaa::t_8b6a75722ad655 149-153,300
+  s_733d66441cadaa::t_76cec235707ff2 148
+docs/impl/visual-editor.md
+  s_733d66441cadaa::t_ef9f2602b76614 51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8afc4ab7855edc1590529fd77ce1880506fcc1cb",
+  "prompts": {},
+  "sessions": {
+    "s_733d66441cadaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9649973d-f497-4440-b031-a92483a592e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
