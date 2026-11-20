@@ -1,4 +1,5 @@
 import { componentCatalog, techKey } from '../../catalog/componentCatalog';
+import { builtinTypes, typeKey, type ResolvedType } from '../../dsl';
 import { kindOf } from '../../dsl/kinds';
 import type { Kind } from '../../dsl/types';
 
@@ -67,4 +68,37 @@ export function firstMatch(groups: PaletteGroup[], query: string): PaletteEntry 
   const q = query.trim().toLowerCase();
   const entries = groups.flatMap((g) => g.entries);
   return (q ? entries.find((e) => e.techStack.toLowerCase().startsWith(q)) : undefined) ?? entries[0];
+}
+
+/** A type the type picker offers: one the document declares, or a catalog component's. */
+export interface TypeChoice {
+  name: string;
+  /** The catalog tech it is drawn with, for its icon. */
+  icon?: string;
+  doc?: string;
+}
+
+export interface TypeChoiceGroup {
+  id: string;
+  label: string;
+  choices: TypeChoice[];
+}
+
+/**
+ * The type picker's groups for a search: the document's own concrete types
+ * first ("In this design"), then the catalog grouped as the palette groups it,
+ * each with its type's `doc` line.
+ */
+export function typeChoices(declared: readonly ResolvedType[], query = ''): TypeChoiceGroup[] {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const own = declared.filter((t) => !t.abstract && words.every((w) => `${t.name} ${t.doc ?? ''}`.toLowerCase().includes(w)));
+  const ownKeys = new Set(own.map((t) => typeKey(t.name)));
+  const table = builtinTypes();
+  const catalog = paletteGroups(query).map(({ id, label, entries }) => ({
+    id,
+    label,
+    choices: entries.filter((e) => !ownKeys.has(typeKey(e.techStack))).map((e) => ({ name: e.techStack, icon: e.techStack, doc: table.get(typeKey(e.techStack))?.doc })),
+  }));
+  const design = own.length > 0 ? [{ id: 'design', label: 'In this design', choices: own.map((t) => ({ name: t.name, icon: t.icon, doc: t.doc })) }] : [];
+  return [...design, ...catalog.filter((g) => g.choices.length > 0)];
 }

@@ -16,14 +16,14 @@ import { prompt } from '../../design/dialogs';
 import { FIT_VIEW_OPTIONS, useFitOnChange } from './useFitOnChange';
 import Inspector from './Inspector';
 import { TECH_DRAG_TYPE } from './Palette';
-import { AddAfterPicker, CanvasMenu, ConnectHint, EmptyCanvas, FlowsToggle, PaletteDock, PaletteToggle, type AddAfterState, type CanvasMenuActions, type CanvasMenuState } from './CanvasEditing';
+import { AddAfterPicker, CanvasMenu, ConnectHint, EmptyCanvas, FlowsToggle, PaletteDock, PaletteToggle, SelectionEmpty, type AddAfterState, type CanvasMenuActions, type CanvasMenuState, type RailTab } from './CanvasEditing';
 import { addComponent, nameNode, namedElsewhere } from './addFlow';
 import { NodeActionsContext, type NodeActions } from '../Canvas/nodeActions';
 import FlowsPanel, { type StepPick } from './FlowsPanel';
 import { nextPick } from './flows';
 import { canvasKey, historyKey, useConnectHint, useMiniMap, usePaletteOpen, type CanvasKey } from './canvasEditState';
 import { CanvasMiniMap, CanvasTopBar, MiniMapButton, OverlayTools } from './CanvasTools';
-import { finderItemsOf, useOverlayOn, usePinDrag, useTopBarInset, withEdgeLoads, withNodeLoads } from './canvasShared';
+import { finderItemsOf, useLateOpen, useOverlayOn, usePinDrag, useTopBarInset, withEdgeLoads, withNodeLoads } from './canvasShared';
 import { useCanvasEdits } from './useCanvasEdits';
 import { ConnectAtAnyZoom, connectionLabels, newConnection, useConnectDrop } from './connect';
 import NodeFinder from './NodeFinder';
@@ -81,9 +81,8 @@ interface EditableCanvasProps {
 
 type Selected = { kind: 'node' | 'edge'; id: string } | null;
 
-/** How much of the canvas's right side a floating panel covers, with its margin: the palette (w-64), the settings (w-72). */
-const FLOATING_PALETTE = 256 + 8;
-const FLOATING_SETTINGS = 288 + 8;
+/** How much of the canvas's right side the rail covers when it floats (a narrow pane), with its margin (w-72). */
+const FLOATING_RAIL = 288 + 8;
 
 type XY = { x: number; y: number };
 const NO_MOVES: ReadonlyMap<string, XY> = new Map();
@@ -177,6 +176,20 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
   const edge = selected?.kind === 'edge' ? diagram.edges.find((e) => e.id === selected.id) : undefined;
   // A selection the text no longer has (deleted, or renamed in the code) is dropped.
   const current: Selected = node || edge ? selected : null;
+  const showSettings = !!current && !settingsClosed && !viewOnly;
+  /**
+   * The rail stays on the Selection tab once a selection opened it, with nothing selected too, so selecting and
+   * clicking away does not open and close the rail (and move the canvas) every time.
+   */
+  const [selectionTab, setSelectionTab] = useState(false);
+  const selectionShown = !phone && !viewOnly && (showSettings || selectionTab);
+  useEffect(() => {
+    if (showSettings && !phone && !paletteOpen && !flowsOpen) setSelectionTab(true);
+  }, [showSettings, phone, paletteOpen, flowsOpen]);
+  const railTab: RailTab = selectionShown ? 'selection' : flowsOpen ? 'flows' : 'components';
+  // Opened by a selection alone, the rail waits for the click to finish (useLateOpen) before it narrows the canvas.
+  const selectionOpens = useLateOpen(selectionShown && !paletteOpen && !flowsOpen);
+  const railOpen = !phone && (paletteOpen || flowsOpen || selectionOpens);
 
   const canvasRef = useRef<HTMLDivElement>(null);
   /**
@@ -286,6 +299,31 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
     }
     setFlowsShown(!flowsOpen);
   };
+  const togglePalette = () => {
+    if (flowsOpen) setFlowsShown(false);
+    setPick(null);
+    setPaletteFocus(!paletteOpen);
+    // Opened, the palette is what shows: the selection's settings, which would take its place, are put away.
+    if (!paletteOpen) closeSelection();
+    if (phone) setSheet(!sheet);
+    else setDocked(!docked);
+  };
+  /** Puts the selection's settings away, so the tab under them (or no rail) shows. */
+  const closeSelection = () => {
+    setSettingsClosed(true);
+    setSelectionTab(false);
+  };
+  const showTab = (tab: RailTab) => {
+    if (tab === 'selection') {
+      setSettingsClosed(false);
+      setSelectionTab(true);
+      return;
+    }
+    closeSelection();
+    if (tab === 'flows') {
+      if (!flowsOpen) toggleFlows();
+    } else if (!paletteOpen) togglePalette();
+  };
   const flowsPanel = flowsOpen && (
     <FlowsPanel source={source} diagram={diagram} onChange={onChange} pick={pick} onPick={setPick} useCase={flowsUseCase} onUseCase={setFlowsUseCase} onClose={toggleFlows} onHighlight={setFlowHover} />
   );
@@ -347,27 +385,27 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
     };
   };
 
-  // With the palette docked, the settings take its place beside the canvas instead of covering the diagram.
-  const dockSettings = !!current && !settingsClosed && (paletteOpen || flowsOpen) && !phone;
-  // Showing or hiding a panel glides the diagram to a new fit (unless the reader zoomed or panned): a docked one
-  // changes the canvas's width, a floating one (the palette in a narrow pane, the settings) covers its right side.
-  const cover = (paletteOpen || flowsOpen) && !phone && floating ? (flowsOpen ? FLOATING_SETTINGS : FLOATING_PALETTE) : current && !settingsClosed && !dockSettings && !phone ? FLOATING_SETTINGS : 0;
+  // Showing or hiding the rail glides the diagram to a new fit (unless the reader zoomed or panned): the docked rail
+  // changes the canvas's width, the floating one (a narrow pane) covers its right side.
+  const cover = railOpen && floating ? FLOATING_RAIL : 0;
   // Below the top bar's buttons, tools and folded legend, so no node of the fit sits under them.
   const barInset = useTopBarInset(canvasRef, `${nodes.length > 0}:${canOverlay}:${!!overlay}:${pinned}:${!!diagram.legend}`);
-  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { glide: `${paletteOpen}:${flowsOpen}`, right: cover, inset: barInset ? { top: barInset } : undefined, added: lastAdded });
-  const inspector = current && !settingsClosed && !viewOnly && (
+  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { glide: `${paletteOpen}:${flowsOpen}:${railOpen}`, right: cover, inset: barInset ? { top: barInset } : undefined, added: lastAdded });
+  const inspector = showSettings && (
     <Inspector
       key={current.id}
+      diagram={diagram}
       node={node}
       edge={node ? undefined : edge}
       labels={!node && edge ? connectionLabels(diagram, edge) : undefined}
       capacity={node ? diagram.capacity?.find((c) => c.node === node.id) : undefined}
       importedFrom={node ? imported.get(node.id) : edge?.loc.file}
       problemCapacity={problemCapacity}
-      docked={dockSettings}
+      docked={!phone}
+      onTypeDone={() => canvasRef.current?.focus({ preventScroll: true })}
       onEdit={(edit) => onChange(edit(source))}
       onDelete={remove}
-      onClose={() => setSettingsClosed(true)}
+      onClose={closeSelection}
     />
   );
 
@@ -394,14 +432,17 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
       }}
     >
       <PaletteDock
-        open={paletteOpen || (flowsOpen && !phone)}
+        open={phone ? paletteOpen : railOpen}
+        tab={railTab}
+        onTab={showTab}
+        offersFlows={flows}
         flows={flowsPanel || undefined}
+        selection={selectionShown ? inspector || <SelectionEmpty onClose={() => setSelectionTab(false)} /> : undefined}
         phone={phone}
         focus={paletteFocus}
         onAdd={(tech) => add(tech, { from: chainFrom })}
         connectFrom={chainFrom ? (diagram.nodes.find((n) => n.id === chainFrom)?.name ?? chainFrom) : undefined}
         onClose={() => (phone ? setSheet(false) : setDocked(false))}
-        settings={dockSettings ? inspector : undefined}
         onFloatingChange={setFloating}
       />
       <div
@@ -489,21 +530,9 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
             left={
               !viewOnly && (
                 <>
-                  {/* While the settings stand in for the palette, the button brings the palette back. */}
-                  <PaletteToggle
-                    open={paletteOpen && !dockSettings}
-                    onToggle={() => {
-                      if (dockSettings) return setSettingsClosed(true);
-                      if (flowsOpen) setFlowsShown(false);
-                      setPick(null);
-                      setPaletteFocus(!paletteOpen);
-                      // Opened, the palette is what shows: the selection's settings, which would take its place, are put away.
-                      if (!paletteOpen) setSettingsClosed(true);
-                      if (phone) setSheet(!sheet);
-                      else setDocked(!docked);
-                    }}
-                  />
-                  {flows && <FlowsToggle open={flowsOpen && !dockSettings} onToggle={() => (dockSettings ? setSettingsClosed(true) : toggleFlows())} />}
+                  {/* Each shows its tab of the rail, or hides the rail when its tab is the one shown. */}
+                  <PaletteToggle open={paletteOpen && railTab === 'components'} onToggle={() => (phone || (paletteOpen && railTab === 'components') ? togglePalette() : showTab('components'))} />
+                  {flows && <FlowsToggle open={flowsOpen && railTab === 'flows'} onToggle={() => (phone || (flowsOpen && railTab === 'flows') ? toggleFlows() : showTab('flows'))} />}
                 </>
               )
             }
@@ -524,8 +553,9 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
           )}
         </ReactFlow>
         </NodeActionsContext.Provider>
-        {inspector && !dockSettings && (
-          <div className="pointer-events-none absolute inset-x-2 bottom-2 z-10 flex max-h-[55%] md:inset-x-auto md:bottom-auto md:right-2 md:top-14 md:max-h-[calc(100%-4.5rem)] md:w-72">
+        {/* A phone has no rail: the settings are a card over the bottom of the canvas. */}
+        {inspector && phone && (
+          <div className="pointer-events-none absolute inset-x-2 bottom-2 z-10 flex max-h-[55%]">
             {inspector}
           </div>
         )}

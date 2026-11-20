@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { Blocks, Cable, Code2, Copy, Pencil, PinOff, Power, PowerOff, Settings2, Trash2, Workflow, X } from 'lucide-react';
+import { Blocks, Cable, Code2, Copy, MousePointerClick, Pencil, PinOff, Power, PowerOff, Settings2, Trash2, Workflow, X } from 'lucide-react';
 import { MenuItem } from '../Playground/Menu';
 import { MOD_KEY } from '../Playground/modKey';
 import { iconButton, toolButton } from '../Playground/ui';
@@ -48,6 +48,9 @@ export function FlowsToggle({ open, onToggle }: { open: boolean; onToggle: () =>
   );
 }
 
+/** The tabs of the rail beside the canvas. */
+export type RailTab = 'components' | 'flows' | 'selection';
+
 interface PaletteDockProps {
   open: boolean;
   phone: boolean;
@@ -55,10 +58,15 @@ interface PaletteDockProps {
   onClose: () => void;
   /** The palette was just opened by the reader, so its search takes the focus. */
   focus: boolean;
-  /** The selection's settings (a docked Inspector): shown in the panel in place of the palette until closed. */
-  settings?: ReactNode;
-  /** The Flows builder: shown in the panel in place of the palette (the settings still come first). */
+  /** The tab shown. */
+  tab: RailTab;
+  onTab: (tab: RailTab) => void;
+  /** The canvas offers the Flows builder, so the rail has its tab. */
+  offersFlows: boolean;
+  /** The Flows builder, while it is open (kept mounted, hidden, while another tab shows). */
   flows?: ReactNode;
+  /** The Selection tab: the selection's settings (an Inspector), or what to do with nothing selected. */
+  selection?: ReactNode;
   /** Told whether the panel floats over the canvas (a narrow pane) instead of sitting beside it. */
   onFloatingChange?: (floating: boolean) => void;
   /** The name of the selected component a new one is connected from, if any. */
@@ -84,12 +92,20 @@ function useNarrowRow(open: boolean) {
   return [ref, narrow] as const;
 }
 
+const RAIL_TABS: { tab: RailTab; label: string }[] = [
+  { tab: 'components', label: 'Components' },
+  { tab: 'flows', label: 'Flows' },
+  { tab: 'selection', label: 'Selection' },
+];
+
 /**
- * The palette docked to the left of the canvas; in a narrow pane (practice's
- * diagram column) a panel floating over the canvas's right side, so the canvas
- * keeps its width; on a phone a bottom sheet where a tap adds.
+ * The rail beside the canvas, with its tabs: the palette (Components), the
+ * Flows builder and the selection's settings (Selection). Docked to the left
+ * of the canvas, so nothing in it covers the diagram; in a narrow pane
+ * (practice's diagram column) floating over the canvas's right side, which
+ * the fit keeps clear; on a phone the palette is a bottom sheet where a tap adds.
  */
-export function PaletteDock({ open, phone, onAdd, onClose, focus, settings, flows, onFloatingChange, connectFrom }: PaletteDockProps) {
+export function PaletteDock({ open, phone, onAdd, onClose, focus, tab, onTab, offersFlows, flows, selection, onFloatingChange, connectFrom }: PaletteDockProps) {
   const [ref, narrow] = useNarrowRow(open && !phone);
   useEffect(() => onFloatingChange?.(narrow), [narrow, onFloatingChange]);
   if (!open) return null;
@@ -117,28 +133,65 @@ export function PaletteDock({ open, phone, onAdd, onClose, focus, settings, flow
     );
   }
   return (
-    // One panel, the selection's settings, else the palette (hidden, not unmounted, so it keeps its search and
-    // does not take the focus again). Beside the canvas, so neither covers the diagram; in a narrow pane over its
-    // right side, from a zero-width box placed after the canvas.
-    <div ref={ref} className={narrow ? 'relative order-last w-0 shrink-0' : `${flows ? 'w-72' : 'w-60'} shrink-0 border-r-bw-1 border-ink`}>
+    // The tabs not shown stay mounted, hidden, so the palette keeps its search and Flows its use case. In a narrow
+    // pane the rail floats over the canvas's right side, from a zero-width box placed after the canvas.
+    <div ref={ref} className={narrow ? 'relative order-last w-0 shrink-0' : 'w-72 shrink-0 border-r-bw-1 border-ink'}>
       <div
         data-testid="palette-dock"
         data-floating={narrow || undefined}
         className={
           narrow
-            ? `absolute right-2 top-2 z-20 flex max-h-[calc(100%-1rem)] ${flows ? 'w-72' : 'w-64'} flex-col overflow-hidden rounded-sm border-bw-1 border-ink bg-surface shadow-brutal-md ${settings ? '' : 'h-[calc(100%-1rem)]'}`
-            : 'h-full'
+            ? 'absolute right-2 top-2 z-20 flex h-[calc(100%-1rem)] w-72 flex-col overflow-hidden rounded-sm border-bw-1 border-ink bg-surface shadow-brutal-md'
+            : 'flex h-full flex-col bg-surface'
         }
       >
-        {settings}
-        {flows && (
-          <div className="h-full min-h-0" hidden={!!settings}>
-            {flows}
-          </div>
-        )}
-        <div className="h-full" hidden={!!settings || !!flows}>
-          <Palette onAdd={onAdd} onClose={onClose} autoFocus={focus} connectFrom={connectFrom} />
+        <div role="tablist" aria-label="Canvas panel" className="flex shrink-0 border-b border-ink/15 px-1 pt-1">
+          {RAIL_TABS.filter((t) => t.tab !== 'flows' || offersFlows).map((t) => (
+            <button
+              key={t.tab}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.tab}
+              onClick={() => onTab(t.tab)}
+              className="-mb-px flex-1 rounded-t-sm border-b-2 border-transparent px-2 py-1.5 text-xs font-semibold text-ink/70 hover:text-ink aria-selected:border-ink aria-selected:text-ink"
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
+        <div className="min-h-0 flex-1">
+          {selection && (
+            <div role="tabpanel" aria-label="Selection" className="h-full" hidden={tab !== 'selection'}>
+              {selection}
+            </div>
+          )}
+          {flows && (
+            <div className="h-full min-h-0" hidden={tab !== 'flows'}>
+              {flows}
+            </div>
+          )}
+          <div className="h-full" hidden={tab !== 'components'}>
+            <Palette onAdd={onAdd} onClose={onClose} autoFocus={focus} connectFrom={connectFrom} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** The Selection tab with nothing selected. */
+export function SelectionEmpty({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="flex h-full flex-col">
+      <div className="flex items-center justify-end border-b border-ink/15 py-1 pr-1">
+        <button type="button" aria-label="Close the panel" title="Close the panel" onClick={onClose} className={iconButton}>
+          <X size={16} />
+        </button>
+      </div>
+      <div className="flex flex-1 flex-col items-center px-4 pt-8 text-center text-sm text-muted">
+        <MousePointerClick size={20} aria-hidden="true" />
+        <p className="mt-2 font-semibold text-ink">Nothing selected</p>
+        <p className="mt-1">Click a component or a connection to change its name, type and settings.</p>
       </div>
     </div>
   );
