@@ -190,9 +190,6 @@ export function useLateOpen(open: boolean, ms = 350): boolean {
   return open && late;
 }
 
-/** The row of the rail (CanvasEditing's PaletteDock) and the canvas: side by side, or on a phone the canvas over its sheet. */
-export const railRowClass = (phone: boolean) => (phone ? 'flex h-full flex-col' : 'flex h-full');
-
 /** After the pane's own glide to a new fit (useFitOnChange's 300ms), with a margin. */
 const KEEP_IN_VIEW_MS = 400;
 

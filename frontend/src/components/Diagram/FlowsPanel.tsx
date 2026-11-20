@@ -1,4 +1,4 @@
-import { useDeferredValue, useId, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useDeferredValue, useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp, CornerDownLeft, MousePointerClick, Pencil, Plus, Trash2, Workflow, X } from 'lucide-react';
 import { addScenario, addStep, addUseCase, giveOperations, moveStep, removeScenario, removeStep, removeUseCase, renameScenario, renameUseCase, setStep, outlineOf, type OutlineStep, type StepKind } from '../../dsl/edit';
 import { parse } from '../../dsl/parser';
@@ -10,6 +10,8 @@ import StepLabelField from './StepLabelField';
 import { composeLabel, isHttpHead, splitLabel, type LabelParts } from './stepLabel';
 import { accessOf } from '../../dsl/access';
 import Select from '../../design/Select';
+import SequenceDiagram from './SequenceDiagram';
+import { entrySteps, followStep, scenarioOfStep, sequenceEntries } from './sequenceLayout';
 
 /**
  * The Flows builder (docs/design/paid-plans.md P46): use cases and their
@@ -20,6 +22,13 @@ import Select from '../../design/Select';
  * scenarios show. A scenario is an alternative within a use case (a cache
  * hit or a miss); steps go to the main flow or to one scenario. Every change
  * is a dsl/edit.ts edit of the text, which stays the source of truth.
+ *
+ * It has two layouts. In the rail (a phone's sheet) it is one narrow column.
+ * As the pane under the canvas (FlowsPane.tsx, on wider screens) the use case
+ * and its scenario tabs head it, the chosen tab is drawn as a sequence
+ * diagram (SequenceDiagram.tsx), and the steps and their forms are in a
+ * column beside it. Either way a step can be selected, from the list or the
+ * diagram, and the canvas lights it up (`onStep`).
  */
 
 /** A step being added: the components picked so far (on the canvas or in the form). */
@@ -42,6 +51,10 @@ interface FlowsPanelProps {
   onClose: () => void;
   /** Lights up a step's two components on the canvas while its row is hovered; null when none is. */
   onHighlight?: (ids: string[] | null) => void;
+  /** The narrow column of the rail (the default), or the wide pane under the canvas with the sequence diagram. */
+  layout?: 'rail' | 'pane';
+  /** The selected step's ends, for the canvas to light up its components and connection; null when none is selected. */
+  onStep?: (step: { from: string; to: string } | null) => void;
 }
 
 /** A step the builder adds. */
@@ -63,7 +76,8 @@ const MAIN = '';
 const NEW = '\u0000new';
 const SUGGEST = '\u0000suggest:';
 
-export default function FlowsPanel({ source, diagram, onChange, pick, onPick, useCase, onUseCase, onClose, onHighlight }: FlowsPanelProps) {
+export default function FlowsPanel({ source, diagram, onChange, pick, onPick, useCase, onUseCase, onClose, onHighlight, layout = 'rail', onStep }: FlowsPanelProps) {
+  const pane = layout === 'pane';
   const local = useMemo(() => diagram.useCases.filter((u) => u.loc.file === undefined), [diagram]);
   const useCases = useMemo(() => local.map((u) => u.name), [local]);
   const current = (local.find((u) => u.id === useCase) ?? local[0])?.name;
@@ -80,6 +94,36 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   const [renaming, setRenaming] = useState<{ scenario?: string } | null>(null);
   const names = useMemo(() => new Map(diagram.nodes.map((n) => [n.id, n.name])), [diagram]);
   const name = (id: string) => names.get(id) ?? id;
+
+  // The selected step, followed through edits of the text (dsl/edit.ts addresses steps by line).
+  const steps = useMemo(() => (outline ? outlineSteps(outline.items) : []), [outline]);
+  const [chosenStep, setChosenStep] = useState<OutlineStep>();
+  const chosen = followStep(chosenStep, steps);
+  if (chosen !== chosenStep && !(chosen && chosenStep && chosen.line === chosenStep.line && chosen.label === chosenStep.label)) setChosenStep(chosen);
+  const selectStep = (s: OutlineStep) => {
+    setChosenStep(s);
+    // A scenario's step shows on its tab.
+    const scenario = outline ? scenarioOfStep(outline.items, s.line) : undefined;
+    if (scenario && scenario !== laneNow) setLane(scenario);
+  };
+  /** Shows a tab (the main flow, or a scenario); a step selected in another scenario is let go. */
+  const chooseLane = (next: string) => {
+    setLane(next);
+    if (chosen && outline && (scenarioOfStep(outline.items, chosen.line) ?? next) !== next) setChosenStep(undefined);
+  };
+  /** In the pane, each step's number as the diagram draws the tab shown; the rail numbers the main flow's. */
+  const drawnNumbers = useMemo(() => (pane && outline ? new Map(entrySteps(sequenceEntries(outline.items, laneNow)).map((s, i) => [s.line, i + 1])) : undefined), [pane, outline, laneNow]);
+  const ends = chosen ? `${chosen.from}\n${chosen.to}` : '';
+  useEffect(() => {
+    const [from, to] = ends.split('\n');
+    onStep?.(ends ? { from, to } : null);
+  }, [ends, onStep]);
+  // Closed, the panel lets the canvas go.
+  const stepRef = useRef(onStep);
+  useEffect(() => {
+    stepRef.current = onStep;
+  });
+  useEffect(() => () => stepRef.current?.(null), []);
 
   const apply = (result: { source?: string; error?: string }) => {
     setError(result.error);
@@ -133,6 +177,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
       onUseCase(value);
       setLane(MAIN);
       setEditing(null);
+      setChosenStep(undefined);
       onPick(null);
     }
   };
@@ -190,11 +235,14 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
     const shown = (
       <StepRow
         key={step.line}
-        n={n}
+        n={drawnNumbers ? drawnNumbers.get(step.line) : n}
         step={step}
         name={name}
+        selected={pane && step.line === chosen?.line}
         onHighlight={onHighlight}
         onEdit={() => {
+          // In the pane, the step being edited is the one selected (in the diagram and on the canvas); the rail is as it was.
+          if (pane) selectStep(step);
           setEditing({ line: step.line, insert: false });
           onPick({ from: step.from, to: step.to });
         }}
@@ -218,6 +266,262 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   ];
   const currentId = local.find((u) => u.name === current)?.id ?? '';
 
+  const pickerButtons = (
+    <>
+      {current && (
+        <button type="button" onClick={() => setRenaming({})} aria-label={`Rename the use case ${current}`} title="Rename this use case" className={`${iconButton} !h-8 !w-8 shrink-0`}>
+          <Pencil size={14} />
+        </button>
+      )}
+      <button type="button" onClick={() => choose(NEW)} aria-label="New use case" title="New use case" className={`${iconButton} !h-8 !w-8 shrink-0`}>
+        <Plus size={15} />
+      </button>
+      {current && (
+        <button
+          type="button"
+          aria-label={`Delete the use case ${current}`}
+          title="Delete this use case"
+          onClick={() => {
+            onPick(null);
+            onChange(removeUseCase(source, current));
+          }}
+          className={`${iconButton} !h-8 !w-8 shrink-0 text-red-700 dark:text-red-300`}
+        >
+          <Trash2 size={15} />
+        </button>
+      )}
+    </>
+  );
+  const picker = naming ? (
+    <NewUseCase onAdd={newUseCase} onCancel={stopNaming} inline={pane} />
+  ) : renaming && !renaming.scenario && current ? (
+    <RenameField label={`Rename the use case ${current}`} value={current} onRename={(next) => apply(renameUseCase(source, current, next)) && (setRenaming(null), true)} onCancel={() => setRenaming(null)} />
+  ) : pane ? (
+    <div className="flex min-w-0 items-center gap-1.5">
+      <label htmlFor={selectId} className={`${eyebrow} mr-0.5 shrink-0`}>
+        Use case
+      </label>
+      <Select size="sm" id={selectId} value={currentId} onChange={choose} options={options} placeholder="No use cases yet" className="w-44 min-w-0 @4xl:w-56" />
+      {pickerButtons}
+    </div>
+  ) : (
+    <>
+      <label htmlFor={selectId} className={`block ${eyebrow}`}>
+        Use case
+      </label>
+      <div className="flex items-center gap-1.5">
+        <Select size="sm" id={selectId} value={currentId} onChange={choose} options={options} placeholder="No use cases yet" className="min-w-0 flex-1" />
+        {pickerButtons}
+      </div>
+    </>
+  );
+  const empty = useCases.length === 0 && !naming && (
+    <div className="space-y-2 pt-1">
+      <p className="text-sm text-muted">A use case is one thing a user does, written as the requests it makes from component to component.</p>
+      <button type="button" onClick={() => choose(NEW)} className={primaryButton}>
+        <Plus size={14} aria-hidden="true" />
+        New use case
+      </button>
+      {suggestions.length > 0 && (
+        <div className="flex flex-wrap gap-1" aria-label="Use cases the problem asks for">
+          {suggestions.map((s) => (
+            <button key={s} type="button" onClick={() => newUseCase(s)} className="inline-flex items-center gap-1 rounded-full border-bw-1 border-ink/40 px-2 py-0.5 text-xs font-semibold hover:border-ink hover:bg-pop-yellow/30">
+              <Plus size={11} aria-hidden="true" />
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+  const alert = error && (
+    <p role="alert" className="text-xs text-red-700 dark:text-red-300">
+      {error}
+    </p>
+  );
+  const newScenario = (value: string) => {
+    const clean = value.trim();
+    if (!clean || !current || !apply(addScenario(source, current, clean))) return false;
+    chooseLane(clean);
+    return true;
+  };
+
+  /** The chosen use case: its steps (each scenario's in a box), what to add, and in the rail the scenario to add to. */
+  const body = current && outline && (
+    <section aria-label={`Use case ${current}`} className={pane ? 'space-y-3' : 'space-y-3 rounded-sm border-bw-1 border-ink p-2.5'}>
+      {outline.items.length === 0 ? (
+        // The pane's diagram says so.
+        !pane && <p className="text-xs text-muted">No steps yet. Add the first request, from where the user starts.</p>
+      ) : (
+        <ol aria-label="Steps" className="space-y-1">
+          {(() => {
+            let n = 0;
+            return outline.items.map((item, i) =>
+              item.kind === 'step' ? (
+                row(item.step, ++n)
+              ) : item.kind === 'scenarios' ? (
+                <li key={`s${i}`} className="space-y-1.5 py-1">
+                  {item.branches.map((b) => (
+                    <div key={b.line} role="group" aria-label={`Scenario ${b.name}`} className={`rounded-sm border-bw-1 border-dashed px-2 py-1.5 ${laneNow === b.name ? 'border-ink bg-pop-yellow/15' : 'border-ink/30'}`}>
+                      <div className="flex items-center gap-1">
+                        {renaming?.scenario === b.name ? (
+                          <RenameField
+                            label={`Rename the scenario ${b.name}`}
+                            value={b.name}
+                            onRename={(next) => apply(renameScenario(source, current, b.name, next)) && (setRenaming(null), next !== b.name && laneNow === b.name && setLane(next), true)}
+                            onCancel={() => setRenaming(null)}
+                          />
+                        ) : (
+                          <>
+                            <span className={`${eyebrow} min-w-0 flex-1 truncate`}>Scenario: {b.name}</span>
+                            <button type="button" aria-label={`Rename the scenario ${b.name}`} title="Rename this scenario" onClick={() => setRenaming({ scenario: b.name })} className={`${iconButton} !h-7 !w-7`}>
+                              <Pencil size={12} />
+                            </button>
+                          </>
+                        )}
+                        <button
+                          type="button"
+                          aria-label={`Delete the scenario ${b.name}`}
+                          title="Delete this scenario and its steps"
+                          onClick={() => apply(removeScenario(source, current, b.name))}
+                          className={`${iconButton} !h-7 !w-7 text-red-700 dark:text-red-300`}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                      {b.steps.length === 0 && b.other === 0 ? (
+                        <p className="text-xs text-muted">No steps yet.</p>
+                      ) : (
+                        <ol className="space-y-1">
+                          {b.steps.map((s) => row(s))}
+                        </ol>
+                      )}
+                      {b.other > 0 && <p className="text-xs text-muted">And {b.other === 1 ? 'a block' : `${b.other} blocks`} you can edit in Code mode.</p>}
+                    </div>
+                  ))}
+                </li>
+              ) : item.kind === 'parallel' ? (
+                <li key={`p${item.block.line}`} className="py-1">
+                  <div role="group" aria-label="At the same time" className="rounded-sm border-bw-1 border-ink/30 px-2 py-1.5">
+                    <span className={eyebrow}>At the same time</span>
+                    <ol className="mt-1 space-y-1">{item.block.steps.map((s) => row(s, ++n))}</ol>
+                    {item.block.other > 0 && <p className="text-xs text-muted">And {item.block.other === 1 ? 'a statement' : `${item.block.other} statements`} you can edit in Code mode.</p>}
+                  </div>
+                </li>
+              ) : (
+                <li key={`o${item.line}`} className="text-xs text-muted">
+                  A block you can edit in Code mode.
+                </li>
+              ),
+            );
+          })()}
+        </ol>
+      )}
+
+      {!pane && scenarios.length > 0 && (
+        <fieldset>
+          <legend className={eyebrow}>Add steps to</legend>
+          <div role="radiogroup" aria-label="Add steps to" className="mt-1 flex flex-wrap gap-1">
+            {[MAIN, ...scenarios].map((s) => (
+              <button
+                key={s || 'main'}
+                type="button"
+                role="radio"
+                aria-checked={laneNow === s}
+                onClick={() => setLane(s)}
+                className={`rounded-sm border-bw-1 px-2 py-0.5 text-xs font-semibold ${laneNow === s ? 'border-ink bg-pop-yellow text-on-accent' : 'border-ink/30 hover:border-ink'}`}
+              >
+                {s || 'Main flow'}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+      )}
+
+      {editing ? null : pick ? (
+        <StepForm
+          key={`${current}:${laneNow}`}
+          diagram={diagram}
+          steps={outlineSteps(outline.items)}
+          used={used}
+          pick={pick}
+          onPick={onPick}
+          where={`A step in ${laneNow ? `scenario “${laneNow}”` : scenarios.length ? 'the main flow' : current}.`}
+          check={check}
+          onGiveOps={giveOps}
+          onAdd={(step) => apply(addStep(source, current, step, laneNow || undefined, undefined, diagram))}
+        />
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => onPick({ from: lastEnd(outlineSteps(outline.items)) })} className={primaryButton}>
+            <Plus size={14} aria-hidden="true" />
+            Add a step
+          </button>
+          <ReplyButton steps={outlineSteps(outline.items)} name={name} onReply={onPick} />
+        </div>
+      )}
+
+      {!pane && (
+        <NameForm label="New scenario" placeholder="e.g. Cache miss" button="Add scenario" help="An alternative path within this use case." suggestions={missingScenarios(diagram, current, scenarios)} onAdd={newScenario} />
+      )}
+    </section>
+  );
+
+  if (pane)
+    return (
+      <section role="region" aria-label="Flows" className="@container flex h-full min-h-0 flex-col bg-surface text-ink">
+        <div className="flex min-h-12 shrink-0 items-center gap-3 border-b border-ink/15 py-1.5 pl-3 pr-1.5">
+          <h2 className="flex shrink-0 items-center gap-1.5 text-sm font-bold">
+            <Workflow size={15} aria-hidden="true" />
+            {/* Named by the region in a narrow pane, where the room goes to the tabs. */}
+            <span className="sr-only @5xl:not-sr-only">Flows</span>
+          </h2>
+          <div className="min-w-0 shrink-0">{picker}</div>
+          {current && outline && (
+            <div className="flex min-w-0 flex-1 items-center gap-1.5">
+              <div role="tablist" aria-label="Scenarios" className="flex min-w-0 items-center gap-1 overflow-x-auto">
+                {[MAIN, ...scenarios].map((s) => (
+                  <button
+                    key={s || 'main'}
+                    type="button"
+                    role="tab"
+                    aria-selected={laneNow === s}
+                    onClick={() => chooseLane(s)}
+                    title={s ? `The steps of ${s}, and the steps it shares with the main flow` : 'The steps every scenario shares'}
+                    className="shrink-0 whitespace-nowrap rounded-sm border-bw-1 border-transparent px-2 py-1 text-xs font-semibold text-ink/75 hover:border-ink/40 hover:text-ink aria-selected:border-ink aria-selected:bg-pop-yellow aria-selected:text-on-accent"
+                  >
+                    {s || 'Main flow'}
+                  </button>
+                ))}
+              </div>
+              <AddScenario suggestions={missingScenarios(diagram, current, scenarios)} onAdd={newScenario} />
+            </div>
+          )}
+          <button type="button" aria-label="Close the flows" title="Close the flows" onClick={onClose} className={`${iconButton} ml-auto !h-8 !w-8 shrink-0`}>
+            <X size={16} />
+          </button>
+        </div>
+        {current && outline ? (
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto @3xl:flex-row @3xl:overflow-hidden">
+            <div className="min-w-0 shrink-0 overflow-x-auto bg-paper @3xl:min-h-0 @3xl:flex-1 @3xl:overflow-auto">
+              <SequenceDiagram outline={outline} scenario={laneNow} diagram={diagram} selected={chosen?.line} onSelect={selectStep} onScenario={chooseLane} />
+            </div>
+            <div className="shrink-0 space-y-3 border-t border-ink/15 p-3 @3xl:w-72 @3xl:overflow-y-auto @3xl:border-l @3xl:border-t-0 @5xl:w-80 @7xl:w-96">
+              {body}
+              {alert}
+            </div>
+          </div>
+        ) : (
+          <div className="min-h-0 flex-1 overflow-y-auto bg-paper p-4">
+            <div className="max-w-md space-y-2">
+              {empty}
+              {alert}
+            </div>
+          </div>
+        )}
+      </section>
+    );
+
   return (
     <aside role="region" aria-label="Flows" className="flex h-full min-h-0 flex-col bg-surface text-ink">
       <div className="flex items-center gap-2 border-b border-ink/15 py-1 pl-3 pr-1">
@@ -229,206 +533,58 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
       </div>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3">
         <div className="space-y-1">
-          {naming ? (
-            <NewUseCase onAdd={newUseCase} onCancel={stopNaming} />
-          ) : renaming && !renaming.scenario && current ? (
-            <RenameField label={`Rename the use case ${current}`} value={current} onRename={(next) => apply(renameUseCase(source, current, next)) && (setRenaming(null), true)} onCancel={() => setRenaming(null)} />
-          ) : (
-            <>
-              <label htmlFor={selectId} className={`block ${eyebrow}`}>
-                Use case
-              </label>
-              <div className="flex items-center gap-1.5">
-                <Select
-                  size="sm"
-                  id={selectId}
-                  value={currentId}
-                  onChange={choose}
-                  options={options}
-                  placeholder="No use cases yet"
-                  className="min-w-0 flex-1"
-                />
-                {current && (
-                  <button type="button" onClick={() => setRenaming({})} aria-label={`Rename the use case ${current}`} title="Rename this use case" className={`${iconButton} !h-8 !w-8 shrink-0`}>
-                    <Pencil size={14} />
-                  </button>
-                )}
-                <button type="button" onClick={() => choose(NEW)} aria-label="New use case" title="New use case" className={`${iconButton} !h-8 !w-8 shrink-0`}>
-                  <Plus size={15} />
-                </button>
-                {current && (
-                  <button
-                    type="button"
-                    aria-label={`Delete the use case ${current}`}
-                    title="Delete this use case"
-                    onClick={() => {
-                      onPick(null);
-                      onChange(removeUseCase(source, current));
-                    }}
-                    className={`${iconButton} !h-8 !w-8 shrink-0 text-red-700 dark:text-red-300`}
-                  >
-                    <Trash2 size={15} />
-                  </button>
-                )}
-              </div>
-            </>
-          )}
-          {useCases.length === 0 && !naming && (
-            <div className="space-y-2 pt-1">
-              <p className="text-sm text-muted">A use case is one thing a user does, written as the requests it makes from component to component.</p>
-              <button type="button" onClick={() => choose(NEW)} className={primaryButton}>
-                <Plus size={14} aria-hidden="true" />
-                New use case
-              </button>
-              {suggestions.length > 0 && (
-                <div className="flex flex-wrap gap-1" aria-label="Use cases the problem asks for">
-                  {suggestions.map((s) => (
-                    <button key={s} type="button" onClick={() => newUseCase(s)} className="inline-flex items-center gap-1 rounded-full border-bw-1 border-ink/40 px-2 py-0.5 text-xs font-semibold hover:border-ink hover:bg-pop-yellow/30">
-                      <Plus size={11} aria-hidden="true" />
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+          {picker}
+          {empty}
         </div>
-
-        {current && outline && (
-          <section aria-label={`Use case ${current}`} className="space-y-3 rounded-sm border-bw-1 border-ink p-2.5">
-            {outline.items.length === 0 ? (
-              <p className="text-xs text-muted">No steps yet. Add the first request, from where the user starts.</p>
-            ) : (
-              <ol aria-label="Steps" className="space-y-1">
-                {(() => {
-                  let n = 0;
-                  return outline.items.map((item, i) =>
-                    item.kind === 'step' ? (
-                      row(item.step, ++n)
-                    ) : item.kind === 'scenarios' ? (
-                      <li key={`s${i}`} className="space-y-1.5 py-1">
-                        {item.branches.map((b) => (
-                          <div key={b.line} role="group" aria-label={`Scenario ${b.name}`} className={`rounded-sm border-bw-1 border-dashed px-2 py-1.5 ${laneNow === b.name ? 'border-ink bg-pop-yellow/15' : 'border-ink/30'}`}>
-                            <div className="flex items-center gap-1">
-                              {renaming?.scenario === b.name ? (
-                                <RenameField
-                                  label={`Rename the scenario ${b.name}`}
-                                  value={b.name}
-                                  onRename={(next) => apply(renameScenario(source, current, b.name, next)) && (setRenaming(null), next !== b.name && laneNow === b.name && setLane(next), true)}
-                                  onCancel={() => setRenaming(null)}
-                                />
-                              ) : (
-                                <>
-                                  <span className={`${eyebrow} min-w-0 flex-1 truncate`}>Scenario: {b.name}</span>
-                                  <button type="button" aria-label={`Rename the scenario ${b.name}`} title="Rename this scenario" onClick={() => setRenaming({ scenario: b.name })} className={`${iconButton} !h-7 !w-7`}>
-                                    <Pencil size={12} />
-                                  </button>
-                                </>
-                              )}
-                              <button
-                                type="button"
-                                aria-label={`Delete the scenario ${b.name}`}
-                                title="Delete this scenario and its steps"
-                                onClick={() => apply(removeScenario(source, current, b.name))}
-                                className={`${iconButton} !h-7 !w-7 text-red-700 dark:text-red-300`}
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            </div>
-                            {b.steps.length === 0 && b.other === 0 ? (
-                              <p className="text-xs text-muted">No steps yet.</p>
-                            ) : (
-                              <ol className="space-y-1">
-                                {b.steps.map((s) => row(s))}
-                              </ol>
-                            )}
-                            {b.other > 0 && <p className="text-xs text-muted">And {b.other === 1 ? 'a block' : `${b.other} blocks`} you can edit in Code mode.</p>}
-                          </div>
-                        ))}
-                      </li>
-                    ) : item.kind === 'parallel' ? (
-                      <li key={`p${item.block.line}`} className="py-1">
-                        <div role="group" aria-label="At the same time" className="rounded-sm border-bw-1 border-ink/30 px-2 py-1.5">
-                          <span className={eyebrow}>At the same time</span>
-                          <ol className="mt-1 space-y-1">{item.block.steps.map((s) => row(s, ++n))}</ol>
-                          {item.block.other > 0 && <p className="text-xs text-muted">And {item.block.other === 1 ? 'a statement' : `${item.block.other} statements`} you can edit in Code mode.</p>}
-                        </div>
-                      </li>
-                    ) : (
-                      <li key={`o${item.line}`} className="text-xs text-muted">
-                        A block you can edit in Code mode.
-                      </li>
-                    ),
-                  );
-                })()}
-              </ol>
-            )}
-
-            {scenarios.length > 0 && (
-              <fieldset>
-                <legend className={eyebrow}>Add steps to</legend>
-                <div role="radiogroup" aria-label="Add steps to" className="mt-1 flex flex-wrap gap-1">
-                  {[MAIN, ...scenarios].map((s) => (
-                    <button
-                      key={s || 'main'}
-                      type="button"
-                      role="radio"
-                      aria-checked={laneNow === s}
-                      onClick={() => setLane(s)}
-                      className={`rounded-sm border-bw-1 px-2 py-0.5 text-xs font-semibold ${laneNow === s ? 'border-ink bg-pop-yellow text-on-accent' : 'border-ink/30 hover:border-ink'}`}
-                    >
-                      {s || 'Main flow'}
-                    </button>
-                  ))}
-                </div>
-              </fieldset>
-            )}
-
-            {editing ? null : pick ? (
-              <StepForm
-                key={`${current}:${laneNow}`}
-                diagram={diagram}
-                steps={outlineSteps(outline.items)}
-                used={used}
-                pick={pick}
-                onPick={onPick}
-                where={`A step in ${laneNow ? `scenario “${laneNow}”` : scenarios.length ? 'the main flow' : current}.`}
-                check={check}
-                onGiveOps={giveOps}
-                onAdd={(step) => apply(addStep(source, current, step, laneNow || undefined, undefined, diagram))}
-              />
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => onPick({ from: lastEnd(outlineSteps(outline.items)) })} className={primaryButton}>
-                  <Plus size={14} aria-hidden="true" />
-                  Add a step
-                </button>
-                <ReplyButton steps={outlineSteps(outline.items)} name={name} onReply={onPick} />
-              </div>
-            )}
-
-            <NameForm
-              label="New scenario"
-              placeholder="e.g. Cache miss"
-              button="Add scenario"
-              help="An alternative path within this use case."
-              suggestions={missingScenarios(diagram, current, scenarios)}
-              onAdd={(value) => {
-                const clean = value.trim();
-                if (!clean || !apply(addScenario(source, current, clean))) return false;
-                setLane(clean);
-                return true;
-              }}
-            />
-          </section>
-        )}
-        {error && (
-          <p role="alert" className="text-xs text-red-700 dark:text-red-300">
-            {error}
-          </p>
-        )}
+        {body}
+        {alert}
       </div>
     </aside>
+  );
+}
+
+/** The header's "Add scenario": a name, with the problem's own as one-click suggestions, in a small card under it. */
+function AddScenario({ suggestions, onAdd }: { suggestions: string[]; onAdd: (name: string) => boolean }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    document.addEventListener('pointerdown', onPointer);
+    return () => document.removeEventListener('pointerdown', onPointer);
+  }, [open]);
+  return (
+    <div ref={ref} className="relative shrink-0">
+      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className={`${toolButton} !px-2 !py-1 text-xs aria-expanded:border-ink aria-expanded:bg-surface`}>
+        <Plus size={13} aria-hidden="true" />
+        Add scenario
+      </button>
+      {open && (
+        <div
+          className="absolute left-0 top-full z-30 mt-1 w-72 rounded-sm border-bw-1 border-ink bg-surface p-3 shadow-brutal-md"
+          onKeyDown={(e) => {
+            if (e.key !== 'Escape') return;
+            e.preventDefault();
+            e.stopPropagation();
+            setOpen(false);
+          }}
+        >
+          <NameForm
+            label="New scenario"
+            placeholder="e.g. Cache miss"
+            button="Add the scenario"
+            help="An alternative path within this use case."
+            suggestions={suggestions}
+            autoFocus
+            onAdd={(name) => {
+              const done = onAdd(name);
+              if (done) setOpen(false);
+              return done;
+            }}
+          />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -458,10 +614,13 @@ function StepRow({
   onInsert,
   onMove,
   onHighlight,
+  selected = false,
 }: {
   n?: number;
   step: OutlineStep;
   name: (id: string) => string;
+  /** The selected step (in the list, the sequence diagram and on the canvas). */
+  selected?: boolean;
   onDelete: () => void;
   onEdit: () => void;
   onInsert: () => void;
@@ -471,14 +630,21 @@ function StepRow({
   const reply = step.kind === 'response';
   const text = `${name(step.from)} ${reply ? 'answers' : 'to'} ${name(step.to)}${step.label ? `: ${step.label}` : ''}`;
   const action = `${iconButton} !h-6 !w-6 shrink-0`;
+  const ref = useRef<HTMLLIElement>(null);
+  // Selected in the diagram, the row comes into sight in the list.
+  useEffect(() => {
+    if (selected) ref.current?.scrollIntoView({ block: 'nearest' });
+  }, [selected]);
   return (
     <li
-      className="group relative -mx-1 flex items-start gap-1 rounded-sm px-1 text-xs hover:bg-pop-yellow/20 focus-within:bg-pop-yellow/20"
+      ref={ref}
+      className={`group relative -mx-1 flex items-start gap-1 rounded-sm px-1 text-xs hover:bg-pop-yellow/20 focus-within:bg-pop-yellow/20 ${selected ? 'bg-pop-pink/15 shadow-[inset_2px_0_0_rgb(var(--c-pink))]' : ''}`}
       aria-label={text}
+      aria-current={selected ? 'step' : undefined}
       onMouseEnter={() => onHighlight?.([step.from, step.to])}
       onMouseLeave={() => onHighlight?.(null)}
     >
-      {n !== undefined && <span className="w-4 shrink-0 pt-0.5 text-right font-mono tabular-nums text-muted">{n}</span>}
+      {n !== undefined && <span className={`w-4 shrink-0 pt-0.5 text-right font-mono tabular-nums ${selected ? 'font-bold text-ink' : 'text-muted'}`}>{n}</span>}
       <button
         type="button"
         onClick={onEdit}
@@ -552,7 +718,7 @@ function RenameField({ label, value, onRename, onCancel }: { label: string; valu
 }
 
 /** The select turned into a name field: Enter adds the use case, Escape goes back to the select. */
-function NewUseCase({ onAdd, onCancel }: { onAdd: (name: string) => boolean; onCancel: () => void }) {
+function NewUseCase({ onAdd, onCancel, inline = false }: { onAdd: (name: string) => boolean; onCancel: () => void; inline?: boolean }) {
   const [value, setValue] = useState('');
   const id = useId();
   return (
@@ -561,12 +727,12 @@ function NewUseCase({ onAdd, onCancel }: { onAdd: (name: string) => boolean; onC
         e.preventDefault();
         onAdd(value);
       }}
-      className="space-y-1"
+      className={inline ? 'flex items-center gap-2' : 'space-y-1'}
     >
-      <label htmlFor={id} className={`block ${eyebrow}`}>
+      <label htmlFor={id} className={`${inline ? 'shrink-0' : 'block'} ${eyebrow}`}>
         New use case
       </label>
-      <div className="flex gap-1.5">
+      <div className={`flex gap-1.5 ${inline ? 'w-64' : ''}`}>
         <input
           id={id}
           autoFocus
@@ -594,7 +760,23 @@ function NewUseCase({ onAdd, onCancel }: { onAdd: (name: string) => boolean; onC
 }
 
 /** A name to add (a use case, a scenario), with the problem's own names as one-click suggestions. */
-function NameForm({ label, placeholder, button, help, suggestions, onAdd }: { label: string; placeholder: string; button: string; help?: string; suggestions: string[]; onAdd: (name: string) => boolean }) {
+function NameForm({
+  label,
+  placeholder,
+  button,
+  help,
+  suggestions,
+  autoFocus,
+  onAdd,
+}: {
+  label: string;
+  placeholder: string;
+  button: string;
+  help?: string;
+  suggestions: string[];
+  autoFocus?: boolean;
+  onAdd: (name: string) => boolean;
+}) {
   const [value, setValue] = useState('');
   const id = useId();
   const submit = (e: FormEvent) => {
@@ -618,7 +800,7 @@ function NameForm({ label, placeholder, button, help, suggestions, onAdd }: { la
         </div>
       )}
       <div className="flex gap-1.5">
-        <input id={id} value={value} onChange={(e) => setValue(e.target.value)} placeholder={placeholder} autoComplete="off" className={`min-w-0 flex-1 ${field} !py-1`} />
+        <input id={id} autoFocus={autoFocus} value={value} onChange={(e) => setValue(e.target.value)} placeholder={placeholder} autoComplete="off" className={`min-w-0 flex-1 ${field} !py-1`} />
         <button type="submit" disabled={!value.trim()} className={`${outlineButton} !px-2 !py-1`} aria-label={button} title={button}>
           <Plus size={14} aria-hidden="true" />
         </button>

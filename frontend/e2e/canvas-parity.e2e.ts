@@ -206,10 +206,10 @@ test.describe('the editor canvas', () => {
     await step.getByRole('button', { name: 'Add step' }).click();
     await expect.poll(() => editorText(page)).toMatch(/user -> api : GET \/items/);
 
-    // The builder and the palette take turns.
+    // On a wide screen the builder is the pane under the canvas, so the palette opens beside it.
     await page.getByRole('button', { name: 'Add component' }).click();
-    await expect(flows).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Components' })).toBeVisible();
+    await expect(flows).toBeVisible();
   });
 
   test('builds a flow in a row: each step starts where the last went, Reply answers, a warning shows before adding', async ({ page }) => {
@@ -346,8 +346,8 @@ test.describe('the editor canvas', () => {
     await expect.poll(() => editorText(page)).toContain('pay "Payments" [Payments]');
   });
 
-  test('with Flows open the canvas is narrow: the legend folds, no node sits under the top bar, the hint shortens clear of the controls', async ({ page }) => {
-    // Visual mode's canvas has the whole width: a smaller window makes it narrow beside Flows.
+  test('with the rail open the canvas is narrow: the legend folds, no node sits under the top bar, the hint shortens clear of the controls', async ({ page }) => {
+    // Visual mode's canvas has the whole width: a smaller window makes it narrow beside the rail (Flows is under it).
     await page.setViewportSize({ width: 900, height: 800 });
     await page.goto('app/');
     await waitForCanvas(page, 3);
@@ -356,8 +356,8 @@ test.describe('the editor canvas', () => {
     await expect(legend).toHaveAttribute('open', '');
     await expectTopBarClear(page);
 
-    await page.getByRole('button', { name: 'Flows' }).click();
-    await expect(page.getByRole('region', { name: 'Flows' })).toBeVisible();
+    await page.getByRole('button', { name: 'Add component' }).click();
+    await expect(page.getByRole('region', { name: 'Components' })).toBeVisible();
     await expect(legend).not.toHaveAttribute('open', '');
     // After the diagram glides to its new fit.
     await page.waitForTimeout(600);
