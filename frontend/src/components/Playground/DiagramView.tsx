@@ -761,7 +761,7 @@ export default function DiagramView({
           </Panel>
         )}
         {/* The minimap takes this corner. */}
-        {nodes.length > 0 && !playing && !miniMap && !(hasSelection && !showSettings) && (
+        {nodes.length > 0 && !playing && !miniMap && !notice && !(hasSelection && !showSettings) && (
           <Panel position="bottom-right" className="hidden md:block text-xs text-muted bg-paper/85 rounded-sm px-2 py-1">
             {narrow ? '? for shortcuts' : 'Drag to pin · select to edit · drag from a dot onto a component to connect · right-click for more · ? for shortcuts'}
           </Panel>
