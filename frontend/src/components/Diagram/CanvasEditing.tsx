@@ -115,11 +115,11 @@ export function PaletteDock({ open, phone, onAdd, onClose, focus, tab, onTab, of
   return (
     // The tabs not shown stay mounted, hidden, so the palette keeps its search and Flows its use case. In a narrow
     // pane the rail floats over the canvas's right side, from a zero-width box placed after the canvas. On a phone
-    // it is the bottom half of the row (most of it while the on-screen keyboard is up, for the field typed in).
+    // it is the bottom half of the row (most of it while the on-screen keyboard is up for a field in it).
     <div
       ref={ref}
       className={
-        phone ? 'order-last h-1/2 shrink-0 [[data-keyboard]_&]:h-3/4' : narrow ? 'relative order-last w-0 shrink-0' : 'w-72 shrink-0 border-r-bw-1 border-ink'
+        phone ? 'order-last h-1/2 shrink-0 [[data-keyboard]_&:focus-within]:h-3/4' : narrow ? 'relative order-last w-0 shrink-0' : 'w-72 shrink-0 border-r-bw-1 border-ink'
       }
     >
       <div

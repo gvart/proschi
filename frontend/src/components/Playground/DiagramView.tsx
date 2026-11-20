@@ -68,7 +68,7 @@ export interface DiagramViewProps {
   /** Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z on the canvas: the code editor's undo and redo, where every canvas edit is one step. */
   onUndo: () => void;
   onRedo: () => void;
-  /** Phones add components from a bottom sheet instead of the docked palette. */
+  /** On a phone the rail (palette, Flows, settings) is a sheet under the canvas. */
   phone: boolean;
   /** The parsed diagram, for the inspector. */
   diagram: Diagram;
@@ -202,12 +202,12 @@ export default function DiagramView({
   const [selection, setSelection] = useState<{ nodes: Node[]; edges: Edge[] }>({ nodes: [], edges: [] });
   // Rename and Delete stay clear of the toasts.
   const clearToasts = useToastClearance();
-  // The palette: docked beside the canvas on wider screens (remembered), a sheet on phones.
+  // The palette: in the rail beside the canvas on wider screens (remembered), in the sheet under it on phones.
   const [docked, setDocked] = usePaletteOpen('proschi.canvas.palette');
   const [sheet, setSheet] = useState(false);
   const [paletteFocus, setPaletteFocus] = useState(false);
   const canAdd = !playing && !viewOnly && crumbs.length === 1;
-  // The Flows builder takes the palette's place beside the canvas (a sheet on phones), as on the practice canvas.
+  // The Flows builder is a tab of the rail (of the sheet on phones), as on the practice canvas.
   const [flowsShown, setFlowsShown] = usePaletteOpen('proschi.canvas.flows');
   const flowsOpen = canAdd && !!flows && flowsShown;
   /** The step being added in the Flows builder: node clicks pick its ends instead of selecting. */
@@ -695,7 +695,7 @@ export default function DiagramView({
   const narrow = useNarrow(wrapperRef);
   const fitInset = useMemo(() => (barInset > (inset?.top ?? 0) ? { top: barInset, bottom: inset?.bottom } : inset), [barInset, inset]);
   useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { wrapper: wrapperRef, inset: fitInset, glide: `${playing ? 'playing' : ''}:${glideKey}:${paletteOpen}:${flowsOpen}:${railOpen}`, added: lastAdded });
-  useKeepInView(playing ? undefined : singleNode?.id);
+  useKeepInView(playing ? undefined : singleNode?.id, railOpen);
 
   const handleEdgesChange = useCallback(
     (changes: EdgeChange[]) => onEdgesChange((current) => applyEdgeChanges(changes, current)),
@@ -932,7 +932,7 @@ export default function DiagramView({
             )
           }
         />
-        {/* With the settings card open, Delete is in its header; this bar covers several items or a closed card. */}
+        {/* With the settings open, Delete is in their header; this bar covers several items or closed settings. */}
         {(notice || (hasSelection && !showSettings)) && (
           <Panel position="bottom-center" className="flex flex-col items-center gap-2">
             {notice && (

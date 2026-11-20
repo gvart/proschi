@@ -340,16 +340,16 @@ test.describe('editor diagram on a phone', () => {
     await page.goto('./');
     await page.goto((await page.locator('a[data-example="url-shortener"]').getAttribute('href'))!);
     await page.locator('.react-flow__node').first().click();
-    await expect(page.getByRole('region', { name: /settings$/ })).toBeVisible();
+    await expect(page.getByTestId('palette-dock').getByRole('region', { name: /settings$/ })).toBeVisible();
   }
 
   /** True when two boxes share any area. */
   const overlap = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
     a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
-  test('delete sits in the settings card, and in a bar of its own once the card is closed', async ({ page }) => {
+  test('delete sits in the settings in the sheet, and in a bar of its own once they are closed', async ({ page }) => {
     await selectNode(page);
-    const settings = page.getByRole('region', { name: /settings$/ });
+    const settings = page.getByTestId('palette-dock').getByRole('region', { name: /settings$/ });
     await expect(settings.getByRole('button', { name: /^Delete / })).toBeVisible();
     await expect(page.getByRole('toolbar', { name: 'Selection' })).toHaveCount(0);
 
@@ -374,7 +374,7 @@ test.describe('editor diagram on a phone', () => {
       };
     });
     await selectNode(page);
-    const settings = page.getByRole('region', { name: /settings$/ });
+    const settings = page.getByTestId('palette-dock').getByRole('region', { name: /settings$/ });
     const field = settings.locator('input, textarea').last();
     await field.focus();
     await page.evaluate(() => (window as unknown as { showKeyboard: (px: number) => void }).showKeyboard(400));
@@ -382,5 +382,38 @@ test.describe('editor diagram on a phone', () => {
     await expect.poll(async () => (await field.boundingBox())!.y + (await field.boundingBox())!.height).toBeLessThanOrEqual(visible);
     expect((await field.boundingBox())!.y).toBeGreaterThanOrEqual(0);
     await expect(page.locator('[data-keyboard]')).toHaveCount(1);
+  });
+
+  test('a name typed on the canvas stays above the keyboard, the sheet open', async ({ page }) => {
+    await page.addInitScript(() => {
+      const fake = Object.assign(new EventTarget(), { height: 844, width: 390, offsetTop: 0, offsetLeft: 0, pageTop: 0, pageLeft: 0, scale: 1 });
+      Object.defineProperty(window, 'visualViewport', { value: fake });
+      (window as unknown as { showKeyboard: (px: number) => void }).showKeyboard = (px) => {
+        fake.height = document.documentElement.clientHeight - px;
+        fake.dispatchEvent(new Event('resize'));
+      };
+    });
+    await selectNode(page);
+    // The sheet shortens the canvas, and the diagram glides to its new fit: double-tap once it is still.
+    const first = page.locator('.react-flow__node').first();
+    let last = '';
+    await expect
+      .poll(async () => {
+        const now = JSON.stringify(await first.boundingBox());
+        const same = now === last;
+        last = now;
+        return same;
+      }, { intervals: [250] })
+      .toBe(true);
+    await first.dblclick({ position: { x: 8, y: 8 } });
+    const name = page.locator('.pc-node__name-field');
+    await expect(name).toBeFocused();
+    await page.evaluate(() => (window as unknown as { showKeyboard: (px: number) => void }).showKeyboard(400));
+    await expect(page.locator('[data-keyboard]')).toHaveCount(1);
+    // The sheet keeps its half: it grows only for a field of its own.
+    await expect.poll(async () => {
+      const b = (await name.boundingBox())!;
+      return b.y >= 0 && b.y + b.height <= 844 - 400;
+    }).toBe(true);
   });
 });

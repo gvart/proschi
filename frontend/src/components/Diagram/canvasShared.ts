@@ -197,18 +197,19 @@ export const railRowClass = (phone: boolean) => (phone ? 'flex h-full flex-col' 
 const KEEP_IN_VIEW_MS = 400;
 
 /**
- * Keeps the selected node `id` on screen when the pane changes size under it: the rail opening beside the
- * canvas, or a phone's sheet under it. The fit that follows a resize already does, unless the reader zoomed or
- * panned; then the view pans, at the same zoom, to bring the node back into the middle.
+ * Keeps the selected node `id` on screen when the rail (`railOpen`) opens or closes and the pane changes size
+ * under it: beside the canvas, or a phone's sheet under it. The fit that follows already does, unless the reader
+ * zoomed or panned; then the view pans, at the same zoom, to bring the node back into the middle.
  */
-export function useKeepInView(id: string | undefined) {
+export function useKeepInView(id: string | undefined, railOpen: boolean) {
   const { getNode, getViewport, setViewport } = useReactFlow();
   const store = useStoreApi();
   const size = useStore((s) => `${s.width}x${s.height}`);
-  const last = useRef(size);
+  const last = useRef({ size, railOpen });
   useEffect(() => {
-    const resized = last.current !== size;
-    last.current = size;
+    // The pane takes its new size a moment after the rail changes; another resize (a splitter) is left alone.
+    const resized = last.current.size !== size && last.current.railOpen !== railOpen;
+    if (last.current.size !== size) last.current = { size, railOpen };
     if (!id || !resized) return;
     const timer = window.setTimeout(() => {
       const node = getNode(id);
@@ -222,5 +223,5 @@ export function useKeepInView(id: string | undefined) {
       setViewport({ x: width / 2 - (at.x + node.width / 2) * zoom, y: height / 2 - (at.y + node.height / 2) * zoom, zoom });
     }, KEEP_IN_VIEW_MS);
     return () => clearTimeout(timer);
-  }, [id, size, getNode, getViewport, setViewport, store]);
+  }, [id, size, railOpen, getNode, getViewport, setViewport, store]);
 }
