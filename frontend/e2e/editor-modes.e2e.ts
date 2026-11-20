@@ -1,3 +1,4 @@
+import { droneLink } from './drone';
 import { addFromPalette, canvasNodes, codeEditor, copiedText, editorText, expect, MODE_KEY, mockClipboard, setMode, test, waitForCanvas } from './fixtures';
 
 /**
@@ -144,6 +145,20 @@ test.describe('editor modes', () => {
       await expect(page.getByRole('button', { name: 'Add component' })).toBeVisible();
       await expect(page.getByRole('button', { name: 'Preview' })).toHaveCount(0);
     });
+  });
+});
+
+test.describe('a read-only team file in Visual mode', () => {
+  test.use({ mode: 'visual' });
+
+  test('View code shows the team file the diagram has opened', async ({ page }) => {
+    await page.goto(droneLink(100));
+    await page.locator('.react-flow__node-systemNode', { hasText: 'Order Processing' }).dblclick();
+    await expect(page.getByRole('navigation', { name: 'Breadcrumb' }).locator('[aria-current="page"]')).toHaveText('Order Processing');
+    await page.getByRole('button', { name: 'View code' }).click();
+    const drawer = page.getByRole('complementary', { name: 'Code, read-only' });
+    await expect(drawer).toContainText('teams/orders.proschi');
+    await expect(drawer.locator('.cm-content')).toContainText('title "Order Processing"');
   });
 });
 

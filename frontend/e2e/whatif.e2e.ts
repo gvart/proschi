@@ -185,6 +185,19 @@ test('Simulate down takes nodes down, Results shows the availability lost, and i
   await expect(page.locator('.pc-node[data-load="down"]')).toHaveCount(0);
 });
 
+test('in Code mode the view-only diagram still runs the what-if: the slider and Simulate down', async ({ page }) => {
+  await openDoc(page, WHATIF_DOC);
+  await setMode(page, 'code');
+  const card = await control(page);
+  await slider(page).fill('6');
+  await expect(card.getByTestId('whatif-value')).toHaveText('×3.0 · 1.5k rps');
+  await page.keyboard.press('Escape');
+  await node(page, 'Notes DB').click({ button: 'right' });
+  await page.getByRole('menu', { name: 'Notes DB actions' }).getByRole('menuitem', { name: 'Simulate down' }).click();
+  await expect(node(page, 'Notes DB').locator('.pc-node')).toHaveAttribute('data-load', 'down');
+  await expect(pill(page)).toContainText('1 down');
+});
+
 test('typing in the code never moves the what-if', async ({ page }) => {
   await openDoc(page, WHATIF_DOC);
   await setMode(page, 'code');
