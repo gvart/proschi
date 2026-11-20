@@ -1,0 +1,21 @@
+frontend/src/components/Diagram/SequenceDiagram.tsx
+  s_733d66441cadaa::t_d17fe9217aece0 174-175
+frontend/src/components/Diagram/StepLabelField.tsx
+  s_733d66441cadaa::t_02a747cc61765e 299-300
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8fee9ec419e7ff02ff3a670ff946143a84b27678",
+  "prompts": {},
+  "sessions": {
+    "s_733d66441cadaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9649973d-f497-4440-b031-a92483a592e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
