@@ -1,0 +1,22 @@
+frontend/src/components/Diagram/StepLabelField.tsx
+  s_733d66441cadaa::t_033fdf2bfe7b2d 334-336
+  s_733d66441cadaa::t_f62b25e6e6b233 1-2,12-15,18-22,191-240,277-278,301-302,310-311
+frontend/e2e/canvas-parity.e2e.ts
+  s_733d66441cadaa::t_fefad0091699ba 203
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8938817b52d5b5f1556d5a9bcc104881daed1910",
+  "prompts": {},
+  "sessions": {
+    "s_733d66441cadaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9649973d-f497-4440-b031-a92483a592e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
