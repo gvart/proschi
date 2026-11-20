@@ -732,7 +732,9 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
                 e.stopPropagation();
                 closeComposer();
               }}
-              className="shadow-brutal-md"
+              // As tall as the diagram in sight lets it be (SequenceDiagram sets --composer-max): its body scrolls, its buttons pinned at
+              // its foot, and a field that takes the focus is scrolled clear of them.
+              className="max-h-[var(--composer-max,none)] scroll-pb-14 overflow-y-auto overscroll-contain rounded-sm shadow-brutal-md"
             >
               <StepForm
                 key={`${composing.slot.kind}:${'line' in composing.slot ? composing.slot.line : 'name' in composing.slot ? composing.slot.name : ''}`}
@@ -809,7 +811,8 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
         </div>
         {current && outline ? (
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto @3xl:flex-row @3xl:overflow-hidden">
-            <div className="min-w-0 shrink-0 overflow-x-auto bg-paper @3xl:min-h-0 @3xl:flex-1 @3xl:overflow-auto">
+            {/* The lane headers stick at its top, so what the browser scrolls into sight (a field that takes the focus) goes under them. */}
+            <div className="min-w-0 shrink-0 scroll-pt-[52px] overflow-x-auto bg-paper @3xl:min-h-0 @3xl:flex-1 @3xl:overflow-auto">
               <SequenceDiagram
                 outline={outline}
                 scenario={laneNow}

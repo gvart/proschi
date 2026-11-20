@@ -506,6 +506,81 @@ test.describe('the Flows pane, polished', () => {
   });
 });
 
+type Box = { x: number; y: number; width: number; height: number };
+/** The part of the diagram in sight: its scrolling box, less the sticky lane headers at its top. */
+async function diagramView(page: Page): Promise<{ top: number; bottom: number; left: number; right: number }> {
+  return sequence(page).evaluate((el) => {
+    const box = el.closest('.bg-paper')!.getBoundingClientRect();
+    const headers = el.closest('.bg-paper')!.querySelector('[data-lane]')!.parentElement!.getBoundingClientRect();
+    return { top: headers.bottom, bottom: box.bottom, left: box.left, right: box.right };
+  });
+}
+const inside = (b: Box, v: { top: number; bottom: number; left: number; right: number }) => b.y >= v.top - 0.5 && b.y + b.height <= v.bottom + 0.5 && b.x >= v.left - 0.5 && b.x + b.width <= v.right + 0.5;
+const overlap = (a: Box, b: Box) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+
+/** At 1280x800 with the pane at its first height, as the blog's clips were recorded. */
+test.describe('the composer in sight, at 1280x800', () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test('a step inserted mid-diagram: the form fits the pane, scrolls inside with its buttons pinned, and the operation list is not clipped', async ({ page }) => {
+    await openPane(page);
+    await (await insertPoint(page, 'Add a step before step 2')).click();
+    const step = composer(page);
+    await chooseOption(step.getByLabel('Goes to'), 'Orders DB');
+    // With both ends, the operation takes the focus and its list opens (no click, which would scroll the page as a test does).
+    const field = step.getByRole('combobox', { name: 'Operation' });
+    await expect(field).toBeFocused();
+    const list = page.getByRole('listbox', { name: 'Labels' });
+    await expect(list).toBeVisible();
+    await expect(list.getByRole('option').first()).toBeVisible();
+
+    const view = await diagramView(page);
+    // The whole form, its buttons too, is in the part of the pane in sight.
+    await expect.poll(async () => inside((await step.boundingBox())!, view)).toBe(true);
+    expect(inside((await step.getByRole('button', { name: 'Add step' }).boundingBox())!, view)).toBe(true);
+    // Its body scrolls inside it, under the pinned buttons.
+    expect(await step.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+    await step.evaluate((el) => el.scrollTo(0, 10_000));
+    expect(inside((await step.getByRole('button', { name: 'Add step' }).boundingBox())!, view)).toBe(true);
+    await step.evaluate((el) => el.scrollTo(0, 0));
+
+    // The list is drawn whole, nothing over it: the top of its first option and the bottom of what it shows are its own.
+    const l = (await list.boundingBox())!;
+    expect(l.y + l.height).toBeLessThanOrEqual(800);
+    const own = (x: number, y: number) => list.evaluate((el, [px, py]) => el.contains(document.elementFromPoint(px, py)), [x, y] as const);
+    expect(await own(l.x + l.width / 2, l.y + 6)).toBe(true);
+    expect(await own(l.x + l.width / 2, l.y + l.height - 6)).toBe(true);
+    // An operation from it goes in the field; typed again, the list is back, and a click elsewhere closes it.
+    await list.getByRole('option', { name: /^INSERT/ }).first().click();
+    await expect(field).toHaveValue(/^INSERT /);
+    await expect(list).toHaveCount(0);
+    await field.fill('SEL');
+    await expect(list).toBeVisible();
+    await step.getByRole('radio', { name: 'Message' }).click();
+    await expect(list).toHaveCount(0);
+  });
+
+  for (const [n, name] of [
+    [2, 'the cart request, high in the diagram'],
+    [3, 'the order insert, low in it'],
+  ] as const) {
+    test(`the reply composer of ${name} never covers the request it answers, which stays in sight`, async ({ page }) => {
+      await openPane(page);
+      await option(page, n).click();
+      await flows(page).getByRole('button', { name: 'Add reply' }).click();
+      const step = composer(page);
+      await expect(step.getByRole('radio', { name: 'Response' })).toHaveAttribute('aria-checked', 'true');
+      const view = await diagramView(page);
+      await expect
+        .poll(async () => {
+          const [row, form] = [(await option(page, n).boundingBox())!, (await step.boundingBox())!];
+          return { covered: overlap(row, form), rowInSight: inside(row, view), formInSight: inside(form, view) };
+        })
+        .toEqual({ covered: false, rowInSight: true, formInSight: true });
+    });
+  }
+});
+
 /** A phone keeps the list of steps in its sheet, each row with its own actions. */
 test.describe('the Flows list on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
