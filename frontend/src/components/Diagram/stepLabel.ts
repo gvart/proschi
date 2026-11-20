@@ -30,6 +30,9 @@ export function isHttpHead(head: string): boolean {
   return !!m && HTTP_METHODS.includes(m[1]) && !m[3];
 }
 
+/** Success first, then redirects, client and server errors; informational last. */
+export const statusRank = (s: number) => (s < 200 ? 1000 + s : s);
+
 export function splitLabel(label: string): LabelParts {
   let rest = label.trim();
   const parts: LabelParts = { head: '', headers: [], tail: '' };

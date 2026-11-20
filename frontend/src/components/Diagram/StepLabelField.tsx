@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { opLabel, type StepVocabulary } from '../../dsl/typesys/vocabulary';
 import { field } from '../Playground/ui';
+import { statusRank } from './stepLabel';
 
 /**
  * A step's label with what its components' types allow, as a combobox: the
@@ -83,8 +84,6 @@ const REASON: Record<number, string> = {
   511: 'Network Authentication Required',
 };
 
-/** Success first, then redirects, client and server errors; informational last. */
-const statusRank = (s: number) => (s < 200 ? 1000 + s : s);
 
 function optionsOf(v: StepVocabulary, kind: string): Option[] {
   const type = v.type?.name;

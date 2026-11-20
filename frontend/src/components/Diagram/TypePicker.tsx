@@ -7,6 +7,7 @@ import { opsMostSpecificFirst, typeTableOf } from '../../dsl/typesys/vocabulary'
 import { getTechStackIcon } from '../../utils/iconMapping';
 import { eyebrow, field } from '../Playground/ui';
 import { typeChoices, type TypeChoice } from './paletteGroups';
+import { statusRank } from './stepLabel';
 
 interface TypePickerProps {
   /** The document's own types, listed first. */
@@ -132,7 +133,7 @@ export function TypeCard({ type, diagram }: { type: ResolvedType; diagram: Diagr
     { label: 'Reads', values: ops.filter((o) => o.access === 'read').map((o) => o.name) },
     { label: 'Writes', values: ops.filter((o) => o.access === 'write').map((o) => o.name) },
     { label: 'Passes on', values: ops.filter((o) => o.access === 'forward').map((o) => o.name) },
-    { label: 'Answers', values: type.statuses.map(String) },
+    { label: 'Answers', values: [...type.statuses].sort((a, b) => statusRank(a) - statusRank(b)).map(String) },
   ];
   return (
     <section aria-label={`${type.name} type`} className="space-y-1.5 rounded-sm border border-ink/20 bg-paper px-2.5 py-2 text-xs">
