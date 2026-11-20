@@ -1,0 +1,26 @@
+frontend/src/components/Playground/DiagramView.tsx
+  s_733d66441cadaa::t_f44cda52590b06 998-999
+frontend/src/components/Diagram/FlowsPane.tsx
+  s_733d66441cadaa::t_e048b54fedbaf7 14-15
+frontend/src/components/Diagram/FlowsPanel.tsx
+  s_733d66441cadaa::t_a44e6375337c09 350-351
+  s_733d66441cadaa::t_e048b54fedbaf7 505
+frontend/src/components/Diagram/SequenceDiagram.tsx
+  s_733d66441cadaa::t_a44e6375337c09 59-62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c5d65b9751ec440784b44cf7b8499908f36b0451",
+  "prompts": {},
+  "sessions": {
+    "s_733d66441cadaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9649973d-f497-4440-b031-a92483a592e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
