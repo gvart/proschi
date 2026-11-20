@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { addConnection, addNode, addScenario, addStep, addUseCase, removeScenario, removeStep, removeUseCase, setReplicas, outlineOf, type EditResult, type NewStep } from './edit';
+import { addConnection, addNode, addScenario, addStep, addUseCase, moveStep, removeScenario, removeStep, removeUseCase, renameScenario, renameUseCase, setReplicas, setStep, outlineOf, type EditResult, type NewStep, type OutlineStep } from './edit';
+import { problems } from '../practice/catalog';
 import { parse } from './parser';
 import { findProblem } from '../practice/catalog';
 import { parseSolution, runTests } from '../practice/workspace';
@@ -116,7 +117,7 @@ describe('use case edits', () => {
     ].join('\n');
     const outline = outlineOf(src, 'U')!;
     expect(outline.endLine).toBe(15);
-    expect(outline.items.map((i) => i.kind)).toEqual(['step', 'scenarios', 'other']);
+    expect(outline.items.map((i) => i.kind)).toEqual(['step', 'scenarios', 'parallel']);
     const group = outline.items[1];
     if (group.kind !== 'scenarios') throw new Error('scenarios');
     expect(group.branches.map((b) => ({ name: b.name, shared: b.shared, steps: b.steps.length, other: b.other, line: b.line, endLine: b.endLine }))).toEqual([
@@ -203,5 +204,112 @@ describe('a practice problem solved with the visual edits alone', () => {
     const run = runTests(parsed, defaultEngine);
     expect(run.results.filter((r) => !r.passed).map((r) => `${r.name}: ${r.message}`)).toEqual([]);
     expect(run.solved).toBe(true);
+  });
+});
+
+describe('editing, moving and inserting steps', () => {
+  const src = [
+    'web [Browser]',
+    'api [REST API]',
+    'db [PostgreSQL]',
+    'web -> api : HTTP',
+    'api -> db : SQL',
+    '',
+    'traffic {',
+    '  "Order" 10 rps mix "Hit" 90%, "Miss" 10%',
+    '}',
+    '',
+    'usecase "Order" {',
+    '  web -> api : POST /orders',
+    '  par {',
+    '    api -> db : INSERT order',
+    '    api ->> db : NOTIFY order',
+    '  }',
+    '  alt "Hit" {',
+    '    db --> api : 1 row',
+    '  } alt "Miss" {',
+    '    api -x db : SELECT order',
+    '  }',
+    '  api --> web : 201',
+    '}',
+    '',
+  ].join('\n');
+  const steps = (text: string) =>
+    outlineOf(text, 'Order')!.items.flatMap((i) => (i.kind === 'step' ? [i.step] : i.kind === 'parallel' ? i.block.steps : i.kind === 'scenarios' ? i.branches.flatMap((b) => b.steps) : []));
+
+  it('reads par blocks and failed calls into the outline', () => {
+    const items = outlineOf(src, 'Order')!.items;
+    expect(items.map((i) => i.kind)).toEqual(['step', 'parallel', 'scenarios', 'step']);
+    const par = items[1].kind === 'parallel' ? items[1].block : undefined;
+    expect(par).toMatchObject({ line: 13, endLine: 16, other: 0 });
+    expect(par!.steps.map((s) => s.label)).toEqual(['INSERT order', 'NOTIFY order']);
+    expect(steps(src).find((s) => s.kind === 'failed')).toMatchObject({ from: 'api', to: 'db', label: 'SELECT order' });
+  });
+
+  it('replaces a step in place, keeping its indent and every other line', () => {
+    const next = ok(setStep(src, 14, { from: 'api', to: 'db', kind: 'request', label: 'UPDATE order' }));
+    expect(next).toBe(src.replace('    api -> db : INSERT order', '    api -> db : UPDATE order'));
+    expect(ok(setStep(src, 20, { from: 'api', to: 'db', kind: 'failed', label: 'SELECT order' }))).toBe(src);
+    expect(setStep(src, 1, req('web', 'api')).error).toMatch(/no step/);
+  });
+
+  it('replaces a multi-line payload with one line', () => {
+    const multi = 'a\nb\na -> b\nusecase "U" {\n  a -> b : POST {\n    "x": 1\n  }\n  b --> a : 200\n}\n';
+    expect(ok(setStep(multi, 5, req('a', 'b', 'GET /x')))).toBe('a\nb\na -> b\nusecase "U" {\n  a -> b : GET /x\n  b --> a : 200\n}\n');
+  });
+
+  it('moves a step among its siblings: past whole blocks in the main flow, within its block otherwise', () => {
+    const down = ok(moveStep(src, 12, 'down'));
+    expect(steps(down).map((s) => s.label)).toEqual(['INSERT order', 'NOTIFY order', 'POST /orders', '1 row', 'SELECT order', '201']);
+    expect(ok(moveStep(down, 16, 'up'))).toBe(src);
+    expect(steps(ok(moveStep(src, 15, 'up'))).map((s) => s.label).slice(1, 3)).toEqual(['NOTIFY order', 'INSERT order']);
+    // The first and last of a block stay.
+    expect(ok(moveStep(src, 14, 'up'))).toBe(src);
+    expect(ok(moveStep(src, 22, 'down'))).toBe(src);
+  });
+
+  it('inserts a step before another, in its block', () => {
+    const next = ok(addStep(src, 'Order', { from: 'api', to: 'db', kind: 'request', label: 'BEGIN' }, undefined, 14));
+    expect(next).toBe(src.replace('    api -> db : INSERT order', '    api -> db : BEGIN\n    api -> db : INSERT order'));
+    expect(addStep(src, 'Order', req('api', 'db'), undefined, 3).error).toMatch(/no step/);
+  });
+
+  it('renames a use case and its traffic, and a scenario and its share of the mix', () => {
+    const renamed = ok(renameUseCase(src, 'Order', 'Place order'));
+    expect(renamed).toContain('usecase "Place order" {');
+    expect(renamed).toContain('  "Place order" 10 rps mix');
+    expect(parse(renamed).diagnostics).toEqual(parse(src).diagnostics);
+    expect(renameUseCase(src, 'Nope', 'X').error).toMatch(/no use case/);
+    const scenario = ok(renameScenario(src, 'Order', 'Miss', 'Cache miss'));
+    expect(scenario).toContain('} alt "Cache miss" {');
+    expect(scenario).toContain('mix "Hit" 90%, "Cache miss" 10%');
+    expect(renameScenario(src, 'Order', 'Miss', 'Hit').error).toMatch(/already has/);
+  });
+
+  it('leaves every other line of the practice solutions byte for byte', () => {
+    for (const p of problems) {
+      const useCase = parse(p.solution).diagram.useCases.find((u) => u.loc.file === undefined);
+      if (!useCase) continue;
+      const lines = p.solution.split('\n');
+      const all: OutlineStep[] = outlineOf(p.solution, useCase.name)!.items.flatMap((i) => (i.kind === 'step' ? [i.step] : i.kind === 'parallel' ? i.block.steps : i.kind === 'scenarios' ? i.branches.flatMap((b) => b.steps) : []));
+      for (const s of all.slice(0, 3)) {
+        // Down and back up is the text it was.
+        const down = moveStep(p.solution, s.line, 'down');
+        if (down.source !== undefined && down.source !== p.solution) {
+          const moved = outlineOf(down.source, useCase.name)!.items.flatMap((i) => (i.kind === 'step' ? [i.step] : i.kind === 'parallel' ? i.block.steps : i.kind === 'scenarios' ? i.branches.flatMap((b) => b.steps) : []));
+          const now = moved.find((m) => m.label === s.label && m.from === s.from && m.to === s.to && m.kind === s.kind);
+          expect(now, `${p.id}: ${s.label}`).toBeDefined();
+          expect(ok(moveStep(down.source, now!.line, 'up')), `${p.id}: ${s.label}`).toBe(p.solution);
+        }
+        // Replacing a one-line step touches only its line.
+        if (lines[s.line - 1].includes('{') || s.from.includes('.') || s.to.includes('.')) continue;
+        const next = ok(setStep(p.solution, s.line, { from: s.from, to: s.to, kind: s.kind, label: 'X' })).split('\n');
+        // Parsed alone, a solution can't see the connections its problem gives, so the step's own may be added.
+        const added = new RegExp(`^${s.from} -> ${s.to}( : .*)?$`);
+        const kept = next.filter((l) => !added.test(l) || lines.includes(l));
+        expect(kept[s.line - 1], p.id).toMatch(/ : X$/);
+        expect(kept.filter((_, i) => i !== s.line - 1), `${p.id}: ${s.label}`).toEqual(lines.filter((_, i) => i !== s.line - 1));
+      }
+    }
   });
 });

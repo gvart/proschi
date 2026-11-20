@@ -7,9 +7,11 @@ import type { Diagram } from '../../dsl/types';
  * step. The labels come from the components' types (dsl/typesys/vocabulary.ts).
  */
 
-/** Every step of an outline, the main flow's and each scenario's, in text order. */
+/** Every step of an outline, the main flow's, each scenario's and each parallel block's, in text order. */
 export function outlineSteps(items: OutlineItem[]): OutlineStep[] {
-  return items.flatMap((item) => (item.kind === 'step' ? [item.step] : item.kind === 'scenarios' ? item.branches.flatMap((b) => b.steps) : []));
+  return items.flatMap((item) =>
+    item.kind === 'step' ? [item.step] : item.kind === 'scenarios' ? item.branches.flatMap((b) => b.steps) : item.kind === 'parallel' ? item.block.steps : [],
+  );
 }
 
 /**
