@@ -1,0 +1,36 @@
+frontend/e2e/canvas-parity.e2e.ts
+  s_733d66441cadaa::t_42bd4ae2f619c7 260-309
+frontend/src/dsl/editFlows.test.ts
+  s_733d66441cadaa::t_8951193520bdff 310-311
+  s_733d66441cadaa::t_4455f11e605eec 2-3,209-306,312-314
+  s_733d66441cadaa::t_8f5d86c300206f 120,307-309
+  s_733d66441cadaa::t_73061547827bdc 315
+frontend/src/dsl/edit.ts
+  s_733d66441cadaa::t_0eeb40e73f7682 514-517,519-520,522,529,533-542,555-559,616-617,631-635,644,648-653,656-659,715,722-727,733-738,740-868
+frontend/src/components/Diagram/FlowsPanel.tsx
+  s_733d66441cadaa::t_cc3b51c6a8cdfb 133,217-218,234-238,434-452,455,464-475,481-483,486-494,496,503-535,619-620,631-634,646,648,659,662,675,706,738
+  s_733d66441cadaa::t_5880155156fe62 167
+  s_733d66441cadaa::t_d35a97d849c30b 161,378,458,484-485,673,705
+  s_733d66441cadaa::t_5d8e562578001f 2-3,48,53,56-58,76-78,91,93,145-160,162-166,168-194,290,296-310,325,332-339,370
+  s_733d66441cadaa::t_f7ec02137ee0a0 195
+frontend/src/components/Diagram/flows.ts
+  s_733d66441cadaa::t_cc3b51c6a8cdfb 10,12-14
+docs/impl/visual-editor.md
+  s_733d66441cadaa::t_e307d175c650c1 37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "08d5129c3d05250b9ca0171ce92cf971fbefa299",
+  "prompts": {},
+  "sessions": {
+    "s_733d66441cadaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9649973d-f497-4440-b031-a92483a592e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
