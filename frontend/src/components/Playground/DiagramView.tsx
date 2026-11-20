@@ -755,12 +755,11 @@ export default function DiagramView({
                   {/* While the settings stand in for the palette, the button brings the palette back. */}
                   <PaletteToggle open={paletteOpen && !dockSettings} onToggle={() => (dockSettings ? setClosedSettings(single.id) : togglePalette())} />
                   {flows && <FlowsToggle open={flowsOpen && !dockSettings} onToggle={() => (dockSettings ? setClosedSettings(single.id) : toggleFlows())} />}
-                  {/* In the top bar's row, so in a narrow pane it wraps below the buttons instead of covering them. */}
-                  {!hintSeen && nodes.length >= 2 && edges.length === 0 && <ConnectHint onDismiss={dismissHint} />}
                 </>
               )
             ))
           }
+          hint={canAdd && !hintSeen && nodes.length >= 2 && edges.length === 0 && <ConnectHint onDismiss={dismissHint} />}
           right={
             nodes.length > 0 &&
             (!playing || diagram.legend) && (

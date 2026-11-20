@@ -480,10 +480,9 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
               }}
             />
             {flows && <FlowsToggle open={flowsOpen && !dockSettings} onToggle={() => (dockSettings ? setSettingsClosed(true) : toggleFlows())} />}
-            {/* In the top bar's row, so in a narrow pane it wraps below the buttons instead of covering them. */}
-            {!hintSeen && nodes.length >= 2 && edges.length === 0 && <ConnectHint onDismiss={dismissHint} />}
               </>
             }
+            hint={!hintSeen && nodes.length >= 2 && edges.length === 0 && <ConnectHint onDismiss={dismissHint} />}
             right={
               nodes.length > 0 &&
               (canOverlay || pinned || diagram.legend) && (

@@ -1,4 +1,4 @@
-import { memo, useRef, type CSSProperties } from 'react';
+import { memo, useEffect, useRef, type CSSProperties } from 'react';
 import { Handle, Position, useNodeId, useStore } from 'reactflow';
 import { NodeResizer } from '@reactflow/node-resizer';
 import { Plus, TriangleAlert } from 'lucide-react';
@@ -91,6 +91,19 @@ const ComponentNode = ({ data, selected }: NodeProps<ComponentMetadata>) => {
  */
 function NameField({ name, onDone }: { name: string; onDone: (name: string | null) => void }) {
   const done = useRef(false);
+  const ref = useRef<HTMLInputElement>(null);
+  // A new node is hidden until React Flow has measured it, and a hidden field can't take the focus: try each frame.
+  useEffect(() => {
+    let tries = 0;
+    let frame = requestAnimationFrame(function focus() {
+      const field = ref.current;
+      if (!field || document.activeElement === field) return;
+      field.focus({ preventScroll: true });
+      if (document.activeElement === field) field.select();
+      else if (tries++ < 60) frame = requestAnimationFrame(focus);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
   const finish = (value: string | null) => {
     if (done.current) return;
     done.current = true;
@@ -98,10 +111,9 @@ function NameField({ name, onDone }: { name: string; onDone: (name: string | nul
   };
   return (
     <input
+      ref={ref}
       aria-label="Name"
       defaultValue={name}
-      autoFocus
-      onFocus={(e) => e.currentTarget.select()}
       onKeyDown={(e) => {
         e.stopPropagation();
         if (e.key === 'Enter') finish(e.currentTarget.value);

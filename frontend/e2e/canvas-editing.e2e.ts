@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { answerDialog, appendCode, canvasNodes, codeEditor, editorText, expect, multiSelectClick, multiSelectSetup, test, waitForCanvas } from './fixtures';
+import { appendCode, canvasNodes, codeEditor, editorText, expect, multiSelectClick, multiSelectSetup, test, waitForCanvas } from './fixtures';
 
 /**
  * The canvas's editing basics: copy, paste and duplicate, moving a
@@ -135,8 +135,9 @@ test.describe('canvas editing', () => {
 
     menu = await open('Cache');
     await menu.getByRole('menuitem', { name: 'Rename…' }).click();
-    await page.locator('.ps-dialog').getByRole('textbox', { name: 'Display name' }).fill('Sessions');
-    await answerDialog(page, 'Rename');
+    // Named in place on the canvas; `cache` is an id the author typed, so it stays.
+    await page.locator('.pc-node__name-field').fill('Sessions');
+    await page.locator('.pc-node__name-field').press('Enter');
     await expect.poll(() => editorText(page)).toMatch(/^cache "Sessions" \[Redis\]$/m);
 
     menu = await open('Sessions');

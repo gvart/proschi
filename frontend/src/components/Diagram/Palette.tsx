@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { GripVertical, Search, X } from 'lucide-react';
 import { getTechStackIcon } from '../../utils/iconMapping';
 import { eyebrow, field, iconButton } from '../Playground/ui';
-import { GROUP_PREVIEW, paletteGroups } from './paletteGroups';
+import { firstMatch, GROUP_PREVIEW, paletteGroups } from './paletteGroups';
 
 /** The drag-and-drop type a palette item carries: its tech stack. */
 export const TECH_DRAG_TYPE = 'application/x-proschi-tech';
@@ -40,7 +40,7 @@ export default function Palette({ onAdd, onClose, variant = 'panel', autoFocus =
   const sheet = variant === 'sheet';
   const picker = variant === 'picker';
   /** What Enter in the search adds. */
-  const first = groups[0]?.entries[0];
+  const first = firstMatch(groups, query);
 
   return (
     <aside

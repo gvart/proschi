@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { addFromPalette, answerDialog, canvasNodes, componentPalette, codeEditor, editorText, expect, test, waitForCanvas } from './fixtures';
+import { addFromPalette, canvasNodes, componentPalette, codeEditor, editorText, expect, test, waitForCanvas } from './fixtures';
 
 /**
  * Editing with the mouse: whatever is done on the canvas has to show up in the
@@ -18,6 +18,13 @@ async function newEmptyDiagram(page: Page) {
 }
 
 const addComponent = addFromPalette;
+
+/** Adds a component with nothing selected, so it comes alone rather than connected from the last one. */
+async function addAlone(page: Page, search: string, name: string) {
+  await page.locator('.react-flow__pane').dispatchEvent('click');
+  await expect(page.locator('.react-flow__node.selected')).toHaveCount(0);
+  await addFromPalette(page, search, name);
+}
 
 const node = (page: Page, name: string) => canvasNodes(page).filter({ hasText: name });
 
@@ -86,7 +93,7 @@ test.describe('visual editing', () => {
 
   test('connecting two components writes the connection', async ({ page }) => {
     await addComponent(page, 'redis', 'Redis');
-    await addComponent(page, 'postgres', 'PostgreSQL');
+    await addAlone(page, 'postgres', 'PostgreSQL');
     await expect(canvasNodes(page)).toHaveCount(2);
     expect(await editorText(page)).not.toContain('->');
 
@@ -121,13 +128,92 @@ test.describe('visual editing', () => {
     expect((await editorText(page)).match(/\bpos\b/g)).toHaveLength(1);
   });
 
-  test('renaming a component rewrites its display name', async ({ page }) => {
+  test('renaming a component on the canvas rewrites its name, and its generated id follows', async ({ page }) => {
     await addComponent(page, 'redis', 'Redis');
     await node(page, 'Redis').dblclick();
-    await page.locator('.ps-dialog').getByRole('textbox', { name: 'Display name' }).fill('Session cache');
-    await answerDialog(page, 'Rename');
+    const field = page.locator('.pc-node__name-field');
+    await field.fill('Session cache');
+    await field.press('Enter');
     await expect(node(page, 'Session cache')).toBeVisible();
-    expect(await editorText(page)).toContain('"Session cache" [Redis]');
+    await expect.poll(() => editorText(page)).toContain('session_cache "Session cache" [Redis]');
+    // Escape keeps the name it has.
+    await node(page, 'Session cache').click();
+    await page.keyboard.press('F2');
+    await field.fill('Other');
+    await field.press('Escape');
+    await expect(field).toHaveCount(0);
+    expect(await editorText(page)).toContain('session_cache "Session cache" [Redis]');
+  });
+
+  test('three palette clicks build a chain, each connection with its target’s protocol', async ({ page }) => {
+    const palette = await componentPalette(page);
+    const search = palette.getByRole('searchbox', { name: 'Search components' });
+    const field = page.locator('.pc-node__name-field');
+    for (const [query, entry] of [['actor', 'Actor'], ['rest api', 'REST API'], ['postgres', 'PostgreSQL']]) {
+      await search.fill(query);
+      await palette.getByRole('button', { name: entry, exact: true }).click();
+      // Selected, with its name ready to type, and the palette stays for the next.
+      await expect(field).toBeFocused();
+      await expect(field).toHaveValue(entry);
+      await expect(palette).toBeVisible();
+    }
+    await expect(canvasNodes(page)).toHaveCount(3);
+    // Typing a name renames the generated id everywhere.
+    await field.fill('Orders DB');
+    await field.press('Enter');
+    await expect.poll(() => editorText(page)).toContain('orders_db "Orders DB" [PostgreSQL]');
+    const text = await editorText(page);
+    expect(text).toMatch(/^actor -> rest_api : HTTP$/m);
+    expect(text).toMatch(/^rest_api -> orders_db : SQL$/m);
+    await expect(page.getByText('No problems')).toBeVisible();
+  });
+
+  test('Enter in the palette search adds the first match, connected from the selection', async ({ page }) => {
+    await addComponent(page, 'rest api', 'REST API');
+    const palette = await componentPalette(page);
+    const search = palette.getByRole('searchbox', { name: 'Search components' });
+    await expect(search).toHaveAttribute('placeholder', /Enter adds/);
+    await search.fill('redis');
+    await expect(palette.getByText('adds Redis, connected from REST API.')).toBeVisible();
+    await search.press('Enter');
+    await expect(page.locator('.pc-node__name-field')).toBeFocused();
+    await expect.poll(() => editorText(page)).toMatch(/^rest_api -> redis : RESP$/m);
+  });
+
+  test('the + on a node opens a type picker that adds a connected component', async ({ page }) => {
+    await addComponent(page, 'rest api', 'REST API');
+    await layoutSettled(page);
+    await node(page, 'REST API').hover();
+    await page.getByRole('button', { name: 'Add a component after REST API', exact: true }).click();
+    const picker = page.getByRole('dialog', { name: 'Add after REST API' });
+    await expect(picker).toBeVisible();
+    await picker.getByRole('searchbox', { name: 'Search components' }).fill('kafka');
+    await picker.getByRole('button', { name: 'Kafka', exact: true }).click();
+    await expect(picker).toHaveCount(0);
+    await expect.poll(() => editorText(page)).toMatch(/^rest_api -> kafka\b/m);
+    await expect(page.locator('.pc-node__name-field')).toBeFocused();
+  });
+
+  test('a connection let go on empty canvas opens the type picker', async ({ page }) => {
+    await addComponent(page, 'rest api', 'REST API');
+    await layoutSettled(page);
+    const dot = (await node(page, 'REST API').locator('.react-flow__handle.source').boundingBox())!;
+    await page.mouse.move(dot.x + dot.width / 2, dot.y + dot.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(dot.x + 40, dot.y + 160, { steps: 10 });
+    await page.mouse.up();
+    const picker = page.getByRole('dialog', { name: 'Add after REST API' });
+    await picker.getByRole('searchbox', { name: 'Search components' }).fill('postgres');
+    await picker.getByRole('searchbox', { name: 'Search components' }).press('Enter');
+    await expect.poll(() => editorText(page)).toMatch(/^rest_api -> postgresql : SQL$/m);
+  });
+
+  test('a starter writes a real design', async ({ page }) => {
+    await page.getByRole('region', { name: 'Start a diagram' }).getByRole('button', { name: 'Client → API → Database' }).click();
+    await waitForCanvas(page, 3);
+    const text = await editorText(page);
+    expect(text).toMatch(/^actor -> rest_api : HTTP$/m);
+    expect(text).toMatch(/^rest_api -> postgresql : SQL$/m);
   });
 
   test('deleting a component removes its line and its connections', async ({ page }) => {
@@ -220,6 +306,8 @@ test.describe('visual editing', () => {
     await expect(canvasNodes(page)).toHaveCount(1);
     // Selected: its settings take the palette's place.
     await expect(page.getByRole('region', { name: 'Database settings' })).toBeVisible();
+    // Its name is ready to type; Escape keeps it, and the canvas has the keys again.
+    await page.locator('.pc-node__name-field').press('Escape');
 
     await page.keyboard.press('ControlOrMeta+z');
     await expect.poll(() => editorText(page)).not.toContain('Database');
@@ -243,7 +331,7 @@ test.describe('visual editing', () => {
   test('the connect hint shows for two unconnected components, until the first connection', async ({ page }) => {
     await addComponent(page, 'redis', 'Redis');
     await expect(page.getByRole('note').filter({ hasText: 'Connect two components' })).toHaveCount(0);
-    await addComponent(page, 'postgres', 'PostgreSQL');
+    await addAlone(page, 'postgres', 'PostgreSQL');
     const hint = page.getByRole('note').filter({ hasText: 'Connect two components' });
     await expect(hint).toBeVisible();
     await connect(page, 'Redis', 'PostgreSQL');
@@ -294,6 +382,8 @@ test.describe('visual editing in practice', () => {
 
     // The visitor is declared in problem.proschi: read-only, and Delete leaves it.
     const before = await editorText(page);
+    await layoutSettled(page);
+    await page.getByRole('button', { name: 'fit view' }).click();
     await canvasNodes(page).filter({ hasText: 'Visitor' }).click();
     await expect(page.getByRole('region', { name: 'Visitor settings' }).getByText('Declared in problem.proschi')).toBeVisible();
     await page.keyboard.press('Delete');
@@ -307,6 +397,9 @@ test.describe('visual editing in practice', () => {
       await expect(codeEditor(page)).toBeVisible();
       await waitForCanvas(page, 2);
       await addFromPalette(page, 'cache', 'Cache');
+      // The canvas pans to the new component; the whole diagram is a fit away.
+      await layoutSettled(page);
+      await page.getByRole('button', { name: 'fit view' }).click();
       await connect(page, 'Visitor', 'Cache');
       await expect.poll(() => editorText(page)).toMatch(/^visitor\s*->\s*cache$/m);
 

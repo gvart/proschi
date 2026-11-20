@@ -61,3 +61,10 @@ export function paletteGroups(query = ''): PaletteGroup[] {
 
 /** How many entries a group shows before "more", when nothing is searched. */
 export const GROUP_PREVIEW = 6;
+
+/** What Enter in the search adds: the first entry whose name starts with the search ("redis" is Redis), else the first shown. */
+export function firstMatch(groups: PaletteGroup[], query: string): PaletteEntry | undefined {
+  const q = query.trim().toLowerCase();
+  const entries = groups.flatMap((g) => g.entries);
+  return (q ? entries.find((e) => e.techStack.toLowerCase().startsWith(q)) : undefined) ?? entries[0];
+}

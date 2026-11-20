@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { paletteGroups } from './paletteGroups';
+import { firstMatch, paletteGroups } from './paletteGroups';
 
 const techs = (id: string, query?: string) => paletteGroups(query).find((g) => g.id === id)?.entries.map((e) => e.techStack) ?? [];
 
@@ -25,5 +25,13 @@ describe('paletteGroups', () => {
     expect(techs('caches', 'redis')).toContain('AWS ElastiCache');
     expect(paletteGroups('postgres').flatMap((g) => g.entries.map((e) => e.techStack))).toContain('PostgreSQL');
     expect(paletteGroups('no such thing')).toEqual([]);
+  });
+
+  it('adds the entry named like the search on Enter, whatever its group', () => {
+    expect(firstMatch(paletteGroups('redis'), 'redis')?.techStack).toBe('Redis');
+    expect(firstMatch(paletteGroups('cache'), 'cache')?.techStack).toBe('Cache');
+    expect(firstMatch(paletteGroups('rest api'), 'rest api')?.techStack).toBe('REST API');
+    expect(firstMatch(paletteGroups('postgres'), 'postgres')?.techStack).toBe('PostgreSQL');
+    expect(firstMatch(paletteGroups('no such thing'), 'no such thing')).toBeUndefined();
   });
 });
