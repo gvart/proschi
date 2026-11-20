@@ -3,7 +3,7 @@ import type { EditorView } from '../../partner/contract';
 import { loadJson, saveJson } from '../../services/storage';
 
 /**
- * The editor's two exclusive modes (docs/impl/visual-editor.md, S10): Visual
+ * The editor's two exclusive modes (docs/VISUAL-EDITOR.md): Visual
  * builds on the canvas, with the code only to look at; Code is the text with
  * the diagram beside it, view-only. One choice for the editor, practice and the
  * interview room, remembered in this browser; a first visit lands in Visual.
