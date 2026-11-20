@@ -171,7 +171,8 @@ export default function SequenceDiagram({
       layoutSequence(entries, lanes, (id) => nodes.get(id)?.name ?? id, undefined, fit === undefined ? undefined : fit - roomy, {
         room,
         draft: draftSlot && { slot: draftSlot, height: draftHeight },
-        adds: !!onInsert,
+        // While a step is drafted, it is the one place a step is added: no "Add step" row besides it.
+        adds: !!onInsert && !draftSlot,
       }),
     // `room` by what it holds.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -721,7 +722,6 @@ export default function SequenceDiagram({
             ))}
         {onInsert &&
           layout.adds.map((a) => {
-            if (draft && sameSlot(draft.slot, a.slot)) return null;
             const index = layout.slots.find((s) => sameSlot(s.slot, a.slot))?.index ?? 0;
             const par = a.slot.kind === 'par';
             const label = par ? 'Add alongside' : a.slot.kind === 'scenario' ? `Add a step to ${a.slot.name}` : 'Add step';
