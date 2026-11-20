@@ -1,0 +1,60 @@
+frontend/src/components/Canvas/ComponentNode.tsx
+  s_733d66441cadaa::t_45db416556e4c2 2
+  s_733d66441cadaa::t_1bd325e097876e 65-66,68-85
+  s_733d66441cadaa::t_ecb1e81fb41f59 67
+  s_733d66441cadaa::t_24ef41ec57de04 46
+  s_733d66441cadaa::t_e7d9f4b7a16aa3 47
+frontend/e2e/canvas-editing.e2e.ts
+  s_733d66441cadaa::t_fce3c9195b8f25 134
+  s_733d66441cadaa::t_66da73cf520a31 205-219,225-241
+  s_733d66441cadaa::t_62c27f89ad65bd 220-224
+frontend/src/components/Canvas/SystemNode.tsx
+  s_733d66441cadaa::t_24ef41ec57de04 33
+  s_733d66441cadaa::t_bcb4c8aefcba59 4
+  s_733d66441cadaa::t_e612000ee981f9 34
+frontend/src/components/Canvas/canvas.css
+  s_733d66441cadaa::t_d9a2069e5ce431 136-140,142-143,147-152,154,158-173,182-194
+  s_733d66441cadaa::t_1bc50d222126a0 174-179,181
+  s_733d66441cadaa::t_c3b70b35bfbf16 180
+frontend/e2e/visual-editing.e2e.ts
+  s_733d66441cadaa::t_ecbee6feec9de6 39,45
+frontend/src/components/Playground/DiagramView.tsx
+  s_733d66441cadaa::t_f89a58bf4a8bf5 765
+  s_733d66441cadaa::t_59f4839b2d0b04 663-664
+  s_733d66441cadaa::t_fa4d93a27eb8d0 211-218
+  s_733d66441cadaa::t_6f1bb54564ab48 22
+  s_733d66441cadaa::t_f83379ce8acd37 638-639,641-642
+  s_733d66441cadaa::t_3407b6cd0cdf6e 640
+  s_733d66441cadaa::t_bf32e58614e8b7 681
+frontend/src/components/Diagram/EditableCanvas.tsx
+  s_733d66441cadaa::t_0671441b809104 388-389,391-392
+  s_733d66441cadaa::t_21882d5a6dd092 390
+  s_733d66441cadaa::t_bf49afc49fd706 383-384
+  s_733d66441cadaa::t_e6e2ba709b8c3b 193-195,197
+  s_733d66441cadaa::t_7bfcf75963e192 25
+  s_733d66441cadaa::t_b1a4be860c76a1 411
+frontend/e2e/canvas-parity.e2e.ts
+  s_733d66441cadaa::t_fce3c9195b8f25 108
+frontend/src/components/Diagram/connect.ts
+  s_733d66441cadaa::t_c13cd7c8928339 1-46,49-50,52-53,55-68
+  s_733d66441cadaa::t_74fd401030acad 47-48,51,54
+frontend/src/components/Playground/Playground.tsx
+  s_733d66441cadaa::t_37829019f1d3e6 71
+  s_733d66441cadaa::t_ba3c73d0b53826 895-897
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "329508b4b973b5b51f4789627211af7b62f46687",
+  "prompts": {},
+  "sessions": {
+    "s_733d66441cadaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9649973d-f497-4440-b031-a92483a592e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
