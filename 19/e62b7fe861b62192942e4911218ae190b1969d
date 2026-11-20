@@ -1,0 +1,14 @@
+docs/impl/visual-editor.md
+  h_bdd87144da84ba 52-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "19e62b7fe861b62192942e4911218ae190b1969d",
+  "prompts": {},
+  "humans": {
+    "h_bdd87144da84ba": {
+      "author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
