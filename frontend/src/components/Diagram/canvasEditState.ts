@@ -20,6 +20,18 @@ export function usePaletteOpen(key: string): [boolean, (open: boolean) => void] 
   return [open, set];
 }
 
+const MAP_KEY = 'proschi.flows.map';
+
+/** Whether the Flows view's architecture map is open, remembered per browser; at first open on a wide screen (1280 and wider). */
+export function useMapOpen(): [boolean, (open: boolean) => void] {
+  const [open, setOpen] = useState(() => loadJson<boolean | null>(MAP_KEY, null) ?? (typeof window === 'undefined' || window.innerWidth >= 1280));
+  const set = (next: boolean) => {
+    setOpen(next);
+    saveJson(MAP_KEY, next);
+  };
+  return [open, set];
+}
+
 const CONNECT_HINT_KEY = 'proschi.canvas.connectHint';
 
 /** Whether the connect hint was already dismissed (or a connection made) in this browser. */

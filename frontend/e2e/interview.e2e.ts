@@ -340,7 +340,7 @@ test.describe('the interview room on your own', () => {
     await expect(settings.getByText('x15', { exact: true })).toBeVisible();
     await board.click({ position: { x: 600, y: 700 } });
 
-    // The second use case, from the traffic's suggestion, with two steps picked on the canvas.
+    // The second use case, from the traffic's suggestion, with two steps picked on the architecture map.
     await board.getByRole('button', { name: 'Flows' }).click();
     const flows = page.getByRole('region', { name: 'Flows' });
     const picker = flows.getByRole('combobox', { name: 'Use case' });
@@ -350,9 +350,10 @@ test.describe('the interview room on your own', () => {
     await flows.getByRole('button', { name: 'Add a step' }).click();
     const step = flows.getByRole('form', { name: 'New step' });
     await expect(step.getByRole('status')).toHaveText('Click the component the step starts at.');
-    await canvasNodes(page).filter({ hasText: 'ID Generator' }).click();
+    const map = page.getByTestId('flows-map');
+    await map.getByRole('button', { name: 'ID Generator', exact: true }).click();
     await expect(step.getByRole('status')).toHaveText('Now click the component it goes to.');
-    await canvasNodes(page).filter({ hasText: 'ZooKeeper' }).click();
+    await map.getByRole('button', { name: 'ZooKeeper', exact: true }).click();
     await expect(step.getByLabel('Starts at')).toHaveAttribute('data-value', 'idgen');
     await expect(step.getByLabel('Goes to')).toHaveAttribute('data-value', 'zk');
     await step.getByRole('combobox', { name: 'Operation' }).fill('CREATE worker id');

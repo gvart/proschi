@@ -32,9 +32,9 @@ The **Code | Visual** switch in the header, or **Ctrl+\\** (**⌘\\** on a
 Mac), changes the mode. A first visit opens in Visual. Practice and the
 mock interview use the same switch.
 
-- **Visual** gives the page to the canvas, with a rail of three tabs:
-  **Components**, **Flows** and **Selection**. **View code** shows the text,
-  read-only.
+- **Visual** gives the page to the canvas, with a rail of two tabs:
+  **Components** and **Selection** (a phone adds **Flows**). **View code**
+  shows the text, read-only.
 - **Code** puts the text editor beside the diagram. The diagram only looks:
   select, pan, zoom and play, but edit in the text.
 
@@ -77,16 +77,23 @@ words a step to it can use.
 
 ## 5. Build a use case
 
-**Flows** opens a pane under the canvas. It draws the chosen
+The **Architecture | Flows** switch above the canvas, or **F**, turns the
+canvas into the Flows view, and back. It draws the chosen
 [use case](USE-CASES.md) as a sequence diagram: a lane per component and a
-numbered arrow per step. Drag the pane's top edge to make it taller or
-shorter. Each [scenario](SCENARIOS.md) has a tab, and **Add scenario**
-starts a new one.
+numbered arrow per step. The lanes fit the width, and only a diagram too
+wide for it scrolls sideways. Each [scenario](SCENARIOS.md) has a tab, and
+**Add scenario** starts a new one. The view is remembered, and the canvas
+keeps its zoom while you are away.
+
+A small map of the architecture floats in the corner. It lights up the
+selected step's components and the connection it travels, and draws a
+dashed line where there is none. Collapse it, or press **M**, to keep it out
+of the way.
 
 1. Pick a use case, or **+ New use case…** in the picker, and name it.
 2. Click **Add a step** beside the diagram. Then click the component it
-   starts at and the one it goes to: on the canvas, on its lane's header
-   or lifeline in the pane, or in the form.
+   starts at and the one it goes to: on the map, on its lane's header or
+   lifeline, or in the form.
 3. Pick the kind: **Request**, **Response**, **Message** (sent without
    waiting) or **Fails** (a call that never gets an answer).
 4. Pick an operation from the list and click **Add step**.
@@ -116,11 +123,11 @@ or the arrow buttons move it, and **Delete** removes it.
 
 Shift-click or Ctrl-click (**⌘**-click) to select several steps. **Run at
 the same time** puts them in a [parallel block](SCENARIOS.md#parallel-steps).
-They must follow each other in one flow or scenario, or the pane says why.
+They must follow each other in one flow or scenario, or the view says why.
 A block's **Ungroup** runs its steps one after another again, and **Add
 alongside** adds one more step to it.
 
-With a scenario's tab open and nothing selected, the side of the pane
+With a scenario's tab open and nothing selected, the side of the view
 renames or deletes that scenario. The pencil beside the picker renames the
 use case.
 
@@ -142,10 +149,11 @@ Click the canvas first. **?** lists every shortcut.
 | **T** | Change its type. |
 | **+**, **-** | More or fewer replicas. |
 | **R** | Lay out again, when you have dragged components into place. |
+| **F** | Switch between the architecture and Flows. |
 
-In the Flows pane, click a step first. **↑** and **↓** select the next
+In the Flows view, click a step first. **↑** and **↓** select the next
 step, **Shift+↑** and **Shift+↓** select several, **Enter** goes to its
-form and **Escape** lets it go.
+form and **Escape** lets it go. **M** shows or collapses the map.
 
 ## 7. Ask the AI in Visual mode
 

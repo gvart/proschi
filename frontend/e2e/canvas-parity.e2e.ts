@@ -12,6 +12,8 @@ test.use({ mode: 'visual' });
  */
 
 const node = (page: Page, name: string) => canvasNodes(page).filter({ hasText: name });
+/** A component on the Flows view's architecture map, which picks a step's end while one is picked. */
+const onMap = (page: Page, name: string) => page.getByTestId('flows-map').getByRole('button', { name, exact: true });
 
 /** Waits until the layout is done and the nodes stop moving. */
 async function layoutSettled(page: Page) {
@@ -190,9 +192,9 @@ test.describe('the editor canvas', () => {
     await flows.getByRole('button', { name: 'Add a step' }).click();
     const step = flows.getByRole('form', { name: 'New step' });
     await expect(step.getByRole('status')).toHaveText('Click the component the step starts at.');
-    await node(page, 'User').click();
+    await onMap(page, 'User').click();
     await expect(step.getByRole('status')).toHaveText('Now click the component it goes to.');
-    await node(page, 'API').click();
+    await onMap(page, 'API').click();
     await expect(step.getByLabel('Starts at')).toHaveAttribute('data-value', 'user');
     await expect(step.getByLabel('Goes to')).toHaveAttribute('data-value', 'api');
     // Picking selects nothing, so no settings open in the builder's place.
@@ -206,10 +208,12 @@ test.describe('the editor canvas', () => {
     await step.getByRole('button', { name: 'Add step' }).click();
     await expect.poll(() => editorText(page)).toMatch(/user -> api : GET \/items/);
 
-    // On a wide screen the builder is the pane under the canvas, so the palette opens beside it.
+    // On a wide screen the Flows view is over the canvas and its rail; back on the architecture, the palette is a click away.
+    await expect(page.getByRole('button', { name: 'Add component' })).toBeHidden();
+    await page.getByRole('group', { name: 'View' }).getByRole('button', { name: 'Architecture', exact: true }).click();
     await page.getByRole('button', { name: 'Add component' }).click();
     await expect(page.getByRole('region', { name: 'Components' })).toBeVisible();
-    await expect(flows).toBeVisible();
+    await expect(flows).toHaveCount(0);
   });
 
   test('builds a flow in a row: each step starts where the last went, Reply answers, a warning shows before adding', async ({ page }) => {
@@ -235,13 +239,13 @@ test.describe('the editor canvas', () => {
     const step = flows.getByRole('form', { name: 'New step' });
     const label = (kind: 'Operation' | 'Answer') => step.getByRole('combobox', { name: kind });
 
-    await node(page, 'Web').click();
-    await node(page, 'API').click();
+    await onMap(page, 'Web').click();
+    await onMap(page, 'API').click();
     await label('Operation').fill('POST /orders');
     await label('Operation').press('Enter');
     // The next step starts at the API: one click picks where it goes.
     await expect(step.getByLabel('Starts at')).toHaveAttribute('data-value', 'api');
-    await node(page, 'DB').click();
+    await onMap(page, 'DB').click();
     // An operation PostgreSQL does not have warns before it is added.
     await label('Operation').fill('persist order');
     await expect(step.getByRole('list', { name: 'Problems with this step' })).toContainText("PostgreSQL has no operation 'persist'");
@@ -300,7 +304,7 @@ test.describe('the editor canvas', () => {
     await flows.getByRole('button', { name: 'Add a step before step 4' }).click();
     const insert = flows.getByRole('dialog', { name: 'Add a step here' });
     await expect(insert.getByLabel('Starts at')).toHaveAttribute('data-value', 'db');
-    await node(page, 'API').click();
+    await onMap(page, 'API').click();
     await insert.getByRole('combobox', { name: 'Answer' }).fill('done');
     await insert.getByRole('button', { name: 'Add step' }).click();
     await expect.poll(() => editorText(page)).toMatch(/ {2}db --> api : done\n {2}api --> web : 201/);
@@ -327,8 +331,8 @@ test.describe('the editor canvas', () => {
     const flows = page.getByRole('region', { name: 'Flows' });
     await flows.getByRole('button', { name: 'Add a step' }).click();
     const step = flows.getByRole('form', { name: 'New step' });
-    await node(page, 'Web').click();
-    await node(page, 'API').click();
+    await onMap(page, 'Web').click();
+    await onMap(page, 'API').click();
     await step.getByRole('combobox', { name: 'Operation' }).fill('POST /orders');
     await step.getByText('Headers, payload and fan-out').click();
     // The headers are the REST API type's own.
@@ -340,7 +344,7 @@ test.describe('the editor canvas', () => {
     await expect.poll(() => editorText(page)).toContain('  web -> api : x2 POST /orders header Authorization {"sku": 7}\n');
 
     // A Worker takes any label; the builder offers to give it operations of its own.
-    await node(page, 'Payments').click();
+    await onMap(page, 'Payments').click();
     await step.getByRole('combobox', { name: 'Operation' }).fill('charge card');
     await step.getByRole('button', { name: /^Give Payments operations of its own/ }).click();
     await expect.poll(() => editorText(page)).toMatch(/type Payments extends Worker \{\n {2}op write charge\n\}/);

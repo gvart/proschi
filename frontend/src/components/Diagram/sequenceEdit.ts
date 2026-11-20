@@ -3,7 +3,7 @@ import type { Diagram } from '../../dsl/types';
 import type { Slot } from './sequenceLayout';
 
 /**
- * The Flows pane's edits on its sequence diagram (FlowsPanel.tsx), as plain
+ * The Flows view's edits on its sequence diagram (FlowsPanel.tsx), as plain
  * functions: adding a step at an insertion point, and finding the step (or
  * steps) an edit made or moved, so the selection goes with it. Every edit is
  * one of dsl/edit.ts, which addresses steps by line.

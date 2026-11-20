@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { outlineOf } from '../../dsl/edit';
-import { clampPaneHeight, PANE_MIN, stepEdge } from './flows';
+import { stepEdge } from './flows';
 import { allSteps, entrySteps, followStep, inParallel, laneOrder, layoutSequence, scenarioOfStep, SEQ, sequenceEntries, type Measure } from './sequenceLayout';
 
 const SRC = [
@@ -209,15 +209,7 @@ describe('the sequence layout', () => {
   });
 });
 
-describe('the pane around it', () => {
-  it('keeps the height between its least and 70% of the column', () => {
-    expect(clampPaneHeight(50, 1000)).toBe(PANE_MIN);
-    expect(clampPaneHeight(400, 1000)).toBe(400);
-    expect(clampPaneHeight(900, 1000)).toBe(700);
-    // In a short column it keeps its least height.
-    expect(clampPaneHeight(300, 180)).toBe(PANE_MIN);
-  });
-
+describe('the view around it', () => {
   it('finds the connection a step travels, either way', () => {
     const edges = [
       { id: 'e1', source: 'web', target: 'api' },

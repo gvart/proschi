@@ -1,4 +1,5 @@
-import { useDeferredValue, useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp, CornerDownLeft, Group, MousePointerClick, Pencil, Plus, Trash2, Workflow, X } from 'lucide-react';
 import {
   addScenario,
@@ -30,7 +31,11 @@ import { accessOf } from '../../dsl/access';
 import Select from '../../design/Select';
 import { MOD_KEY } from '../Playground/modKey';
 import SequenceDiagram, { type SelectMode } from './SequenceDiagram';
-import { allSteps, entrySteps, followStep, inParallel, scenarioOfStep, sequenceEntries, type Slot } from './sequenceLayout';
+import { allSteps, entrySteps, followStep, inParallel, laneOrder, scenarioOfStep, sequenceEntries, type Slot } from './sequenceLayout';
+import ArchitectureMap from './ArchitectureMap';
+import { useMapOpen } from './canvasEditState';
+import { ViewSwitch } from './CanvasEditing';
+import { FlowsScroller } from './FlowsView';
 import { insertAt, insertedStep, movedStep, samePlaces, unanswered } from './sequenceEdit';
 
 /**
@@ -73,10 +78,8 @@ interface FlowsPanelProps {
   onClose: () => void;
   /** Lights up a step's two components on the canvas while its row is hovered; null when none is. */
   onHighlight?: (ids: string[] | null) => void;
-  /** The narrow column of the rail (the default), or the wide pane under the canvas with the sequence diagram. */
+  /** The narrow column of a phone's sheet (the default), or the Flows view of a wider screen (FlowsView.tsx) with the sequence diagram. */
   layout?: 'rail' | 'pane';
-  /** The selected step's ends, for the canvas to light up its components and connection; null when none is selected. */
-  onStep?: (step: { from: string; to: string } | null) => void;
 }
 
 /** A step the builder adds. */
@@ -101,8 +104,9 @@ const said = (list: OutlineStep[]) => list.map((s) => `${s.line} ${s.from} ${s.t
 const NEW = '\u0000new';
 const SUGGEST = '\u0000suggest:';
 
-export default function FlowsPanel({ source, diagram, onChange, pick, onPick, useCase, onUseCase, onClose, onHighlight, layout = 'rail', onStep }: FlowsPanelProps) {
+export default function FlowsPanel({ source, diagram, onChange, pick, onPick, useCase, onUseCase, onClose, onHighlight, layout = 'rail' }: FlowsPanelProps) {
   const pane = layout === 'pane';
+  const [mapOpen, setMapOpen] = useMapOpen();
   const local = useMemo(() => diagram.useCases.filter((u) => u.loc.file === undefined), [diagram]);
   const useCases = useMemo(() => local.map((u) => u.name), [local]);
   const current = (local.find((u) => u.id === useCase) ?? local[0])?.name;
@@ -125,7 +129,6 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   const [sel, setSel] = useState<OutlineStep[]>([]);
   const followed = useMemo(() => sel.flatMap((s) => followStep(s, steps) ?? []).filter((s, i, all) => all.findIndex((o) => o.line === s.line) === i), [sel, steps]);
   if (said(followed) !== said(sel)) setSel(followed);
-  const primary = followed.at(-1);
   /** The one step selected, whose form the column shows. */
   const chosen = followed.length === 1 ? followed[0] : undefined;
   /** Where the composer is open on the diagram, and how many messages are drawn before it. */
@@ -184,17 +187,6 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
     const [from, to] = chosenKey.split('\n')[0].split(' ').slice(1, 3);
     if (pane && chosenKey) pickRef.current({ from, to });
   }, [pane, chosenKey]);
-  const ends = primary ? `${primary.from}\n${primary.to}` : '';
-  useEffect(() => {
-    const [from, to] = ends.split('\n');
-    onStep?.(ends ? { from, to } : null);
-  }, [ends, onStep]);
-  // Closed, the panel lets the canvas go.
-  const stepRef = useRef(onStep);
-  useEffect(() => {
-    stepRef.current = onStep;
-  });
-  useEffect(() => () => stepRef.current?.(null), []);
 
   const apply = (result: { source?: string; error?: string }) => {
     setError(result.error);
@@ -418,10 +410,10 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
     <RenameField label={`Rename the use case ${current}`} value={current} onRename={(next) => apply(renameUseCase(source, current, next)) && (setRenaming(null), true)} onCancel={() => setRenaming(null)} />
   ) : pane ? (
     <div className="flex min-w-0 items-center gap-1.5">
-      <label htmlFor={selectId} className={`${eyebrow} mr-0.5 shrink-0`}>
+      <label htmlFor={selectId} className={`${eyebrow} mr-0.5 shrink-0 @max-5xl:sr-only`}>
         Use case
       </label>
-      <Select size="sm" id={selectId} value={currentId} onChange={choose} options={options} placeholder="No use cases yet" className="w-44 min-w-0 @4xl:w-56" />
+      <Select size="sm" id={selectId} value={currentId} onChange={choose} options={options} placeholder="No use cases yet" className="w-44 min-w-0 @5xl:w-56" />
       {pickerButtons}
     </div>
   ) : (
@@ -732,14 +724,8 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
                 e.stopPropagation();
                 closeComposer();
               }}
-              // As tall as the diagram in sight lets it be (SequenceDiagram sets --composer-max): its body scrolls, its buttons pinned at
-              // its foot, and a field that takes the focus is scrolled clear of them.
-              className="max-h-[var(--composer-max,none)] scroll-pb-14 overflow-y-auto overscroll-contain rounded-sm shadow-brutal-md"
-              // The browser scrolls a focused field into sight however the top falls: snapped after it, to a whole line.
-              onFocus={(e) => {
-                const box = e.currentTarget;
-                requestAnimationFrame(() => snapToField(box));
-              }}
+              // As tall as it needs: the Flows view, the one thing that scrolls, scrolls it into sight (SequenceDiagram).
+              className="rounded-sm shadow-brutal-md"
             >
               <StepForm
                 key={`${composing.slot.kind}:${'line' in composing.slot ? composing.slot.line : 'name' in composing.slot ? composing.slot.name : ''}`}
@@ -779,19 +765,43 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
         }
       : undefined;
 
+  // The architecture beside the sequence: the selected steps lit up, or the step whose ends are being picked (clicks on it pick them).
+  const map = pane && (
+    <ArchitectureMap
+      open={mapOpen}
+      onOpen={setMapOpen}
+      steps={pick?.from && pick.to ? [{ from: pick.from, to: pick.to }] : followed}
+      marked={pick ? [pick.from, pick.to].filter((id): id is string => !!id) : []}
+      focus={outline ? laneOrder(outline) : []}
+      onPick={pick ? (id) => onPick(nextPick(pick, id)) : undefined}
+      hint={pick && !chosen ? (pick.from ? 'Click where it goes' : 'Click where it starts') : undefined}
+    />
+  );
+
   if (pane)
     return (
-      <section role="region" aria-label="Flows" className="@container flex h-full min-h-0 flex-col bg-surface text-ink">
-        <div className="flex min-h-12 shrink-0 items-center gap-3 border-b border-ink/15 py-1.5 pl-3 pr-1.5">
-          <h2 className="flex shrink-0 items-center gap-1.5 text-sm font-bold">
-            <Workflow size={15} aria-hidden="true" />
-            {/* Named by the region in a narrow pane, where the room goes to the tabs. */}
-            <span className="sr-only @5xl:not-sr-only">Flows</span>
-          </h2>
+      <section
+        role="region"
+        aria-label="Flows"
+        tabIndex={-1}
+        data-flows-focus
+        className="@container flex h-full min-h-0 flex-col bg-surface text-ink outline-hidden"
+        onKeyDown={(e) => {
+          // M opens or collapses the map, from anywhere in the view but a field or a control with letter keys of its own.
+          if (e.defaultPrevented || e.key.toLowerCase() !== 'm' || e.ctrlKey || e.metaKey || e.altKey) return;
+          if ((e.target as Element).closest('input, textarea, select, [contenteditable], [role="combobox"], [role="menu"], [role="dialog"]')) return;
+          e.preventDefault();
+          setMapOpen(!mapOpen);
+        }}
+      >
+        {/* The bar: the view switch, the use case, its scenarios; it wraps rather than scroll. */}
+        <div className="flex min-h-[52px] shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b-bw-1 border-ink py-2 pl-4 pr-3">
+          <h2 className="sr-only">Flows</h2>
+          <ViewSwitch flows onChange={(flows) => !flows && onClose()} />
           <div className="min-w-0 shrink-0">{picker}</div>
           {current && outline && (
-            <div className="flex min-w-0 flex-1 items-center gap-1.5">
-              <div role="tablist" aria-label="Scenarios" className="flex min-w-0 items-center gap-1 overflow-x-auto">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 border-l border-ink/15 pl-3">
+              <div role="tablist" aria-label="Scenarios" className="flex min-w-0 flex-wrap items-center gap-1">
                 {[MAIN, ...scenarios].map((s) => (
                   <button
                     key={s || 'main'}
@@ -810,18 +820,23 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
             </div>
           )}
           {canGroup && <div className="ml-auto shrink-0">{runTogether}</div>}
-          <button type="button" aria-label="Close the flows" title="Close the flows" onClick={onClose} className={`${iconButton} ${canGroup ? '' : 'ml-auto'} !h-8 !w-8 shrink-0`}>
-            <X size={16} />
-          </button>
         </div>
         {current && outline ? (
-          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto @3xl:flex-row @3xl:overflow-hidden">
-            {/* The lane headers stick at its top, so what the browser scrolls into sight (a field that takes the focus) goes under them. */}
-            <div className="min-w-0 shrink-0 scroll-pt-[52px] overflow-x-auto bg-paper @3xl:min-h-0 @3xl:flex-1 @3xl:overflow-auto">
+          <FlowsScroller
+            float={map}
+            column={
+              <section ref={detailsRef} aria-label={`Use case ${current}`} className="space-y-3 p-3">
+                {details}
+                {alert}
+              </section>
+            }
+          >
+            {(fit) => (
               <SequenceDiagram
                 outline={outline}
                 scenario={laneNow}
                 diagram={diagram}
+                fitWidth={fit}
                 selected={followed.map((st) => st.line)}
                 onSelect={select}
                 onScenario={chooseLane}
@@ -835,18 +850,18 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
                 focusKey={focusKey}
                 onPickLane={pick ? (id) => onPick(nextPick(pick, id)) : undefined}
               />
-            </div>
-            <section ref={detailsRef} aria-label={`Use case ${current}`} className="shrink-0 space-y-3 [&_form>.sticky]:shadow-[0_12px_0_0_rgb(var(--c-surface))] border-t border-ink/15 p-3 @3xl:w-72 @3xl:overflow-y-auto @3xl:border-l @3xl:border-t-0 @5xl:w-80">
-              {details}
-              {alert}
-            </section>
-          </div>
+            )}
+          </FlowsScroller>
         ) : (
-          <div className="min-h-0 flex-1 overflow-y-auto bg-paper p-4">
-            <div className="max-w-md space-y-2">
-              {empty}
-              {alert}
-            </div>
+          <div className="relative min-h-0 flex-1 bg-paper p-6">
+            {(empty || alert) && (
+              <div className="mx-auto mt-[8vh] max-w-md space-y-3 rounded-sm border-bw-1 border-ink bg-surface p-5 shadow-brutal-sm">
+                {empty && <h3 className="text-base font-bold">No use cases yet</h3>}
+                {empty}
+                {alert}
+              </div>
+            )}
+            {map && <div className="absolute bottom-3 right-3">{map}</div>}
           </div>
         )}
       </section>
@@ -873,30 +888,70 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   );
 }
 
-/** The header's "Add scenario": a name, with the problem's own as one-click suggestions, in a small card under it. */
+/** The card's width (w-72), to keep it on the screen. */
+const CARD_W = 288;
+
+/**
+ * The bar's "Add scenario": a name, with the problem's own as one-click suggestions, in a small card under it. The
+ * card is drawn in a portal with a fixed position, over everything (the diagram's sticky lane headers too).
+ */
 function AddScenario({ suggestions, onAdd }: { suggestions: string[]; onAdd: (name: string) => boolean }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [at, setAt] = useState<{ left: number; top: number } | null>(null);
+  useLayoutEffect(() => {
     if (!open) return;
-    const onPointer = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    const place = () => {
+      const r = buttonRef.current?.getBoundingClientRect();
+      if (r) setAt({ left: Math.max(8, Math.min(r.left, window.innerWidth - CARD_W - 8)), top: r.bottom + 6 });
+    };
+    place();
+    const onPointer = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (!buttonRef.current?.contains(target) && !cardRef.current?.contains(target)) setOpen(false);
+    };
     document.addEventListener('pointerdown', onPointer);
-    return () => document.removeEventListener('pointerdown', onPointer);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
   }, [open]);
+  const close = () => {
+    setOpen(false);
+    buttonRef.current?.focus({ preventScroll: true });
+  };
   return (
-    <div ref={ref} className="relative shrink-0">
-      <button type="button" aria-expanded={open} onClick={() => setOpen(!open)} className={`${toolButton} !px-2 !py-1 text-xs aria-expanded:border-ink aria-expanded:bg-surface`}>
+    <div className="shrink-0">
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        onClick={() => setOpen(!open)}
+        className={`${toolButton} !px-2 !py-1 text-xs aria-expanded:border-ink aria-expanded:bg-surface`}
+      >
         <Plus size={13} aria-hidden="true" />
         Add scenario
       </button>
-      {open && (
+      {open &&
+        at &&
+        createPortal(
         <div
-          className="absolute left-0 top-full z-30 mt-1 w-72 rounded-sm border-bw-1 border-ink bg-surface p-3 shadow-brutal-md"
+          ref={cardRef}
+          role="dialog"
+          aria-label="Add a scenario"
+          data-testid="add-scenario"
+          className="fixed z-[1000] w-72 rounded-sm border-bw-1 border-ink bg-surface p-3 text-ink shadow-brutal-md"
+          style={at}
           onKeyDown={(e) => {
             if (e.key !== 'Escape') return;
             e.preventDefault();
             e.stopPropagation();
-            setOpen(false);
+            close();
           }}
         >
           <NameForm
@@ -912,8 +967,9 @@ function AddScenario({ suggestions, onAdd }: { suggestions: string[]; onAdd: (na
               return done;
             }}
           />
-        </div>
-      )}
+        </div>,
+          document.body,
+        )}
     </div>
   );
 }
@@ -1379,26 +1435,4 @@ function Labelled({ id, label, children }: { id: string; label: string; children
       {children}
     </div>
   );
-}
-
-/**
- * Scrolls a form's body (`box`, its buttons pinned at its foot) so the focused field in it is in sight with nothing cut
- * in half at the top: at the top when the whole form fits, else at the highest edge of a row that still shows the field.
- */
-function snapToField(box: HTMLElement) {
-  const max = box.scrollHeight - box.clientHeight;
-  if (max <= 0) {
-    box.scrollTop = 0;
-    return;
-  }
-  const field = document.activeElement;
-  if (!(field instanceof HTMLElement) || field === box || !box.contains(field)) return;
-  const foot = box.querySelector<HTMLElement>('[data-form-foot]');
-  // Where the body's content starts on the screen: a row's place in the body is its top less this.
-  const origin = box.getBoundingClientRect().top + box.clientTop - box.scrollTop;
-  const shown = box.clientHeight - (foot?.offsetHeight ?? 0);
-  const reach = field.getBoundingClientRect().bottom - origin + 4;
-  const rows = Array.from(box.querySelectorAll<HTMLElement>('*'), (el) => (foot?.contains(el) ? Infinity : el.getBoundingClientRect().top - origin));
-  const top = [0, ...rows].filter((y) => y <= max && y + shown >= reach).sort((a, b) => a - b)[0];
-  box.scrollTop = top ?? max;
 }

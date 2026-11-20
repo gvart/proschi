@@ -73,12 +73,11 @@ test.describe('the Selection tab', () => {
     // The other tabs are a click away.
     await rail.getByRole('tab', { name: 'Components' }).click();
     await expect(rail.getByRole('region', { name: 'Components' })).toBeVisible();
-    // Flows opens its pane under the canvas, and the rail keeps its tab.
-    await rail.getByRole('tab', { name: 'Flows' }).click();
-    const flows = page.getByRole('region', { name: 'Flows' });
-    await expect(flows).toBeVisible();
-    await expect(rail.getByRole('region', { name: 'Components' })).toBeVisible();
-    expect((await flows.boundingBox())!.y).toBeGreaterThanOrEqual((await page.locator('.react-flow').boundingBox())!.y + 100);
+    // Flows is not a tab on a wide screen: the switch above the canvas shows it over the canvas and the rail.
+    await expect(rail.getByRole('tab', { name: 'Flows' })).toHaveCount(0);
+    await page.getByRole('group', { name: 'View' }).getByRole('button', { name: 'Flows', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Flows' })).toBeVisible();
+    await expect(rail).toBeHidden();
   });
 
   test('the type picker lists the design’s own types first, and the type card reads the type', async ({ page }) => {

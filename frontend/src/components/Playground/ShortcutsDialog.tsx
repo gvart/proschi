@@ -19,7 +19,7 @@ interface Section {
 
 /**
  * Every key the editor page answers to. Keep in step with the handlers: the
- * canvas's (canvasEditState.ts, DiagramView.tsx), the Flows pane's (SequenceDiagram.tsx), the page's (Playground.tsx,
+ * canvas's (canvasEditState.ts, DiagramView.tsx), the Flows view's (FlowsView.tsx, FlowsPanel.tsx, SequenceDiagram.tsx), the page's (Playground.tsx,
  * useZenMode.ts, partner/shortcut.ts, Diagram/editorMode.ts) and the code editor's (CodeEditor.tsx:
  * CodeMirror's basicSetup, tabKeymap.ts and format).
  */
@@ -51,9 +51,11 @@ function shortcutSections(partner: boolean): Section[] {
       ],
     },
     {
-      title: 'Flows pane',
+      title: 'Flows',
       note: 'Click a message in the sequence diagram first. Its form is beside the diagram.',
       bindings: [
+        { keys: [['F']], action: 'Switch between the architecture and Flows' },
+        { keys: [['M']], action: 'Show or collapse the architecture map' },
         { keys: [['↑ ↓'], ['Home'], ['End']], action: 'Select the previous or next step, or the first or last' },
         { keys: [['Shift', '↑ ↓'], ['Shift', 'Click']], action: 'Select the steps from the first selected to this one' },
         { keys: [[MOD_KEY, 'Click']], action: 'Add a step to the selection, or take it out' },

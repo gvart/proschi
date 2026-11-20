@@ -5,7 +5,7 @@ import { canvasNodes, chooseOption, codeEditor, editorText, expect, setMode, tes
 test.use({ mode: 'visual' });
 
 /**
- * Editing a use case on the Flows pane's sequence diagram: a "+" between the
+ * Editing a use case on the Flows view's sequence diagram: a "+" between the
  * messages or a drag from one lifeline to another opens a composer there, a
  * selected message's form is beside the diagram, Alt+Up and Down move it and
  * Delete removes it, several selected run at the same time, and a par frame
@@ -46,6 +46,10 @@ const flows = (page: Page) => page.getByRole('region', { name: 'Flows' });
 const sequence = (page: Page) => flows(page).getByRole('listbox', { name: 'Sequence of Checkout' });
 const option = (page: Page, n: number) => sequence(page).getByRole('option', { name: new RegExp(`^${n}\\. `) });
 const composer = (page: Page) => flows(page).getByRole('dialog', { name: 'Add a step here' });
+/** A component on the Flows view's architecture map, which picks a step's end while one is picked. */
+const onMap = (page: Page, name: string) => page.getByTestId('flows-map').getByRole('button', { name, exact: true });
+/** The Flows view's one scrolling surface. */
+const surface = (page: Page) => page.locator('[data-flows-scroller]');
 /** The use case's text, from the code editor. */
 const useCase = async (page: Page) => /usecase "Checkout" \{\n[\s\S]*?\n\}/.exec(await editorText(page))?.[0] ?? '';
 
@@ -62,7 +66,7 @@ async function insertPoint(page: Page, name: string) {
   return flows(page).getByRole('button', { name, exact: true });
 }
 
-test.describe('editing on the Flows pane', () => {
+test.describe('editing on the Flows view', () => {
   test('a "+" opens the composer there: from where the last step went, to any component, a new lane for a new one', async ({ page }) => {
     await openPane(page);
     await (await insertPoint(page, 'Add a step before step 2')).click();
@@ -91,7 +95,7 @@ test.describe('editing on the Flows pane', () => {
     await flows(page).getByRole('tab', { name: 'Cart expired' }).click();
     await (await insertPoint(page, 'Add a step at the end of Cart expired')).click();
     await expect(composer(page).getByLabel('Starts at')).toHaveAttribute('data-value', 'db');
-    await canvasNodes(page).filter({ hasText: 'Checkout API' }).click();
+    await onMap(page, 'Checkout API').click();
     // The answer to the open request, by default.
     await expect(composer(page).getByRole('radio', { name: 'Response' })).toHaveAttribute('aria-checked', 'true');
     await composer(page).getByRole('combobox', { name: 'Answer' }).fill('3 rows');
@@ -139,7 +143,7 @@ test.describe('editing on the Flows pane', () => {
     await expect(option(page, 2)).toHaveAttribute('aria-selected', 'true');
 
     // To the lane next to it, at the end (scrolled to the bottom).
-    await sequence(page).evaluate((el) => el.closest('.bg-paper')!.scrollTo(0, 10_000));
+    await surface(page).evaluate((el) => el.scrollTo(0, 10_000));
     const last = (await sequence(page).getByRole('option').last().boundingBox())!;
     await drag('api', 'cache', last.y + last.height - (await lifeline('api')).y + 14);
     await expect(composer(page).getByLabel('Starts at')).toHaveAttribute('data-value', 'api');
@@ -170,11 +174,13 @@ test.describe('editing on the Flows pane', () => {
     await edit.getByRole('combobox', { name: 'Operation' }).fill('PUBLISH CartRead');
     await edit.getByRole('button', { name: 'Save step' }).click();
     await expect.poll(() => useCase(page)).toContain('  api ->> events : PUBLISH CartRead\n');
-    // Still selected, with its new ends, on the diagram, the canvas and in the form.
+    // Still selected, with its new ends, on the diagram, the map and in the form.
     await expect(option(page, 2)).toHaveAccessibleName('2. Checkout API to Order events: PUBLISH CartRead (message)');
     await expect(option(page, 2)).toHaveAttribute('aria-selected', 'true');
     await expect(flows(page).getByRole('form', { name: 'Edit step' }).getByLabel('Goes to')).toHaveAttribute('data-value', 'events');
-    expect(await page.locator('.react-flow__node.pc-active').evaluateAll((els) => els.map((e) => e.getAttribute('data-id')).sort())).toEqual(['api', 'events']);
+    await expect
+      .poll(() => page.getByTestId('flows-map').locator('[data-map-node][data-active]').evaluateAll((els) => els.map((e) => e.getAttribute('data-map-node')).sort()))
+      .toEqual(['api', 'events']);
 
     // Enter on a message goes to its form; Escape on the diagram lets it go.
     await option(page, 2).focus();
@@ -326,7 +332,8 @@ test.describe('editing on the Flows pane', () => {
     await page.mouse.click(line.x + line.width / 2, line.y + 8);
     await expect(step.getByLabel('Goes to')).toHaveAttribute('data-value', 'cache');
 
-    // The composer of a "+" picks from the headers too.
+    // The composer of a "+" picks from the headers too. (With both ends the operation list opened under its field: Escape puts it away.)
+    await page.keyboard.press('Escape');
     await step.getByRole('button', { name: 'Cancel' }).click();
     await (await insertPoint(page, 'Add a step before step 2')).click();
     await expect(composer(page).getByLabel('Goes to')).toBeFocused();
@@ -335,31 +342,30 @@ test.describe('editing on the Flows pane', () => {
     await expect(composer(page).getByLabel('Goes to')).toHaveAttribute('data-value', 'events');
   });
 
-  test("while a step's ends are picked, a click anywhere on a small node picks it: its \"+\" and dots are put away", async ({ page }) => {
+  test("while a step's ends are picked, the map's components pick them, the way it goes lit up; otherwise the map is only a picture", async ({ page }) => {
     await openPane(page);
-    // The pane at its tallest, so the canvas and its nodes are small.
-    await page.getByRole('separator', { name: 'Resize the flows pane' }).focus();
-    await page.keyboard.press('End');
+    const map = page.getByTestId('flows-map');
+    // Nothing picked: no buttons on it.
+    await expect(map.locator('[data-map-node]')).toHaveCount(6);
+    await expect(map.getByRole('button', { name: 'Orders DB', exact: true })).toHaveCount(0);
     await flows(page).getByRole('button', { name: 'Add a step', exact: true }).click();
     const step = flows(page).getByRole('form', { name: 'New step' });
     await expect(step.getByLabel('Starts at')).toHaveAttribute('data-value', 'shopper');
-    const node = canvasNodes(page).filter({ hasText: 'Orders DB' });
-    await expect(node.getByRole('button', { name: 'Add a component after Orders DB' })).toHaveCount(0);
-    // Where the "+" is when nothing is picked: on the node's right edge, half way down.
-    await node.hover();
-    const box = (await node.boundingBox())!;
-    await page.mouse.click(box.x + box.width - 2, box.y + box.height / 2);
-    await expect(page.getByRole('dialog', { name: 'Add after Orders DB' })).toHaveCount(0);
+    await expect(map).toContainText('Click where it goes');
+    await onMap(page, 'Orders DB').click();
     await expect(step.getByLabel('Goes to')).toHaveAttribute('data-value', 'db');
-    // Where its dot is, at the bottom: picked too (it starts over), no connection dragged.
-    const cache = canvasNodes(page).filter({ hasText: 'Cart cache' });
-    const at = (await cache.boundingBox())!;
-    await page.mouse.click(at.x + at.width / 2, at.y + at.height - 1);
-    await expect(step.getByLabel('Starts at')).toHaveAttribute('data-value', 'cache');
-    // Done picking, the "+" is back.
+    // Not connected: the map draws the way it would go, dashed.
+    await expect(map.locator('[data-map-missing]')).toHaveCount(1);
+    await onMap(page, 'Checkout API').click();
+    // A click after both ends starts over, from there.
+    await expect(step.getByLabel('Starts at')).toHaveAttribute('data-value', 'api');
+    await onMap(page, 'Orders DB').click();
+    await expect(map.locator('[data-map-missing]')).toHaveCount(0);
+    await expect(map.locator('[data-map-edge][data-active]')).toHaveCount(1);
+    // Done picking, it is a picture again. (With both ends the operation list opened under its field: Escape puts it away.)
+    await page.keyboard.press('Escape');
     await step.getByRole('button', { name: 'Cancel' }).click();
-    await node.hover();
-    await expect(node.getByRole('button', { name: 'Add a component after Orders DB' })).toBeVisible();
+    await expect(map.getByRole('button', { name: 'Orders DB', exact: true })).toHaveCount(0);
   });
 
   test('Add reply answers a selected request right after it, before the block that follows', async ({ page }) => {
@@ -408,14 +414,11 @@ test.describe('editing on the Flows pane', () => {
   });
 });
 
-test.describe('the Flows pane, polished', () => {
-  test('labels keep a sensible width: the diagram scrolls sideways rather than starve them, beside the column, never under it', async ({ page }) => {
+test.describe('the Flows view, polished', () => {
+  test('labels keep a sensible width: the view scrolls sideways rather than starve them, and the far lanes come out from under the column', async ({ page }) => {
     const long = SOURCE.replace('POST /checkout', 'POST /checkout {"cart": 42, "coupon": "WINTER-SALE-2026"}');
     const label = (n: number) => option(page, n).locator('span.truncate').first();
-    const scroller = () => sequence(page).evaluate((el) => {
-      const box = el.closest('.bg-paper')!;
-      return { scroll: box.scrollWidth, client: box.clientWidth, right: box.getBoundingClientRect().right };
-    });
+    const scroller = () => surface(page).evaluate((box) => ({ scroll: box.scrollWidth, client: box.clientWidth }));
     await openPane(page, long);
     for (const size of [{ width: 1440, height: 900 }, { width: 1024, height: 768 }]) {
       await page.setViewportSize(size);
@@ -425,16 +428,20 @@ test.describe('the Flows pane, polished', () => {
       // A short label shows whole.
       await expect(label(2)).toHaveText('GET cart');
       expect(await label(2).evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
-      // The column is beside the diagram, which scrolls when its lanes don't fit.
+      // The column is beside the diagram; where the lanes don't fit, the view scrolls sideways and the far end comes out from under the column.
       const column = (await flows(page).getByRole('region', { name: 'Use case Checkout' }).boundingBox())!;
       const box = await scroller();
-      expect(box.right).toBeLessThanOrEqual(column.x + 1);
+      const lane = async () => (await flows(page).locator('[data-lane="events"]').boundingBox())!;
       if (size.width === 1024) {
         expect(box.scroll).toBeGreaterThan(box.client);
-        // Scrolled to the far end, the last lane's header is in sight, in the sticky strip.
-        await sequence(page).evaluate((el) => el.closest('.bg-paper')!.scrollTo(10_000, 0));
-        const lane = (await flows(page).locator('[data-lane="events"]').boundingBox())!;
-        expect(lane.x + lane.width).toBeLessThanOrEqual(box.right + 1);
+        await surface(page).evaluate((el) => el.scrollTo(10_000, 0));
+        const last = await lane();
+        expect(last.x + last.width).toBeLessThanOrEqual(column.x + 1);
+        await surface(page).evaluate((el) => el.scrollTo(0, 0));
+      } else {
+        expect(box.scroll).toBeLessThanOrEqual(box.client);
+        const last = await lane();
+        expect(last.x + last.width).toBeLessThanOrEqual(column.x + 1);
       }
     }
   });
@@ -486,43 +493,25 @@ test.describe('the Flows pane, polished', () => {
     await expect(added).toHaveCount(0);
     await expect(flows(page).getByRole('button', { name: 'Add a step', exact: true })).toBeVisible();
   });
-
-  test('at the least pane height the composer opens above its "+" when there is more room there, its buttons in sight', async ({ page }) => {
-    await openPane(page);
-    const handle = page.getByRole('separator', { name: 'Resize the flows pane' });
-    await handle.focus();
-    await page.keyboard.press('Home');
-    await (await insertPoint(page, 'Add a step at the end')).click();
-    const box = composer(page).locator('xpath=..');
-    await expect(box).toHaveAttribute('data-placement', 'above');
-    // Taller than the diagram is there, its buttons are pinned in sight.
-    const scroller = (await sequence(page).evaluate((el) => el.closest('.bg-paper')!.getBoundingClientRect().toJSON())) as { top: number; bottom: number };
-    await expect
-      .poll(async () => {
-        const b = (await composer(page).getByRole('button', { name: 'Add step' }).boundingBox())!;
-        return b.y >= scroller.top && b.y + b.height <= scroller.bottom + 1;
-      })
-      .toBe(true);
-  });
 });
 
 type Box = { x: number; y: number; width: number; height: number };
-/** The part of the diagram in sight: its scrolling box, less the sticky lane headers at its top. */
+/** The part of the diagram in sight: the view's scrolling surface, less the sticky lane headers at its top. */
 async function diagramView(page: Page): Promise<{ top: number; bottom: number; left: number; right: number }> {
-  return sequence(page).evaluate((el) => {
-    const box = el.closest('.bg-paper')!.getBoundingClientRect();
-    const headers = el.closest('.bg-paper')!.querySelector('[data-lane]')!.parentElement!.getBoundingClientRect();
-    return { top: headers.bottom, bottom: box.bottom, left: box.left, right: box.right };
+  return surface(page).evaluate((el) => {
+    const box = el.getBoundingClientRect();
+    const headers = el.querySelector('[data-lane]')!.parentElement!.getBoundingClientRect();
+    return { top: headers.bottom, bottom: box.top + el.clientHeight, left: box.left, right: box.left + el.clientWidth };
   });
 }
 const inside = (b: Box, v: { top: number; bottom: number; left: number; right: number }) => b.y >= v.top - 0.5 && b.y + b.height <= v.bottom + 0.5 && b.x >= v.left - 0.5 && b.x + b.width <= v.right + 0.5;
 const overlap = (a: Box, b: Box) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
-/** At 1280x800 with the pane at its first height, as the blog's clips were recorded. */
+/** At 1280x800, as the blog's clips were recorded. */
 test.describe('the composer in sight, at 1280x800', () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
-  test('a step inserted mid-diagram: the form fits the pane, scrolls inside with its buttons pinned, and the operation list is not clipped', async ({ page }) => {
+  test('a step inserted mid-diagram: the view scrolls the whole form into sight (it has no scroll of its own), and the operation list is not clipped', async ({ page }) => {
     await openPane(page);
     await (await insertPoint(page, 'Add a step before step 2')).click();
     const step = composer(page);
@@ -535,14 +524,10 @@ test.describe('the composer in sight, at 1280x800', () => {
     await expect(list.getByRole('option').first()).toBeVisible();
 
     const view = await diagramView(page);
-    // The whole form, its buttons too, is in the part of the pane in sight.
+    // The whole form, its buttons too, is in the part of the view in sight, and nothing in it scrolls.
     await expect.poll(async () => inside((await step.boundingBox())!, view)).toBe(true);
     expect(inside((await step.getByRole('button', { name: 'Add step' }).boundingBox())!, view)).toBe(true);
-    // Its body scrolls inside it, under the pinned buttons.
-    expect(await step.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
-    await step.evaluate((el) => el.scrollTo(0, 10_000));
-    expect(inside((await step.getByRole('button', { name: 'Add step' }).boundingBox())!, view)).toBe(true);
-    await step.evaluate((el) => el.scrollTo(0, 0));
+    expect(await step.evaluate((el) => el.scrollHeight <= el.clientHeight && getComputedStyle(el).overflowY === 'visible')).toBe(true);
 
     // The list is drawn whole, nothing over it: the top of its first option and the bottom of what it shows are its own.
     const l = (await list.boundingBox())!;
@@ -577,19 +562,11 @@ test.describe('the composer in sight, at 1280x800', () => {
           return { covered: overlap(row, form), rowInSight: inside(row, view), formInSight: inside(form, view) };
         })
         .toEqual({ covered: false, rowInSight: true, formInSight: true });
-      // Its field is in sight, and the body above it is not cut through a line: at its top, or at the edge of a row.
-      await expect(step.getByRole('combobox', { name: 'Answer' })).toBeFocused();
-      await expect
-        .poll(() =>
-          step.evaluate((box) => {
-            const origin = box.getBoundingClientRect().top + box.clientTop - box.scrollTop;
-            const foot = box.querySelector('[data-form-foot]')!;
-            const field = box.querySelector('input:focus')!.getBoundingClientRect();
-            const edge = box.scrollTop === 0 || [...Array.from(box.querySelectorAll('*'))].some((el) => !foot.contains(el) && Math.abs(el.getBoundingClientRect().top - origin - box.scrollTop) < 1);
-            return { edge, fieldInSight: field.top >= box.getBoundingClientRect().top && field.bottom <= foot.getBoundingClientRect().top };
-          }),
-        )
-        .toEqual({ edge: true, fieldInSight: true });
+      // Its field has the focus, in sight, and the form has no scroll of its own.
+      const field = step.getByRole('combobox', { name: 'Answer' });
+      await expect(field).toBeFocused();
+      expect(inside((await field.boundingBox())!, view)).toBe(true);
+      expect(await step.evaluate((el) => el.scrollHeight <= el.clientHeight)).toBe(true);
     });
   }
 });
@@ -605,7 +582,7 @@ test.describe('the Flows list on a phone', () => {
     const sheet = page.getByTestId('palette-dock');
     const list = sheet.getByRole('region', { name: 'Flows' });
     const steps = list.getByRole('list', { name: 'Steps' });
-    await expect(page.getByTestId('flows-pane')).toHaveCount(0);
+    await expect(page.getByTestId('flows-view')).toHaveCount(0);
     await expect(steps.getByRole('group', { name: 'Scenario Cart expired' })).toContainText('SELECT cart');
 
     await steps.getByRole('button', { name: 'Edit step: Checkout API to Cart cache: GET cart' }).click();
@@ -636,9 +613,33 @@ test.describe('the Flows list on a phone', () => {
     await expect(reply.getByLabel('Starts at')).toHaveAttribute('data-value', 'mail');
     await expect(reply.getByLabel('Goes to')).toHaveAttribute('data-value', 'api');
   });
+
+  test("while a step's ends are picked, a click anywhere on a node picks it: its \"+\" and dots are put away", async ({ page }) => {
+    await page.goto(`app/#code=${lz.compressToEncodedURIComponent(SOURCE)}`);
+    await waitForCanvas(page, 6);
+    await page.getByRole('button', { name: 'Flows', exact: true }).click();
+    const list = page.getByTestId('palette-dock').getByRole('region', { name: 'Flows' });
+    await list.getByRole('button', { name: 'Add a step', exact: true }).click();
+    const step = list.getByRole('form', { name: 'New step' });
+    await expect(step.getByLabel('Starts at')).toHaveAttribute('data-value', 'shopper');
+    const node = canvasNodes(page).filter({ hasText: 'Checkout API' });
+    await expect(node.getByRole('button', { name: 'Add a component after Checkout API' })).toHaveCount(0);
+    // Where the "+" is when nothing is picked: on the node's right edge, half way down.
+    const box = (await node.boundingBox())!;
+    await page.mouse.click(box.x + box.width - 2, box.y + box.height / 2);
+    await expect(page.getByRole('dialog', { name: 'Add after Checkout API' })).toHaveCount(0);
+    await expect(step.getByLabel('Goes to')).toHaveAttribute('data-value', 'api');
+    // Where its dot is, at the bottom: picked too (it starts over), no connection dragged.
+    const edges = await page.locator('.react-flow__edge').count();
+    const shopper = canvasNodes(page).filter({ hasText: 'Shopper' });
+    const at = (await shopper.boundingBox())!;
+    await page.mouse.click(at.x + at.width / 2, at.y + at.height - 1);
+    await expect(step.getByLabel('Starts at')).toHaveAttribute('data-value', 'shopper');
+    await expect(page.locator('.react-flow__edge')).toHaveCount(edges);
+  });
 });
 
-test('a group made on the pane is in the code editor\'s history: Code mode undoes it', async ({ page }) => {
+test('a group made on the view is in the code editor\'s history: Code mode undoes it', async ({ page }) => {
   await openPane(page);
   const original = await useCase(page);
   await option(page, 1).click();
