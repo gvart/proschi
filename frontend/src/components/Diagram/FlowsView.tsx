@@ -114,7 +114,7 @@ export function FlowsScroller({ children, float }: FlowsScrollerProps) {
     return () => observer.disconnect();
   }, [floats]);
 
-  // Up in the top corner while what is being worked on (the selected step, the composer) is under the bottom corner.
+  // Up in the top corner while what is being worked on (the selected step, the draft of a new one) is under the bottom corner.
   const [up, setUp] = useState(false);
   useEffect(() => {
     const scroller = scrollerRef.current;
@@ -127,7 +127,7 @@ export function FlowsScroller({ children, float }: FlowsScrollerProps) {
         if (!box) return;
         const s = scroller.getBoundingClientRect();
         const bottom = { left: box.left, right: box.right, top: s.top + scroller.clientHeight - GAP - box.height, bottom: s.top + scroller.clientHeight - GAP };
-        const work = [...scroller.querySelectorAll<HTMLElement>('[role="option"][aria-selected="true"], [role="dialog"], [data-step-toolbar], [data-label-editor]')].map((el) => el.getBoundingClientRect());
+        const work = [...scroller.querySelectorAll<HTMLElement>('[role="option"][aria-selected="true"], [role="dialog"], [data-step-toolbar], [data-label-editor], [data-card], [data-draft]')].map((el) => el.getBoundingClientRect());
         setUp(work.some((w) => w.left < bottom.right && w.right > bottom.left && w.top < bottom.bottom && w.bottom > bottom.top));
       });
     };

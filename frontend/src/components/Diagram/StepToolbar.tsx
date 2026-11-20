@@ -134,6 +134,37 @@ export default function StepToolbar({ n, kind, onKind, onReply, onMove, details,
   );
 }
 
+/** A draft's toolbar, under its row once both ends are known: its kind (guessed, a response going back to a caller), and to stop. */
+export function DraftToolbar({ kind, onKind, onCancel }: { kind: StepKind; onKind: (kind: StepKind) => void; onCancel: () => void }) {
+  return (
+    <Bar label="New step" onLeave={onCancel}>
+      <div role="group" aria-label="Kind of step" className="flex items-center gap-0.5">
+        {KINDS.map((k) => (
+          <button
+            key={k.kind}
+            type="button"
+            aria-pressed={kind === k.kind}
+            title={k.help}
+            // Keeps the label's field focused, so Enter still adds the step.
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => onKind(k.kind)}
+            className={`${button} ${kind === k.kind ? '!bg-ink !text-paper' : ''}`}
+          >
+            <span aria-hidden="true" className="font-mono">
+              {k.glyph}
+            </span>
+            {k.label}
+          </button>
+        ))}
+      </div>
+      <Divider />
+      <button type="button" aria-label="Stop adding steps" title="Stop (Escape)" onClick={onCancel} className={button}>
+        <X size={14} aria-hidden="true" />
+      </button>
+    </Bar>
+  );
+}
+
 /** The toolbar over several selected steps: run them at the same time, delete them, or let them go. */
 export function GroupToolbar({ count, onGroup, refusal, onDelete, onClear, onLeave }: { count: number; onGroup?: () => void; refusal?: string; onDelete: () => void; onClear: () => void; onLeave: () => void }) {
   return (

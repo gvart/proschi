@@ -35,7 +35,7 @@ import ArchitectureMap from './ArchitectureMap';
 import { useMapOpen } from './canvasEditState';
 import { ViewSwitch } from './CanvasEditing';
 import { FlowsScroller } from './FlowsView';
-import StepToolbar, { GroupToolbar } from './StepToolbar';
+import StepToolbar, { DraftToolbar, GroupToolbar } from './StepToolbar';
 import Menu, { MenuItem } from '../Playground/Menu';
 import { insertAt, insertedStep, movedStep, samePlaces, unanswered } from './sequenceEdit';
 
@@ -55,9 +55,13 @@ import { insertAt, insertedStep, movedStep, samePlaces, unanswered } from './seq
  * (SequenceDiagram.tsx) that is edited on its arrows: a click selects a step
  * (Shift or Cmd/Ctrl several) and shows its toolbar (its kind, Add reply,
  * move, its details, delete); Enter or a double click edits its label in
- * place; its end handles drag to other lanes; a "+" or a drag between
- * lifelines opens a composer there. Every change applies at once and undoes
- * with Ctrl/Cmd+Z. The architecture map lights up the selected step.
+ * place; its end handles drag to other lanes. A step is added by a draft
+ * arrow drawn in place: the "Add step" row, a "+" between the rows, a drag
+ * between lifelines or N starts it, a click on a lane (or the map) picks
+ * where it goes, its label is typed on it, and Enter adds it and starts the
+ * next from where it ended. "+ Lane" shows another of the design's
+ * components. Every change applies at once and undoes with Ctrl/Cmd+Z. The
+ * architecture map lights up the selected step.
  */
 
 /** A step being added: the components picked so far (on the canvas or in the form). */
@@ -142,14 +146,17 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   const detailsOpen = !!chosen && detailsOf === chosen.line;
   /** What the last change did, for the live region. */
   const [news, setNews] = useState('');
-  /** Where the composer is open on the diagram, and how many messages are drawn before it. */
-  const [composing, setComposing] = useState<{ slot: Slot; index: number; useCase?: string; added?: number } | null>(null);
-  // Another use case chosen (here or in the top bar): the composer was for the last one, and so were its ends.
+  /** The step being drafted on the diagram: where (and how many messages are drawn before it), its kind when chosen, how many it chained. Its ends are `pick`. */
+  /** Before or after a step, the step it is anchored to, followed through edits of the text (an undo) as the selection is. */
+  const [draft, setDraft] = useState<{ slot: Slot; index: number; useCase?: string; kind?: StepKind; chained?: number; anchor?: OutlineStep } | null>(null);
+  // Another use case chosen (here or in the top bar): the draft was for the last one, and so were its ends.
   useEffect(() => {
-    if (!composing || composing.useCase === current) return;
-    setComposing(null);
+    if (!draft || draft.useCase === current) return;
+    setDraft(null);
     pickRef.current(null);
-  }, [composing, current]);
+  }, [draft, current]);
+  /** The lanes shown with "+ Lane" before a step uses them, by use case. */
+  const [laneAdds, setLaneAdds] = useState<Record<string, string[]>>({});
   /** Changed to put the focus back on the diagram's selected message after an edit. */
   const [focusKey, setFocusKey] = useState(0);
   /** The steps the tab draws, in order. */
@@ -163,7 +170,10 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   };
   const select = (step: OutlineStep, mode: SelectMode) => {
     setError(undefined);
-    setComposing(null);
+    if (draft) {
+      setDraft(null);
+      onPick(null);
+    }
     const at = (s: OutlineStep) => drawn.findIndex((d) => d.line === s.line);
     if (mode === 'toggle') selectSteps(followed.some((s) => s.line === step.line) ? followed.filter((s) => s.line !== step.line) : [...followed, step]);
     else if (mode === 'range' && followed.length && at(followed[0]) >= 0 && at(step) >= 0) {
@@ -176,8 +186,8 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   /** Shows a tab (the main flow, or a scenario); a step selected in another scenario is let go. */
   const chooseLane = (next: string) => {
     setLane(next);
-    if (composing) {
-      setComposing(null);
+    if (draft) {
+      setDraft(null);
       onPick(null);
     }
     if (outline && followed.some((s) => (scenarioOfStep(outline.items, s.line) ?? next) !== next)) clearSelection();
@@ -233,15 +243,22 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
       return placed && [placed.reduce((a, b) => (b.line < a.line ? b : a))];
     }, true);
   const ungroup = (line: number) => commit(ungroupParallel(source, line), (after) => samePlaces(steps, after, followed), true);
-  const openComposer = (slot: Slot, index: number, stepEnds?: StepPick) => {
+  /** The components a flow can run between, and where one starts: the design's first actor or client. */
+  const parts = useMemo(() => diagram.nodes.filter((x) => x.kind !== 'group' && x.kind !== 'text'), [diagram]);
+  const starter = useMemo(() => parts.find((x) => x.resolvedType?.kind === 'client')?.id, [parts]);
+  /** Starts a draft at an insertion point, from where the step before it went (or with the ends a drag drew). */
+  const startDraft = (slot: Slot, index: number, stepEnds?: StepPick) => {
     setError(undefined);
     setSel([]);
-    setComposing({ slot, index, useCase: current });
-    // From where the step before it went.
-    onPick(stepEnds ?? { from: drawn[index - 1]?.to });
+    setLabelEdit(null);
+    setDetailsOf(null);
+    setDraft({ slot, index, useCase: current, anchor: slot.kind === 'before' || slot.kind === 'after' ? steps.find((s) => s.line === slot.line) : undefined });
+    const from = stepEnds ? stepEnds.from : (drawn[index - 1]?.to ?? (index === 0 ? (drawn[0]?.from ?? starter) : undefined));
+    onPick(stepEnds ?? { from });
+    setNews(from ? `New step from ${name(from)}. Choose where it goes.` : 'New step. Choose where it starts.');
   };
-  const closeComposer = () => {
-    setComposing(null);
+  const endDraft = () => {
+    setDraft(null);
     onPick(null);
     setFocusKey((k) => k + 1);
   };
@@ -294,7 +311,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
       setLane(MAIN);
       setEditing(null);
       setSel([]);
-      setComposing(null);
+      setDraft(null);
       onPick(null);
     }
   };
@@ -589,14 +606,20 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   };
   const addAtEnd = (ends?: StepPick) => {
     const [slot, index] = endSlot();
-    openComposer(slot, index, ends ?? { from: drawn[index - 1]?.to });
+    startDraft(slot, index, ends);
   };
-  // A step's ends picked from elsewhere (the command bar's "Add a step"): the composer at the end takes them.
+  /** A use case with nothing in it yet: its draft is already there, from where the flow starts. */
+  const blank = !!outline && outline.items.length === 0;
+  /** No steps (but perhaps scenarios or blocks): the design's components show as lanes to start from. */
+  const stepless = !!outline && steps.length === 0;
   useEffect(() => {
-    if (pane && pick && !composing && current) addAtEnd(pick);
-    // Only when the pick comes without a composer.
+    if (!pane || !current) return;
+    // A step's ends picked from elsewhere (the command bar's "Add a step"): a draft at the end takes them.
+    if (pick && !draft) addAtEnd(pick);
+    else if (blank && !draft && !naming) addAtEnd();
+    // Only when a pick comes without a draft, or the use case is blank.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pane, pick, composing, current]);
+  }, [pane, pick, draft, current, blank, naming]);
 
   /** Changes the selected step (its kind, ends or label) in one edit, kept selected; refuses a step to its own component. */
   const change = (next: Partial<NewStepInput>, done: string, focus = true) => {
@@ -612,6 +635,12 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
     return ok;
   };
   const n = chosen ? drawnNumbers?.get(chosen.line) : undefined;
+  /** The lanes shown beyond the steps': those "+ Lane" added, and a draft's ends. */
+  const shownLanes = useMemo(() => {
+    const own = outline ? laneOrder(outline) : [];
+    const more = [...(current ? (laneAdds[current] ?? []) : []), ...(draft && pick ? [pick.from, pick.to] : [])].filter((id): id is string => !!id && !own.includes(id));
+    return [...own, ...more.filter((id, i) => more.indexOf(id) === i)];
+  }, [outline, laneAdds, current, draft, pick]);
   const retarget = (step: OutlineStep, end: 'from' | 'to', id: string) => {
     if (id === (end === 'from' ? step.to : step.from)) {
       setError(SELF);
@@ -622,7 +651,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   };
   const reply =
     chosen?.kind === 'request' && unanswered(drawn, chosen.line)
-      ? () => openComposer({ kind: 'after', line: chosen.line }, drawn.findIndex((d) => d.line === chosen.line) + 1, { from: chosen.to, to: chosen.from })
+      ? () => startDraft({ kind: 'after', line: chosen.line }, drawn.findIndex((d) => d.line === chosen.line) + 1, { from: chosen.to, to: chosen.from })
       : undefined;
   const setKind = (kind: StepKind) => change({ kind }, `Step ${n} is now a ${KIND_LABEL[kind].toLowerCase()}.`);
   /** The keys on the selected step: 1 to 4 its kind, R its reply, D its details, X swaps its ends, Alt+Left and Right move its head (with Shift its tail). */
@@ -638,11 +667,18 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
       if (key === 'r' && reply && !e.shiftKey) return reply(), true;
       if (key === 'd' && !e.shiftKey) return setDetailsOf(detailsOpen ? null : chosen.line), true;
       if (key === 'x' && !e.shiftKey) return change({ from: chosen.to, to: chosen.from }, `Step ${n} now goes from ${name(chosen.to)} to ${name(chosen.from)}.`), true;
+      if (key === 'n') {
+        // After it, from where it went; with Shift, before it.
+        const at = drawn.findIndex((d) => d.line === chosen.line);
+        if (e.shiftKey) startDraft({ kind: 'before', line: chosen.line }, at);
+        else startDraft({ kind: 'after', line: chosen.line }, at + 1, { from: chosen.to });
+        return true;
+      }
       return false;
     }
     if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return false;
     const end = e.shiftKey ? 'from' : 'to';
-    const lanes = laneOrder(outline);
+    const lanes = shownLanes;
     const other = end === 'from' ? chosen.to : chosen.from;
     const d = e.key === 'ArrowRight' ? 1 : -1;
     let i = lanes.indexOf(chosen[end]) + d;
@@ -704,28 +740,22 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
           ),
         }
       : undefined;
-  /** The selected step's details (headers, payload, fan-out), in a card under its arrow. */
+  /** The selected step's details (headers, payload, fan-out), in a card under its toolbar. */
   const detailsCard =
-    chosen && detailsOpen && outline
-      ? {
-          slot: { kind: 'after' as const, line: chosen.line },
-          card: true,
-          node: (
-            <DetailsCard
-              key={chosen.line}
-              step={chosen}
-              n={n}
-              headers={stepVocabulary(diagram, chosen.from, chosen.to, chosen.kind, used).headers}
-              typeName={diagram.nodes.find((x) => x.id === chosen.to)?.resolvedType?.name}
-              onApply={(label) => change({ label }, `Step ${n} details changed.`, false)}
-              onClose={() => {
-                setDetailsOf(null);
-                setFocusKey((k) => k + 1);
-              }}
-            />
-          ),
-        }
-      : undefined;
+    chosen && detailsOpen && outline ? (
+      <DetailsCard
+        key={chosen.line}
+        step={chosen}
+        n={n}
+        headers={stepVocabulary(diagram, chosen.from, chosen.to, chosen.kind, used).headers}
+        typeName={diagram.nodes.find((x) => x.id === chosen.to)?.resolvedType?.name}
+        onApply={(label) => change({ label }, `Step ${n} details changed.`, false)}
+        onClose={() => {
+          setDetailsOf(null);
+          setFocusKey((k) => k + 1);
+        }}
+      />
+    ) : undefined;
   const scenarioTools = laneNow && current && (
     <div role="group" aria-label={`Scenario ${laneNow}`} className="flex items-center gap-0.5">
       {renaming?.scenario === laneNow ? (
@@ -751,74 +781,117 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
       </button>
     </div>
   );
-  /** The composer on the diagram: a step added at its insertion point, then selected; at the end of the tab it stays open for the next. */
-  const chaining = composing && (composing.slot.kind === 'end' || composing.slot.kind === 'scenario');
-  const composer =
-    composing && pick && current
-      ? {
-          slot: composing.slot,
-          node: (
-            <div
-              role="dialog"
-              aria-label="Add a step here"
-              onKeyDown={(e) => {
-                if (e.key !== 'Escape' || e.defaultPrevented) return;
-                e.preventDefault();
-                e.stopPropagation();
-                closeComposer();
-              }}
-              // As tall as it needs: the Flows view, the one thing that scrolls, scrolls it into sight (SequenceDiagram).
-              className="rounded-sm shadow-brutal-md"
-            >
-              <StepForm
-                key={`${composing.slot.kind}:${'line' in composing.slot ? composing.slot.line : 'name' in composing.slot ? composing.slot.name : ''}`}
-                diagram={diagram}
-                steps={drawn.slice(0, chaining ? endSlot()[1] : composing.index)}
-                used={used}
-                pick={pick}
-                onPick={(p) => (p ? onPick(p) : closeComposer())}
-                where={
-                  composing.slot.kind === 'after'
-                    ? 'The reply, right after the step.'
-                    : composing.slot.kind === 'par'
-                      ? 'A step at the same time as the others.'
-                      : composing.slot.kind === 'scenario'
-                        ? `A step at the end of ${composing.slot.name}.`
-                        : composing.slot.kind === 'end'
-                          ? 'A step at the end.'
-                          : 'A step here.'
-                }
-                mode={chaining ? 'add' : 'insert'}
-                firstAdded={composing.added}
-                button="Add step"
-                autoFocus
-                check={(st) => problemsOf(insertAt(source, current, composing.slot, st, diagram))}
-                onGiveOps={chaining ? giveOps : undefined}
-                onAdd={(st) => {
-                  const slot = composing.slot;
-                  // At the end, the composer stays for the next step (StepForm starts it where this one went).
-                  if (chaining) {
-                    const ok = apply(insertAt(source, current, slot, st, diagram));
-                    // Counted here too: the first step moves the composer from the empty diagram onto it, a new form.
-                    if (ok) setComposing((c) => c && { ...c, added: (c.added ?? 0) + 1 });
-                    return ok;
-                  }
-                  // No types from here: one written above the use case would move the step this adds before.
-                  const done = commit(insertAt(source, current, slot, st, diagram), (after) => {
-                    const added = insertedStep(steps, after, slot);
-                    return added ? [added] : [];
-                  }, true);
-                  if (done) {
-                    setComposing(null);
-                    onPick(null);
-                  }
-                  return done;
-                }}
-              />
-            </div>
-          ),
-        }
-      : undefined;
+  /**
+   * The draft, while it is for this use case and its ends are being picked: where it is now. Before or after a step,
+   * it follows that step through edits of the text; with the step gone, it goes to the end. At the end, it stays there.
+   */
+  const live = (() => {
+    if (!draft || !pick || !current || draft.useCase !== current) return null;
+    const { slot } = draft;
+    if (slot.kind === 'end' || slot.kind === 'scenario') {
+      const [, index] = endSlot();
+      return { ...draft, index };
+    }
+    if (slot.kind === 'par') return draft;
+    const anchor = draft.anchor && followStep(draft.anchor, steps);
+    const at = anchor ? drawn.findIndex((d) => d.line === anchor.line) : -1;
+    if (!anchor || at < 0) {
+      const [end, index] = endSlot();
+      return { ...draft, slot: end, index, anchor: undefined };
+    }
+    return { ...draft, slot: { kind: slot.kind, line: anchor.line }, index: at + (slot.kind === 'after' ? 1 : 0), anchor };
+  })();
+  /** A lane chosen for the draft (a click on a lane, its row or the map): its start while it has none, else where it goes; its start again starts over. */
+  const draftLane = (id: string) => {
+    setError(undefined);
+    if (!pick?.from) {
+      onPick({ from: id });
+      setNews(`New step from ${name(id)}. Choose where it goes.`);
+    } else if (id === pick.from) {
+      onPick({});
+      setNews('Choose where the step starts.');
+    } else {
+      setError(undefined);
+      onPick({ from: pick.from, to: id });
+      setNews(`To ${name(id)}. Type what it does.`);
+    }
+  };
+  const draftView = (() => {
+    if (!live || !current) return undefined;
+    const { from, to } = pick ?? {};
+    const before = drawn.slice(0, live.index);
+    const kind = live.kind ?? (from && to ? defaultStepKind(before, from, to) : 'request');
+    const waiting = !to ? openRequest(before) : undefined;
+    const asked = waiting && before.reduce((at, s, i) => (s.kind === 'request' && s.from === waiting.from && s.to === waiting.to ? i + 1 : at), 0);
+    const status = !from
+      ? 'Click the component that starts the flow.'
+      : !to
+        ? live.chained
+          ? `Added. Next from ${name(from)}: click where it goes. Escape to stop.`
+          : drawn.length === 0
+            ? `${name(from)} starts. Click what it calls.`
+            : `From ${name(from)}. Click where it goes.`
+        : live.chained
+          ? 'Enter adds the next step. Escape to stop.'
+          : 'Enter adds the step. Escape to stop.';
+    return {
+      slot: live.slot,
+      from,
+      to,
+      kind,
+      status,
+      reply: waiting
+        ? {
+            text: `Reply to ${asked}: ${name(waiting.to)} answers ${name(waiting.from)}`,
+            onTake: () => {
+              setDraft({ ...live, kind: 'response' });
+              onPick({ from: waiting.to, to: waiting.from });
+            },
+          }
+        : undefined,
+      toolbar: to ? <DraftToolbar kind={kind} onKind={(k) => setDraft({ ...live, kind: k })} onCancel={endDraft} /> : undefined,
+      field:
+        from && to ? (
+          <LabelEditor
+            key={`${slotKeyOf(live.slot)}:${from}>${to}:${live.chained ?? 0}`}
+            draft
+            step={{ line: -1, from, to, kind, label: '' }}
+            diagram={diagram}
+            used={used}
+            check={(label) => problemsOf(insertAt(source, current, live.slot, { from, to, kind, label }, diagram))}
+            onDone={(label) => (label === undefined ? endDraft() : addDraft({ from, to, kind, label }))}
+            onGiveOps={(head) => giveOps(to, head)}
+          />
+        ) : undefined,
+      onLane: draftLane,
+      onCancel: endDraft,
+    };
+  })();
+  /** Adds the draft's step, and starts the next from where it went, on the row after it. */
+  const addDraft = (step: NewStepInput) => {
+    if (!live || !current) return;
+    const result = insertAt(source, current, live.slot, step, diagram);
+    if (!apply(result)) return;
+    const after = outlineOf(result.source!, current);
+    const added = insertedStep(steps, after ? allSteps(after.items) : [], live.slot);
+    setNews(`Step ${live.index + 1} added.`);
+    if (!added) return endDraft();
+    setDraft({ slot: { kind: 'after', line: added.line }, index: live.index + 1, useCase: current, chained: (live.chained ?? 0) + 1, anchor: added });
+    onPick({ from: step.to });
+  };
+  /** Shows another of the design's components as a lane; picked for a draft choosing one, its end. */
+  const addLane = (id: string) => {
+    if (!current) return;
+    setLaneAdds((all) => ({ ...all, [current]: [...(all[current] ?? []).filter((x) => x !== id), id] }));
+    setNews(`${name(id)} has a lane.`);
+    if (live && !pick?.to) draftLane(id);
+  };
+  /** The design's components in the order they connect, from where flows start: an empty use case's lanes. */
+  const candidates = useMemo(() => {
+    const order: string[] = starter ? [starter] : [];
+    for (let i = 0; i < order.length; i++) for (const e of diagram.edges) if (e.source === order[i] && !order.includes(e.target)) order.push(e.target);
+    return [...order, ...parts.map((x) => x.id).filter((id) => !order.includes(id))];
+  }, [diagram, parts, starter]);
 
   // The architecture beside the sequence: the selected steps lit up, or the step whose ends are being picked (clicks on it pick them).
   const map = pane && (
@@ -827,8 +900,8 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
       onOpen={setMapOpen}
       steps={pick?.from && pick.to ? [{ from: pick.from, to: pick.to }] : followed}
       marked={pick ? [pick.from, pick.to].filter((id): id is string => !!id) : []}
-      focus={outline ? laneOrder(outline) : []}
-      onPick={pick ? (id) => onPick(nextPick(pick, id)) : undefined}
+      focus={stepless ? [] : shownLanes}
+      onPick={pick ? (id) => (live ? draftLane(id) : onPick(nextPick(pick, id))) : undefined}
       hint={pick ? (pick.from ? 'Click where it goes' : 'Click where it starts') : undefined}
     />
   );
@@ -909,18 +982,21 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
         data-flows-focus
         className="@container flex h-full min-h-0 flex-col bg-surface text-ink outline-hidden"
         onKeyDown={(e) => {
-          // M opens or collapses the map, from anywhere in the view but a field or a control with letter keys of its own.
-          if (e.defaultPrevented || e.key.toLowerCase() !== 'm' || e.ctrlKey || e.metaKey || e.altKey) return;
+          // M opens or collapses the map, N starts a step at the end, from anywhere in the view but a field or a control with letter keys of its own.
+          const key = e.key.toLowerCase();
+          if (e.defaultPrevented || (key !== 'm' && key !== 'n') || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
           if ((e.target as Element).closest('input, textarea, select, [contenteditable], [role="combobox"], [role="menu"], [role="dialog"]')) return;
+          if (key === 'n' && (!current || !outline || live)) return;
           e.preventDefault();
-          setMapOpen(!mapOpen);
+          if (key === 'm') setMapOpen(!mapOpen);
+          else addAtEnd();
         }}
       >
-        {/* The bar: the view switch, the use case, its scenarios, Add a step; it wraps rather than scroll. Over the diagram's sticky lane headers, for its menus. */}
+        {/* The bar: the view switch, the use case and its scenarios; it wraps rather than scroll. Over the diagram's sticky lane headers, for its menus. */}
         <div className="relative z-50 flex min-h-[52px] shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b-bw-1 border-ink bg-surface py-2 pl-4 pr-3">
           <h2 className="sr-only">Flows</h2>
           <ViewSwitch flows onChange={(flows) => !flows && onClose()} />
-          <div className="min-w-0 shrink-0">{headerPicker ? title : picker}</div>
+          {useCases.length > 0 && <div className="min-w-0 shrink-0">{headerPicker ? title : picker}</div>}
           {current && outline && (
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 border-l border-ink/15 pl-3">
               <div role="tablist" aria-label="Scenarios" className="flex min-w-0 flex-wrap items-center gap-1">
@@ -942,18 +1018,20 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
               <AddScenario suggestions={missingScenarios(diagram, current, scenarios)} onAdd={newScenario} />
             </div>
           )}
-          {current && outline && (
-            <button type="button" onClick={() => addAtEnd()} title="Add a step at the end, then click its components on the map or the lanes" className={`${primaryButton} ml-auto !px-2.5 !py-1 text-xs`}>
-              <Plus size={14} aria-hidden="true" />
-              Add a step
-            </button>
-          )}
         </div>
         {alert && <div className="shrink-0 border-b border-ink/15 bg-surface px-4 py-1.5">{alert}</div>}
         <p role="status" data-testid="flows-news" className="sr-only">
           {news}
         </p>
-        {current && outline ? (
+        {parts.length === 0 ? (
+          // Nothing to run between: one way to the components.
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 bg-paper p-6 text-center">
+            <p className="max-w-sm text-sm text-muted">A flow runs between components. Add some on the Architecture view.</p>
+            <button type="button" onClick={onClose} className={primaryButton}>
+              Go to Architecture
+            </button>
+          </div>
+        ) : current && outline ? (
           <FlowsScroller float={map}>
             {(fit) => (
               <SequenceDiagram
@@ -967,30 +1045,29 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
                   select(step, mode);
                 }}
                 onScenario={chooseLane}
-                onInsert={openComposer}
+                onInsert={startDraft}
                 onMove={move}
                 onDelete={() => deleteSelected()}
                 onEdit={() => chosen && setLabelEdit(chosen.line)}
                 onClear={clearSelection}
                 onUngroup={ungroup}
-                composer={composer ?? detailsCard}
+                card={live ? undefined : detailsCard}
                 focusKey={focusKey}
-                onPickLane={pick ? (id) => onPick(nextPick(pick, id)) : undefined}
-                toolbar={composer ? undefined : toolbar}
+                onPickLane={pick && !live ? (id) => onPick(nextPick(pick, id)) : undefined}
+                toolbar={live ? undefined : toolbar}
                 editing={labelEditor}
                 onRetarget={retarget}
                 onStepKey={stepKey}
+                extraLanes={shownLanes}
+                candidates={stepless ? candidates : undefined}
+                laneAdder={<LaneAdder options={parts.filter((x) => !shownLanes.includes(x.id))} onAdd={addLane} onNew={onClose} />}
+                draft={draftView}
               />
             )}
           </FlowsScroller>
         ) : (
           <div className="relative min-h-0 flex-1 bg-paper p-6">
-            {empty && (
-              <div className="mx-auto mt-[8vh] max-w-md space-y-3 rounded-sm border-bw-1 border-ink bg-surface p-5 shadow-brutal-sm">
-                <h3 className="text-base font-bold">No use cases yet</h3>
-                {empty}
-              </div>
-            )}
+            {!naming && <FirstUseCase suggestions={suggestions} onAdd={newUseCase} />}
             {map && <div className="absolute bottom-3 right-3">{map}</div>}
           </div>
         )}
@@ -1100,6 +1177,180 @@ function AddScenario({ suggestions, onAdd }: { suggestions: string[]; onAdd: (na
           document.body,
         )}
     </div>
+  );
+}
+
+const slotKeyOf = (slot: Slot) => `${slot.kind}:${'line' in slot ? slot.line : 'name' in slot ? slot.name : ''}`;
+
+/** The view with no use case yet: one field to name the first, with the problem's own names as one-click chips. */
+function FirstUseCase({ suggestions, onAdd }: { suggestions: string[]; onAdd: (name: string) => boolean }) {
+  const [value, setValue] = useState('');
+  const id = useId();
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        onAdd(value);
+      }}
+      className="mx-auto mt-[8vh] max-w-md space-y-2.5 rounded-sm border-bw-1 border-ink bg-surface p-5 shadow-brutal-sm"
+    >
+      <label htmlFor={id} className="block text-base font-bold">
+        Name the first use case
+      </label>
+      <p className="text-sm text-muted">A use case is one thing a user does, written as the requests it makes from component to component.</p>
+      <input id={id} autoFocus value={value} onChange={(e) => setValue(e.target.value)} placeholder="e.g. Place order, then Enter" autoComplete="off" className={`w-full ${field}`} />
+      {suggestions.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1" aria-label="Use cases the problem asks for">
+          <span className="mr-1 text-xs text-muted">Or one the problem asks for:</span>
+          {suggestions.map((s) => (
+            <button key={s} type="button" onClick={() => onAdd(s)} className="inline-flex items-center gap-1 rounded-full border-bw-1 border-ink/40 px-2 py-0.5 text-xs font-semibold hover:border-ink hover:bg-pop-yellow/30">
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+    </form>
+  );
+}
+
+/** The width of "+ Lane"'s list. */
+const LANES_W = 256;
+
+/**
+ * "+ Lane" at the end of the lane headers: the design's components that have no lane yet, filtered by typing, in a
+ * list drawn in a portal over everything. The last row, "New component…", goes to the Architecture view.
+ */
+function LaneAdder({ options, onAdd, onNew }: { options: Diagram['nodes']; onAdd: (id: string) => void; onNew: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [active, setActive] = useState(0);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const [at, setAt] = useState<{ left: number; top: number } | null>(null);
+  const shown = options.filter((o) => `${o.name} ${o.id} ${o.techStack}`.toLowerCase().includes(query.trim().toLowerCase())).slice(0, 8);
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const r = buttonRef.current?.getBoundingClientRect();
+      if (r) setAt({ left: Math.max(8, Math.min(r.left, window.innerWidth - LANES_W - 8)), top: r.bottom + 6 });
+    };
+    place();
+    const onPointer = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (!buttonRef.current?.contains(target) && !listRef.current?.contains(target)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', onPointer);
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer);
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
+    };
+  }, [open]);
+  const close = () => {
+    setOpen(false);
+    setQuery('');
+    setActive(0);
+  };
+  const choose = (id: string) => {
+    close();
+    onAdd(id);
+  };
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        title="Show another component as a lane"
+        onClick={() => (open ? close() : setOpen(true))}
+        className="inline-flex h-8 items-center gap-1 whitespace-nowrap rounded-sm border-bw-1 border-dashed border-ink/50 bg-surface px-2 text-xs font-semibold text-ink/80 hover:border-ink hover:bg-pop-yellow/30 hover:text-ink aria-expanded:border-ink"
+      >
+        <Plus size={13} aria-hidden="true" />
+        Lane
+      </button>
+      {open &&
+        at &&
+        createPortal(
+          <div
+            ref={listRef}
+            role="dialog"
+            aria-label="Add a lane"
+            className="fixed z-[1000] rounded-sm border-bw-1 border-ink bg-surface p-2 text-ink shadow-brutal-md"
+            style={{ ...at, width: LANES_W }}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                close();
+                buttonRef.current?.focus({ preventScroll: true });
+              }
+            }}
+          >
+            <input
+              autoFocus
+              role="combobox"
+              aria-label="Component"
+              aria-expanded="true"
+              aria-controls={`${at.left}-lanes`}
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setActive(0);
+              }}
+              onKeyDown={(e) => {
+                const count = shown.length + 1;
+                if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  setActive((a) => (a + (e.key === 'ArrowDown' ? 1 : -1) + count) % count);
+                } else if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (active < shown.length) choose(shown[active].id);
+                  else {
+                    close();
+                    onNew();
+                  }
+                }
+              }}
+              placeholder="Search the components"
+              autoComplete="off"
+              className={`mb-1.5 w-full ${field} !py-1 text-xs`}
+            />
+            <div role="listbox" id={`${at.left}-lanes`} aria-label="Components without a lane" className="space-y-0.5">
+              {shown.map((o, i) => (
+                <div
+                  key={o.id}
+                  role="option"
+                  aria-selected={i === active}
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => choose(o.id)}
+                  className="flex cursor-pointer items-center justify-between gap-2 rounded-sm px-1.5 py-1 text-xs aria-selected:bg-pop-yellow/40 hover:bg-pop-yellow/30"
+                >
+                  <span className="truncate font-semibold">{o.name}</span>
+                  <span className="shrink-0 text-muted">{o.techStack}</span>
+                </div>
+              ))}
+              {shown.length === 0 && <p className="px-1.5 py-1 text-xs text-muted">{options.length ? 'None matches.' : 'Every component has a lane.'}</p>}
+              <div
+                role="option"
+                aria-selected={active === shown.length}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => {
+                  close();
+                  onNew();
+                }}
+                className="flex cursor-pointer items-center gap-1 rounded-sm border-t border-ink/15 px-1.5 py-1 text-xs font-semibold aria-selected:bg-pop-yellow/40 hover:bg-pop-yellow/30"
+              >
+                <Plus size={12} aria-hidden="true" />
+                New component…
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
 
@@ -1324,7 +1575,6 @@ function StepForm({
   mode = 'add',
   initial,
   button,
-  firstAdded = 0,
   autoFocus = false,
   quiet = false,
   check,
@@ -1344,8 +1594,6 @@ function StepForm({
   initial?: { kind: StepKind; label: string };
   /** The submit button's text, when not the mode's. */
   button?: string;
-  /** How many steps this composer added before it was drawn again elsewhere. */
-  firstAdded?: number;
   /** Focuses the end it still needs on opening (the label takes the focus once both are known). */
   autoFocus?: boolean;
   /** Takes no focus at all: it opens beside a selection that keeps it. */
@@ -1373,7 +1621,7 @@ function StepForm({
   const vocabulary = useMemo(() => stepVocabulary(diagram, from ?? '', to ?? '', kind, used), [diagram, from, to, kind, used]);
   const nodes = diagram.nodes.filter((n) => n.kind !== 'group' && n.kind !== 'text');
   const select = (value: string, which: 'from' | 'to') => onPick({ ...pick, [which]: value || undefined });
-  const [added, setAdded] = useState(firstAdded);
+  const [added, setAdded] = useState(0);
   const deferred = useDeferredValue(label);
   const problems = useMemo(() => (both ? check({ from, to, kind, label: deferred }) : []), [both, check, from, to, kind, deferred]);
   const open = openRequest(steps);
@@ -1488,7 +1736,8 @@ const restOf = (p: LabelParts): More => ({ fanOut: p.fanOut, size: p.size, sizeF
 /**
  * A step's label edited on its arrow (SequenceDiagram draws it over the label): the operation or status, with the
  * type's own as suggestions. Enter, Tab or leaving the field applies it; Escape keeps the old one. The rest of the
- * label (headers, payload, fan-out) stays as it is: the details card edits it.
+ * label (headers, payload, fan-out) stays as it is: the details card edits it. A draft's (`draft`) is applied by
+ * Enter alone, and Escape ends the draft.
  */
 function LabelEditor({
   step,
@@ -1497,7 +1746,9 @@ function LabelEditor({
   check,
   onDone,
   onGiveOps,
+  draft = false,
 }: {
+  draft?: boolean;
   step: OutlineStep;
   diagram: Diagram;
   used: UsedStep[];
@@ -1514,14 +1765,15 @@ function LabelEditor({
   const label = composeLabel({ ...parts, head });
   const finish = (keep: boolean, focus: boolean) => {
     if (finished.current) return;
-    finished.current = true;
+    // A draft stays for another try when its step could not be added.
+    if (!draft) finished.current = true;
     onDone(keep ? label : undefined, focus);
   };
   const vocabulary = useMemo(() => stepVocabulary(diagram, step.from, step.to, step.kind, used), [diagram, step.from, step.to, step.kind, used]);
   const deferred = useDeferredValue(label);
   // On what is typed only: the check reads the text as it is now.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const problems = useMemo(() => (deferred === step.label ? [] : check(deferred)), [deferred]);
+  const problems = useMemo(() => (deferred === step.label && !draft ? [] : check(deferred)), [deferred]);
   const target = diagram.nodes.find((x) => x.id === step.to)?.name ?? step.to;
   const giveOps = step.kind !== 'response' && !!vocabulary.type && vocabulary.ops.length === 0;
   return (
@@ -1542,12 +1794,13 @@ function LabelEditor({
             e.preventDefault();
             e.stopPropagation();
             finish(false, true);
-          } else if (e.key === 'Tab') finish(true, false);
+          } else if (e.key === 'Tab' && !draft) finish(true, false);
         }}
-        onBlur={() => finish(true, false)}
+        onBlur={() => !draft && finish(true, false)}
       />
       {(problems.length > 0 || giveOps) && (
-        <div role="note" aria-label="Problems with this step" className="absolute left-0 top-full z-10 mt-1 w-max max-w-80 space-y-1 rounded-sm border-bw-1 border-amber-600/50 bg-amber-50 px-2 py-1 text-xs text-amber-950 shadow-brutal-sm dark:bg-amber-950 dark:text-amber-100">
+        // Under the field, in the room the rows below it make (SequenceDiagram measures it).
+        <div role="note" aria-label="Problems with this step" className="relative z-10 mt-1 w-max max-w-80 space-y-1 rounded-sm border-bw-1 border-amber-600/50 bg-amber-50 px-2 py-1 text-xs text-amber-950 shadow-brutal-sm dark:bg-amber-950 dark:text-amber-100">
           {problems.map((p, i) => (
             <p key={`${p}#${i}`} className="flex items-start gap-1.5">
               <AlertTriangle size={13} aria-hidden="true" className="mt-px shrink-0" />

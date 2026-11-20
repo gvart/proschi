@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { outlineOf } from '../../dsl/edit';
 import { stepEdge } from './flows';
-import { allSteps, entrySteps, followStep, inParallel, laneOrder, layoutSequence, scenarioOfStep, SEQ, sequenceEntries, type Measure } from './sequenceLayout';
+import { allSteps, entrySteps, followStep, inParallel, laneOrder, layoutSequence, scenarioOfStep, SEQ, sequenceEntries, type Measure, type Slot } from './sequenceLayout';
 
 const SRC = [
   'web "Web" [Browser]',
@@ -205,7 +205,70 @@ describe('the sequence layout', () => {
     const layout = layoutSequence([], [], names, FIXED);
     expect(layout.lanes).toEqual([]);
     expect(layout.messages).toEqual([]);
+    expect(layout.adds).toEqual([]);
+    expect(layout.draft).toBeUndefined();
     expect(layout.height).toBe(SEQ.top + SEQ.bottom);
+  });
+});
+
+describe('what the view adds to the rows', () => {
+  const lanes = laneOrder(outline);
+  const names = (id: string) => id.toUpperCase();
+  const entries = sequenceEntries(outline.items, 'Miss');
+  const plain = layoutSequence(entries, lanes, names, FIXED);
+  const y = (l: typeof plain, line: number) => l.messages.find((m) => m.step.line === line)!.y;
+
+  it('makes room under a step: every row below it moves down by it, and the frames around it grow', () => {
+    // Under SET order (13), in the par block in the scenario.
+    const roomy = layoutSequence(entries, lanes, names, FIXED, undefined, { room: { line: 13, below: 50 } });
+    for (const m of plain.messages) expect(y(roomy, m.step.line)).toBe(m.step.line <= 13 ? m.y : m.y + 50);
+    const grown = (kind: 'parallel' | 'scenario', line: number) => {
+      const [a, b] = [plain, roomy].map((l) => l.frames.find((f) => f.kind === kind && f.line === line)!);
+      return [b.y - a.y, b.height - a.height];
+    };
+    expect(grown('parallel', 12)).toEqual([0, 50]);
+    expect(grown('scenario', 10)).toEqual([0, 50]);
+    expect(grown('parallel', 17)).toEqual([50, 0]);
+    expect(roomy.height).toBe(plain.height + 50);
+    // The "+" before the next row is under the room, at that row's top.
+    expect(roomy.slots.find((s) => s.slot.kind === 'before' && s.slot.line === 14)!.y).toBe(y(roomy, 14) - SEQ.row / 2);
+  });
+
+  it('puts a draft row at its insertion point, before a step, after one, or at the end of a frame or of the flow', () => {
+    const at = (slot: Slot) => layoutSequence(entries, lanes, names, FIXED, undefined, { draft: { slot, height: 60 } });
+    const before = at({ kind: 'before', line: 13 });
+    expect(before.draft).toMatchObject({ top: y(plain, 13) - SEQ.row / 2, height: 60 });
+    expect(y(before, 13)).toBe(y(plain, 13) + 60);
+    expect(y(before, 11)).toBe(y(plain, 11));
+    const after = at({ kind: 'after', line: 13 });
+    expect(after.draft!.top).toBe(y(plain, 13) + SEQ.row / 2);
+    expect(y(after, 14)).toBe(y(plain, 14) + 60);
+    // At the end of the par block: inside its frame, after its last row.
+    const par = at({ kind: 'par', line: 12 });
+    const frame = par.frames.find((f) => f.kind === 'parallel' && f.line === 12)!;
+    expect(par.draft!.top).toBe(y(plain, 14) + SEQ.row / 2);
+    expect(par.draft!.top + 60).toBeLessThan(frame.y + frame.height);
+    const end = at({ kind: 'end' });
+    expect(end.draft!.top).toBeGreaterThan(Math.max(...end.messages.map((m) => m.y)));
+    expect(end.height).toBe(plain.height + 60);
+    // Nowhere else, and only once.
+    expect(at({ kind: 'before', line: 999 }).draft).toBeUndefined();
+  });
+
+  it('adds an "Add step" row at the end of the flow and of each frame, inside it', () => {
+    const layout = layoutSequence(entries, lanes, names, FIXED, undefined, { adds: true });
+    const kinds = layout.adds.map((a) => (a.slot.kind === 'par' ? `par ${a.slot.line}` : a.slot.kind === 'scenario' ? `scenario ${a.slot.name}` : a.slot.kind));
+    expect(kinds).toEqual(['par 12', 'scenario Miss', 'par 17', 'end']);
+    for (const a of layout.adds.slice(0, -1)) {
+      const frame = layout.frames.find((f) => (a.slot.kind === 'par' ? f.kind === 'parallel' && f.line === (a.slot as { line: number }).line : f.kind === 'scenario'))!;
+      expect(a.x).toBe(frame.x + 4);
+      expect(a.y).toBeGreaterThan(frame.y);
+      expect(a.y + SEQ.add).toBeLessThanOrEqual(frame.y + frame.height);
+    }
+    const end = layout.adds.at(-1)!;
+    expect(end.x).toBe(2);
+    expect(end.y).toBeGreaterThan(Math.max(...layout.frames.map((f) => f.y + f.height)));
+    expect(layout.height).toBe(plain.height + 4 * SEQ.add);
   });
 });
 

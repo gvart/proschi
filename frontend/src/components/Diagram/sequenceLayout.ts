@@ -140,6 +140,8 @@ export const SEQ = {
   labelChrome: 44,
   /** How far a message to its own lane loops out. */
   loop: 44,
+  /** The "Add step" row at the end of the flow and of each frame. */
+  add: 30,
 } as const;
 
 export interface LaneBox {
@@ -205,6 +207,21 @@ export interface SlotBox {
 
 export const sameSlot = (a: Slot, b: Slot) => a.kind === b.kind && (a.kind === 'end' || (a.kind === 'scenario' ? a.name === (b as { name: string }).name : a.line === (b as { line: number }).line));
 
+/** The row of a step being drafted: its insertion point, and the band it takes. */
+export interface DraftBox {
+  slot: Slot;
+  top: number;
+  height: number;
+}
+
+/** An "Add step" row: the end of the flow or of a frame (its slot), its left edge, top and width. */
+export interface AddBox {
+  slot: Slot;
+  x: number;
+  y: number;
+  width: number;
+}
+
 export interface SequenceLayout {
   lanes: LaneBox[];
   messages: MessageBox[];
@@ -212,8 +229,22 @@ export interface SequenceLayout {
   notes: NoteBox[];
   /** The insertion points, top to bottom. */
   slots: SlotBox[];
+  /** The step being drafted, when there is one. */
+  draft?: DraftBox;
+  /** The "Add step" rows, when asked for. */
+  adds: AddBox[];
   width: number;
   height: number;
+}
+
+/** What the view adds to the rows of the text: room under a step, a draft's row, the "Add step" rows. */
+export interface LayoutExtras {
+  /** Room under the step on `line` (its toolbar, its details card), which the rows below it make by moving down. */
+  room?: { line: number; below: number };
+  /** A step being drafted at `slot`: a row `height` tall there. */
+  draft?: { slot: Slot; height: number };
+  /** An "Add step" row at the end of the flow and of each frame. */
+  adds?: boolean;
 }
 
 export interface Measure {
@@ -241,7 +272,7 @@ const headerWidth = (name: string, measure: Measure) => Math.min(SEQ.headerMax, 
  * cut shorter then, and past that the diagram is wider than its pane. Rows follow the text, a frame around each `par` block
  * and the chosen scenario's branch.
  */
-export function layoutSequence(entries: SequenceEntry[], laneIds: string[], names: (id: string) => string, measure: Measure = ESTIMATE, fit?: number): SequenceLayout {
+export function layoutSequence(entries: SequenceEntry[], laneIds: string[], names: (id: string) => string, measure: Measure = ESTIMATE, fit?: number, extras: LayoutExtras = {}): SequenceLayout {
   const index = new Map(laneIds.map((id, i) => [id, i]));
   const widths = laneIds.map((id) => headerWidth(names(id), measure));
   const headers = widths.slice(1).map((w, i) => Math.max(SEQ.minGap, (widths[i] + w) / 2 + 20));
@@ -297,10 +328,18 @@ export function layoutSequence(entries: SequenceEntry[], laneIds: string[], name
   const frames: FrameBox[] = [];
   const notes: NoteBox[] = [];
   const slots: SlotBox[] = [];
+  const adds: AddBox[] = [];
+  let draft: DraftBox | undefined;
   /** The left edge of the frame being laid out, where its "+"s go; the diagram's own left edge is fixed up after the shift. */
   let edge = 0;
   let y = SEQ.top;
   let n = 0;
+  /** The draft's row, if it goes at `slot`. */
+  const drafted = (slot: Slot) => {
+    if (!extras.draft || draft || !sameSlot(extras.draft.slot, slot)) return;
+    draft = { slot: extras.draft.slot, top: y, height: extras.draft.height };
+    y += extras.draft.height;
+  };
 
   /** Lays out `list` from the current row; returns the horizontal reach of its messages. */
   const place = (list: SequenceEntry[], level: number): { lo: number; hi: number } => {
@@ -312,12 +351,15 @@ export function layoutSequence(entries: SequenceEntry[], laneIds: string[], name
     };
     const message = (step: OutlineStep) => {
       slots.push({ slot: { kind: 'before', line: step.line }, x: edge, y, index: n });
+      drafted({ kind: 'before', line: step.line });
       const x1 = laneX(step.from);
       const self = step.from === step.to;
       const x2 = self ? x1 : laneX(step.to);
       messages.push({ step, n: ++n, y: y + SEQ.row / 2, x1, x2, labelWidth: labelOf(step) });
       reach(Math.min(x1, x2), self ? x1 + SEQ.loop : Math.max(x1, x2));
       y += SEQ.row;
+      if (extras.room?.line === step.line) y += extras.room.below;
+      drafted({ kind: 'after', line: step.line });
     };
     const frame = (kind: FrameBox['kind'], title: string, line: number, end: Slot, body: () => { lo: number; hi: number }) => {
       const top = y;
@@ -332,8 +374,13 @@ export function layoutSequence(entries: SequenceEntry[], laneIds: string[], name
       const to = Number.isFinite(inner.hi) ? inner.hi : Math.max(lastX, firstX + SEQ.minGap);
       const x = from - pad;
       const width = Math.max(to + pad - x, measure.name(title) + 40 + (kind === 'parallel' ? SEQ.frameActions : 0));
+      drafted(end);
       slots.push({ slot: end, x: NaN, y: y + 2, index: n });
       for (const s of slots.slice(first)) if (Number.isNaN(s.x)) s.x = x + 4;
+      if (extras.adds) {
+        adds.push({ slot: end, x: x + 4, y: y + 2, width: width - 8 });
+        y += SEQ.add;
+      }
       edge = outer;
       y += SEQ.frameFoot;
       frames.push({ kind, title, line, x, y: top, width, height: y - top });
@@ -374,7 +421,13 @@ export function layoutSequence(entries: SequenceEntry[], laneIds: string[], name
     return { lo, hi };
   };
   place(entries, 0);
+  drafted({ kind: 'end' });
   slots.push({ slot: { kind: 'end' }, x: 0, y: y + 6, index: n });
+  if (extras.adds) {
+    // Its width is the diagram's, known below.
+    adds.push({ slot: { kind: 'end' }, x: 0, y: y + 4, width: 0 });
+    y += SEQ.add;
+  }
   y += SEQ.bottom;
 
   // Everything right of zero, and the width to the farthest frame, label or header.
@@ -395,11 +448,18 @@ export function layoutSequence(entries: SequenceEntry[], laneIds: string[], name
     for (const f of frames) f.x += shift;
     for (const nb of notes) nb.x += shift;
     for (const s of slots) if (s.x > 0) s.x += shift;
+    for (const a of adds) if (a.x > 0) a.x += shift;
   }
   // The main flow's "+"s at the very left, in the margin.
   for (const s of slots) if (s.x === 0) s.x = 2;
   const width = Math.ceil(Math.max(0, ...rights) + shift + SEQ.margin);
-  return { lanes, messages, frames, notes, slots, width, height: Math.ceil(y) };
+  // The main flow's "Add step" row: from the left margin to the last lane.
+  for (const a of adds)
+    if (a.x === 0) {
+      a.x = 2;
+      a.width = Math.max(220, (lanes.at(-1)?.x ?? 0) + 24 - a.x);
+    }
+  return { lanes, messages, frames, notes, slots, draft, adds, width, height: Math.ceil(y) };
 }
 
 /** How deep the frames nest: 1 for a `par` block or a scenario, 2 for a `par` block in a scenario. */
