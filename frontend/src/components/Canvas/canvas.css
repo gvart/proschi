@@ -157,6 +157,14 @@
   background: rgb(var(--c-yellow)) !important;
 }
 /*
+ * Only the dot grows: its pad keeps its size. Grown with it, the pad would reach the middle of the node
+ * once the pointer rests there, and a press meant to drag the node would start a connection.
+ */
+.pc-editable .react-flow__node:hover .pc-handle::after,
+.pc-editable .react-flow__node.selected .pc-handle::after {
+  scale: calc(1 / 1.45);
+}
+/*
  * The whole node takes a dropped connection (BodyTarget): invisible, and out of the pointer's way
  * until a connection is dragged; then it outlines the node under the pointer.
  */
@@ -248,6 +256,13 @@
     transition: none;
   }
 }
+/* While a Flows step's ends are picked (.pc-picking), a click anywhere on a node picks it: nothing on it resizes. */
+.pc-picking .react-flow__resize-control {
+  display: none;
+}
+.pc-picking .react-flow__node {
+  cursor: pointer;
+}
 /* A group's handles only let React Flow draw its edges (they follow their route, not the handle), so they stay out of sight. */
 .pc-handle--hidden {
   opacity: 0;
@@ -262,6 +277,11 @@
 .react-flow__node.pc-active .pc-node__icon {
   background: rgb(var(--c-pink));
   color: rgb(var(--c-on-accent));
+}
+/* The step selected in the Flows pane (Diagram/FlowsPanel.tsx): its two nodes as above, and the connection it travels. */
+.react-flow .react-flow__edge.pc-active .react-flow__edge-path {
+  stroke: rgb(var(--c-pink));
+  stroke-width: 3;
 }
 .react-flow__node.pc-failing .pc-node {
   border-color: rgb(var(--c-fail));

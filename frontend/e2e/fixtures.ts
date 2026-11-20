@@ -256,6 +256,23 @@ export async function waitForCanvas(page: Page, min = 1): Promise<void> {
   await expect.poll(() => canvasNodes(page).count(), { message: 'canvas nodes rendered' }).toBeGreaterThanOrEqual(min);
 }
 
+/**
+ * Waits until the layout is done (`data-layout-busy` gone) and the nodes stop moving on screen: the view
+ * fits the laid-out diagram a frame after that, and a node's box read before then is not where it is drawn.
+ */
+export async function layoutSettled(page: Page): Promise<void> {
+  await expect(page.locator('[data-layout-busy]')).toHaveCount(0);
+  let last = '';
+  await expect
+    .poll(async () => {
+      const now = JSON.stringify(await canvasNodes(page).evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON())));
+      const same = now === last;
+      last = now;
+      return same;
+    }, { intervals: [250] })
+    .toBe(true);
+}
+
 /** The editable area of the (visible) CodeMirror editor. */
 export function codeEditor(page: Page): Locator {
   return page.locator('.cm-content:visible');

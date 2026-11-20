@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import lz from 'lz-string';
-import { addFromPalette, appendCode, canvasNodes, codeEditor, editorText, expect, expectDiagramFitted, setMode, test, waitForCanvas } from './fixtures';
+import { addFromPalette, appendCode, canvasNodes, codeEditor, editorText, expect, expectDiagramFitted, layoutSettled, setMode, test, waitForCanvas } from './fixtures';
 
 // These tests type in the code editor, so they run in Code mode (the canvas beside it only looks).
 test.use({ mode: 'code' });
@@ -81,6 +81,8 @@ test.describe('editor', () => {
       await expect(edge.locator('.pc-edge-head')).toBeAttached();
     }
 
+    // The edges are drawn before the layout of the typed code is done; the view fits again once it is.
+    await layoutSettled(page);
     const path = edges.filter({ hasText: 'HTTPS' }).locator('path.react-flow__edge-path');
     const routed = await path.getAttribute('d');
     const box = (await canvasNodes(page).filter({ hasText: 'Client' }).boundingBox())!;
@@ -198,6 +200,18 @@ test.describe('editor', () => {
     await expect(canvasNodes(other)).toHaveCount(DEFAULT_NODES + 2); // + the group + the new node
   });
 
+  test('another share link opened in the same tab opens there, and keeps the diagram that was open', async ({ page }) => {
+    const link = `#code=${lz.compressToEncodedURIComponent(HOT)}`;
+    await page.goto(`app/${link}`);
+    await expect(canvasNodes(page).filter({ hasText: 'Notes API' })).toBeVisible();
+    expect(await editorText(page)).toBe(HOT);
+    // The address bar keeps the link: a reload opens the same diagram.
+    await page.reload();
+    await expect(canvasNodes(page).filter({ hasText: 'Notes API' })).toBeVisible();
+    expect(await editorText(page)).toBe(HOT);
+    await expect(page.getByRole('list', { name: 'Files' }).getByRole('button', { name: 'E-Commerce Platform', exact: true })).toBeVisible();
+  });
+
   test('Format code tidies the document', async ({ page }) => {
     await appendCode(page, '\nzeta    "Zeta Cache"     [Redis]\n   orders   ->   zeta\n');
     await expect.poll(() => editorText(page)).toContain('   orders   ->   zeta');
@@ -258,9 +272,8 @@ test.describe('editor', () => {
   });
 
   test('a node at 70% or more is ringed as the bottleneck', async ({ page }) => {
-    // Only the hash changes from the page already open, so load it again to open the link.
+    // Only the hash changes from the page already open: the editor opens the link in place.
     await page.goto(`app/#code=${lz.compressToEncodedURIComponent(HOT)}`);
-    await page.reload();
     await waitForCanvas(page);
     const ringed = page.locator('.react-flow__node').filter({ has: page.locator('.pc-node[data-bottleneck]') });
     await expect(ringed).toHaveCount(1);

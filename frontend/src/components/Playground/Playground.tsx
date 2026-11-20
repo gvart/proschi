@@ -446,14 +446,40 @@ export default function Playground() {
   }, []);
 
   // Keep the address bar a shareable link to the diagram, and to the current step while playing.
+  const addressUpdate = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => {
-    const timer = setTimeout(() => {
+    addressUpdate.current = setTimeout(() => {
       window.history.replaceState(null, '', encodeShareHash(source, playback, imports));
     }, PARSE_DELAY_MS);
-    return () => clearTimeout(timer);
+    return () => clearTimeout(addressUpdate.current);
     // playbackKey and importsKey capture playback and imports by value.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, playbackKey, importsKey]);
+
+  // Another `#code=` link opened in this tab (pasted into the address bar): it opens as it would on a fresh load.
+  useEffect(() => {
+    const onHashChange = (event: HashChangeEvent) => {
+      // From the event: a pending update may have rewritten the address before it was dispatched.
+      const link = readShareLink(new URL(event.newURL).hash);
+      if (!link) return;
+      // The pending update would write the diagram open before back over the link.
+      clearTimeout(addressUpdate.current);
+      if ('error' in link) return setBanner({ message: link.error, tone: 'warning' });
+      if (link.source === currentDoc(docStore.get()).source && !link.playback) return;
+      openDoc((s) => openShared(s, link.source, link.imports));
+      setLinkCloud({ docId: docStore.get().currentId, files: cloudImports(link.imports) });
+      if (link.playback) {
+        setSelectedUseCaseId(link.playback.useCase);
+        setSelectedScenarioId(link.playback.scenario);
+        setInitialStep(link.playback.step - 1);
+        setPlaying(true);
+      }
+    };
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+    // openDoc only calls state setters, which are stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [nodes, setNodes] = useState<Node[]>([]);
   /** "Overlay: load": the analysis drawn on the diagram, for documents with a traffic block; on until turned off. */

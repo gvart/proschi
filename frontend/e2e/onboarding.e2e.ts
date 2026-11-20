@@ -10,6 +10,8 @@ const practiceTour = (page: Page) => page.getByRole('dialog', { name: /^Practice
 
 /** Clicks Next (or Finish) where it is right after each step shows: the popover must not move under the cursor. */
 async function clickThrough(page: Page, tour: ReturnType<typeof editorTour>, titles: string[], label: string) {
+  // The first layout (its glide, then the fit) moves the canvas nodes some steps point at; the popover rightly follows them.
+  await expect(page.locator('[data-layout-busy]')).toHaveCount(0);
   for (const [i, title] of titles.entries()) {
     await expect(tour).toHaveAccessibleName(`${label}: ${title}`);
     const box = (await tour.getByRole('button', { name: i === titles.length - 1 ? 'Finish' : 'Next', exact: true }).boundingBox())!;

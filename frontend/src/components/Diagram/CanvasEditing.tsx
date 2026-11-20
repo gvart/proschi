@@ -61,9 +61,12 @@ interface PaletteDockProps {
   /** The tab shown. */
   tab: RailTab;
   onTab: (tab: RailTab) => void;
-  /** The canvas offers the Flows builder, so the rail has its tab. */
+  /**
+   * The canvas offers the Flows builder, so the rail has its tab. On a phone the tab shows it in the sheet; on wider
+   * screens it opens the pane under the canvas (FlowsPane.tsx) and the rail keeps the tab it shows.
+   */
   offersFlows: boolean;
-  /** The Flows builder, while it is open (kept mounted, hidden, while another tab shows). */
+  /** The Flows builder, while it is open in the sheet (kept mounted, hidden, while another tab shows). */
   flows?: ReactNode;
   /** The Selection tab: the selection's settings (an Inspector), or what to do with nothing selected. */
   selection?: ReactNode;
@@ -100,49 +103,39 @@ const RAIL_TABS: { tab: RailTab; label: string }[] = [
 
 /**
  * The rail beside the canvas, with its tabs: the palette (Components), the
- * Flows builder and the selection's settings (Selection). Docked to the left
+ * Flows builder (in the pane under the canvas, but on a phone here) and the
+ * selection's settings (Selection). Docked to the left
  * of the canvas, so nothing in it covers the diagram; in a narrow pane
  * (practice's diagram column) floating over the canvas's right side, which
- * the fit keeps clear; on a phone the palette is a bottom sheet where a tap adds.
+ * the fit keeps clear. On a phone it is a sheet under the canvas with the
+ * same tabs: the canvas gets shorter rather than covered, and a tap in the
+ * palette adds and puts the sheet away.
  */
 export function PaletteDock({ open, phone, onAdd, onClose, focus, tab, onTab, offersFlows, flows, selection, onFloatingChange, connectFrom }: PaletteDockProps) {
-  const [ref, narrow] = useNarrowRow(open && !phone);
+  const [ref, narrowRow] = useNarrowRow(open && !phone);
+  const narrow = narrowRow && !phone;
   useEffect(() => onFloatingChange?.(narrow), [narrow, onFloatingChange]);
   if (!open) return null;
-  if (phone) {
-    return (
-      <div className="fixed inset-0 z-40 flex flex-col justify-end bg-black/40" onMouseDown={onClose}>
-        <div
-          role="dialog"
-          aria-label="Add a component"
-          className="flex h-[70dvh] flex-col overflow-hidden rounded-t-brutal border-t-bw-2 border-ink bg-surface shadow-brutal-lg"
-          onMouseDown={(e) => e.stopPropagation()}
-        >
-          <Palette
-            variant="sheet"
-            autoFocus={false}
-            connectFrom={connectFrom}
-            onAdd={(tech) => {
-              onAdd(tech);
-              onClose();
-            }}
-            onClose={onClose}
-          />
-        </div>
-      </div>
-    );
-  }
   return (
     // The tabs not shown stay mounted, hidden, so the palette keeps its search and Flows its use case. In a narrow
-    // pane the rail floats over the canvas's right side, from a zero-width box placed after the canvas.
-    <div ref={ref} className={narrow ? 'relative order-last w-0 shrink-0' : 'w-72 shrink-0 border-r-bw-1 border-ink'}>
+    // pane the rail floats over the canvas's right side, from a zero-width box placed after the canvas. On a phone
+    // it is the bottom half of the row (most of it while the on-screen keyboard is up for a field in it).
+    <div
+      ref={ref}
+      className={
+        phone ? 'order-last h-1/2 shrink-0 [[data-keyboard]_&:focus-within]:h-3/4' : narrow ? 'relative order-last w-0 shrink-0' : 'w-72 shrink-0 border-r-bw-1 border-ink'
+      }
+    >
       <div
         data-testid="palette-dock"
         data-floating={narrow || undefined}
+        data-sheet={phone || undefined}
         className={
-          narrow
-            ? 'absolute right-2 top-2 z-20 flex h-[calc(100%-1rem)] w-72 flex-col overflow-hidden rounded-sm border-bw-1 border-ink bg-surface shadow-brutal-md'
-            : 'flex h-full flex-col bg-surface'
+          phone
+            ? 'flex h-full flex-col overflow-hidden rounded-t-brutal border-t-bw-2 border-ink bg-surface'
+            : narrow
+              ? 'absolute right-2 top-2 z-20 flex h-[calc(100%-1rem)] w-72 flex-col overflow-hidden rounded-sm border-bw-1 border-ink bg-surface shadow-brutal-md'
+              : 'flex h-full flex-col bg-surface'
         }
       >
         <div role="tablist" aria-label="Canvas panel" className="flex shrink-0 border-b border-ink/15 px-1 pt-1">
@@ -153,7 +146,7 @@ export function PaletteDock({ open, phone, onAdd, onClose, focus, tab, onTab, of
               role="tab"
               aria-selected={tab === t.tab}
               onClick={() => onTab(t.tab)}
-              className="-mb-px flex-1 rounded-t-sm border-b-2 border-transparent px-2 py-1.5 text-xs font-semibold text-ink/70 hover:text-ink aria-selected:border-ink aria-selected:text-ink"
+              className={`-mb-px flex-1 rounded-t-sm border-b-2 border-transparent px-2 font-semibold text-ink/70 hover:text-ink aria-selected:border-ink aria-selected:text-ink ${phone ? 'py-2.5 text-sm' : 'py-1.5 text-xs'}`}
             >
               {t.label}
             </button>
@@ -171,7 +164,19 @@ export function PaletteDock({ open, phone, onAdd, onClose, focus, tab, onTab, of
             </div>
           )}
           <div className="h-full" hidden={tab !== 'components'}>
-            <Palette onAdd={onAdd} onClose={onClose} autoFocus={focus} connectFrom={connectFrom} />
+            {phone ? (
+              <Palette
+                variant="sheet"
+                connectFrom={connectFrom}
+                onAdd={(tech) => {
+                  onAdd(tech);
+                  onClose();
+                }}
+                onClose={onClose}
+              />
+            ) : (
+              <Palette onAdd={onAdd} onClose={onClose} autoFocus={focus} connectFrom={connectFrom} />
+            )}
           </div>
         </div>
       </div>

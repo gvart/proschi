@@ -340,16 +340,16 @@ test.describe('editor diagram on a phone', () => {
     await page.goto('./');
     await page.goto((await page.locator('a[data-example="url-shortener"]').getAttribute('href'))!);
     await page.locator('.react-flow__node').first().click();
-    await expect(page.getByRole('region', { name: /settings$/ })).toBeVisible();
+    await expect(page.getByTestId('palette-dock').getByRole('region', { name: /settings$/ })).toBeVisible();
   }
 
   /** True when two boxes share any area. */
   const overlap = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
     a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
-  test('delete sits in the settings card, and in a bar of its own once the card is closed', async ({ page }) => {
+  test('delete sits in the settings in the sheet, and in a bar of its own once they are closed', async ({ page }) => {
     await selectNode(page);
-    const settings = page.getByRole('region', { name: /settings$/ });
+    const settings = page.getByTestId('palette-dock').getByRole('region', { name: /settings$/ });
     await expect(settings.getByRole('button', { name: /^Delete / })).toBeVisible();
     await expect(page.getByRole('toolbar', { name: 'Selection' })).toHaveCount(0);
 
@@ -374,7 +374,7 @@ test.describe('editor diagram on a phone', () => {
       };
     });
     await selectNode(page);
-    const settings = page.getByRole('region', { name: /settings$/ });
+    const settings = page.getByTestId('palette-dock').getByRole('region', { name: /settings$/ });
     const field = settings.locator('input, textarea').last();
     await field.focus();
     await page.evaluate(() => (window as unknown as { showKeyboard: (px: number) => void }).showKeyboard(400));
@@ -382,5 +382,96 @@ test.describe('editor diagram on a phone', () => {
     await expect.poll(async () => (await field.boundingBox())!.y + (await field.boundingBox())!.height).toBeLessThanOrEqual(visible);
     expect((await field.boundingBox())!.y).toBeGreaterThanOrEqual(0);
     await expect(page.locator('[data-keyboard]')).toHaveCount(1);
+  });
+
+  test('the sheet opening and closing re-fits the diagram before it is drawn, with no cropped view in between', async ({ page }) => {
+    await page.goto('./');
+    await page.goto((await page.locator('a[data-example="url-shortener"]').getAttribute('href'))!);
+    await expect(page.locator('.react-flow__node').first()).toBeVisible();
+    const viewport = page.locator('.react-flow__viewport');
+    // Settled: the layout done (its nodes no longer gliding to their places), and the same view twice in a row.
+    await expect(page.locator('[data-layout-busy]')).toHaveCount(0);
+    let last = '';
+    await expect
+      .poll(async () => {
+        const now = await viewport.evaluate((el) => [el, ...Array.from(el.querySelectorAll<HTMLElement>('.react-flow__node'))].map((n) => (n as HTMLElement).style.transform).join(';'));
+        const same = now === last;
+        last = now;
+        return same;
+      }, { intervals: [300] })
+      .toBe(true);
+
+    /** Every frame's view and canvas height from now on, until `stop`. */
+    const sample = () =>
+      page.evaluate(() => {
+        const w = window as unknown as { frames: [string, number][]; sampling: boolean };
+        w.frames = [];
+        w.sampling = true;
+        const tick = () => {
+          w.frames.push([document.querySelector<HTMLElement>('.react-flow__viewport')!.style.transform, document.querySelector<HTMLElement>('.react-flow')!.offsetHeight]);
+          if (w.sampling) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+    const frames = async () => {
+      await page.waitForTimeout(700);
+      return page.evaluate(() => {
+        const w = window as unknown as { frames: [string, number][]; sampling: boolean };
+        w.sampling = false;
+        return w.frames;
+      });
+    };
+    /** Once the canvas has its new height, every frame shows the view it ends with: none is drawn at the old view, cropped, or on the way. */
+    const expectNoJump = (seen: [string, number][], before: string) => {
+      const [end, height] = seen.at(-1)!;
+      expect(end, 'the diagram is fitted again').not.toBe(before);
+      const resized = seen.filter(([, h]) => h === height);
+      expect(new Set(resized.map(([t]) => t)), `views drawn at the new height ${height}px`).toEqual(new Set([end]));
+    };
+
+    const start = (await viewport.evaluate((el) => (el as HTMLElement).style.transform))!;
+    await sample();
+    await page.getByRole('button', { name: 'Add component' }).click();
+    const opened = await frames();
+    expect(opened.at(-1)![1], 'the sheet shortens the canvas').toBeLessThan(opened[0][1]);
+    expectNoJump(opened, start);
+
+    const shown = opened.at(-1)![0];
+    await sample();
+    await page.getByRole('button', { name: 'Hide components' }).click();
+    expectNoJump(await frames(), shown);
+  });
+
+  test('a name typed on the canvas stays above the keyboard, the sheet open', async ({ page }) => {
+    await page.addInitScript(() => {
+      const fake = Object.assign(new EventTarget(), { height: 844, width: 390, offsetTop: 0, offsetLeft: 0, pageTop: 0, pageLeft: 0, scale: 1 });
+      Object.defineProperty(window, 'visualViewport', { value: fake });
+      (window as unknown as { showKeyboard: (px: number) => void }).showKeyboard = (px) => {
+        fake.height = document.documentElement.clientHeight - px;
+        fake.dispatchEvent(new Event('resize'));
+      };
+    });
+    await selectNode(page);
+    // The sheet shortens the canvas, and the diagram glides to its new fit: double-tap once it is still.
+    const first = page.locator('.react-flow__node').first();
+    let last = '';
+    await expect
+      .poll(async () => {
+        const now = JSON.stringify(await first.boundingBox());
+        const same = now === last;
+        last = now;
+        return same;
+      }, { intervals: [250] })
+      .toBe(true);
+    await first.dblclick({ position: { x: 8, y: 8 } });
+    const name = page.locator('.pc-node__name-field');
+    await expect(name).toBeFocused();
+    await page.evaluate(() => (window as unknown as { showKeyboard: (px: number) => void }).showKeyboard(400));
+    await expect(page.locator('[data-keyboard]')).toHaveCount(1);
+    // The sheet keeps its half: it grows only for a field of its own.
+    await expect.poll(async () => {
+      const b = (await name.boundingBox())!;
+      return b.y >= 0 && b.y + b.height <= 844 - 400;
+    }).toBe(true);
   });
 });

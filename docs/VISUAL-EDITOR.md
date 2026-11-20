@@ -77,18 +77,23 @@ words a step to it can use.
 
 ## 5. Build a use case
 
-The **Flows** tab builds [use cases](USE-CASES.md) step by step.
+**Flows** opens a pane under the canvas. It draws the chosen
+[use case](USE-CASES.md) as a sequence diagram: a lane per component and a
+numbered arrow per step. Drag the pane's top edge to make it taller or
+shorter. Each [scenario](SCENARIOS.md) has a tab, and **Add scenario**
+starts a new one.
 
-1. Click **New use case** and name it.
-2. Click **Add a step**, then the component it starts at and the one it
-   goes to.
+1. Pick a use case, or **+ New use case…** in the picker, and name it.
+2. Click **Add a step** beside the diagram. Then click the component it
+   starts at and the one it goes to: on the canvas, on its lane's header
+   or lifeline in the pane, or in the form.
 3. Pick the kind: **Request**, **Response**, **Message** (sent without
    waiting) or **Fails** (a call that never gets an answer).
 4. Pick an operation from the list and click **Add step**.
 
 The form stays open for the next step, from where the last one ended.
 **Reply** answers the open request in one click. Warnings show before you
-add the step.
+add the step. On a scenario's tab, steps go into that scenario.
 
 The operations come from the target's type: PostgreSQL offers `SELECT` and
 `INSERT`, a REST API its HTTP methods, a response its statuses. **Headers,
@@ -98,10 +103,31 @@ response takes only a payload. If the type lists no operations, **Give …
 operations of its own** writes a [type](TYPES.md#declare-a-type) from the
 steps you used, so the next ones are checked.
 
-You can edit, move, delete or insert before any step, rename use cases and
-[scenarios](SCENARIOS.md), and start a new path with **Add scenario**. The
-builder shows [parallel blocks](SCENARIOS.md#parallel-steps) and edits
-their steps, but it can't create one: write `par` in Code mode.
+To add a step in the middle, hover the diagram and click a **+** between
+two arrows, or drag from one lifeline to another. A small form opens there,
+starting where the step before it ended. **Goes to** lists every component,
+and one that is not in the use case yet gets its own lane. A step can't go
+from a component to itself.
+
+Click an arrow to select it, and its form shows beside the diagram. Change
+its ends, kind or operation and click **Save step**. **Add reply** answers
+a selected request right after it. **Alt+↑** and **Alt+↓** (**⌥** on a Mac)
+or the arrow buttons move it, and **Delete** removes it.
+
+Shift-click or Ctrl-click (**⌘**-click) to select several steps. **Run at
+the same time** puts them in a [parallel block](SCENARIOS.md#parallel-steps).
+They must follow each other in one flow or scenario, or the pane says why.
+A block's **Ungroup** runs its steps one after another again, and **Add
+alongside** adds one more step to it.
+
+With a scenario's tab open and nothing selected, the side of the pane
+renames or deletes that scenario. The pencil beside the picker renames the
+use case.
+
+Every change edits the text. **Ctrl+Z** (**⌘Z**) undoes it in Visual mode,
+and Code mode has it in the code editor's history too. On a phone, Flows is
+a sheet under the canvas with the steps as a list: tap a step to edit it,
+and its row moves it or inserts a step before it.
 
 ## 6. Work from the keyboard
 
@@ -116,6 +142,10 @@ Click the canvas first. **?** lists every shortcut.
 | **T** | Change its type. |
 | **+**, **-** | More or fewer replicas. |
 | **R** | Lay out again, when you have dragged components into place. |
+
+In the Flows pane, click a step first. **↑** and **↓** select the next
+step, **Shift+↑** and **Shift+↓** select several, **Enter** goes to its
+form and **Escape** lets it go.
 
 ## 7. Ask the AI in Visual mode
 

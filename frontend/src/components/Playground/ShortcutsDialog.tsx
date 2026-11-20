@@ -19,7 +19,7 @@ interface Section {
 
 /**
  * Every key the editor page answers to. Keep in step with the handlers: the
- * canvas's (canvasEditState.ts, DiagramView.tsx), the page's (Playground.tsx,
+ * canvas's (canvasEditState.ts, DiagramView.tsx), the Flows pane's (SequenceDiagram.tsx), the page's (Playground.tsx,
  * useZenMode.ts, partner/shortcut.ts, Diagram/editorMode.ts) and the code editor's (CodeEditor.tsx:
  * CodeMirror's basicSetup, tabKeymap.ts and format).
  */
@@ -27,7 +27,7 @@ function shortcutSections(partner: boolean): Section[] {
   return [
     {
       title: 'Canvas',
-      note: 'Click the diagram first. In Code mode the diagram is view-only: edit there in the code.',
+      note: 'Click the diagram first. In Code mode the diagram is view-only: edit there in the code. Undo and redo work on it in both modes.',
       bindings: [
         { keys: [['A'], [MOD_KEY, 'K']], action: 'Add a component or run an action, in plain words' },
         { keys: [['/'], [MOD_KEY, 'F']], action: 'Find a component' },
@@ -48,6 +48,20 @@ function shortcutSections(partner: boolean): Section[] {
         { keys: [['Double-click']], action: 'Rename a component, or open a system' },
         { keys: [['Right-click']], action: 'More: duplicate, connect, unpin, jump to code' },
         { keys: [['Drag its end']], action: 'Move a connection to another component' },
+      ],
+    },
+    {
+      title: 'Flows pane',
+      note: 'Click a message in the sequence diagram first. Its form is beside the diagram.',
+      bindings: [
+        { keys: [['↑ ↓'], ['Home'], ['End']], action: 'Select the previous or next step, or the first or last' },
+        { keys: [['Shift', '↑ ↓'], ['Shift', 'Click']], action: 'Select the steps from the first selected to this one' },
+        { keys: [[MOD_KEY, 'Click']], action: 'Add a step to the selection, or take it out' },
+        { keys: [[ALT, '↑ ↓']], action: 'Move the selected step up or down' },
+        { keys: [['Delete'], ['Backspace']], action: 'Delete the selected steps' },
+        { keys: [['Enter']], action: "Go to the step's form" },
+        { keys: [['Escape']], action: 'Let go of the selection, or close the composer' },
+        { keys: [['Drag a lifeline']], action: 'Add a step from that component to the one you drop on' },
       ],
     },
     {

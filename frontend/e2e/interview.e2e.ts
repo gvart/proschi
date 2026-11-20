@@ -364,7 +364,7 @@ test.describe('the interview room on your own', () => {
     await expect(step.getByRole('radio', { name: 'Response' })).toHaveAttribute('aria-checked', 'true');
     await step.getByRole('combobox', { name: 'Answer' }).fill('worker id');
     await step.getByRole('button', { name: 'Add step' }).click();
-    await expect(flows.getByRole('list', { name: 'Steps' }).getByRole('listitem')).toHaveCount(2);
+    await expect(flows.getByRole('listbox', { name: 'Sequence of Start generator' }).getByRole('option')).toHaveCount(2);
 
     await rail(page).getByRole('button', { name: 'Check my design' }).click();
     await expect(page.getByTestId('checks').getByRole('status')).toHaveText(/^All \d+ checks pass$/);

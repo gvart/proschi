@@ -1,5 +1,5 @@
 import { createContext, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
-import type { Edge, Node, NodeDragHandler } from 'reactflow';
+import { useReactFlow, useStore, useStoreApi, type Edge, type Node, type NodeDragHandler } from 'reactflow';
 import { loadJson, saveJson } from '../../services/storage';
 import { edgeOverlays, type SimOverlay } from '../../sim/overlay';
 import type { Diagram } from '../../dsl/types';
@@ -188,4 +188,37 @@ export function useLateOpen(open: boolean, ms = 350): boolean {
     };
   }, [open, ms]);
   return open && late;
+}
+
+/** After the pane's own glide to a new fit (useFitOnChange's 300ms), with a margin. */
+const KEEP_IN_VIEW_MS = 400;
+
+/**
+ * Keeps the selected node `id` on screen when the rail (`railOpen`) opens or closes and the pane changes size
+ * under it: beside the canvas, or a phone's sheet under it. The fit that follows already does, unless the reader
+ * zoomed or panned; then the view pans, at the same zoom, to bring the node back into the middle.
+ */
+export function useKeepInView(id: string | undefined, railOpen: boolean) {
+  const { getNode, getViewport, setViewport } = useReactFlow();
+  const store = useStoreApi();
+  const size = useStore((s) => `${s.width}x${s.height}`);
+  const last = useRef({ size, railOpen });
+  useEffect(() => {
+    // The pane takes its new size a moment after the rail changes; another resize (a splitter) is left alone.
+    const resized = last.current.size !== size && last.current.railOpen !== railOpen;
+    if (last.current.size !== size) last.current = { size, railOpen };
+    if (!id || !resized) return;
+    const timer = window.setTimeout(() => {
+      const node = getNode(id);
+      const { width, height } = store.getState();
+      if (!node?.width || !node.height || !width || !height) return;
+      const { x, y, zoom } = getViewport();
+      const at = node.positionAbsolute ?? node.position;
+      const left = at.x * zoom + x;
+      const top = at.y * zoom + y;
+      if (left >= 0 && top >= 0 && left + node.width * zoom <= width && top + node.height * zoom <= height) return;
+      setViewport({ x: width / 2 - (at.x + node.width / 2) * zoom, y: height / 2 - (at.y + node.height / 2) * zoom, zoom });
+    }, KEEP_IN_VIEW_MS);
+    return () => clearTimeout(timer);
+  }, [id, size, railOpen, getNode, getViewport, setViewport, store]);
 }
