@@ -815,7 +815,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
                 focusKey={focusKey}
               />
             </div>
-            <section ref={detailsRef} aria-label={`Use case ${current}`} className="shrink-0 space-y-3 border-t border-ink/15 p-3 @3xl:w-72 @3xl:overflow-y-auto @3xl:border-l @3xl:border-t-0 @5xl:w-80">
+            <section ref={detailsRef} aria-label={`Use case ${current}`} className="shrink-0 space-y-3 [&_form>.sticky]:shadow-[0_12px_0_0_rgb(var(--c-surface))] border-t border-ink/15 p-3 @3xl:w-72 @3xl:overflow-y-auto @3xl:border-l @3xl:border-t-0 @5xl:w-80">
               {details}
               {alert}
             </section>
