@@ -94,7 +94,7 @@ test.describe('the command bar', () => {
     const flows = page.getByRole('region', { name: 'Flows' });
     await expect(flows).toBeVisible();
     await expect(page.getByTestId('flows-view')).toBeVisible();
-    await expect(flows.getByRole('combobox', { name: 'Use case' })).toHaveText(/Checkout/);
+    await expect(flows.getByRole('button', { name: 'Rename the use case Checkout' })).toBeVisible();
   });
 });
 

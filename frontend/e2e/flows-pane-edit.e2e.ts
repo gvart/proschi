@@ -6,11 +6,13 @@ test.use({ mode: 'visual' });
 
 /**
  * Editing a use case on the Flows view's sequence diagram: a "+" between the
- * messages or a drag from one lifeline to another opens a composer there, a
- * selected message's form is beside the diagram, Alt+Up and Down move it and
- * Delete removes it, several selected run at the same time, and a par frame
- * ungroups or takes one more. Every edit is one of the text, which the code
- * editor's undo takes back.
+ * messages or a drag from one lifeline to another opens a composer there; a
+ * selected message has a toolbar over it (its kind, Add reply, move, details,
+ * delete), its label is edited on its arrow and its ends are dragged to other
+ * lanes, each change at once and undoable; Alt+Up and Down move it and Delete
+ * removes it, several selected run at the same time, and a par frame ungroups
+ * or takes one more. Every edit is one of the text, which the code editor's
+ * undo takes back.
  */
 
 const SOURCE = `shopper "Shopper" [Browser]
@@ -46,6 +48,8 @@ const flows = (page: Page) => page.getByRole('region', { name: 'Flows' });
 const sequence = (page: Page) => flows(page).getByRole('listbox', { name: 'Sequence of Checkout' });
 const option = (page: Page, n: number) => sequence(page).getByRole('option', { name: new RegExp(`^${n}\\. `) });
 const composer = (page: Page) => flows(page).getByRole('dialog', { name: 'Add a step here' });
+/** The toolbar over the selected step (or steps). */
+const toolbar = (page: Page, name: string | RegExp = /^Step \d+$/) => flows(page).getByRole('toolbar', { name });
 /** A component on the Flows view's architecture map, which picks a step's end while one is picked. */
 const onMap = (page: Page, name: string) => page.getByTestId('flows-map').getByRole('button', { name, exact: true });
 /** The Flows view's one scrolling surface. */
@@ -60,9 +64,9 @@ async function openPane(page: Page, source = SOURCE) {
   await expect(sequence(page)).toBeVisible();
 }
 
-/** The "+"s show while the pointer is over the diagram. */
+/** The "+"s show while the pointer is over the diagram (here its first lane's header, which no toolbar covers). */
 async function insertPoint(page: Page, name: string) {
-  await sequence(page).getByRole('option').first().hover();
+  await flows(page).locator('[data-lane]').first().hover();
   return flows(page).getByRole('button', { name, exact: true });
 }
 
@@ -89,7 +93,7 @@ test.describe('editing on the Flows view', () => {
     await expect(option(page, 2)).toHaveAccessibleName('2. Checkout API to Email: SEND receipt');
     await expect(option(page, 2)).toHaveAttribute('aria-selected', 'true');
     await expect(option(page, 2)).toBeFocused();
-    await expect(flows(page).getByRole('region', { name: 'Selected step' })).toContainText('Step 2');
+    await expect(toolbar(page, 'Step 2')).toBeVisible();
 
     // On a scenario's tab, the "+" at the end of its frame adds to it.
     await flows(page).getByRole('tab', { name: 'Cart expired' }).click();
@@ -153,43 +157,193 @@ test.describe('editing on the Flows view', () => {
     await expect.poll(() => useCase(page)).toMatch(/ {2}api --> shopper : 201\n {2}api -> cache : DEL cart\n\}$/);
   });
 
-  test("a selected step's form is beside the diagram, and the selection follows a change of its ends and kind", async ({ page }) => {
+  test('a selected message has its toolbar over it: its kind changes at once, by a click or 1 to 4, and undo takes each back; there is no column and no Save', async ({ page }) => {
     await openPane(page);
-    // Nothing selected: a hint and the form to add a step.
-    await expect(flows(page).getByText(/Click a message to change it/)).toBeVisible();
-    await expect(flows(page).getByRole('button', { name: 'Add a step', exact: true })).toBeVisible();
-    // The list of every step is gone from the pane (the phone's sheet keeps it).
-    await expect(flows(page).getByRole('list', { name: 'Steps' })).toHaveCount(0);
+    const original = await useCase(page);
+    // The side column and its form are gone: the view is the diagram alone.
+    await expect(page.locator('[data-flows-column]')).toHaveCount(0);
+    await expect(flows(page).getByRole('region', { name: 'Use case Checkout' })).toHaveCount(0);
 
     await option(page, 2).click();
-    const edit = flows(page).getByRole('form', { name: 'Edit step' });
-    await expect(edit.getByLabel('Starts at')).toHaveAttribute('data-value', 'api');
-    await expect(edit.getByLabel('Goes to')).toHaveAttribute('data-value', 'cache');
-    await expect(edit.getByRole('combobox', { name: 'Operation' })).toHaveValue('GET cart');
-    // Its own vocabulary: the cache is Redis.
-    await expect(edit.getByText(/one of Redis's \d+ operations/)).toBeVisible();
+    const bar = toolbar(page, 'Step 2');
+    await expect(bar).toBeVisible();
+    // Over the row, not on it.
+    const [row, box] = [(await option(page, 2).boundingBox())!, (await bar.boundingBox())!];
+    expect(box.y + box.height).toBeLessThanOrEqual(row.y + 4);
+    await expect(bar.getByRole('button', { name: 'Request' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('button', { name: /^Save step$/ })).toHaveCount(0);
+    await expect(flows(page).getByRole('form', { name: 'Edit step' })).toHaveCount(0);
 
-    await chooseOption(edit.getByLabel('Goes to'), 'Order events');
-    await edit.getByRole('radio', { name: 'Message' }).click();
-    await edit.getByRole('combobox', { name: 'Operation' }).fill('PUBLISH CartRead');
-    await edit.getByRole('button', { name: 'Save step' }).click();
-    await expect.poll(() => useCase(page)).toContain('  api ->> events : PUBLISH CartRead\n');
-    // Still selected, with its new ends, on the diagram, the map and in the form.
-    await expect(option(page, 2)).toHaveAccessibleName('2. Checkout API to Order events: PUBLISH CartRead (message)');
+    // A click on a kind writes it, the step still selected, and says so.
+    await bar.getByRole('button', { name: 'Message' }).click();
+    await expect.poll(() => useCase(page)).toContain('  api ->> cache : GET cart\n');
+    await expect(option(page, 2)).toHaveAccessibleName('2. Checkout API to Cart cache: GET cart (message)');
     await expect(option(page, 2)).toHaveAttribute('aria-selected', 'true');
-    await expect(flows(page).getByRole('form', { name: 'Edit step' }).getByLabel('Goes to')).toHaveAttribute('data-value', 'events');
+    await expect(option(page, 2)).toBeFocused();
+    await expect(page.getByTestId('flows-news')).toHaveText('Step 2 is now a message.');
+    // 4 makes it fail, by the keys.
+    await page.keyboard.press('4');
+    await expect.poll(() => useCase(page)).toContain('  api -x cache : GET cart\n');
+    await expect(option(page, 2)).toHaveAccessibleName(/\(fails\)$/);
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect.poll(() => useCase(page)).toContain('  api ->> cache : GET cart\n');
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect.poll(() => useCase(page)).toBe(original);
+
+    // The toolbar by the keys: Tab from the step reaches it, the arrows go along it, Escape goes back to the step.
+    await option(page, 2).click();
+    await page.keyboard.press('Tab');
+    await expect(bar.getByRole('button', { name: 'Request' })).toBeFocused();
+    await page.keyboard.press('ArrowRight');
+    await expect(bar.getByRole('button', { name: 'Response' })).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect.poll(() => useCase(page)).toContain('  api --> cache : GET cart\n');
+    await page.keyboard.press('Escape');
+    await expect(option(page, 2)).toBeFocused();
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect.poll(() => useCase(page)).toBe(original);
+  });
+
+  test('the label is edited on its arrow: Enter or a double click, the type\'s operations listed (no scroll), Enter applies, Escape keeps the old', async ({ page }) => {
+    await openPane(page);
+    const original = await useCase(page);
+    await option(page, 2).click();
+    await page.keyboard.press('Enter');
+    const field = flows(page).getByRole('combobox', { name: 'Operation' });
+    await expect(field).toBeFocused();
+    await expect(field).toHaveValue('GET cart');
+    // On the arrow, in place of the label.
+    const [row, box] = [(await option(page, 2).boundingBox())!, (await field.boundingBox())!];
+    expect(box.y).toBeGreaterThanOrEqual(row.y - 2);
+    expect(box.y + box.height).toBeLessThanOrEqual(row.y + row.height + 2);
+
+    // Redis's operations: at most eight, the rest reached by typing, and the list does not scroll.
+    await field.fill('');
+    const list = page.getByRole('listbox', { name: 'Labels' });
+    await expect(list).toBeVisible();
+    expect(await list.getByRole('option').count()).toBeLessThanOrEqual(8);
+    await expect(list).toContainText(/\d+ more, keep typing/);
+    expect(await list.evaluate((el) => el.scrollHeight <= el.clientHeight && !/(auto|scroll)/.test(getComputedStyle(el).overflowY))).toBe(true);
+    await field.fill('MGET cart');
+    await page.keyboard.press('Enter');
+    await expect.poll(() => useCase(page)).toContain('  api -> cache : MGET cart\n');
+    await expect(field).toHaveCount(0);
+    await expect(option(page, 2)).toBeFocused();
+    await expect(option(page, 2)).toHaveAttribute('aria-selected', 'true');
+
+    // A double click edits it too; Escape puts back what was there before this edit, and writes nothing.
+    await option(page, 2).dblclick();
+    await expect(field).toHaveValue('MGET cart');
+    await field.fill('XADD cart');
+    await page.keyboard.press('Escape');
+    await expect(field).toHaveCount(0);
+    await expect(option(page, 2)).toHaveAccessibleName('2. Checkout API to Cart cache: MGET cart');
+    await expect(option(page, 2)).toBeFocused();
+    expect(await useCase(page)).toContain('  api -> cache : MGET cart\n');
+    // Unchanged and left: nothing written, so one undo takes the edit back.
+    await page.keyboard.press('Enter');
+    await expect(field).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(field).toHaveCount(0);
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect.poll(() => useCase(page)).toBe(original);
+  });
+
+  test("an end handle dragged to another lane changes where the step goes or starts, at once; onto the step's other end it is refused", async ({ page }) => {
+    await openPane(page);
+    const original = await useCase(page);
+    await option(page, 2).click();
+    const dragEnd = async (end: 'from' | 'to', lane: string) => {
+      const handle = (await flows(page).locator(`[data-end-handle="${end}"]`).boundingBox())!;
+      const target = (await flows(page).locator(`[data-lane="${lane}"]`).boundingBox())!;
+      const y = handle.y + handle.height / 2;
+      await page.mouse.move(handle.x + handle.width / 2, y);
+      await page.mouse.down();
+      await page.mouse.move(target.x + target.width / 2, y, { steps: 10 });
+      return { drop: () => page.mouse.up() };
+    };
+    // The head, from the cache to the orders DB: lit up while dragged, written when dropped.
+    const head = await dragEnd('to', 'db');
+    await expect(flows(page).locator('[data-end-ghost="lane"]')).toHaveCount(1);
+    await head.drop();
+    await expect.poll(() => useCase(page)).toContain('  api -> db : GET cart\n');
+    await expect(option(page, 2)).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('flows-news')).toHaveText('Step 2 now goes to Orders DB.');
     await expect
       .poll(() => page.getByTestId('flows-map').locator('[data-map-node][data-active]').evaluateAll((els) => els.map((e) => e.getAttribute('data-map-node')).sort()))
-      .toEqual(['api', 'events']);
+      .toEqual(['api', 'db']);
 
-    // Enter on a message goes to its form; Escape on the diagram lets it go.
+    // The tail onto the head's lane: a step to itself, refused and said so; the text stays.
+    const tail = await dragEnd('from', 'db');
+    await expect(flows(page).locator('[data-end-ghost="refused"]')).toHaveCount(1);
+    await tail.drop();
+    await expect(flows(page).getByRole('alert')).toHaveText("A step can't go from a component to itself.");
+    expect(await useCase(page)).toContain('  api -> db : GET cart\n');
+
+    // By the keys: Alt+Right moves the head a lane on (the lanes are in the order the steps meet them), X swaps the ends.
     await option(page, 2).focus();
-    await page.keyboard.press('Enter');
-    await expect(flows(page).getByRole('form', { name: 'Edit step' }).getByLabel('Starts at')).toBeFocused();
-    await option(page, 2).focus();
+    await page.keyboard.press('Alt+ArrowRight');
+    await expect.poll(() => useCase(page)).toContain('  api -> cache : GET cart\n');
+    await page.keyboard.press('x');
+    await expect.poll(() => useCase(page)).toContain('  cache -> api : GET cart\n');
+    // Each one undo step.
+    for (let i = 0; i < 3; i++) await page.keyboard.press('ControlOrMeta+z');
+    await expect.poll(() => useCase(page)).toBe(original);
+  });
+
+  test('the details card opens from the toolbar or D, at the arrow and with no scroll of its own; a header applies at once, a field when left, and undo takes each back', async ({ page }) => {
+    await openPane(page);
+    const original = await useCase(page);
+    await option(page, 1).click();
+    await toolbar(page, 'Step 1').getByRole('button', { name: 'Headers, payload and fan-out' }).click();
+    const card = flows(page).getByRole('dialog', { name: 'Details of step 1' });
+    await expect(card).toBeVisible();
+    expect(await card.evaluate((el) => el.scrollHeight <= el.clientHeight)).toBe(true);
+    // Under the step, not over it or its toolbar.
+    const [row, box, bar] = [(await option(page, 1).boundingBox())!, (await card.boundingBox())!, (await toolbar(page, 'Step 1').boundingBox())!];
+    expect(box.y).toBeGreaterThanOrEqual(row.y + row.height - 2);
+    expect(box.y).toBeGreaterThanOrEqual(bar.y + bar.height - 2);
+
+    await card.getByPlaceholder('Filter headers').fill('author');
+    await card.getByRole('button', { name: '+ Authorization' }).click();
+    await expect.poll(() => useCase(page)).toContain('  shopper -> api : POST /checkout header Authorization\n');
+    await card.getByLabel('Payload or note').fill('{"sku": 7}');
+    await expect.poll(() => useCase(page)).not.toContain('{"sku": 7}');
+    await card.getByLabel('Payload or note').press('Tab');
+    await expect.poll(() => useCase(page)).toContain('  shopper -> api : POST /checkout header Authorization {"sku": 7}\n');
+    // Escape closes it, back on the step; D opens it again.
     await page.keyboard.press('Escape');
-    await expect(option(page, 2)).toHaveAttribute('aria-selected', 'false');
-    await expect(flows(page).getByRole('form', { name: 'Edit step' })).toHaveCount(0);
+    await expect(card).toHaveCount(0);
+    await expect(option(page, 1)).toBeFocused();
+    await page.keyboard.press('d');
+    await expect(card).toBeVisible();
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('ControlOrMeta+z');
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect.poll(() => useCase(page)).toBe(original);
+  });
+
+  test('the editor has one use case picker, in its header: the bar shows the name (a click renames it) and a menu adds or deletes one', async ({ page }) => {
+    await openPane(page);
+    await expect(flows(page).getByRole('combobox', { name: 'Use case' })).toHaveCount(0);
+    await expect(page.getByRole('combobox', { name: 'Use case' })).toHaveCount(1);
+    await flows(page).getByRole('button', { name: 'Rename the use case Checkout' }).click();
+    const rename = flows(page).getByRole('textbox', { name: 'Rename the use case Checkout' });
+    await rename.fill('Place order');
+    await rename.press('Enter');
+    await expect.poll(() => editorText(page)).toContain('usecase "Place order" {');
+    await expect(flows(page).getByRole('button', { name: 'Rename the use case Place order' })).toBeVisible();
+
+    await flows(page).getByRole('button', { name: 'Use case actions' }).click();
+    await page.getByRole('menuitem', { name: 'New use case…' }).click();
+    const name = flows(page).getByRole('textbox', { name: 'New use case' });
+    await name.fill('Browse');
+    await name.press('Enter');
+    await expect(page.getByTitle(/^Use case: the flow Play runs/)).toHaveText(/Browse/);
+    await expect(flows(page).getByRole('button', { name: 'Rename the use case Browse' })).toBeVisible();
+    await flows(page).getByRole('button', { name: 'Use case actions' }).click();
+    await page.getByRole('menuitem', { name: 'Delete this use case' }).click();
+    await expect.poll(() => editorText(page)).not.toContain('usecase "Browse"');
   });
 
   test('Alt+Up and Down and the buttons move the selected step, Delete and the button remove it, and undo takes each back', async ({ page }) => {
@@ -236,8 +390,8 @@ test.describe('editing on the Flows view', () => {
     await expect(option(page, 1)).toHaveAttribute('aria-selected', 'true');
     await expect(option(page, 2)).toHaveAttribute('aria-selected', 'true');
     await expect(option(page, 2)).toBeFocused();
-    const selected = flows(page).getByRole('region', { name: 'Selected steps' });
-    await expect(selected).toContainText('2 steps selected');
+    const selected = toolbar(page, '2 steps selected');
+    await expect(selected).toBeVisible();
     await selected.getByRole('button', { name: 'Run at the same time' }).click();
     await expect.poll(() => useCase(page)).toContain('  par {\n    shopper -> api : POST /checkout\n    api -> cache : GET cart\n  }\n');
     await expect(flows(page).locator('[data-frame="parallel"]')).toHaveCount(2);
@@ -249,10 +403,10 @@ test.describe('editing on the Flows view', () => {
     await page.keyboard.press('ControlOrMeta+z');
     await expect.poll(() => useCase(page)).toBe(original);
 
-    // Steps that can't run at the same time say why, in the pane; Cmd/Ctrl-click adds one to the selection, and the header has the action too.
+    // Steps that can't run at the same time say why, under the bar; Cmd/Ctrl-click adds one to the selection.
     await option(page, 1).click();
     await option(page, 5).click({ modifiers: ['ControlOrMeta'] });
-    await flows(page).getByRole('button', { name: 'Run at the same time' }).first().click();
+    await toolbar(page, '2 steps selected').getByRole('button', { name: 'Run at the same time' }).click();
     await expect(flows(page).getByRole('alert')).toHaveText(/follow each other/);
     expect(await useCase(page)).toBe(original);
 
@@ -276,23 +430,23 @@ test.describe('editing on the Flows view', () => {
     const run = flows(page).getByRole('button', { name: 'Run at the same time' });
     await option(page, 1).click();
     await option(page, 2).click({ modifiers: ['Shift'] });
-    await expect(run).toHaveCount(2);
-    await run.first().click();
+    await expect(run).toHaveCount(1);
+    await run.click();
     await expect.poll(() => useCase(page)).toContain('  par {\n    shopper -> api : POST /checkout\n    api -> cache : GET cart\n  }\n');
-    // The block's first step, alone: the action is gone from the header and the column.
+    // The block's first step, alone: its toolbar, without the action.
     await expect(option(page, 1)).toHaveAttribute('aria-selected', 'true');
     await expect(option(page, 2)).toHaveAttribute('aria-selected', 'false');
-    await expect(flows(page).getByRole('region', { name: 'Selected step' })).toContainText('Step 1');
+    await expect(toolbar(page, 'Step 1')).toBeVisible();
     await expect(run).toHaveCount(0);
-    // Both steps of the new block, selected again: not offered, and the column says why.
+    // Both steps of the new block, selected again: not offered, and the toolbar says why.
     await option(page, 2).click({ modifiers: ['Shift'] });
-    await expect(flows(page).getByRole('region', { name: 'Selected steps' })).toContainText('2 steps selected');
+    await expect(toolbar(page, '2 steps selected')).toBeVisible();
     await expect(run).toHaveCount(0);
-    await expect(flows(page).getByRole('region', { name: 'Selected steps' })).toContainText('already runs at the same time as others: ungroup its block first');
+    await expect(flows(page).getByText('already runs at the same time as others: ungroup its block first')).toBeVisible();
     // A step of the block with one outside it: not offered either.
     await option(page, 5).click();
     await option(page, 4).click({ modifiers: ['ControlOrMeta'] });
-    await expect(flows(page).getByRole('region', { name: 'Selected steps' })).toContainText('Step 4 already runs at the same time');
+    await expect(flows(page).getByText(/Step 4 already runs at the same time/)).toBeVisible();
     await expect(run).toHaveCount(0);
   });
 
@@ -327,7 +481,8 @@ test.describe('editing on the Flows view', () => {
     await expect(step.getByLabel('Starts at')).toHaveAttribute('data-value', 'db');
     await expect(step.getByLabel('Goes to')).toHaveAttribute('data-value', '');
 
-    // A click on a lifeline picks too.
+    // A click on a lifeline picks too (at its top, scrolled back into sight).
+    await surface(page).evaluate((el) => el.scrollTo(0, 0));
     const line = (await flows(page).locator('[data-lifeline="cache"]').boundingBox())!;
     await page.mouse.click(line.x + line.width / 2, line.y + 8);
     await expect(step.getByLabel('Goes to')).toHaveAttribute('data-value', 'cache');
@@ -415,7 +570,7 @@ test.describe('editing on the Flows view', () => {
 });
 
 test.describe('the Flows view, polished', () => {
-  test('labels keep a sensible width: the view scrolls sideways rather than starve them, and the far lanes come out from under the column', async ({ page }) => {
+  test('labels keep a sensible width: the view scrolls sideways rather than starve them', async ({ page }) => {
     const long = SOURCE.replace('POST /checkout', 'POST /checkout {"cart": 42, "coupon": "WINTER-SALE-2026"}');
     const label = (n: number) => option(page, n).locator('span.truncate').first();
     const scroller = () => surface(page).evaluate((box) => ({ scroll: box.scrollWidth, client: box.clientWidth }));
@@ -428,20 +583,20 @@ test.describe('the Flows view, polished', () => {
       // A short label shows whole.
       await expect(label(2)).toHaveText('GET cart');
       expect(await label(2).evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
-      // The column is beside the diagram; where the lanes don't fit, the view scrolls sideways and the far end comes out from under the column.
-      const column = (await flows(page).getByRole('region', { name: 'Use case Checkout' }).boundingBox())!;
+      // Where the lanes don't fit, the view scrolls sideways to the far end; where they do, they are all in sight.
+      const right = await surface(page).evaluate((el) => el.getBoundingClientRect().left + el.clientWidth);
       const box = await scroller();
       const lane = async () => (await flows(page).locator('[data-lane="events"]').boundingBox())!;
       if (size.width === 1024) {
         expect(box.scroll).toBeGreaterThan(box.client);
         await surface(page).evaluate((el) => el.scrollTo(10_000, 0));
         const last = await lane();
-        expect(last.x + last.width).toBeLessThanOrEqual(column.x + 1);
+        expect(last.x + last.width).toBeLessThanOrEqual(right + 1);
         await surface(page).evaluate((el) => el.scrollTo(0, 0));
       } else {
         expect(box.scroll).toBeLessThanOrEqual(box.client);
         const last = await lane();
-        expect(last.x + last.width).toBeLessThanOrEqual(column.x + 1);
+        expect(last.x + last.width).toBeLessThanOrEqual(right + 1);
       }
     }
   });
@@ -451,7 +606,7 @@ test.describe('the Flows view, polished', () => {
     const reply = flows(page).getByRole('button', { name: 'Add reply' });
     // The checkout request is answered by the 201.
     await option(page, 1).click();
-    await expect(flows(page).getByRole('region', { name: 'Selected step' })).toBeVisible();
+    await expect(toolbar(page, 'Step 1')).toBeVisible();
     await expect(reply).toHaveCount(0);
     // On the main flow, the cart request waits (its answers are in the scenarios).
     await option(page, 2).click();
@@ -459,7 +614,7 @@ test.describe('the Flows view, polished', () => {
     // On a scenario's tab it is answered.
     await flows(page).getByRole('tab', { name: 'Cart expired' }).click();
     await option(page, 2).click();
-    await expect(flows(page).getByRole('region', { name: 'Selected step' })).toContainText('Step 2');
+    await expect(toolbar(page, 'Step 2')).toBeVisible();
     await expect(reply).toHaveCount(0);
   });
 
@@ -535,7 +690,9 @@ test.describe('the composer in sight, at 1280x800', () => {
     const own = (x: number, y: number) => list.evaluate((el, [px, py]) => el.contains(document.elementFromPoint(px, py)), [x, y] as const);
     expect(await own(l.x + l.width / 2, l.y + 6)).toBe(true);
     expect(await own(l.x + l.width / 2, l.y + l.height - 6)).toBe(true);
-    // An operation from it goes in the field; typed again, the list is back, and a click elsewhere closes it.
+    // It shows the first eight, the rest reached by typing; an operation from it goes in the field; typed again, the list is back, and a click elsewhere closes it.
+    expect(await list.getByRole('option').count()).toBeLessThanOrEqual(8);
+    await field.fill('INS');
     await list.getByRole('option', { name: /^INSERT/ }).first().click();
     await expect(field).toHaveValue(/^INSERT /);
     await expect(list).toHaveCount(0);
@@ -644,7 +801,7 @@ test('a group made on the view is in the code editor\'s history: Code mode undoe
   const original = await useCase(page);
   await option(page, 1).click();
   await option(page, 2).click({ modifiers: ['Shift'] });
-  await flows(page).getByRole('region', { name: 'Selected steps' }).getByRole('button', { name: 'Run at the same time' }).click();
+  await toolbar(page, '2 steps selected').getByRole('button', { name: 'Run at the same time' }).click();
   await expect.poll(() => useCase(page)).toContain('  par {\n    shopper -> api : POST /checkout\n');
   await setMode(page, 'code');
   await codeEditor(page).click();

@@ -761,6 +761,7 @@ export default function DiagramView({
       onClose={toggleFlows}
       onHighlight={setFlowHover}
       layout={phone ? 'rail' : 'pane'}
+      headerPicker
     />
   );
   // A component just added keeps its settings closed (the palette stays for the next add), but where the Selection
