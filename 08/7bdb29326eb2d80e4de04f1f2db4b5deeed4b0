@@ -1,0 +1,24 @@
+frontend/src/dsl/renameId.test.ts
+  s_733d66441cadaa::t_373a18b6e0808a 153
+  s_733d66441cadaa::t_2919e4e83d8f0a 121-123
+  s_733d66441cadaa::t_bf73ca4af0e392 140-141
+  s_733d66441cadaa::t_ef52f081d0c7c6 119-120
+  s_733d66441cadaa::t_b4574a6c5f4121 67-73
+  s_733d66441cadaa::t_05e55ba3ae6bf0 107
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "087bdb29326eb2d80e4de04f1f2db4b5deeed4b0",
+  "prompts": {},
+  "sessions": {
+    "s_733d66441cadaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9649973d-f497-4440-b031-a92483a592e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
