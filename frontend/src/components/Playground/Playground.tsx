@@ -214,6 +214,11 @@ function initialTourMode(): StartMode {
 
 const EDITOR_CONTEXT = { kind: 'editor' } as const;
 
+/** The pane a phone in Code mode opens on: the code on a first visit, where it all starts; the diagram for a link or a returning visitor. */
+function initialMobilePane(): 'code' | 'diagram' {
+  return !isDeepLink() && !isReturning() ? 'code' : 'diagram';
+}
+
 export default function Playground() {
   // An external store, so cloud sync can merge into the latest diagrams (src/playground/docStore.ts).
   const [docStore] = useState(() => createDocStore(loadInitialState()));
@@ -282,7 +287,7 @@ export default function Playground() {
   const [mode] = useEditorMode();
   const visual = mode === 'visual';
   // Phones show one pane at a time: in Code mode the code, with a peek at the diagram (not remembered); in Visual the canvas.
-  const [mobilePane, setMobilePane] = useState<'code' | 'diagram'>('code');
+  const [mobilePane, setMobilePane] = useState<'code' | 'diagram'>(initialMobilePane);
   const phonePane = visual ? 'diagram' : mobilePane;
   /** Visual mode's View code: open, and the declaration to select in it. */
   const [codeView, setCodeView] = useState<{ at: (SourceLoc & { n: number }) | null } | null>(null);
