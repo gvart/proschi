@@ -194,7 +194,12 @@ test.describe('the editor canvas', () => {
     await expect(step.getByLabel('Goes to')).toHaveAttribute('data-value', 'api');
     // Picking selects nothing, so no settings open in the builder's place.
     await expect(page.getByRole('region', { name: /settings/ })).toHaveCount(0);
-    await step.getByRole('textbox', { name: 'Label' }).fill('GET /items');
+    // The operations come from the API's type: pick GET, then type the path.
+    const label = step.getByRole('combobox', { name: 'Operation' });
+    await label.click();
+    await step.getByRole('option', { name: /^GET\b/ }).click();
+    await expect(label).toHaveValue('GET /');
+    await label.pressSequentially('items');
     await step.getByRole('button', { name: 'Add step' }).click();
     await expect.poll(() => editorText(page)).toMatch(/user -> api : GET \/items/);
 

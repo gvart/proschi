@@ -6,6 +6,7 @@ import type { Diagnostic as CmDiagnostic } from '@codemirror/lint';
 import { componentCatalog } from '../../catalog/componentCatalog';
 import { COLOR_NAMES } from '../../dsl/palette';
 import { HTTP_METHODS, KINDS, builtinTypes, parse, typeKey, type Diagnostic, type Diagram, type ResolvedType } from '../../dsl';
+import { stepVocabulary } from '../../dsl/typesys/vocabulary';
 
 interface LexState {
   inLabel: boolean;
@@ -304,28 +305,27 @@ function stepOptions(diagram: () => Diagram, doc: Text, before: string, pos: num
   const m = STEP.exec(before);
   if (!m || !openBlocks(doc, lineNumber).some((b) => /^\s*usecase\b/.test(b))) return null;
   const [, from, arrow, to, label] = m;
-  const typeOf = (id: string) => diagram().nodes.find((n) => n.id === id)?.resolvedType;
-  if (arrow === '-->') {
-    const t = typeOf(from);
-    if (!t || !/^\d*$/.test(label)) return null;
-    return { from: pos - label.length, options: t.statuses.map((s) => ({ label: String(s), type: 'constant', detail: `status of ${t.name}` })), validFor: /^\d*$/ };
-  }
-  const t = typeOf(to);
+  const kind = arrow === '-->' ? 'response' : arrow === '->>' ? 'async' : arrow === '-x' ? 'failed' : 'request';
+  const v = stepVocabulary(diagram(), from, to, kind);
+  const t = v.type;
   if (!t) return null;
+  if (kind === 'response') {
+    if (!/^\d*$/.test(label)) return null;
+    return { from: pos - label.length, options: v.statuses.map((s) => ({ label: String(s), type: 'constant', detail: `status of ${t.name}` })), validFor: /^\d*$/ };
+  }
   const headers = /^([A-Z]+)\s+\S+\s+header\s+((?:[\w-]+\s*,\s*)*)([\w-]*)$/.exec(label);
   if (headers && HTTP_METHODS.includes(headers[1])) {
     const used = new Set(headers[2].split(',').map((h) => h.trim().toLowerCase()));
-    const options = t.headers.filter((h) => !used.has(h.toLowerCase())).map((h) => ({ label: h, type: 'property', detail: `header of ${t.name}` }));
+    const options = v.headers.filter((h) => !used.has(h.toLowerCase())).map((h) => ({ label: h, type: 'property', detail: `header of ${t.name}` }));
     return { from: pos - headers[3].length, options, validFor: /^[\w-]*$/ };
   }
   const afterPath = /^([A-Z]+)\s+\S+\s+(\w*)$/.exec(label);
-  if (afterPath && HTTP_METHODS.includes(afterPath[1]) && t.headers.length) {
-    return { from: pos - afterPath[2].length, options: [{ label: 'header', type: 'keyword', apply: 'header ', detail: t.headers.join(', ') }], validFor: /^\w*$/ };
+  if (afterPath && HTTP_METHODS.includes(afterPath[1]) && v.headers.length) {
+    return { from: pos - afterPath[2].length, options: [{ label: 'header', type: 'keyword', apply: 'header ', detail: v.headers.join(', ') }], validFor: /^\w*$/ };
   }
   if (!/^\w*$/.test(label)) return null;
-  const ops: Completion[] = t.ops.map((o) => ({ label: o.name, type: 'method', detail: `${o.access} · ${t.name}`, info: t.doc }));
-  const http = t.protocol?.toUpperCase() === 'HTTP' ? HTTP_METHODS.filter((h) => !t.ops.some((o) => o.name === h)) : [];
-  const options = [...ops, ...http.map((h) => ({ label: h, type: 'method', detail: `HTTP method · ${t.name}` }))];
+  const ops: Completion[] = v.ops.map((o) => ({ label: o.name, type: 'method', detail: `${o.access} · ${o.from}`, info: t.doc }));
+  const options = [...ops, ...v.methods.map((h) => ({ label: h, type: 'method', detail: `HTTP method · ${t.name}` }))];
   return options.length ? { from: pos - label.length, options, validFor: /^\w*$/ } : null;
 }
 

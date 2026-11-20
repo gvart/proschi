@@ -1,10 +1,10 @@
 import type { OutlineItem, OutlineStep, StepKind } from '../../dsl/edit';
-import type { Diagram, Kind } from '../../dsl/types';
+import type { Diagram } from '../../dsl/types';
 
 /**
  * What the Flows builder (FlowsPanel.tsx) suggests, as plain functions: the
- * use case and scenario names the problem asks for, the kind of the next step
- * and labels to pick from. Typing anything else always works.
+ * use case and scenario names the problem asks for and the kind of the next
+ * step. The labels come from the components' types (dsl/typesys/vocabulary.ts).
  */
 
 /** Every step of an outline, the main flow's and each scenario's, in text order. */
@@ -23,27 +23,6 @@ export function defaultStepKind(steps: OutlineStep[], from: string, to: string):
     else if (s.kind === 'response' && s.from === from && s.to === to) open = Math.max(0, open - 1);
   }
   return open > 0 ? 'response' : 'request';
-}
-
-/** Labels to pick from for a step of `kind` going to a component of `target` kind. */
-export function labelSuggestions(kind: StepKind, target: Kind | undefined): string[] {
-  if (kind === 'response') return ['200 OK', '201 Created', '302 Found', '404 Not found', 'ok', 'result'];
-  if (kind === 'async') return target === 'queue' || target === 'broker' ? ['publish event', 'enqueue job'] : ['SET', 'notify', 'log'];
-  switch (target) {
-    case 'database':
-    case 'search':
-    case 'analytics':
-      return ['SELECT', 'INSERT', 'UPDATE', 'query'];
-    case 'cache':
-      return ['GET', 'SET'];
-    case 'queue':
-    case 'broker':
-      return ['publish', 'consume'];
-    case 'storage':
-      return ['GET object', 'PUT object'];
-    default:
-      return ['GET /', 'POST /', 'PUT /', 'DELETE /'];
-  }
 }
 
 /** The use cases the problem's traffic names, which the design does not define yet. */

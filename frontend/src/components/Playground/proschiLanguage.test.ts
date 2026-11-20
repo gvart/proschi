@@ -4,6 +4,7 @@ import { StringStream } from '@codemirror/language';
 import { CompletionContext } from '@codemirror/autocomplete';
 import { builtinTypes, mapResolver, parse, type Diagram } from '../../dsl';
 import { proschiCompletions, proschiStreamParser, toCmDiagnostics } from './proschiLanguage';
+import { opsMostSpecificFirst } from '../../dsl/typesys/vocabulary';
 
 /** [text, style] for each non-blank token of one line. */
 function highlight(line: string): [string, string | null][] {
@@ -432,7 +433,8 @@ describe('types', () => {
 
   it("offers a step's operations, a response's statuses and the target's headers", () => {
     const ops = complete(`db "DB" [${withOps.name}]\na -> db\nusecase "U" {\n  a -> db : `, true)!;
-    expect(ops.options.map((o) => o.label)).toEqual(withOps.ops.map((o) => o.name));
+    // Its own operations first, then each ancestor's (dsl/typesys/vocabulary.ts).
+    expect(ops.options.map((o) => o.label)).toEqual(opsMostSpecificFirst(withOps, builtinTypes()).map((o) => o.name));
     const api = `api "API" [${http.name}]\nweb -> api\nusecase "U" {\n`;
     expect(complete(`${api}  api --> web : `, true)!.options.map((o) => o.label)).toEqual(http.statuses.map(String));
     expect(complete(`${api}  web -> api : GET /x header `, true)!.options.map((o) => o.label)).toEqual(http.headers);

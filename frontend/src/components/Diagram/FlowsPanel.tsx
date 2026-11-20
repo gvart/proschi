@@ -1,11 +1,12 @@
 import { useId, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { ArrowRight, MousePointerClick, Plus, Trash2, Workflow, X } from 'lucide-react';
-import { kindOf } from '../../dsl/kinds';
 import { addScenario, addStep, addUseCase, removeScenario, removeStep, removeUseCase, outlineOf, type OutlineStep, type StepKind } from '../../dsl/edit';
 import { parse } from '../../dsl/parser';
 import type { Diagram } from '../../dsl/types';
 import { eyebrow, field, iconButton, outlineButton, primaryButton, toolButton } from '../Playground/ui';
-import { defaultStepKind, labelSuggestions, missingScenarios, missingUseCases, outlineSteps } from './flows';
+import { defaultStepKind, missingScenarios, missingUseCases, outlineSteps } from './flows';
+import { stepVocabulary, type UsedStep } from '../../dsl/typesys/vocabulary';
+import StepLabelField from './StepLabelField';
 import Select from '../../design/Select';
 
 /**
@@ -58,6 +59,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   const selectId = useId();
   const [naming, setNaming] = useState(false);
   const outline = useMemo(() => (current ? outlineOf(source, current) : undefined), [source, current]);
+  const used = useMemo(() => useCases.flatMap((u) => outlineSteps(outlineOf(source, u)?.items ?? [])), [source, useCases]);
   const scenarios = useMemo(() => outline?.items.flatMap((i) => (i.kind === 'scenarios' ? i.branches.map((b) => b.name) : [])) ?? [], [outline]);
   const [lane, setLane] = useState(MAIN);
   const laneNow = scenarios.includes(lane) ? lane : MAIN;
@@ -241,6 +243,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
                 key={`${current}:${laneNow}`}
                 diagram={diagram}
                 steps={outlineSteps(outline.items)}
+                used={used}
                 pick={pick}
                 onPick={onPick}
                 where={laneNow ? `scenario “${laneNow}”` : scenarios.length ? 'the main flow' : current}
@@ -379,6 +382,7 @@ function NameForm({ label, placeholder, button, help, suggestions, onAdd }: { la
 function StepForm({
   diagram,
   steps,
+  used,
   pick,
   onPick,
   where,
@@ -386,6 +390,8 @@ function StepForm({
 }: {
   diagram: Diagram;
   steps: OutlineStep[];
+  /** Every step of the design's use cases, for the labels already used. */
+  used: UsedStep[];
   pick: StepPick;
   onPick: (pick: StepPick | null) => void;
   where: string;
@@ -400,7 +406,7 @@ function StepForm({
   const [chosen, setKind] = useState<StepKind>();
   const kind = chosen ?? suggested;
   const [label, setLabel] = useState('');
-  const target = to ? diagram.nodes.find((n) => n.id === to) : undefined;
+  const vocabulary = useMemo(() => stepVocabulary(diagram, from ?? '', to ?? '', kind, used), [diagram, from, to, kind, used]);
   const nodes = diagram.nodes.filter((n) => n.kind !== 'group' && n.kind !== 'text');
   const select = (value: string, which: 'from' | 'to') => onPick({ ...pick, [which]: value || undefined });
   return (
@@ -456,24 +462,9 @@ function StepForm({
             ))}
           </div>
           <p className="-mt-1 text-xs text-muted">{KIND_HELP[kind]}.</p>
-          <Labelled id={labelId} label="Label">
-            <input
-              id={labelId}
-              autoFocus
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              placeholder={kind === 'response' ? 'e.g. 200 OK' : 'e.g. GET /items'}
-              autoComplete="off"
-              className={`w-full ${field} !py-1 font-mono`}
-            />
+          <Labelled id={labelId} label={kind === 'response' ? 'Answer' : 'Operation'}>
+            <StepLabelField id={labelId} value={label} onChange={setLabel} vocabulary={vocabulary} kind={kind} />
           </Labelled>
-          <div className="flex flex-wrap gap-1" aria-label="Label suggestions">
-            {labelSuggestions(kind, target && kindOf(target)).map((s) => (
-              <button key={s} type="button" onClick={() => setLabel(s)} className="rounded-full border-bw-1 border-ink/30 px-2 py-0.5 font-mono text-[11px] hover:border-ink hover:bg-pop-yellow/30">
-                {s}
-              </button>
-            ))}
-          </div>
         </>
       )}
       <div className="flex flex-wrap gap-1.5">
