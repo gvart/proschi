@@ -290,6 +290,51 @@ test.describe('editing on the Flows pane', () => {
     await expect(run).toHaveCount(0);
   });
 
+  test("while a step's ends are picked, a lane's header or lifeline picks its component, by the pointer or the keys", async ({ page }) => {
+    await openPane(page);
+    const header = (name: string) => flows(page).getByRole('button', { name: `Pick ${name}`, exact: true });
+    // Nothing is being picked: the headers only show the lanes.
+    await expect(header('Orders DB')).toHaveCount(0);
+
+    await flows(page).getByRole('button', { name: 'Add a step', exact: true }).click();
+    const step = flows(page).getByRole('form', { name: 'New step' });
+    // From where the last step went; the form asks for where it goes, and a header (lit up under the pointer) picks it.
+    await expect(step.getByLabel('Starts at')).toHaveAttribute('data-value', 'shopper');
+    await expect(step).toContainText('Now click the component it goes to.');
+    const api = header('Checkout API');
+    const idle = await api.evaluate((el) => getComputedStyle(el).backgroundColor);
+    await api.hover();
+    await expect.poll(() => api.evaluate((el) => getComputedStyle(el).backgroundColor)).not.toBe(idle);
+    await api.click();
+    await expect(step.getByLabel('Goes to')).toHaveAttribute('data-value', 'api');
+
+    // By the keys: Tab goes from header to header, the focused one ringed, and Enter picks it; after both ends, a pick starts over, as on the canvas.
+    await page.mouse.move(0, 0);
+    const db = header('Orders DB');
+    const unfocused = await db.evaluate((el) => getComputedStyle(el).boxShadow);
+    await api.focus();
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Tab');
+    await expect(db).toBeFocused();
+    await expect.poll(() => db.evaluate((el) => getComputedStyle(el).boxShadow)).not.toBe(unfocused);
+    await page.keyboard.press('Enter');
+    await expect(step.getByLabel('Starts at')).toHaveAttribute('data-value', 'db');
+    await expect(step.getByLabel('Goes to')).toHaveAttribute('data-value', '');
+
+    // A click on a lifeline picks too.
+    const line = (await flows(page).locator('[data-lifeline="cache"]').boundingBox())!;
+    await page.mouse.click(line.x + line.width / 2, line.y + 8);
+    await expect(step.getByLabel('Goes to')).toHaveAttribute('data-value', 'cache');
+
+    // The composer of a "+" picks from the headers too.
+    await step.getByRole('button', { name: 'Cancel' }).click();
+    await (await insertPoint(page, 'Add a step before step 2')).click();
+    await expect(composer(page).getByLabel('Goes to')).toBeFocused();
+    await header('Order events').click();
+    await expect(composer(page).getByLabel('Starts at')).toHaveAttribute('data-value', 'api');
+    await expect(composer(page).getByLabel('Goes to')).toHaveAttribute('data-value', 'events');
+  });
+
   test('Add reply answers a selected request right after it, before the block that follows', async ({ page }) => {
     await openPane(page);
     await option(page, 2).click();

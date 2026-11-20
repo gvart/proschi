@@ -48,6 +48,8 @@ interface SequenceDiagramProps {
   composer?: { slot: Slot; node: ReactNode };
   /** Changed to put the focus back on the selected message (after an edit took it away). */
   focusKey?: number;
+  /** While a step's ends are being picked: a click on a lane's header or lifeline picks its component, as a click on the canvas does. */
+  onPickLane?: (id: string) => void;
 }
 
 /** The arrow sits under its label, this far below the row's centre. */
@@ -55,7 +57,7 @@ const LINE_DY = 8;
 /** The lane headers' strip, which stays at the top as the diagram scrolls. */
 const HEADER = 52;
 
-export default function SequenceDiagram({ outline, scenario, diagram, selected, onSelect, onScenario, onInsert, onMove, onDelete, onEdit, onClear, onUngroup, composer, focusKey }: SequenceDiagramProps) {
+export default function SequenceDiagram({ outline, scenario, diagram, selected, onSelect, onScenario, onInsert, onMove, onDelete, onEdit, onClear, onUngroup, composer, focusKey, onPickLane }: SequenceDiagramProps) {
   const nodes = useMemo(() => new Map(diagram.nodes.map((n) => [n.id, n])), [diagram]);
   const name = (id: string) => nodes.get(id)?.name ?? id;
   const lanes = useMemo(() => laneOrder(outline), [outline]);
@@ -119,7 +121,8 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
     if (composerAt) composerRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }, [composerAt, composerHeight]);
 
-  const [drag, setDrag] = useState<{ from: string; x1: number; x: number; y: number } | null>(null);
+  /** A drag from a lifeline: the lane it started at, and where the pointer went down (a press that hardly moves is a click). */
+  const [drag, setDrag] = useState<{ from: string; x1: number; x: number; y: number; x0: number; y0: number } | null>(null);
 
   if (empty) {
     return (
@@ -212,23 +215,34 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
 
   return (
     <div ref={rootRef} className="group/seq relative min-w-full" style={{ width: layout.width }}>
-      {/* The lane headers: each component's icon and name, like its node on the canvas. */}
-      <div className="sticky top-0 z-20 border-b border-ink/15 bg-surface" style={{ height: HEADER, width: layout.width, minWidth: '100%' }} aria-hidden="true">
+      {/* The lane headers: each component's icon and name, like its node on the canvas, and while a step's ends are
+          picked, buttons that pick it. Over the composer, which scrolls under them. */}
+      <div
+        role={onPickLane ? 'group' : undefined}
+        aria-label={onPickLane ? 'Lanes' : undefined}
+        aria-hidden={onPickLane ? undefined : true}
+        className="sticky top-0 z-40 border-b border-ink/15 bg-surface"
+        style={{ height: HEADER, width: layout.width, minWidth: '100%' }}
+      >
         {layout.lanes.map((lane) => {
           const node = nodes.get(lane.id);
+          const Tag = onPickLane ? 'button' : 'div';
           return (
-            <div
+            <Tag
               key={lane.id}
               data-lane={lane.id}
-              title={node ? `${node.name} (${node.techStack})` : lane.id}
-              className="absolute top-2 flex h-9 -translate-x-1/2 items-center gap-1.5 rounded-sm border-bw-1 border-ink bg-surface py-1 pl-1 pr-2 text-ink shadow-brutal-sm"
+              {...(onPickLane ? { type: 'button' as const, 'aria-label': `Pick ${name(lane.id)}`, onClick: () => onPickLane(lane.id) } : {})}
+              title={onPickLane ? `Pick ${name(lane.id)} for the step` : node ? `${node.name} (${node.techStack})` : lane.id}
+              className={`absolute top-2 flex h-9 -translate-x-1/2 items-center gap-1.5 rounded-sm border-bw-1 border-ink bg-surface py-1 pl-1 pr-2 text-ink shadow-brutal-sm ${
+                onPickLane ? 'cursor-pointer outline-hidden hover:bg-pop-yellow focus-visible:bg-pop-yellow focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-1' : ''
+              }`}
               style={{ left: lane.x, maxWidth: lane.width }}
             >
               <span className="grid h-6 w-6 shrink-0 place-items-center rounded-sm border-bw-1 border-ink bg-paper [&_svg]:h-3.5 [&_svg]:w-3.5">
                 {node ? getTechStackIcon(node.techStack, node.type) : null}
               </span>
               <span className="truncate text-[13px] font-bold">{name(lane.id)}</span>
-            </div>
+            </Tag>
           );
         })}
       </div>
@@ -264,14 +278,15 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
               key={lane.id}
               data-lifeline={lane.id}
               aria-hidden="true"
-              title={`Drag to another lifeline to add a step from ${name(lane.id)}`}
-              className="absolute top-0 w-3 -translate-x-1/2 cursor-crosshair touch-none"
+              title={onPickLane ? `Click to pick ${name(lane.id)} for the step, or drag to another lifeline to add a step from it` : `Drag to another lifeline to add a step from ${name(lane.id)}`}
+              className={`absolute top-0 w-3 -translate-x-1/2 touch-none ${onPickLane ? 'cursor-pointer hover:bg-pop-pink/25' : 'cursor-crosshair'}`}
               style={{ left: lane.x, height: layout.height }}
               onPointerDown={(e) => {
                 if (e.button !== 0) return;
                 e.preventDefault();
                 e.currentTarget.setPointerCapture(e.pointerId);
-                setDrag({ from: lane.id, x1: lane.x, ...pointerAt(e) });
+                const at = pointerAt(e);
+                setDrag({ from: lane.id, x1: lane.x, ...at, x0: at.x, y0: at.y });
               }}
               onPointerMove={(e) => drag && setDrag({ ...drag, ...pointerAt(e) })}
               onPointerUp={(e) => {
@@ -281,6 +296,8 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
                 const slot = to && slotNear(layout.slots, at.y);
                 setDrag(null);
                 if (to && slot) onInsert(slot.slot, slot.index, { from: drag.from, to: to.id });
+                // A click (a press that hardly moved) picks the lane's component while a step's ends are picked.
+                else if (onPickLane && Math.hypot(at.x - drag.x0, at.y - drag.y0) < 4) onPickLane(drag.from);
               }}
               onPointerCancel={() => setDrag(null)}
             />

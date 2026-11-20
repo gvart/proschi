@@ -22,7 +22,7 @@ import {
 import { parse } from '../../dsl/parser';
 import type { Diagram } from '../../dsl/types';
 import { eyebrow, field, iconButton, outlineButton, primaryButton, toolButton } from '../Playground/ui';
-import { defaultStepKind, missingScenarios, missingUseCases, openRequest, outlineSteps } from './flows';
+import { defaultStepKind, missingScenarios, missingUseCases, nextPick, openRequest, outlineSteps } from './flows';
 import { stepVocabulary, type UsedStep } from '../../dsl/typesys/vocabulary';
 import StepLabelField from './StepLabelField';
 import { composeLabel, isHttpHead, splitLabel, type LabelParts } from './stepLabel';
@@ -825,6 +825,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
                 onUngroup={ungroup}
                 composer={composer}
                 focusKey={focusKey}
+                onPickLane={pick ? (id) => onPick(nextPick(pick, id)) : undefined}
               />
             </div>
             <section ref={detailsRef} aria-label={`Use case ${current}`} className="shrink-0 space-y-3 [&_form>.sticky]:shadow-[0_12px_0_0_rgb(var(--c-surface))] border-t border-ink/15 p-3 @3xl:w-72 @3xl:overflow-y-auto @3xl:border-l @3xl:border-t-0 @5xl:w-80">

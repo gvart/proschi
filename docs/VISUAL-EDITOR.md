@@ -85,7 +85,8 @@ starts a new one.
 
 1. Pick a use case, or **+ New use case…** in the picker, and name it.
 2. Click **Add a step** beside the diagram. Then click the component it
-   starts at and the one it goes to, on the canvas or in the form.
+   starts at and the one it goes to: on the canvas, on its lane's header
+   or lifeline in the pane, or in the form.
 3. Pick the kind: **Request**, **Response**, **Message** (sent without
    waiting) or **Fails** (a call that never gets an answer).
 4. Pick an operation from the list and click **Add step**.
