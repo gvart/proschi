@@ -337,7 +337,7 @@ test.describe('the editor canvas', () => {
     await node(page, 'Payments').click();
     await step.getByRole('combobox', { name: 'Operation' }).fill('charge card');
     await step.getByRole('button', { name: /^Give Payments operations of its own/ }).click();
-    await expect.poll(() => editorText(page)).toMatch(/type Payments extends Worker \{\n  op write charge\n\}/);
+    await expect.poll(() => editorText(page)).toMatch(/type Payments extends Worker \{\n {2}op write charge\n\}/);
     await expect.poll(() => editorText(page)).toContain('pay "Payments" [Payments]');
   });
 
