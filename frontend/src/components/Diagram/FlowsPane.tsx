@@ -11,8 +11,8 @@ import { clampPaneHeight, PANE_MAX_SHARE, PANE_MIN } from './flows';
  */
 
 const HEIGHT_KEY = 'proschi.flows.height';
-/** Before one was chosen: about two fifths of the column. */
-const DEFAULT_SHARE = 0.42;
+/** Before one was chosen: half the column. */
+const DEFAULT_SHARE = 0.5;
 /** An arrow key moves the handle this far; with Shift, four times as far. */
 const KEY_STEP = 24;
 

@@ -995,8 +995,8 @@ export default function DiagramView({
             )}
           </Panel>
         )}
-        {/* The minimap takes this corner. */}
-        {nodes.length > 0 && !playing && !miniMap && !notice && !(hasSelection && !showSettings) && (
+        {/* The minimap takes this corner; with the Flows pane under it the canvas is short, and the hint would cover its lowest nodes. */}
+        {nodes.length > 0 && !playing && !miniMap && !notice && !(hasSelection && !showSettings) && !(flowsOpen && !phone) && (
           <Panel position="bottom-right" className="hidden md:block text-xs text-muted bg-paper/85 rounded-sm px-2 py-1">
             {narrow
               ? '? for shortcuts'

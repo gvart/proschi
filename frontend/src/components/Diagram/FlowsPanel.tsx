@@ -347,7 +347,8 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   const body = current && outline && (
     <section aria-label={`Use case ${current}`} className={pane ? 'space-y-3' : 'space-y-3 rounded-sm border-bw-1 border-ink p-2.5'}>
       {outline.items.length === 0 ? (
-        <p className="text-xs text-muted">No steps yet. Add the first request, from where the user starts.</p>
+        // The pane's diagram says so.
+        !pane && <p className="text-xs text-muted">No steps yet. Add the first request, from where the user starts.</p>
       ) : (
         <ol aria-label="Steps" className="space-y-1">
           {(() => {
@@ -501,7 +502,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
             <div className="min-w-0 shrink-0 overflow-x-auto bg-paper @3xl:min-h-0 @3xl:flex-1 @3xl:overflow-auto">
               <SequenceDiagram outline={outline} scenario={laneNow} diagram={diagram} selected={chosen?.line} onSelect={selectStep} onScenario={chooseLane} />
             </div>
-            <div className="shrink-0 space-y-3 border-t border-ink/15 p-3 @3xl:w-80 @3xl:overflow-y-auto @3xl:border-l @3xl:border-t-0 @5xl:w-96">
+            <div className="shrink-0 space-y-3 border-t border-ink/15 p-3 @3xl:w-72 @3xl:overflow-y-auto @3xl:border-l @3xl:border-t-0 @5xl:w-80 @7xl:w-96">
               {body}
               {alert}
             </div>

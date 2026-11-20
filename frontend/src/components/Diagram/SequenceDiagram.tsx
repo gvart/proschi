@@ -56,7 +56,10 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
   if (lanes.length === 0) {
     return (
       <div className="flex h-full min-h-32 items-center justify-center p-6 text-center text-sm text-muted">
-        <p className="max-w-sm">No steps yet. Add the first request, from where the user starts, and it is drawn here, one lane per component.</p>
+        <p className="max-w-sm">
+          <span className="block font-semibold text-ink">No steps yet</span>
+          Add the first request, from where the user starts. Each step is drawn here, with a lane per component.
+        </p>
       </div>
     );
   }
