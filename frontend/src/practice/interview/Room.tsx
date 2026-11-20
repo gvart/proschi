@@ -147,20 +147,26 @@ export default function Room({ problem, board, phone, phase, viewing, onView, ne
 
   const boardLayout = phone ? (
     <>
-      <div role="tablist" aria-label="Room" className="ps-tabs ps-tabs--fill flex bg-surface">
-        {(
-          [
-            ['chat', rail.title, MessagesSquare],
-            ['board', 'Whiteboard', Presentation],
-            ...(visual ? [] : ([['code', 'Code', Code2]] as const)),
-          ] as const
-        ).map(([id, label, Icon]) => (
-          <button key={id} role="tab" aria-selected={shownTab === id} onClick={() => onTab(id)} className="ps-tab relative !px-2">
-            <Icon size={15} className="hidden min-[420px]:block" aria-hidden="true" />
-            {label}
-            {id === 'chat' && rail.unread && shownTab !== 'chat' && <span aria-label="New message" className="absolute right-3 top-2 h-2 w-2 rounded-full bg-pop-pink" />}
-          </button>
-        ))}
+      <div className="flex items-stretch border-b-bw-1 border-ink bg-surface">
+        <div role="tablist" aria-label="Room" className="ps-tabs ps-tabs--fill flex min-w-0 flex-1 !border-b-0">
+          {(
+            [
+              ['chat', rail.title, MessagesSquare],
+              ['board', 'Whiteboard', Presentation],
+              ...(visual ? [] : ([['code', 'Code', Code2]] as const)),
+            ] as const
+          ).map(([id, label, Icon]) => (
+            <button key={id} role="tab" aria-selected={shownTab === id} onClick={() => onTab(id)} className="ps-tab relative !px-2">
+              <Icon size={15} className="hidden min-[420px]:block" aria-hidden="true" />
+              {label}
+              {id === 'chat' && rail.unread && shownTab !== 'chat' && <span aria-label="New message" className="absolute right-3 top-2 h-2 w-2 rounded-full bg-pop-pink" />}
+            </button>
+          ))}
+        </div>
+        {/* The top bar has no room on a phone. */}
+        <div className="flex flex-none items-center border-l-bw-1 border-ink px-1.5">
+          <ModeSwitch compact />
+        </div>
       </div>
       <div className="min-h-0 flex-1">
         <div className={shownTab === 'chat' ? 'h-full' : 'hidden'}>{railBox}</div>
@@ -338,7 +344,6 @@ function TopBar({ problem, phone, phase, viewing, onView, next, boardTools, puls
         <div className="flex items-center gap-1 px-1.5 py-1">
           {exit}
           <div className="min-w-0 flex-1 overflow-hidden">{stepper}</div>
-          {boardTools && <ModeSwitch compact />}
           {timer}
           <Menu label="Room options" align="right" trigger={<MoreHorizontal size={18} />}>
             {(close) => (
