@@ -24,7 +24,16 @@ scratchpad (`editor-review/*.png`).
   declares it (`api -> db : SQL`); no protocol means a bare arrow.
 - **Warning labels may be added**, with the warning shown first; problems with
   `strict: true` block, as the language already does.
-- **Default layout stays Split**, with a minimum fit zoom so nodes stay readable.
+- ~~Default layout stays Split~~ → replaced by **S10, exclusive modes** (user, 2026-11-20):
+  - **Visual mode:** canvas with the rail (Components, Flows, Selection), no code pane; a read-only
+    "View code" drawer shows the generated Proschi.
+  - **Code mode:** code editor plus the live diagram, read-only (no palette, Flows, connect or drag).
+  - First-time visitors land in Visual; the last-used mode is remembered after that.
+  - The editor and the practice/interview workspaces share the switch (it replaces practice's Code toggle).
+  - **AI assistants know the mode.** In Visual mode the Design partner and the Interview coach answer
+    in components and connections, show no code (unless asked), and their changes appear as diagram
+    previews with Accept; no code diff. Code mode keeps today's behaviour.
+- A minimum fit zoom keeps nodes readable.
 - **No payload schema in types** (a separate language feature).
 - Both canvases (`Playground/DiagramView.tsx`, `Diagram/EditableCanvas.tsx`)
   get every change; shared logic moves into `components/Diagram/`.
@@ -40,6 +49,9 @@ scratchpad (`editor-review/*.png`).
 - [ ] **S7 Selection tab.** Inspector docked in the rail, `TypePicker.tsx` with the document's types, type card. verify: unit picker lists a declared type; e2e no panel overlaps a node. depends on: S6
 - [ ] **S8 Quick-add bar and keys.** `QuickAdd.tsx` (A / Cmd+K) taking a line of Proschi; keys Tab, C, F2, T, +/-, R; shortcuts dialog. verify: `canvasEditState.test.ts`; e2e `A`, `cache [Redis]`, Enter. depends on: S6, S3
 - [ ] **S9 Docs and tour.** A visual editor docs page (`docs/`, `docs/site.json`), tour steps. verify: `docs.e2e.ts`, `onboarding.e2e.ts`. depends on: S1–S8
+- [ ] **S10a Editor modes.** Code | Visual switch in the editor header, stored in localStorage (default Visual); Visual = canvas + rail + View code drawer; Code = editor + read-only diagram. verify: e2e both modes, switch keeps the document and undo; no editing affordances in Code mode's diagram. depends on: S6
+- [ ] **S10b Practice modes.** The practice and interview workspaces use the same switch instead of their Code toggle. verify: practice/interview e2e. depends on: S10a
+- [ ] **S10c Mode-aware AI.** Partner and coach requests carry the mode; the backend prompt asks for component-level answers without code in Visual; ChangeCard shows only the diagram preview in Visual. verify: backend prompt tests, partner unit/e2e. depends on: —
 - [ ] **Ship.** Full CLAUDE.md checks, PR `feat(editor): …`, merge, watch deploy.
 - [ ] **Blog.** Post on the new editor with GIFs and a before/after video; LinkedIn gets one 4-panel image.
 
