@@ -128,7 +128,7 @@ test.describe('the Flows view', () => {
     await expect(tabs.getByRole('tab', { name: 'Out of stock' })).toHaveAttribute('aria-selected', 'true');
   });
 
-  test('a step clicked in the diagram lights up on the map and has its form beside it, and Up and Down move it', async ({ page }) => {
+  test('a step clicked in the diagram lights up on the map and has its toolbar over it, and Up and Down move it', async ({ page }) => {
     await openEditor(page);
     await switchTo(page, 'Flows').click();
     await expect(map(page)).toBeVisible();
@@ -140,16 +140,14 @@ test.describe('the Flows view', () => {
     await expect.poll(() => litNodes(page)).toEqual(['api', 'cache']);
     await expect(map(page).locator('[data-map-edge][data-active]')).toHaveCount(1);
     await expect(map(page).locator('[data-map-node="shopper"]')).toHaveCSS('opacity', '0.4');
-    const selected = flows(page).getByRole('region', { name: 'Selected step' });
-    const edit = selected.getByRole('form', { name: 'Edit step' });
-    await expect(selected).toContainText('Step 2');
-    await expect(edit.getByRole('combobox', { name: 'Operation' })).toHaveValue('GET cart');
+    const selected = flows(page).getByRole('toolbar', { name: /^Step \d+$/ });
+    await expect(selected).toHaveAccessibleName('Step 2');
 
     await page.keyboard.press('ArrowDown');
     await expect(options.nth(2)).toHaveAttribute('aria-selected', 'true');
     await expect(options.nth(2)).toBeFocused();
     await expect.poll(() => litNodes(page)).toEqual(['api', 'db']);
-    await expect(edit.getByRole('combobox', { name: 'Operation' })).toHaveValue('INSERT order');
+    await expect(selected).toHaveAccessibleName('Step 3');
     await page.keyboard.press('ArrowUp');
     await page.keyboard.press('ArrowUp');
     await expect(options.nth(0)).toHaveAttribute('aria-selected', 'true');
@@ -159,7 +157,7 @@ test.describe('the Flows view', () => {
     await flows(page).getByRole('tab', { name: 'Cart expired' }).click();
     await sequence(page).getByRole('option', { name: /SELECT cart/ }).click();
     await expect(sequence(page).getByRole('option', { name: /SELECT cart/ })).toHaveAccessibleName(/^4\. /);
-    await expect(selected).toContainText('Step 4');
+    await expect(selected).toHaveAccessibleName('Step 4');
     await flows(page).getByRole('tab', { name: 'Cart cached' }).click();
     await expect(selected).toHaveCount(0);
     await expect(sequence(page).getByRole('option', { selected: true })).toHaveCount(0);
@@ -187,14 +185,17 @@ test.describe('the Flows view', () => {
     await expect(switchTo(page, 'Flows')).toHaveAttribute('aria-pressed', 'true');
     await expect(sequence(page).getByRole('option').first()).toBeFocused();
 
-    // Typed in a field, F is a letter.
+    // Typed in a field (the label, edited on its arrow), F is a letter; Escape puts the label back.
     await sequence(page).getByRole('option').nth(1).click();
-    const field = flows(page).getByRole('form', { name: 'Edit step' }).getByRole('combobox', { name: 'Operation' });
-    await field.focus();
+    await page.keyboard.press('Enter');
+    const field = flows(page).getByRole('combobox', { name: 'Operation' });
+    await expect(field).toBeFocused();
     await page.keyboard.press('End');
     await page.keyboard.type('f');
     await expect(field).toHaveValue('GET cartf');
     await expect(flows(page)).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(field).toHaveCount(0);
 
     // F on the diagram: back to the canvas, focused, its view as it was.
     await sequence(page).getByRole('option').nth(1).focus();
@@ -215,12 +216,13 @@ test.describe('the Flows view', () => {
   test('the map lights up a step, collapses to a pill and back (by its buttons or M), and stays as it was left', async ({ page }) => {
     await openEditor(page);
     await switchTo(page, 'Flows').click();
-    // Open at first on a wide screen, in the corner of the diagram, clear of the column beside it.
+    // Open at first on a wide screen, in the bottom right corner of the diagram.
     await expect(map(page)).toHaveAttribute('aria-label', 'Architecture map');
     const m = (await map(page).boundingBox())!;
-    const column = (await flows(page).getByRole('region', { name: 'Use case Checkout' }).boundingBox())!;
+    const right = await page.locator('[data-flows-scroller]').evaluate((el) => el.getBoundingClientRect().left + el.clientWidth);
     const view = (await page.getByTestId('flows-view').boundingBox())!;
-    expect(m.x + m.width).toBeLessThanOrEqual(column.x);
+    expect(m.x + m.width).toBeLessThanOrEqual(right);
+    expect(m.x + m.width).toBeGreaterThan(right - 40);
     expect(m.y + m.height).toBeLessThanOrEqual(view.y + view.height);
     expect(m.y + m.height).toBeGreaterThan(view.y + view.height - 40);
     // Every component of the use case is drawn, and a selected answer lights the connection it goes back along.
@@ -282,6 +284,7 @@ test.describe('the Flows view', () => {
     const name = view.getByRole('textbox', { name: 'New use case' });
     await name.fill('Try it');
     await name.press('Enter');
+    await expect(picker).toHaveText(/Try it/);
     await view.getByRole('button', { name: 'Add a step', exact: true }).click();
     const step = view.getByRole('form', { name: 'New step' });
     await map(page).getByRole('button', { name: 'Visitor', exact: true }).click();
@@ -300,13 +303,15 @@ test.describe('the Flows view', () => {
 });
 
 /** Many steps between lanes with long names: taller and wider than the view at 1024x768. */
-const LONG = `${['gateway "Public API gateway"', 'orders "Order orchestration service"', 'payments "Payment authorisation service"', 'stock "Inventory reservation service"', 'ledger "Accounting ledger writer"', 'mail "Customer notification sender"', 'audit "Compliance audit trail"']
+const LONG = `${['gateway "Public API gateway"', 'orders "Order orchestration service"', 'payments "Payment authorisation service"', 'fraud "Fraud scoring service"', 'search "Product search indexer"', 'ledger "Accounting ledger writer"', 'mail "Customer notification sender"', 'audit "Compliance audit trail"']
   .map((n) => `${n} [REST API]`)
   .join('\n')}
 
 usecase "Checkout" {
 ${Array.from({ length: 14 }, (_, i) => `  gateway -> orders : POST /orders/${i}/confirm-and-reserve
   orders -> payments : POST /authorise-payment-${i}
+  payments -> fraud : POST /score-the-payment-${i}
+  orders -> search : POST /reindex-the-products-${i}
   payments --> orders : 201
   orders -> audit : POST /audit-record-${i}`).join('\n')}
 }
@@ -320,18 +325,28 @@ test.describe('one scrolling surface', () => {
     await waitForCanvas(page, 7);
     await switchTo(page, 'Flows').click();
     await expect(sequence(page)).toBeVisible();
-    // Every element in the view (the diagram, the column, the composer, the map, the bar): one with a scroll of its own.
+    // Every element in the view (the diagram, the toolbar, the label's field, the details card, the composer, the map,
+    // the bar) and the label's list, drawn outside it: one with a scroll of its own.
     const scrollers = () =>
-      page.getByTestId('flows-view').evaluate((root) =>
-        [root, ...Array.from(root.querySelectorAll('*'))]
-          .filter((el) => /(auto|scroll)/.test(`${getComputedStyle(el).overflowX} ${getComputedStyle(el).overflowY}`))
+      page.evaluate(() =>
+        [...Array.from(document.querySelectorAll('[data-testid="flows-view"], [data-testid="flows-view"] *')), ...Array.from(document.querySelectorAll('[role="listbox"][aria-label="Labels"], [role="listbox"][aria-label="Labels"] *'))]
+          .filter((el) => /(auto|scroll)/.test(`${getComputedStyle(el).overflowX} ${getComputedStyle(el).overflowY}`) || (el.getAttribute('aria-label') === 'Labels' && el.scrollHeight > el.clientHeight))
           .map((el) => (el.hasAttribute('data-flows-scroller') ? 'surface' : el.outerHTML.slice(0, 120))),
       );
     expect(await scrollers()).toEqual(['surface']);
-    // A step selected (its form beside), and the composer open: still one.
+    // A step selected (its toolbar over it), its label edited with its list open, its details card, and the composer open: still one.
     await sequence(page).getByRole('option').nth(3).click();
     expect(await scrollers()).toEqual(['surface']);
-    await sequence(page).getByRole('option').first().hover();
+    await page.keyboard.press('Enter');
+    await flows(page).getByRole('combobox', { name: 'Operation' }).fill('');
+    await expect(page.getByRole('listbox', { name: 'Labels' })).toBeVisible();
+    expect(await scrollers()).toEqual(['surface']);
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('d');
+    await expect(flows(page).getByRole('dialog', { name: 'Details of step 4' })).toBeVisible();
+    expect(await scrollers()).toEqual(['surface']);
+    await page.keyboard.press('Escape');
+    await flows(page).locator('[data-lane]').first().hover();
     await flows(page).getByRole('button', { name: 'Add a step before step 3', exact: true }).click();
     await expect(flows(page).getByRole('dialog', { name: 'Add a step here' })).toBeVisible();
     expect(await scrollers()).toEqual(['surface']);
@@ -344,11 +359,11 @@ test.describe('one scrolling surface', () => {
     await surface.evaluate((el) => el.scrollTo(0, 600));
     const lane = (await flows(page).locator('[data-lane="gateway"]').boundingBox())!;
     expect(Math.abs(lane.y - size.top)).toBeLessThanOrEqual(12);
-    // Scrolled to the far end, the last lane is in sight, left of the column.
+    // Scrolled to the far end, the last lane is in sight.
     await surface.evaluate((el) => el.scrollTo(10_000, 0));
     const last = (await flows(page).locator('[data-lane="audit"]').boundingBox())!;
-    const column = (await flows(page).getByRole('region', { name: 'Use case Checkout' }).boundingBox())!;
-    expect(last.x + last.width).toBeLessThanOrEqual(column.x + 1);
+    const right = await surface.evaluate((el) => el.getBoundingClientRect().left + el.clientWidth);
+    expect(last.x + last.width).toBeLessThanOrEqual(right + 1);
   });
 
   test("Add scenario's card is over the lane headers, whole, and takes clicks", async ({ page }) => {

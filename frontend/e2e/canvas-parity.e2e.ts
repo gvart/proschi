@@ -167,28 +167,33 @@ test.describe('the editor canvas', () => {
 
     await page.getByRole('button', { name: 'Flows' }).click();
     const flows = page.getByRole('region', { name: 'Flows' });
-    // One use case select, whose last option turns it into a name field: Escape goes back, Enter adds.
-    const picker = flows.getByRole('combobox', { name: 'Use case' });
-    await chooseOption(picker, '+ New use case…');
+    // With none yet, a button starts one in a name field: Escape goes back, Enter adds. Then the bar's title is its name, and its menu starts another.
+    await flows.getByRole('button', { name: 'New use case' }).first().click();
     const name = flows.getByRole('textbox', { name: 'New use case' });
     await expect(name).toBeFocused();
     await name.press('Escape');
-    await expect(picker).toBeFocused();
-    await chooseOption(picker, '+ New use case…');
+    await expect(name).toHaveCount(0);
+    await flows.getByRole('button', { name: 'New use case' }).first().click();
     await name.fill('Browse');
     await name.press('Enter');
     await expect.poll(() => editorText(page)).toContain('usecase "Browse"');
-    await expect(picker).toHaveText(/Browse/);
-    await chooseOption(picker, '+ New use case…');
+    await expect(flows.getByRole('button', { name: 'Rename the use case Browse' })).toBeVisible();
+    await flows.getByRole('button', { name: 'Use case actions' }).click();
+    await page.getByRole('menuitem', { name: 'New use case…' }).click();
+    await expect(name).toBeFocused();
+    await name.press('Escape');
+    await expect(flows.getByRole('button', { name: 'Rename the use case Browse' })).toBeFocused();
+    await flows.getByRole('button', { name: 'Use case actions' }).click();
+    await page.getByRole('menuitem', { name: 'New use case…' }).click();
     await name.fill('Search');
     await name.press('Enter');
     await expect.poll(() => editorText(page)).toContain('usecase "Search"');
-    // The builder and the top bar's picker show the same use case, either way.
+    // The view follows the header's picker, the editor's one: no second picker in the view.
+    await expect(flows.getByRole('combobox', { name: 'Use case' })).toHaveCount(0);
     const topBar = page.getByTitle(/^Use case: the flow Play runs/);
     await expect(topBar).toHaveAttribute('data-value', 'search');
     await chooseOption(topBar, 'Browse');
-    await expect(picker).toHaveAttribute('data-value', 'browse');
-    await expect(flows.getByRole('region', { name: 'Use case Browse' })).toBeVisible();
+    await expect(flows.getByRole('button', { name: 'Rename the use case Browse' })).toBeVisible();
     await flows.getByRole('button', { name: 'Add a step' }).click();
     const step = flows.getByRole('form', { name: 'New step' });
     await expect(step.getByRole('status')).toHaveText('Click the component the step starts at.');
@@ -285,11 +290,11 @@ test.describe('the editor canvas', () => {
     await expect(flows.locator('[data-frame-title="parallel"]')).toContainText('At the same time');
     await expect(message(/API to DB: SELECT order/)).toHaveAccessibleName(/\(fails\)$/);
 
-    // Click a step to change it in place, in the form beside the diagram.
+    // Click a step, then Enter, to change its label in place, on its arrow.
     await message(/INSERT order/).click();
-    const edit = flows.getByRole('form', { name: 'Edit step' });
-    await edit.getByRole('combobox', { name: 'Operation' }).fill('UPDATE order');
-    await edit.getByRole('button', { name: 'Save step' }).click();
+    await page.keyboard.press('Enter');
+    await flows.getByRole('combobox', { name: 'Operation' }).fill('UPDATE order');
+    await page.keyboard.press('Enter');
     await expect.poll(() => editorText(page)).toContain('    api -> db : UPDATE order\n');
 
     // Move the first step down, past the parallel block, and back with the keyboard.

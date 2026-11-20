@@ -346,7 +346,7 @@ test.describe('the interview room on your own', () => {
     const picker = flows.getByRole('combobox', { name: 'Use case' });
     await chooseOption(picker, 'Start generator');
     await expect(picker).toHaveText(/Start generator/);
-    await expect(flows.getByRole('region', { name: 'Use case Start generator' })).toBeVisible();
+    await expect(flows.getByText('No steps yet')).toBeVisible();
     await flows.getByRole('button', { name: 'Add a step' }).click();
     const step = flows.getByRole('form', { name: 'New step' });
     await expect(step.getByRole('status')).toHaveText('Click the component the step starts at.');
