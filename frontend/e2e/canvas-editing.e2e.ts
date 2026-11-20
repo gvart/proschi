@@ -258,6 +258,30 @@ test.describe('connecting by drag', () => {
     expect((await editorText(page)).match(/^api -> db/gm)).toHaveLength(1);
   });
 
+  test('zoomed out, a press in the middle of a hovered or selected node drags it, and starts no connection', async ({ page }) => {
+    await newDiagram(page, 'api "API" [REST API] pos 0,0\ndb "Orders DB" [PostgreSQL] pos 0,300\n', 2);
+    await layoutSettled(page);
+    for (const below of [0.7, 0.55]) {
+      for (let zoom = await zoomOf(page); zoom > below; zoom = await zoomOf(page)) {
+        await page.getByRole('button', { name: 'zoom out' }).click();
+        await expect.poll(() => zoomOf(page)).toBeLessThan(zoom);
+      }
+      for (let i = 0; i < 2; i++) {
+        // Hovered (and, from the second press, selected), the dots have grown before the press.
+        await layoutSettled(page);
+        const before = await editorText(page);
+        const box = (await node(page, 'API').boundingBox())!;
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+        await expect(node(page, 'API').locator('.react-flow__handle.source')).toHaveCSS('scale', '1.45');
+        await page.mouse.down();
+        await page.mouse.move(box.x + box.width / 2 + 40, box.y + box.height / 2, { steps: 5 });
+        await page.mouse.up();
+        await expect.poll(() => editorText(page)).not.toBe(before);
+        expect(await editorText(page)).not.toMatch(/^api -> /m);
+      }
+    }
+  });
+
   test('a connection’s settings offer its target’s protocol and the labels the design already uses', async ({ page }) => {
     await newDiagram(page, PINNED, 3);
     // Halfway along the connection to the cache.

@@ -157,6 +157,14 @@
   background: rgb(var(--c-yellow)) !important;
 }
 /*
+ * Only the dot grows: its pad keeps its size. Grown with it, the pad would reach the middle of the node
+ * once the pointer rests there, and a press meant to drag the node would start a connection.
+ */
+.pc-editable .react-flow__node:hover .pc-handle::after,
+.pc-editable .react-flow__node.selected .pc-handle::after {
+  scale: calc(1 / 1.45);
+}
+/*
  * The whole node takes a dropped connection (BodyTarget): invisible, and out of the pointer's way
  * until a connection is dragged; then it outlines the node under the pointer.
  */
