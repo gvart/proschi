@@ -1,0 +1,36 @@
+frontend/e2e/flows-pane.e2e.ts
+  s_733d66441cadaa::t_ab293e5697d51d 5,9-14,48-51,73-74,79-80,83-89,91-93,96-97,101-102,110,115,118,122-124,131,133-134,139-142,151,156,166,168-169,171,174,176-193,195-197,199-208,210-212,215,217-230,232-241,243-251,254,256,259-264,271,274-279,281-282,285-288,291,293,297-383
+frontend/e2e/canvas-editing.e2e.ts
+  s_733d66441cadaa::t_0bd50050fb4bb0 209,211
+frontend/e2e/selection-tab.e2e.ts
+  s_733d66441cadaa::t_0bd50050fb4bb0 76-80
+frontend/e2e/flows-pane-edit.e2e.ts
+  s_733d66441cadaa::t_9e41c0cebd980d 8,49-52,69,98,146,177,181-183,417-418,421,431,434,437-444,499,501-504,510,514,527,530,565-569,585,642
+  s_733d66441cadaa::t_10ce1a093552b9 616-632,636,639
+  s_733d66441cadaa::t_e270fda17eae35 335-336,349
+  s_733d66441cadaa::t_c2dc5c59e2abb1 345,347-348,350,354-355,357-364,368
+  s_733d66441cadaa::t_af45f03dfc5d3b 365-366,633-635,637-638
+frontend/e2e/canvas-parity.e2e.ts
+  s_733d66441cadaa::t_2251732dfa17ef 211-213,216
+  s_733d66441cadaa::t_0d72b5d6f6a479 15-16,195,197,242-243,248,307,334-335,347
+frontend/e2e/canvas-keys.e2e.ts
+  s_733d66441cadaa::t_0bd50050fb4bb0 93,96
+frontend/e2e/interview.e2e.ts
+  s_733d66441cadaa::t_6eb6db7148661c 343,353-354,356
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c6d72c118568a6c8725125006a88fc30e856b0e9",
+  "prompts": {},
+  "sessions": {
+    "s_733d66441cadaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9649973d-f497-4440-b031-a92483a592e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
