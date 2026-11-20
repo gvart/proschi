@@ -1,0 +1,44 @@
+frontend/src/components/Diagram/StepToolbar.tsx
+  s_733d66441cadaa::t_4522f4cc4d6e1d 1,56,58,62-68,70-74,77
+  s_733d66441cadaa::t_4383a8475f79ff 2-55,57,59-61,69,75-76,78-161
+frontend/src/components/Playground/ShortcutsDialog.tsx
+  s_733d66441cadaa::t_4c12a0a95218c5 55,64-71,73
+frontend/src/components/Diagram/FlowsView.tsx
+  s_733d66441cadaa::t_aabb53cc66a7be 73,84,88-89,91,98,130,137,153,161
+frontend/src/components/Playground/DiagramView.tsx
+  s_733d66441cadaa::t_bb2b8960e36bdf 764
+frontend/src/components/Diagram/SequenceDiagram.tsx
+  s_733d66441cadaa::t_5ab601c3a05e65 10,19-26,51-60,74-95,235-246,273-277,328-329,332-334,336-338,340-349,397,402-414,539-548,551-587,589-601,609,626-628,645-646,649,682-700,723-726,731
+  s_733d66441cadaa::t_56027900cb918b 339,385,647-648,652
+  s_733d66441cadaa::t_86f7ee51d5440a 175-176,220-233,330-331,335,588,650-651
+  s_733d66441cadaa::t_8574c1418bf92f 234,350
+frontend/src/components/Diagram/StepLabelField.tsx
+  s_733d66441cadaa::t_bc19334851f564 1,188
+  s_733d66441cadaa::t_7c5fbb72f31111 22
+  s_733d66441cadaa::t_98302677d96c6d 14-16,21,169-173,175,182-187,189,204-205,217-218,223,228,278,287-290,295,301-303,313,324,327,348-352,356
+frontend/src/components/Diagram/FlowsPanel.tsx
+  s_733d66441cadaa::t_4e26aec0599ecb 584-586,588-728,730,739-741,754-755,776,791,796,799,806,832,836-845,847-902,919-920,923,941,945-950,952-955,957,965-968,973,976,979-982,988,990
+  s_733d66441cadaa::t_86f7ee51d5440a 1619
+  s_733d66441cadaa::t_02b8565180ef2e 53-60,85-86,111,136,138-144,158,210-211,218,236,309-310,320
+  s_733d66441cadaa::t_707aeaeb17ac58 1,3,38-39,104,175,1485,1487-1618,1620-1639,1641,1649-1665,1723
+  s_733d66441cadaa::t_d2240a41a3d186 587,1486
+  s_733d66441cadaa::t_14338ba2b25a26 305-306,846
+  s_733d66441cadaa::t_e6852209b91cd5 811-814
+  s_733d66441cadaa::t_2aa6e7930d0933 146,792,800-805,1327,1347-1348,1376
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "41f998227e65cc2f779f0959e785ba841a9d8cbb",
+  "prompts": {},
+  "sessions": {
+    "s_733d66441cadaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9649973d-f497-4440-b031-a92483a592e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
