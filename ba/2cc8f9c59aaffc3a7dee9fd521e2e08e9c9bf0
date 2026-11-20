@@ -1,0 +1,22 @@
+frontend/src/dsl/editParallel.test.ts
+  s_733d66441cadaa::t_e2efd2f759d76b 18-20,23-25,71,106,268
+  s_733d66441cadaa::t_edf6b7e2fc8023 90-95,97-99
+  s_733d66441cadaa::t_0584c73138cf68 87-89,96
+  s_733d66441cadaa::t_5c06ca22d4cfb4 1-17,21-22,26-70,72-86,100-105,107-267,269-303
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ba2cc8f9c59aaffc3a7dee9fd521e2e08e9c9bf0",
+  "prompts": {},
+  "sessions": {
+    "s_733d66441cadaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9649973d-f497-4440-b031-a92483a592e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
