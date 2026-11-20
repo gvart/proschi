@@ -2,6 +2,9 @@ import type { Page } from '@playwright/test';
 import { mockSignedIn } from './accounts';
 import { answerDialog, appendCode, codeEditor, expect, test } from './fixtures';
 
+// These tests type in the code editor, so they run in Code mode (the canvas beside it only looks).
+test.use({ mode: 'code' });
+
 /**
  * Cloud sync of the editor's diagrams, signed in (the build with accounts):
  * the account's documents (GET/PUT/DELETE /api/me/documents) are kept in

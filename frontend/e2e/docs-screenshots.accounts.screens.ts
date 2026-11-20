@@ -3,6 +3,9 @@ import { mockSignedIn } from './accounts';
 import { chooseOption, codeEditor, expect, test, waitForCanvas } from './fixtures';
 import { Account, seed } from './versions';
 
+// The docs show the code beside the diagram, as Code mode lays them out.
+test.use({ mode: 'code' });
+
 /**
  * The screenshots of saved versions in docs/VERSIONS.md, signed in against
  * the in-memory account of e2e/versions.ts. Retaken with the others by

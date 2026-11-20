@@ -1,6 +1,9 @@
 import type { Page } from '@playwright/test';
 import { codeEditor, expect, test, waitForCanvas } from './fixtures';
 
+// These tests type in the code editor, so they run in Code mode (the canvas beside it only looks).
+test.use({ mode: 'code' });
+
 /** Clicks a link that opens in a new tab and returns that tab once it has loaded. */
 async function openInNewTab(page: Page, click: () => Promise<void>): Promise<Page> {
   const [tab] = await Promise.all([page.context().waitForEvent('page'), click()]);

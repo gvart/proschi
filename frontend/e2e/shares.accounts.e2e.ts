@@ -2,6 +2,9 @@ import type { Page } from '@playwright/test';
 import { mockSignedIn } from './accounts';
 import { canvasNodes, codeEditor, editorText, expect, test, waitForCanvas } from './fixtures';
 
+// These tests type in the code editor, so they run in Code mode (the canvas beside it only looks).
+test.use({ mode: 'code' });
+
 /**
  * Short links in the build with accounts (API mocked, e2e/accounts.ts):
  * signed in, Share → Short link with preview stores the diagram with a PNG

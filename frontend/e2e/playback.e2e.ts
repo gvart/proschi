@@ -1,6 +1,9 @@
 import type { Locator, Page } from '@playwright/test';
 import { codeEditor, expect, expectDiagramFitted, test, waitForCanvas } from './fixtures';
 
+// These tests type in the code editor, so they run in Code mode (the canvas beside it only looks).
+test.use({ mode: 'code' });
+
 // Playing a use case restyles the canvas that is already on screen: the same
 // React Flow viewport stays mounted, at the same pan and zoom, through Play,
 // Replay and back, so nothing flashes or jumps.
@@ -119,13 +122,15 @@ test.describe('editor panes', () => {
   test('phones keep one pane at a time, without a splitter', async ({ browser }) => {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
     const page = await context.newPage();
+    // A new context has not the file's mode: Code, so there are two panes to switch between.
+    await page.addInitScript(() => localStorage.setItem('proschi.editor.mode', '"code"'));
     await page.goto('app/?example=ecommerce');
     await expect(page.getByRole('separator', { name: 'Resize the code and diagram panes' })).toBeHidden();
-    const tabs = page.getByRole('tablist').filter({ has: page.getByRole('tab', { name: 'Code' }) });
-    await tabs.getByRole('tab', { name: 'Code' }).click();
+    const preview = page.getByRole('button', { name: 'Preview' });
+    await preview.click();
     await expect(codeEditor(page)).toBeVisible();
     await expect(page.locator('#pane-panel-diagram')).toBeHidden();
-    await tabs.getByRole('tab', { name: /Preview/ }).click();
+    await preview.click();
     await expect(page.locator('#pane-panel-diagram')).toBeVisible();
     await expect(page.locator('#pane-panel-code')).toBeHidden();
     const pane = (await page.locator('#pane-panel-diagram').boundingBox())!;

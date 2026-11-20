@@ -1,6 +1,9 @@
 import { mockSignedIn, SIGNED_IN } from './accounts';
 import { codeEditor, expect, loadReferenceSolution, test, waitForCanvas } from './fixtures';
 
+// These tests type in the code editor, so they run in Code mode (the canvas beside it only looks).
+test.use({ mode: 'code' });
+
 /**
  * A problem's leaderboards signed in (API mocked): after a run, under how
  * others did, the cheapest and the lowest-p99 passing designs of those who

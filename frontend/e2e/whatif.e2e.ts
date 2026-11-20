@@ -1,6 +1,9 @@
 import type { Page } from '@playwright/test';
-import { canvasNodes, codeEditor, editorText, expect, expectTopBarClear, test } from './fixtures';
+import { canvasNodes, codeEditor, editorText, expect, expectTopBarClear, setMode, test } from './fixtures';
 import { diagramTab, openDoc, resultsTab, WHATIF_DOC, WITH_WHATIFS } from './whatif';
+
+// The what-if writes to the code from the canvas, and undoes there: Visual mode.
+test.use({ mode: 'visual' });
 
 /**
  * The live what-if (docs/design/paid-plans.md P57): the traffic slider and
@@ -184,6 +187,7 @@ test('Simulate down takes nodes down, Results shows the availability lost, and i
 
 test('typing in the code never moves the what-if', async ({ page }) => {
   await openDoc(page, WHATIF_DOC);
+  await setMode(page, 'code');
   await codeEditor(page).click();
   await page.keyboard.press('ControlOrMeta+End');
   await page.keyboard.type('\n# notes');

@@ -2,6 +2,9 @@ import type { Page } from '@playwright/test';
 import lz from 'lz-string';
 import { canvasNodes, codeEditor, expect, test, waitForCanvas } from './fixtures';
 
+// These tests type in the code editor, so they run in Code mode (the canvas beside it only looks).
+test.use({ mode: 'code' });
+
 /**
  * The auto layout keeps room between layers for the load overlay's edge
  * chips: none lies over a node, the replicas' stacked cards included.

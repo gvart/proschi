@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
-import { expect, test, waitForCanvas } from './fixtures';
+import { codeEditor, expect, test, waitForCanvas } from './fixtures';
 
 /**
  * A practice problem worked through in stages (docs/design/paid-plans.md
@@ -40,7 +40,7 @@ for (const [device, viewport] of [
       await expect(rail(page).getByRole('button')).toHaveText(['1Lesson', '2Clarify', '3Estimate', '4Design', '5Wrap-up']);
       await expect(rail(page).getByRole('button', { name: 'Lesson' })).toHaveAttribute('aria-current', 'step');
       await expect(rail(page).getByRole('button', { name: 'Estimate' })).toBeDisabled();
-      await expect(page.locator('.cm-content')).toHaveCount(0);
+      await expect(codeEditor(page)).toHaveCount(0);
       await expect(next(page)).toHaveText('Next: Clarify');
       await shot(page, `${device}-1-lesson`);
       await next(page).click();
@@ -84,7 +84,7 @@ for (const [device, viewport] of [
 
       // Design: the whiteboard, with the guide (on phones a tab of its own).
       await waitForCanvas(page);
-      await expect(page.locator('.cm-content')).toHaveCount(0);
+      await expect(codeEditor(page)).toHaveCount(0);
       await shot(page, `${device}-6-design`);
       if (device === 'phone') {
         await page.getByRole('tab', { name: 'Guide' }).click();
@@ -179,7 +179,9 @@ test('going back keeps the notes, and a reload lands where you were', async ({ p
 test('a problem opened from Problems is the plain workspace: no stage bar, no lesson gate', async ({ page }) => {
   await page.goto('practice/#/url-shortener');
   await expect(page.locator('[data-view="editor"]')).toBeVisible();
-  await expect(page.locator('.cm-content')).toBeVisible();
+  // A first visit is in Visual mode: the diagram, with the code a switch away.
+  await expect(page.getByRole('radiogroup', { name: 'Editor mode' })).toBeVisible();
+  await waitForCanvas(page);
   await expect(page.getByRole('button', { name: 'Run tests' })).toBeVisible();
   await expect(page.getByRole('navigation', { name: 'Steps' })).toHaveCount(0);
   await expect(page.getByTestId('stage-next')).toHaveCount(0);

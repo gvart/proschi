@@ -1,5 +1,8 @@
 import type { Page } from '@playwright/test';
-import { appendCode, canvasNodes, codeEditor, editorText, expect, multiSelectClick, multiSelectSetup, test, waitForCanvas } from './fixtures';
+import { appendCode, canvasNodes, codeEditor, editorText, expect, multiSelectClick, multiSelectSetup, setMode, test, waitForCanvas } from './fixtures';
+
+// The canvas edits in Visual mode; each diagram's code is typed in Code mode first (newDiagram).
+test.use({ mode: 'visual' });
 
 /**
  * The canvas's editing basics: copy, paste and duplicate, moving a
@@ -9,12 +12,13 @@ import { appendCode, canvasNodes, codeEditor, editorText, expect, multiSelectCli
 
 async function newDiagram(page: Page, code: string, nodes: number) {
   await page.goto('app/');
-  await expect(codeEditor(page)).toBeVisible();
   await waitForCanvas(page, 1);
   await page.getByRole('button', { name: 'File' }).click();
   await page.getByRole('menuitem', { name: 'New diagram' }).click();
   await expect(canvasNodes(page)).toHaveCount(0);
+  await setMode(page, 'code');
   await appendCode(page, code);
+  await setMode(page, 'visual');
   await waitForCanvas(page, nodes);
   await layoutSettled(page);
 }
@@ -86,6 +90,7 @@ test.describe('canvas editing', () => {
     await expect(page.getByRole('region', { name: 'Cache settings' })).toBeVisible();
     // In the code editor the same keys are the editor's own.
     const before = await editorText(page);
+    await setMode(page, 'code');
     await codeEditor(page).click();
     await page.keyboard.press('ControlOrMeta+d');
     await page.keyboard.press('ControlOrMeta+v');
@@ -145,7 +150,17 @@ test.describe('canvas editing', () => {
     await menu.getByRole('menuitem', { name: /Duplicate/ }).click();
     await expect.poll(() => editorText(page)).toMatch(/^cache2 "Sessions" \[Redis\]$/m);
 
+    // In Visual mode the code is View code's: it opens on the declaration.
     menu = await open('API');
+    await menu.getByRole('menuitem', { name: 'Jump to code' }).click();
+    const drawer = page.getByRole('complementary', { name: 'Code, read-only' });
+    await expect(drawer.locator('.cm-selectionBackground').first()).toBeAttached();
+    await drawer.getByRole('button', { name: 'Close the code' }).click();
+
+    // In Code mode, in the code editor, the menu only looks.
+    await setMode(page, 'code');
+    menu = await open('API');
+    await expect(menu.getByRole('menuitem')).toHaveText(['Jump to code']);
     await menu.getByRole('menuitem', { name: 'Jump to code' }).click();
     await expect(codeEditor(page)).toBeFocused();
     const selected = await page.evaluate(() => window.getSelection()?.toString());
@@ -265,7 +280,6 @@ test.describe('canvas editing on a phone', () => {
 
   test('there is no minimap to cover the diagram', async ({ page }) => {
     await page.goto('app/');
-    await page.getByRole('tab', { name: 'Preview' }).click();
     await waitForCanvas(page, 2);
     await expect(page.getByRole('button', { name: 'Minimap' })).toHaveCount(0);
     await expect(page.locator('.react-flow__minimap')).toHaveCount(0);
