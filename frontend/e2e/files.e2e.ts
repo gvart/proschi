@@ -1,6 +1,9 @@
 import type { Page } from '@playwright/test';
 import { codeEditor, editorText, expect, test } from './fixtures';
 
+// These tests type in the code editor, so they run in Code mode (the canvas beside it only looks).
+test.use({ mode: 'code' });
+
 const files = (page: Page) => page.getByRole('complementary', { name: 'Diagrams' });
 const stored = (page: Page) =>
   page.evaluate(() => (JSON.parse(localStorage.getItem('proschi.docs') ?? '{}') as { docs: { id: string; fileName: string }[] }).docs.map((d) => [d.id, d.fileName]));

@@ -3,6 +3,9 @@ import { mockSignedIn, SIGNED_IN } from './accounts';
 import { codeEditor, editorText, expect, test, toSetupStep } from './fixtures';
 import { allowStatus, arrowLine, PartnerMock } from './partner';
 
+// These tests type in the code editor, so they run in Code mode (the canvas beside it only looks).
+test.use({ mode: 'code' });
+
 /**
  * Design partner in the build with accounts (API mocked, e2e/partner.ts):
  * the panel, a review with clarifying questions, change cards (accept is one

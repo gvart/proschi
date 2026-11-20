@@ -1,5 +1,8 @@
 import type { Page } from '@playwright/test';
-import { addFromPalette, canvasNodes, componentPalette, codeEditor, editorText, expect, test, waitForCanvas } from './fixtures';
+import { addFromPalette, canvasNodes, componentPalette, editorText, expect, test, waitForCanvas } from './fixtures';
+
+// Every edit here is made on the canvas, so the tests run in Visual mode, and read the code from the hidden editor's document.
+test.use({ mode: 'visual' });
 
 /**
  * Editing with the mouse: whatever is done on the canvas has to show up in the
@@ -9,7 +12,6 @@ import { addFromPalette, canvasNodes, componentPalette, codeEditor, editorText, 
 
 async function newEmptyDiagram(page: Page) {
   await page.goto('app/');
-  await expect(codeEditor(page)).toBeVisible();
   await waitForCanvas(page, 1);
   await page.getByRole('button', { name: 'File' }).click();
   await page.getByRole('menuitem', { name: 'New diagram' }).click();
@@ -185,7 +187,8 @@ test.describe('visual editing', () => {
     const text = await editorText(page);
     expect(text).toMatch(/^actor -> rest_api : HTTP$/m);
     expect(text).toMatch(/^rest_api -> orders_db : SQL$/m);
-    await expect(page.getByText('No problems')).toBeVisible();
+    // No problems: Visual hides the code's list, and the Code switch would count them.
+    await expect(page.getByRole('radio', { name: 'Code', exact: true })).toBeVisible();
   });
 
   test('Enter in the palette search adds the first match, connected from the selection', async ({ page }) => {
@@ -314,7 +317,8 @@ test.describe('visual editing', () => {
     await addComponent(page, 'postgres', 'PostgreSQL');
     await connect(page, 'Redis', 'PostgreSQL');
     await expect.poll(() => editorText(page)).toMatch(/redis\s*->\s*postgresql/);
-    await expect(page.getByText('No problems')).toBeVisible();
+    // No problems: Visual hides the code's list, and the Code switch would count them.
+    await expect(page.getByRole('radio', { name: 'Code', exact: true })).toBeVisible();
   });
 
   test('a component dragged onto the canvas is written, selected, and one Ctrl+Z takes it back', async ({ page }) => {
@@ -387,7 +391,6 @@ test.describe('visual editing', () => {
 test.describe('visual editing in practice', () => {
   test('a cache from the palette goes into the solution; the problem’s own nodes stay', async ({ page }) => {
     await page.goto('practice/#/url-shortener');
-    await expect(codeEditor(page)).toBeVisible();
     await waitForCanvas(page, 2);
     await addFromPalette(page, 'cache', 'Cache');
     await expect.poll(() => editorText(page)).toMatch(/^cache "Cache" \[Cache\]$/m);
@@ -413,7 +416,6 @@ test.describe('visual editing in practice', () => {
 
   test('a component added with the API selected is connected from it, and its id follows the name typed', async ({ page }) => {
     await page.goto('practice/#/url-shortener');
-    await expect(codeEditor(page)).toBeVisible();
     await waitForCanvas(page, 2);
     await canvasNodes(page).filter({ hasText: 'Shortener API' }).click();
     const palette = await componentPalette(page);
@@ -431,7 +433,6 @@ test.describe('visual editing in practice', () => {
   for (const key of ['Delete', 'Backspace']) {
     test(`the ${key} key removes a selected connection of the solution`, async ({ page }) => {
       await page.goto('practice/#/url-shortener');
-      await expect(codeEditor(page)).toBeVisible();
       await waitForCanvas(page, 2);
       await addFromPalette(page, 'cache', 'Cache');
       // The canvas pans to the new component; the whole diagram is a fit away.
@@ -451,10 +452,9 @@ test.describe('visual editing in practice', () => {
   }
 
   test('in the narrow practice pane the palette floats over the canvas, and the diagram fits beside it unless zoomed by hand', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.setViewportSize({ width: 1024, height: 800 });
     await page.emulateMedia({ colorScheme: 'dark' });
     await page.goto('practice/#/url-shortener');
-    await expect(codeEditor(page)).toBeVisible();
     // Drawn on first load in dark mode too.
     await waitForCanvas(page, 2);
     await expect(canvasNodes(page).first()).toBeInViewport();

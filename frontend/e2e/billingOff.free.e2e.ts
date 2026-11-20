@@ -43,7 +43,7 @@ test('the editor has no Design partner tab or Ctrl+J', async ({ page }) => {
 test('a roadmap problem opened on Design has no Design partner', async ({ page }) => {
   const metered = await open(page);
   await page.goto('practice/#/roadmap/url-shortener');
-  await expect(page.locator('.cm-content').first()).toBeVisible();
+  await expect(page.locator('.react-flow__node').first()).toBeVisible();
   await noPartner(page);
   await expect(page.getByTestId('ask-selection')).toHaveCount(0);
   if (SHOTS) await page.screenshot({ path: `${SHOTS}/problem-design.png` });

@@ -1,8 +1,11 @@
 import type { Page } from '@playwright/test';
 import lz from 'lz-string';
 import { DRONE_TEAM_FILES, droneOrgSource } from '../src/playground/droneStartup';
-import { addFromPalette, canvasNodes, codeEditor, editorText, expect, test } from './fixtures';
+import { addFromPalette, canvasNodes, codeEditor, editorText, expect, setMode, test } from './fixtures';
 import { droneLink } from './drone';
+
+// These tests type in the code editor, so they run in Code mode (the canvas beside it only looks).
+test.use({ mode: 'code' });
 
 /** A system box on the canvas, by its name. */
 const box = (page: Page, name: string) => page.locator('.react-flow__node-systemNode', { hasText: name });
@@ -314,6 +317,7 @@ test('the drone example opens its team files as diagrams, which Open edits', asy
 
 test('a component added from the palette next to team systems leaves every box shown', async ({ page }) => {
   await page.goto(droneLink(100));
+  await setMode(page, 'visual');
   await expect(box(page, 'Order Processing')).toBeVisible();
   const before = await canvasNodes(page).count();
   await addFromPalette(page, 'redis', 'Redis');

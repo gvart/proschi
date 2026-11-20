@@ -9,7 +9,7 @@ import type { Problem } from '../types';
 import { useNow } from '../modes/useNow';
 import { redactedStatement, type Interview } from '../modes/interviewFile';
 import { CHECKLIST, PHASES, PHASE_SHARE, remaining, totalElapsed, type InterviewAction, type InterviewSession, type Phase } from '../modes/session';
-import { useCodePref, useRailFoldedPref, useSoundPref } from './prefs';
+import { useRailFoldedPref, useSoundPref } from './prefs';
 import Room, { ChecksSheet, type RoomTab } from './Room';
 import { Brief, EstimateLayout, EstimatesSummary, PinnedBrief, RequirementsCard, StageContext, StageHeading, StartClarifying, Worksheet } from './StageParts';
 import { loadBriefRead, loadWorksheet, nextStage, questionRowId, saveBriefRead, saveWorksheet, stageLabel, type WorksheetRow } from './stages';
@@ -45,7 +45,6 @@ export default function SoloRoom({ problem, engine, phone, interview, session, d
   const board = useWhiteboard(problem, engine);
   const [soundOn, setSound] = useSoundPref();
   const play = useCues(soundOn);
-  const [codeShown, setCode] = useCodePref();
   const [folded, setFolded] = useRailFoldedPref();
   const [tab, setTab] = useState<RoomTab>('chat');
   const [viewing, setViewing] = useState<Phase>();
@@ -236,7 +235,6 @@ export default function SoloRoom({ problem, engine, phone, interview, session, d
       pulse={pulse}
       clock={{ left, flash, paused: !running, onToggle: () => dispatch({ type: running ? 'pause' : 'resume', now: Date.now() }) }}
       sound={{ on: soundOn, onChange: setSound }}
-      code={{ shown: codeShown, onChange: setCode }}
       onCheck={check}
       finish={{ label: 'Finish', loud: stage === 'wrapup', onClick: () => void finish() }}
       onExit={() => void exit()}

@@ -1,5 +1,5 @@
 ---
-updated: 2026-11-09
+updated: 2026-11-20
 ---
 
 # Colors, legend and layout
@@ -115,6 +115,14 @@ goes where its edges pull it, which can be between two ranks.
 
 The text is the source of truth. Canvas edits are written back into it,
 changing only their part of the line, so comments and alignment survive.
+
+The editor has two modes, switched with **Code | Visual** in its header
+(or **Ctrl+\\**, **⌘\\** on a Mac) and remembered in the browser. **Visual**
+gives the canvas the whole page, with the edits below; **View code** shows
+the text it writes, read-only. **Code** puts the text editor beside the
+diagram, which then only looks: select a node to find its line, pan, zoom,
+play a use case, but edit in the text. Practice and the mock interview use
+the same switch.
 
 | On the canvas | In the text |
 |---|---|

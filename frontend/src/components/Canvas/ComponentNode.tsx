@@ -16,7 +16,9 @@ import './canvas.css';
  * is kept for what matters while you look: the selected node, and the active
  * or failing node during playback (classes from UseCasePlayback, styled in canvas.css).
  */
-const ComponentNode = ({ data, selected }: NodeProps<ComponentMetadata>) => {
+// A handle starts a drag whatever `nodesConnectable` says (React Flow 11 leaves that to the node), so each
+// handle takes `isConnectable`: a view-only canvas (Code mode) neither starts nor takes a connection.
+const ComponentNode = ({ data, selected, isConnectable }: NodeProps<ComponentMetadata>) => {
   const icon = getTechStackIcon(data.techStack, data.type);
   const o = data.overlay;
   const u = o?.utilization;
@@ -47,8 +49,8 @@ const ComponentNode = ({ data, selected }: NodeProps<ComponentMetadata>) => {
       )}
       <NodeResizer color={CANVAS_ACCENT} isVisible={selected && !data.fixedSize} minWidth={180} minHeight={80} />
 
-      <Handle type="target" position={Position.Top} className="pc-handle pc-handle--in" isConnectableStart={false} />
-      <BodyTarget />
+      <Handle type="target" position={Position.Top} className="pc-handle pc-handle--in" isConnectable={isConnectable} isConnectableStart={false} />
+      <BodyTarget isConnectable={isConnectable} />
 
       <div className="flex items-center gap-2.5">
         <div className="pc-node__icon">{icon}</div>
@@ -65,7 +67,7 @@ const ComponentNode = ({ data, selected }: NodeProps<ComponentMetadata>) => {
       {data.ownerTeam && !o && <div className="pc-node__team truncate">Team: {data.ownerTeam}</div>}
       {o && <LoadBadge overlay={o} />}
 
-      <Handle type="source" position={Position.Bottom} className="pc-handle" />
+      <Handle type="source" position={Position.Bottom} className="pc-handle" isConnectable={isConnectable} isConnectableStart={isConnectable} />
       {id && actions?.onAddAfter && !editing && (
         <button
           type="button"
@@ -135,7 +137,7 @@ function NameField({ name, onDone }: { name: string; onDone: (name: string | nul
  * when the drop connects, dashed red when it can't (useConnectDrop says why). It comes after the top
  * dot, which stays the first target: the one edges and their grips are anchored to.
  */
-export function BodyTarget() {
+export function BodyTarget({ isConnectable }: { isConnectable: boolean }) {
   const nodeId = useNodeId();
   const status = useStore((s) => (s.connectionEndHandle?.nodeId === nodeId ? s.connectionStatus : null));
   return (
@@ -143,6 +145,7 @@ export function BodyTarget() {
       type="target"
       id="body"
       position={Position.Top}
+      isConnectable={isConnectable}
       isConnectableStart={false}
       className="pc-body-target"
       data-connect={status ?? undefined}

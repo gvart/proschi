@@ -1,5 +1,8 @@
 import type { Page } from '@playwright/test';
-import { appendCode, canvasNodes, chooseOption, codeEditor, editorText, expect, expectTopBarClear, test, waitForCanvas } from './fixtures';
+import { appendCode, canvasNodes, chooseOption, editorText, expect, expectTopBarClear, setMode, test, waitForCanvas } from './fixtures';
+
+// The canvas edits in Visual mode; the code a test starts from is typed in Code mode first.
+test.use({ mode: 'visual' });
 
 /**
  * The practice canvas and the editor's behave the same (6.1): the practice
@@ -34,7 +37,6 @@ async function drag(page: Page, name: string, dx: number, dy: number) {
 
 async function openProblem(page: Page) {
   await page.goto('practice/#/url-shortener');
-  await expect(codeEditor(page)).toBeVisible();
   await waitForCanvas(page, 2);
   await layoutSettled(page);
 }
@@ -151,12 +153,13 @@ test.describe('the interview whiteboard', () => {
 test.describe('the editor canvas', () => {
   test('has the Flows builder: a use case and a step picked on the canvas', async ({ page }) => {
     await page.goto('app/');
-    await expect(codeEditor(page)).toBeVisible();
     await waitForCanvas(page, 1);
     await page.getByRole('button', { name: 'File' }).click();
     await page.getByRole('menuitem', { name: 'New diagram' }).click();
     await expect(canvasNodes(page)).toHaveCount(0);
+    await setMode(page, 'code');
     await appendCode(page, 'user "User" [Actor]\napi "API" [REST API]\nuser -> api\n');
+    await setMode(page, 'visual');
     await waitForCanvas(page, 2);
     await layoutSettled(page);
 
@@ -211,12 +214,13 @@ test.describe('the editor canvas', () => {
 
   test('builds a flow in a row: each step starts where the last went, Reply answers, a warning shows before adding', async ({ page }) => {
     await page.goto('app/');
-    await expect(codeEditor(page)).toBeVisible();
     await waitForCanvas(page, 1);
     await page.getByRole('button', { name: 'File' }).click();
     await page.getByRole('menuitem', { name: 'New diagram' }).click();
     await expect(canvasNodes(page)).toHaveCount(0);
+    await setMode(page, 'code');
     await appendCode(page, 'web "Web" [Browser]\napi "API" [REST API]\ndb "DB" [PostgreSQL]\nweb -> api\napi -> db\n');
+    await setMode(page, 'visual');
     await waitForCanvas(page, 3);
     await layoutSettled(page);
 
@@ -259,15 +263,16 @@ test.describe('the editor canvas', () => {
 
   test('edits, moves and inserts steps, shows parallel blocks and failed calls, and renames a use case', async ({ page }) => {
     await page.goto('app/');
-    await expect(codeEditor(page)).toBeVisible();
     await waitForCanvas(page, 1);
     await page.getByRole('button', { name: 'File' }).click();
     await page.getByRole('menuitem', { name: 'New diagram' }).click();
     await expect(canvasNodes(page)).toHaveCount(0);
+    await setMode(page, 'code');
     await appendCode(
       page,
       'web "Web" [Browser]\napi "API" [REST API]\ndb "DB" [PostgreSQL]\nweb -> api\napi -> db\nusecase "Order" {\n  web -> api : POST /orders\n  par {\n    api -> db : INSERT order\n    api -x db : SELECT order\n  }\n  api --> web : 201\n}\n',
     );
+    await setMode(page, 'visual');
     await waitForCanvas(page, 3);
     await page.getByRole('button', { name: 'Flows' }).click();
     const flows = page.getByRole('region', { name: 'Flows' });
@@ -309,12 +314,13 @@ test.describe('the editor canvas', () => {
 
   test("composes a step's headers, payload and fan-out, and gives an untyped component operations", async ({ page }) => {
     await page.goto('app/');
-    await expect(codeEditor(page)).toBeVisible();
     await waitForCanvas(page, 1);
     await page.getByRole('button', { name: 'File' }).click();
     await page.getByRole('menuitem', { name: 'New diagram' }).click();
     await expect(canvasNodes(page)).toHaveCount(0);
+    await setMode(page, 'code');
     await appendCode(page, 'web "Web" [Browser]\napi "API" [REST API]\npay "Payments" [Worker]\nweb -> api\napi -> pay\nusecase "Order" {\n}\n');
+    await setMode(page, 'visual');
     await waitForCanvas(page, 3);
     await page.getByRole('button', { name: 'Flows' }).click();
     const flows = page.getByRole('region', { name: 'Flows' });
@@ -342,6 +348,8 @@ test.describe('the editor canvas', () => {
   });
 
   test('with Flows open the canvas is narrow: the legend folds, no node sits under the top bar, the hint shortens clear of the controls', async ({ page }) => {
+    // Visual mode's canvas has the whole width: a smaller window makes it narrow beside Flows.
+    await page.setViewportSize({ width: 900, height: 800 });
     await page.goto('app/');
     await waitForCanvas(page, 3);
     await layoutSettled(page);

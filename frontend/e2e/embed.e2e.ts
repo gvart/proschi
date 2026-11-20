@@ -1,6 +1,9 @@
 import { canvasNodes, codeEditor, expect, test, waitForCanvas } from './fixtures';
 import { droneLink } from './drone';
 
+// These tests type in the code editor, so they run in Code mode (the canvas beside it only looks).
+test.use({ mode: 'code' });
+
 /**
  * The read-only embed page (/embed/, src/embed/main.tsx) and the editor's
  * Share → Embed, signed out (this build has no accounts): the snippet

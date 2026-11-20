@@ -1,7 +1,10 @@
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import lz from 'lz-string';
-import { addFromPalette, appendCode, canvasNodes, codeEditor, editorText, expect, expectDiagramFitted, test, waitForCanvas } from './fixtures';
+import { addFromPalette, appendCode, canvasNodes, codeEditor, editorText, expect, expectDiagramFitted, setMode, test, waitForCanvas } from './fixtures';
+
+// These tests type in the code editor, so they run in Code mode (the canvas beside it only looks).
+test.use({ mode: 'code' });
 
 /** The API runs at about 75% of what its two replicas take: a bottleneck. */
 const HOT = `user "User" [Actor]
@@ -65,10 +68,12 @@ test.describe('editor', () => {
   });
 
   test('connections to and from a group are drawn, also while dragging', async ({ page }) => {
+    // Typed in the code, dragged on the canvas: Code mode's diagram only looks.
     const edges = page.locator('.react-flow__edge:visible');
     const before = await edges.count();
     await appendCode(page, '\nclient "Client" [Browser]\nclient -> vpc : HTTPS\nvpc -> events : Audit\n');
     await expect(canvasNodes(page).filter({ hasText: 'Client' })).toBeVisible();
+    await setMode(page, 'visual');
     await expect(edges).toHaveCount(before + 2);
     for (const label of ['HTTPS', 'Audit']) {
       const edge = edges.filter({ hasText: label });
@@ -88,6 +93,7 @@ test.describe('editor', () => {
   });
 
   test('a component added from the palette is edited in its settings', async ({ page }) => {
+    await setMode(page, 'visual');
     const before = await canvasNodes(page).count();
     await addFromPalette(page, 'redis', 'Redis');
     await expect(canvasNodes(page)).toHaveCount(before + 1);
@@ -101,7 +107,8 @@ test.describe('editor', () => {
     await settings.getByLabel('Latency').fill('4');
     await settings.getByLabel('Latency').press('Enter');
     await expect.poll(() => editorText(page)).toMatch(/redis latency 4ms/);
-    await expect(page.getByText('No problems')).toBeVisible();
+    // No problems: Visual hides the code's list, and the Code switch would count them.
+    await expect(page.getByRole('radio', { name: 'Code', exact: true })).toBeVisible();
   });
 
   test('a bad line shows a diagnostic', async ({ page }) => {
@@ -419,49 +426,47 @@ test.describe('first visit and example links', () => {
 test.describe('editor on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
-  test('a first visit opens on the Code pane', async ({ page }) => {
+  // In Code mode a phone shows the code, and Preview peeks at the diagram.
+  test('a first visit opens on the code', async ({ page }) => {
     await page.goto('app/');
-    const panes = page.getByRole('tablist', { name: 'View', exact: true });
-    await expect(panes.getByRole('tab', { name: /Code/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('button', { name: 'Preview' })).toHaveAttribute('aria-pressed', 'false');
     await expect(codeEditor(page)).toBeVisible();
     await expect(codeEditor(page)).toContainText('title "Hello Proschi"');
   });
 
-  test('Code and Preview tabs switch panes; a link opens on the Preview', async ({ page }) => {
+  test('Preview switches between the code and the diagram; a link opens on the Preview', async ({ page }) => {
     await page.goto('app/?example=ecommerce');
-    const panes = page.getByRole('tablist', { name: 'View', exact: true });
-    const codeTab = panes.getByRole('tab', { name: /Code/ });
-    const diagramTab = panes.getByRole('tab', { name: /Preview/ });
-    await expect(diagramTab).toHaveAttribute('aria-selected', 'true');
+    const preview = page.getByRole('button', { name: 'Preview' });
+    await expect(preview).toHaveAttribute('aria-pressed', 'true');
     await waitForCanvas(page, DEFAULT_NODES);
     await expect(codeEditor(page)).toHaveCount(0);
 
-    await codeTab.click();
-    await expect(codeTab).toHaveAttribute('aria-selected', 'true');
+    await preview.click();
+    await expect(preview).toHaveAttribute('aria-pressed', 'false');
     await expect(codeEditor(page)).toBeVisible();
     await expect(canvasNodes(page)).toHaveCount(0);
     await appendCode(page, '\nphone "Phone Node" [Redis]\n');
 
-    await diagramTab.click();
-    await expect(diagramTab).toHaveAttribute('aria-selected', 'true');
+    await preview.click();
+    await expect(preview).toHaveAttribute('aria-pressed', 'true');
     await expect(canvasNodes(page).filter({ hasText: 'Phone Node' })).toBeVisible();
     await expect(codeEditor(page)).toHaveCount(0);
   });
 
   test('the diagram is fitted again after switching back from Code', async ({ page }) => {
     await page.goto('app/?example=ecommerce');
-    const panes = page.getByRole('tablist', { name: 'View', exact: true });
+    const preview = page.getByRole('button', { name: 'Preview' });
     await waitForCanvas(page, DEFAULT_NODES);
     await expectDiagramFitted(page);
     // Edit while the canvas is hidden, then come back: the pane only gets its size again after it is shown.
-    await panes.getByRole('tab', { name: /Code/ }).click();
+    await preview.click();
     await appendCode(page, '\nwide "A Node With A Rather Long Name" [Redis]\norders -> wide\n');
-    await panes.getByRole('tab', { name: /Preview/ }).click();
+    await preview.click();
     await expect(canvasNodes(page).filter({ hasText: 'A Node With A Rather Long Name' })).toBeVisible();
     await expectDiagramFitted(page);
-    // Just switching tabs keeps it fitted too.
-    await panes.getByRole('tab', { name: /Code/ }).click();
-    await panes.getByRole('tab', { name: /Preview/ }).click();
+    // Just switching panes keeps it fitted too.
+    await preview.click();
+    await preview.click();
     await waitForCanvas(page, DEFAULT_NODES);
     await expectDiagramFitted(page);
   });

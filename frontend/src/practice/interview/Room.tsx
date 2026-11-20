@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, Check, CircleCheck, Eye, CircleX, Code2, FlaskConical, Flag, Keyboard, MessagesSquare, Mic, MoreHorizontal, PanelRightClose, PanelRightOpen, Pause, Presentation, Timer, Volume2, VolumeX, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, CircleCheck, Eye, CircleX, Code2, FlaskConical, Flag, Keyboard, MessagesSquare, Mic, MoreHorizontal, PanelRightClose, PanelRightOpen, Pause, Presentation, Shapes, Timer, Volume2, VolumeX, X } from 'lucide-react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import CodeEditor from '../../components/Playground/CodeEditor';
 import EditableCanvas from '../../components/Diagram/EditableCanvas';
+import ModeSwitch from '../../components/Diagram/ModeSwitch';
+import CodeDrawer from '../../components/Diagram/CodeDrawer';
+import { useEditorMode } from '../../components/Diagram/editorMode';
 import Menu, { MenuItem } from '../../components/Playground/Menu';
 import { iconButton, outlineButton, primaryButton, toolButton } from '../../components/Playground/ui';
 import { DifficultyBadge } from '../Badges';
@@ -21,8 +24,10 @@ import './room.css';
  * palette and the Flows builder) takes the page; the rail on the right holds
  * the conversation (or, on your own, the phase's questions) and folds away.
  * The top bar has the phases, the clock, the toggles and the two actions:
- * check the design, finish. The code is hidden until "Show code", for those
- * who know Proschi. Phones get Chat and Whiteboard tabs, the chat first.
+ * check the design, finish. The Code | Visual switch (as in the editor) puts
+ * the code beside a view-only whiteboard, for those who know Proschi; Visual
+ * shows it read-only in View code. Phones get Chat and Whiteboard tabs, the
+ * chat first, and Code in Code mode.
  *
  * Each phase is its own stage screen (P49): Clarify and Estimate bring their
  * own `screen`, Design and Wrap-up are the whiteboard. "Next" moves on (the
@@ -52,7 +57,6 @@ interface RoomProps {
   /** Voice or text, with the interviewer only. */
   talk?: { value: Talk; onChange: (t: Talk) => void; voiceOk: boolean };
   sound: { on: boolean; onChange: (on: boolean) => void };
-  code: { shown: boolean; onChange: (shown: boolean) => void };
   onCheck: () => void;
   finish: { label: string; busy?: boolean; loud?: boolean; onClick: () => void; disabled?: boolean };
   onExit: () => void;
@@ -63,13 +67,18 @@ interface RoomProps {
   onTab: (tab: RoomTab) => void;
 }
 
-export default function Room({ problem, board, phone, phase, viewing, onView, next, screen, railWide, pulse, clock, talk, sound, code, onCheck, finish, onExit, rail, checks, tab, onTab }: RoomProps) {
+export default function Room({ problem, board, phone, phase, viewing, onView, next, screen, railWide, pulse, clock, talk, sound, onCheck, finish, onExit, rail, checks, tab, onTab }: RoomProps) {
   const { source, setSource, parsed, layout, editor } = board;
   const rootDiagnostics = useMemo(() => parsed.diagnostics.filter((d) => d.file === undefined), [parsed]);
   const nodeIds = useMemo(() => parsed.diagram.nodes.map((n) => n.id), [parsed]);
   const [fitTick, setFitTick] = useState(0);
   const refit = useCallback(() => setFitTick((n) => n + 1), []);
-  const shownTab = tab === 'code' && !code.shown ? 'board' : tab;
+  const [mode] = useEditorMode();
+  const visual = mode === 'visual';
+  const shownTab = tab === 'code' && visual ? 'board' : tab;
+  /** Visual mode's View code, read-only over the whiteboard. */
+  const [codeView, setCodeView] = useState(false);
+  const closeCodeView = useCallback(() => setCodeView(false), []);
   const boardStage = !screen;
   const clearToasts = useToastClearance();
 
@@ -96,14 +105,16 @@ export default function Room({ problem, board, phone, phase, viewing, onView, ne
         onRedo={() => void editor.current?.redo()}
         nodes={layout.nodes}
         edges={layout.edges}
-        fitKey={`${shownTab}:${layout.settled}:${fitTick}:${code.shown}:${rail.folded}`}
+        fitKey={`${shownTab}:${layout.settled}:${fitTick}:${mode}:${rail.folded}`}
         layoutBusy={layout.busy}
         problemCapacity
         paletteKey="proschi.interview.palette"
         phone={phone}
         flows
+        viewOnly={!visual}
       />
       {checks}
+      {visual && codeView && <CodeDrawer source={source} file="solution.proschi" diagnostics={rootDiagnostics} nodeIds={nodeIds} diagram={parsed.diagram} onClose={closeCodeView} />}
     </section>
   );
   const editorPane = (
@@ -112,11 +123,6 @@ export default function Room({ problem, board, phone, phase, viewing, onView, ne
         <span className="min-w-0 flex-1 truncate">
           solution.proschi <span className="font-sans">· imports</span> {PROBLEM_FILE}
         </span>
-        {!phone && (
-          <button type="button" onClick={() => code.onChange(false)} className={`${iconButton} !h-7 !w-7`} aria-label="Hide the code" title="Hide the code">
-            <X size={14} />
-          </button>
-        )}
       </div>
       <div className="min-h-0 flex-1">
         <CodeEditor ref={editor} value={source} onChange={setSource} diagnostics={rootDiagnostics} nodeIds={nodeIds} diagram={parsed.diagram} />
@@ -141,43 +147,47 @@ export default function Room({ problem, board, phone, phase, viewing, onView, ne
 
   const boardLayout = phone ? (
     <>
-      <div role="tablist" aria-label="Room" className="ps-tabs ps-tabs--fill flex bg-surface">
-        {(
-          [
-            ['chat', rail.title, MessagesSquare],
-            ['board', 'Whiteboard', Presentation],
-            ...(code.shown ? ([['code', 'Code', Code2]] as const) : []),
-          ] as const
-        ).map(([id, label, Icon]) => (
-          <button key={id} role="tab" aria-selected={shownTab === id} onClick={() => onTab(id)} className="ps-tab relative !px-2">
-            <Icon size={15} className="hidden min-[420px]:block" aria-hidden="true" />
-            {label}
-            {id === 'chat' && rail.unread && shownTab !== 'chat' && <span aria-label="New message" className="absolute right-3 top-2 h-2 w-2 rounded-full bg-pop-pink" />}
-          </button>
-        ))}
+      <div className="flex items-stretch border-b-bw-1 border-ink bg-surface">
+        <div role="tablist" aria-label="Room" className="ps-tabs ps-tabs--fill flex min-w-0 flex-1 !border-b-0">
+          {(
+            [
+              ['chat', rail.title, MessagesSquare],
+              ['board', 'Whiteboard', Presentation],
+              ...(visual ? [] : ([['code', 'Code', Code2]] as const)),
+            ] as const
+          ).map(([id, label, Icon]) => (
+            <button key={id} role="tab" aria-selected={shownTab === id} onClick={() => onTab(id)} className="ps-tab relative !px-2">
+              <Icon size={15} className="hidden min-[420px]:block" aria-hidden="true" />
+              {label}
+              {id === 'chat' && rail.unread && shownTab !== 'chat' && <span aria-label="New message" className="absolute right-3 top-2 h-2 w-2 rounded-full bg-pop-pink" />}
+            </button>
+          ))}
+        </div>
+        {/* The top bar has no room on a phone. */}
+        <div className="flex flex-none items-center border-l-bw-1 border-ink px-1.5">
+          <ModeSwitch compact />
+        </div>
       </div>
       <div className="min-h-0 flex-1">
         <div className={shownTab === 'chat' ? 'h-full' : 'hidden'}>{railBox}</div>
         <div className={shownTab === 'board' ? 'h-full' : 'hidden'}>{whiteboard}</div>
-        {code.shown && <div className={shownTab === 'code' ? 'h-full' : 'hidden'}>{editorPane}</div>}
+        {/* Mounted in Visual too, hidden: the whiteboard's undo and redo are its history. */}
+        <div className={shownTab === 'code' ? 'h-full' : 'hidden'}>{editorPane}</div>
       </div>
     </>
   ) : (
     <div className="flex min-h-0 flex-1">
       <div className="min-w-0 flex-1">
-        {code.shown ? (
-          <Group orientation="horizontal" className="h-full" onLayoutChanged={refit}>
-            <Panel id="room-code" defaultSize="38%" minSize="22%" maxSize="60%">
-              {editorPane}
-            </Panel>
-            <Separator className="ps-splitter w-[var(--bw-1)]" aria-label="Resize the code and the whiteboard" />
-            <Panel id="room-board" minSize="30%">
-              {whiteboard}
-            </Panel>
-          </Group>
-        ) : (
-          whiteboard
-        )}
+        {/* Visual mode hides the code, still mounted: the whiteboard's undo and redo are its history. */}
+        <Group orientation="horizontal" className="h-full [&>[data-mode-hidden]]:!hidden" onLayoutChanged={refit}>
+          <Panel id="room-code" defaultSize="38%" minSize="22%" maxSize="60%" data-mode-hidden={visual || undefined}>
+            {editorPane}
+          </Panel>
+          <Separator className="ps-splitter w-[var(--bw-1)]" aria-label="Resize the code and the whiteboard" data-mode-hidden={visual || undefined} />
+          <Panel id="room-board" minSize="30%">
+            {whiteboard}
+          </Panel>
+        </Group>
       </div>
       {rail.folded ? (
         <div className="flex w-12 shrink-0 flex-col items-center gap-2 border-l-bw-1 border-ink bg-surface py-2">
@@ -208,7 +218,7 @@ export default function Room({ problem, board, phone, phase, viewing, onView, ne
         clock={clock}
         talk={talk}
         sound={sound}
-        code={code}
+        codeView={visual ? { open: codeView, onToggle: () => setCodeView(!codeView) } : undefined}
         onCheck={onCheck}
         finish={finish}
         onExit={onExit}
@@ -251,9 +261,13 @@ export default function Room({ problem, board, phone, phase, viewing, onView, ne
   );
 }
 
-type TopBarProps = Pick<RoomProps, 'problem' | 'phone' | 'phase' | 'viewing' | 'onView' | 'next' | 'pulse' | 'clock' | 'talk' | 'sound' | 'code' | 'onCheck' | 'finish' | 'onExit'> & { boardTools: boolean };
+type TopBarProps = Pick<RoomProps, 'problem' | 'phone' | 'phase' | 'viewing' | 'onView' | 'next' | 'pulse' | 'clock' | 'talk' | 'sound' | 'onCheck' | 'finish' | 'onExit'> & {
+  boardTools: boolean;
+  /** Visual mode's View code, open or not. */
+  codeView?: { open: boolean; onToggle: () => void };
+};
 
-function TopBar({ problem, phone, phase, viewing, onView, next, boardTools, pulse, clock, talk, sound, code, onCheck, finish, onExit }: TopBarProps) {
+function TopBar({ problem, phone, phase, viewing, onView, next, boardTools, pulse, clock, talk, sound, codeView, onCheck, finish, onExit }: TopBarProps) {
   const index = PHASES.findIndex((p) => p.id === phase);
   const late = clock.left <= 60_000 ? 'text-red-700 dark:text-red-300' : clock.left <= 5 * 60_000 ? 'text-amber-700 dark:text-amber-300' : 'text-ink';
   const wrapup = phase === 'wrapup';
@@ -365,15 +379,15 @@ function TopBar({ problem, phone, phase, viewing, onView, next, boardTools, puls
                 >
                   {sound.on ? 'Turn sounds off' : 'Turn sounds on'}
                 </MenuItem>
-                {boardTools && (
+                {boardTools && codeView && (
                   <MenuItem
-                    icon={<Code2 size={14} />}
+                    icon={codeView.open ? <Shapes size={14} /> : <Eye size={14} />}
                     onSelect={() => {
                       close();
-                      code.onChange(!code.shown);
+                      codeView.onToggle();
                     }}
                   >
-                    {code.shown ? 'Hide code' : 'Show code'}
+                    {codeView.open ? 'Close the code' : 'View code'}
                   </MenuItem>
                 )}
                 {!wrapup && (
@@ -446,10 +460,13 @@ function TopBar({ problem, phone, phase, viewing, onView, next, boardTools, puls
         </button>
         {boardTools && (
           <>
-            <button type="button" aria-label="Show code" aria-pressed={code.shown} onClick={() => code.onChange(!code.shown)} className={`${toolButton} aria-pressed:border-ink aria-pressed:bg-pop-yellow aria-pressed:text-on-accent`} title="The design as Proschi code, beside the whiteboard">
-              <Code2 size={15} aria-hidden="true" />
-              <span className="max-[1279px]:sr-only">Code</span>
-            </button>
+            <ModeSwitch compact />
+            {codeView && (
+              <button type="button" aria-pressed={codeView.open} onClick={codeView.onToggle} className={`${toolButton} whitespace-nowrap aria-pressed:border-ink aria-pressed:bg-pop-yellow aria-pressed:text-on-accent`} title="The Proschi code behind the whiteboard, read-only">
+                <Eye size={15} aria-hidden="true" />
+                <span className="max-[1279px]:sr-only">View code</span>
+              </button>
+            )}
             <button type="button" onClick={onCheck} className={outlineButton} title="Run the problem's tests on the whiteboard">
               <FlaskConical size={15} aria-hidden="true" />
               <span className="max-xl:sr-only">Check my design</span>
@@ -499,7 +516,7 @@ export function ChecksSheet({ run, stale, onClose, children }: { run: RunResult;
       </div>
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
         {stale && <p className="text-xs text-muted">The whiteboard changed since; check again to see where it stands.</p>}
-        {run.blocked === 'errors' && <p className="text-sm text-ink">Show the code to see the errors, or undo the last change.</p>}
+        {run.blocked === 'errors' && <p className="text-sm text-ink">Look at the code (View code, or Code mode) to see the errors, or undo the last change.</p>}
         <ul className="space-y-1.5">
           {[...failed, ...run.results.filter((r) => r.passed)].map((r) => (
             <li key={r.id} className="flex items-start gap-2 text-sm text-ink">

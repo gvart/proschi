@@ -1,6 +1,9 @@
 import { codeEditor, copiedText, expect, loadReferenceSolution, mockClipboard, test, waitForCanvas } from './fixtures';
 import { mockProfile, PROFILE } from './profile';
 
+// These tests type in the code editor, so they run in Code mode (the canvas beside it only looks).
+test.use({ mode: 'code' });
+
 /**
  * Share buttons (src/components/ShareButton.tsx, texts in src/learn/share.ts):
  * without a share sheet they copy, here to a mocked clipboard. A first solve

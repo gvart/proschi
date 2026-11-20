@@ -1,10 +1,10 @@
 import type { Page } from '@playwright/test';
-import { answerDialog, canvasNodes, chooseOption, codeEditor, editorText, expect, test, toSetupStep } from './fixtures';
+import { answerDialog, canvasNodes, chooseOption, codeEditor, editorText, expect, setMode, test, toSetupStep } from './fixtures';
 
 /**
  * The mock interview's pages without accounts (practice/interview, P45): the
  * set-up (a random problem, or one chosen), the room on your own (the
- * whiteboard, the clock and the phases, the code behind "Show code", the
+ * whiteboard, the clock and the phases, the Code | Visual switch, the
  * sound cues) and the result. With accounts and the interviewer, see
  * aiInterview.accounts.e2e.ts.
  */
@@ -277,27 +277,31 @@ test.describe('the interview room on your own', () => {
     await expect(currentStage(page)).toContainText('Design');
   });
 
-  test('the code is hidden until Show code, which opens a drawer beside the whiteboard and is remembered', async ({ page }) => {
+  test("the editor's Code | Visual switch: Visual shows the code read-only, Code puts it beside a view-only whiteboard, remembered", async ({ page }) => {
     await startOn(page, 'URL Shortener');
+    const modes = page.getByRole('radiogroup', { name: 'Editor mode' });
     // The whiteboard's stages only: no code or checks while clarifying.
-    await expect(page.getByRole('button', { name: 'Show code' })).toHaveCount(0);
+    await expect(modes).toHaveCount(0);
     await toStage(page, 'Design');
-    await expect(page.getByRole('region', { name: 'Whiteboard' })).toBeVisible();
+    const whiteboard = page.getByRole('region', { name: 'Whiteboard' });
+    await expect(whiteboard).toBeVisible();
+    await expect(modes.getByRole('radio', { name: 'Visual' })).toBeChecked();
     await expect(codeEditor(page)).toHaveCount(0);
-    const show = page.getByRole('button', { name: 'Show code' });
-    await expect(show).toHaveAttribute('aria-pressed', 'false');
-    await show.click();
-    await expect(show).toHaveAttribute('aria-pressed', 'true');
+    await page.getByRole('button', { name: 'View code' }).click();
+    await expect(page.getByRole('complementary', { name: 'Code, read-only' })).toContainText('import "problem.proschi"');
+
+    await setMode(page, 'code');
     await expect(codeEditor(page)).toBeVisible();
     expect(await editorText(page)).toContain('import "problem.proschi"');
-    const board = (await page.getByRole('region', { name: 'Whiteboard' }).boundingBox())!;
+    const board = (await whiteboard.boundingBox())!;
     const code = (await page.getByRole('region', { name: 'Code' }).boundingBox())!;
     expect(code.x + code.width).toBeLessThanOrEqual(board.x + 2);
+    await expect(whiteboard.getByRole('button', { name: 'Add component' })).toHaveCount(0);
     await page.reload();
     await expect(codeEditor(page)).toBeVisible();
-    await page.getByRole('button', { name: 'Hide the code' }).click();
+    await setMode(page, 'visual');
     await expect(codeEditor(page)).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Show code' })).toHaveAttribute('aria-pressed', 'false');
+    await expect(whiteboard.getByRole('button', { name: 'Add component' })).toBeVisible();
   });
 
   test('sound is on by default, off from the set-up or the top bar, and remembered', async ({ page }) => {
@@ -424,7 +428,7 @@ test.describe('an interview as progress', () => {
 test.describe('the interview room on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
-  test('a stage at a time with the Next bar; the interview tab first, then the whiteboard; the code tab only with Show code', async ({ page }) => {
+  test('a stage at a time with the Next bar; the interview tab first, then the whiteboard; the code tab only in Code mode', async ({ page }) => {
     await startOn(page, 'URL Shortener');
     const next = page.getByTestId('next-bar');
     await expect(next.getByRole('button', { name: 'Next: Estimate' })).toBeVisible();
@@ -440,8 +444,7 @@ test.describe('the interview room on a phone', () => {
     await tabs.getByRole('tab', { name: 'Whiteboard' }).click();
     await expect(page.getByRole('region', { name: 'Whiteboard' })).toBeVisible();
     await expect(rail(page)).toBeHidden();
-    await page.getByRole('button', { name: 'Room options' }).click();
-    await page.getByRole('menuitem', { name: 'Show code' }).click();
+    await setMode(page, 'code');
     await expect(tabs.getByRole('tab')).toHaveText(['Interview', 'Whiteboard', 'Code']);
     const width = await page.evaluate(() => document.documentElement.scrollWidth);
     expect(width).toBeLessThanOrEqual(390);

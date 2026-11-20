@@ -8,7 +8,7 @@ import { CANVAS_ACCENT } from '../../utils/canvasColors';
 import './canvas.css';
 
 /** A sticky note: a faint yellow card, the only tint a note gets. */
-function TextNode({ data, selected }: NodeProps<ComponentMetadata>) {
+function TextNode({ data, selected, isConnectable }: NodeProps<ComponentMetadata>) {
   const fontSize = data.fontSize || 14;
   const textContent = data.textContent || 'Double-click to edit';
 
@@ -25,8 +25,8 @@ function TextNode({ data, selected }: NodeProps<ComponentMetadata>) {
         </div>
       </div>
 
-      <Handle type="target" position={Position.Top} className="pc-handle" />
-      <Handle type="source" position={Position.Bottom} className="pc-handle" />
+      <Handle type="target" position={Position.Top} className="pc-handle" isConnectable={isConnectable} />
+      <Handle type="source" position={Position.Bottom} className="pc-handle" isConnectable={isConnectable} isConnectableStart={isConnectable} />
     </div>
   );
 }
