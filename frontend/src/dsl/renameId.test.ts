@@ -64,6 +64,13 @@ describe('renameId', () => {
     );
   });
 
+  it('renames a system and the nodes that reach it, but not its entry points, which its team file names', () => {
+    const source = 'system pay "Payments" {\n  expose charge\n  capacity { 2k rps }\n}\nweb -> pay.charge\ncharge [Worker]\n';
+    expect(renameId(source, 'pay', 'billing').source).toBe('system billing "Payments" {\n  expose charge\n  capacity { 2k rps }\n}\nweb -> billing.charge\ncharge [Worker]\n');
+    expect(renameId(source, 'charge', 'charger').source).toBe(source.replace('charge [Worker]', 'charger [Worker]'));
+    expect(parse(renameId(source, 'pay', 'billing').source!).diagnostics).toEqual(parse(source).diagnostics);
+  });
+
   it('renames a node only a connection declares', () => {
     expect(renameId('a -> b\n', 'b', 'c').source).toBe('a -> c\n');
   });
@@ -97,7 +104,7 @@ function sameLength(id: string, used: Set<string>): string {
 }
 
 /** Fields that hold a word that may equal an id without naming the node: a kind, a team, a name, a label. */
-const NOT_AN_ID = new Set(['kind', 'type', 'ownerTeam', 'name', 'techStack', 'label', 'stepName', 'description', 'text']);
+const NOT_AN_ID = new Set(['kind', 'type', 'ownerTeam', 'name', 'techStack', 'label', 'stepName', 'description', 'text', 'requestBody', 'responseBody']);
 
 /** `value` with every reference to `from` as `to`: ids and edge ids (`a->b#2`), but not a word that only looks like one. */
 function swapped(value: unknown, from: string, to: string, key = ''): unknown {
@@ -109,9 +116,11 @@ function swapped(value: unknown, from: string, to: string, key = ''): unknown {
   }
   if (Array.isArray(value)) return value.map((v) => swapped(v, from, to, key));
   if (value && typeof value === 'object') {
-    // A use case's id comes from its name.
-    const useCase = 'scenarios' in value;
-    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, useCase && k === 'id' ? v : swapped(v, from, to, k)]));
+    // A use case's id comes from its name, a scenario's is its own.
+    const useCase = 'scenarios' in value || 'condition' in value;
+    // A node only a connection declares is named by its id.
+    const implicit = 'implicit' in value && value.implicit === true;
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, useCase && k === 'id' ? v : implicit && k === 'name' && v === from ? to : swapped(v, from, to, k)]));
   }
   return value;
 }
@@ -128,6 +137,8 @@ describe('renameId over every practice solution and example', () => {
     ...problems.map((p) => ({ name: `problem ${p.id}`, source: p.solution, parse: (s: string) => parseSolution(p, s), given: identifiers(p.given ?? '') })),
     ...examples.map((e) => ({ name: `example ${e.id}`, source: e.source, parse: (s: string) => parse(s), given: new Set<string>() })),
   ];
+  // Read alone too (its import unresolved), so a node the problem's file also names is renamed as well.
+  documents.push(...problems.map((p) => ({ name: `problem ${p.id} alone`, source: p.solution, parse: (s: string) => parse(s), given: new Set<string>() })));
   it.each(documents.map((d) => [d.name, d] as const))('%s: renaming each node keeps the diagram, with only the id swapped', (_name, doc) => {
     const before = doc.parse(doc.source);
     const used = new Set(before.diagram.nodes.map((n) => n.id));
@@ -139,7 +150,7 @@ describe('renameId over every practice solution and example', () => {
       expect(result.error, `${node.id} → ${id}`).toBeUndefined();
       const after = doc.parse(result.source!);
       expect(after.diagram, `${node.id} → ${id}`).toEqual(swapped(before.diagram, node.id, id));
-      const swap = (d: Diagnostic) => message(d).replace(new RegExp(`'${node.id}'`, 'g'), `'${id}'`);
+      const swap = (d: Diagnostic) => message(d).replace(/'[^']*'/g, (q) => q.replace(new RegExp(`\\b${node.id}\\b`, 'g'), id));
       expect(after.diagnostics.map(message), `${node.id} → ${id}`).toEqual(before.diagnostics.map(swap));
     }
   });
