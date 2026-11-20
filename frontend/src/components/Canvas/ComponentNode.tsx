@@ -1,5 +1,5 @@
 import { memo, type CSSProperties } from 'react';
-import { Handle, Position } from 'reactflow';
+import { Handle, Position, useNodeId, useStore } from 'reactflow';
 import { NodeResizer } from '@reactflow/node-resizer';
 import { TriangleAlert } from 'lucide-react';
 import type { NodeProps } from 'reactflow';
@@ -43,7 +43,8 @@ const ComponentNode = ({ data, selected }: NodeProps<ComponentMetadata>) => {
       )}
       <NodeResizer color={CANVAS_ACCENT} isVisible={selected && !data.fixedSize} minWidth={180} minHeight={80} />
 
-      <Handle type="target" position={Position.Top} className="pc-handle" />
+      <Handle type="target" position={Position.Top} className="pc-handle pc-handle--in" isConnectableStart={false} />
+      <BodyTarget />
 
       <div className="flex items-center gap-2.5">
         <div className="pc-node__icon">{icon}</div>
@@ -60,6 +61,27 @@ const ComponentNode = ({ data, selected }: NodeProps<ComponentMetadata>) => {
     </div>
   );
 };
+
+/**
+ * The whole node as a drop target for a new connection. It takes the pointer only while a connection
+ * is being dragged (`.pc-connecting`, from useConnectDrop; else it would take the node's own drags), and outlines the node it is over: accent
+ * when the drop connects, dashed red when it can't (useConnectDrop says why). It comes after the top
+ * dot, which stays the first target: the one edges and their grips are anchored to.
+ */
+export function BodyTarget() {
+  const nodeId = useNodeId();
+  const status = useStore((s) => (s.connectionEndHandle?.nodeId === nodeId ? s.connectionStatus : null));
+  return (
+    <Handle
+      type="target"
+      id="body"
+      position={Position.Top}
+      isConnectableStart={false}
+      className="pc-body-target"
+      data-connect={status ?? undefined}
+    />
+  );
+}
 
 /** The node's colors as custom properties, so playback and overlay styles in canvas.css still win. */
 function tintVars(data: ComponentMetadata): CSSProperties | undefined {

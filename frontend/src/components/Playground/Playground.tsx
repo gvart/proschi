@@ -68,6 +68,7 @@ import { applyMerge, backupFileName, buildBackup, mergeSummary, planMerge, readB
 import { loadProgress, mergeProgress, saveProgress } from '../../practice/progress';
 import { addConnection, addNode, addWhatIf, removeConnections, removeNode, renameNode, scaleTraffic, uniqueId } from '../../dsl/edit';
 import { useCanvasEdits } from '../Diagram/useCanvasEdits';
+import { newConnection } from '../Diagram/connect';
 import { useOverlayOn, withEdgeLoads } from '../Diagram/canvasShared';
 import { EmptyCanvas } from '../Diagram/CanvasEditing';
 import { isShortcutsKey } from '../Diagram/canvasEditState';
@@ -891,8 +892,9 @@ export default function Playground() {
   const connectNodes = (from: string, to: string) => {
     if (systems.focusFile || importedNodes.has(from) || importedNodes.has(to)) return setNotice(`Declared in ${systems.focusFile ?? importedNodes.get(from) ?? importedNodes.get(to)}; connect it there.`);
     // The connection may already exist in an imported file.
-    if (diagram.edges.some((e) => e.source === from && e.target === to)) return;
-    editSource((src) => addConnection(src, from, to));
+    const { error, label } = newConnection(diagram, from, to);
+    if (error !== undefined) return setNotice(error);
+    editSource((src) => addConnection(src, from, to, label));
   };
 
   /** A problem (or test) in an imported file opens that file, if it is saved in this browser. */

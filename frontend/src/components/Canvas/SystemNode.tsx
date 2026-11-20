@@ -1,6 +1,7 @@
 import { memo, useId, useState, type SyntheticEvent } from 'react';
 import { Handle, Position, type NodeProps } from 'reactflow';
 import { ArrowUpRight, Boxes, CircleAlert, CircleCheck, CircleDashed, Maximize2, Minimize2, TriangleAlert } from 'lucide-react';
+import { BodyTarget } from './ComponentNode';
 import { useSystemActions, type SystemNodeData } from './systemActions';
 import type { SystemStatus, SystemSummary } from './systemSummary';
 import './canvas.css';
@@ -29,7 +30,8 @@ function SystemNode({ id, data, selected }: NodeProps<SystemNodeData>) {
           Bottleneck
         </span>
       )}
-      <Handle type="target" position={Position.Top} className="pc-handle" />
+      <Handle type="target" position={Position.Top} className="pc-handle pc-handle--in" isConnectableStart={false} />
+      <BodyTarget />
 
       <div className="pc-system__head">
         <div className="pc-node__icon">

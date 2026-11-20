@@ -36,13 +36,13 @@ async function layoutSettled(page: Page) {
     .toBe(true);
 }
 
-/** Drags from the bottom (source) dot of one node to the top (target) dot of another. */
+/** Drags from the bottom (source) dot of one node onto the body of another. */
 async function connect(page: Page, from: string, to: string) {
   // Drawn only once the new text is parsed, which starts its layout.
   await expect(node(page, to)).toBeVisible();
   await layoutSettled(page);
   const source = (await node(page, from).locator('.react-flow__handle.source').boundingBox())!;
-  const target = (await node(page, to).locator('.react-flow__handle.target').boundingBox())!;
+  const target = (await node(page, to).boundingBox())!;
   await page.mouse.move(source.x + source.width / 2, source.y + source.height / 2);
   await page.mouse.down();
   await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 10 });

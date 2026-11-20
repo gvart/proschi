@@ -131,7 +131,7 @@ test.describe('canvas editing', () => {
     await expect(finder.getByRole('option')).toHaveCount(2);
     await finder.getByRole('combobox').fill('postgres');
     await finder.getByRole('combobox').press('Enter');
-    await expect.poll(() => editorText(page)).toMatch(/^cache -> db$/m);
+    await expect.poll(() => editorText(page)).toMatch(/^cache -> db : SQL$/m);
 
     menu = await open('Cache');
     await menu.getByRole('menuitem', { name: 'Rename…' }).click();
@@ -199,6 +199,43 @@ test.describe('canvas editing', () => {
     await expect(sheet).toBeVisible();
     await sheet.getByRole('button', { name: 'Close' }).click();
     await expect(sheet).toBeHidden();
+  });
+});
+
+test.describe('connecting by drag', () => {
+  /** The canvas's zoom, from React Flow's viewport transform. */
+  const zoomOf = (page: Page) => page.locator('.react-flow__viewport').evaluate((el) => new DOMMatrix(getComputedStyle(el).transform).a);
+
+  /** Presses the mouse on a node's bottom dot and moves it to the middle of another node's body. */
+  async function dragToBody(page: Page, from: string, to: string) {
+    const dot = (await node(page, from).locator('.react-flow__handle.source').boundingBox())!;
+    const body = (await node(page, to).boundingBox())!;
+    await page.mouse.move(dot.x + dot.width / 2, dot.y + dot.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(body.x + body.width / 2, body.y + body.height / 2, { steps: 12 });
+  }
+
+  test('at half zoom, a drop on the middle of a node connects with its type’s protocol, and a duplicate says why', async ({ page }) => {
+    await newDiagram(page, 'api "API" [REST API] pos 0,0\ndb "Orders DB" [PostgreSQL] pos 0,300\n', 2);
+    for (let zoom = await zoomOf(page); zoom > 0.55; zoom = await zoomOf(page)) {
+      await page.getByRole('button', { name: 'zoom out' }).click();
+      await expect.poll(() => zoomOf(page)).toBeLessThan(zoom);
+    }
+    expect(await zoomOf(page)).toBeGreaterThan(0.4);
+
+    await dragToBody(page, 'API', 'Orders DB');
+    // The node under the pointer is outlined while the connection is over it.
+    await expect(node(page, 'Orders DB').locator('.pc-body-target')).toHaveAttribute('data-connect', 'valid');
+    await page.mouse.up();
+    await expect.poll(() => editorText(page)).toMatch(/^api -> db : SQL$/m);
+    expect(await zoomOf(page)).toBeLessThan(0.6);
+
+    await layoutSettled(page);
+    await dragToBody(page, 'API', 'Orders DB');
+    await expect(node(page, 'Orders DB').locator('.pc-body-target')).toHaveAttribute('data-connect', 'invalid');
+    await page.mouse.up();
+    await expect(page.getByRole('status').filter({ hasText: '"API" already connects to "Orders DB".' })).toBeVisible();
+    expect((await editorText(page)).match(/^api -> db/gm)).toHaveLength(1);
   });
 });
 
