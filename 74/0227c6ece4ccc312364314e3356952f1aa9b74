@@ -1,0 +1,27 @@
+frontend/e2e/canvas-editing.e2e.ts
+  s_733d66441cadaa::t_8d98e97b2f28b1 261-270,272-284
+  s_733d66441cadaa::t_b021ec52b92032 271
+frontend/e2e/fixtures.ts
+  s_733d66441cadaa::t_3c58230a6594de 259-275
+frontend/e2e/editor.e2e.ts
+  s_733d66441cadaa::t_d26f7842fd982c 4,84-85
+frontend/src/components/Canvas/canvas.css
+  s_733d66441cadaa::t_8d7d55258c31f3 160-166
+  s_733d66441cadaa::t_3b8a7281374c6e 159
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "740227c6ece4ccc312364314e3356952f1aa9b74",
+  "prompts": {},
+  "sessions": {
+    "s_733d66441cadaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9649973d-f497-4440-b031-a92483a592e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
