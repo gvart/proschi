@@ -80,7 +80,7 @@ export default function EditorTour(props: EditorTourProps) {
             sides: ['right'],
             body: phone ? (
               <p>
-                A Proschi diagram is plain text. the code holds the text, <strong>Preview</strong> draws it, and they always stay in sync.
+                A Proschi diagram is plain text. <strong>Code</strong> holds the text, <strong>Preview</strong> draws it, and they always stay in sync.
               </p>
             ) : (
               <p>
@@ -204,7 +204,7 @@ export default function EditorTour(props: EditorTourProps) {
         },
         body: hasTraffic ? (
           <p>
-            The <Code>traffic</Code> and <Code>requirements</Code> blocks at the bottom feed a simulation of load, latency, availability and cost.{' '}
+            The <Code>traffic</Code> and <Code>requirements</Code> blocks{visual ? '' : ' at the bottom'} feed a simulation of load, latency, availability and cost.{' '}
             <strong>Results</strong> says what passes or fails and shows the numbers, <strong>HLD</strong> writes the design document.
           </p>
         ) : (
