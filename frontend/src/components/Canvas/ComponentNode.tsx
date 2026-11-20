@@ -119,7 +119,11 @@ function NameField({ name, onDone }: { name: string; onDone: (name: string | nul
         if (e.key === 'Enter') finish(e.currentTarget.value);
         else if (e.key === 'Escape') finish(null);
       }}
-      onBlur={(e) => finish(e.currentTarget.value)}
+      onBlur={(e) => {
+        // After the focus has landed: a field taken away while the focus moves leaves it nowhere (the palette's search, clicked, is not focused).
+        const value = e.currentTarget.value;
+        setTimeout(() => finish(value));
+      }}
       className="pc-node__name pc-node__name-field nodrag nopan"
     />
   );

@@ -212,6 +212,8 @@ export default function DiagramView({
     if (flowsOpen) setFlowsShown(false);
     setPick(null);
     setPaletteFocus(!paletteOpen);
+    // Opened, the palette is what shows: the selection's settings, which would take its place, are put away.
+    if (!paletteOpen && single) setClosedSettings(single.id);
     if (phone) setSheet(!sheet);
     else setDocked(!docked);
   };
@@ -289,6 +291,10 @@ export default function DiagramView({
   useEffect(() => {
     if (!pendingSelect || !pendingSelect.every((id) => nodes.some((n) => n.id === id))) return;
     selectOnly(...pendingSelect);
+    // A renamed node whose settings were put away keeps them away, from the render it is selected in (not before,
+    // or its old id, still selected, would show them for a frame and hide the palette).
+    const r = renamed.current;
+    if (r && pendingSelect.includes(r.to)) setClosedSettings((c) => (c === r.from ? r.to : c));
     setPendingSelect(null);
   }, [nodes, pendingSelect, selectOnly]);
 
@@ -372,16 +378,17 @@ export default function DiagramView({
   const finishName = (id: string, name: string | null) => {
     setEditing(null);
     // Enter or Escape: back to the canvas's keys (a click elsewhere keeps its own focus).
-    requestAnimationFrame(() => {
-      if (document.activeElement === document.body) wrapperRef.current?.focus({ preventScroll: true });
-    });
+    if (document.activeElement?.classList.contains('pc-node__name-field')) wrapperRef.current?.focus({ preventScroll: true });
+    else
+      requestAnimationFrame(() => {
+        if (document.activeElement === document.body) wrapperRef.current?.focus({ preventScroll: true });
+      });
     if (name === null) return;
     const next = onRenameNode(id, name);
     if (!next || next === id) return;
     renamed.current = { from: id, to: next };
     if (lastAdded === id) setLastAdded(next);
     if (selection.nodes.some((n) => n.id === id)) setPendingSelect([next]);
-    if (closedSettings === id) setClosedSettings(next);
   };
   const nodeActions: NodeActions | null =
     playing || crumbs.length > 1 ? null : { editing, onName: finishName, onAddAfter: canAdd ? (id, at) => setAddAfter({ from: id, ...at }) : undefined };

@@ -27,7 +27,7 @@ export function namedElsewhere(diagram: Diagram, id: string): boolean {
   return (
     diagram.edges.some((e) => e.loc.file !== undefined && (e.source === id || e.target === id)) ||
     steps.some((s) => s.fromServiceId === id || s.toServiceId === id) ||
-    [...(diagram.tests ?? []), ...(diagram.capacity ?? []), ...(diagram.whatifs ?? [])].some((t) => 'loc' in t && t.loc?.file !== undefined && JSON.stringify(t).includes(`"${id}"`))
+    [...(diagram.tests ?? []), ...(diagram.capacity ?? []), ...(diagram.whatifs ?? []), ...(diagram.requirements ?? []), ...(diagram.entities ?? [])].some((t) => 'loc' in t && t.loc?.file !== undefined && JSON.stringify(t).includes(`"${id}"`))
   );
 }
 
@@ -49,7 +49,8 @@ export function nameNode(source: string, id: string, name: string, { taken, keep
   if (!node || !clean || clean === node.name) return { source, id };
   const named = renameNode(source, id, clean);
   if (keepId || node.implicit || !isGeneratedId(id, node.techStack)) return { source: named, id };
-  if (idFromName(clean) === id) return { source: named, id };
+  // A name with no letter or digit an id can take ('Кэш') gives no id to follow.
+  if (idFromName(clean) === id || !/[a-z0-9]/i.test(clean)) return { source: named, id };
   const next = uniqueId(named, clean, taken);
   const renamed = renameId(named, id, next, taken);
   return renamed.error === undefined ? { source: renamed.source, id: next } : { source: named, id };

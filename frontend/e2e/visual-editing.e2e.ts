@@ -143,6 +143,26 @@ test.describe('visual editing', () => {
     await field.press('Escape');
     await expect(field).toHaveCount(0);
     expect(await editorText(page)).toContain('session_cache "Session cache" [Redis]');
+    // F2 and Enter rename it again; the id came from a name now, so it stays.
+    await page.keyboard.press('F2');
+    await field.fill('Primary cache');
+    await field.press('Enter');
+    await expect.poll(() => editorText(page)).toContain('session_cache "Primary cache" [Redis]');
+  });
+
+  test('a name typed and left by clicking the next palette entry is kept, and the chain goes on from it', async ({ page }) => {
+    const palette = await componentPalette(page);
+    const search = palette.getByRole('searchbox', { name: 'Search components' });
+    const field = page.locator('.pc-node__name-field');
+    await search.fill('rest api');
+    await palette.getByRole('button', { name: 'REST API', exact: true }).click();
+    await expect(field).toBeFocused();
+    await field.fill('Orders API');
+    // No Enter: the click on the palette leaves the field, which keeps the name.
+    await search.fill('postgres');
+    await palette.getByRole('button', { name: 'PostgreSQL', exact: true }).click();
+    await expect.poll(() => editorText(page)).toMatch(/^orders_api "Orders API" \[REST API\]$/m);
+    await expect.poll(() => editorText(page)).toMatch(/^orders_api -> postgresql : SQL$/m);
   });
 
   test('three palette clicks build a chain, each connection with its target’s protocol', async ({ page }) => {
@@ -389,6 +409,23 @@ test.describe('visual editing in practice', () => {
     await page.keyboard.press('Delete');
     await expect(page.getByRole('status').filter({ hasText: 'problem.proschi' })).toBeVisible();
     expect(await editorText(page)).toBe(before);
+  });
+
+  test('a component added with the API selected is connected from it, and its id follows the name typed', async ({ page }) => {
+    await page.goto('practice/#/url-shortener');
+    await expect(codeEditor(page)).toBeVisible();
+    await waitForCanvas(page, 2);
+    await canvasNodes(page).filter({ hasText: 'Shortener API' }).click();
+    const palette = await componentPalette(page);
+    const search = palette.getByRole('searchbox', { name: 'Search components' });
+    await search.fill('redis');
+    await search.press('Enter');
+    const field = page.locator('.pc-node__name-field');
+    await expect(field).toBeFocused();
+    await field.fill('Code cache');
+    await field.press('Enter');
+    await expect.poll(() => editorText(page)).toMatch(/^code_cache "Code cache" \[Redis\]$/m);
+    expect(await editorText(page)).toMatch(/^api -> code_cache : RESP$/m);
   });
 
   for (const key of ['Delete', 'Backspace']) {

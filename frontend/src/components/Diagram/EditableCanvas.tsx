@@ -216,9 +216,11 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
   const finishName = (id: string, name: string | null) => {
     setEditing(null);
     // Enter or Escape: back to the canvas's keys (a click elsewhere keeps its own focus).
-    requestAnimationFrame(() => {
-      if (document.activeElement === document.body) canvasRef.current?.focus({ preventScroll: true });
-    });
+    if (document.activeElement?.classList.contains('pc-node__name-field')) canvasRef.current?.focus({ preventScroll: true });
+    else
+      requestAnimationFrame(() => {
+        if (document.activeElement === document.body) canvasRef.current?.focus({ preventScroll: true });
+      });
     if (name === null) return;
     const result = nameNode(source, id, name, { taken: imported.keys(), keepId: namedElsewhere(diagram, id) });
     if (result.source === source) return;
@@ -475,6 +477,8 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
                 if (flowsOpen) setFlowsShown(false);
                 setPick(null);
                 setPaletteFocus(!paletteOpen);
+                // Opened, the palette is what shows: the selection's settings, which would take its place, are put away.
+                if (!paletteOpen) setSettingsClosed(true);
                 if (phone) setSheet(!sheet);
                 else setDocked(!docked);
               }}

@@ -36,6 +36,8 @@ describe('nameNode', () => {
     expect(nameNode(source, 'rest_api', 'Rest API').id).toBe('rest_api');
     expect(nameNode(source, 'rest_api', 'REST API').source).toBe(source);
     expect(nameNode(source, 'rest_api', '  ').source).toBe(source);
+    // No letter an id can take: the name changes, the id stays.
+    expect(nameNode(source, 'rest_api', 'Кэш')).toEqual({ source: source.replace('"REST API"', '"Кэш"'), id: 'rest_api' });
   });
 
   it('numbers an id another node has', () => {
@@ -55,6 +57,13 @@ describe('ids', () => {
     const { diagram } = parse('import "given.proschi"\nredis [Redis]\npg [PostgreSQL]\n', { resolve: (path) => (path === 'given.proschi' ? { path, source: 'client -> redis\n' } : undefined) });
     expect(namedElsewhere(diagram, 'redis')).toBe(true);
     expect(namedElsewhere(diagram, 'pg')).toBe(false);
+  });
+
+  it('know when an imported file names an id in its tests, requirements or entities', () => {
+    const given = 'test "Reads" {\n  "Read" never calls cache\n}\nrequirements {\n  survive failure of root\n}\nentity Row in store {\n  id string key\n}\n';
+    const source = 'import "given.proschi"\ncache [Redis]\nroot [PostgreSQL]\nstore [PostgreSQL]\npg [PostgreSQL]\n';
+    const { diagram } = parse(source, { resolve: (path) => (path === 'given.proschi' ? { path, source: given } : undefined) });
+    expect(['cache', 'root', 'store', 'pg'].map((id) => namedElsewhere(diagram, id))).toEqual([true, true, true, false]);
   });
 });
 
