@@ -237,6 +237,23 @@ test.describe('connecting by drag', () => {
     await expect(page.getByRole('status').filter({ hasText: '"API" already connects to "Orders DB".' })).toBeVisible();
     expect((await editorText(page)).match(/^api -> db/gm)).toHaveLength(1);
   });
+
+  test('a connection’s settings offer its target’s protocol and the labels the design already uses', async ({ page }) => {
+    await newDiagram(page, PINNED, 3);
+    // Halfway along the connection to the cache.
+    const path = page.getByTestId('rf__edge-api->cache').locator('path.react-flow__edge-interaction');
+    await expect(path).toHaveAttribute('d', /\d/);
+    const at = await path.evaluate((el) => {
+      const line = el as SVGPathElement;
+      const p = line.getPointAtLength(line.getTotalLength() / 2).matrixTransform(line.getScreenCTM()!);
+      return { x: p.x, y: p.y };
+    });
+    await page.mouse.click(at.x, at.y);
+    const suggested = page.getByRole('region', { name: 'api → cache settings' }).getByRole('group', { name: 'Suggested labels' });
+    await expect(suggested.getByRole('button')).toHaveText(['RESP', 'reads']);
+    await suggested.getByRole('button', { name: 'RESP' }).click();
+    await expect.poll(() => editorText(page)).toMatch(/^api -> cache : RESP$/m);
+  });
 });
 
 test.describe('canvas editing on a phone', () => {

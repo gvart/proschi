@@ -22,7 +22,7 @@ import { canvasKey, historyKey, useConnectHint, useMiniMap, usePaletteOpen, type
 import { CanvasMiniMap, CanvasTopBar, MiniMapButton, OverlayTools } from './CanvasTools';
 import { finderItemsOf, useOverlayOn, usePinDrag, useTopBarInset, withEdgeLoads, withNodeLoads } from './canvasShared';
 import { useCanvasEdits } from './useCanvasEdits';
-import { ConnectAtAnyZoom, newConnection, useConnectDrop } from './connect';
+import { ConnectAtAnyZoom, connectionLabels, newConnection, useConnectDrop } from './connect';
 import NodeFinder from './NodeFinder';
 
 /**
@@ -307,6 +307,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
       key={current.id}
       node={node}
       edge={node ? undefined : edge}
+      labels={!node && edge ? connectionLabels(diagram, edge) : undefined}
       capacity={node ? diagram.capacity?.find((c) => c.node === node.id) : undefined}
       importedFrom={node ? imported.get(node.id) : edge?.loc.file}
       problemCapacity={problemCapacity}

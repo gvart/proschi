@@ -25,6 +25,8 @@ type Edit = (source: string) => string;
 interface InspectorProps {
   node?: DiagramNode;
   edge?: DiagramEdge;
+  /** Labels to pick for the connection (connectionLabels): its target's protocol, then those the document uses. */
+  labels?: string[];
   /** The node's line in the `capacity` block, if any. */
   capacity?: CapacityOverride;
   /** The file a node or connection is declared in, when it is not this document: it is then read-only here. */
@@ -59,7 +61,7 @@ const CAPACITY_ROWS: { part: CapacityPart; label: string; unit: string; storeOnl
  * The settings of the selected node or connection. Every change is a small
  * edit of the text, which stays the source of truth.
  */
-export default function Inspector({ node, edge, capacity, importedFrom, system, problemCapacity = false, docked = false, onEdit, onDelete, onClose, onSimulateDown, down = false }: InspectorProps) {
+export default function Inspector({ node, edge, labels = [], capacity, importedFrom, system, problemCapacity = false, docked = false, onEdit, onDelete, onClose, onSimulateDown, down = false }: InspectorProps) {
   const title = node ? node.name : edge ? `${edge.source} → ${edge.target}` : '';
   const readOnly = importedFrom !== undefined;
   return (
@@ -95,17 +97,33 @@ export default function Inspector({ node, edge, capacity, importedFrom, system, 
         ) : (
           node && <NodeFields node={node} capacity={capacity} readOnly={readOnly} problemCapacity={problemCapacity} onEdit={onEdit} />
         )}
-        {edge && (
-          <TextField
-            label="Label or protocol"
-            value={edge.label ?? ''}
-            placeholder="e.g. HTTPS, gRPC, reads"
-            disabled={readOnly || /[{[<]/.test(edge.label ?? '')}
-            onCommit={(label) => onEdit((src) => setEdgeLabel(src, edge.id, label || null))}
-          />
-        )}
+        {edge && <EdgeLabelField edge={edge} labels={labels} disabled={readOnly || /[{[<]/.test(edge.label ?? '')} onEdit={onEdit} />}
       </div>
     </aside>
+  );
+}
+
+/** A connection's label: typed, or picked from its target type's protocol and the labels the document already uses. */
+function EdgeLabelField({ edge, labels, disabled, onEdit }: { edge: DiagramEdge; labels: string[]; disabled: boolean; onEdit: (edit: Edit) => void }) {
+  const write = (label: string) => onEdit((src) => setEdgeLabel(src, edge.id, label || null));
+  return (
+    <div>
+      <TextField label="Label or protocol" value={edge.label ?? ''} placeholder="e.g. HTTPS, gRPC, reads" disabled={disabled} onCommit={write} />
+      {!disabled && labels.length > 0 && (
+        <div role="group" aria-label="Suggested labels" className="mt-1.5 flex flex-wrap gap-1">
+          {labels.map((label) => (
+            <button
+              key={label}
+              type="button"
+              onClick={() => write(label)}
+              className="rounded-sm border border-ink/30 bg-paper px-1.5 py-0.5 font-mono text-xs text-ink hover:border-ink hover:bg-ink/10"
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useStore, useStoreApi, type Connection } from 'reactflow';
-import type { Diagram } from '../../dsl/types';
+import type { Diagram, DiagramEdge } from '../../dsl/types';
 
 /**
  * Connecting two components on either editable canvas (the editor's
@@ -14,6 +14,16 @@ export function newConnection(diagram: Diagram, from: string, to: string): { err
   if (from === to) return { error: `"${name(from)}" can't connect to itself.` };
   if (diagram.edges.some((e) => e.source === from && e.target === to)) return { error: `"${name(from)}" already connects to "${name(to)}".` };
   return { label: diagram.nodes.find((n) => n.id === to)?.resolvedType?.protocol };
+}
+
+/**
+ * The labels the connection inspector offers for `edge`: its target type's protocol first, then the
+ * labels already on the document's connections (without payloads), at most 8. Anything else is typed.
+ */
+export function connectionLabels(diagram: Diagram, edge: DiagramEdge): string[] {
+  const protocol = diagram.nodes.find((n) => n.id === edge.target)?.resolvedType?.protocol;
+  const used = diagram.edges.flatMap((e) => (e.label && !/[{[<]/.test(e.label) ? [e.label] : []));
+  return [...new Set([...(protocol ? [protocol] : []), ...used])].filter((l) => l !== edge.label).slice(0, 8);
 }
 
 /** How near a dot, in screen pixels, a drop still lands on it, whatever the zoom. */

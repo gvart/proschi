@@ -19,7 +19,7 @@ import FlowsPanel, { type StepPick } from '../Diagram/FlowsPanel';
 import { CanvasMenu, ConnectHint, FlowsToggle, PaletteDock, PaletteToggle, type CanvasMenuActions, type CanvasMenuState } from '../Diagram/CanvasEditing';
 import { canvasKey, historyKey, useConnectHint, useMiniMap, usePaletteOpen, type CanvasKey } from '../Diagram/canvasEditState';
 import Inspector from '../Diagram/Inspector';
-import { ConnectAtAnyZoom, useConnectDrop } from '../Diagram/connect';
+import { ConnectAtAnyZoom, connectionLabels, useConnectDrop } from '../Diagram/connect';
 import NodeFinder from '../Diagram/NodeFinder';
 import { FIT_MAX_ZOOM, FIT_VIEW_OPTIONS, useFitOnChange, type FitInset } from '../Diagram/useFitOnChange';
 import FlowParticles from '../Overlay/FlowParticles';
@@ -556,6 +556,7 @@ export default function DiagramView({
       key={single.id}
       node={selectedNode}
       edge={selectedNode ? undefined : selectedEdge}
+      labels={!selectedNode && selectedEdge ? connectionLabels(diagram, selectedEdge) : undefined}
       capacity={selectedNode ? diagram.capacity?.find((c) => c.node === selectedNode.id) : undefined}
       importedFrom={selectedNode ? importedNodes.get(selectedNode.id) : selectedEdge?.loc.file}
       system={selectedNode ? (nodes.find((n) => n.id === selectedNode.id)?.data as SystemNodeData | undefined)?.system : undefined}
