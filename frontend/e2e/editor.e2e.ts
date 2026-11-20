@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import lz from 'lz-string';
-import { addFromPalette, appendCode, canvasNodes, codeEditor, editorText, expect, expectDiagramFitted, setMode, test, waitForCanvas } from './fixtures';
+import { addFromPalette, appendCode, canvasNodes, codeEditor, editorText, expect, expectDiagramFitted, layoutSettled, setMode, test, waitForCanvas } from './fixtures';
 
 // These tests type in the code editor, so they run in Code mode (the canvas beside it only looks).
 test.use({ mode: 'code' });
@@ -81,6 +81,8 @@ test.describe('editor', () => {
       await expect(edge.locator('.pc-edge-head')).toBeAttached();
     }
 
+    // The edges are drawn before the layout of the typed code is done; the view fits again once it is.
+    await layoutSettled(page);
     const path = edges.filter({ hasText: 'HTTPS' }).locator('path.react-flow__edge-path');
     const routed = await path.getAttribute('d');
     const box = (await canvasNodes(page).filter({ hasText: 'Client' }).boundingBox())!;
