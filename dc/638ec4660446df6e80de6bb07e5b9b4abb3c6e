@@ -1,0 +1,39 @@
+frontend/e2e/canvas-parity.e2e.ts
+  s_733d66441cadaa::t_63e07fd653fceb 212-259
+frontend/e2e/interview.e2e.ts
+  s_733d66441cadaa::t_fddd2096e7ade1 356-359
+frontend/src/dsl/edit.ts
+  s_733d66441cadaa::t_040b46a9e627d3 681-682,700-703
+frontend/src/components/Diagram/EditableCanvas.tsx
+  s_733d66441cadaa::t_bb004ac38bcd1e 101-102,221,229,231,243,388-389
+  s_733d66441cadaa::t_812d6e04fd9c11 21
+frontend/src/dsl/editFlows.test.ts
+  s_733d66441cadaa::t_68cb3c76cff4df 39-44
+frontend/src/components/Diagram/flows.ts
+  s_733d66441cadaa::t_1eac8d42e91da0 28-52
+frontend/src/components/Diagram/FlowsPanel.tsx
+  s_733d66441cadaa::t_fddd2096e7ade1 1-2,7,41-42,45-47,60,82-98,173-175,193-211,224,246,293-294,298,302,331-348,352-357,456,466-469,483-487,493-498,504,506-511,553,555-564,572
+frontend/src/components/Playground/DiagramView.tsx
+  s_733d66441cadaa::t_812d6e04fd9c11 19
+  s_733d66441cadaa::t_bb004ac38bcd1e 199-200,287,550,553,640-641
+docs/impl/visual-editor.md
+  s_733d66441cadaa::t_3897bb239cd730 34-36
+frontend/src/components/Diagram/flows.test.ts
+  s_733d66441cadaa::t_09e236fd145b87 4,30-44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "dc638ec4660446df6e80de6bb07e5b9b4abb3c6e",
+  "prompts": {},
+  "sessions": {
+    "s_733d66441cadaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9649973d-f497-4440-b031-a92483a592e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
