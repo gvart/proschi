@@ -1,0 +1,30 @@
+frontend/src/components/Diagram/sequenceLayout.test.ts
+  s_733d66441cadaa::t_f92bd74c149801 76-77
+  s_733d66441cadaa::t_b1f839c6204760 4,74-75
+  s_733d66441cadaa::t_43a01a04913853 78
+frontend/src/components/Diagram/FlowsPanel.tsx
+  s_733d66441cadaa::t_47df4f51c7f75f 654
+  s_733d66441cadaa::t_f73510bb045b2d 33,232-240,643,652-653,655-656,805-806
+frontend/src/components/Diagram/sequenceLayout.ts
+  s_733d66441cadaa::t_30d875686fd931 87-92
+frontend/e2e/flows-pane-edit.e2e.ts
+  s_733d66441cadaa::t_fe498ee37d894e 288-289
+  s_733d66441cadaa::t_c8c810618b44d6 247-248,250,268-287,290
+  s_733d66441cadaa::t_8aa40d89ae4e8c 291-292
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fd4b2bd02afd0180474b2f21e039082f1f83899c",
+  "prompts": {},
+  "sessions": {
+    "s_733d66441cadaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9649973d-f497-4440-b031-a92483a592e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
