@@ -13,7 +13,7 @@ import './canvas.css';
  * load saturates it or breaks its SLA. Double-click (or Open) navigates into
  * the design; Expand unfolds it in place.
  */
-function SystemNode({ id, data, selected }: NodeProps<SystemNodeData>) {
+function SystemNode({ id, data, selected, isConnectable }: NodeProps<SystemNodeData>) {
   const s = data.system;
   const actions = useSystemActions();
   const status = s?.status ?? 'unsimulated';
@@ -30,8 +30,8 @@ function SystemNode({ id, data, selected }: NodeProps<SystemNodeData>) {
           Bottleneck
         </span>
       )}
-      <Handle type="target" position={Position.Top} className="pc-handle pc-handle--in" isConnectableStart={false} />
-      <BodyTarget />
+      <Handle type="target" position={Position.Top} className="pc-handle pc-handle--in" isConnectable={isConnectable} isConnectableStart={false} />
+      <BodyTarget isConnectable={isConnectable} />
 
       <div className="pc-system__head">
         <div className="pc-node__icon">
@@ -91,7 +91,7 @@ function SystemNode({ id, data, selected }: NodeProps<SystemNodeData>) {
         )}
       </div>
 
-      <Handle type="source" position={Position.Bottom} className="pc-handle" />
+      <Handle type="source" position={Position.Bottom} className="pc-handle" isConnectable={isConnectable} isConnectableStart={isConnectable} />
     </div>
   );
 }
