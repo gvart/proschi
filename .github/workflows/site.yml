@@ -60,7 +60,8 @@ jobs:
     name: e2e (${{ matrix.shard }}/2)
     # Not ubuntu-latest: this Playwright version can't install Chromium on Ubuntu 26.04.
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # Room for a slow apt mirror on top of the ~10 minutes a shard takes.
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -92,21 +93,22 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
-      # A slow download fails after 3 minutes and is tried once more, rather
-      # than running into the job's timeout.
+      # The OS packages the browser needs (apt): never cut short, since a killed
+      # apt-get keeps the dpkg lock and the next install fails on it.
+      - timeout-minutes: 10
+        run: npx playwright install-deps chromium
+      # The browser itself: a slow download fails after 3 minutes and is tried
+      # once more, rather than running into the job's timeout. Stopping a
+      # download midway is harmless.
       - if: steps.browsers.outputs.cache-hit != 'true'
         timeout-minutes: 7
-        run: timeout 3m npx playwright install --with-deps chromium || timeout 3m npx playwright install --with-deps chromium
+        run: timeout 3m npx playwright install chromium || timeout 3m npx playwright install chromium
       # Saved straight away, so a run whose tests fail still fills the cache.
       - if: steps.browsers.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
           path: ~/.cache/ms-playwright
           key: ${{ steps.browsers.outputs.cache-primary-key }}
-      # The cache holds the browser only, not the OS packages it needs.
-      - if: steps.browsers.outputs.cache-hit == 'true'
-        timeout-minutes: 5
-        run: npx playwright install-deps chromium
       - run: npm run e2e -- --shard=${{ matrix.shard }}/2
       - uses: actions/upload-artifact@v7
         if: failure()
