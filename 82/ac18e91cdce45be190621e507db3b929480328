@@ -1,0 +1,21 @@
+frontend/src/dsl/edit.ts
+  s_733d66441cadaa::t_e6ab5de763b664 1026
+frontend/src/dsl/editParallel.test.ts
+  s_733d66441cadaa::t_27caa3f2cd19df 201-203
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "82ac18e91cdce45be190621e507db3b929480328",
+  "prompts": {},
+  "sessions": {
+    "s_733d66441cadaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9649973d-f497-4440-b031-a92483a592e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
