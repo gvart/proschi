@@ -136,6 +136,8 @@ function barBottom(pane: HTMLElement, bar: HTMLElement | null): number {
   const top = pane.getBoundingClientRect().top;
   let bottom = top;
   for (const group of bar ? Array.from(bar.children) : []) {
+    // A passing hint (the connect hint) does not move the diagram either.
+    if (group.matches('[data-topbar-passing]')) continue;
     /** How far an open popover pushed the parts below it down. */
     let shift = 0;
     for (const part of group.matches('[data-topbar-right]') ? Array.from(group.children) : [group]) {

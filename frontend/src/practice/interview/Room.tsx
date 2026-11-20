@@ -3,7 +3,6 @@ import { ArrowLeft, ArrowRight, Check, CircleCheck, Eye, CircleX, Code2, FlaskCo
 import { Group, Panel, Separator } from 'react-resizable-panels';
 import CodeEditor from '../../components/Playground/CodeEditor';
 import EditableCanvas from '../../components/Diagram/EditableCanvas';
-import { EmptyCanvas } from '../../components/Diagram/CanvasEditing';
 import Menu, { MenuItem } from '../../components/Playground/Menu';
 import { iconButton, outlineButton, primaryButton, toolButton } from '../../components/Playground/ui';
 import { DifficultyBadge } from '../Badges';
@@ -104,7 +103,6 @@ export default function Room({ problem, board, phone, phase, viewing, onView, ne
         phone={phone}
         flows
       />
-      {layout.nodes.length === 0 && <EmptyCanvas />}
       {checks}
     </section>
   );

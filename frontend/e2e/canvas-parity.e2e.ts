@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { answerDialog, appendCode, canvasNodes, chooseOption, codeEditor, editorText, expect, expectTopBarClear, test, waitForCanvas } from './fixtures';
+import { appendCode, canvasNodes, chooseOption, codeEditor, editorText, expect, expectTopBarClear, test, waitForCanvas } from './fixtures';
 
 /**
  * The practice canvas and the editor's behave the same (6.1): the practice
@@ -95,8 +95,8 @@ test.describe('the practice canvas', () => {
 
     await node(page, 'Shortener API').first().click({ button: 'right' });
     await page.getByRole('menuitem', { name: 'Rename…' }).click();
-    await page.locator('.ps-dialog').getByRole('textbox').fill('Links API');
-    await answerDialog(page, 'Rename');
+    await page.locator('.pc-node__name-field').fill('Links API');
+    await page.locator('.pc-node__name-field').press('Enter');
     await expect.poll(() => editorText(page)).toMatch(/^api "Links API" \[REST API\]/m);
     await layoutSettled(page);
 

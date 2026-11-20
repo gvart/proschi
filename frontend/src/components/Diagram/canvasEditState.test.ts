@@ -33,6 +33,14 @@ describe('canvasKey', () => {
     expect(canvas('/')).toBe('find');
   });
 
+  it('reads F2 as rename, but not with a modifier or in a field', () => {
+    expect(canvas('F2')).toBe('rename');
+    expect(canvas('F2', { shift: true })).toBeNull();
+    expect(canvas('F2', { ctrl: true })).toBeNull();
+    const input = { closest: () => ({}) } as unknown as EventTarget;
+    expect(canvas('F2', {}, input)).toBeNull();
+  });
+
   it('ignores plain letters, other modifiers and typing in a field', () => {
     expect(canvas('c')).toBeNull();
     expect(canvas('c', { ctrl: true, shift: true })).toBeNull();

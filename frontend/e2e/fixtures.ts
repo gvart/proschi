@@ -333,11 +333,13 @@ export async function componentPalette(page: Page): Promise<Locator> {
   return palette;
 }
 
-/** Adds a component from the palette by searching for it; `name` is the palette entry. */
+/** Adds a component from the palette by searching for it, connected from the selected one if any; `name` is the palette entry. */
 export async function addFromPalette(page: Page, search: string, name: string): Promise<void> {
   const palette = await componentPalette(page);
   await palette.getByRole('searchbox', { name: 'Search components' }).fill(search);
   await palette.getByRole('button', { name, exact: true }).click();
+  // The new component's name is ready to type on the canvas; Escape keeps the one it has.
+  await page.locator('.pc-node__name-field').press('Escape');
 }
 
 /** Opens one of the design system's selects (src/design/Select.tsx) and picks the option with this exact label. */

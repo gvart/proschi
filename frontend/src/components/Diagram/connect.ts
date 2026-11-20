@@ -48,8 +48,14 @@ export function ConnectAtAnyZoom() {
  * The drag-to-connect props of a canvas: a drop on a node that can't take the
  * connection (itself, or one it already has) is refused, its outline shows why
  * while hovered (ComponentNode's body target), and the drop says why in a notice.
+ * A connection let go on empty canvas calls `onDropOnPane` with where (screen pixels), to pick what to add there.
  */
-export function useConnectDrop(diagram: Diagram, onConnect: (from: string, to: string) => void, onNotice: (message: string) => void) {
+export function useConnectDrop(
+  diagram: Diagram,
+  onConnect: (from: string, to: string) => void,
+  onNotice: (message: string) => void,
+  onDropOnPane?: (from: string, at: { x: number; y: number }) => void,
+) {
   const store = useStoreApi();
   /** Dragging an end of an existing connection: refusals there need no notice. */
   const reconnecting = useRef(false);
@@ -60,9 +66,14 @@ export function useConnectDrop(diagram: Diagram, onConnect: (from: string, to: s
     isValidConnection: (c: Connection) => reconnecting.current || check(c),
     onConnectStart: () => setConnecting(true),
     onConnect: (c: Connection) => c.source && c.target && onConnect(c.source, c.target),
-    onConnectEnd: () => {
+    onConnectEnd: (event: MouseEvent | TouchEvent) => {
       setConnecting(false);
       const { connectionStatus, connectionStartHandle: start, connectionEndHandle: end } = store.getState();
+      const point = 'changedTouches' in event ? event.changedTouches[0] : event;
+      const onPane = (event.target as Element | null)?.closest?.('.react-flow__pane');
+      if (!reconnecting.current && onDropOnPane && start?.type === 'source' && !end && onPane && point) {
+        return onDropOnPane(start.nodeId, { x: point.clientX, y: point.clientY });
+      }
       if (reconnecting.current || connectionStatus !== 'invalid' || !start || !end) return;
       const [from, to] = start.type === 'source' ? [start.nodeId, end.nodeId] : [end.nodeId, start.nodeId];
       const { error } = newConnection(diagram, from, to);

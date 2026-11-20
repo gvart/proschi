@@ -59,12 +59,12 @@ export function typingIn(target: EventTarget | null): boolean {
   return !!(target as Element | null)?.closest?.('input, textarea, select, [contenteditable]');
 }
 
-export type CanvasKey = 'copy' | 'paste' | 'duplicate' | 'find';
+export type CanvasKey = 'copy' | 'paste' | 'duplicate' | 'find' | 'rename';
 
-/** The canvas's own keys, outside fields: Ctrl/Cmd+C, V and D, and `/` or Ctrl/Cmd+F to find a node. */
+/** The canvas's own keys, outside fields: Ctrl/Cmd+C, V and D, `/` or Ctrl/Cmd+F to find a node, and F2 to rename the selected one. */
 export function canvasKey(e: KeyEvent): CanvasKey | null {
   if (e.altKey || typingIn(e.target)) return null;
-  if (!(e.ctrlKey || e.metaKey)) return e.key === '/' ? 'find' : null;
+  if (!(e.ctrlKey || e.metaKey)) return e.key === '/' ? 'find' : e.key === 'F2' && !e.shiftKey ? 'rename' : null;
   if (e.shiftKey) return null;
   const actions: Record<string, CanvasKey> = { c: 'copy', v: 'paste', d: 'duplicate', f: 'find' };
   return actions[e.key.toLowerCase()] ?? null;

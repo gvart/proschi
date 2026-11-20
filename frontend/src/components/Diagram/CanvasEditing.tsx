@@ -61,6 +61,8 @@ interface PaletteDockProps {
   flows?: ReactNode;
   /** Told whether the panel floats over the canvas (a narrow pane) instead of sitting beside it. */
   onFloatingChange?: (floating: boolean) => void;
+  /** The name of the selected component a new one is connected from, if any. */
+  connectFrom?: string;
 }
 
 /** Below this width, a panel docked beside the canvas would leave too little of it, so the panel floats over the canvas instead. */
@@ -87,7 +89,7 @@ function useNarrowRow(open: boolean) {
  * diagram column) a panel floating over the canvas's right side, so the canvas
  * keeps its width; on a phone a bottom sheet where a tap adds.
  */
-export function PaletteDock({ open, phone, onAdd, onClose, focus, settings, flows, onFloatingChange }: PaletteDockProps) {
+export function PaletteDock({ open, phone, onAdd, onClose, focus, settings, flows, onFloatingChange, connectFrom }: PaletteDockProps) {
   const [ref, narrow] = useNarrowRow(open && !phone);
   useEffect(() => onFloatingChange?.(narrow), [narrow, onFloatingChange]);
   if (!open) return null;
@@ -103,6 +105,7 @@ export function PaletteDock({ open, phone, onAdd, onClose, focus, settings, flow
           <Palette
             variant="sheet"
             autoFocus={false}
+            connectFrom={connectFrom}
             onAdd={(tech) => {
               onAdd(tech);
               onClose();
@@ -134,7 +137,7 @@ export function PaletteDock({ open, phone, onAdd, onClose, focus, settings, flow
           </div>
         )}
         <div className="h-full" hidden={!!settings || !!flows}>
-          <Palette onAdd={onAdd} onClose={onClose} autoFocus={focus} />
+          <Palette onAdd={onAdd} onClose={onClose} autoFocus={focus} connectFrom={connectFrom} />
         </div>
       </div>
     </div>
@@ -240,6 +243,49 @@ export function ConnectHint({ onDismiss }: { onDismiss: () => void }) {
       <button type="button" aria-label="Dismiss the hint" onClick={onDismiss} className={`${iconButton} !h-7 !w-7`}>
         <X size={14} />
       </button>
+    </div>
+  );
+}
+
+/** Where the type picker opens (screen pixels), and the component the new one is connected from. */
+export interface AddAfterState {
+  from: string;
+  x: number;
+  y: number;
+}
+
+/**
+ * The type picker that a node's "+" (or a connection dropped on empty canvas) opens in place: the
+ * palette's search and catalog in a small card. Choosing a type adds it, connected from `fromName`.
+ */
+export function AddAfterPicker({ at, fromName, onAdd, onClose }: { at: AddAfterState; fromName: string; onAdd: (tech: string) => void; onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [place, setPlace] = useState({ left: at.x + 12, top: at.y - 24 });
+  useEffect(() => {
+    const onPointer = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && onClose();
+    document.addEventListener('pointerdown', onPointer);
+    return () => document.removeEventListener('pointerdown', onPointer);
+  }, [onClose]);
+  // Beside the point, kept on screen; to its left when there is no room on the right.
+  useLayoutEffect(() => {
+    const box = ref.current?.getBoundingClientRect();
+    if (!box) return;
+    const right = at.x + 12 + box.width <= window.innerWidth - 8;
+    const left = right ? at.x + 12 : Math.max(8, at.x - 12 - box.width);
+    setPlace({ left, top: Math.max(8, Math.min(at.y - 24, window.innerHeight - box.height - 8)) });
+  }, [at.x, at.y]);
+  return (
+    <div
+      ref={ref}
+      role="dialog"
+      aria-label={`Add after ${fromName}`}
+      style={place}
+      className="fixed z-50 flex h-80 w-64 flex-col overflow-hidden rounded-sm border-bw-1 border-ink bg-surface shadow-brutal-md"
+    >
+      <p className="border-b border-ink/15 px-3 pb-1.5 pt-2 text-xs font-semibold text-ink">Add after {fromName}</p>
+      <div className="min-h-0 flex-1">
+        <Palette variant="picker" autoFocus onAdd={onAdd} onClose={onClose} connectFrom={fromName} />
+      </div>
     </div>
   );
 }

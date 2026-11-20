@@ -7,7 +7,6 @@ import type { Engine } from '../hld/engine';
 import CodeEditor, { type CodeEditorHandle } from '../components/Playground/CodeEditor';
 import EditableCanvas from '../components/Diagram/EditableCanvas';
 import { useDiagramLayout } from '../components/Diagram/useDiagramLayout';
-import { EmptyCanvas } from '../components/Diagram/CanvasEditing';
 import { UseCasePlayer } from '../components/UseCases/UseCasePlayback';
 import AnalysisPanel from '../components/Analysis/AnalysisPanel';
 import Markdown from './Markdown';
@@ -634,7 +633,6 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
         phone={phone}
         simulate={engine.available ? engine.analyze : undefined}
       />
-      {nodes.length === 0 && <EmptyCanvas />}
       {checksOpen && run && (
         <ChecksSheet run={run.result} stale={run.source !== source} onClose={() => setChecksOpen(false)} />
       )}
@@ -1087,7 +1085,6 @@ function DiagramPane({ diagram, nodes, edges, fitKey, layoutBusy, engine, onSele
             simulate={engine.available ? engine.analyze : undefined}
           />
         )}
-        {nodes.length === 0 && tab === 'diagram' && <EmptyCanvas />}
       </div>
     </div>
   );

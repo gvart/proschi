@@ -17,7 +17,8 @@ import { CanvasMiniMap, CanvasTopBar, MiniMapButton, OverlayTools } from '../Dia
 import { finderItemsOf, useNarrow, usePinDrag, useTopBarInset } from '../Diagram/canvasShared';
 import FlowsPanel, { type StepPick } from '../Diagram/FlowsPanel';
 import { nextPick } from '../Diagram/flows';
-import { CanvasMenu, ConnectHint, FlowsToggle, PaletteDock, PaletteToggle, type CanvasMenuActions, type CanvasMenuState } from '../Diagram/CanvasEditing';
+import { AddAfterPicker, CanvasMenu, ConnectHint, FlowsToggle, PaletteDock, PaletteToggle, type AddAfterState, type CanvasMenuActions, type CanvasMenuState } from '../Diagram/CanvasEditing';
+import { NodeActionsContext, type NodeActions } from '../Canvas/nodeActions';
 import { canvasKey, historyKey, useConnectHint, useMiniMap, usePaletteOpen, type CanvasKey } from '../Diagram/canvasEditState';
 import Inspector from '../Diagram/Inspector';
 import { ConnectAtAnyZoom, connectionLabels, useConnectDrop } from '../Diagram/connect';
@@ -53,9 +54,13 @@ export interface DiagramViewProps {
   hasPinnedNodes: boolean;
   onMoveNodes: (moved: { id: string; position: { x: number; y: number } }[]) => void;
   onConnectNodes: (from: string, to: string) => void;
-  onRenameNode: (id: string, name: string) => void;
-  /** Adds a component from the palette, at a canvas position when it was dropped; returns its id, if it was added. */
-  onAddNode: (techStack: string, position?: { x: number; y: number }) => string | undefined;
+  /** Names a node; returns its id after (the id follows the name while it is the generated one), if it was named. */
+  onRenameNode: (id: string, name: string) => string | undefined;
+  /**
+   * Adds a component from the palette, at a canvas position when it was dropped, connected from `from` when
+   * given; returns its id, if it was added.
+   */
+  onAddNode: (techStack: string, position?: { x: number; y: number }, from?: string) => string | undefined;
   /** Applies an inspector edit to the text. */
   onEdit: (edit: (source: string) => string) => void;
   /** Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z on the canvas: the code editor's undo and redo, where every canvas edit is one step. */
@@ -126,6 +131,8 @@ export interface DiagramViewProps {
   onOpenSystem: (id: string) => void;
   /** Offers the Flows builder (use cases and scenarios without code, FlowsPanel.tsx) on this document's text. */
   flows?: { source: string; diagram: Diagram; onChange: (next: string) => void; useCase: string | undefined; onUseCase: (id: string) => void };
+  /** What an empty canvas shows (the editor's starter card), centred on the canvas. */
+  empty?: ReactNode;
 }
 
 /** Renders the parsed diagram. Canvas edits are written back to the text, which stays the source of truth. */
@@ -179,6 +186,7 @@ export default function DiagramView({
   onCrumb,
   onOpenSystem,
   flows,
+  empty,
 }: DiagramViewProps) {
   const playing = playback.active;
   const { getNode, getNodes, getViewport, screenToFlowPosition, fitView, setViewport } = useReactFlow();
@@ -204,6 +212,8 @@ export default function DiagramView({
     if (flowsOpen) setFlowsShown(false);
     setPick(null);
     setPaletteFocus(!paletteOpen);
+    // Opened, the palette is what shows: the selection's settings, which would take its place, are put away.
+    if (!paletteOpen && single) setClosedSettings(single.id);
     if (phone) setSheet(!sheet);
     else setDocked(!docked);
   };
@@ -211,6 +221,9 @@ export default function DiagramView({
   const [menu, setMenu] = useState<CanvasMenuState | null>(null);
   const closeMenu = useCallback(() => setMenu(null), []);
   const [hintSeen, dismissHint] = useConnectHint();
+  /** The type picker of a node's "+", or of a connection let go on empty canvas. */
+  const [addAfter, setAddAfter] = useState<AddAfterState | null>(null);
+  const closeAddAfter = useCallback(() => setAddAfter(null), []);
   const connectDrop = useConnectDrop(
     diagram,
     (from, to) => {
@@ -218,7 +231,14 @@ export default function DiagramView({
       onConnectNodes(from, to);
     },
     onNotice,
+    (from, at) => canAdd && setAddAfter({ from, ...at }),
   );
+  /** The component whose name is typed on the canvas (ComponentNode's field). */
+  const [editing, setEditing] = useState<string | null>(null);
+  /** The last id a name changed, so a click that comes before the layout catches up still means that node. */
+  const renamed = useRef<{ from: string; to: string } | null>(null);
+  /** The component added last on this canvas: the fit keeps it readable (useFitOnChange `added`). */
+  const [lastAdded, setLastAdded] = useState<string>();
   const [miniMap, setMiniMap] = useMiniMap();
   /** The node finder: to jump to a node, or to pick the one to connect `from` to. */
   const [finder, setFinder] = useState<{ connectFrom?: string } | null>(null);
@@ -240,13 +260,24 @@ export default function DiagramView({
     onNotice,
   });
 
+  /** The component a new one is connected from: the one just added, else the selected component or system. */
+  const chainFrom = (() => {
+    const kind = singleNode && diagram.nodes.find((n) => n.id === singleNode.id)?.kind;
+    const id = pendingSelect?.length === 1 ? pendingSelect[0] : kind === 'component' || kind === 'system' ? singleNode?.id : undefined;
+    return id && renamed.current?.from === id ? renamed.current.to : id;
+  })();
   /**
-   * A dropped component is selected, so its settings open; one clicked in the palette is not, so
-   * the palette stays for the next one. A phone's sheet closes on a tap, and selects it too.
+   * Adds a component, connected from `from` when given, selected and with its name ready to type. A dropped one
+   * opens its settings; one clicked keeps the palette for the next, connected from it.
    */
-  const addComponent = (tech: string, position?: { x: number; y: number }) => {
-    const id = onAddNode(tech, position);
-    if (id && (position || phone)) setPendingSelect([id]);
+  const addComponent = (tech: string, position?: { x: number; y: number }, from?: string) => {
+    const id = onAddNode(tech, position, from);
+    if (!id) return;
+    if (from) dismissHint();
+    setPendingSelect([id]);
+    if (!position) setClosedSettings(id);
+    setEditing(id);
+    setLastAdded(id);
   };
   /** Selects only `ids` (nodes or a connection), as a click (or a box) would. */
   const selectOnly = useCallback(
@@ -260,6 +291,10 @@ export default function DiagramView({
   useEffect(() => {
     if (!pendingSelect || !pendingSelect.every((id) => nodes.some((n) => n.id === id))) return;
     selectOnly(...pendingSelect);
+    // A renamed node whose settings were put away keeps them away, from the render it is selected in (not before,
+    // or its old id, still selected, would show them for a frame and hide the palette).
+    const r = renamed.current;
+    if (r && pendingSelect.includes(r.to)) setClosedSettings((c) => (c === r.from ? r.to : c));
     setPendingSelect(null);
   }, [nodes, pendingSelect, selectOnly]);
 
@@ -331,12 +366,40 @@ export default function DiagramView({
     return () => cancelAnimationFrame(frame);
   }, [linkedIds, getNode, getViewport, setViewport]);
 
+  /** Names a component in place on the canvas; other nodes (a group, a note, a system) in a dialog. */
   const promptRename = async (node: Node) => {
     // Ask the parent straight away, which explains why a node from an imported file cannot be renamed.
-    if (importedNodes.has(node.id)) return onRenameNode(node.id, '');
+    if (importedNodes.has(node.id)) return void onRenameNode(node.id, '');
+    if (node.type === 'componentNode' && !node.data?.system) return setEditing(node.id);
     const name = await prompt({ title: 'Rename', label: 'Display name', defaultValue: node.data?.name ?? node.id, confirmLabel: 'Rename' });
     if (name !== null) onRenameNode(node.id, name);
   };
+  /** The name typed on the canvas: written, and the selection follows the id when it changes. */
+  const finishName = (id: string, name: string | null) => {
+    setEditing(null);
+    // Enter or Escape: back to the canvas's keys (a click elsewhere keeps its own focus).
+    if (document.activeElement?.classList.contains('pc-node__name-field')) wrapperRef.current?.focus({ preventScroll: true });
+    else
+      requestAnimationFrame(() => {
+        if (document.activeElement === document.body) wrapperRef.current?.focus({ preventScroll: true });
+      });
+    if (name === null) return;
+    const next = onRenameNode(id, name);
+    if (!next || next === id) return;
+    renamed.current = { from: id, to: next };
+    if (lastAdded === id) setLastAdded(next);
+    if (selection.nodes.some((n) => n.id === id)) setPendingSelect([next]);
+  };
+  // The same object while nothing in it changes, so the nodes (memo) don't all render again on every pan and glide.
+  const finishNameRef = useRef(finishName);
+  useLayoutEffect(() => {
+    finishNameRef.current = finishName;
+  });
+  const readOnly = playing || crumbs.length > 1;
+  const nodeActions = useMemo<NodeActions | null>(
+    () => (readOnly ? null : { editing, onName: (id, name) => finishNameRef.current(id, name), onAddAfter: canAdd ? (id, at) => setAddAfter({ from: id, ...at }) : undefined }),
+    [readOnly, editing, canAdd],
+  );
 
   const deleteSelection = () => {
     if (playing || (selection.nodes.length === 0 && selection.edges.length === 0)) return;
@@ -361,6 +424,9 @@ export default function DiagramView({
       if (added?.length) setPendingSelect(added);
     } else if (key === 'duplicate') {
       if (ids.length > 0) duplicate(ids);
+    } else if (key === 'rename') {
+      if (!singleNode) return false;
+      void promptRename(singleNode);
     } else setFinder({});
     return true;
   };
@@ -523,7 +589,7 @@ export default function DiagramView({
   const barInset = useTopBarInset(wrapperRef, `${nodes.length > 0}:${playing}:${crumbs.length}:${canOverlay}:${!!overlay}:${hasPinnedNodes}:${!!diagram.legend}`);
   const narrow = useNarrow(wrapperRef);
   const fitInset = useMemo(() => (barInset > (inset?.top ?? 0) ? { top: barInset, bottom: inset?.bottom } : inset), [barInset, inset]);
-  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { wrapper: wrapperRef, inset: fitInset, glide: `${playing ? 'playing' : ''}:${glideKey}:${paletteOpen}:${flowsOpen}` });
+  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { wrapper: wrapperRef, inset: fitInset, glide: `${playing ? 'playing' : ''}:${glideKey}:${paletteOpen}:${flowsOpen}`, added: lastAdded });
 
   const handleEdgesChange = useCallback(
     (changes: EdgeChange[]) => onEdgesChange((current) => applyEdgeChanges(changes, current)),
@@ -587,7 +653,8 @@ export default function DiagramView({
       flows={flowsPanel || undefined}
       phone={phone}
       focus={paletteFocus}
-      onAdd={(tech) => addComponent(tech)}
+      onAdd={(tech) => addComponent(tech, undefined, chainFrom)}
+      connectFrom={chainFrom ? (diagram.nodes.find((n) => n.id === chainFrom)?.name ?? chainFrom) : undefined}
       onClose={closePalette}
       settings={dockSettings ? inspector : undefined}
     />
@@ -622,6 +689,7 @@ export default function DiagramView({
         if (key && runCanvasKey(key)) e.preventDefault();
       }}
     >
+      <NodeActionsContext.Provider value={nodeActions}>
       <ReactFlow
         nodes={drawnNodes}
         edges={drawnEdges}
@@ -636,7 +704,8 @@ export default function DiagramView({
         onNodeDragStart={pinDrag.onNodeDragStart}
         onNodeDragStop={pinDrag.onNodeDragStop}
         // While a Flows step is picked, a click picks its end instead of selecting.
-        onNodeClick={(_event, node) => picking && pickNode(node.id)}
+        // A click on a node whose settings were put away (one just added from the palette, say) shows them again.
+        onNodeClick={(_event, node) => (picking ? pickNode(node.id) : closedSettings === node.id && editing !== node.id && setClosedSettings(null))}
         // …and a click on a connection sends the step along it.
         onEdgeClick={(_event, edge) => picking && setPick({ from: edge.source, to: edge.target })}
         // A connection drops anywhere on a node's body; one it can't take is refused, saying why.
@@ -670,7 +739,7 @@ export default function DiagramView({
         onNodeDoubleClick={(_event, node) => {
           if (playing) return;
           if (node.type === 'systemNode' || node.data?.system) onOpenSystem(node.id);
-          else promptRename(node);
+          else void promptRename(node);
         }}
         onSelectionChange={handleSelectionChange}
         // Deleting goes through the text; React Flow's own delete would only hide the node until the next render.
@@ -705,6 +774,7 @@ export default function DiagramView({
               )
             ))
           }
+          hint={canAdd && !hintSeen && nodes.length >= 2 && edges.length === 0 && <ConnectHint onDismiss={dismissHint} />}
           right={
             nodes.length > 0 &&
             (!playing || diagram.legend) && (
@@ -723,11 +793,6 @@ export default function DiagramView({
             )
           }
         />
-        {canAdd && !hintSeen && nodes.length >= 2 && edges.length === 0 && (
-          <Panel position="top-center" className="max-md:!top-12">
-            <ConnectHint onDismiss={dismissHint} />
-          </Panel>
-        )}
         {/* With the settings card open, Delete is in its header; this bar covers several items or a closed card. */}
         {(notice || (hasSelection && !showSettings)) && (
           <Panel position="bottom-center" className="flex flex-col items-center gap-2">
@@ -770,6 +835,8 @@ export default function DiagramView({
           </Panel>
         )}
       </ReactFlow>
+      </NodeActionsContext.Provider>
+      {empty}
       {showSettings && !dockSettings && (
         <div data-canvas-cover className="pointer-events-none absolute inset-x-2 bottom-2 z-10 flex max-h-[55%] max-md:[[data-keyboard]_&]:max-h-[calc(100%-1rem)] md:inset-x-auto md:bottom-auto md:right-2 md:top-14 md:max-h-[calc(100%-4.5rem)] md:w-72">
           {inspector}
@@ -779,6 +846,17 @@ export default function DiagramView({
         <div data-testid="flows-sheet" className="absolute inset-x-0 bottom-0 z-20 flex max-h-[55%] flex-col overflow-hidden rounded-t-brutal border-t-bw-2 border-ink bg-surface shadow-brutal-lg">
           {flowsPanel}
         </div>
+      )}
+      {addAfter && (
+        <AddAfterPicker
+          at={addAfter}
+          fromName={diagram.nodes.find((n) => n.id === addAfter.from)?.name ?? addAfter.from}
+          onAdd={(tech) => {
+            setAddAfter(null);
+            addComponent(tech, undefined, addAfter.from);
+          }}
+          onClose={closeAddAfter}
+        />
       )}
       {menu && <CanvasMenu menu={menu} onSettings={() => setClosedSettings(null)} onDelete={deleteSelection} onClose={closeMenu} actions={menuActions()} />}
       {finder && (

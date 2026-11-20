@@ -198,6 +198,56 @@
     transition: none;
   }
 }
+/* The name typed in place (an editable canvas, nodeActions.ts). */
+.pc-node__name-field {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  margin: -2px -4px;
+  padding: 1px 4px;
+  border: var(--bw-1) solid rgb(var(--c-ink));
+  border-radius: var(--r-sm);
+  background: rgb(var(--c-paper));
+  color: rgb(var(--c-ink));
+  outline: 2px solid rgb(var(--c-pink));
+  outline-offset: 1px;
+}
+/* The "+" on a node's right edge: shown while it is hovered or selected, at least its size on screen at any zoom. */
+.pc-node__add {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: var(--bw-1) solid rgb(var(--c-ink));
+  border-radius: 50%;
+  background: rgb(var(--c-yellow));
+  color: #111111;
+  box-shadow: 1px 1px 0 rgb(var(--c-ink));
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(50%, -50%) scale(clamp(1, calc(1 / var(--pc-zoom, 1)), 1.6));
+  transition: opacity 120ms ease-out;
+}
+.react-flow__node:hover .pc-node__add,
+.react-flow__node.selected .pc-node__add,
+.pc-node[data-selected] .pc-node__add,
+.pc-node__add:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+.pc-connecting .pc-node__add {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pc-node__add {
+    transition: none;
+  }
+}
 /* A group's handles only let React Flow draw its edges (they follow their route, not the handle), so they stay out of sight. */
 .pc-handle--hidden {
   opacity: 0;
