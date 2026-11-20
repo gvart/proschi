@@ -16,7 +16,7 @@ import { redactedStatement } from '../modes/interviewFile';
 import { shownPhase, type AiMessage, type Hint, type TurnDone } from '../modes/ai/api';
 import { HINT_ICON, HINT_LABEL, HINT_STYLE } from '../modes/ai/hints';
 import { AUTO_SEND_MS, autoSendLeft } from './autoSend';
-import { useCodePref, useRailFoldedPref, useSoundPref, useTalkPref } from './prefs';
+import { useRailFoldedPref, useSoundPref, useTalkPref } from './prefs';
 import Room, { ChecksSheet, type RoomTab } from './Room';
 import { Brief, PinnedBrief, RequirementsCard, StageContext, StageHeading, StartClarifying, Worksheet, EstimatesSummary } from './StageParts';
 import { loadBriefRead, loadStage, loadWorksheet, nextStage, saveBriefRead, saveStage, saveWorksheet, splitByStage, stageLabel, STARTER_ROWS, worksheetPayload, type WorksheetRow } from './stages';
@@ -60,7 +60,6 @@ export default function MockRoom({ id, problem, engine, phone, onExit, onVerdict
   const [soundOn, setSound] = useSoundPref();
   const play = useCues(soundOn);
   const [talk, setTalk] = useTalkPref();
-  const [codeShown, setCode] = useCodePref();
   const [folded, setFolded] = useRailFoldedPref();
   const [tab, setTab] = useState<RoomTab>('chat');
   const [unread, setUnread] = useState(false);
@@ -603,7 +602,6 @@ export default function MockRoom({ id, problem, engine, phone, onExit, onVerdict
         },
       }}
       sound={{ on: soundOn, onChange: setSound }}
-      code={{ shown: codeShown, onChange: setCode }}
       onCheck={check}
       finish={{ label: 'Finish and get the verdict', busy: busy === 'finish', loud: timeUp || outOfCredits, disabled: !!busy || !active, onClick: () => void finish() }}
       onExit={() => void exit()}

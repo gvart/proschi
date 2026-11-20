@@ -17,7 +17,7 @@ interface StageBarProps {
   hasLesson: boolean;
   onOpen: (stage: StageId) => void;
   next?: StageNext;
-  /** The stage's tools (Design: Run tests, Show code, the full editor). */
+  /** The stage's tools (Design: the Code | Visual switch, View code, the full editor). */
   tools?: ReactNode;
   /** Phones: Design partner's button, at the bar's end. */
   partner?: ReactNode;

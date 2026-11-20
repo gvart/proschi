@@ -72,6 +72,11 @@ interface EditableCanvasProps {
    */
   simulate?: (diagram: Diagram) => Analysis | undefined;
   overlayKey?: string;
+  /**
+   * Code mode: the canvas only looks (pan, zoom, select, find, the overlay); the text is edited in the code.
+   * No palette, Flows, connecting, dragging, naming, settings or deleting.
+   */
+  viewOnly?: boolean;
 }
 
 type Selected = { kind: 'node' | 'edge'; id: string } | null;
@@ -83,7 +88,8 @@ const FLOATING_SETTINGS = 288 + 8;
 type XY = { x: number; y: number };
 const NO_MOVES: ReadonlyMap<string, XY> = new Map();
 
-function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKey, layoutBusy, problemCapacity, paletteKey, phone, flows = false, simulate, overlayKey = 'proschi.practice.overlay' }: EditableCanvasProps) {
+function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKey, layoutBusy, problemCapacity, paletteKey, phone, flows: offersFlows = false, simulate, overlayKey = 'proschi.practice.overlay', viewOnly = false }: EditableCanvasProps) {
+  const flows = offersFlows && !viewOnly;
   const { fitView } = useReactFlow();
   const [selected, setSelected] = useState<Selected>(null);
   const [settingsClosed, setSettingsClosed] = useState(false);
@@ -102,7 +108,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
   const [pick, setPick] = useState<StepPick | null>(null);
   /** The two components of the Flows step row under the pointer, lit up on the canvas. */
   const [flowHover, setFlowHover] = useState<string[] | null>(null);
-  const paletteOpen = (phone ? sheet : docked) && !flowsOpen;
+  const paletteOpen = !viewOnly && (phone ? sheet : docked) && !flowsOpen;
   /** Whether the palette floats over the canvas (a narrow pane) rather than sitting beside it. */
   const [floating, setFloating] = useState(false);
   /** A component just added, selected once the layout draws it; `settings` opens its settings (a drop), else the palette stays for the next. */
@@ -137,7 +143,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
     const analysis = simulate?.(diagram);
     return analysis ? analysisOverlay(diagram, analysis) : undefined;
   }, [overlayOn, canOverlay, simulate, diagram]);
-  const pinned = diagram.nodes.some((n) => n.position && !imported.has(n.id));
+  const pinned = !viewOnly && diagram.nodes.some((n) => n.position && !imported.has(n.id));
 
   // Where nodes were dragged to, until the next layout (which has their new `pos`) replaces `nodes`; and the
   // sizes React Flow measured, so a node redrawn mid-drag is not hidden until measured again.
@@ -349,7 +355,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
   // Below the top bar's buttons, tools and folded legend, so no node of the fit sits under them.
   const barInset = useTopBarInset(canvasRef, `${nodes.length > 0}:${canOverlay}:${!!overlay}:${pinned}:${!!diagram.legend}`);
   useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { glide: `${paletteOpen}:${flowsOpen}`, right: cover, inset: barInset ? { top: barInset } : undefined, added: lastAdded });
-  const inspector = current && !settingsClosed && (
+  const inspector = current && !settingsClosed && !viewOnly && (
     <Inspector
       key={current.id}
       node={node}
@@ -370,13 +376,17 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
   useLayoutEffect(() => {
     finishNameRef.current = finishName;
   });
-  const nodeActions = useMemo<NodeActions>(() => ({ editing, onName: (id, name) => finishNameRef.current(id, name), onAddAfter: (id, at) => setAddAfter({ from: id, ...at }) }), [editing]);
+  const nodeActions = useMemo<NodeActions | null>(
+    () => (viewOnly ? null : { editing, onName: (id, name) => finishNameRef.current(id, name), onAddAfter: (id, at) => setAddAfter({ from: id, ...at }) }),
+    [editing, viewOnly],
+  );
 
   return (
     <div
       className="flex h-full"
       onKeyDown={(e) => {
-        const step = historyKey(e);
+        // Code mode's undo is the code editor's own.
+        const step = viewOnly ? null : historyKey(e);
         if (!step) return;
         e.preventDefault();
         if (step === 'undo') onUndo();
@@ -397,28 +407,29 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
       <div
         ref={canvasRef}
         tabIndex={-1}
-        className="pc-editable relative h-full min-w-0 flex-1 outline-hidden"
+        className={`relative h-full min-w-0 flex-1 outline-hidden ${viewOnly ? '' : 'pc-editable'}`}
         data-layout-busy={layoutBusy || undefined}
         onDragOver={(e) => {
-          if (!e.dataTransfer.types.includes(TECH_DRAG_TYPE)) return;
+          if (viewOnly || !e.dataTransfer.types.includes(TECH_DRAG_TYPE)) return;
           e.preventDefault();
           e.dataTransfer.dropEffect = 'copy';
         }}
         onDrop={(e) => {
           const tech = e.dataTransfer.getData(TECH_DRAG_TYPE);
-          if (!tech) return;
+          if (!tech || viewOnly) return;
           e.preventDefault();
           e.currentTarget.focus();
           add(tech, { drop: true });
         }}
         onKeyDown={(e) => {
-          if ((e.key === 'Delete' || e.key === 'Backspace') && current && !(e.target as Element).closest('input, textarea, select, [contenteditable]')) {
+          if ((e.key === 'Delete' || e.key === 'Backspace') && current && !viewOnly && !(e.target as Element).closest('input, textarea, select, [contenteditable]')) {
             e.preventDefault();
             remove();
             return;
           }
           const key = canvasKey(e);
-          if (key && runCanvasKey(key)) e.preventDefault();
+          // Finding a node only looks; the other keys edit.
+          if (key && (!viewOnly || key === 'find') && runCanvasKey(key)) e.preventDefault();
         }}
       >
         <NodeActionsContext.Provider value={nodeActions}>
@@ -428,19 +439,19 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
           nodeTypes={nodeTypes}
           edgeTypes={EDGE_TYPES}
           // Dragging a node pins it where it is dropped (`pos x,y`); Auto-layout unpins them all.
-          nodesDraggable
+          nodesDraggable={!viewOnly}
           onNodesChange={onNodesChange}
           onNodeDragStart={pinDrag.onNodeDragStart}
           onNodeDragStop={pinDrag.onNodeDragStop}
-          nodesConnectable
+          nodesConnectable={!viewOnly}
           elementsSelectable
           // Dragging an end of a connection onto another node moves that end, in the text.
-          edgesUpdatable
+          edgesUpdatable={!viewOnly}
           onReconnect={(ed, c) => c.source && c.target && edits.reconnect(ed.id, c.source, c.target)}
           onReconnectStart={connectDrop.onReconnectStart}
           onReconnectEnd={connectDrop.onReconnectEnd}
           onNodeClick={(_e, n) => (pick && flowsOpen ? pickNode(n.id) : select({ kind: 'node', id: n.id }))}
-          onNodeDoubleClick={(_e, n) => !(pick && flowsOpen) && void rename(n.id)}
+          onNodeDoubleClick={(_e, n) => !viewOnly && !(pick && flowsOpen) && void rename(n.id)}
           // While a Flows step is picked, a click on a connection sends the step along it.
           onEdgeClick={(_e, ed) => (pick && flowsOpen ? setPick({ from: ed.source, to: ed.target }) : select({ kind: 'edge', id: ed.id }))}
           onPaneClick={() => (pick ? undefined : setSelected(null))}
@@ -451,11 +462,14 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
           onConnectEnd={connectDrop.onConnectEnd}
           onNodeContextMenu={(e, n) => {
             e.preventDefault();
+            // Its every item edits.
+            if (viewOnly) return;
             select({ kind: 'node', id: n.id });
             setMenu({ x: e.clientX, y: e.clientY, label: n.data?.name ?? n.id, id: n.id });
           }}
           onEdgeContextMenu={(e, ed) => {
             e.preventDefault();
+            if (viewOnly) return;
             select({ kind: 'edge', id: ed.id });
             setMenu({ x: e.clientX, y: e.clientY, label: `${ed.source} → ${ed.target}`, id: ed.id });
           }}
@@ -473,25 +487,27 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
           {!phone && miniMap && <CanvasMiniMap />}
           <CanvasTopBar
             left={
-              <>
-            {/* While the settings stand in for the palette, the button brings the palette back. */}
-            <PaletteToggle
-              open={paletteOpen && !dockSettings}
-              onToggle={() => {
-                if (dockSettings) return setSettingsClosed(true);
-                if (flowsOpen) setFlowsShown(false);
-                setPick(null);
-                setPaletteFocus(!paletteOpen);
-                // Opened, the palette is what shows: the selection's settings, which would take its place, are put away.
-                if (!paletteOpen) setSettingsClosed(true);
-                if (phone) setSheet(!sheet);
-                else setDocked(!docked);
-              }}
-            />
-            {flows && <FlowsToggle open={flowsOpen && !dockSettings} onToggle={() => (dockSettings ? setSettingsClosed(true) : toggleFlows())} />}
-              </>
+              !viewOnly && (
+                <>
+                  {/* While the settings stand in for the palette, the button brings the palette back. */}
+                  <PaletteToggle
+                    open={paletteOpen && !dockSettings}
+                    onToggle={() => {
+                      if (dockSettings) return setSettingsClosed(true);
+                      if (flowsOpen) setFlowsShown(false);
+                      setPick(null);
+                      setPaletteFocus(!paletteOpen);
+                      // Opened, the palette is what shows: the selection's settings, which would take its place, are put away.
+                      if (!paletteOpen) setSettingsClosed(true);
+                      if (phone) setSheet(!sheet);
+                      else setDocked(!docked);
+                    }}
+                  />
+                  {flows && <FlowsToggle open={flowsOpen && !dockSettings} onToggle={() => (dockSettings ? setSettingsClosed(true) : toggleFlows())} />}
+                </>
+              )
             }
-            hint={!hintSeen && nodes.length >= 2 && edges.length === 0 && <ConnectHint onDismiss={dismissHint} />}
+            hint={!viewOnly && !hintSeen && nodes.length >= 2 && edges.length === 0 && <ConnectHint onDismiss={dismissHint} />}
             right={
               nodes.length > 0 &&
               (canOverlay || pinned || diagram.legend) && (
@@ -518,7 +534,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
             {flowsPanel}
           </div>
         )}
-        {nodes.length === 0 && <EmptyCanvas />}
+        {nodes.length === 0 && <EmptyCanvas viewOnly={viewOnly} />}
         {addAfter && (
           <AddAfterPicker
             at={addAfter}

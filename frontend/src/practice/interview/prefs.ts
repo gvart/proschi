@@ -15,7 +15,6 @@ export type Kind = 'mock' | 'solo';
 const KEYS = {
   sound: 'proschi.interview.sound',
   talk: 'proschi.interview.talk',
-  code: 'proschi.interview.code',
   rail: 'proschi.interview.rail',
   last: 'proschi.interview.last',
   done: 'proschi.interview.done',
@@ -41,8 +40,6 @@ export const useSoundPref = () => usePref(KEYS.sound, (raw) => raw !== false);
 export const soundOn = (): boolean => loadJson<unknown>(KEYS.sound, true) !== false;
 /** Voice or text with the interviewer: text by default. */
 export const useTalkPref = () => usePref<Talk>(KEYS.talk, (raw) => (raw === 'voice' ? 'voice' : 'text'));
-/** The code editor beside the whiteboard: hidden by default. */
-export const useCodePref = () => usePref(KEYS.code, (raw) => raw === true);
 /** The chat rail folded away. */
 export const useRailFoldedPref = () => usePref(KEYS.rail, (raw) => raw === true);
 
