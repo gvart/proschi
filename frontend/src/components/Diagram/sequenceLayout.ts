@@ -128,6 +128,8 @@ export const SEQ = {
   bottom: 18,
   /** A message's label at its widest; longer ones are cut, with the whole in a tooltip. */
   labelMax: 300,
+  /** …and at its narrowest when the diagram fits a narrow pane: past that, the pane scrolls instead. */
+  labelMin: 200,
   /** The room a label takes beside its text: the step's number and the padding. */
   labelChrome: 44,
   /** How far a message to its own lane loops out. */
@@ -180,8 +182,9 @@ export interface NoteBox {
 /**
  * Where a step can be added (dsl/edit.ts): before or right after the step on
  * a line (in its block), at the end of a scenario's branch or of a `par`
- * block, or at the end of the main flow. The diagram draws a "+" for each but
- * `after`, which is where a reply goes.
+ * block, or at the end of the main flow. `after` is drawn only where a block
+ * follows the step (elsewhere it is "before" the next one), and is where a
+ * reply goes.
  */
 export type Slot = { kind: 'before' | 'after'; line: number } | { kind: 'scenario'; name: string } | { kind: 'par'; line: number } | { kind: 'end' };
 
@@ -228,34 +231,41 @@ const headerWidth = (name: string, measure: Measure) => Math.min(SEQ.headerMax, 
  * each gap starts at what the two headers beside it need, and a message whose
  * label is wider than the lanes it spans widens them, the shortest spans
  * first. Given the width it has (`fit`), the widening gives back what it
- * must for the lanes to fit, down to what the headers need: the labels are
- * cut shorter then. Rows follow the text, a frame around each `par` block
+ * must for the lanes to fit, down to a label of SEQ.labelMin: the labels are
+ * cut shorter then, and past that the diagram is wider than its pane. Rows follow the text, a frame around each `par` block
  * and the chosen scenario's branch.
  */
 export function layoutSequence(entries: SequenceEntry[], laneIds: string[], names: (id: string) => string, measure: Measure = ESTIMATE, fit?: number): SequenceLayout {
   const index = new Map(laneIds.map((id, i) => [id, i]));
   const widths = laneIds.map((id) => headerWidth(names(id), measure));
-  const base = widths.slice(1).map((w, i) => Math.max(SEQ.minGap, (widths[i] + w) / 2 + 20));
-  const gaps = [...base];
+  const headers = widths.slice(1).map((w, i) => Math.max(SEQ.minGap, (widths[i] + w) / 2 + 20));
   const steps = entrySteps(entries);
   const labelOf = (s: OutlineStep) => Math.min(SEQ.labelMax, measure.label(s.label || ' '));
   /** The word after a message's or a failed call's label. */
   const tagOf = (s: OutlineStep) => (s.kind === 'async' ? 62 : s.kind === 'failed' ? 40 : 0);
-  // A message to its own lane loops out right: its label sits beside the loop, in the gap after the lane.
-  const spans = steps
-    .map((s) => {
-      const a = index.get(s.from) ?? 0;
-      const b = index.get(s.to) ?? 0;
-      return { lo: Math.min(a, b), hi: a === b ? Math.min(a + 1, laneIds.length - 1) : Math.max(a, b), need: labelOf(s) + tagOf(s) + SEQ.labelChrome + (a === b ? SEQ.loop : 0) };
-    })
-    .filter((s) => s.hi > s.lo)
-    .sort((p, q) => p.hi - p.lo - (q.hi - q.lo));
-  for (const { lo, hi, need } of spans) {
-    const have = gaps.slice(lo, hi).reduce((sum, g) => sum + g, 0);
-    if (have >= need) continue;
-    const more = (need - have) / (hi - lo);
-    for (let i = lo; i < hi; i++) gaps[i] += more;
-  }
+  /** The gaps that fit every label over its arrow, each label at most `cap` wide. */
+  const widened = (cap: number) => {
+    const gaps = [...headers];
+    // A message to its own lane loops out right: its label sits beside the loop, in the gap after the lane.
+    const spans = steps
+      .map((s) => {
+        const a = index.get(s.from) ?? 0;
+        const b = index.get(s.to) ?? 0;
+        return { lo: Math.min(a, b), hi: a === b ? Math.min(a + 1, laneIds.length - 1) : Math.max(a, b), need: Math.min(cap, labelOf(s)) + tagOf(s) + SEQ.labelChrome + (a === b ? SEQ.loop : 0) };
+      })
+      .filter((s) => s.hi > s.lo)
+      .sort((p, q) => p.hi - p.lo - (q.hi - q.lo));
+    for (const { lo, hi, need } of spans) {
+      const have = gaps.slice(lo, hi).reduce((sum, g) => sum + g, 0);
+      if (have >= need) continue;
+      const more = (need - have) / (hi - lo);
+      for (let i = lo; i < hi; i++) gaps[i] += more;
+    }
+    return gaps;
+  };
+  const gaps = widened(SEQ.labelMax);
+  /** What fitting the width never takes: each label at least SEQ.labelMin wide (or whole, if shorter). */
+  const base = widened(SEQ.labelMin);
 
   // The left edge: room for the first header, the outermost frame and a message to the first lane's own.
   const depth = maxDepth(entries);
@@ -331,7 +341,10 @@ export function layoutSequence(entries: SequenceEntry[], laneIds: string[], name
       notes.push({ kind, line, names, x, y: y + 4, width, height: SEQ.note - 8 });
       y += SEQ.note;
     };
-    for (const e of list) {
+    for (const [k, e] of list.entries()) {
+      // Between a step and the block after it: right after the step, which "before" the block's first step can't say.
+      const prev = list[k - 1];
+      if (e.kind !== 'step' && e.kind !== 'other' && prev?.kind === 'step') slots.push({ slot: { kind: 'after', line: prev.step.line }, x: edge, y: y + 1, index: n });
       if (e.kind === 'step') message(e.step);
       else if (e.kind === 'parallel')
         frame('parallel', 'At the same time', e.line, { kind: 'par', line: e.line }, () => {

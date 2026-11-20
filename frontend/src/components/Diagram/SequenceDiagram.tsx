@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { Plus, Ungroup } from 'lucide-react';
 import type { OutlineStep, UseCaseOutline } from '../../dsl/edit';
 import type { Diagram } from '../../dsl/types';
@@ -106,9 +106,18 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
   }, [layout]);
   // The composer in sight when it opens.
   const composerAt = composer && slotKey(composer.slot);
+  const [composerHeight, setComposerHeight] = useState(0);
+  useLayoutEffect(() => {
+    const el = composerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => setComposerHeight(el.offsetHeight));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [composerAt]);
+  // Wholly in sight (below the sticky headers) when it opens or grows.
   useEffect(() => {
     if (composerAt) composerRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  }, [composerAt]);
+  }, [composerAt, composerHeight]);
 
   const [drag, setDrag] = useState<{ from: string; x1: number; x: number; y: number } | null>(null);
 
@@ -187,13 +196,18 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
   const composerBox = ((): { x: number; y: number } | undefined => {
     if (!composer) return undefined;
     const { slot } = composer;
+    const drawn = layout.slots.find((b) => sameSlot(b.slot, slot));
+    if (drawn) return drawn;
     if (slot.kind === 'after') {
+      // A reply's place where no "+" is drawn: under its request.
       const m = layout.messages.find((msg) => msg.step.line === slot.line);
       const box = layout.slots.find((b) => b.slot.kind === 'before' && b.slot.line === slot.line);
       return m && { x: box?.x ?? 2, y: m.y + SEQ.row / 2 };
     }
-    return layout.slots.find((b) => sameSlot(b.slot, slot)) ?? layout.slots.at(-1);
+    return layout.slots.at(-1);
   })();
+  // Above its insertion point when the diagram has too little room under it and more over it.
+  const above = !!composerBox && composerHeight > 0 && layout.height - composerBox.y < composerHeight + 8 && composerBox.y > layout.height - composerBox.y;
   const number = (line: number) => layout.messages.find((m) => m.step.line === line)?.n;
 
   return (
@@ -369,7 +383,9 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
               label={
                 box.slot.kind === 'before'
                   ? `Add a step before step ${number(box.slot.line)}`
-                  : box.slot.kind === 'scenario'
+                  : box.slot.kind === 'after'
+                    ? `Add a step after step ${number(box.slot.line)}`
+                    : box.slot.kind === 'scenario'
                     ? `Add a step at the end of ${box.slot.name}`
                     : box.slot.kind === 'par'
                       ? 'Add a step at the end of the block, at the same time'
@@ -381,7 +397,12 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
         {composer && composerBox && (
           <>
             <div aria-hidden="true" className="pointer-events-none absolute border-t-2 border-dashed border-pop-pink" style={{ left: composerBox.x + 22, top: composerBox.y - 1, width: Math.max(0, layout.width - composerBox.x - 30) }} />
-            <div ref={composerRef} className="absolute z-30 w-80 scroll-mt-16 pb-2" style={{ left: Math.max(2, composerBox.x), top: composerBox.y + 6 }}>
+            <div
+              ref={composerRef}
+              data-placement={above ? 'above' : 'below'}
+              className="absolute z-30 w-80 scroll-mt-16 scroll-mb-2 py-1"
+              style={{ left: Math.max(2, composerBox.x), top: above ? composerBox.y - 4 - composerHeight : composerBox.y + 4 }}
+            >
               {composer.node}
             </div>
           </>

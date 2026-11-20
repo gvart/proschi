@@ -128,7 +128,7 @@ describe('the sequence layout', () => {
     expect(cut.lanes[1].x - cut.lanes[0].x).toBe(SEQ.labelMax + SEQ.labelChrome);
   });
 
-  it('gives back the widening to fit the width it has, down to what the headers need', () => {
+  it('gives back the widening to fit the width it has, down to a label of its least width', () => {
     const src = `usecase "U" {\n  a -> b : ${'x'.repeat(30)}\n  b -> c : y\n}`;
     const o = outlineOf(src, 'U')!;
     const wide = layoutSequence(sequenceEntries(o.items, ''), laneOrder(o), names, FIXED);
@@ -137,8 +137,14 @@ describe('the sequence layout', () => {
     expect(gap(fitted)).toBeCloseTo(gap(wide) - 40, 0);
     expect(fitted.lanes[2].x - fitted.lanes[1].x).toBe(SEQ.minGap);
     // Never closer than the headers need, however narrow.
+    // Never narrower than a label of SEQ.labelMin: the pane scrolls instead.
     const narrow = layoutSequence(sequenceEntries(o.items, ''), laneOrder(o), names, FIXED, 100);
-    expect(gap(narrow)).toBe(SEQ.minGap);
+    expect(gap(narrow)).toBe(SEQ.labelMin + SEQ.labelChrome);
+    expect(narrow.width).toBeGreaterThan(100);
+    // A label shorter than that keeps its whole width.
+    const short = outlineOf(`usecase "U" {\n  a -> b : ${'x'.repeat(20)}\n  b -> c : ${'y'.repeat(30)}\n}`, 'U')!;
+    const tight = layoutSequence(sequenceEntries(short.items, ''), laneOrder(short), names, FIXED, 100);
+    expect(tight.lanes[1].x - tight.lanes[0].x).toBe(Math.max(SEQ.minGap, 20 * 8 + SEQ.labelChrome));
     expect(layoutSequence(sequenceEntries(o.items, ''), laneOrder(o), names, FIXED, 5000).lanes).toEqual(wide.lanes);
   });
 
@@ -171,8 +177,9 @@ describe('the sequence layout', () => {
 
   it('has an insertion point before each message, at the end of each frame and of the diagram', () => {
     const layout = layoutSequence(sequenceEntries(outline.items, 'Miss'), lanes, names, FIXED);
-    const kinds = layout.slots.map((s) => (s.slot.kind === 'before' ? `before ${s.slot.line}` : s.slot.kind === 'scenario' ? `scenario ${s.slot.name}` : s.slot.kind === 'par' ? `par ${s.slot.line}` : s.slot.kind));
-    expect(kinds).toEqual(['before 7', 'before 11', 'before 13', 'before 14', 'par 12', 'scenario Miss', 'before 18', 'before 19', 'par 17', 'before 21', 'end']);
+    const kinds = layout.slots.map((s) => (s.slot.kind === 'before' || s.slot.kind === 'after' ? `${s.slot.kind} ${s.slot.line}` : s.slot.kind === 'scenario' ? `scenario ${s.slot.name}` : s.slot.kind === 'par' ? `par ${s.slot.line}` : s.slot.kind));
+    // Right after a step a frame follows, too (7 before the scenario, 11 before its par block).
+    expect(kinds).toEqual(['before 7', 'after 7', 'before 11', 'after 11', 'before 13', 'before 14', 'par 12', 'scenario Miss', 'before 18', 'before 19', 'par 17', 'before 21', 'end']);
     // Top to bottom, each "+" at its row's top edge, a frame's inside its left edge, the main flow's in the margin.
     const ys = layout.slots.map((s) => s.y);
     expect([...ys].sort((a, b) => a - b)).toEqual(ys);
@@ -180,7 +187,7 @@ describe('the sequence layout', () => {
     const scenario = layout.frames.find((f) => f.kind === 'scenario')!;
     expect(layout.slots.find((s) => s.slot.kind === 'before' && s.slot.line === 11)!.x).toBe(scenario.x + 4);
     expect(layout.slots[0].x).toBe(2);
-    expect(layout.slots.map((s) => s.index)).toEqual([0, 1, 2, 3, 4, 4, 4, 5, 6, 6, 7]);
+    expect(layout.slots.map((s) => s.index)).toEqual([0, 1, 1, 2, 2, 3, 4, 4, 4, 5, 6, 6, 7]);
     expect(layout.slots.at(-1)!.y).toBeLessThan(layout.height);
   });
 

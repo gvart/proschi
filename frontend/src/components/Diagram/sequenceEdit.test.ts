@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { groupParallel, moveStep, outlineOf, setStep, type EditResult, type OutlineStep } from '../../dsl/edit';
-import { insertAt, insertedStep, movedStep, samePlaces, slotNear } from './sequenceEdit';
+import { insertAt, insertedStep, movedStep, samePlaces, slotNear, unanswered } from './sequenceEdit';
 import { allSteps } from './sequenceLayout';
 
 const SRC = [
@@ -77,6 +77,12 @@ describe('the selection after an edit', () => {
     const moved = steps(ok(moveStep(SRC, 15, 'up')));
     expect(said(movedStep(moved, second, 'up'))).toBe('14 api>db:INSERT audit');
     expect(said(movedStep(steps(ok(moveStep(SRC, 9, 'up'))), before[1], 'up'))).toBe('8 api>db:INSERT order');
+  });
+
+  it('tells a request still waiting for its answer from one answered, the latest of two alike first', () => {
+    const s = (line: number, from: string, to: string, kind: OutlineStep['kind']): OutlineStep => ({ line, from, to, kind, label: '' });
+    const steps = [s(1, 'web', 'api', 'request'), s(2, 'api', 'db', 'request'), s(3, 'api', 'db', 'request'), s(4, 'db', 'api', 'response'), s(5, 'api', 'q', 'async')];
+    expect([1, 2, 3, 5].map((line) => unanswered(steps, line))).toEqual([true, true, false, false]);
   });
 
   it('drops a drag at the nearest insertion point', () => {

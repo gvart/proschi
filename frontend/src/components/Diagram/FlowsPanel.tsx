@@ -31,7 +31,7 @@ import Select from '../../design/Select';
 import { MOD_KEY } from '../Playground/modKey';
 import SequenceDiagram, { type SelectMode } from './SequenceDiagram';
 import { allSteps, entrySteps, followStep, scenarioOfStep, sequenceEntries, type Slot } from './sequenceLayout';
-import { insertAt, insertedStep, movedStep, samePlaces } from './sequenceEdit';
+import { insertAt, insertedStep, movedStep, samePlaces, unanswered } from './sequenceEdit';
 
 /**
  * The Flows builder (docs/design/paid-plans.md P46): use cases and their
@@ -130,8 +130,12 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   const chosen = followed.length === 1 ? followed[0] : undefined;
   /** Where the composer is open on the diagram, and how many messages are drawn before it. */
   const [composing, setComposing] = useState<{ slot: Slot; index: number; useCase?: string } | null>(null);
-  // Another use case chosen (here or in the top bar): the composer was for the last one.
-  if (composing && composing.useCase !== current) setComposing(null);
+  // Another use case chosen (here or in the top bar): the composer was for the last one, and so were its ends.
+  useEffect(() => {
+    if (!composing || composing.useCase === current) return;
+    setComposing(null);
+    pickRef.current(null);
+  }, [composing, current]);
   /** Changed to put the focus back on the diagram's selected message after an edit. */
   const [focusKey, setFocusKey] = useState(0);
   /** The steps the tab draws, in order. */
@@ -582,7 +586,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
       Run at the same time
     </button>
   );
-  const replyTo = chosen?.kind === 'request' && (
+  const replyTo = chosen?.kind === 'request' && unanswered(drawn, chosen.line) && (
     <button
       type="button"
       onClick={() => openComposer({ kind: 'after', line: chosen.line }, drawn.findIndex((d) => d.line === chosen.line) + 1, { from: chosen.to, to: chosen.from })}
@@ -1255,7 +1259,8 @@ function StepForm({
           )}
         </>
       )}
-      <div className="flex flex-wrap gap-1.5">
+      {/* Pinned to the bottom of what scrolls it (the pane's column, the diagram), so it is in sight however long the form. */}
+      <div className="sticky bottom-0 z-10 -mx-2.5 -mb-2.5 flex flex-wrap gap-1.5 rounded-b-sm border-t border-ink/15 bg-paper px-2.5 py-2">
         <button type="submit" disabled={!both} className={`${primaryButton} disabled:opacity-50`}>
           {button ?? (mode === 'edit' ? 'Save step' : mode === 'insert' ? 'Insert step' : 'Add step')}
         </button>

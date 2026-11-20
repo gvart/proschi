@@ -49,8 +49,8 @@ const composer = (page: Page) => flows(page).getByRole('dialog', { name: 'Add a 
 /** The use case's text, from the code editor. */
 const useCase = async (page: Page) => /usecase "Checkout" \{\n[\s\S]*?\n\}/.exec(await editorText(page))?.[0] ?? '';
 
-async function openPane(page: Page) {
-  await page.goto(`app/#code=${lz.compressToEncodedURIComponent(SOURCE)}`);
+async function openPane(page: Page, source = SOURCE) {
+  await page.goto(`app/#code=${lz.compressToEncodedURIComponent(source)}`);
   await waitForCanvas(page, 6);
   await page.getByRole('button', { name: 'Flows', exact: true }).click();
   await expect(sequence(page)).toBeVisible();
@@ -308,6 +308,104 @@ test.describe('editing on the Flows pane', () => {
     await expect(sequence(page).getByRole('option', { name: /POST \/checkout/ })).toBeFocused();
     await page.keyboard.press('ControlOrMeta+z');
     await expect.poll(() => useCase(page)).not.toContain('par {\n    shopper');
+  });
+});
+
+test.describe('the Flows pane, polished', () => {
+  test('labels keep a sensible width: the diagram scrolls sideways rather than starve them, beside the column, never under it', async ({ page }) => {
+    const long = SOURCE.replace('POST /checkout', 'POST /checkout {"cart": 42, "coupon": "WINTER-SALE-2026"}');
+    const label = (n: number) => option(page, n).locator('span.truncate').first();
+    const scroller = () => sequence(page).evaluate((el) => {
+      const box = el.closest('.bg-paper')!;
+      return { scroll: box.scrollWidth, client: box.clientWidth, right: box.getBoundingClientRect().right };
+    });
+    await openPane(page, long);
+    for (const size of [{ width: 1440, height: 900 }, { width: 1024, height: 768 }]) {
+      await page.setViewportSize(size);
+      await expect.poll(async () => (await sequence(page).boundingBox())?.width ?? 0).toBeGreaterThan(0);
+      // At least 200px of the label shows (it is longer).
+      expect((await label(1).boundingBox())!.width).toBeGreaterThanOrEqual(195);
+      // A short label shows whole.
+      await expect(label(2)).toHaveText('GET cart');
+      expect(await label(2).evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+      // The column is beside the diagram, which scrolls when its lanes don't fit.
+      const column = (await flows(page).getByRole('region', { name: 'Use case Checkout' }).boundingBox())!;
+      const box = await scroller();
+      expect(box.right).toBeLessThanOrEqual(column.x + 1);
+      if (size.width === 1024) {
+        expect(box.scroll).toBeGreaterThan(box.client);
+        // Scrolled to the far end, the last lane's header is in sight, in the sticky strip.
+        await sequence(page).evaluate((el) => el.closest('.bg-paper')!.scrollTo(10_000, 0));
+        const lane = (await flows(page).locator('[data-lane="events"]').boundingBox())!;
+        expect(lane.x + lane.width).toBeLessThanOrEqual(box.right + 1);
+      }
+    }
+  });
+
+  test('Add reply is only on a request that has no answer yet', async ({ page }) => {
+    await openPane(page);
+    const reply = flows(page).getByRole('button', { name: 'Add reply' });
+    // The checkout request is answered by the 201.
+    await option(page, 1).click();
+    await expect(flows(page).getByRole('region', { name: 'Selected step' })).toBeVisible();
+    await expect(reply).toHaveCount(0);
+    // On the main flow, the cart request waits (its answers are in the scenarios).
+    await option(page, 2).click();
+    await expect(reply).toBeVisible();
+    // On a scenario's tab it is answered.
+    await flows(page).getByRole('tab', { name: 'Cart expired' }).click();
+    await option(page, 2).click();
+    await expect(flows(page).getByRole('region', { name: 'Selected step' })).toContainText('Step 2');
+    await expect(reply).toHaveCount(0);
+  });
+
+  test('a "+" between a step and the block after it adds there, not into the block', async ({ page }) => {
+    await openPane(page);
+    // After step 2, before the folded scenarios.
+    await (await insertPoint(page, 'Add a step after step 2')).click();
+    await expect(composer(page).getByLabel('Starts at')).toHaveAttribute('data-value', 'cache');
+    await chooseOption(composer(page).getByLabel('Goes to'), 'Checkout API');
+    await composer(page).getByRole('combobox', { name: 'Answer' }).fill('hit');
+    await composer(page).getByRole('button', { name: 'Add step' }).click();
+    await expect.poll(() => useCase(page)).toContain('  api -> cache : GET cart\n  cache --> api : hit\n  alt "Cart cached" {\n');
+  });
+
+  test('changing the tab or the use case closes the composer and lets its ends go', async ({ page }) => {
+    await openPane(page, `${SOURCE}\nusecase "Browse" {\n  shopper -> api : GET /items\n}\n`);
+    const added = flows(page).getByRole('form', { name: 'New step' });
+    await (await insertPoint(page, 'Add a step at the end')).click();
+    await expect(composer(page)).toBeVisible();
+    await flows(page).getByRole('tab', { name: 'Cart cached' }).click();
+    await expect(composer(page)).toHaveCount(0);
+    await expect(added).toHaveCount(0);
+    await expect(flows(page).getByRole('button', { name: 'Add a step', exact: true })).toBeVisible();
+
+    // The top bar's use case picker, while the composer is open.
+    await (await insertPoint(page, 'Add a step at the end')).click();
+    await expect(composer(page)).toBeVisible();
+    await chooseOption(page.getByTitle(/^Use case: the flow Play runs/), 'Browse');
+    await expect(flows(page).getByRole('listbox', { name: 'Sequence of Browse' })).toBeVisible();
+    await expect(composer(page)).toHaveCount(0);
+    await expect(added).toHaveCount(0);
+    await expect(flows(page).getByRole('button', { name: 'Add a step', exact: true })).toBeVisible();
+  });
+
+  test('at the least pane height the composer opens above its "+" when there is more room there, its buttons in sight', async ({ page }) => {
+    await openPane(page);
+    const handle = page.getByRole('separator', { name: 'Resize the flows pane' });
+    await handle.focus();
+    await page.keyboard.press('Home');
+    await (await insertPoint(page, 'Add a step at the end')).click();
+    const box = composer(page).locator('xpath=..');
+    await expect(box).toHaveAttribute('data-placement', 'above');
+    // Taller than the diagram is there, its buttons are pinned in sight.
+    const scroller = (await sequence(page).evaluate((el) => el.closest('.bg-paper')!.getBoundingClientRect().toJSON())) as { top: number; bottom: number };
+    await expect
+      .poll(async () => {
+        const b = (await composer(page).getByRole('button', { name: 'Add step' }).boundingBox())!;
+        return b.y >= scroller.top && b.y + b.height <= scroller.bottom + 1;
+      })
+      .toBe(true);
   });
 });
 

@@ -55,6 +55,22 @@ export function movedStep(after: OutlineStep[], step: OutlineStep, direction: 'u
   return side.sort((a, b) => Math.abs(a.line - step.line) - Math.abs(b.line - step.line))[0];
 }
 
+/** Whether the request on `line` is still waiting for its answer after `steps` (what Reply would answer, flows.ts openRequest). */
+export function unanswered(steps: OutlineStep[], line: number): boolean {
+  const open: OutlineStep[] = [];
+  for (const s of steps) {
+    if (s.kind === 'request') open.push(s);
+    else if (s.kind === 'response') {
+      for (let i = open.length - 1; i >= 0; i--) {
+        if (open[i].from !== s.to || open[i].to !== s.from) continue;
+        open.splice(i, 1);
+        break;
+      }
+    }
+  }
+  return open.some((s) => s.line === line);
+}
+
 /** The insertion point nearest a height in the diagram (a drop of a drag between lifelines). */
 export function slotNear<T extends { y: number }>(slots: T[], y: number): T | undefined {
   return slots.reduce<T | undefined>((best, s) => (!best || Math.abs(s.y - y) < Math.abs(best.y - y) ? s : best), undefined);
