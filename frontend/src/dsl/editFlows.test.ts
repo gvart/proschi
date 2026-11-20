@@ -36,6 +36,12 @@ describe('use case edits', () => {
     expect(diagram.useCases[0].steps[0].statusCode).toBe(200);
   });
 
+  it("labels the connection a step needs with its target's protocol", () => {
+    const src = ok(addStep(addUseCase('api [REST API]\ndb [PostgreSQL]\n', 'U'), 'U', req('api', 'db', 'SELECT orders')));
+    expect(src).toContain('api -> db : SQL\n');
+    expect(parse(src).diagnostics).toEqual([]);
+  });
+
   it('keeps a label with an unclosed bracket on its line', () => {
     const src = ok(addStep(addUseCase('a\nb\na -> b\n', 'U'), 'U', req('a', 'b', 'POST {"x": 1')));
     expect(src).toContain('  a -> b : POST "x": 1\n}');

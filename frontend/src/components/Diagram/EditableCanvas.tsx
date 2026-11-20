@@ -18,6 +18,7 @@ import Inspector from './Inspector';
 import { TECH_DRAG_TYPE } from './Palette';
 import { CanvasMenu, ConnectHint, FlowsToggle, PaletteDock, PaletteToggle, type CanvasMenuActions, type CanvasMenuState } from './CanvasEditing';
 import FlowsPanel, { type StepPick } from './FlowsPanel';
+import { nextPick } from './flows';
 import { canvasKey, historyKey, useConnectHint, useMiniMap, usePaletteOpen, type CanvasKey } from './canvasEditState';
 import { CanvasMiniMap, CanvasTopBar, MiniMapButton, OverlayTools } from './CanvasTools';
 import { finderItemsOf, useOverlayOn, usePinDrag, useTopBarInset, withEdgeLoads, withNodeLoads } from './canvasShared';
@@ -97,6 +98,8 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
   const [flowsUseCase, setFlowsUseCase] = useState<string>();
   /** The step being added in the Flows builder: node clicks pick its ends instead of selecting. */
   const [pick, setPick] = useState<StepPick | null>(null);
+  /** The two components of the Flows step row under the pointer, lit up on the canvas. */
+  const [flowHover, setFlowHover] = useState<string[] | null>(null);
   const paletteOpen = (phone ? sheet : docked) && !flowsOpen;
   /** Whether the palette floats over the canvas (a narrow pane) rather than sitting beside it. */
   const [floating, setFloating] = useState(false);
@@ -215,7 +218,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
 
   const shownNodes = useMemo(() => {
     // While a step is picked, its ends are marked instead of the selection.
-    const marked = pick && flowsOpen ? [pick.from, pick.to] : current?.kind === 'node' ? [current.id] : [];
+    const marked = flowHover && flowsOpen ? flowHover : pick && flowsOpen ? [pick.from, pick.to] : current?.kind === 'node' ? [current.id] : [];
     const drawn = nodes.map((n) => {
       const at = moves.get(n.id);
       const size = sizes.get(n.id);
@@ -223,11 +226,9 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
       return marked.includes(n.id) || at || measured.width ? { ...n, ...measured, ...(at ? { position: at } : {}), ...(marked.includes(n.id) ? { selected: true } : {}) } : n;
     });
     return withNodeLoads(drawn, overlay);
-  }, [nodes, current, pick, flowsOpen, moves, sizes, overlay]);
+  }, [nodes, current, pick, flowHover, flowsOpen, moves, sizes, overlay]);
   const pickNode = (id: string) => {
-    if (!pick) return;
-    if (!pick.from || (pick.to && pick.from !== id)) setPick({ from: id });
-    else if (id !== pick.from) setPick({ ...pick, to: id });
+    if (pick) setPick(nextPick(pick, id));
   };
   const toggleFlows = () => {
     setPick(null);
@@ -239,7 +240,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
     setFlowsShown(!flowsOpen);
   };
   const flowsPanel = flowsOpen && (
-    <FlowsPanel source={source} diagram={diagram} onChange={onChange} pick={pick} onPick={setPick} useCase={flowsUseCase} onUseCase={setFlowsUseCase} onClose={toggleFlows} />
+    <FlowsPanel source={source} diagram={diagram} onChange={onChange} pick={pick} onPick={setPick} useCase={flowsUseCase} onUseCase={setFlowsUseCase} onClose={toggleFlows} onHighlight={setFlowHover} />
   );
   const shownEdges = useMemo(
     () => withEdgeLoads(edges.map((e) => (current?.kind === 'edge' && e.id === current.id ? { ...e, selected: true } : e)), overlay),
@@ -384,7 +385,8 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
           onReconnectStart={connectDrop.onReconnectStart}
           onReconnectEnd={connectDrop.onReconnectEnd}
           onNodeClick={(_e, n) => (pick && flowsOpen ? pickNode(n.id) : select({ kind: 'node', id: n.id }))}
-          onEdgeClick={(_e, ed) => select({ kind: 'edge', id: ed.id })}
+          // While a Flows step is picked, a click on a connection sends the step along it.
+          onEdgeClick={(_e, ed) => (pick && flowsOpen ? setPick({ from: ed.source, to: ed.target }) : select({ kind: 'edge', id: ed.id }))}
           onPaneClick={() => (pick ? undefined : setSelected(null))}
           // A connection drops anywhere on a node's body; one it can't take is refused, saying why.
           isValidConnection={connectDrop.isValidConnection}

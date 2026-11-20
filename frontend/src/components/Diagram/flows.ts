@@ -25,6 +25,31 @@ export function defaultStepKind(steps: OutlineStep[], from: string, to: string):
   return open > 0 ? 'response' : 'request';
 }
 
+/**
+ * The latest request not answered yet, `from` waiting on `to`: what Reply
+ * answers. Messages and failed calls wait for nothing.
+ */
+export function openRequest(steps: OutlineStep[]): { from: string; to: string } | undefined {
+  const open: { from: string; to: string }[] = [];
+  for (const s of steps) {
+    if (s.kind === 'request') open.push({ from: s.from, to: s.to });
+    else if (s.kind === 'response') {
+      for (let i = open.length - 1; i >= 0; i--) {
+        if (open[i].from !== s.to || open[i].to !== s.from) continue;
+        open.splice(i, 1);
+        break;
+      }
+    }
+  }
+  return open.at(-1);
+}
+
+/** A step's ends picked on the canvas: the first click sets where it starts, the next where it goes; a click after both starts over. */
+export function nextPick(pick: { from?: string; to?: string }, id: string): { from?: string; to?: string } {
+  if (!pick.from || (pick.to && pick.from !== id)) return { from: id };
+  return id !== pick.from ? { ...pick, to: id } : pick;
+}
+
 /** The use cases the problem's traffic names, which the design does not define yet. */
 export function missingUseCases(diagram: Diagram, defined: string[]): string[] {
   return (diagram.traffic ?? []).map((t) => t.useCase).filter((name, i, all) => !defined.includes(name) && all.indexOf(name) === i);

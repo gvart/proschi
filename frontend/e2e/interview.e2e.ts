@@ -353,9 +353,10 @@ test.describe('the interview room on your own', () => {
     await expect(step.getByLabel('Goes to')).toHaveAttribute('data-value', 'zk');
     await step.getByRole('combobox', { name: 'Operation' }).fill('CREATE worker id');
     await step.getByRole('button', { name: 'Add step' }).click();
-    await flows.getByRole('button', { name: 'Add a step' }).click();
-    await chooseOption(step.getByLabel('Starts at'), 'ZooKeeper');
-    await chooseOption(step.getByLabel('Goes to'), 'ID Generator');
+    // The composer stays open, and Reply answers the open request in one click.
+    await step.getByRole('button', { name: 'Reply: ZooKeeper answers ID Generator' }).click();
+    await expect(step.getByLabel('Starts at')).toHaveAttribute('data-value', 'zk');
+    await expect(step.getByLabel('Goes to')).toHaveAttribute('data-value', 'idgen');
     await expect(step.getByRole('radio', { name: 'Response' })).toHaveAttribute('aria-checked', 'true');
     await step.getByRole('combobox', { name: 'Answer' }).fill('worker id');
     await step.getByRole('button', { name: 'Add step' }).click();

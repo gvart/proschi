@@ -16,6 +16,7 @@ import { TECH_DRAG_TYPE } from '../Diagram/Palette';
 import { CanvasMiniMap, CanvasTopBar, MiniMapButton, OverlayTools } from '../Diagram/CanvasTools';
 import { finderItemsOf, useNarrow, usePinDrag, useTopBarInset } from '../Diagram/canvasShared';
 import FlowsPanel, { type StepPick } from '../Diagram/FlowsPanel';
+import { nextPick } from '../Diagram/flows';
 import { CanvasMenu, ConnectHint, FlowsToggle, PaletteDock, PaletteToggle, type CanvasMenuActions, type CanvasMenuState } from '../Diagram/CanvasEditing';
 import { canvasKey, historyKey, useConnectHint, useMiniMap, usePaletteOpen, type CanvasKey } from '../Diagram/canvasEditState';
 import Inspector from '../Diagram/Inspector';
@@ -195,6 +196,8 @@ export default function DiagramView({
   const flowsOpen = canAdd && !!flows && flowsShown;
   /** The step being added in the Flows builder: node clicks pick its ends instead of selecting. */
   const [pick, setPick] = useState<StepPick | null>(null);
+  /** The two components of the Flows step row under the pointer, lit up on the canvas. */
+  const [flowHover, setFlowHover] = useState<string[] | null>(null);
   const picking = flowsOpen && pick !== null;
   const paletteOpen = canAdd && (phone ? sheet : docked) && !flowsOpen;
   const togglePalette = () => {
@@ -281,7 +284,7 @@ export default function DiagramView({
   }, [selectionKey, playing]);
 
   // What the code's cursor sits on wears a ring of its own (pc-linked in canvas.css), the selection untouched.
-  const linkedKey = (picking ? [pick.from, pick.to].filter((id): id is string => !!id) : linked).join('\n');
+  const linkedKey = (flowsOpen && flowHover ? flowHover : picking ? [pick.from, pick.to].filter((id): id is string => !!id) : linked).join('\n');
   const linkedIds = useMemo(() => new Set(linkedKey ? linkedKey.split('\n') : []), [linkedKey]);
   const linkedClass = (className: string | undefined) => (className ? `${className} pc-linked` : 'pc-linked');
   const drawnNodes = useMemo(
@@ -544,12 +547,10 @@ export default function DiagramView({
     setFlowsShown(!flowsOpen);
   };
   const pickNode = (id: string) => {
-    if (!pick) return;
-    if (!pick.from || (pick.to && pick.from !== id)) setPick({ from: id });
-    else if (id !== pick.from) setPick({ ...pick, to: id });
+    if (pick) setPick(nextPick(pick, id));
   };
   const flowsPanel = flowsOpen && flows && (
-    <FlowsPanel source={flows.source} diagram={flows.diagram} onChange={flows.onChange} pick={pick} onPick={setPick} useCase={flows.useCase} onUseCase={flows.onUseCase} onClose={toggleFlows} />
+    <FlowsPanel source={flows.source} diagram={flows.diagram} onChange={flows.onChange} pick={pick} onPick={setPick} useCase={flows.useCase} onUseCase={flows.onUseCase} onClose={toggleFlows} onHighlight={setFlowHover} />
   );
   const inspector = showSettings && (
     <Inspector
@@ -636,6 +637,8 @@ export default function DiagramView({
         onNodeDragStop={pinDrag.onNodeDragStop}
         // While a Flows step is picked, a click picks its end instead of selecting.
         onNodeClick={(_event, node) => picking && pickNode(node.id)}
+        // …and a click on a connection sends the step along it.
+        onEdgeClick={(_event, edge) => picking && setPick({ from: edge.source, to: edge.target })}
         // A connection drops anywhere on a node's body; one it can't take is refused, saying why.
         isValidConnection={connectDrop.isValidConnection}
         onConnectStart={connectDrop.onConnectStart}

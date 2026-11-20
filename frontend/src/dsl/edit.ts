@@ -678,7 +678,8 @@ function indentOf(line: string | undefined): string {
 /**
  * Appends a step to a use case: at the end of its main flow, or of its
  * scenario `scenario`. A request or message between two components that are
- * not connected yet connects them too, as the step needs.
+ * not connected yet connects them too, as the step needs, labelled with the
+ * target's protocol.
  */
 export function addStep(source: string, useCase: string, step: NewStep, scenario?: string): EditResult {
   const outline = outlineOf(source, useCase);
@@ -696,7 +697,10 @@ export function addStep(source: string, useCase: string, step: NewStep, scenario
   const label = step.label ? cleanLabel(step.label) : '';
   lines.splice(at, 0, `${indent}${step.from} ${STEP_ARROW[step.kind]} ${step.to}${label ? ` : ${label}` : ''}`);
   const next = lines.join('\n');
-  return { source: step.kind === 'response' ? next : addConnection(next, step.from, step.to) };
+  if (step.kind === 'response') return { source: next };
+  // The connection the step needs carries its target's protocol, as one drawn on the canvas does.
+  const protocol = parse(next).diagram.nodes.find((n) => n.id === step.to)?.resolvedType?.protocol;
+  return { source: addConnection(next, step.from, step.to, protocol) };
 }
 
 /** Removes the step written at `line` (its whole payload too). */

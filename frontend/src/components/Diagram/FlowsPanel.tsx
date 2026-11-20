@@ -1,10 +1,10 @@
-import { useId, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { ArrowRight, MousePointerClick, Plus, Trash2, Workflow, X } from 'lucide-react';
+import { useDeferredValue, useId, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { AlertTriangle, ArrowRight, CornerDownLeft, MousePointerClick, Plus, Trash2, Workflow, X } from 'lucide-react';
 import { addScenario, addStep, addUseCase, removeScenario, removeStep, removeUseCase, outlineOf, type OutlineStep, type StepKind } from '../../dsl/edit';
 import { parse } from '../../dsl/parser';
 import type { Diagram } from '../../dsl/types';
 import { eyebrow, field, iconButton, outlineButton, primaryButton, toolButton } from '../Playground/ui';
-import { defaultStepKind, missingScenarios, missingUseCases, outlineSteps } from './flows';
+import { defaultStepKind, missingScenarios, missingUseCases, openRequest, outlineSteps } from './flows';
 import { stepVocabulary, type UsedStep } from '../../dsl/typesys/vocabulary';
 import StepLabelField from './StepLabelField';
 import Select from '../../design/Select';
@@ -38,7 +38,12 @@ interface FlowsPanelProps {
   useCase: string | undefined;
   onUseCase: (id: string) => void;
   onClose: () => void;
+  /** Lights up a step's two components on the canvas while its row is hovered; null when none is. */
+  onHighlight?: (ids: string[] | null) => void;
 }
+
+/** A step the builder adds. */
+type NewStepInput = { from: string; to: string; kind: StepKind; label: string };
 
 const KIND_LABEL: Record<StepKind, string> = { request: 'Request', response: 'Response', async: 'Message' };
 const KIND_HELP: Record<StepKind, string> = {
@@ -52,7 +57,7 @@ const MAIN = '';
 const NEW = '\u0000new';
 const SUGGEST = '\u0000suggest:';
 
-export default function FlowsPanel({ source, diagram, onChange, pick, onPick, useCase, onUseCase, onClose }: FlowsPanelProps) {
+export default function FlowsPanel({ source, diagram, onChange, pick, onPick, useCase, onUseCase, onClose, onHighlight }: FlowsPanelProps) {
   const local = useMemo(() => diagram.useCases.filter((u) => u.loc.file === undefined), [diagram]);
   const useCases = useMemo(() => local.map((u) => u.name), [local]);
   const current = (local.find((u) => u.id === useCase) ?? local[0])?.name;
@@ -72,6 +77,23 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
     if (result.error !== undefined) return false;
     onChange(result.source!);
     return true;
+  };
+
+  // What a step would add to the problems: the diagnostics the text gets with it that it does not have now.
+  const baseline = useMemo(() => parse(source).diagnostics.map((d) => `${d.severity}:${d.message}`), [source]);
+  const check = (step: NewStepInput): string[] => {
+    if (!current) return [];
+    const result = addStep(source, current, step, laneNow || undefined);
+    if (result.error !== undefined) return [result.error];
+    const left = [...baseline];
+    return parse(result.source!).diagnostics.flatMap((d) => {
+      const i = left.indexOf(`${d.severity}:${d.message}`);
+      if (i >= 0) {
+        left.splice(i, 1);
+        return [];
+      }
+      return [d.message];
+    });
   };
 
   const newUseCase = (value: string) => {
@@ -148,6 +170,9 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
                   placeholder="No use cases yet"
                   className="min-w-0 flex-1"
                 />
+                <button type="button" onClick={() => choose(NEW)} aria-label="New use case" title="New use case" className={`${iconButton} !h-8 !w-8 shrink-0`}>
+                  <Plus size={15} />
+                </button>
                 {current && (
                   <button
                     type="button"
@@ -165,7 +190,25 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
               </div>
             </>
           )}
-          {useCases.length === 0 && !naming && <p className="pt-1 text-sm text-muted">A use case is one thing a user does, written as the requests it makes from component to component. Add one from the list.</p>}
+          {useCases.length === 0 && !naming && (
+            <div className="space-y-2 pt-1">
+              <p className="text-sm text-muted">A use case is one thing a user does, written as the requests it makes from component to component.</p>
+              <button type="button" onClick={() => choose(NEW)} className={primaryButton}>
+                <Plus size={14} aria-hidden="true" />
+                New use case
+              </button>
+              {suggestions.length > 0 && (
+                <div className="flex flex-wrap gap-1" aria-label="Use cases the problem asks for">
+                  {suggestions.map((s) => (
+                    <button key={s} type="button" onClick={() => newUseCase(s)} className="inline-flex items-center gap-1 rounded-full border-bw-1 border-ink/40 px-2 py-0.5 text-xs font-semibold hover:border-ink hover:bg-pop-yellow/30">
+                      <Plus size={11} aria-hidden="true" />
+                      {s}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {current && outline && (
@@ -178,7 +221,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
                   let n = 0;
                   return outline.items.map((item, i) =>
                     item.kind === 'step' ? (
-                      <StepRow key={item.step.line} n={++n} step={item.step} name={name} onDelete={() => onChange(removeStep(source, item.step.line))} />
+                      <StepRow key={item.step.line} n={++n} step={item.step} name={name} onHighlight={onHighlight} onDelete={() => onChange(removeStep(source, item.step.line))} />
                     ) : item.kind === 'scenarios' ? (
                       <li key={`s${i}`} className="space-y-1.5 py-1">
                         {item.branches.map((b) => (
@@ -200,7 +243,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
                             ) : (
                               <ol className="space-y-1">
                                 {b.steps.map((s) => (
-                                  <StepRow key={s.line} step={s} name={name} onDelete={() => onChange(removeStep(source, s.line))} />
+                                  <StepRow key={s.line} step={s} name={name} onHighlight={onHighlight} onDelete={() => onChange(removeStep(source, s.line))} />
                                 ))}
                               </ol>
                             )}
@@ -247,14 +290,16 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
                 pick={pick}
                 onPick={onPick}
                 where={laneNow ? `scenario “${laneNow}”` : scenarios.length ? 'the main flow' : current}
-                onAdd={(step) => apply(addStep(source, current, step, laneNow || undefined)) && onPick(null)}
+                check={check}
+                onAdd={(step) => apply(addStep(source, current, step, laneNow || undefined))}
               />
             ) : (
               <div className="flex flex-wrap gap-2">
-                <button type="button" onClick={() => onPick({})} className={primaryButton}>
+                <button type="button" onClick={() => onPick({ from: lastEnd(outlineSteps(outline.items)) })} className={primaryButton}>
                   <Plus size={14} aria-hidden="true" />
                   Add a step
                 </button>
+                <ReplyButton steps={outlineSteps(outline.items)} name={name} onReply={onPick} />
               </div>
             )}
 
@@ -283,11 +328,33 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   );
 }
 
-function StepRow({ n, step, name, onDelete }: { n?: number; step: OutlineStep; name: (id: string) => string; onDelete: () => void }) {
+/** Where the next step starts: where the last one went. */
+function lastEnd(steps: OutlineStep[]): string | undefined {
+  return steps.at(-1)?.to;
+}
+
+/** One click to answer the latest open request: the callee back to its caller. */
+function ReplyButton({ steps, name, onReply }: { steps: OutlineStep[]; name: (id: string) => string; onReply: (pick: StepPick) => void }) {
+  const open = openRequest(steps);
+  if (!open) return null;
+  return (
+    <button type="button" onClick={() => onReply({ from: open.to, to: open.from })} className={outlineButton} title={`Add the answer from ${name(open.to)} to ${name(open.from)}`}>
+      <CornerDownLeft size={14} aria-hidden="true" />
+      Reply to {name(open.from)}
+    </button>
+  );
+}
+
+function StepRow({ n, step, name, onDelete, onHighlight }: { n?: number; step: OutlineStep; name: (id: string) => string; onDelete: () => void; onHighlight?: (ids: string[] | null) => void }) {
   const reply = step.kind === 'response';
   const text = `${name(step.from)} ${reply ? 'answers' : 'to'} ${name(step.to)}${step.label ? `: ${step.label}` : ''}`;
   return (
-    <li className="group flex items-start gap-1.5 text-xs" aria-label={text}>
+    <li
+      className="group -mx-1 flex items-start gap-1.5 rounded-sm px-1 text-xs hover:bg-pop-yellow/20"
+      aria-label={text}
+      onMouseEnter={() => onHighlight?.([step.from, step.to])}
+      onMouseLeave={() => onHighlight?.(null)}
+    >
       {n !== undefined && <span className="w-4 shrink-0 pt-0.5 text-right font-mono tabular-nums text-muted">{n}</span>}
       <span className="min-w-0 flex-1 pt-0.5">
         <span className="font-semibold">{name(step.from)}</span>
@@ -386,6 +453,7 @@ function StepForm({
   pick,
   onPick,
   where,
+  check,
   onAdd,
 }: {
   diagram: Diagram;
@@ -395,7 +463,10 @@ function StepForm({
   pick: StepPick;
   onPick: (pick: StepPick | null) => void;
   where: string;
-  onAdd: (step: { from: string; to: string; kind: StepKind; label: string }) => void;
+  /** The problems the step would bring, before it is added. */
+  check: (step: NewStepInput) => string[];
+  /** Adds the step; false when it could not be. */
+  onAdd: (step: NewStepInput) => boolean;
 }) {
   const fromId = useId();
   const toId = useId();
@@ -409,19 +480,35 @@ function StepForm({
   const vocabulary = useMemo(() => stepVocabulary(diagram, from ?? '', to ?? '', kind, used), [diagram, from, to, kind, used]);
   const nodes = diagram.nodes.filter((n) => n.kind !== 'group' && n.kind !== 'text');
   const select = (value: string, which: 'from' | 'to') => onPick({ ...pick, [which]: value || undefined });
+  const [added, setAdded] = useState(0);
+  const deferred = useDeferredValue(label);
+  const problems = useMemo(() => (both ? check({ from, to, kind, label: deferred }) : []), [both, check, from, to, kind, deferred]);
+  const open = openRequest(steps);
+  const replying = !!open && open.from === to && open.to === from;
   return (
     <form
       aria-label="New step"
       onSubmit={(e) => {
         e.preventDefault();
-        if (both) onAdd({ from, to, kind, label });
+        if (!both || !onAdd({ from, to, kind, label })) return;
+        // The composer stays open for the next step, which starts where this one went.
+        setLabel('');
+        setKind(undefined);
+        setAdded(added + 1);
+        onPick({ from: to });
       }}
       className="space-y-2.5 rounded-sm border-bw-1 border-ink bg-paper p-2.5"
     >
       <p role="status" className="flex items-start gap-1.5 text-xs font-semibold">
         <MousePointerClick size={14} aria-hidden="true" className="mt-px shrink-0" />
-        {!from ? 'Click the component the step starts at.' : !to ? 'Now click the component it goes to.' : `A step in ${where}.`}
+        {!from ? 'Click the component the step starts at.' : !to ? (added ? `Added. Next step from ${diagram.nodes.find((n) => n.id === from)?.name ?? from}: click where it goes.` : 'Now click the component it goes to.') : `A step in ${where}.`}
       </p>
+      {open && !replying && (
+        <button type="button" onClick={() => onPick({ from: open.to, to: open.from })} className={`${toolButton} !px-1.5 !py-0.5 text-xs`}>
+          <CornerDownLeft size={13} aria-hidden="true" />
+          Reply: {diagram.nodes.find((n) => n.id === open.to)?.name ?? open.to} answers {diagram.nodes.find((n) => n.id === open.from)?.name ?? open.from}
+        </button>
+      )}
       <div className="grid grid-cols-2 gap-1.5">
         <Labelled id={fromId} label="Starts at">
           <Select
@@ -463,8 +550,18 @@ function StepForm({
           </div>
           <p className="-mt-1 text-xs text-muted">{KIND_HELP[kind]}.</p>
           <Labelled id={labelId} label={kind === 'response' ? 'Answer' : 'Operation'}>
-            <StepLabelField id={labelId} value={label} onChange={setLabel} vocabulary={vocabulary} kind={kind} />
+            <StepLabelField key={`${from}>${to}:${added}`} id={labelId} value={label} onChange={setLabel} vocabulary={vocabulary} kind={kind} />
           </Labelled>
+          {problems.length > 0 && (
+            <ul aria-label="Problems with this step" className="space-y-1">
+              {problems.map((p) => (
+                <li key={p} className="flex items-start gap-1.5 rounded-sm border-bw-1 border-amber-600/50 bg-amber-100/60 px-1.5 py-1 text-xs text-amber-950 dark:bg-amber-900/30 dark:text-amber-100">
+                  <AlertTriangle size={13} aria-hidden="true" className="mt-px shrink-0" />
+                  <span className="min-w-0 break-words">{p}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </>
       )}
       <div className="flex flex-wrap gap-1.5">
@@ -472,7 +569,7 @@ function StepForm({
           Add step
         </button>
         <button type="button" onClick={() => onPick(null)} className={toolButton}>
-          Cancel
+          {added ? 'Done' : 'Cancel'}
         </button>
       </div>
     </form>

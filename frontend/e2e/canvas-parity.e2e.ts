@@ -209,6 +209,54 @@ test.describe('the editor canvas', () => {
     await expect(page.getByRole('region', { name: 'Components' })).toBeVisible();
   });
 
+  test('builds a flow in a row: each step starts where the last went, Reply answers, a warning shows before adding', async ({ page }) => {
+    await page.goto('app/');
+    await expect(codeEditor(page)).toBeVisible();
+    await waitForCanvas(page, 1);
+    await page.getByRole('button', { name: 'File' }).click();
+    await page.getByRole('menuitem', { name: 'New diagram' }).click();
+    await expect(canvasNodes(page)).toHaveCount(0);
+    await appendCode(page, 'web "Web" [Browser]\napi "API" [REST API]\ndb "DB" [PostgreSQL]\nweb -> api\napi -> db\n');
+    await waitForCanvas(page, 3);
+    await layoutSettled(page);
+
+    await page.getByRole('button', { name: 'Flows' }).click();
+    const flows = page.getByRole('region', { name: 'Flows' });
+    // With no use case yet, starting one is a visible button.
+    await flows.getByRole('button', { name: 'New use case' }).first().click();
+    const name = flows.getByRole('textbox', { name: 'New use case' });
+    await name.fill('Order');
+    await name.press('Enter');
+    await flows.getByRole('button', { name: 'Add a step' }).click();
+    const step = flows.getByRole('form', { name: 'New step' });
+    const label = (kind: 'Operation' | 'Answer') => step.getByRole('combobox', { name: kind });
+
+    await node(page, 'Web').click();
+    await node(page, 'API').click();
+    await label('Operation').fill('POST /orders');
+    await label('Operation').press('Enter');
+    // The next step starts at the API: one click picks where it goes.
+    await expect(step.getByLabel('Starts at')).toHaveAttribute('data-value', 'api');
+    await node(page, 'DB').click();
+    // An operation PostgreSQL does not have warns before it is added.
+    await label('Operation').fill('persist order');
+    await expect(step.getByRole('list', { name: 'Problems with this step' })).toContainText("PostgreSQL has no operation 'persist'");
+    await label('Operation').fill('INSERT order');
+    await expect(step.getByRole('list', { name: 'Problems with this step' })).toHaveCount(0);
+    await label('Operation').press('Enter');
+    // Reply answers the latest open request: the DB back to the API, then the API back to the web.
+    await step.getByRole('button', { name: 'Reply: DB answers API' }).click();
+    await label('Answer').fill('1 row');
+    await label('Answer').press('Enter');
+    await step.getByRole('button', { name: 'Reply: API answers Web' }).click();
+    await label('Answer').fill('201');
+    await label('Answer').press('Enter');
+    await expect.poll(() => editorText(page)).toMatch(/web -> api : POST \/orders\n\s+api -> db : INSERT order\n\s+db --> api : 1 row\n\s+api --> web : 201\n/);
+    await expect(flows.getByRole('list', { name: 'Steps' }).getByRole('listitem')).toHaveCount(4);
+    await step.getByRole('button', { name: 'Done' }).click();
+    await expect(step).toHaveCount(0);
+  });
+
   test('with Flows open the canvas is narrow: the legend folds, no node sits under the top bar, the hint shortens clear of the controls', async ({ page }) => {
     await page.goto('app/');
     await waitForCanvas(page, 3);
