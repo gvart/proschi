@@ -335,7 +335,6 @@ test.describe('the editor canvas', () => {
     await step.getByRole('button', { name: '+ Authorization' }).click();
     await step.getByLabel('Payload or note').fill('{"sku": 7}');
     await step.getByLabel('Calls per request').fill('2');
-    await expect(step.getByLabel('Writes')).toHaveText('web -> api : x2 POST /orders header Authorization {"sku": 7}');
     await step.getByRole('button', { name: 'Add step' }).click();
     await expect.poll(() => editorText(page)).toContain('  web -> api : x2 POST /orders header Authorization {"sku": 7}\n');
 

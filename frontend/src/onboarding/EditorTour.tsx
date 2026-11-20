@@ -179,11 +179,11 @@ export default function EditorTour(props: EditorTourProps) {
             onEnter: () => setMobilePane('diagram'),
             body: canPlay ? (
               <p>
-                {edited ? 'Your change is already drawn. ' : ''}A <Code>usecase</Code> block lists requests and responses in order. Play animates them over the diagram, step by step.
+                {edited ? 'Your change is already drawn. ' : ''}A {visual ? 'use case' : <><Code>usecase</Code> block</>} lists requests and responses in order. Play animates them over the diagram, step by step.
               </p>
             ) : (
               <p>
-                This diagram has no <Code>usecase</Code> with steps yet, so there is nothing to play. The Examples all have some.
+                This diagram has no {visual ? 'use case' : <Code>usecase</Code>} with steps yet, so there is nothing to play. The Examples all have some.
               </p>
             ),
             task: canPlay ? 'Press Play.' : undefined,
@@ -204,12 +204,12 @@ export default function EditorTour(props: EditorTourProps) {
         },
         body: hasTraffic ? (
           <p>
-            The <Code>traffic</Code> and <Code>requirements</Code> blocks{visual ? '' : ' at the bottom'} feed a simulation of load, latency, availability and cost.{' '}
+            {visual ? 'The design’s traffic and requirements' : <>The <Code>traffic</Code> and <Code>requirements</Code> blocks at the bottom</>} feed a simulation of load, latency, availability and cost.{' '}
             <strong>Results</strong> says what passes or fails and shows the numbers, <strong>HLD</strong> writes the design document.
           </p>
         ) : (
           <p>
-            Add <Code>traffic</Code>, <Code>requirements</Code> and <Code>test</Code> blocks and a simulation computes load, latency, availability and
+            {visual ? 'Give the design traffic and requirements in Code mode' : <>Add <Code>traffic</Code>, <Code>requirements</Code> and <Code>test</Code> blocks</>} and a simulation computes load, latency, availability and
             cost. <strong>Results</strong> says what passes or fails and shows the numbers, <strong>HLD</strong> writes the design document.
           </p>
         ),

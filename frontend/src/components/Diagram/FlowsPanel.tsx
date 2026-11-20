@@ -55,8 +55,6 @@ const KIND_HELP: Record<StepKind, string> = {
   failed: 'A call that never gets an answer: a timeout, a refused connection',
 };
 
-const ARROW: Record<StepKind, string> = { request: '->', response: '-->', async: '->>', failed: '-x' };
-
 /** A step being changed in place, or one being inserted before it. */
 type Editing = { line: number; insert: boolean };
 
@@ -344,7 +342,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
                                 {b.steps.map((s) => row(s))}
                               </ol>
                             )}
-                            {b.other > 0 && <p className="text-xs text-muted">And {b.other === 1 ? 'a block' : `${b.other} blocks`} written in the code.</p>}
+                            {b.other > 0 && <p className="text-xs text-muted">And {b.other === 1 ? 'a block' : `${b.other} blocks`} you can edit in Code mode.</p>}
                           </div>
                         ))}
                       </li>
@@ -353,12 +351,12 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
                         <div role="group" aria-label="At the same time" className="rounded-sm border-bw-1 border-ink/30 px-2 py-1.5">
                           <span className={eyebrow}>At the same time</span>
                           <ol className="mt-1 space-y-1">{item.block.steps.map((s) => row(s, ++n))}</ol>
-                          {item.block.other > 0 && <p className="text-xs text-muted">And {item.block.other === 1 ? 'a statement' : `${item.block.other} statements`} written in the code.</p>}
+                          {item.block.other > 0 && <p className="text-xs text-muted">And {item.block.other === 1 ? 'a statement' : `${item.block.other} statements`} you can edit in Code mode.</p>}
                         </div>
                       </li>
                     ) : (
                       <li key={`o${item.line}`} className="text-xs text-muted">
-                        A block written in the code (line {item.line}).
+                        A block you can edit in Code mode.
                       </li>
                     ),
                   );
@@ -755,10 +753,6 @@ function StepForm({
             </button>
           )}
           <MoreFields kind={kind} head={head} more={more} onMore={setMore} headers={vocabulary.headers} typeName={vocabulary.type?.name} />
-          <p className="break-words rounded-sm bg-ink/5 px-1.5 py-1 font-mono text-[11px] text-ink/80" aria-label="Writes">
-            {from} {ARROW[kind]} {to}
-            {label ? ` : ${label}` : ''}
-          </p>
           {problems.length > 0 && (
             <ul aria-label="Problems with this step" className="space-y-1">
               {problems.map((p) => (
