@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { firstMatch, paletteGroups } from './paletteGroups';
+import { parse } from '../../dsl';
+import { firstMatch, paletteGroups, typeChoices } from './paletteGroups';
 
 const techs = (id: string, query?: string) => paletteGroups(query).find((g) => g.id === id)?.entries.map((e) => e.techStack) ?? [];
 
@@ -33,5 +34,22 @@ describe('paletteGroups', () => {
     expect(firstMatch(paletteGroups('rest api'), 'rest api')?.techStack).toBe('REST API');
     expect(firstMatch(paletteGroups('postgres'), 'postgres')?.techStack).toBe('PostgreSQL');
     expect(firstMatch(paletteGroups('no such thing'), 'no such thing')).toBeUndefined();
+  });
+});
+
+describe('typeChoices', () => {
+  const { diagram } = parse('type OrdersDb extends PostgreSQL {\n  doc "Orders and their lines"\n  op read listOrders\n}\ntype abstract Store extends Database {}\ndb [OrdersDb]\n');
+
+  it("lists the document's own types first, then the catalog grouped as the palette groups it", () => {
+    const groups = typeChoices(diagram.types ?? []);
+    expect(groups[0]).toEqual({ id: 'design', label: 'In this design', choices: [{ name: 'OrdersDb', icon: 'PostgreSQL', doc: 'Orders and their lines' }] });
+    expect(groups.slice(1).map((g) => g.label)).toEqual(paletteGroups().map((g) => g.label));
+    expect(groups.find((g) => g.id === 'data')?.choices.find((c) => c.name === 'PostgreSQL')?.doc).toBeTruthy();
+  });
+
+  it('searches both, and leaves abstract types out', () => {
+    expect(typeChoices(diagram.types ?? [], 'orders')[0].choices.map((c) => c.name)).toEqual(['OrdersDb']);
+    expect(typeChoices(diagram.types ?? [], 'store').some((g) => g.id === 'design')).toBe(false);
+    expect(typeChoices([], 'redis').find((g) => g.id === 'caches')?.choices[0].name).toBe('Redis');
   });
 });

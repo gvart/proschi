@@ -1,4 +1,4 @@
-import { createContext, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { createContext, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import type { Edge, Node, NodeDragHandler } from 'reactflow';
 import { loadJson, saveJson } from '../../services/storage';
 import { edgeOverlays, type SimOverlay } from '../../sim/overlay';
@@ -160,3 +160,32 @@ function barBottom(pane: HTMLElement, bar: HTMLElement | null): number {
  * so the legend moves down under the card instead of the card covering it.
  */
 export const ToolsPopoverSlot = createContext<HTMLElement | null>(null);
+
+/** Whether a pointer is pressed anywhere on the page (a click under way, or a drag). */
+let pressed = false;
+if (typeof window !== 'undefined') {
+  window.addEventListener('pointerdown', () => (pressed = true), true);
+  for (const type of ['pointerup', 'pointercancel'] as const) window.addEventListener(type, () => (pressed = false), true);
+}
+
+/**
+ * `open`, turned on a moment late and never while a pointer is pressed. The rail that a selection opens (the
+ * Selection tab) narrows the canvas, and the diagram glides to its new fit; waiting lets the click that selected
+ * finish what it began first: a double-click, or a drag to pin.
+ */
+export function useLateOpen(open: boolean, ms = 350): boolean {
+  const [late, setLate] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    let timer = 0;
+    const wait = () => {
+      timer = window.setTimeout(() => (pressed ? wait() : setLate(true)), ms);
+    };
+    wait();
+    return () => {
+      clearTimeout(timer);
+      setLate(false);
+    };
+  }, [open, ms]);
+  return open && late;
+}

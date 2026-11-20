@@ -1,4 +1,8 @@
 import { useState } from 'react';
+import { parse } from '../../dsl';
+import { setReplicas } from '../../dsl/edit';
+import { kindOf } from '../../dsl/kinds';
+import type { DiagramNode } from '../../dsl/types';
 import { loadJson, saveJson } from '../../services/storage';
 
 /** The state of visual editing that outlives a canvas (CanvasEditing.tsx): remembered per browser. */
@@ -59,18 +63,57 @@ export function typingIn(target: EventTarget | null): boolean {
   return !!(target as Element | null)?.closest?.('input, textarea, select, [contenteditable]');
 }
 
-export type CanvasKey = 'copy' | 'paste' | 'duplicate' | 'find' | 'rename';
+export type CanvasKey = 'copy' | 'paste' | 'duplicate' | 'find' | 'rename' | 'quick' | 'next' | 'previous' | 'connect' | 'type' | 'more' | 'fewer' | 'layout';
 
-/** The canvas's own keys, outside fields: Ctrl/Cmd+C, V and D, `/` or Ctrl/Cmd+F to find a node, and F2 to rename the selected one. */
+/** Keys without Ctrl/Cmd: one key each, so Cmd+R, Cmd+T and Cmd+± stay the browser's. */
+const PLAIN_KEYS: Record<string, CanvasKey> = { '/': 'find', a: 'quick', c: 'connect', t: 'type', r: 'layout', '+': 'more', '=': 'more', '-': 'fewer' };
+
+/**
+ * The canvas's own keys, outside fields: Ctrl/Cmd+C, V and D; `/` or Ctrl/Cmd+F to find a node; F2 to rename the
+ * selected one; A or Ctrl/Cmd+K for the command bar; Tab and Shift+Tab to the next and previous node; C to add one
+ * connected from the selection; T to change its type; + and - for its replicas; R to lay the diagram out again.
+ */
 export function canvasKey(e: KeyEvent): CanvasKey | null {
   if (e.altKey || typingIn(e.target)) return null;
-  if (!(e.ctrlKey || e.metaKey)) return e.key === '/' ? 'find' : e.key === 'F2' && !e.shiftKey ? 'rename' : null;
+  if (!(e.ctrlKey || e.metaKey)) {
+    if (e.key === 'Tab') return e.shiftKey ? 'previous' : 'next';
+    if (e.key === 'F2') return e.shiftKey ? null : 'rename';
+    return PLAIN_KEYS[e.key.length === 1 ? e.key.toLowerCase() : ''] ?? null;
+  }
   if (e.shiftKey) return null;
-  const actions: Record<string, CanvasKey> = { c: 'copy', v: 'paste', d: 'duplicate', f: 'find' };
+  const actions: Record<string, CanvasKey> = { c: 'copy', v: 'paste', d: 'duplicate', f: 'find', k: 'quick' };
   return actions[e.key.toLowerCase()] ?? null;
+}
+
+/**
+ * The node Tab (or Shift+Tab, `back`) selects after `current`: in reading order, top to bottom, then left to
+ * right, around the end; the first (or last) when none is selected.
+ */
+export function stepNode(nodes: readonly { id: string; x: number; y: number }[], current: string | undefined, back: boolean): string | undefined {
+  // Nodes whose tops are within a row's height of each other read as one row.
+  const order = [...nodes].sort((a, b) => Math.round(a.y / 40) - Math.round(b.y / 40) || a.x - b.x).map((n) => n.id);
+  if (order.length === 0) return undefined;
+  const at = current === undefined ? -1 : order.indexOf(current);
+  if (at < 0) return back ? order[order.length - 1] : order[0];
+  return order[(at + (back ? -1 : 1) + order.length) % order.length];
+}
+
+/** Whether a node has replicas and a capacity to set: a component, not a client, a note or a box. */
+export function scalable(node: DiagramNode): boolean {
+  const kind = kindOf(node);
+  return kind !== 'client' && kind !== 'other';
 }
 
 /** `?` outside fields: the keyboard shortcuts. */
 export function isShortcutsKey(e: KeyEvent): boolean {
   return e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey && !typingIn(e.target);
+}
+
+/**
+ * `source` with node `id`'s replicas one more (or, `delta` -1, one fewer, never under one): + and - on the canvas.
+ * Read from the text itself, so keys pressed faster than the diagram is parsed again each count.
+ */
+export function stepReplicas(source: string, id: string, delta: 1 | -1): string {
+  const node = parse(source).diagram.nodes.find((n) => n.id === id && n.loc.file === undefined);
+  return node ? setReplicas(source, id, (node.replicas ?? 1) + delta) : source;
 }
