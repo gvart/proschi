@@ -197,12 +197,14 @@ export function layoutSequence(entries: SequenceEntry[], laneIds: string[], name
   const gaps = widths.slice(1).map((w, i) => Math.max(SEQ.minGap, (widths[i] + w) / 2 + 20));
   const steps = entrySteps(entries);
   const labelOf = (s: OutlineStep) => Math.min(SEQ.labelMax, measure.label(s.label || ' '));
+  /** The word after a message's or a failed call's label. */
+  const tagOf = (s: OutlineStep) => (s.kind === 'async' ? 62 : s.kind === 'failed' ? 40 : 0);
   // A message to its own lane loops out right: its label sits beside the loop, in the gap after the lane.
   const spans = steps
     .map((s) => {
       const a = index.get(s.from) ?? 0;
       const b = index.get(s.to) ?? 0;
-      return { lo: Math.min(a, b), hi: a === b ? Math.min(a + 1, laneIds.length - 1) : Math.max(a, b), need: labelOf(s) + SEQ.labelChrome + (a === b ? SEQ.loop : 0) };
+      return { lo: Math.min(a, b), hi: a === b ? Math.min(a + 1, laneIds.length - 1) : Math.max(a, b), need: labelOf(s) + tagOf(s) + SEQ.labelChrome + (a === b ? SEQ.loop : 0) };
     })
     .filter((s) => s.hi > s.lo)
     .sort((p, q) => p.hi - p.lo - (q.hi - q.lo));

@@ -14,9 +14,10 @@ import TextNode from '../Canvas/TextNode';
 import type { SystemNodeData } from '../Canvas/systemActions';
 import { TECH_DRAG_TYPE } from '../Diagram/Palette';
 import { CanvasMiniMap, CanvasTopBar, MiniMapButton, OverlayTools } from '../Diagram/CanvasTools';
-import { finderItemsOf, railRowClass, useKeepInView, useLateOpen, useNarrow, usePinDrag, useTopBarInset } from '../Diagram/canvasShared';
+import { finderItemsOf, useKeepInView, useLateOpen, useNarrow, usePinDrag, useTopBarInset } from '../Diagram/canvasShared';
 import FlowsPanel, { type StepPick } from '../Diagram/FlowsPanel';
-import { nextPick } from '../Diagram/flows';
+import { markStep, nextPick } from '../Diagram/flows';
+import { FlowsSplit } from '../Diagram/FlowsPane';
 import { AddAfterPicker, CanvasMenu, ConnectHint, FlowsToggle, PaletteDock, PaletteToggle, SelectionEmpty, type AddAfterState, type CanvasMenuActions, type CanvasMenuState, type RailTab } from '../Diagram/CanvasEditing';
 import { NodeActionsContext, type NodeActions } from '../Canvas/nodeActions';
 import { canvasKey, historyKey, scalable, stepNode, stepReplicas, useConnectHint, useMiniMap, usePaletteOpen, type CanvasKey } from '../Diagram/canvasEditState';
@@ -207,17 +208,23 @@ export default function DiagramView({
   const [sheet, setSheet] = useState(false);
   const [paletteFocus, setPaletteFocus] = useState(false);
   const canAdd = !playing && !viewOnly && crumbs.length === 1;
-  // The Flows builder is a tab of the rail (of the sheet on phones), as on the practice canvas.
+  // The Flows builder is the pane under the canvas (FlowsPane.tsx), beside whatever the rail shows; on phones a tab
+  // of the sheet. As on the practice canvas.
   const [flowsShown, setFlowsShown] = usePaletteOpen('proschi.canvas.flows');
   const flowsOpen = canAdd && !!flows && flowsShown;
+  const flowsInRail = flowsOpen && phone;
+  /** The step selected in the Flows pane, lit up on the canvas. */
+  const [flowStep, setFlowStep] = useState<{ from: string; to: string } | null>(null);
+  /** Counts the Flows pane's resizes by hand, so the diagram glides to its new fit (unless the reader moved the view). */
+  const [paneMoves, setPaneMoves] = useState(0);
   /** The step being added in the Flows builder: node clicks pick its ends instead of selecting. */
   const [pick, setPick] = useState<StepPick | null>(null);
   /** The two components of the Flows step row under the pointer, lit up on the canvas. */
   const [flowHover, setFlowHover] = useState<string[] | null>(null);
   const picking = flowsOpen && pick !== null;
-  const paletteOpen = canAdd && (phone ? sheet : docked) && !flowsOpen;
+  const paletteOpen = canAdd && (phone ? sheet : docked) && !flowsInRail;
   const togglePalette = () => {
-    if (flowsOpen) setFlowsShown(false);
+    if (flowsInRail) setFlowsShown(false);
     setPick(null);
     setPaletteFocus(!paletteOpen);
     // Opened, the palette is what shows: the selection's settings, which would take its place, are put away.
@@ -268,10 +275,10 @@ export default function DiagramView({
    */
   const [selectionTab, setSelectionTab] = useState(false);
   const selectionShown = !viewOnly && !playing && (showSettings || (selectionTab && canAdd));
-  const railTab: RailTab = selectionShown ? 'selection' : flowsOpen ? 'flows' : 'components';
+  const railTab: RailTab = selectionShown ? 'selection' : flowsInRail ? 'flows' : 'components';
   // Opened by a selection alone, the rail waits for the click to finish (useLateOpen) before it narrows the canvas.
-  const selectionOpens = useLateOpen(selectionShown && !paletteOpen && !flowsOpen);
-  const railOpen = paletteOpen || flowsOpen || selectionOpens;
+  const selectionOpens = useLateOpen(selectionShown && !paletteOpen && !flowsInRail);
+  const railOpen = paletteOpen || flowsInRail || selectionOpens;
   const selectionCount = selection.nodes.length + selection.edges.length;
   const hasSelection = !playing && !viewOnly && selectionCount > 0;
   const singleNode = selection.nodes.length === 1 && selection.edges.length === 0 ? selection.nodes[0] : undefined;
@@ -321,8 +328,8 @@ export default function DiagramView({
   }, [nodes, pendingSelect, selectOnly]);
 
   useEffect(() => {
-    if (showSettings && !paletteOpen && !flowsOpen) setSelectionTab(true);
-  }, [showSettings, paletteOpen, flowsOpen]);
+    if (showSettings && !paletteOpen && !flowsInRail) setSelectionTab(true);
+  }, [showSettings, paletteOpen, flowsInRail]);
 
   // React Flow re-sends the selection when this handler changes, so it must be stable
   // and must not store an equal selection again.
@@ -348,13 +355,15 @@ export default function DiagramView({
   const linkedKey = (flowsOpen && flowHover ? flowHover : picking ? [pick.from, pick.to].filter((id): id is string => !!id) : linked).join('\n');
   const linkedIds = useMemo(() => new Set(linkedKey ? linkedKey.split('\n') : []), [linkedKey]);
   const linkedClass = (className: string | undefined) => (className ? `${className} pc-linked` : 'pc-linked');
+  // The Flows pane's selected step is lit up as playback lights its step.
+  const shownStep = flowsOpen ? flowStep : null;
   const drawnNodes = useMemo(
-    () => (linkedIds.size === 0 ? nodes : nodes.map((n) => (linkedIds.has(n.id) ? { ...n, className: linkedClass(n.className) } : n))),
-    [nodes, linkedIds],
+    () => markStep(linkedIds.size === 0 ? nodes : nodes.map((n) => (linkedIds.has(n.id) ? { ...n, className: linkedClass(n.className) } : n)), [], shownStep).nodes,
+    [nodes, linkedIds, shownStep],
   );
   const drawnEdges = useMemo(
-    () => (linkedIds.size === 0 ? edges : edges.map((e) => (linkedIds.has(e.id) ? { ...e, className: linkedClass(e.className) } : e))),
-    [edges, linkedIds],
+    () => markStep([], linkedIds.size === 0 ? edges : edges.map((e) => (linkedIds.has(e.id) ? { ...e, className: linkedClass(e.className) } : e)), shownStep).edges,
+    [edges, linkedIds, shownStep],
   );
   // A linked node out of sight, or under a card over the canvas (a floating rail, the legend),
   // is brought into the uncovered part: a short pan at the same zoom.
@@ -694,7 +703,7 @@ export default function DiagramView({
   const barInset = useTopBarInset(wrapperRef, `${nodes.length > 0}:${playing}:${crumbs.length}:${canOverlay}:${!!overlay}:${hasPinnedNodes}:${!!diagram.legend}`);
   const narrow = useNarrow(wrapperRef);
   const fitInset = useMemo(() => (barInset > (inset?.top ?? 0) ? { top: barInset, bottom: inset?.bottom } : inset), [barInset, inset]);
-  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { wrapper: wrapperRef, inset: fitInset, glide: `${playing ? 'playing' : ''}:${glideKey}:${paletteOpen}:${flowsOpen}:${railOpen}`, added: lastAdded });
+  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { wrapper: wrapperRef, inset: fitInset, glide: `${playing ? 'playing' : ''}:${glideKey}:${paletteOpen}:${flowsOpen}:${railOpen}:${paneMoves}`, added: lastAdded });
   useKeepInView(playing ? undefined : singleNode?.id, railOpen);
 
   const handleEdgesChange = useCallback(
@@ -718,11 +727,16 @@ export default function DiagramView({
       setSelectionTab(true);
       return;
     }
+    // The rail's Flows tab opens the pane on wider screens, and the rail keeps its tab.
+    if (tab === 'flows' && !phone) {
+      if (!flowsOpen) toggleFlows();
+      return;
+    }
     closeSelection();
     if (tab === 'flows') {
       if (!flowsOpen) toggleFlows();
     } else if (!paletteOpen) {
-      setFlowsShown(false);
+      if (flowsInRail) setFlowsShown(false);
       setPick(null);
       setPaletteFocus(true);
       if (phone) setSheet(true);
@@ -731,10 +745,10 @@ export default function DiagramView({
   };
   const toggleFlows = () => {
     setPick(null);
-    if (!flowsOpen) {
+    // In the sheet, Flows takes the place of the selection's settings and the palette; the pane leaves them be.
+    if (!flowsOpen && phone) {
       selectOnly();
-      if (phone) setSheet(false);
-      else setDocked(false);
+      setSheet(false);
     }
     setFlowsShown(!flowsOpen);
   };
@@ -742,7 +756,19 @@ export default function DiagramView({
     if (pick) setPick(nextPick(pick, id));
   };
   const flowsPanel = flowsOpen && flows && (
-    <FlowsPanel source={flows.source} diagram={flows.diagram} onChange={flows.onChange} pick={pick} onPick={setPick} useCase={flows.useCase} onUseCase={flows.onUseCase} onClose={toggleFlows} onHighlight={setFlowHover} />
+    <FlowsPanel
+      source={flows.source}
+      diagram={flows.diagram}
+      onChange={flows.onChange}
+      pick={pick}
+      onPick={setPick}
+      useCase={flows.useCase}
+      onUseCase={flows.onUseCase}
+      onClose={toggleFlows}
+      onHighlight={setFlowHover}
+      layout={phone ? 'rail' : 'pane'}
+      onStep={setFlowStep}
+    />
   );
   // A component just added keeps its settings closed (the palette stays for the next add), but where the Selection
   // tab is already showing, it shows them rather than "Nothing selected".
@@ -772,8 +798,10 @@ export default function DiagramView({
   );
 
   return (
-    <div
-      className={railRowClass(phone)}
+    <FlowsSplit
+      phone={phone}
+      pane={!phone && flowsPanel}
+      onResized={() => setPaneMoves((n) => n + 1)}
       onKeyDown={(e) => {
         // In Code mode too: the view-only diagram edits nothing, but undoes and redoes the code it shows.
         const step = playing ? null : historyKey(e);
@@ -788,7 +816,7 @@ export default function DiagramView({
       tab={railTab}
       onTab={showTab}
       offersFlows={canAdd && !!flows}
-      flows={flowsPanel || undefined}
+      flows={(flowsInRail && flowsPanel) || undefined}
       selection={selectionShown ? inspector || <SelectionEmpty onClose={() => setSelectionTab(false)} /> : undefined}
       phone={phone}
       focus={paletteFocus}
@@ -908,7 +936,7 @@ export default function DiagramView({
                 <>
                   {/* Each shows its tab of the rail, or hides the rail when its tab is the one shown. */}
                   <PaletteToggle open={paletteOpen && railTab === 'components'} onToggle={() => (paletteOpen && railTab === 'components' ? togglePalette() : showTab('components'))} />
-                  {flows && <FlowsToggle open={flowsOpen && railTab === 'flows'} onToggle={() => (flowsOpen && railTab === 'flows' ? toggleFlows() : showTab('flows'))} />}
+                  {flows && <FlowsToggle open={phone ? flowsInRail && railTab === 'flows' : flowsOpen} onToggle={() => ((phone ? flowsInRail && railTab === 'flows' : flowsOpen) ? toggleFlows() : showTab('flows'))} />}
                 </>
               )
             ))
@@ -1013,7 +1041,7 @@ export default function DiagramView({
         />
       )}
     </div>
-    </div>
+    </FlowsSplit>
   );
 }
 

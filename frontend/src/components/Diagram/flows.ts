@@ -81,3 +81,23 @@ export function clampPaneHeight(height: number, column: number): number {
 export function stepEdge(step: { from: string; to: string }, edges: readonly { id: string; source: string; target: string }[]): string | undefined {
   return (edges.find((e) => e.source === step.from && e.target === step.to) ?? edges.find((e) => e.source === step.to && e.target === step.from))?.id;
 }
+
+const withActive = (className: string | undefined) => (className ? `${className} pc-active` : 'pc-active');
+
+/**
+ * The canvas with the Flows pane's selected step lit up as playback lights its
+ * current step (`pc-active`, Canvas/canvas.css): its two nodes and the
+ * connection it travels. The same arrays when no step is selected.
+ */
+export function markStep<N extends { id: string; className?: string }, E extends { id: string; source: string; target: string; className?: string }>(
+  nodes: N[],
+  edges: E[],
+  step: { from: string; to: string } | null,
+): { nodes: N[]; edges: E[] } {
+  if (!step) return { nodes, edges };
+  const edge = stepEdge(step, edges);
+  return {
+    nodes: nodes.map((n) => (n.id === step.from || n.id === step.to ? { ...n, className: withActive(n.className) } : n)),
+    edges: edge ? edges.map((e) => (e.id === edge ? { ...e, className: withActive(e.className) } : e)) : edges,
+  };
+}

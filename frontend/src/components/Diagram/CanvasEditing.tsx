@@ -61,9 +61,12 @@ interface PaletteDockProps {
   /** The tab shown. */
   tab: RailTab;
   onTab: (tab: RailTab) => void;
-  /** The canvas offers the Flows builder, so the rail has its tab. */
+  /**
+   * The canvas offers the Flows builder, so the rail has its tab. On a phone the tab shows it in the sheet; on wider
+   * screens it opens the pane under the canvas (FlowsPane.tsx) and the rail keeps the tab it shows.
+   */
   offersFlows: boolean;
-  /** The Flows builder, while it is open (kept mounted, hidden, while another tab shows). */
+  /** The Flows builder, while it is open in the sheet (kept mounted, hidden, while another tab shows). */
   flows?: ReactNode;
   /** The Selection tab: the selection's settings (an Inspector), or what to do with nothing selected. */
   selection?: ReactNode;
@@ -100,7 +103,8 @@ const RAIL_TABS: { tab: RailTab; label: string }[] = [
 
 /**
  * The rail beside the canvas, with its tabs: the palette (Components), the
- * Flows builder and the selection's settings (Selection). Docked to the left
+ * Flows builder (in the pane under the canvas, but on a phone here) and the
+ * selection's settings (Selection). Docked to the left
  * of the canvas, so nothing in it covers the diagram; in a narrow pane
  * (practice's diagram column) floating over the canvas's right side, which
  * the fit keeps clear. On a phone it is a sheet under the canvas with the

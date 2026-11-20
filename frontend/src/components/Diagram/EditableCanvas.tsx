@@ -20,10 +20,11 @@ import { AddAfterPicker, CanvasMenu, ConnectHint, EmptyCanvas, FlowsToggle, Pale
 import { addComponent, nameNode, namedElsewhere } from './addFlow';
 import { NodeActionsContext, type NodeActions } from '../Canvas/nodeActions';
 import FlowsPanel, { type StepPick } from './FlowsPanel';
-import { nextPick } from './flows';
+import { markStep, nextPick } from './flows';
+import { FlowsSplit } from './FlowsPane';
 import { canvasKey, historyKey, scalable, stepNode, stepReplicas, useConnectHint, useMiniMap, usePaletteOpen, type CanvasKey } from './canvasEditState';
 import { CanvasMiniMap, CanvasTopBar, MiniMapButton, OverlayTools } from './CanvasTools';
-import { finderItemsOf, railRowClass, useKeepInView, useLateOpen, useOverlayOn, usePinDrag, useTopBarInset, withEdgeLoads, withNodeLoads } from './canvasShared';
+import { finderItemsOf, useKeepInView, useLateOpen, useOverlayOn, usePinDrag, useTopBarInset, withEdgeLoads, withNodeLoads } from './canvasShared';
 import { useCanvasEdits } from './useCanvasEdits';
 import { ConnectAtAnyZoom, connectionLabels, newConnection, useConnectDrop } from './connect';
 import NodeFinder from './NodeFinder';
@@ -103,13 +104,19 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
   const [paletteFocus, setPaletteFocus] = useState(false);
   const [flowsShown, setFlowsShown] = usePaletteOpen(`${paletteKey}.flows`);
   const flowsOpen = flows && flowsShown;
+  /** On a phone Flows is a tab of the sheet; on wider screens it is the pane under the canvas (FlowsPane.tsx), beside whatever the rail shows. */
+  const flowsInRail = flowsOpen && phone;
+  /** The step selected in the Flows pane, lit up on the canvas. */
+  const [flowStep, setFlowStep] = useState<{ from: string; to: string } | null>(null);
+  /** Counts the Flows pane's resizes by hand, so the diagram glides to its new fit (unless the reader moved the view). */
+  const [paneMoves, setPaneMoves] = useState(0);
   /** The Flows builder's use case, kept here so closing the builder doesn't forget it. */
   const [flowsUseCase, setFlowsUseCase] = useState<string>();
   /** The step being added in the Flows builder: node clicks pick its ends instead of selecting. */
   const [pick, setPick] = useState<StepPick | null>(null);
   /** The two components of the Flows step row under the pointer, lit up on the canvas. */
   const [flowHover, setFlowHover] = useState<string[] | null>(null);
-  const paletteOpen = !viewOnly && (phone ? sheet : docked) && !flowsOpen;
+  const paletteOpen = !viewOnly && (phone ? sheet : docked) && !flowsInRail;
   /** Whether the palette floats over the canvas (a narrow pane) rather than sitting beside it. */
   const [floating, setFloating] = useState(false);
   /** A component just added, selected once the layout draws it; `settings` opens its settings (a drop), else the palette stays for the next. */
@@ -186,12 +193,12 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
   const [selectionTab, setSelectionTab] = useState(false);
   const selectionShown = !viewOnly && (showSettings || selectionTab);
   useEffect(() => {
-    if (showSettings && !paletteOpen && !flowsOpen) setSelectionTab(true);
-  }, [showSettings, paletteOpen, flowsOpen]);
-  const railTab: RailTab = selectionShown ? 'selection' : flowsOpen ? 'flows' : 'components';
+    if (showSettings && !paletteOpen && !flowsInRail) setSelectionTab(true);
+  }, [showSettings, paletteOpen, flowsInRail]);
+  const railTab: RailTab = selectionShown ? 'selection' : flowsInRail ? 'flows' : 'components';
   // Opened by a selection alone, the rail waits for the click to finish (useLateOpen) before it narrows the canvas.
-  const selectionOpens = useLateOpen(selectionShown && !paletteOpen && !flowsOpen);
-  const railOpen = paletteOpen || flowsOpen || selectionOpens;
+  const selectionOpens = useLateOpen(selectionShown && !paletteOpen && !flowsInRail);
+  const railOpen = paletteOpen || flowsInRail || selectionOpens;
   /** The type picker T asked for: the component's, opened in its settings until a type is picked or it closes. */
   const [typeRequest, setTypeRequest] = useState<{ id: string; n: number } | null>(null);
   /** The command bar (A, or Ctrl/Cmd+K). */
@@ -291,22 +298,22 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
       const measured = size && size.type === n.type && !n.width ? { width: size.width, height: size.height } : {};
       return marked.includes(n.id) || at || measured.width ? { ...n, ...measured, ...(at ? { position: at } : {}), ...(marked.includes(n.id) ? { selected: true } : {}) } : n;
     });
-    return withNodeLoads(drawn, overlay);
-  }, [nodes, current, pick, flowHover, flowsOpen, moves, sizes, overlay]);
+    return withNodeLoads(markStep(drawn, [], flowsOpen ? flowStep : null).nodes, overlay);
+  }, [nodes, current, pick, flowHover, flowsOpen, flowStep, moves, sizes, overlay]);
   const pickNode = (id: string) => {
     if (pick) setPick(nextPick(pick, id));
   };
   const toggleFlows = () => {
     setPick(null);
-    if (!flowsOpen) {
+    // In the sheet, Flows takes the place of the selection's settings and the palette; the pane leaves them be.
+    if (!flowsOpen && phone) {
       setSelected(null);
-      if (phone) setSheet(false);
-      else setDocked(false);
+      setSheet(false);
     }
     setFlowsShown(!flowsOpen);
   };
   const togglePalette = () => {
-    if (flowsOpen) setFlowsShown(false);
+    if (flowsInRail) setFlowsShown(false);
     setPick(null);
     setPaletteFocus(!paletteOpen);
     // Opened, the palette is what shows: the selection's settings, which would take its place, are put away.
@@ -325,17 +332,34 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
       setSelectionTab(true);
       return;
     }
+    // The rail's Flows tab opens the pane on wider screens, and the rail keeps its tab.
+    if (tab === 'flows' && !phone) {
+      if (!flowsOpen) toggleFlows();
+      return;
+    }
     closeSelection();
     if (tab === 'flows') {
       if (!flowsOpen) toggleFlows();
     } else if (!paletteOpen) togglePalette();
   };
   const flowsPanel = flowsOpen && (
-    <FlowsPanel source={source} diagram={diagram} onChange={onChange} pick={pick} onPick={setPick} useCase={flowsUseCase} onUseCase={setFlowsUseCase} onClose={toggleFlows} onHighlight={setFlowHover} />
+    <FlowsPanel
+      source={source}
+      diagram={diagram}
+      onChange={onChange}
+      pick={pick}
+      onPick={setPick}
+      useCase={flowsUseCase}
+      onUseCase={setFlowsUseCase}
+      onClose={toggleFlows}
+      onHighlight={setFlowHover}
+      layout={phone ? 'rail' : 'pane'}
+      onStep={setFlowStep}
+    />
   );
   const shownEdges = useMemo(
-    () => withEdgeLoads(edges.map((e) => (current?.kind === 'edge' && e.id === current.id ? { ...e, selected: true } : e)), overlay),
-    [edges, current, overlay],
+    () => withEdgeLoads(markStep([], edges.map((e) => (current?.kind === 'edge' && e.id === current.id ? { ...e, selected: true } : e)), flowsOpen ? flowStep : null).edges, overlay),
+    [edges, current, overlay, flowsOpen, flowStep],
   );
 
   /** Selects a node once the layout draws it (a paste or a duplicate: the first of its new nodes). */
@@ -476,7 +500,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
   const cover = railOpen && floating ? FLOATING_RAIL : 0;
   // Below the top bar's buttons, tools and folded legend, so no node of the fit sits under them.
   const barInset = useTopBarInset(canvasRef, `${nodes.length > 0}:${canOverlay}:${!!overlay}:${pinned}:${!!diagram.legend}`);
-  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { glide: `${paletteOpen}:${flowsOpen}:${railOpen}`, right: cover, inset: barInset ? { top: barInset } : undefined, added: lastAdded });
+  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { glide: `${paletteOpen}:${flowsOpen}:${railOpen}:${paneMoves}`, right: cover, inset: barInset ? { top: barInset } : undefined, added: lastAdded });
   useKeepInView(current?.kind === 'node' ? current.id : undefined, railOpen);
   // A component just added keeps its settings closed (the palette stays for the next add), but where the Selection
   // tab is already showing, it shows them rather than "Nothing selected".
@@ -513,8 +537,10 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
   );
 
   return (
-    <div
-      className={railRowClass(phone)}
+    <FlowsSplit
+      phone={phone}
+      pane={!phone && flowsPanel}
+      onResized={() => setPaneMoves((n) => n + 1)}
       onKeyDown={(e) => {
         // In Code mode too: the view-only diagram edits nothing, but undoes and redoes the code it shows.
         const step = historyKey(e);
@@ -529,7 +555,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
         tab={railTab}
         onTab={showTab}
         offersFlows={flows}
-        flows={flowsPanel || undefined}
+        flows={(flowsInRail && flowsPanel) || undefined}
         selection={selectionShown ? inspector || <SelectionEmpty onClose={() => setSelectionTab(false)} /> : undefined}
         phone={phone}
         focus={paletteFocus}
@@ -625,7 +651,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
                 <>
                   {/* Each shows its tab of the rail, or hides the rail when its tab is the one shown. */}
                   <PaletteToggle open={paletteOpen && railTab === 'components'} onToggle={() => (paletteOpen && railTab === 'components' ? togglePalette() : showTab('components'))} />
-                  {flows && <FlowsToggle open={flowsOpen && railTab === 'flows'} onToggle={() => (flowsOpen && railTab === 'flows' ? toggleFlows() : showTab('flows'))} />}
+                  {flows && <FlowsToggle open={phone ? flowsInRail && railTab === 'flows' : flowsOpen} onToggle={() => ((phone ? flowsInRail && railTab === 'flows' : flowsOpen) ? toggleFlows() : showTab('flows'))} />}
                 </>
               )
             }
@@ -678,7 +704,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
           />
         )}
       </div>
-    </div>
+    </FlowsSplit>
   );
 }
 
