@@ -1,0 +1,20 @@
+frontend/e2e/editor.e2e.ts
+  s_733d66441cadaa::t_ed35ab288a75d5 273
+  s_733d66441cadaa::t_5d4792cdee0c36 201-212
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7c162a1980675022c235e09caf613fc1805ba348",
+  "prompts": {},
+  "sessions": {
+    "s_733d66441cadaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9649973d-f497-4440-b031-a92483a592e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
