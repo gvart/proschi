@@ -1,0 +1,24 @@
+frontend/src/components/Diagram/useFitOnChange.ts
+  s_733d66441cadaa::t_b2da3e6f949e36 71-72,90-91,94-95,128
+frontend/e2e/canvas-editing.e2e.ts
+  s_733d66441cadaa::t_e971f42fcc474e 26
+  s_733d66441cadaa::t_41f3b3564c10d4 222-223
+docs/impl/visual-editor.md
+  s_733d66441cadaa::t_7dc349d035666f 48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fb82222a35e496f49715e96cdee0df8213832eab",
+  "prompts": {},
+  "sessions": {
+    "s_733d66441cadaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9649973d-f497-4440-b031-a92483a592e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
