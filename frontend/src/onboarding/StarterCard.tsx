@@ -13,7 +13,7 @@ interface StarterCardProps {
 const optionClass =
   'group flex w-full items-start gap-3 rounded-sm border-bw-1 border-ink bg-paper p-3 text-left hover:bg-pop-yellow/25 hover:shadow-brutal-sm hover:-translate-x-px hover:-translate-y-px focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-pop-blue motion-safe:transition';
 
-/** What an empty diagram shows instead of a blank canvas: three ways to start. */
+/** What an empty diagram shows in Visual mode instead of a blank canvas: ways to start, none of them code. */
 export default function StarterCard({ onTemplate, onExamples, onStarter }: StarterCardProps) {
   return (
     <section aria-labelledby="starter-title" className="pointer-events-auto w-full max-w-sm rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-brutal-md">
@@ -21,7 +21,7 @@ export default function StarterCard({ onTemplate, onExamples, onStarter }: Start
         Start a diagram
       </h2>
       <p className="mt-0.5 text-sm text-muted">
-        Add components from Add component or describe them in code, e.g. <code className="rounded-sm bg-ink/5 px-1">api -&gt; db</code>. Or start with:
+        Add components from Add component, or start with:
       </p>
       <div role="group" aria-label="Starters" className="mt-3 flex flex-wrap gap-1.5">
         {STARTERS.map((starter) => (
