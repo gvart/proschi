@@ -1,0 +1,23 @@
+frontend/e2e/flows-pane.e2e.ts
+  s_733d66441cadaa::t_95f1be8503d82c 160-161
+  s_733d66441cadaa::t_176ea5829dd5b9 158-159,162,282-289
+frontend/src/components/Diagram/FlowsPanel.tsx
+  s_733d66441cadaa::t_56a705b64c7e54 14,114-115,238,241,244-245
+  s_733d66441cadaa::t_c400b2d1eb3e5b 473,476-477,479,481,500
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "41cbc888e0f23d46a4600be179213ecfe95f7932",
+  "prompts": {},
+  "sessions": {
+    "s_733d66441cadaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9649973d-f497-4440-b031-a92483a592e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
