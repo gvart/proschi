@@ -274,7 +274,7 @@ test.describe('the Flows pane', () => {
     const name = pane.getByRole('textbox', { name: 'New use case' });
     await name.fill('Try it');
     await name.press('Enter');
-    await pane.getByRole('button', { name: 'Add a step' }).click();
+    await pane.getByRole('button', { name: 'Add a step', exact: true }).click();
     const step = pane.getByRole('form', { name: 'New step' });
     await canvasNodes(page).filter({ hasText: 'Visitor' }).click();
     await canvasNodes(page).filter({ hasText: 'Shortener API' }).click();
