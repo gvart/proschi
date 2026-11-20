@@ -149,7 +149,22 @@ function hint(v: StepVocabulary, kind: string): string {
   return `${name} takes any label.${speaks}`;
 }
 
-export default function StepLabelField({ id, value, onChange, vocabulary, kind }: { id: string; value: string; onChange: (label: string) => void; vocabulary: StepVocabulary; kind: string }) {
+export default function StepLabelField({
+  id,
+  value,
+  onChange,
+  vocabulary,
+  kind,
+  autoFocus = true,
+}: {
+  id: string;
+  value: string;
+  onChange: (label: string) => void;
+  vocabulary: StepVocabulary;
+  kind: string;
+  /** Takes the focus when it shows (off where the form opens beside a selection that keeps it). */
+  autoFocus?: boolean;
+}) {
   const listId = useId();
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
@@ -190,7 +205,7 @@ export default function StepLabelField({ id, value, onChange, vocabulary, kind }
       <input
         ref={inputRef}
         id={id}
-        autoFocus
+        autoFocus={autoFocus}
         role="combobox"
         aria-autocomplete="list"
         aria-expanded={expanded}

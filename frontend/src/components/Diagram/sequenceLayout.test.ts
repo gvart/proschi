@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { outlineOf } from '../../dsl/edit';
 import { clampPaneHeight, PANE_MIN, stepEdge } from './flows';
-import { entrySteps, followStep, laneOrder, layoutSequence, scenarioOfStep, SEQ, sequenceEntries, type Measure } from './sequenceLayout';
+import { allSteps, entrySteps, followStep, laneOrder, layoutSequence, scenarioOfStep, SEQ, sequenceEntries, type Measure } from './sequenceLayout';
 
 const SRC = [
   'web "Web" [Browser]',
@@ -60,6 +60,10 @@ describe('what a tab of the sequence shows', () => {
   it('orders the lanes as the components first appear, in every scenario, so they stay put across tabs', () => {
     expect(laneOrder(outline)).toEqual(['web', 'api', 'cache', 'db', 'q']);
     expect(laneOrder({ items: [] })).toEqual([]);
+  });
+
+  it('lists every step in text order, those of a par block in a scenario too', () => {
+    expect(allSteps(outline.items).map((s) => s.line)).toEqual([7, 9, 11, 13, 14, 18, 19, 21]);
   });
 
   it('finds the scenario a step belongs to', () => {
@@ -124,6 +128,20 @@ describe('the sequence layout', () => {
     expect(cut.lanes[1].x - cut.lanes[0].x).toBe(SEQ.labelMax + SEQ.labelChrome);
   });
 
+  it('gives back the widening to fit the width it has, down to what the headers need', () => {
+    const src = `usecase "U" {\n  a -> b : ${'x'.repeat(30)}\n  b -> c : y\n}`;
+    const o = outlineOf(src, 'U')!;
+    const wide = layoutSequence(sequenceEntries(o.items, ''), laneOrder(o), names, FIXED);
+    const fitted = layoutSequence(sequenceEntries(o.items, ''), laneOrder(o), names, FIXED, wide.width - 40);
+    const gap = (l: typeof wide) => l.lanes[1].x - l.lanes[0].x;
+    expect(gap(fitted)).toBeCloseTo(gap(wide) - 40, 0);
+    expect(fitted.lanes[2].x - fitted.lanes[1].x).toBe(SEQ.minGap);
+    // Never closer than the headers need, however narrow.
+    const narrow = layoutSequence(sequenceEntries(o.items, ''), laneOrder(o), names, FIXED, 100);
+    expect(gap(narrow)).toBe(SEQ.minGap);
+    expect(layoutSequence(sequenceEntries(o.items, ''), laneOrder(o), names, FIXED, 5000).lanes).toEqual(wide.lanes);
+  });
+
   it('frames a par block and the chosen scenario around their messages, the par block inside the scenario', () => {
     const layout = layoutSequence(sequenceEntries(outline.items, 'Miss'), lanes, names, FIXED);
     const scenario = layout.frames.find((f) => f.kind === 'scenario')!;
@@ -149,6 +167,26 @@ describe('the sequence layout', () => {
     expect(layout.notes[0]).toMatchObject({ kind: 'scenarios', names: ['Hit', 'Miss'] });
     expect(layout.notes[0].x).toBeLessThan(layout.lanes[0].x);
     expect(layout.notes[0].x + layout.notes[0].width).toBeGreaterThan(layout.lanes.at(-1)!.x);
+  });
+
+  it('has an insertion point before each message, at the end of each frame and of the diagram', () => {
+    const layout = layoutSequence(sequenceEntries(outline.items, 'Miss'), lanes, names, FIXED);
+    const kinds = layout.slots.map((s) => (s.slot.kind === 'before' ? `before ${s.slot.line}` : s.slot.kind === 'scenario' ? `scenario ${s.slot.name}` : s.slot.kind === 'par' ? `par ${s.slot.line}` : s.slot.kind));
+    expect(kinds).toEqual(['before 7', 'before 11', 'before 13', 'before 14', 'par 12', 'scenario Miss', 'before 18', 'before 19', 'par 17', 'before 21', 'end']);
+    // Top to bottom, each "+" at its row's top edge, a frame's inside its left edge, the main flow's in the margin.
+    const ys = layout.slots.map((s) => s.y);
+    expect([...ys].sort((a, b) => a - b)).toEqual(ys);
+    for (const m of layout.messages) expect(layout.slots.find((s) => s.slot.kind === 'before' && s.slot.line === m.step.line)!.y).toBe(m.y - SEQ.row / 2);
+    const scenario = layout.frames.find((f) => f.kind === 'scenario')!;
+    expect(layout.slots.find((s) => s.slot.kind === 'before' && s.slot.line === 11)!.x).toBe(scenario.x + 4);
+    expect(layout.slots[0].x).toBe(2);
+    expect(layout.slots.map((s) => s.index)).toEqual([0, 1, 2, 3, 4, 4, 4, 5, 6, 6, 7]);
+    expect(layout.slots.at(-1)!.y).toBeLessThan(layout.height);
+  });
+
+  it('widens a par frame for its actions', () => {
+    const layout = layoutSequence(sequenceEntries(outline.items, ''), lanes, names, FIXED);
+    expect(layout.frames[0].width).toBeGreaterThanOrEqual(FIXED.name('At the same time') + 40 + SEQ.frameActions);
   });
 
   it('lays out an empty use case as no lanes and no rows', () => {
