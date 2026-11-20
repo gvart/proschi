@@ -1,5 +1,4 @@
 import type { OutlineBranchItem, OutlineItem, OutlineStep, UseCaseOutline } from '../../dsl/edit';
-import { outlineSteps } from './flows';
 
 /**
  * The Flows pane's sequence diagram (FlowsPane.tsx, SequenceDiagram.tsx), as
@@ -46,13 +45,30 @@ export function entrySteps(entries: SequenceEntry[]): OutlineStep[] {
 }
 
 /**
+ * Every step of a use case in text order: the main flow's, each scenario's
+ * and each `par` block's, the blocks in scenarios too (flows.ts outlineSteps
+ * leaves those out).
+ */
+export function allSteps(items: OutlineItem[]): OutlineStep[] {
+  return items.flatMap((item) =>
+    item.kind === 'step'
+      ? [item.step]
+      : item.kind === 'parallel'
+        ? item.block.steps
+        : item.kind === 'scenarios'
+          ? item.branches.flatMap((b) => b.items.flatMap((i) => (i.kind === 'step' ? [i.step] : i.block.steps)))
+          : [],
+  );
+}
+
+/**
  * The lanes, one per component the use case's steps go between, in the order
  * they first appear in its text: every scenario's too, so the lanes stay put
  * when another tab is chosen.
  */
 export function laneOrder(outline: Pick<UseCaseOutline, 'items'>): string[] {
   const lanes: string[] = [];
-  for (const s of outlineSteps(outline.items)) {
+  for (const s of allSteps(outline.items)) {
     for (const id of [s.from, s.to]) if (!lanes.includes(id)) lanes.push(id);
   }
   return lanes;
@@ -99,7 +115,9 @@ export const SEQ = {
   row: 44,
   /** A frame's title strip, and the room under its last row. */
   frameHead: 30,
-  frameFoot: 10,
+  frameFoot: 14,
+  /** A `par` frame's title strip also has its actions (Add alongside, Ungroup). */
+  frameActions: 176,
   /** How far a frame reaches past the lanes of its messages; a frame inside another reaches a little less. */
   framePad: 30,
   nestedPad: 16,
@@ -110,6 +128,8 @@ export const SEQ = {
   bottom: 18,
   /** A message's label at its widest; longer ones are cut, with the whole in a tooltip. */
   labelMax: 300,
+  /** …and at its narrowest when the diagram fits a narrow pane: past that, the pane scrolls instead. */
+  labelMin: 200,
   /** The room a label takes beside its text: the step's number and the padding. */
   labelChrome: 44,
   /** How far a message to its own lane loops out. */
@@ -159,11 +179,33 @@ export interface NoteBox {
   height: number;
 }
 
+/**
+ * Where a step can be added (dsl/edit.ts): before or right after the step on
+ * a line (in its block), at the end of a scenario's branch or of a `par`
+ * block, or at the end of the main flow. `after` is drawn only where a block
+ * follows the step (elsewhere it is "before" the next one), and is where a
+ * reply goes.
+ */
+export type Slot = { kind: 'before' | 'after'; line: number } | { kind: 'scenario'; name: string } | { kind: 'par'; line: number } | { kind: 'end' };
+
+export interface SlotBox {
+  slot: Slot;
+  /** Its "+": the left edge of the frame it is in (or of the diagram), and the row boundary it adds at. */
+  x: number;
+  y: number;
+  /** How many messages the tab draws before it. */
+  index: number;
+}
+
+export const sameSlot = (a: Slot, b: Slot) => a.kind === b.kind && (a.kind === 'end' || (a.kind === 'scenario' ? a.name === (b as { name: string }).name : a.line === (b as { line: number }).line));
+
 export interface SequenceLayout {
   lanes: LaneBox[];
   messages: MessageBox[];
   frames: FrameBox[];
   notes: NoteBox[];
+  /** The insertion points, top to bottom. */
+  slots: SlotBox[];
   width: number;
   height: number;
 }
@@ -188,36 +230,56 @@ const headerWidth = (name: string, measure: Measure) => Math.min(SEQ.headerMax, 
  * Lays a tab out. The lanes are spread so every label fits over its arrow:
  * each gap starts at what the two headers beside it need, and a message whose
  * label is wider than the lanes it spans widens them, the shortest spans
- * first. Rows follow the text, a frame around each `par` block and the chosen
- * scenario's branch.
+ * first. Given the width it has (`fit`), the widening gives back what it
+ * must for the lanes to fit, down to a label of SEQ.labelMin: the labels are
+ * cut shorter then, and past that the diagram is wider than its pane. Rows follow the text, a frame around each `par` block
+ * and the chosen scenario's branch.
  */
-export function layoutSequence(entries: SequenceEntry[], laneIds: string[], names: (id: string) => string, measure: Measure = ESTIMATE): SequenceLayout {
+export function layoutSequence(entries: SequenceEntry[], laneIds: string[], names: (id: string) => string, measure: Measure = ESTIMATE, fit?: number): SequenceLayout {
   const index = new Map(laneIds.map((id, i) => [id, i]));
   const widths = laneIds.map((id) => headerWidth(names(id), measure));
-  const gaps = widths.slice(1).map((w, i) => Math.max(SEQ.minGap, (widths[i] + w) / 2 + 20));
+  const headers = widths.slice(1).map((w, i) => Math.max(SEQ.minGap, (widths[i] + w) / 2 + 20));
   const steps = entrySteps(entries);
   const labelOf = (s: OutlineStep) => Math.min(SEQ.labelMax, measure.label(s.label || ' '));
   /** The word after a message's or a failed call's label. */
   const tagOf = (s: OutlineStep) => (s.kind === 'async' ? 62 : s.kind === 'failed' ? 40 : 0);
-  // A message to its own lane loops out right: its label sits beside the loop, in the gap after the lane.
-  const spans = steps
-    .map((s) => {
-      const a = index.get(s.from) ?? 0;
-      const b = index.get(s.to) ?? 0;
-      return { lo: Math.min(a, b), hi: a === b ? Math.min(a + 1, laneIds.length - 1) : Math.max(a, b), need: labelOf(s) + tagOf(s) + SEQ.labelChrome + (a === b ? SEQ.loop : 0) };
-    })
-    .filter((s) => s.hi > s.lo)
-    .sort((p, q) => p.hi - p.lo - (q.hi - q.lo));
-  for (const { lo, hi, need } of spans) {
-    const have = gaps.slice(lo, hi).reduce((sum, g) => sum + g, 0);
-    if (have >= need) continue;
-    const more = (need - have) / (hi - lo);
-    for (let i = lo; i < hi; i++) gaps[i] += more;
-  }
+  /** The gaps that fit every label over its arrow, each label at most `cap` wide. */
+  const widened = (cap: number) => {
+    const gaps = [...headers];
+    // A message to its own lane loops out right: its label sits beside the loop, in the gap after the lane.
+    const spans = steps
+      .map((s) => {
+        const a = index.get(s.from) ?? 0;
+        const b = index.get(s.to) ?? 0;
+        return { lo: Math.min(a, b), hi: a === b ? Math.min(a + 1, laneIds.length - 1) : Math.max(a, b), need: Math.min(cap, labelOf(s)) + tagOf(s) + SEQ.labelChrome + (a === b ? SEQ.loop : 0) };
+      })
+      .filter((s) => s.hi > s.lo)
+      .sort((p, q) => p.hi - p.lo - (q.hi - q.lo));
+    for (const { lo, hi, need } of spans) {
+      const have = gaps.slice(lo, hi).reduce((sum, g) => sum + g, 0);
+      if (have >= need) continue;
+      const more = (need - have) / (hi - lo);
+      for (let i = lo; i < hi; i++) gaps[i] += more;
+    }
+    return gaps;
+  };
+  const gaps = widened(SEQ.labelMax);
+  /** What fitting the width never takes: each label at least SEQ.labelMin wide (or whole, if shorter). */
+  const base = widened(SEQ.labelMin);
 
   // The left edge: room for the first header, the outermost frame and a message to the first lane's own.
   const depth = maxDepth(entries);
   const left = SEQ.margin + Math.max((widths[0] ?? 0) / 2, depth > 0 ? SEQ.framePad + (depth - 1) * SEQ.nestedPad : 0);
+  if (fit !== undefined && gaps.length) {
+    // The lanes' reach past the last one: its header, or a frame around it.
+    const right = Math.max((widths.at(-1) ?? 0) / 2, depth > 0 ? SEQ.framePad : 0) + SEQ.margin;
+    const over = left + gaps.reduce((sum, g) => sum + g, 0) + right - fit;
+    const extra = gaps.reduce((sum, g, i) => sum + g - base[i], 0);
+    if (over > 0 && extra > 0) {
+      const keep = Math.max(0, 1 - over / extra);
+      for (let i = 0; i < gaps.length; i++) gaps[i] = base[i] + (gaps[i] - base[i]) * keep;
+    }
+  }
   const xs: number[] = [];
   laneIds.forEach((_, i) => xs.push(i === 0 ? left : xs[i - 1] + gaps[i - 1]));
   const lanes = laneIds.map((id, i) => ({ id, x: Math.round(xs[i]), width: widths[i] }));
@@ -228,6 +290,9 @@ export function layoutSequence(entries: SequenceEntry[], laneIds: string[], name
   const messages: MessageBox[] = [];
   const frames: FrameBox[] = [];
   const notes: NoteBox[] = [];
+  const slots: SlotBox[] = [];
+  /** The left edge of the frame being laid out, where its "+"s go; the diagram's own left edge is fixed up after the shift. */
+  let edge = 0;
   let y = SEQ.top;
   let n = 0;
 
@@ -240,6 +305,7 @@ export function layoutSequence(entries: SequenceEntry[], laneIds: string[], name
       hi = Math.max(hi, b);
     };
     const message = (step: OutlineStep) => {
+      slots.push({ slot: { kind: 'before', line: step.line }, x: edge, y, index: n });
       const x1 = laneX(step.from);
       const self = step.from === step.to;
       const x2 = self ? x1 : laneX(step.to);
@@ -247,15 +313,22 @@ export function layoutSequence(entries: SequenceEntry[], laneIds: string[], name
       reach(Math.min(x1, x2), self ? x1 + SEQ.loop : Math.max(x1, x2));
       y += SEQ.row;
     };
-    const frame = (kind: FrameBox['kind'], title: string, line: number, body: () => { lo: number; hi: number }) => {
+    const frame = (kind: FrameBox['kind'], title: string, line: number, end: Slot, body: () => { lo: number; hi: number }) => {
       const top = y;
       y += SEQ.frameHead;
+      // Where the frame will be is known once its body is: its "+"s are fixed up below.
+      const first = slots.length;
+      const outer = edge;
+      edge = NaN;
       const inner = body();
       const pad = level === 0 ? SEQ.framePad : SEQ.nestedPad;
       const from = Number.isFinite(inner.lo) ? inner.lo : firstX;
       const to = Number.isFinite(inner.hi) ? inner.hi : Math.max(lastX, firstX + SEQ.minGap);
       const x = from - pad;
-      const width = Math.max(to + pad - x, measure.name(title) + 40);
+      const width = Math.max(to + pad - x, measure.name(title) + 40 + (kind === 'parallel' ? SEQ.frameActions : 0));
+      slots.push({ slot: end, x: NaN, y: y + 2, index: n });
+      for (const s of slots.slice(first)) if (Number.isNaN(s.x)) s.x = x + 4;
+      edge = outer;
       y += SEQ.frameFoot;
       frames.push({ kind, title, line, x, y: top, width, height: y - top });
       reach(x, x + width);
@@ -268,10 +341,13 @@ export function layoutSequence(entries: SequenceEntry[], laneIds: string[], name
       notes.push({ kind, line, names, x, y: y + 4, width, height: SEQ.note - 8 });
       y += SEQ.note;
     };
-    for (const e of list) {
+    for (const [k, e] of list.entries()) {
+      // Between a step and the block after it: right after the step, which "before" the block's first step can't say.
+      const prev = list[k - 1];
+      if (e.kind !== 'step' && e.kind !== 'other' && prev?.kind === 'step') slots.push({ slot: { kind: 'after', line: prev.step.line }, x: edge, y: y + 1, index: n });
       if (e.kind === 'step') message(e.step);
       else if (e.kind === 'parallel')
-        frame('parallel', 'At the same time', e.line, () => {
+        frame('parallel', 'At the same time', e.line, { kind: 'par', line: e.line }, () => {
           const inner = place(
             e.steps.map((step) => ({ kind: 'step', step })),
             level + 1,
@@ -280,7 +356,7 @@ export function layoutSequence(entries: SequenceEntry[], laneIds: string[], name
           return inner;
         });
       else if (e.kind === 'scenario')
-        frame('scenario', `Scenario: ${e.name}`, e.line, () => {
+        frame('scenario', `Scenario: ${e.name}`, e.line, { kind: 'scenario', name: e.name }, () => {
           const inner = place(e.entries, level + 1);
           if (e.entries.length === 0) note('empty', e.line, [], level + 1);
           if (e.other > 0) note('other', e.line, [], level + 1);
@@ -292,6 +368,7 @@ export function layoutSequence(entries: SequenceEntry[], laneIds: string[], name
     return { lo, hi };
   };
   place(entries, 0);
+  slots.push({ slot: { kind: 'end' }, x: 0, y: y + 6, index: n });
   y += SEQ.bottom;
 
   // Everything right of zero, and the width to the farthest frame, label or header.
@@ -311,9 +388,12 @@ export function layoutSequence(entries: SequenceEntry[], laneIds: string[], name
     }
     for (const f of frames) f.x += shift;
     for (const nb of notes) nb.x += shift;
+    for (const s of slots) if (s.x > 0) s.x += shift;
   }
+  // The main flow's "+"s at the very left, in the margin.
+  for (const s of slots) if (s.x === 0) s.x = 2;
   const width = Math.ceil(Math.max(0, ...rights) + shift + SEQ.margin);
-  return { lanes, messages, frames, notes, width, height: Math.ceil(y) };
+  return { lanes, messages, frames, notes, slots, width, height: Math.ceil(y) };
 }
 
 /** How deep the frames nest: 1 for a `par` block or a scenario, 2 for a `par` block in a scenario. */

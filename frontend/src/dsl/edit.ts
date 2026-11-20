@@ -745,6 +745,21 @@ export function addStep(source: string, useCase: string, step: NewStep, scenario
   return { source: withConnection(lines.join('\n'), step, design) };
 }
 
+/**
+ * Adds a step right after the step written at line `after`, in its block (a
+ * scenario's branch, a `par` block or the main flow): also where no step
+ * follows it there, before the block that comes next.
+ */
+export function addStepAfter(source: string, useCase: string, step: NewStep, after: number, design?: Diagram): EditResult {
+  const outline = outlineOf(source, useCase);
+  if (!outline) return { error: `There is no use case "${useCase}" in this design.` };
+  if (step.from === step.to) return { error: 'A step goes from one component to another.' };
+  if (!stepsOf(outline).some((s) => s.line === after)) return { error: 'There is no step on that line of this use case.' };
+  const lines = source.split('\n');
+  lines.splice(statementEnd(lines, after - 1) + 1, 0, `${indentOf(lines[after - 1])}${stepText(step)}`);
+  return { source: withConnection(lines.join('\n'), step, design) };
+}
+
 /** `a -> b : label`, the label kept on one line. */
 function stepText(step: NewStep): string {
   const label = step.label ? cleanLabel(step.label) : '';

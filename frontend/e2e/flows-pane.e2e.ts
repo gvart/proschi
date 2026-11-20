@@ -97,7 +97,7 @@ test.describe('the Flows pane', () => {
     // The main flow: its own steps, numbered, the scenarios folded and the par block framed.
     await expect(sequence(page).getByRole('option')).toHaveText(['1POST /checkout', '2GET cart', '3INSERT order', '4PUBLISH OrderPlacedmessage', '5201']);
     await expect(sequence(page).getByRole('option').nth(4)).toHaveAccessibleName('5. Checkout API answers Shopper: 201 (response)');
-    await expect(pane.locator('[data-frame="parallel"]')).toContainText('At the same time');
+    await expect(pane.locator('[data-frame-title="parallel"]')).toContainText('At the same time');
     const parallel = (await pane.locator('[data-frame="parallel"]').boundingBox())!;
     for (const i of [2, 3]) {
       const b = (await sequence(page).getByRole('option').nth(i).boundingBox())!;
@@ -111,7 +111,7 @@ test.describe('the Flows pane', () => {
     await tabs.getByRole('tab', { name: 'Cart expired' }).click();
     await expect(tabs.getByRole('tab', { name: 'Cart expired' })).toHaveAttribute('aria-selected', 'true');
     await expect(sequence(page).getByRole('option')).toHaveText(['1POST /checkout', '2GET cart', '3nil', '4SELECT cart', '5INSERT order', '6PUBLISH OrderPlacedmessage', '7201']);
-    await expect(pane.locator('[data-frame="scenario"]')).toContainText('Scenario: Cart expired');
+    await expect(pane.locator('[data-frame-title="scenario"]')).toContainText('Scenario: Cart expired');
     // The folded set on the main flow opens a scenario's tab too.
     await tabs.getByRole('tab', { name: 'Main flow' }).click();
     await pane.getByRole('button', { name: 'Show the scenario Cart cached' }).click();
@@ -127,7 +127,7 @@ test.describe('the Flows pane', () => {
     await expect(tabs.getByRole('tab', { name: 'Out of stock' })).toHaveAttribute('aria-selected', 'true');
   });
 
-  test('a step clicked in the diagram lights up on the canvas and in the list, and Up and Down move it', async ({ page }) => {
+  test('a step clicked in the diagram lights up on the canvas and has its form beside it, and Up and Down move it', async ({ page }) => {
     await openEditor(page);
     await page.getByRole('button', { name: 'Flows', exact: true }).click();
     const options = sequence(page).getByRole('option');
@@ -138,28 +138,29 @@ test.describe('the Flows pane', () => {
     await expect(page.locator('.react-flow__node.pc-active')).toHaveCount(2);
     expect(await page.locator('.react-flow__node.pc-active').evaluateAll((els) => els.map((e) => e.getAttribute('data-id')).sort())).toEqual(['api', 'cache']);
     await expect(page.locator('.react-flow__edge.pc-active')).toHaveCount(1);
-    const steps = flows(page).getByRole('list', { name: 'Steps' });
-    await expect(steps.locator('[aria-current="step"]')).toHaveAccessibleName('Checkout API to Cart cache: GET cart');
+    const selected = flows(page).getByRole('region', { name: 'Selected step' });
+    const edit = selected.getByRole('form', { name: 'Edit step' });
+    await expect(selected).toContainText('Step 2');
+    await expect(edit.getByRole('combobox', { name: 'Operation' })).toHaveValue('GET cart');
 
     await page.keyboard.press('ArrowDown');
     await expect(options.nth(2)).toHaveAttribute('aria-selected', 'true');
     await expect(options.nth(2)).toBeFocused();
     expect(await page.locator('.react-flow__node.pc-active').evaluateAll((els) => els.map((e) => e.getAttribute('data-id')).sort())).toEqual(['api', 'db']);
-    await expect(steps.locator('[aria-current="step"]')).toHaveAccessibleName('Checkout API to Orders DB: INSERT order');
+    await expect(edit.getByRole('combobox', { name: 'Operation' })).toHaveValue('INSERT order');
     await page.keyboard.press('ArrowUp');
     await page.keyboard.press('ArrowUp');
     await expect(options.nth(0)).toHaveAttribute('aria-selected', 'true');
     expect(await page.locator('.react-flow__node.pc-active').evaluateAll((els) => els.map((e) => e.getAttribute('data-id')).sort())).toEqual(['api', 'shopper']);
 
-    // A step chosen in the list is selected in the diagram, on its scenario's tab.
-    await steps.getByRole('button', { name: 'Edit step: Checkout API to Orders DB: SELECT cart' }).click();
-    await expect(flows(page).getByRole('tab', { name: 'Cart expired' })).toHaveAttribute('aria-selected', 'true');
-    await expect(sequence(page).getByRole('option', { name: /SELECT cart/ })).toHaveAttribute('aria-selected', 'true');
-    // Numbered in the list as the diagram numbers the tab shown.
+    // A scenario's step, on its tab, is numbered as that tab draws it; another tab lets it go.
+    await flows(page).getByRole('tab', { name: 'Cart expired' }).click();
+    await sequence(page).getByRole('option', { name: /SELECT cart/ }).click();
     await expect(sequence(page).getByRole('option', { name: /SELECT cart/ })).toHaveAccessibleName(/^4\. /);
-    await expect(steps.getByRole('listitem', { name: 'Cart cache answers Checkout API: nil' })).toHaveText(/^3/);
-    await expect(steps.getByRole('listitem', { name: 'Cart cache answers Checkout API: cart' })).not.toHaveText(/^\d/);
-    await expect(steps.getByRole('listitem', { name: 'Checkout API to Orders DB: INSERT order' })).toHaveText(/^5/);
+    await expect(selected).toContainText('Step 4');
+    await flows(page).getByRole('tab', { name: 'Cart cached' }).click();
+    await expect(selected).toHaveCount(0);
+    await expect(sequence(page).getByRole('option', { selected: true })).toHaveCount(0);
 
     // Closed, the pane lets the canvas go.
     await flows(page).getByRole('button', { name: 'Close the flows' }).click();
@@ -273,7 +274,7 @@ test.describe('the Flows pane', () => {
     const name = pane.getByRole('textbox', { name: 'New use case' });
     await name.fill('Try it');
     await name.press('Enter');
-    await pane.getByRole('button', { name: 'Add a step' }).click();
+    await pane.getByRole('button', { name: 'Add a step', exact: true }).click();
     const step = pane.getByRole('form', { name: 'New step' });
     await canvasNodes(page).filter({ hasText: 'Visitor' }).click();
     await canvasNodes(page).filter({ hasText: 'Shortener API' }).click();

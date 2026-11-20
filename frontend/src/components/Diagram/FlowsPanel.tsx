@@ -1,6 +1,24 @@
 import { useDeferredValue, useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp, CornerDownLeft, MousePointerClick, Pencil, Plus, Trash2, Workflow, X } from 'lucide-react';
-import { addScenario, addStep, addUseCase, giveOperations, moveStep, removeScenario, removeStep, removeUseCase, renameScenario, renameUseCase, setStep, outlineOf, type OutlineStep, type StepKind } from '../../dsl/edit';
+import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp, CornerDownLeft, Group, MousePointerClick, Pencil, Plus, Trash2, Workflow, X } from 'lucide-react';
+import {
+  addScenario,
+  addStep,
+  addUseCase,
+  giveOperations,
+  groupParallel,
+  moveStep,
+  removeScenario,
+  removeStep,
+  removeUseCase,
+  renameScenario,
+  renameUseCase,
+  setStep,
+  outlineOf,
+  ungroupParallel,
+  type EditResult,
+  type OutlineStep,
+  type StepKind,
+} from '../../dsl/edit';
 import { parse } from '../../dsl/parser';
 import type { Diagram } from '../../dsl/types';
 import { eyebrow, field, iconButton, outlineButton, primaryButton, toolButton } from '../Playground/ui';
@@ -10,8 +28,10 @@ import StepLabelField from './StepLabelField';
 import { composeLabel, isHttpHead, splitLabel, type LabelParts } from './stepLabel';
 import { accessOf } from '../../dsl/access';
 import Select from '../../design/Select';
-import SequenceDiagram from './SequenceDiagram';
-import { entrySteps, followStep, scenarioOfStep, sequenceEntries } from './sequenceLayout';
+import { MOD_KEY } from '../Playground/modKey';
+import SequenceDiagram, { type SelectMode } from './SequenceDiagram';
+import { allSteps, entrySteps, followStep, scenarioOfStep, sequenceEntries, type Slot } from './sequenceLayout';
+import { insertAt, insertedStep, movedStep, samePlaces, unanswered } from './sequenceEdit';
 
 /**
  * The Flows builder (docs/design/paid-plans.md P46): use cases and their
@@ -25,10 +45,12 @@ import { entrySteps, followStep, scenarioOfStep, sequenceEntries } from './seque
  *
  * It has two layouts. In the rail (a phone's sheet) it is one narrow column.
  * As the pane under the canvas (FlowsPane.tsx, on wider screens) the use case
- * and its scenario tabs head it, the chosen tab is drawn as a sequence
- * diagram (SequenceDiagram.tsx), and the steps and their forms are in a
- * column beside it. Either way a step can be selected, from the list or the
- * diagram, and the canvas lights it up (`onStep`).
+ * and its scenario tabs head it, and the chosen tab is drawn as a sequence
+ * diagram (SequenceDiagram.tsx) that is edited in place: a "+" or a drag
+ * between lifelines opens a composer there, a click selects a step (Shift or
+ * Cmd/Ctrl several), and the column beside it has the selected step's form,
+ * or with nothing selected the form to add a step. The canvas lights up the
+ * selected step (`onStep`).
  */
 
 /** A step being added: the components picked so far (on the canvas or in the form). */
@@ -72,6 +94,9 @@ const KIND_HELP: Record<StepKind, string> = {
 type Editing = { line: number; insert: boolean };
 
 const MAIN = '';
+const ALT = MOD_KEY === '⌘' ? '⌥' : 'Alt';
+/** What steps say and where, to tell when following them changed anything. */
+const said = (list: OutlineStep[]) => list.map((s) => `${s.line} ${s.from} ${s.to} ${s.kind} ${s.label}`).join('\n');
 /** The select's options that add a use case rather than pick one. */
 const NEW = '\u0000new';
 const SUGGEST = '\u0000suggest:';
@@ -95,25 +120,71 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   const names = useMemo(() => new Map(diagram.nodes.map((n) => [n.id, n.name])), [diagram]);
   const name = (id: string) => names.get(id) ?? id;
 
-  // The selected step, followed through edits of the text (dsl/edit.ts addresses steps by line).
-  const steps = useMemo(() => (outline ? outlineSteps(outline.items) : []), [outline]);
-  const [chosenStep, setChosenStep] = useState<OutlineStep>();
-  const chosen = followStep(chosenStep, steps);
-  if (chosen !== chosenStep && !(chosen && chosenStep && chosen.line === chosenStep.line && chosen.label === chosenStep.label)) setChosenStep(chosen);
-  const selectStep = (s: OutlineStep) => {
-    setChosenStep(s);
-    // A scenario's step shows on its tab.
-    const scenario = outline ? scenarioOfStep(outline.items, s.line) : undefined;
+  // The selected steps (the pane's; the last is the one in focus), followed through edits of the text (dsl/edit.ts addresses steps by line).
+  const steps = useMemo(() => (outline ? allSteps(outline.items) : []), [outline]);
+  const [sel, setSel] = useState<OutlineStep[]>([]);
+  const followed = useMemo(() => sel.flatMap((s) => followStep(s, steps) ?? []).filter((s, i, all) => all.findIndex((o) => o.line === s.line) === i), [sel, steps]);
+  if (said(followed) !== said(sel)) setSel(followed);
+  const primary = followed.at(-1);
+  /** The one step selected, whose form the column shows. */
+  const chosen = followed.length === 1 ? followed[0] : undefined;
+  /** Where the composer is open on the diagram, and how many messages are drawn before it. */
+  const [composing, setComposing] = useState<{ slot: Slot; index: number; useCase?: string } | null>(null);
+  // Another use case chosen (here or in the top bar): the composer was for the last one, and so were its ends.
+  useEffect(() => {
+    if (!composing || composing.useCase === current) return;
+    setComposing(null);
+    pickRef.current(null);
+  }, [composing, current]);
+  /** Changed to put the focus back on the diagram's selected message after an edit. */
+  const [focusKey, setFocusKey] = useState(0);
+  /** The steps the tab draws, in order. */
+  const drawn = useMemo(() => (outline ? entrySteps(sequenceEntries(outline.items, laneNow)) : []), [outline, laneNow]);
+  const endsOf = (s: OutlineStep) => ({ from: s.from, to: s.to });
+  /** Selects steps (a scenario's shows on its tab); one is edited in the column, so the canvas picks its ends. */
+  const selectSteps = (next: OutlineStep[]) => {
+    setSel(next);
+    const scenario = next[0] && outline ? scenarioOfStep(outline.items, next.at(-1)!.line) : undefined;
     if (scenario && scenario !== laneNow) setLane(scenario);
+    onPick(next.length === 1 ? endsOf(next[0]) : null);
+  };
+  const select = (step: OutlineStep, mode: SelectMode) => {
+    setError(undefined);
+    setComposing(null);
+    const at = (s: OutlineStep) => drawn.findIndex((d) => d.line === s.line);
+    if (mode === 'toggle') selectSteps(followed.some((s) => s.line === step.line) ? followed.filter((s) => s.line !== step.line) : [...followed, step]);
+    else if (mode === 'range' && followed.length && at(followed[0]) >= 0 && at(step) >= 0) {
+      // From the anchor (the first selected) to this one, which comes last.
+      const [a, b] = [at(followed[0]), at(step)];
+      selectSteps(a <= b ? drawn.slice(a, b + 1) : drawn.slice(b, a + 1).reverse());
+    } else selectSteps([step]);
+  };
+  const clearSelection = () => {
+    setSel([]);
+    onPick(null);
   };
   /** Shows a tab (the main flow, or a scenario); a step selected in another scenario is let go. */
   const chooseLane = (next: string) => {
     setLane(next);
-    if (chosen && outline && (scenarioOfStep(outline.items, chosen.line) ?? next) !== next) setChosenStep(undefined);
+    if (composing) {
+      setComposing(null);
+      onPick(null);
+    }
+    if (outline && followed.some((s) => (scenarioOfStep(outline.items, s.line) ?? next) !== next)) clearSelection();
   };
   /** In the pane, each step's number as the diagram draws the tab shown; the rail numbers the main flow's. */
-  const drawnNumbers = useMemo(() => (pane && outline ? new Map(entrySteps(sequenceEntries(outline.items, laneNow)).map((s, i) => [s.line, i + 1])) : undefined), [pane, outline, laneNow]);
-  const ends = chosen ? `${chosen.from}\n${chosen.to}` : '';
+  const drawnNumbers = useMemo(() => (pane ? new Map(drawn.map((s, i) => [s.line, i + 1])) : undefined), [pane, drawn]);
+  // The selected step changed in the text (an undo, a move): its form picks its ends again.
+  const chosenKey = chosen ? said([chosen]) : '';
+  const pickRef = useRef(onPick);
+  useEffect(() => {
+    pickRef.current = onPick;
+  });
+  useEffect(() => {
+    const [from, to] = chosenKey.split('\n')[0].split(' ').slice(1, 3);
+    if (pane && chosenKey) pickRef.current({ from, to });
+  }, [pane, chosenKey]);
+  const ends = primary ? `${primary.from}\n${primary.to}` : '';
   useEffect(() => {
     const [from, to] = ends.split('\n');
     onStep?.(ends ? { from, to } : null);
@@ -131,12 +202,55 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
     onChange(result.source!);
     return true;
   };
+  /** Applies a pane edit and selects the steps `next` finds in its result (the edited, moved or added ones), with the focus back on the diagram if `focus`. */
+  const commit = (result: EditResult, next: (after: OutlineStep[]) => OutlineStep[] | undefined, focus = false) => {
+    if (!apply(result) || !current) return false;
+    const after = outlineOf(result.source!, current);
+    selectSteps(next(after ? allSteps(after.items) : []) ?? []);
+    if (focus) setFocusKey((k) => k + 1);
+    return true;
+  };
+  const move = (direction: 'up' | 'down') => {
+    if (!chosen) return;
+    const result = moveStep(source, chosen.line, direction);
+    // At its block's edge it stays (and a twin elsewhere is not it).
+    if (result.source === source) return;
+    commit(result, (after) => [movedStep(after, chosen, direction) ?? chosen]);
+  };
+  /** Deletes the selected steps; the step drawn next (or else the one before) is selected in place of one. */
+  const deleteSelected = (focus = false) => {
+    if (!followed.length || !current) return;
+    const next = [...followed].sort((a, b) => b.line - a.line).reduce((text, s) => removeStep(text, s.line), source);
+    const index = drawn.findIndex((d) => d.line === followed[0].line);
+    commit({ source: next }, (after) => {
+      if (followed.length > 1) return [];
+      const left = after.length ? entrySteps(sequenceEntries(outlineOf(next, current)!.items, laneNow)) : [];
+      const step = left[index] ?? left[index - 1];
+      return step ? [step] : [];
+    }, focus);
+  };
+  const group = () => commit(groupParallel(source, followed.map((s) => s.line)), (after) => samePlaces(steps, after, followed), true);
+  const ungroup = (line: number) => commit(ungroupParallel(source, line), (after) => samePlaces(steps, after, followed), true);
+  const openComposer = (slot: Slot, index: number, stepEnds?: { from: string; to: string }) => {
+    setError(undefined);
+    setSel([]);
+    setComposing({ slot, index, useCase: current });
+    // From where the step before it went.
+    onPick(stepEnds ?? { from: drawn[index - 1]?.to });
+  };
+  const closeComposer = () => {
+    setComposing(null);
+    onPick(null);
+    setFocusKey((k) => k + 1);
+  };
 
   // What a step would add to the problems: the diagnostics the text gets with it that it does not have now.
   const baseline = useMemo(() => parse(source).diagnostics.map((d) => `${d.severity}:${d.message}`), [source]);
   const check = (step: NewStepInput, at?: Editing): string[] => {
     if (!current) return [];
-    const result = at ? (at.insert ? addStep(source, current, step, undefined, at.line, diagram) : setStep(source, at.line, step, diagram)) : addStep(source, current, step, laneNow || undefined, undefined, diagram);
+    return problemsOf(at ? (at.insert ? addStep(source, current, step, undefined, at.line, diagram) : setStep(source, at.line, step, diagram)) : addStep(source, current, step, laneNow || undefined, undefined, diagram));
+  };
+  const problemsOf = (result: EditResult): string[] => {
     if (result.error !== undefined) return [result.error];
     const left = [...baseline];
     return parse(result.source!).diagnostics.flatMap((d) => {
@@ -177,7 +291,8 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
       onUseCase(value);
       setLane(MAIN);
       setEditing(null);
-      setChosenStep(undefined);
+      setSel([]);
+      setComposing(null);
       onPick(null);
     }
   };
@@ -235,14 +350,11 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
     const shown = (
       <StepRow
         key={step.line}
-        n={drawnNumbers ? drawnNumbers.get(step.line) : n}
+        n={n}
         step={step}
         name={name}
-        selected={pane && step.line === chosen?.line}
         onHighlight={onHighlight}
         onEdit={() => {
-          // In the pane, the step being edited is the one selected (in the diagram and on the canvas); the rail is as it was.
-          if (pane) selectStep(step);
           setEditing({ line: step.line, insert: false });
           onPick({ from: step.from, to: step.to });
         }}
@@ -467,6 +579,187 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
     </section>
   );
 
+  const detailsRef = useRef<HTMLElement>(null);
+  const runTogether = (
+    <button type="button" onClick={group} title="Run the selected steps at the same time (a par block)" className={`${outlineButton} !px-2 !py-1 text-xs`}>
+      <Group size={14} aria-hidden="true" />
+      Run at the same time
+    </button>
+  );
+  const replyTo = chosen?.kind === 'request' && unanswered(drawn, chosen.line) && (
+    <button
+      type="button"
+      onClick={() => openComposer({ kind: 'after', line: chosen.line }, drawn.findIndex((d) => d.line === chosen.line) + 1, { from: chosen.to, to: chosen.from })}
+      title={`Add the answer from ${name(chosen.to)} to ${name(chosen.from)}, right after this step`}
+      className={`${toolButton} !px-2 !py-1 text-xs`}
+    >
+      <CornerDownLeft size={13} aria-hidden="true" />
+      Add reply
+    </button>
+  );
+  const scenarioTools = laneNow && current && (
+    <div role="group" aria-label={`Scenario ${laneNow}`} className="flex items-center gap-1 rounded-sm border-bw-1 border-dashed border-ink/40 px-2 py-1">
+      {renaming?.scenario === laneNow ? (
+        <RenameField
+          label={`Rename the scenario ${laneNow}`}
+          value={laneNow}
+          onRename={(next) => apply(renameScenario(source, current, laneNow, next)) && (setRenaming(null), next !== laneNow && setLane(next), true)}
+          onCancel={() => setRenaming(null)}
+        />
+      ) : (
+        <>
+          <span className={`${eyebrow} min-w-0 flex-1 truncate`}>Scenario: {laneNow}</span>
+          <button type="button" aria-label={`Rename the scenario ${laneNow}`} title="Rename this scenario" onClick={() => setRenaming({ scenario: laneNow })} className={`${iconButton} !h-7 !w-7`}>
+            <Pencil size={12} />
+          </button>
+        </>
+      )}
+      <button
+        type="button"
+        aria-label={`Delete the scenario ${laneNow}`}
+        title="Delete this scenario and its steps"
+        onClick={() => apply(removeScenario(source, current, laneNow)) && chooseLane(MAIN)}
+        className={`${iconButton} !h-7 !w-7 text-red-700 dark:text-red-300`}
+      >
+        <Trash2 size={13} />
+      </button>
+    </div>
+  );
+  /** Beside the diagram: the selected step's form, what to do with several, or with none a hint and the form to add one. */
+  const details =
+    current && outline ? (
+      followed.length > 1 ? (
+        <section aria-label="Selected steps" className="space-y-2">
+          <p className="text-sm font-semibold">{followed.length} steps selected</p>
+          <div className="flex flex-wrap gap-1.5">
+            {runTogether}
+            <button type="button" onClick={() => deleteSelected(true)} className={`${toolButton} !px-2 !py-1 text-xs text-red-700 dark:text-red-300`}>
+              <Trash2 size={13} aria-hidden="true" />
+              Delete them
+            </button>
+            <button type="button" onClick={clearSelection} className={`${toolButton} !px-2 !py-1 text-xs`}>
+              Clear
+            </button>
+          </div>
+          <p className="text-xs text-muted">Steps that follow each other in one flow or scenario can run at the same time.</p>
+        </section>
+      ) : chosen ? (
+        <section aria-label="Selected step" className="space-y-2">
+          <div className="flex flex-wrap items-center gap-1">
+            <span className={`${eyebrow} mr-auto`}>Step {drawnNumbers?.get(chosen.line)}</span>
+            {replyTo}
+            <button type="button" aria-label="Move the step up" title={`Move up (${ALT}+↑)`} onClick={() => move('up')} className={`${iconButton} !h-7 !w-7`}>
+              <ArrowUp size={14} />
+            </button>
+            <button type="button" aria-label="Move the step down" title={`Move down (${ALT}+↓)`} onClick={() => move('down')} className={`${iconButton} !h-7 !w-7`}>
+              <ArrowDown size={14} />
+            </button>
+            <button type="button" aria-label="Delete the step" title="Delete (Delete)" onClick={() => deleteSelected(true)} className={`${iconButton} !h-7 !w-7 text-red-700 dark:text-red-300`}>
+              <Trash2 size={14} />
+            </button>
+          </div>
+          <StepForm
+            key={chosenKey}
+            diagram={diagram}
+            steps={drawn.slice(0, drawn.findIndex((d) => d.line === chosen.line))}
+            used={used}
+            pick={pick ?? endsOf(chosen)}
+            onPick={(p) => (p ? onPick(p) : clearSelection())}
+            where="Change this step, or click other components."
+            mode="edit"
+            quiet
+            initial={{ kind: chosen.kind, label: chosen.label }}
+            check={(st) => problemsOf(setStep(source, chosen.line, st, diagram))}
+            onGiveOps={giveOps}
+            onAdd={(st) => commit(setStep(source, chosen.line, st, diagram), (after) => samePlaces(steps, after, [chosen]), true)}
+          />
+        </section>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-xs text-muted">
+            Click a message to change it, or Shift-click several. Add a step with a <span className="font-semibold text-ink">+</span> between the rows, by dragging from one lifeline to another, or here.
+          </p>
+          {scenarioTools}
+          {composing ? null : pick ? (
+            <StepForm
+              key={`${current}:${laneNow}`}
+              diagram={diagram}
+              steps={drawn}
+              used={used}
+              pick={pick}
+              onPick={onPick}
+              where={`A step at the end of ${laneNow ? `scenario “${laneNow}”` : scenarios.length ? 'the main flow' : current}.`}
+              check={check}
+              onGiveOps={giveOps}
+              onAdd={(step) => apply(addStep(source, current, step, laneNow || undefined, undefined, diagram))}
+            />
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => onPick({ from: lastEnd(drawn) })} className={primaryButton}>
+                <Plus size={14} aria-hidden="true" />
+                Add a step
+              </button>
+              <ReplyButton steps={drawn} name={name} onReply={onPick} />
+            </div>
+          )}
+        </div>
+      )
+    ) : null;
+  /** The composer on the diagram: a step added at its insertion point, then selected. */
+  const composer =
+    composing && pick && current
+      ? {
+          slot: composing.slot,
+          node: (
+            <div
+              role="dialog"
+              aria-label="Add a step here"
+              onKeyDown={(e) => {
+                if (e.key !== 'Escape' || e.defaultPrevented) return;
+                e.preventDefault();
+                e.stopPropagation();
+                closeComposer();
+              }}
+              className="shadow-brutal-md"
+            >
+              <StepForm
+                key={`${composing.slot.kind}:${'line' in composing.slot ? composing.slot.line : 'name' in composing.slot ? composing.slot.name : ''}`}
+                diagram={diagram}
+                steps={drawn.slice(0, composing.index)}
+                used={used}
+                pick={pick}
+                onPick={(p) => (p ? onPick(p) : closeComposer())}
+                where={
+                  composing.slot.kind === 'after'
+                    ? 'The reply, right after the step.'
+                    : composing.slot.kind === 'par'
+                      ? 'A step at the same time as the others.'
+                      : composing.slot.kind === 'scenario'
+                        ? `A step at the end of ${composing.slot.name}.`
+                        : composing.slot.kind === 'end'
+                          ? 'A step at the end.'
+                          : 'A step here.'
+                }
+                mode="insert"
+                button="Add step"
+                autoFocus
+                check={(st) => problemsOf(insertAt(source, current, composing.slot, st, diagram))}
+                // No types from here: one written above the use case would move the step this adds before.
+                onAdd={(st) => {
+                  const slot = composing.slot;
+                  const done = commit(insertAt(source, current, slot, st, diagram), (after) => {
+                    const added = insertedStep(steps, after, slot);
+                    return added ? [added] : [];
+                  }, true);
+                  if (done) setComposing(null);
+                  return done;
+                }}
+              />
+            </div>
+          ),
+        }
+      : undefined;
+
   if (pane)
     return (
       <section role="region" aria-label="Flows" className="@container flex h-full min-h-0 flex-col bg-surface text-ink">
@@ -497,19 +790,35 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
               <AddScenario suggestions={missingScenarios(diagram, current, scenarios)} onAdd={newScenario} />
             </div>
           )}
-          <button type="button" aria-label="Close the flows" title="Close the flows" onClick={onClose} className={`${iconButton} ml-auto !h-8 !w-8 shrink-0`}>
+          {followed.length > 1 && <div className="ml-auto shrink-0">{runTogether}</div>}
+          <button type="button" aria-label="Close the flows" title="Close the flows" onClick={onClose} className={`${iconButton} ${followed.length > 1 ? '' : 'ml-auto'} !h-8 !w-8 shrink-0`}>
             <X size={16} />
           </button>
         </div>
         {current && outline ? (
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto @3xl:flex-row @3xl:overflow-hidden">
             <div className="min-w-0 shrink-0 overflow-x-auto bg-paper @3xl:min-h-0 @3xl:flex-1 @3xl:overflow-auto">
-              <SequenceDiagram outline={outline} scenario={laneNow} diagram={diagram} selected={chosen?.line} onSelect={selectStep} onScenario={chooseLane} />
+              <SequenceDiagram
+                outline={outline}
+                scenario={laneNow}
+                diagram={diagram}
+                selected={followed.map((st) => st.line)}
+                onSelect={select}
+                onScenario={chooseLane}
+                onInsert={openComposer}
+                onMove={move}
+                onDelete={() => deleteSelected()}
+                onEdit={() => detailsRef.current?.querySelector<HTMLElement>('form input, form button')?.focus()}
+                onClear={clearSelection}
+                onUngroup={ungroup}
+                composer={composer}
+                focusKey={focusKey}
+              />
             </div>
-            <div className="shrink-0 space-y-3 border-t border-ink/15 p-3 @3xl:w-72 @3xl:overflow-y-auto @3xl:border-l @3xl:border-t-0 @5xl:w-80 @7xl:w-96">
-              {body}
+            <section ref={detailsRef} aria-label={`Use case ${current}`} className="shrink-0 space-y-3 [&_form>.sticky]:shadow-[0_12px_0_0_rgb(var(--c-surface))] border-t border-ink/15 p-3 @3xl:w-72 @3xl:overflow-y-auto @3xl:border-l @3xl:border-t-0 @5xl:w-80">
+              {details}
               {alert}
-            </div>
+            </section>
           </div>
         ) : (
           <div className="min-h-0 flex-1 overflow-y-auto bg-paper p-4">
@@ -614,13 +923,10 @@ function StepRow({
   onInsert,
   onMove,
   onHighlight,
-  selected = false,
 }: {
   n?: number;
   step: OutlineStep;
   name: (id: string) => string;
-  /** The selected step (in the list, the sequence diagram and on the canvas). */
-  selected?: boolean;
   onDelete: () => void;
   onEdit: () => void;
   onInsert: () => void;
@@ -630,21 +936,14 @@ function StepRow({
   const reply = step.kind === 'response';
   const text = `${name(step.from)} ${reply ? 'answers' : 'to'} ${name(step.to)}${step.label ? `: ${step.label}` : ''}`;
   const action = `${iconButton} !h-6 !w-6 shrink-0`;
-  const ref = useRef<HTMLLIElement>(null);
-  // Selected in the diagram, the row comes into sight in the list.
-  useEffect(() => {
-    if (selected) ref.current?.scrollIntoView({ block: 'nearest' });
-  }, [selected]);
   return (
     <li
-      ref={ref}
-      className={`group relative -mx-1 flex items-start gap-1 rounded-sm px-1 text-xs hover:bg-pop-yellow/20 focus-within:bg-pop-yellow/20 ${selected ? 'bg-pop-pink/15 shadow-[inset_2px_0_0_rgb(var(--c-pink))]' : ''}`}
+      className="group relative -mx-1 flex items-start gap-1 rounded-sm px-1 text-xs hover:bg-pop-yellow/20 focus-within:bg-pop-yellow/20"
       aria-label={text}
-      aria-current={selected ? 'step' : undefined}
       onMouseEnter={() => onHighlight?.([step.from, step.to])}
       onMouseLeave={() => onHighlight?.(null)}
     >
-      {n !== undefined && <span className={`w-4 shrink-0 pt-0.5 text-right font-mono tabular-nums ${selected ? 'font-bold text-ink' : 'text-muted'}`}>{n}</span>}
+      {n !== undefined && <span className="w-4 shrink-0 pt-0.5 text-right font-mono tabular-nums text-muted">{n}</span>}
       <button
         type="button"
         onClick={onEdit}
@@ -818,6 +1117,9 @@ function StepForm({
   where,
   mode = 'add',
   initial,
+  button,
+  autoFocus = false,
+  quiet = false,
   check,
   onGiveOps,
   onAdd,
@@ -833,6 +1135,12 @@ function StepForm({
   mode?: 'add' | 'insert' | 'edit';
   /** The step being changed, in edit mode. */
   initial?: { kind: StepKind; label: string };
+  /** The submit button's text, when not the mode's. */
+  button?: string;
+  /** Focuses the end it still needs on opening (the label takes the focus once both are known). */
+  autoFocus?: boolean;
+  /** Takes no focus at all: it opens beside a selection that keeps it. */
+  quiet?: boolean;
   /** The problems the step would bring, before it is added. */
   check: (step: NewStepInput) => string[];
   /** Gives `node` a type of its own with operations, `head` among them; absent where the builder can't. */
@@ -861,6 +1169,10 @@ function StepForm({
   const problems = useMemo(() => (both ? check({ from, to, kind, label: deferred }) : []), [both, check, from, to, kind, deferred]);
   const open = openRequest(steps);
   const replying = !!open && open.from === to && open.to === from;
+  const focusFirst = useRef(autoFocus && !both && (!from ? fromId : toId));
+  useEffect(() => {
+    if (focusFirst.current) document.getElementById(focusFirst.current)?.focus();
+  }, []);
   return (
     <form
       aria-label={mode === 'edit' ? 'Edit step' : 'New step'}
@@ -927,7 +1239,7 @@ function StepForm({
           </div>
           <p className="-mt-1 text-xs text-muted">{KIND_HELP[kind]}.</p>
           <Labelled id={labelId} label={kind === 'response' ? 'Answer' : 'Operation'}>
-            <StepLabelField key={`${from}>${to}:${added}`} id={labelId} value={head} onChange={setHead} vocabulary={vocabulary} kind={kind} />
+            <StepLabelField key={`${from}>${to}:${added}`} id={labelId} value={head} onChange={setHead} vocabulary={vocabulary} kind={kind} autoFocus={!quiet} />
           </Labelled>
           {onGiveOps && kind !== 'response' && vocabulary.type && vocabulary.ops.length === 0 && (
             <button type="button" onClick={() => onGiveOps(to, head)} className="text-left text-xs font-semibold underline underline-offset-2 hover:text-ink">
@@ -947,9 +1259,10 @@ function StepForm({
           )}
         </>
       )}
-      <div className="flex flex-wrap gap-1.5">
+      {/* Pinned to the bottom of what scrolls it (the pane's column, the diagram), so it is in sight however long the form. */}
+      <div className="sticky bottom-0 z-10 -mx-2.5 -mb-2.5 flex flex-wrap gap-1.5 rounded-b-sm border-t border-ink/15 bg-paper px-2.5 py-2">
         <button type="submit" disabled={!both} className={`${primaryButton} disabled:opacity-50`}>
-          {mode === 'edit' ? 'Save step' : mode === 'insert' ? 'Insert step' : 'Add step'}
+          {button ?? (mode === 'edit' ? 'Save step' : mode === 'insert' ? 'Insert step' : 'Add step')}
         </button>
         <button type="button" onClick={() => onPick(null)} className={toolButton}>
           {added ? 'Done' : 'Cancel'}

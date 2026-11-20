@@ -256,7 +256,7 @@ test.describe('the editor canvas', () => {
     await label('Answer').fill('201');
     await label('Answer').press('Enter');
     await expect.poll(() => editorText(page)).toMatch(/web -> api : POST \/orders\n\s+api -> db : INSERT order\n\s+db --> api : 1 row\n\s+api --> web : 201\n/);
-    await expect(flows.getByRole('list', { name: 'Steps' }).getByRole('listitem')).toHaveCount(4);
+    await expect(flows.getByRole('listbox', { name: 'Sequence of Order' }).getByRole('option')).toHaveCount(4);
     await step.getByRole('button', { name: 'Done' }).click();
     await expect(step).toHaveCount(0);
   });
@@ -276,33 +276,34 @@ test.describe('the editor canvas', () => {
     await waitForCanvas(page, 3);
     await page.getByRole('button', { name: 'Flows' }).click();
     const flows = page.getByRole('region', { name: 'Flows' });
-    const steps = flows.getByRole('list', { name: 'Steps' });
-    await expect(flows.getByRole('group', { name: 'At the same time' })).toContainText('INSERT order');
-    await expect(steps.getByRole('listitem', { name: /API to DB: SELECT order/ })).toContainText('(fails)');
+    const sequence = flows.getByRole('listbox', { name: 'Sequence of Order' });
+    const message = (name: RegExp) => sequence.getByRole('option', { name });
+    await expect(flows.locator('[data-frame-title="parallel"]')).toContainText('At the same time');
+    await expect(message(/API to DB: SELECT order/)).toHaveAccessibleName(/\(fails\)$/);
 
-    // Click a step to change it in place.
-    await steps.getByRole('button', { name: 'Edit step: API to DB: INSERT order' }).click();
+    // Click a step to change it in place, in the form beside the diagram.
+    await message(/INSERT order/).click();
     const edit = flows.getByRole('form', { name: 'Edit step' });
     await edit.getByRole('combobox', { name: 'Operation' }).fill('UPDATE order');
     await edit.getByRole('button', { name: 'Save step' }).click();
     await expect.poll(() => editorText(page)).toContain('    api -> db : UPDATE order\n');
 
     // Move the first step down, past the parallel block, and back with the keyboard.
-    await steps.getByRole('listitem', { name: 'Web to API: POST /orders' }).hover();
-    await steps.getByRole('button', { name: 'Move down: Web to API: POST /orders' }).click();
+    await message(/POST \/orders/).click();
+    await flows.getByRole('button', { name: 'Move the step down' }).click();
     await expect.poll(() => editorText(page)).toMatch(/ {2}\}\n {2}web -> api : POST \/orders\n {2}api --> web : 201/);
-    await steps.getByRole('button', { name: 'Edit step: Web to API: POST /orders' }).press('Alt+ArrowUp');
+    await message(/POST \/orders/).press('Alt+ArrowUp');
     await expect.poll(() => editorText(page)).toMatch(/usecase "Order" \{\n {2}web -> api : POST \/orders\n {2}par \{/);
 
-    // Insert a step before the response.
-    await steps.getByRole('listitem', { name: 'API answers Web: 201' }).hover();
-    await steps.getByRole('button', { name: 'Insert a step before: API answers Web: 201' }).click();
-    const insert = flows.getByRole('form', { name: 'New step' });
-    await expect(insert.getByLabel('Starts at')).toHaveAttribute('data-value', 'api');
-    await node(page, 'DB').click();
-    await insert.getByRole('combobox', { name: 'Operation' }).fill('COMMIT');
-    await insert.getByRole('button', { name: 'Insert step' }).click();
-    await expect.poll(() => editorText(page)).toMatch(/ {2}api -> db : COMMIT\n {2}api --> web : 201/);
+    // Insert a step before the response: it starts where the step before it went.
+    await message(/POST \/orders/).hover();
+    await flows.getByRole('button', { name: 'Add a step before step 4' }).click();
+    const insert = flows.getByRole('dialog', { name: 'Add a step here' });
+    await expect(insert.getByLabel('Starts at')).toHaveAttribute('data-value', 'db');
+    await node(page, 'API').click();
+    await insert.getByRole('combobox', { name: 'Answer' }).fill('done');
+    await insert.getByRole('button', { name: 'Add step' }).click();
+    await expect.poll(() => editorText(page)).toMatch(/ {2}db --> api : done\n {2}api --> web : 201/);
 
     // Rename the use case.
     await flows.getByRole('button', { name: 'Rename the use case Order' }).click();

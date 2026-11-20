@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useRef, type KeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { Plus, Ungroup } from 'lucide-react';
 import type { OutlineStep, UseCaseOutline } from '../../dsl/edit';
 import type { Diagram } from '../../dsl/types';
 import { shorten } from '../../dsl/sequence';
 import { getTechStackIcon } from '../../utils/iconMapping';
 import { eyebrow } from '../Playground/ui';
-import { entrySteps, laneOrder, layoutSequence, SEQ, sequenceEntries, type MessageBox } from './sequenceLayout';
+import { entrySteps, laneOrder, layoutSequence, sameSlot, SEQ, sequenceEntries, type MessageBox, type Slot, type SlotBox } from './sequenceLayout';
+import { slotNear } from './sequenceEdit';
 
 /**
  * A use case as a sequence diagram (the Flows pane, FlowsPane.tsx): one lane
@@ -13,19 +15,39 @@ import { entrySteps, laneOrder, layoutSequence, SEQ, sequenceEntries, type Messa
  * head, failed calls (`-x`) end in a red cross, and a `par` block is a frame.
  * The main flow folds its scenarios; a scenario's tab shows its branch in
  * place. The messages are a list box: a click or Up and Down select a step,
- * which the canvas and the step list show too.
+ * which the canvas and the details beside the diagram show too; Shift or
+ * Cmd/Ctrl select several. It is edited in place (FlowsPanel.tsx does the
+ * edits): a "+" between the rows, or a drag from one lifeline to another,
+ * opens the composer there; Alt+Up and Down move the selected step, Delete
+ * removes it, and a `par` frame can be ungrouped or added to.
  */
+
+/** How a click or a key changes the selection: to the one step, the steps from the anchor to it, or with it added or taken out. */
+export type SelectMode = 'only' | 'range' | 'toggle';
 
 interface SequenceDiagramProps {
   outline: UseCaseOutline;
   /** The scenario whose tab is shown; empty for the main flow. */
   scenario: string;
   diagram: Diagram;
-  /** The line of the selected step, if any. */
-  selected?: number;
-  onSelect: (step: OutlineStep) => void;
+  /** The lines of the selected steps; the last is the one in focus. */
+  selected: number[];
+  onSelect: (step: OutlineStep, mode: SelectMode) => void;
   /** Opens a folded scenario's tab. */
   onScenario: (name: string) => void;
+  /** Opens the composer at an insertion point (`index`: how many messages are drawn before it), with the step's ends when a drag drew them. */
+  onInsert?: (slot: Slot, index: number, ends?: { from: string; to: string }) => void;
+  /** The keys on a selected step: Alt+Up and Down move it, Delete removes the selection, Enter goes to its form, Escape lets go. */
+  onMove?: (direction: 'up' | 'down') => void;
+  onDelete?: () => void;
+  onEdit?: () => void;
+  onClear?: () => void;
+  /** A `par` frame's Ungroup, by the line that opens it. */
+  onUngroup?: (line: number) => void;
+  /** The open composer, drawn at its insertion point. */
+  composer?: { slot: Slot; node: ReactNode };
+  /** Changed to put the focus back on the selected message (after an edit took it away). */
+  focusKey?: number;
 }
 
 /** The arrow sits under its label, this far below the row's centre. */
@@ -33,53 +55,163 @@ const LINE_DY = 8;
 /** The lane headers' strip, which stays at the top as the diagram scrolls. */
 const HEADER = 52;
 
-export default function SequenceDiagram({ outline, scenario, diagram, selected, onSelect, onScenario }: SequenceDiagramProps) {
+export default function SequenceDiagram({ outline, scenario, diagram, selected, onSelect, onScenario, onInsert, onMove, onDelete, onEdit, onClear, onUngroup, composer, focusKey }: SequenceDiagramProps) {
   const nodes = useMemo(() => new Map(diagram.nodes.map((n) => [n.id, n])), [diagram]);
   const name = (id: string) => nodes.get(id)?.name ?? id;
   const lanes = useMemo(() => laneOrder(outline), [outline]);
   const entries = useMemo(() => sequenceEntries(outline.items, scenario), [outline, scenario]);
-  const layout = useMemo(() => layoutSequence(entries, lanes, (id) => nodes.get(id)?.name ?? id), [entries, lanes, nodes]);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const empty = lanes.length === 0;
+  /** The width the diagram has (its scrolling box's), which the labels give room back to fit. */
+  const [fit, setFit] = useState<number>();
+  const layout = useMemo(() => layoutSequence(entries, lanes, (id) => nodes.get(id)?.name ?? id, undefined, fit), [entries, lanes, nodes, fit]);
+  useEffect(() => {
+    const box = rootRef.current?.parentElement;
+    if (!box) return;
+    const measure = () => setFit(box.clientWidth || undefined);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, [empty]);
   const listRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLDivElement>(null);
   /** The selection was moved with the keyboard, so the focus follows it. */
   const moved = useRef(false);
+  const primary = selected.at(-1);
+  const shown = entrySteps(entries);
+  const focusable = shown.some((s) => s.line === primary) ? primary : shown[0]?.line;
 
   // The selected message in sight (below the sticky headers), and focused when the keys moved it.
   useEffect(() => {
-    if (selected === undefined) return;
-    const option = listRef.current?.querySelector<HTMLElement>(`[data-line="${selected}"]`);
+    if (primary === undefined) return;
+    const option = listRef.current?.querySelector<HTMLElement>(`[data-line="${primary}"]`);
     if (!option) return;
     option.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     if (moved.current) option.focus({ preventScroll: true });
     moved.current = false;
-  }, [selected, layout]);
+  }, [primary, layout]);
+  // After an edit that took the focus away (its button or the composer is gone), back on the message.
+  const lastFocusKey = useRef(focusKey);
+  useEffect(() => {
+    if (focusKey === lastFocusKey.current) return;
+    lastFocusKey.current = focusKey;
+    listRef.current?.querySelector<HTMLElement>('[role="option"][tabindex="0"]')?.focus({ preventScroll: true });
+  }, [focusKey]);
+  // A message is keyed by its line, so an edit of the text (an undo, a move) can take the focused one away: the focus stays on the diagram.
+  const listFocused = useRef(false);
+  useEffect(() => {
+    if (listFocused.current && (document.activeElement === document.body || document.activeElement === null)) listRef.current?.querySelector<HTMLElement>('[role="option"][tabindex="0"]')?.focus({ preventScroll: true });
+  }, [layout]);
+  // The composer in sight when it opens.
+  const composerAt = composer && slotKey(composer.slot);
+  const [composerHeight, setComposerHeight] = useState(0);
+  useLayoutEffect(() => {
+    const el = composerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => setComposerHeight(el.offsetHeight));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [composerAt]);
+  // Wholly in sight (below the sticky headers) when it opens or grows.
+  useEffect(() => {
+    if (composerAt) composerRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [composerAt, composerHeight]);
 
-  if (lanes.length === 0) {
+  const [drag, setDrag] = useState<{ from: string; x1: number; x: number; y: number } | null>(null);
+
+  if (empty) {
     return (
-      <div className="flex h-full min-h-32 items-center justify-center p-6 text-center text-sm text-muted">
+      <div className="flex h-full min-h-32 flex-col items-center justify-center gap-3 p-6 text-center text-sm text-muted">
         <p className="max-w-sm">
           <span className="block font-semibold text-ink">No steps yet</span>
           Add the first request, from where the user starts. Each step is drawn here, with a lane per component.
         </p>
+        {composer ? (
+          <div className="w-80 max-w-full text-left">{composer.node}</div>
+        ) : (
+          onInsert && (
+            <button type="button" onClick={() => onInsert({ kind: 'end' }, 0)} className="inline-flex items-center gap-1.5 rounded-sm border-bw-1 border-ink bg-surface px-2.5 py-1 text-xs font-semibold text-ink shadow-brutal-sm hover:bg-pop-yellow/40">
+              <Plus size={13} aria-hidden="true" />
+              Add the first step
+            </button>
+          )
+        )}
       </div>
     );
   }
 
-  const shown = entrySteps(entries);
   const onKey = (e: KeyboardEvent) => {
-    const at = shown.findIndex((s) => s.line === selected);
+    if ((e.target as Element).getAttribute('role') !== 'option') return;
+    if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      e.preventDefault();
+      if (primary === undefined || !onMove) return;
+      moved.current = true;
+      onMove(e.key === 'ArrowUp' ? 'up' : 'down');
+      return;
+    }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selected.length && onDelete) {
+      e.preventDefault();
+      moved.current = true;
+      onDelete();
+      return;
+    }
+    if (e.key === 'Enter' && primary !== undefined && onEdit) {
+      e.preventDefault();
+      onEdit();
+      return;
+    }
+    if (e.key === 'Escape' && selected.length && onClear) {
+      e.preventDefault();
+      e.stopPropagation();
+      onClear();
+      return;
+    }
+    const at = shown.findIndex((s) => s.line === primary);
     const next =
       e.key === 'ArrowDown' ? Math.min(shown.length - 1, at + 1) : e.key === 'ArrowUp' ? Math.max(0, at === -1 ? 0 : at - 1) : e.key === 'Home' ? 0 : e.key === 'End' ? shown.length - 1 : undefined;
     if (next === undefined) return;
     e.preventDefault();
-    if (shown[next] && shown[next].line !== selected) {
+    const range = e.shiftKey && primary !== undefined;
+    if (shown[next] && (shown[next].line !== primary || (!range && selected.length > 1))) {
       moved.current = true;
-      onSelect(shown[next]);
+      onSelect(shown[next], range ? 'range' : 'only');
     }
   };
-  const focusable = shown.some((s) => s.line === selected) ? selected : shown[0]?.line;
+
+  // A drag from one lifeline to another: the lane nearest the pointer, if it is close enough and not the one it started at.
+  const pointerAt = (e: ReactPointerEvent) => {
+    const r = contentRef.current!.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  };
+  const dropLane = (x: number, from: string) => {
+    const near = layout.lanes.reduce((best, l) => (Math.abs(l.x - x) < Math.abs(best.x - x) ? l : best), layout.lanes[0]);
+    return near && near.id !== from && Math.abs(near.x - x) <= 48 ? near : undefined;
+  };
+  const target = drag ? dropLane(drag.x, drag.from) : undefined;
+  const ghostSlot = drag && target ? slotNear(layout.slots, drag.y) : undefined;
+
+  /** Where the composer goes: its insertion point, or under the message a reply follows. */
+  const composerBox = ((): { x: number; y: number } | undefined => {
+    if (!composer) return undefined;
+    const { slot } = composer;
+    const drawn = layout.slots.find((b) => sameSlot(b.slot, slot));
+    if (drawn) return drawn;
+    if (slot.kind === 'after') {
+      // A reply's place where no "+" is drawn: under its request.
+      const m = layout.messages.find((msg) => msg.step.line === slot.line);
+      const box = layout.slots.find((b) => b.slot.kind === 'before' && b.slot.line === slot.line);
+      return m && { x: box?.x ?? 2, y: m.y + SEQ.row / 2 };
+    }
+    return layout.slots.at(-1);
+  })();
+  // Above its insertion point when the diagram has too little room under it and more over it.
+  const above = !!composerBox && composerHeight > 0 && layout.height - composerBox.y < composerHeight + 8 && composerBox.y > layout.height - composerBox.y;
+  const number = (line: number) => layout.messages.find((m) => m.step.line === line)?.n;
 
   return (
-    <div className="relative min-w-full" style={{ width: layout.width }}>
+    <div ref={rootRef} className="group/seq relative min-w-full" style={{ width: layout.width }}>
       {/* The lane headers: each component's icon and name, like its node on the canvas. */}
       <div className="sticky top-0 z-20 border-b border-ink/15 bg-surface" style={{ height: HEADER, width: layout.width, minWidth: '100%' }} aria-hidden="true">
         {layout.lanes.map((lane) => {
@@ -100,28 +232,98 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
           );
         })}
       </div>
-      <div className="relative" style={{ height: layout.height }}>
-        {/* Frames under everything: a par block, the chosen scenario's branch. */}
+      <div ref={contentRef} className="relative" style={{ height: layout.height }}>
+        {/* Frames under everything: a par block, the chosen scenario's branch. Their titles (and a par block's actions) go over the lifelines, below. */}
         {layout.frames.map((f) => (
           <div
             key={`${f.kind}${f.line}`}
             data-frame={f.kind}
             className={`absolute rounded-sm border-bw-1 ${f.kind === 'parallel' ? 'border-ink/45 bg-ink/[0.025]' : 'border-dashed border-ink/50 bg-pop-yellow/10'}`}
             style={{ left: f.x, top: f.y, width: f.width, height: f.height }}
-          >
-            <span className={`absolute left-0 top-0 rounded-br-sm border-b border-r px-1.5 py-0.5 ${eyebrow} !text-ink/75 ${f.kind === 'parallel' ? 'border-ink/45 bg-surface' : 'border-dashed border-ink/50 bg-pop-yellow/30'}`}>
-              {f.title}
-            </span>
-          </div>
+          />
         ))}
         <svg className="pointer-events-none absolute left-0 top-0 overflow-visible" width={layout.width} height={layout.height} aria-hidden="true">
           {layout.lanes.map((lane) => (
-            <line key={lane.id} x1={lane.x} x2={lane.x} y1={0} y2={layout.height} className="stroke-ink/25" strokeWidth={1.5} strokeDasharray="4 5" />
+            <line key={lane.id} x1={lane.x} x2={lane.x} y1={0} y2={layout.height} className={target?.id === lane.id || drag?.from === lane.id ? 'stroke-pop-pink' : 'stroke-ink/25'} strokeWidth={1.5} strokeDasharray="4 5" />
           ))}
           {layout.messages.map((m) => (
-            <Arrow key={m.step.line} m={m} selected={m.step.line === selected} />
+            <Arrow key={m.step.line} m={m} selected={selected.includes(m.step.line)} />
           ))}
+          {drag && (
+            <g className="stroke-pop-pink" strokeWidth={2} fill="none">
+              {ghostSlot && <line x1={ghostSlot.x + 22} x2={layout.width - 8} y1={ghostSlot.y} y2={ghostSlot.y} strokeDasharray="5 4" strokeWidth={1.5} />}
+              <line x1={drag.x1} y1={drag.y} x2={target?.x ?? drag.x} y2={drag.y} strokeDasharray={target ? undefined : '4 4'} />
+              {target && <Head x={target.x} y={drag.y} dir={Math.sign(target.x - drag.x1)} kind="request" fill="fill-pop-pink" />}
+            </g>
+          )}
         </svg>
+        {/* A lifeline's strip, to drag a new step from it to another (the messages leave them clear). */}
+        {onInsert &&
+          layout.lanes.map((lane) => (
+            <div
+              key={lane.id}
+              data-lifeline={lane.id}
+              aria-hidden="true"
+              title={`Drag to another lifeline to add a step from ${name(lane.id)}`}
+              className="absolute top-0 w-3 -translate-x-1/2 cursor-crosshair touch-none"
+              style={{ left: lane.x, height: layout.height }}
+              onPointerDown={(e) => {
+                if (e.button !== 0) return;
+                e.preventDefault();
+                e.currentTarget.setPointerCapture(e.pointerId);
+                setDrag({ from: lane.id, x1: lane.x, ...pointerAt(e) });
+              }}
+              onPointerMove={(e) => drag && setDrag({ ...drag, ...pointerAt(e) })}
+              onPointerUp={(e) => {
+                if (!drag) return;
+                const at = pointerAt(e);
+                const to = dropLane(at.x, drag.from);
+                const slot = to && slotNear(layout.slots, at.y);
+                setDrag(null);
+                if (to && slot) onInsert(slot.slot, slot.index, { from: drag.from, to: to.id });
+              }}
+              onPointerCancel={() => setDrag(null)}
+            />
+          ))}
+        {layout.frames.map((f) => (
+          <div
+            key={`${f.kind}${f.line}`}
+            data-frame-title={f.kind}
+            className={`absolute flex items-center rounded-br-sm border-b border-r ${f.kind === 'parallel' ? 'border-ink/45 bg-surface' : 'border-dashed border-ink/50 bg-pop-yellow/30'}`}
+            style={{ left: f.x + 1, top: f.y + 1 }}
+          >
+            <span className={`px-1.5 py-0.5 ${eyebrow} !text-ink/75`}>{f.title}</span>
+            {f.kind === 'parallel' && (onInsert || onUngroup) && (
+              <span className="flex items-center self-stretch border-l border-ink/20">
+                {onInsert && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const box = layout.slots.find((b) => b.slot.kind === 'par' && b.slot.line === f.line);
+                      if (box) onInsert(box.slot, box.index);
+                    }}
+                    title="Add a step that runs at the same time as these"
+                    className="inline-flex h-full items-center gap-0.5 px-1.5 text-[11px] font-semibold text-ink/80 hover:bg-pop-yellow/40 hover:text-ink focus-visible:bg-pop-yellow/40"
+                  >
+                    <Plus size={11} aria-hidden="true" />
+                    Add alongside
+                  </button>
+                )}
+                {onUngroup && (
+                  <button
+                    type="button"
+                    onClick={() => onUngroup(f.line)}
+                    title="Run these one after another again"
+                    className="inline-flex h-full items-center gap-0.5 border-l border-ink/20 px-1.5 text-[11px] font-semibold text-ink/80 hover:bg-pop-yellow/40 hover:text-ink focus-visible:bg-pop-yellow/40"
+                  >
+                    <Ungroup size={11} aria-hidden="true" />
+                    Ungroup
+                  </button>
+                )}
+              </span>
+            )}
+          </div>
+        ))}
         {layout.notes.map((note) => (
           <div
             key={`${note.kind}${note.line}`}
@@ -154,11 +356,57 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
             )}
           </div>
         ))}
-        <div ref={listRef} role="listbox" aria-label={`Sequence of ${outline.name}`} aria-orientation="vertical" onKeyDown={onKey} className="pointer-events-none absolute inset-0">
+        <div
+          ref={listRef}
+          role="listbox"
+          aria-label={`Sequence of ${outline.name}`}
+          aria-orientation="vertical"
+          aria-multiselectable="true"
+          onKeyDown={onKey}
+          onFocus={() => (listFocused.current = true)}
+          // Gone elsewhere (not with its message, which takes no focus with it).
+          onBlur={(e) => e.relatedTarget && (listFocused.current = false)}
+          className="pointer-events-none absolute inset-0"
+        >
           {layout.messages.map((m) => (
-            <Message key={m.step.line} m={m} name={name} selected={m.step.line === selected} focusable={m.step.line === focusable} onSelect={() => onSelect(m.step)} />
+            <Message key={m.step.line} m={m} name={name} selected={selected.includes(m.step.line)} focusable={m.step.line === focusable} onSelect={(mode) => onSelect(m.step, mode)} />
           ))}
         </div>
+        {/* The insertion points: a "+" at the left of each row boundary, seen while the pointer is over the diagram or one is focused. */}
+        {onInsert &&
+          layout.slots.map((box) => (
+            <InsertPoint
+              key={slotKey(box.slot)}
+              box={box}
+              width={layout.width}
+              open={!!composer && sameSlot(composer.slot, box.slot)}
+              label={
+                box.slot.kind === 'before'
+                  ? `Add a step before step ${number(box.slot.line)}`
+                  : box.slot.kind === 'after'
+                    ? `Add a step after step ${number(box.slot.line)}`
+                    : box.slot.kind === 'scenario'
+                    ? `Add a step at the end of ${box.slot.name}`
+                    : box.slot.kind === 'par'
+                      ? 'Add a step at the end of the block, at the same time'
+                      : 'Add a step at the end'
+              }
+              onOpen={() => onInsert(box.slot, box.index)}
+            />
+          ))}
+        {composer && composerBox && (
+          <>
+            <div aria-hidden="true" className="pointer-events-none absolute border-t-2 border-dashed border-pop-pink" style={{ left: composerBox.x + 22, top: composerBox.y - 1, width: Math.max(0, layout.width - composerBox.x - 30) }} />
+            <div
+              ref={composerRef}
+              data-placement={above ? 'above' : 'below'}
+              className="absolute z-30 w-80 scroll-mt-16 scroll-mb-2 py-1"
+              style={{ left: Math.max(2, composerBox.x), top: above ? composerBox.y - 4 - composerHeight : composerBox.y + 4 }}
+            >
+              {composer.node}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
@@ -166,8 +414,30 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
 
 const KIND_TAG: Partial<Record<OutlineStep['kind'], string>> = { async: 'message', failed: 'fails' };
 
+const slotKey = (slot: Slot) => `${slot.kind}:${'line' in slot ? slot.line : 'name' in slot ? slot.name : ''}`;
+
+/** A "+" at a row boundary, with a guide across the diagram while it is hovered or focused. */
+function InsertPoint({ box, width, open, label, onOpen }: { box: SlotBox; width: number; open: boolean; label: string; onOpen: () => void }) {
+  return (
+    <>
+      <button
+        type="button"
+        aria-label={label}
+        aria-expanded={open}
+        title={label}
+        onClick={onOpen}
+        className={`peer absolute z-10 grid h-5 w-5 scroll-mt-16 place-items-center rounded-full border-bw-1 border-ink transition-opacity hover:!opacity-100 focus-visible:!opacity-100 ${open ? 'bg-pop-pink text-on-accent' : 'bg-surface text-ink opacity-0 hover:bg-pop-yellow focus-visible:bg-pop-yellow group-hover/seq:opacity-60'}`}
+        style={{ left: box.x, top: box.y - 10 }}
+      >
+        <Plus size={12} aria-hidden="true" />
+      </button>
+      <span aria-hidden="true" className="pointer-events-none absolute border-t-2 border-dashed border-ink/40 opacity-0 peer-hover:opacity-100 peer-focus-visible:opacity-100" style={{ left: box.x + 22, top: box.y - 1, width: Math.max(0, width - box.x - 30) }} />
+    </>
+  );
+}
+
 /** A message's row: its number and label over the arrow, the target of clicks and keys. */
-function Message({ m, name, selected, focusable, onSelect }: { m: MessageBox; name: (id: string) => string; selected: boolean; focusable: boolean; onSelect: () => void }) {
+function Message({ m, name, selected, focusable, onSelect }: { m: MessageBox; name: (id: string) => string; selected: boolean; focusable: boolean; onSelect: (mode: SelectMode) => void }) {
   const { step } = m;
   const self = m.x1 === m.x2;
   const left = self ? m.x1 + 6 : Math.min(m.x1, m.x2) + 6;
@@ -183,8 +453,14 @@ function Message({ m, name, selected, focusable, onSelect }: { m: MessageBox; na
       data-line={step.line}
       tabIndex={focusable ? 0 : -1}
       title={step.label ? `${m.n}. ${step.label}` : undefined}
-      onClick={onSelect}
-      className={`group/msg pointer-events-auto absolute flex scroll-mt-16 cursor-pointer justify-center rounded-sm outline-hidden focus-visible:ring-2 focus-visible:ring-ink ${self ? '!justify-start pl-[52px]' : ''}`}
+      // Shift-click picks a range, so it selects no text.
+      onMouseDown={(e) => e.shiftKey && e.preventDefault()}
+      onClick={(e) => {
+        // The one clicked has the focus, a Shift-click's too.
+        e.currentTarget.focus({ preventScroll: true });
+        onSelect(e.shiftKey ? 'range' : e.metaKey || e.ctrlKey ? 'toggle' : 'only');
+      }}
+      className={`group/msg pointer-events-auto absolute flex scroll-mt-16 cursor-pointer select-none justify-center rounded-sm outline-hidden focus-visible:ring-2 focus-visible:ring-ink ${self ? '!justify-start pl-[52px]' : ''}`}
       style={{ left, width, top: m.y - SEQ.row / 2 + 1, height: SEQ.row - 2 }}
     >
       <span
