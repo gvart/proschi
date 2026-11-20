@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addConnection, addNode, addScenario, addStep, addUseCase, moveStep, removeScenario, removeStep, removeUseCase, renameScenario, renameUseCase, setReplicas, setStep, outlineOf, type EditResult, type NewStep, type OutlineStep } from './edit';
+import { addConnection, addNode, addScenario, addStep, addUseCase, giveOperations, moveStep, removeScenario, removeStep, removeUseCase, renameScenario, renameUseCase, setReplicas, setStep, outlineOf, type EditResult, type NewStep, type OutlineStep } from './edit';
 import { problems } from '../practice/catalog';
 import { parse } from './parser';
 import { findProblem } from '../practice/catalog';
@@ -311,5 +311,17 @@ describe('editing, moving and inserting steps', () => {
         expect(kept.filter((_, i) => i !== s.line - 1), `${p.id}: ${s.label}`).toEqual(lines.filter((_, i) => i !== s.line - 1));
       }
     }
+  });
+});
+
+describe('giving a component operations', () => {
+  it('declares a type with the operations after the title, and the component takes it', () => {
+    const src = 'title "Shop"\n\npay "Payments" [Service]\napi [REST API]\napi -> pay\n';
+    const next = ok(giveOperations(src, 'pay', 'Payments', 'Service', [{ name: 'charge', access: 'write' }, { name: 'status', access: 'read' }, { name: 'charge', access: 'write' }]));
+    expect(next).toBe('title "Shop"\n\ntype Payments extends Service {\n  op write charge\n  op read status\n}\n\npay "Payments" [Payments]\napi [REST API]\napi -> pay\n');
+    const { diagram, diagnostics } = parse(`${next}usecase "U" {\n  api -> pay : charge card\n}\n`);
+    expect(diagnostics).toEqual([]);
+    expect(diagram.useCases[0].steps[0].op?.name).toBe('charge');
+    expect(giveOperations(next, 'pay', 'payments', 'Service', []).error).toMatch(/already/);
   });
 });

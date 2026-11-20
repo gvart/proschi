@@ -909,6 +909,30 @@ export function removeScenario(source: string, useCase: string, name: string): E
   return { source: lines.join('\n') };
 }
 
+/**
+ * Gives a component a type of its own with operations (docs/TYPES.md): writes
+ * `type Name extends Parent { op … }` before the first declaration (after the
+ * title and imports) and makes `node` one of it. For a component whose type
+ * takes any label, so its steps get checked and their reads and writes known.
+ */
+export function giveOperations(source: string, node: string, name: string, parent: string, ops: { name: string; access: 'read' | 'write' }[]): EditResult {
+  const clean = cleanText(name).replace(/[[\]{}"]/g, '');
+  if (!clean) return { error: 'Name the type.' };
+  const { diagram } = parse(source);
+  if (!diagram.nodes.some((n) => n.id === node)) return { error: `There is no component '${node}' in this design.` };
+  if ((diagram.types ?? []).some((t) => t.name.toLowerCase() === clean.toLowerCase())) return { error: `There is a type "${clean}" already.` };
+  const names = (access: 'read' | 'write') => [...new Set(ops.filter((o) => o.access === access).map((o) => (/^[A-Za-z_]\w*$/.test(o.name) ? o.name : quote(o.name))))];
+  const typeName = /^[A-Za-z_]\w*$/.test(clean) ? clean : `[${clean}]`;
+  const block = [`type ${typeName} extends ${/^[A-Za-z_]\w*$/.test(parent) ? parent : `[${parent}]`} {`, ...(['write', 'read'] as const).flatMap((a) => (names(a).length ? [`  op ${a} ${names(a).join(', ')}`] : [])), '}', ''];
+  const lines = source.split('\n');
+  let at = 0;
+  while (at < lines.length && /^\s*(title\b|import\b|#|$)/.test(lines[at])) at++;
+  // Keep a blank line after the title and imports, if there is one.
+  while (at > 0 && lines[at - 1].trim() === '') at--;
+  lines.splice(at, 0, ...(at > 0 ? ['', ...block.slice(0, -1)] : block));
+  return { source: setTech(lines.join('\n'), node, clean) };
+}
+
 // ---------------------------------------------------------------------------
 // What-ifs from the canvas (docs/design/paid-plans.md P57): the traffic slider
 // and "Simulate down" are saved as a `whatif` block, or written to the

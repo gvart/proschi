@@ -1,12 +1,14 @@
 import { useDeferredValue, useId, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp, CornerDownLeft, MousePointerClick, Pencil, Plus, Trash2, Workflow, X } from 'lucide-react';
-import { addScenario, addStep, addUseCase, moveStep, removeScenario, removeStep, removeUseCase, renameScenario, renameUseCase, setStep, outlineOf, type OutlineStep, type StepKind } from '../../dsl/edit';
+import { addScenario, addStep, addUseCase, giveOperations, moveStep, removeScenario, removeStep, removeUseCase, renameScenario, renameUseCase, setStep, outlineOf, type OutlineStep, type StepKind } from '../../dsl/edit';
 import { parse } from '../../dsl/parser';
 import type { Diagram } from '../../dsl/types';
 import { eyebrow, field, iconButton, outlineButton, primaryButton, toolButton } from '../Playground/ui';
 import { defaultStepKind, missingScenarios, missingUseCases, openRequest, outlineSteps } from './flows';
 import { stepVocabulary, type UsedStep } from '../../dsl/typesys/vocabulary';
 import StepLabelField from './StepLabelField';
+import { composeLabel, isHttpHead, splitLabel, type LabelParts } from './stepLabel';
+import { accessOf } from '../../dsl/access';
 import Select from '../../design/Select';
 
 /**
@@ -52,6 +54,8 @@ const KIND_HELP: Record<StepKind, string> = {
   async: 'Sent without waiting',
   failed: 'A call that never gets an answer: a timeout, a refused connection',
 };
+
+const ARROW: Record<StepKind, string> = { request: '->', response: '-->', async: '->>', failed: '-x' };
 
 /** A step being changed in place, or one being inserted before it. */
 type Editing = { line: number; insert: boolean };
@@ -142,6 +146,20 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
     requestAnimationFrame(() => document.getElementById(selectId)?.focus());
   };
 
+  /** A type of its own for `node`, with the operations its steps already send it and the one being written. */
+  const giveOps = (node: string, head: string) => {
+    const target = diagram.nodes.find((n) => n.id === node);
+    const parent = target?.resolvedType?.name;
+    if (!target || !parent) return;
+    const labels = [...used.filter((s) => s.to === node && s.kind !== 'response').map((s) => s.label), head].filter((l) => l.trim());
+    const ops = labels.flatMap((l) => {
+      const word = /^\s*(?:x\d+\s+|~\S+\s+)*"?([A-Za-z_][\w]*)/.exec(l)?.[1];
+      return word ? [{ name: word, access: accessOf(undefined, l) }] : [];
+    });
+    const name = target.name.replace(/[^\w ]/g, '').trim() || node;
+    apply(giveOperations(source, node, name === parent ? `${name} API` : name, parent, ops));
+  };
+
   const stopEditing = () => {
     setEditing(null);
     onPick(null);
@@ -162,6 +180,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
             mode={editing.insert ? 'insert' : 'edit'}
             initial={editing.insert ? undefined : { kind: step.kind, label: step.label }}
             check={(s) => check(s, editing)}
+            onGiveOps={giveOps}
             onAdd={(s) => {
               const done = apply(editing.insert ? addStep(source, current, s, undefined, step.line) : setStep(source, step.line, s));
               if (done) stopEditing();
@@ -377,6 +396,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
                 onPick={onPick}
                 where={`A step in ${laneNow ? `scenario “${laneNow}”` : scenarios.length ? 'the main flow' : current}.`}
                 check={check}
+                onGiveOps={giveOps}
                 onAdd={(step) => apply(addStep(source, current, step, laneNow || undefined))}
               />
             ) : (
@@ -619,6 +639,7 @@ function StepForm({
   mode = 'add',
   initial,
   check,
+  onGiveOps,
   onAdd,
 }: {
   diagram: Diagram;
@@ -634,6 +655,8 @@ function StepForm({
   initial?: { kind: StepKind; label: string };
   /** The problems the step would bring, before it is added. */
   check: (step: NewStepInput) => string[];
+  /** Gives `node` a type of its own with operations, `head` among them; absent where the builder can't. */
+  onGiveOps?: (node: string, head: string) => void;
   /** Adds the step; false when it could not be. */
   onAdd: (step: NewStepInput) => boolean;
 }) {
@@ -645,7 +668,11 @@ function StepForm({
   const suggested = both ? defaultStepKind(steps, from, to) : 'request';
   const [chosen, setKind] = useState<StepKind | undefined>(initial?.kind);
   const kind = chosen ?? suggested;
-  const [label, setLabel] = useState(initial?.label ?? '');
+  // The label in its parts: the operation (the combobox) and the rest under More.
+  const [start] = useState(() => splitLabel(initial?.label ?? ''));
+  const [head, setHead] = useState(start.head);
+  const [more, setMore] = useState<Omit<LabelParts, 'head'>>(() => ({ fanOut: start.fanOut, size: start.size, sizeFirst: start.sizeFirst, headers: start.headers, tail: start.tail }));
+  const label = composeLabel({ ...more, head });
   const vocabulary = useMemo(() => stepVocabulary(diagram, from ?? '', to ?? '', kind, used), [diagram, from, to, kind, used]);
   const nodes = diagram.nodes.filter((n) => n.kind !== 'group' && n.kind !== 'text');
   const select = (value: string, which: 'from' | 'to') => onPick({ ...pick, [which]: value || undefined });
@@ -661,7 +688,8 @@ function StepForm({
         e.preventDefault();
         if (!both || !onAdd({ from, to, kind, label }) || mode !== 'add') return;
         // The composer stays open for the next step, which starts where this one went.
-        setLabel('');
+        setHead('');
+        setMore({ headers: [], tail: '' });
         setKind(undefined);
         setAdded(added + 1);
         onPick({ from: to });
@@ -719,8 +747,18 @@ function StepForm({
           </div>
           <p className="-mt-1 text-xs text-muted">{KIND_HELP[kind]}.</p>
           <Labelled id={labelId} label={kind === 'response' ? 'Answer' : 'Operation'}>
-            <StepLabelField key={`${from}>${to}:${added}`} id={labelId} value={label} onChange={setLabel} vocabulary={vocabulary} kind={kind} />
+            <StepLabelField key={`${from}>${to}:${added}`} id={labelId} value={head} onChange={setHead} vocabulary={vocabulary} kind={kind} />
           </Labelled>
+          {onGiveOps && kind !== 'response' && vocabulary.type && vocabulary.ops.length === 0 && (
+            <button type="button" onClick={() => onGiveOps(to, head)} className="text-left text-xs font-semibold underline underline-offset-2 hover:text-ink">
+              Give {diagram.nodes.find((n) => n.id === to)?.name ?? to} operations of its own, so its steps are checked
+            </button>
+          )}
+          <MoreFields kind={kind} head={head} more={more} onMore={setMore} headers={vocabulary.headers} typeName={vocabulary.type?.name} />
+          <p className="break-words rounded-sm bg-ink/5 px-1.5 py-1 font-mono text-[11px] text-ink/80" aria-label="Writes">
+            {from} {ARROW[kind]} {to}
+            {label ? ` : ${label}` : ''}
+          </p>
           {problems.length > 0 && (
             <ul aria-label="Problems with this step" className="space-y-1">
               {problems.map((p) => (
@@ -742,6 +780,82 @@ function StepForm({
         </button>
       </div>
     </form>
+  );
+}
+
+/** The rest of a label, folded: headers from the target's type, the payload, fan-out and payload size. */
+function MoreFields({ kind, head, more, onMore, headers, typeName }: { kind: StepKind; head: string; more: Omit<LabelParts, 'head'>; onMore: (more: Omit<LabelParts, 'head'>) => void; headers: string[]; typeName?: string }) {
+  const id = useId();
+  const [filter, setFilter] = useState('');
+  const set = (patch: Partial<Omit<LabelParts, 'head'>>) => onMore({ ...more, ...patch });
+  const http = isHttpHead(head) && kind !== 'response';
+  const offered = headers.filter((h) => !more.headers.includes(h) && h.toLowerCase().includes(filter.trim().toLowerCase())).slice(0, 8);
+  const count = (more.tail ? 1 : 0) + (more.fanOut ? 1 : 0) + (more.size ? 1 : 0) + more.headers.length;
+  return (
+    <details className="group/more rounded-sm border-bw-1 border-ink/20 px-2 py-1" open={count > 0 || undefined}>
+      <summary className="cursor-pointer select-none text-xs font-semibold">
+        {kind === 'response' ? 'Payload' : 'Headers, payload and fan-out'}
+        {count > 0 && <span className="ml-1 text-muted">({count})</span>}
+      </summary>
+      <div className="space-y-2 pb-1 pt-2">
+        {http && headers.length > 0 && (
+          <div className="space-y-1">
+            <label htmlFor={`${id}-h`} className={`block ${eyebrow}`}>
+              Headers {typeName ? `${typeName} takes` : ''}
+            </label>
+            {more.headers.length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {more.headers.map((h) => (
+                  <button key={h} type="button" aria-label={`Remove header ${h}`} onClick={() => set({ headers: more.headers.filter((x) => x !== h) })} className="inline-flex items-center gap-1 rounded-full border-bw-1 border-ink bg-pop-yellow/40 px-2 py-0.5 font-mono text-[11px]">
+                    {h}
+                    <X size={10} aria-hidden="true" />
+                  </button>
+                ))}
+              </div>
+            )}
+            <input id={`${id}-h`} value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter headers" autoComplete="off" className={`w-full ${field} !py-1 text-xs`} />
+            <div className="flex flex-wrap gap-1" aria-label="Headers to add">
+              {offered.map((h) => (
+                <button key={h} type="button" onClick={() => set({ headers: [...more.headers, h] })} className="rounded-full border-bw-1 border-ink/30 px-2 py-0.5 font-mono text-[11px] hover:border-ink hover:bg-pop-yellow/30">
+                  + {h}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {kind !== 'response' && !http && headers.length > 0 && <p className="text-xs text-muted">Headers go after an HTTP method and a path, e.g. GET /orders.</p>}
+        <div className="space-y-0.5">
+          <label htmlFor={`${id}-t`} className={`block ${eyebrow}`}>
+            Payload or note
+          </label>
+          <input id={`${id}-t`} value={more.tail} onChange={(e) => set({ tail: e.target.value })} placeholder={'e.g. {"id": 42}'} autoComplete="off" spellCheck={false} className={`w-full ${field} !py-1 font-mono text-xs`} />
+        </div>
+        {kind !== 'response' && (
+          <div className="grid grid-cols-2 gap-1.5">
+            <div className="space-y-0.5">
+              <label htmlFor={`${id}-x`} className={`block ${eyebrow}`}>
+                Calls per request
+              </label>
+              <input
+                id={`${id}-x`}
+                type="number"
+                min={1}
+                value={more.fanOut ?? ''}
+                onChange={(e) => set({ fanOut: e.target.value === '' ? undefined : Math.max(1, Number(e.target.value)) })}
+                placeholder="1"
+                className={`w-full ${field} !py-1 text-xs`}
+              />
+            </div>
+            <div className="space-y-0.5">
+              <label htmlFor={`${id}-s`} className={`block ${eyebrow}`}>
+                Payload size
+              </label>
+              <input id={`${id}-s`} value={more.size ?? ''} onChange={(e) => set({ size: e.target.value.trim() || undefined })} placeholder="e.g. 2MB" autoComplete="off" className={`w-full ${field} !py-1 text-xs`} />
+            </div>
+          </div>
+        )}
+      </div>
+    </details>
   );
 }
 

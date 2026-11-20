@@ -307,6 +307,40 @@ test.describe('the editor canvas', () => {
     await expect.poll(() => editorText(page)).toContain('usecase "Place order" {');
   });
 
+  test("composes a step's headers, payload and fan-out, and gives an untyped component operations", async ({ page }) => {
+    await page.goto('app/');
+    await expect(codeEditor(page)).toBeVisible();
+    await waitForCanvas(page, 1);
+    await page.getByRole('button', { name: 'File' }).click();
+    await page.getByRole('menuitem', { name: 'New diagram' }).click();
+    await expect(canvasNodes(page)).toHaveCount(0);
+    await appendCode(page, 'web "Web" [Browser]\napi "API" [REST API]\npay "Payments" [Worker]\nweb -> api\napi -> pay\nusecase "Order" {\n}\n');
+    await waitForCanvas(page, 3);
+    await page.getByRole('button', { name: 'Flows' }).click();
+    const flows = page.getByRole('region', { name: 'Flows' });
+    await flows.getByRole('button', { name: 'Add a step' }).click();
+    const step = flows.getByRole('form', { name: 'New step' });
+    await node(page, 'Web').click();
+    await node(page, 'API').click();
+    await step.getByRole('combobox', { name: 'Operation' }).fill('POST /orders');
+    await step.getByText('Headers, payload and fan-out').click();
+    // The headers are the REST API type's own.
+    await step.getByPlaceholder('Filter headers').fill('author');
+    await step.getByRole('button', { name: '+ Authorization' }).click();
+    await step.getByLabel('Payload or note').fill('{"sku": 7}');
+    await step.getByLabel('Calls per request').fill('2');
+    await expect(step.getByLabel('Writes')).toHaveText('web -> api : x2 POST /orders header Authorization {"sku": 7}');
+    await step.getByRole('button', { name: 'Add step' }).click();
+    await expect.poll(() => editorText(page)).toContain('  web -> api : x2 POST /orders header Authorization {"sku": 7}\n');
+
+    // A Worker takes any label; the builder offers to give it operations of its own.
+    await node(page, 'Payments').click();
+    await step.getByRole('combobox', { name: 'Operation' }).fill('charge card');
+    await step.getByRole('button', { name: /^Give Payments operations of its own/ }).click();
+    await expect.poll(() => editorText(page)).toMatch(/type Payments extends Worker \{\n  op write charge\n\}/);
+    await expect.poll(() => editorText(page)).toContain('pay "Payments" [Payments]');
+  });
+
   test('with Flows open the canvas is narrow: the legend folds, no node sits under the top bar, the hint shortens clear of the controls', async ({ page }) => {
     await page.goto('app/');
     await waitForCanvas(page, 3);
