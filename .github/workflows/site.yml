@@ -84,17 +84,25 @@ jobs:
       # Chromium is cached per Playwright version: the download from
       # cdn.playwright.dev can crawl for minutes and eat the job's timeout.
       - id: playwright
-        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+        run: |
+          version=$(node -p "require('@playwright/test/package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - id: browsers
-        uses: actions/cache@v6
+        uses: actions/cache/restore@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
-      # A slow download fails after 4 minutes and is tried once more, rather
+      # A slow download fails after 3 minutes and is tried once more, rather
       # than running into the job's timeout.
       - if: steps.browsers.outputs.cache-hit != 'true'
-        timeout-minutes: 9
-        run: timeout 4m npx playwright install --with-deps chromium || timeout 4m npx playwright install --with-deps chromium
+        timeout-minutes: 7
+        run: timeout 3m npx playwright install --with-deps chromium || timeout 3m npx playwright install --with-deps chromium
+      # Saved straight away, so a run whose tests fail still fills the cache.
+      - if: steps.browsers.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ steps.browsers.outputs.cache-primary-key }}
       # The cache holds the browser only, not the OS packages it needs.
       - if: steps.browsers.outputs.cache-hit == 'true'
         timeout-minutes: 5
