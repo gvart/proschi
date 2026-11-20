@@ -43,6 +43,15 @@ describe('use case edits', () => {
     expect(parse(src).diagnostics).toEqual([]);
   });
 
+  it("counts a connection and a type the design's imports declare", () => {
+    const problem = findProblem('trending-topics')!;
+    const solution = addUseCase('import "problem.proschi"\n', 'U');
+    const design = parseSolution(problem, solution).diagram;
+    const edge = design.edges.find((e) => !e.sourcePort && !e.targetPort)!;
+    // A step along a connection the given declares adds none to the solution.
+    expect(ok(addStep(solution, 'U', req(edge.source, edge.target, 'x'), undefined, undefined, design))).toBe(solution.replace('{\n}', `{\n  ${edge.source} -> ${edge.target} : x\n}`));
+  });
+
   it('keeps a label with an unclosed bracket on its line', () => {
     const src = ok(addStep(addUseCase('a\nb\na -> b\n', 'U'), 'U', req('a', 'b', 'POST {"x": 1')));
     expect(src).toContain('  a -> b : POST "x": 1\n}');

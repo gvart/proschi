@@ -1,6 +1,6 @@
 import { bracketDepth, tokenizeLine, type Token } from './lexer';
 import { parse } from './parser';
-import type { CapacityOverride, DiagramNode, InstanceSize } from './types';
+import type { CapacityOverride, Diagram, DiagramNode, InstanceSize } from './types';
 
 /**
  * Source-to-source edits used when the diagram is changed on the canvas. Each
@@ -712,7 +712,7 @@ function indentOf(line: string | undefined): string {
  * not connected yet connects them too, as the step needs, labelled with the
  * target's protocol.
  */
-export function addStep(source: string, useCase: string, step: NewStep, scenario?: string, before?: number): EditResult {
+export function addStep(source: string, useCase: string, step: NewStep, scenario?: string, before?: number, design?: Diagram): EditResult {
   const outline = outlineOf(source, useCase);
   if (!outline) return { error: `There is no use case "${useCase}" in this design.` };
   if (step.from === step.to) return { error: 'A step goes from one component to another.' };
@@ -731,7 +731,7 @@ export function addStep(source: string, useCase: string, step: NewStep, scenario
     indent = `${indentOf(lines[branch.line - 1])}  `;
   }
   lines.splice(at, 0, `${indent}${stepText(step)}`);
-  return { source: withConnection(lines.join('\n'), step) };
+  return { source: withConnection(lines.join('\n'), step, design) };
 }
 
 /** `a -> b : label`, the label kept on one line. */
@@ -740,11 +740,17 @@ function stepText(step: NewStep): string {
   return `${step.from} ${STEP_ARROW[step.kind]} ${step.to}${label ? ` : ${label}` : ''}`;
 }
 
-/** The connection a request, message or failed call needs, labelled with its target's protocol as one drawn on the canvas is. */
-function withConnection(source: string, step: NewStep): string {
+/**
+ * The connection a request, message or failed call needs, labelled with its
+ * target's protocol as one drawn on the canvas is. `design` is the whole
+ * design with its imports (a practice problem's given): a connection or type
+ * declared there counts, which the text alone can't see.
+ */
+function withConnection(source: string, step: NewStep, design?: Diagram): string {
   if (step.kind === 'response') return source;
-  const protocol = parse(source).diagram.nodes.find((n) => n.id === step.to)?.resolvedType?.protocol;
-  return addConnection(source, step.from, step.to, protocol);
+  if (design?.edges.some((e) => e.source === step.from && e.target === step.to)) return source;
+  const target = design?.nodes.find((n) => n.id === step.to) ?? parse(source).diagram.nodes.find((n) => n.id === step.to);
+  return addConnection(source, step.from, step.to, target?.resolvedType?.protocol);
 }
 
 /** Every step of an outline: the main flow's, each scenario's and each parallel block's. */
@@ -765,13 +771,13 @@ function outlineWithStep(source: string, line: number): UseCaseOutline | undefin
 }
 
 /** Replaces the step written at `line` (its whole payload too) with `step`, in the same place. */
-export function setStep(source: string, line: number, step: NewStep): EditResult {
+export function setStep(source: string, line: number, step: NewStep, design?: Diagram): EditResult {
   if (step.from === step.to) return { error: 'A step goes from one component to another.' };
   if (!outlineWithStep(source, line)) return { error: 'There is no step on that line.' };
   const lines = source.split('\n');
   const last = statementEnd(lines, line - 1);
   lines.splice(line - 1, last - line + 2, `${indentOf(lines[line - 1])}${stepText(step)}`);
-  return { source: withConnection(lines.join('\n'), step) };
+  return { source: withConnection(lines.join('\n'), step, design) };
 }
 
 /**

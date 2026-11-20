@@ -94,7 +94,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   const baseline = useMemo(() => parse(source).diagnostics.map((d) => `${d.severity}:${d.message}`), [source]);
   const check = (step: NewStepInput, at?: Editing): string[] => {
     if (!current) return [];
-    const result = at ? (at.insert ? addStep(source, current, step, undefined, at.line) : setStep(source, at.line, step)) : addStep(source, current, step, laneNow || undefined);
+    const result = at ? (at.insert ? addStep(source, current, step, undefined, at.line, diagram) : setStep(source, at.line, step, diagram)) : addStep(source, current, step, laneNow || undefined, undefined, diagram);
     if (result.error !== undefined) return [result.error];
     const left = [...baseline];
     return parse(result.source!).diagnostics.flatMap((d) => {
@@ -182,7 +182,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
             check={(s) => check(s, editing)}
             onGiveOps={giveOps}
             onAdd={(s) => {
-              const done = apply(editing.insert ? addStep(source, current, s, undefined, step.line) : setStep(source, step.line, s));
+              const done = apply(editing.insert ? addStep(source, current, s, undefined, step.line, diagram) : setStep(source, step.line, s, diagram));
               if (done) stopEditing();
               return done;
             }}
@@ -397,7 +397,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
                 where={`A step in ${laneNow ? `scenario “${laneNow}”` : scenarios.length ? 'the main flow' : current}.`}
                 check={check}
                 onGiveOps={giveOps}
-                onAdd={(step) => apply(addStep(source, current, step, laneNow || undefined))}
+                onAdd={(step) => apply(addStep(source, current, step, laneNow || undefined, undefined, diagram))}
               />
             ) : (
               <div className="flex flex-wrap gap-2">
