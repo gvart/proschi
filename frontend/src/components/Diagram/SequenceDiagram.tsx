@@ -7,6 +7,7 @@ import { getTechStackIcon } from '../../utils/iconMapping';
 import { eyebrow } from '../Playground/ui';
 import { entrySteps, laneOrder, layoutSequence, sameSlot, SEQ, sequenceEntries, type MessageBox, type Slot, type SlotBox } from './sequenceLayout';
 import { slotNear } from './sequenceEdit';
+import { MOD_KEY } from '../Playground/modKey';
 
 /**
  * A use case as a sequence diagram (the Flows view, FlowsView.tsx): one lane
@@ -15,11 +16,14 @@ import { slotNear } from './sequenceEdit';
  * head, failed calls (`-x`) end in a red cross, and a `par` block is a frame.
  * The main flow folds its scenarios; a scenario's tab shows its branch in
  * place. The messages are a list box: a click or Up and Down select a step,
- * which the canvas and the details beside the diagram show too; Shift or
- * Cmd/Ctrl select several. It is edited in place (FlowsPanel.tsx does the
- * edits): a "+" between the rows, or a drag from one lifeline to another,
- * opens the composer there; Alt+Up and Down move the selected step, Delete
- * removes it, and a `par` frame can be ungrouped or added to.
+ * which the architecture map lights up; Shift or Cmd/Ctrl select several. It
+ * is edited in place (FlowsPanel.tsx does the edits): the selected step has
+ * a toolbar over it, its label is edited on its arrow (Enter or a double
+ * click), and its ends are dragged by their handles to other lanes (or moved
+ * with Alt+Left and Right); a "+" between the rows, or a drag from one
+ * lifeline to another, opens the composer there; Alt+Up and Down move the
+ * selected step, Delete removes it, and a `par` frame can be ungrouped or
+ * added to.
  */
 
 /** How a click or a key changes the selection: to the one step, the steps from the anchor to it, or with it added or taken out. */
@@ -44,8 +48,16 @@ interface SequenceDiagramProps {
   onClear?: () => void;
   /** A `par` frame's Ungroup, by the line that opens it. */
   onUngroup?: (line: number) => void;
-  /** The open composer, drawn at its insertion point. */
-  composer?: { slot: Slot; node: ReactNode };
+  /** The open composer, drawn at its insertion point; or a card (`card`) under a step's row, such as its details. */
+  composer?: { slot: Slot; node: ReactNode; card?: boolean };
+  /** Over the selected step (the one in focus): its toolbar. */
+  toolbar?: ReactNode;
+  /** The selected step's label being edited: the field, drawn on its arrow in place of the label. */
+  editing?: { line: number; node: ReactNode };
+  /** A step's end dragged to another lane (FlowsPanel moves them with Alt+Left and Right too). */
+  onRetarget?: (step: OutlineStep, end: 'from' | 'to', id: string) => void;
+  /** The keys on a selected step that FlowsPanel acts on (its kind, its ends, reply, details); true when it did. */
+  onStepKey?: (e: KeyboardEvent) => boolean;
   /** Changed to put the focus back on the selected message (after an edit took it away). */
   focusKey?: number;
   /** While a step's ends are being picked: a click on a lane's header or lifeline picks its component, as a click on the map does. */
@@ -59,7 +71,28 @@ const LINE_DY = 8;
 /** The lane headers' strip, which stays at the top as the diagram scrolls. */
 const HEADER = 52;
 
-export default function SequenceDiagram({ outline, scenario, diagram, selected, onSelect, onScenario, onInsert, onMove, onDelete, onEdit, onClear, onUngroup, composer, focusKey, onPickLane, fitWidth }: SequenceDiagramProps) {
+export default function SequenceDiagram({
+  outline,
+  scenario,
+  diagram,
+  selected,
+  onSelect,
+  onScenario,
+  onInsert,
+  onMove,
+  onDelete,
+  onEdit,
+  onClear,
+  onUngroup,
+  composer,
+  focusKey,
+  onPickLane,
+  fitWidth,
+  toolbar,
+  editing,
+  onRetarget,
+  onStepKey,
+}: SequenceDiagramProps) {
   const nodes = useMemo(() => new Map(diagram.nodes.map((n) => [n.id, n])), [diagram]);
   const name = (id: string) => nodes.get(id)?.name ?? id;
   const lanes = useMemo(() => laneOrder(outline), [outline]);
@@ -139,6 +172,8 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
     const { slot } = composer;
     const drawn = layout.slots.find((b) => sameSlot(b.slot, slot));
     const m = slot.kind === 'after' ? layout.messages.find((msg) => msg.step.line === slot.line) : undefined;
+    // A card under the row (and under the toolbar, where the first row has it below).
+    if (m && composer.card) return { x: Math.max(2, Math.min(m.x1, m.x2) - 8), top: m.y - SEQ.row / 2, bottom: m.y + SEQ.row / 2 + 6 + (toolbarBelow(m) ? TOOLBAR_H : 0) };
     if (m) {
       // After a step (a reply to it): under its row, which is the anchor; where no "+" is drawn, at the row's foot.
       const box = drawn ?? layout.slots.find((b) => b.slot.kind === 'before' && b.slot.line === m.step.line);
@@ -182,6 +217,33 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
 
   /** A drag from a lifeline: the lane it started at, and where the pointer went down (a press that hardly moves is a click). */
   const [drag, setDrag] = useState<{ from: string; x1: number; x: number; y: number; x0: number; y0: number } | null>(null);
+  /** A selected step's end being dragged to another lane: the step, which end, and where the pointer is. */
+  const [dragged, setEndDrag] = useState<{ line: number; end: 'from' | 'to'; x: number } | null>(null);
+  // Escape lets the drag go.
+  useEffect(() => {
+    if (!dragged) return;
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      setEndDrag(null);
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [dragged]);
+
+  // The toolbar over the selected step, kept in sight across the width the diagram is shown in.
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  const [toolbarWidth, setToolbarWidth] = useState(0);
+  const hasToolbar = toolbar !== undefined && toolbar !== null && toolbar !== false;
+  useLayoutEffect(() => {
+    const el = toolbarRef.current;
+    if (!el) return;
+    setToolbarWidth(el.offsetWidth);
+    const observer = new ResizeObserver(() => setToolbarWidth(el.offsetWidth));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasToolbar, primary]);
 
   if (empty) {
     return (
@@ -208,6 +270,11 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
 
   const onKey = (e: KeyboardEvent) => {
     if ((e.target as Element).getAttribute('role') !== 'option') return;
+    if (primary !== undefined && onStepKey?.(e)) {
+      e.preventDefault();
+      moved.current = true;
+      return;
+    }
     if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
       e.preventDefault();
       if (primary === undefined || !onMove) return;
@@ -258,6 +325,29 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
 
   const number = (line: number) => layout.messages.find((m) => m.step.line === line)?.n;
 
+  // The step in focus: its toolbar, its label's field and (when it alone is selected) its end handles go with it.
+  const focused = layout.messages.find((m) => m.step.line === primary);
+  // Only for the step it started on, while it is still the one selected.
+  const endDrag = dragged && focused && dragged.line === focused.step.line && selected.length === 1 ? dragged : null;
+  const toolbarBox = (() => {
+    if (!focused || !hasToolbar) return undefined;
+    const centre = focused.x1 === focused.x2 ? focused.x1 + SEQ.loop + 40 : (focused.x1 + focused.x2) / 2;
+    const above = toolbarTop(focused);
+    // In the width the diagram is shown in: from the left of the view (the lanes may be centred in it) to its right.
+    const lo = 4 - offset;
+    const hi = Math.max(layout.width, (fit ?? layout.width) - offset) - toolbarWidth - 4;
+    return { left: Math.max(lo, Math.min(hi, centre - toolbarWidth / 2)), top: toolbarBelow(focused) ? focused.y + LINE_DY + 14 : above, below: toolbarBelow(focused) };
+  })();
+  const editBox = editing && layout.messages.find((m) => m.step.line === editing.line);
+  /** The lane an end is dragged to: the nearest, near enough; the step's other end (a step to itself) is refused. */
+  const endTarget = (() => {
+    if (!endDrag || !focused) return undefined;
+    const near = layout.lanes.reduce((best, l) => (Math.abs(l.x - endDrag.x) < Math.abs(best.x - endDrag.x) ? l : best), layout.lanes[0]);
+    if (!near || Math.abs(near.x - endDrag.x) > 48) return undefined;
+    const other = endDrag.end === 'from' ? focused.step.to : focused.step.from;
+    return { lane: near, refused: near.id === other };
+  })();
+
   return (
     <div ref={rootRef} className="group/seq relative min-w-full" style={{ width: layout.width }}>
       {/* The lane headers: each component's icon and name, like its node on the canvas, and while a step's ends are
@@ -292,7 +382,7 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
         })}
       </div>
       {/* As tall as the composer reaches too, so what scrolls the diagram (its own box, or the column on a narrow pane) takes it in. */}
-      <div ref={contentRef} className="relative" style={{ marginLeft: offset, width: layout.width, height: Math.max(layout.height, composerTop === undefined ? 0 : composerTop + composerHeight + 8) }}>
+      <div ref={contentRef} className="relative" style={{ marginLeft: offset, marginTop: TOP_ROOM, width: layout.width, height: Math.max(layout.height, composerTop === undefined ? 0 : composerTop + composerHeight + 8) }}>
         {/* Frames under everything: a par block, the chosen scenario's branch. Their titles (and a par block's actions) go over the lifelines, below. */}
         {layout.frames.map((f) => (
           <div
@@ -304,11 +394,24 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
         ))}
         <svg className="pointer-events-none absolute left-0 top-0 overflow-visible" width={layout.width} height={layout.height} aria-hidden="true">
           {layout.lanes.map((lane) => (
-            <line key={lane.id} x1={lane.x} x2={lane.x} y1={0} y2={layout.height} className={target?.id === lane.id || drag?.from === lane.id ? 'stroke-pop-pink' : 'stroke-ink/25'} strokeWidth={1.5} strokeDasharray="4 5" />
+            <line key={lane.id} x1={lane.x} x2={lane.x} y1={0} y2={layout.height} className={target?.id === lane.id || drag?.from === lane.id || (endTarget && !endTarget.refused && endTarget.lane.id === lane.id) ? 'stroke-pop-pink' : 'stroke-ink/25'} strokeWidth={1.5} strokeDasharray="4 5" />
           ))}
           {layout.messages.map((m) => (
             <Arrow key={m.step.line} m={m} selected={selected.includes(m.step.line)} />
           ))}
+          {endDrag && focused && (
+            // The arrow as it would be: from the end that stays to the lane it would go to, or the pointer.
+            <line
+              data-end-ghost={endTarget?.refused ? 'refused' : endTarget ? 'lane' : 'free'}
+              className={endTarget?.refused ? 'stroke-fail' : 'stroke-pop-pink'}
+              strokeWidth={2}
+              strokeDasharray="5 4"
+              x1={endDrag.end === 'from' ? focused.x2 : focused.x1}
+              x2={endTarget && !endTarget.refused ? endTarget.lane.x : endDrag.x}
+              y1={focused.y + LINE_DY}
+              y2={focused.y + LINE_DY}
+            />
+          )}
           {drag && (
             <g className="stroke-pop-pink" strokeWidth={2} fill="none">
               {ghostSlot && <line x1={ghostSlot.x + 22} x2={layout.width - 8} y1={ghostSlot.y} y2={ghostSlot.y} strokeDasharray="5 4" strokeWidth={1.5} />}
@@ -433,9 +536,69 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
           className="pointer-events-none absolute inset-0"
         >
           {layout.messages.map((m) => (
-            <Message key={m.step.line} m={m} name={name} selected={selected.includes(m.step.line)} focusable={m.step.line === focusable} onSelect={(mode) => onSelect(m.step, mode)} />
+            <Message
+              key={m.step.line}
+              m={m}
+              name={name}
+              selected={selected.includes(m.step.line)}
+              focusable={m.step.line === focusable}
+              editing={editing?.line === m.step.line}
+              onSelect={(mode) => onSelect(m.step, mode)}
+              onEdit={onEdit}
+            />
           ))}
         </div>
+        {/* Right after the list, so Tab goes from the selected step to its toolbar. Under the sticky lane headers. */}
+        {toolbarBox && (
+          <div ref={toolbarRef} data-step-toolbar={toolbarBox.below ? 'below' : 'above'} className="absolute z-30" style={{ left: toolbarBox.left, top: toolbarBox.top }}>
+            {toolbar}
+          </div>
+        )}
+        {editBox && editing && (
+          <div
+            data-label-editor
+            className="absolute z-30"
+            style={{
+              left: Math.min(editBox.x1, editBox.x2) + 6,
+              top: editBox.y - SEQ.row / 2 + 1,
+              width: Math.max(260, editBox.x1 === editBox.x2 ? SEQ.loop + editBox.labelWidth + SEQ.labelChrome + 24 : Math.abs(editBox.x2 - editBox.x1) - 12),
+            }}
+          >
+            {editing.node}
+          </div>
+        )}
+        {/* The selected step's end handles: drag one to another lane to change where the step starts or goes. Over the lifelines' strips. */}
+        {onRetarget &&
+          focused &&
+          selected.length === 1 &&
+          focused.x1 !== focused.x2 &&
+          (['from', 'to'] as const).map((end) => (
+            <div
+              key={end}
+              data-end-handle={end}
+              aria-hidden="true"
+              title={end === 'from' ? `Drag to change where it starts (${ALT_KEY}+Shift+← →)` : `Drag to change where it goes (${ALT_KEY}+← →)`}
+              className="group/end absolute z-20 grid h-6 w-6 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize touch-none place-items-center"
+              style={{ left: endDrag?.end === end ? endDrag.x : end === 'from' ? focused.x1 : focused.x2, top: focused.y + LINE_DY }}
+              onPointerDown={(e) => {
+                if (e.button !== 0) return;
+                e.preventDefault();
+                e.stopPropagation();
+                e.currentTarget.setPointerCapture(e.pointerId);
+                setEndDrag({ line: focused.step.line, end, x: pointerAt(e).x });
+              }}
+              onPointerMove={(e) => endDrag && setEndDrag({ ...endDrag, x: pointerAt(e).x })}
+              onPointerUp={() => {
+                if (!endDrag) return;
+                const t = endTarget;
+                setEndDrag(null);
+                if (t && t.lane.id !== (end === 'from' ? focused.step.from : focused.step.to)) onRetarget(focused.step, end, t.lane.id);
+              }}
+              onPointerCancel={() => setEndDrag(null)}
+            >
+              <span className="h-2.5 w-2.5 rounded-full border-2 border-pop-pink bg-surface transition-transform group-hover/end:scale-150" />
+            </div>
+          ))}
         {/* The insertion points: a "+" at the left of each row boundary, seen while the pointer is over the diagram or one is focused. */}
         {onInsert &&
           layout.slots.map((box) => (
@@ -443,7 +606,7 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
               key={slotKey(box.slot)}
               box={box}
               width={layout.width}
-              open={!!composer && sameSlot(composer.slot, box.slot)}
+              open={!!composer && !composer.card && sameSlot(composer.slot, box.slot)}
               label={
                 box.slot.kind === 'before'
                   ? `Add a step before step ${number(box.slot.line)}`
@@ -460,7 +623,9 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
           ))}
         {composer && placement && composerTop !== undefined && (
           <>
-            <div aria-hidden="true" className="pointer-events-none absolute border-t-2 border-dashed border-pop-pink" style={{ left: placement.x + 22, top: placement.bottom - 1, width: Math.max(0, layout.width - placement.x - 30) }} />
+            {!composer.card && (
+              <div aria-hidden="true" className="pointer-events-none absolute border-t-2 border-dashed border-pop-pink" style={{ left: placement.x + 22, top: placement.bottom - 1, width: Math.max(0, layout.width - placement.x - 30) }} />
+            )}
             <div
               ref={composerRef}
               data-placement={above ? 'above' : 'below'}
@@ -477,6 +642,14 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
 }
 
 const KIND_TAG: Partial<Record<OutlineStep['kind'], string>> = { async: 'message', failed: 'fails' };
+/** The step toolbar's height, to put it over the row. */
+const TOOLBAR_H = 34;
+/** Room over the first row, for its toolbar. */
+const TOP_ROOM = 32;
+const ALT_KEY = MOD_KEY === '⌘' ? '⌥' : 'Alt';
+/** Where the toolbar goes over a row; under it where there is no room over it (the first row). */
+const toolbarTop = (m: MessageBox) => m.y - SEQ.row / 2 - TOOLBAR_H + 2;
+const toolbarBelow = (m: MessageBox) => toolbarTop(m) < -TOP_ROOM;
 
 /** What scrolls the diagram: the Flows view's one scrolling surface, else (outside the view) its own box. */
 function scrollerOf(root: HTMLElement): HTMLElement {
@@ -506,7 +679,25 @@ function InsertPoint({ box, width, open, label, onOpen }: { box: SlotBox; width:
 }
 
 /** A message's row: its number and label over the arrow, the target of clicks and keys. */
-function Message({ m, name, selected, focusable, onSelect }: { m: MessageBox; name: (id: string) => string; selected: boolean; focusable: boolean; onSelect: (mode: SelectMode) => void }) {
+function Message({
+  m,
+  name,
+  selected,
+  focusable,
+  editing,
+  onSelect,
+  onEdit,
+}: {
+  m: MessageBox;
+  name: (id: string) => string;
+  selected: boolean;
+  focusable: boolean;
+  /** Its label is being edited: the field is drawn over it. */
+  editing: boolean;
+  onSelect: (mode: SelectMode) => void;
+  /** A double click edits the label. */
+  onEdit?: () => void;
+}) {
   const { step } = m;
   const self = m.x1 === m.x2;
   const left = self ? m.x1 + 6 : Math.min(m.x1, m.x2) + 6;
@@ -529,11 +720,15 @@ function Message({ m, name, selected, focusable, onSelect }: { m: MessageBox; na
         e.currentTarget.focus({ preventScroll: true });
         onSelect(e.shiftKey ? 'range' : e.metaKey || e.ctrlKey ? 'toggle' : 'only');
       }}
+      onDoubleClick={(e) => {
+        if (e.shiftKey || e.metaKey || e.ctrlKey) return;
+        onEdit?.();
+      }}
       className={`group/msg pointer-events-auto absolute flex scroll-mt-16 cursor-pointer select-none justify-center rounded-sm outline-hidden focus-visible:ring-2 focus-visible:ring-ink ${self ? '!justify-start pl-[52px]' : ''}`}
       style={{ left, width, top: m.y - SEQ.row / 2 + 1, height: SEQ.row - 2 }}
     >
       <span
-        className={`mt-0.5 inline-flex h-[21px] max-w-full items-center gap-1.5 self-start rounded-sm border-bw-1 bg-surface pl-0.5 pr-1.5 ${
+        className={`mt-0.5 inline-flex h-[21px] max-w-full items-center gap-1.5 self-start rounded-sm border-bw-1 bg-surface pl-0.5 pr-1.5 ${editing ? 'invisible' : ''} ${
           selected ? 'border-ink shadow-brutal-sm' : 'border-transparent group-hover/msg:border-ink/40'
         }`}
       >

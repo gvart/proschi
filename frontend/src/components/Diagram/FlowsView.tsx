@@ -70,10 +70,8 @@ export function FlowsView({ phone, view, onToggle, onUndo, onRedo, children }: F
 }
 
 interface FlowsScrollerProps {
-  /** The sequence diagram, given the width it has to fit its lanes in (the view's less the column's). */
+  /** The sequence diagram, given the width it has to fit its lanes in (the view's). */
   children: (fit: number | undefined) => ReactNode;
-  /** Beside the diagram, on the right: stays in sight as the view scrolls, and has no scroll of its own. */
-  column: ReactNode;
   /** Floats over the diagram's bottom right corner (the architecture map), and keeps clear of the selected step. */
   float?: ReactNode;
 }
@@ -83,32 +81,26 @@ const LANE_HEADERS = 52;
 /** Between what floats and the edges. */
 const GAP = 12;
 
-type Size = { width: number; height: number; bar: number; barBottom: number; column: number; columnHeight: number; float: number };
+type Size = { width: number; bar: number; barBottom: number; float: number };
 
 /**
  * The body of the Flows view: one scrolling surface, the only one in the view. The diagram's lane headers stick at
- * its top; the lanes fit its width and only an over-wide diagram scrolls it sideways. The column beside it sticks too
- * (and, taller than the view, scrolls along until its foot shows, rather than scroll on its own). What floats sits in
- * the bottom corner and moves to the top corner while the selected step or the composer would be under it.
+ * its top; the lanes fit its width and only an over-wide diagram scrolls it sideways. What floats sits in the bottom
+ * corner and moves to the top corner while the selected step, its toolbar or a card would be under it.
  */
-export function FlowsScroller({ children, column, float }: FlowsScrollerProps) {
+export function FlowsScroller({ children, float }: FlowsScrollerProps) {
   const scrollerRef = useRef<HTMLDivElement>(null);
-  const columnRef = useRef<HTMLDivElement>(null);
   const floatRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState<Size>();
   const floats = !!float;
   useLayoutEffect(() => {
     const scroller = scrollerRef.current;
-    const col = columnRef.current;
-    if (!scroller || !col) return;
+    if (!scroller) return;
     const measure = () => {
       const next: Size = {
         width: scroller.clientWidth,
-        height: scroller.clientHeight,
         bar: scroller.offsetWidth - scroller.clientWidth,
         barBottom: scroller.offsetHeight - scroller.clientHeight,
-        column: col.offsetWidth,
-        columnHeight: col.offsetHeight,
         float: floatRef.current?.offsetHeight ?? 0,
       };
       setSize((prev) => (prev && (Object.keys(next) as (keyof Size)[]).every((k) => prev[k] === next[k]) ? prev : next));
@@ -116,7 +108,6 @@ export function FlowsScroller({ children, column, float }: FlowsScrollerProps) {
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(scroller);
-    observer.observe(col);
     // The content's size decides whether there are scrollbars.
     if (scroller.firstElementChild) observer.observe(scroller.firstElementChild);
     if (floatRef.current) observer.observe(floatRef.current);
@@ -136,14 +127,14 @@ export function FlowsScroller({ children, column, float }: FlowsScrollerProps) {
         if (!box) return;
         const s = scroller.getBoundingClientRect();
         const bottom = { left: box.left, right: box.right, top: s.top + scroller.clientHeight - GAP - box.height, bottom: s.top + scroller.clientHeight - GAP };
-        const work = [...scroller.querySelectorAll<HTMLElement>('[role="option"][aria-selected="true"], [role="dialog"]')].map((el) => el.getBoundingClientRect());
+        const work = [...scroller.querySelectorAll<HTMLElement>('[role="option"][aria-selected="true"], [role="dialog"], [data-step-toolbar], [data-label-editor]')].map((el) => el.getBoundingClientRect());
         setUp(work.some((w) => w.left < bottom.right && w.right > bottom.left && w.top < bottom.bottom && w.bottom > bottom.top));
       });
     };
     check();
     scroller.addEventListener('scroll', check, { passive: true });
     const observer = new MutationObserver(check);
-    observer.observe(scroller, { subtree: true, childList: true, attributes: true, attributeFilter: ['aria-selected'] });
+    observer.observe(scroller, { subtree: true, childList: true, attributes: true, attributeFilter: ['aria-selected', 'style'] });
     window.addEventListener('resize', check);
     return () => {
       cancelAnimationFrame(frame);
@@ -159,17 +150,7 @@ export function FlowsScroller({ children, column, float }: FlowsScrollerProps) {
         <div className="flex min-h-full w-max min-w-full">
           {/* Room at the foot, so the last rows scroll clear of what floats in the corner. */}
           <div className="flex min-w-0 flex-1 flex-col" style={{ paddingBottom: (size?.float ?? 0) + GAP * 2 }}>
-            {children(size ? size.width - size.column : undefined)}
-          </div>
-          <div
-            ref={columnRef}
-            data-flows-column
-            className="sticky right-0 z-[41] w-72 shrink-0 self-start border-l border-ink/15 bg-surface @5xl:w-80"
-            // Over the diagram's sticky lane headers (z-40) where an over-wide diagram runs under it. Taller than the view, it
-            // scrolls along with the diagram until its foot is in sight, then stays.
-            style={{ top: size ? Math.min(0, size.height - size.columnHeight) : 0, minHeight: size?.height }}
-          >
-            {column}
+            {children(size?.width)}
           </div>
         </div>
       </div>
@@ -177,7 +158,7 @@ export function FlowsScroller({ children, column, float }: FlowsScrollerProps) {
         <div
           ref={floatRef}
           className="absolute z-30"
-          style={{ right: (size?.column ?? 0) + (size?.bar ?? 0) + GAP, ...(up ? { top: LANE_HEADERS + GAP } : { bottom: (size?.barBottom ?? 0) + GAP }) }}
+          style={{ right: (size?.bar ?? 0) + GAP, ...(up ? { top: LANE_HEADERS + GAP } : { bottom: (size?.barBottom ?? 0) + GAP }) }}
         >
           {float}
         </div>
