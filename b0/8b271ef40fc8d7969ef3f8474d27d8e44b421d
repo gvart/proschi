@@ -1,0 +1,29 @@
+frontend/e2e/selection-tab.e2e.ts
+  s_733d66441cadaa::t_95bf45a331818d 76,78-81
+frontend/e2e/canvas-parity.e2e.ts
+  s_733d66441cadaa::t_95bf45a331818d 209,212,349-350,359-360
+frontend/src/components/Diagram/SequenceDiagram.tsx
+  s_733d66441cadaa::t_405a24282e363a 81,139
+  s_733d66441cadaa::t_9ca371d502a1dd 154,184
+frontend/e2e/canvas-keys.e2e.ts
+  s_733d66441cadaa::t_06613eaaeb194f 93-97
+frontend/e2e/flows-pane.e2e.ts
+  s_733d66441cadaa::t_4c815f6f15857d 1-215,217-220,222-279
+  s_733d66441cadaa::t_776a119ac126a9 216,221
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b08b271ef40fc8d7969ef3f8474d27d8e44b421d",
+  "prompts": {},
+  "sessions": {
+    "s_733d66441cadaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9649973d-f497-4440-b031-a92483a592e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
