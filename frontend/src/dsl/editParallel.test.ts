@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addParallelStep, addStep, groupParallel, moveStep, outlineOf, setStep, ungroupParallel, type EditResult, type NewStep, type OutlineBranch, type OutlineParallel, type OutlineStep } from './edit';
+import { addParallelStep, addStep, addStepAfter, groupParallel, moveStep, outlineOf, setStep, ungroupParallel, type EditResult, type NewStep, type OutlineBranch, type OutlineParallel, type OutlineStep } from './edit';
 import { format } from './format';
 import { parse } from './parser';
 import { problems } from '../practice/catalog';
@@ -256,6 +256,29 @@ describe('adding a step alongside the ones in a par block', () => {
     expect(addParallelStep(src, 12, req('api', 'db')).error).toMatch(/no steps that run at the same time/);
     const grouped = ok(groupParallel(src, [13, 15]));
     expect(addParallelStep(grouped, 13, req('api', 'api')).error).toMatch(/one component to another/);
+  });
+});
+
+describe('adding a step right after another', () => {
+  it('goes after it in its own block, before the block that follows it', () => {
+    // Line 15 is the receipt; a par block of 15 and 16 comes before the scenarios.
+    const grouped = ok(groupParallel(src, [15, 16]));
+    const after = ok(addStepAfter(grouped, 'Order', { from: 'db', to: 'api', kind: 'response', label: 'ok' }, 13));
+    expect(after).toBe(grouped.replace('  api -> db : INSERT order\n', '  api -> db : INSERT order\n  db --> api : ok\n'));
+    // After the last step of a par block, inside it; after a scenario's step, in its branch.
+    expect(labels(parallels(ok(addStepAfter(grouped, 'Order', req('api', 'db', 'x'), 17)), 'Order')[0].steps)).toEqual(['SEND receipt', 'SET order', 'x']);
+    expect(labels(branch(ok(addStepAfter(src, 'Order', req('api', 'db', 'x'), 18)), 'Order', 'Hit').steps)).toEqual(['GET order', 'x', 'SELECT order', 'order']);
+  });
+
+  it('goes after the whole of a step with a payload over several lines, and is connected as addStep does', () => {
+    const multi = 'a\nb\nc\na -> b\nusecase "U" {\n  a -> b : POST /x {\n    "id": 1\n  }\n  b --> a : 201\n}\n';
+    expect(ok(addStepAfter(multi, 'U', req('b', 'c', 'GET'), 6))).toBe('a\nb\nc\na -> b\nb -> c\nusecase "U" {\n  a -> b : POST /x {\n    "id": 1\n  }\n  b -> c : GET\n  b --> a : 201\n}\n');
+  });
+
+  it('refuses a line with no step of the use case, and a step to itself', () => {
+    expect(addStepAfter(src, 'Order', req('api', 'db'), 11).error).toMatch(/no step on that line/);
+    expect(addStepAfter(src, 'Nope', req('api', 'db'), 12).error).toMatch(/no use case/);
+    expect(addStepAfter(src, 'Order', req('api', 'api'), 12).error).toMatch(/one component to another/);
   });
 });
 
