@@ -1,4 +1,4 @@
-import { useEffect, useRef, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react';
 import { getNodesBounds, getViewportForBounds, useNodesInitialized, useReactFlow, useStore, useStoreApi } from 'reactflow';
 
 const PADDING = 0.15;
@@ -32,6 +32,12 @@ interface FitOptions {
   /** The width of a panel floating over the pane's right side: the diagram fits beside it. A change re-fits like `glide`. */
   right?: number;
   /**
+   * Like `glide`, but the re-fit is not animated: it is made before the pane is drawn at its new size, so the diagram
+   * never shows cropped in between (a phone's sheet, which takes half of the pane at once). It leaves a view the reader
+   * zoomed or panned alone, as `glide` does.
+   */
+  still?: string;
+  /**
    * The component the canvas added last. While it is new to the fit (or the one the last fit followed), and the
    * nodes before it are all still there, the fit keeps a readable zoom (ADD_MIN_ZOOM) and pans to it.
    */
@@ -53,7 +59,7 @@ const MIN_FIT_WIDTH = 160;
  * and when the pane is shown again its resize observer corrects that a moment
  * later; fitting in between would centre the diagram in the wrong box.
  */
-export function useFitOnChange(key: string, { duration, wrapper, inset, glide = '', right: rightInset, added: addedId }: FitOptions = {}) {
+export function useFitOnChange(key: string, { duration, wrapper, inset, glide = '', right: rightInset, added: addedId, still = '' }: FitOptions = {}) {
   const { setViewport } = useReactFlow();
   const store = useStoreApi();
   const measured = useNodesInitialized();
@@ -64,7 +70,7 @@ export function useFitOnChange(key: string, { duration, wrapper, inset, glide = 
   const bottom = Math.max(0, Math.round(inset?.bottom ?? 0));
   const right = Math.max(0, Math.round(rightInset ?? 0));
   const baseKey = `${key}|${top}|${bottom}`;
-  const fitKey = `${baseKey}|${right}|${glide}`;
+  const fitKey = `${baseKey}|${right}|${glide}|${still}`;
   const fitted = useRef<string | undefined>(undefined);
   /** The base key of the last fit, to tell a glide-only change. */
   const fittedBase = useRef<string | undefined>(undefined);
@@ -75,57 +81,85 @@ export function useFitOnChange(key: string, { duration, wrapper, inset, glide = 
   /** The nodes of the last fit, to tell an addition; and the node it followed (see `added`). */
   const fittedIds = useRef<ReadonlySet<string>>(new Set());
   const added = useRef<string | undefined>(undefined);
+  /** The `still` of the last fit, to tell a change of it, which is fitted before paint. */
+  const fittedStill = useRef(still);
+
+  /**
+   * Fits the view for the current keys. `now` fits before paint, at once, at the size the pane has in the page (React
+   * Flow learns it only after paint); when that can't be done yet, the fit is left to the next frame.
+   */
+  const fit = (now: boolean) => {
+    // A hidden pane has no size; fitting it would produce NaN. Fit again when it is shown, even if nothing else changed.
+    if (wrapper && !wrapper.current?.offsetWidth) {
+      fitted.current = undefined;
+      return;
+    }
+    const state = store.getState();
+    const { domNode, getNodes, minZoom, maxZoom, nodeOrigin, d3Zoom, d3Selection } = state;
+    if (!domNode?.offsetWidth || (now && (!d3Zoom || !d3Selection))) return;
+    const [width, height] = now ? [domNode.offsetWidth, domNode.offsetHeight] : [state.width, state.height];
+    if (Math.abs(domNode.offsetWidth - width) > 1 || Math.abs(domNode.offsetHeight - height) > 1) return;
+    const reduced = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const glideOnly = fittedBase.current === baseKey;
+    // Only what covers the pane changed (a bar's height, a docked card): like a glide, it leaves a view the reader moved.
+    const coverOnly = fittedKey.current === key;
+    fitted.current = fitKey;
+    fittedBase.current = baseKey;
+    fittedKey.current = key;
+    fittedStill.current = still;
+    if ((glideOnly || coverOnly) && movedByHand(store.getState().transform, target.current)) return;
+    const ms = now ? 0 : glideOnly && !reduced ? GLIDE_MS : duration;
+    const nodes = getNodes().filter((n) => !n.hidden);
+    if (nodes.length === 0) return;
+    const ids = new Set(nodes.map((n) => n.id));
+    const before = fittedIds.current;
+    // Added on the canvas to the nodes there were; the later fits of the same nodes (a layout settling, its id
+    // following its name) follow it too.
+    const kept = [...before].every((id) => ids.has(id) || id === added.current);
+    const follow = !!addedId && ids.has(addedId) && kept && (!before.has(addedId) || added.current === addedId);
+    added.current = follow ? addedId : undefined;
+    fittedIds.current = ids;
+    const free = height - top - bottom;
+    const covered = (top || bottom) && free > height / 4;
+    // Beside a floating panel only while that leaves a usable strip; past that the panel is the reader's focus.
+    const freeWidth = width - right >= MIN_FIT_WIDTH ? width - right : width;
+    const freeHeight = covered ? free : height;
+    const viewport = getViewportForBounds(getNodesBounds(nodes, nodeOrigin), freeWidth, freeHeight, minZoom, Math.min(maxZoom, FIT_MAX_ZOOM), PADDING);
+    const newest = added.current ? nodes.find((n) => n.id === added.current) : undefined;
+    // Too small to read after an addition: the newest node at a readable zoom, in the middle of the free part.
+    const readable =
+      newest && viewport.zoom < ADD_MIN_ZOOM
+        ? (() => {
+            const at = newest.positionAbsolute ?? newest.position;
+            const zoom = Math.min(ADD_MIN_ZOOM, maxZoom);
+            return { x: freeWidth / 2 - (at.x + (newest.width ?? 0) / 2) * zoom, y: freeHeight / 2 - (at.y + (newest.height ?? 0) / 2) * zoom, zoom };
+          })()
+        : viewport;
+    const next = covered ? { ...readable, y: readable.y + top } : readable;
+    target.current = { ...next, at: performance.now() + (ms ?? 0) };
+    if (now) {
+      // Not setViewport, whose transition (even of no duration) starts on the next frame: the zoom's own transform at
+      // once, which React Flow draws before paint. The world's origin goes to the view's, so the fit's x and y are exact.
+      d3Zoom!.scaleTo(d3Selection!, next.zoom, [0, 0]);
+      d3Zoom!.translateTo(d3Selection!, -next.x / next.zoom, -next.y / next.zoom, [0, 0]);
+    } else setViewport(next, { duration: ms });
+  };
+  const fitRef = useRef(fit);
+  useLayoutEffect(() => {
+    fitRef.current = fit;
+  });
+
+  // A change of `still` (the pane resized at once, in this commit): fitted now, before paint.
+  useLayoutEffect(() => {
+    if (!measured || !sized || fitted.current === fitKey || fittedStill.current === still) return;
+    fitRef.current(true);
+  }, [fitKey, still, measured, sized]);
+
   useEffect(() => {
     if (!measured || !sized || fitted.current === fitKey) return;
-    const frame = requestAnimationFrame(() => {
-      // A hidden pane has no size; fitting it would produce NaN. Fit again when it is shown, even if nothing else changed.
-      if (wrapper && !wrapper.current?.offsetWidth) {
-        fitted.current = undefined;
-        return;
-      }
-      const { domNode, width, height, getNodes, minZoom, maxZoom, nodeOrigin } = store.getState();
-      if (!domNode?.offsetWidth || Math.abs(domNode.offsetWidth - width) > 1 || Math.abs(domNode.offsetHeight - height) > 1) return;
-      const reduced = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      const glideOnly = fittedBase.current === baseKey;
-      // Only what covers the pane changed (a bar's height, a docked card): like a glide, it leaves a view the reader moved.
-      const coverOnly = fittedKey.current === key;
-      fitted.current = fitKey;
-      fittedBase.current = baseKey;
-      fittedKey.current = key;
-      if ((glideOnly || coverOnly) && movedByHand(store.getState().transform, target.current)) return;
-      const ms = glideOnly && !reduced ? GLIDE_MS : duration;
-      const nodes = getNodes().filter((n) => !n.hidden);
-      if (nodes.length === 0) return;
-      const ids = new Set(nodes.map((n) => n.id));
-      const before = fittedIds.current;
-      // Added on the canvas to the nodes there were; the later fits of the same nodes (a layout settling, its id
-      // following its name) follow it too.
-      const kept = [...before].every((id) => ids.has(id) || id === added.current);
-      const follow = !!addedId && ids.has(addedId) && kept && (!before.has(addedId) || added.current === addedId);
-      added.current = follow ? addedId : undefined;
-      fittedIds.current = ids;
-      const free = height - top - bottom;
-      const covered = (top || bottom) && free > height / 4;
-      // Beside a floating panel only while that leaves a usable strip; past that the panel is the reader's focus.
-      const freeWidth = width - right >= MIN_FIT_WIDTH ? width - right : width;
-      const freeHeight = covered ? free : height;
-      const viewport = getViewportForBounds(getNodesBounds(nodes, nodeOrigin), freeWidth, freeHeight, minZoom, Math.min(maxZoom, FIT_MAX_ZOOM), PADDING);
-      const newest = added.current ? nodes.find((n) => n.id === added.current) : undefined;
-      // Too small to read after an addition: the newest node at a readable zoom, in the middle of the free part.
-      const readable =
-        newest && viewport.zoom < ADD_MIN_ZOOM
-          ? (() => {
-              const at = newest.positionAbsolute ?? newest.position;
-              const zoom = Math.min(ADD_MIN_ZOOM, maxZoom);
-              return { x: freeWidth / 2 - (at.x + (newest.width ?? 0) / 2) * zoom, y: freeHeight / 2 - (at.y + (newest.height ?? 0) / 2) * zoom, zoom };
-            })()
-          : viewport;
-      const next = covered ? { ...readable, y: readable.y + top } : readable;
-      target.current = { ...next, at: performance.now() + (ms ?? 0) };
-      setViewport(next, { duration: ms });
-    });
+    const frame = requestAnimationFrame(() => fitRef.current(false));
     return () => cancelAnimationFrame(frame);
-  }, [fitKey, baseKey, key, measured, sized, paneSize, setViewport, duration, wrapper, store, top, bottom, right, addedId]);
+  }, [fitKey, measured, sized, paneSize]);
 }
 
 /** Whether the view is not where the last fit left it (after its glide): the reader zoomed or panned since. */

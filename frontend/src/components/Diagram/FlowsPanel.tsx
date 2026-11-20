@@ -22,7 +22,7 @@ import {
 import { parse } from '../../dsl/parser';
 import type { Diagram } from '../../dsl/types';
 import { eyebrow, field, iconButton, outlineButton, primaryButton, toolButton } from '../Playground/ui';
-import { defaultStepKind, missingScenarios, missingUseCases, openRequest, outlineSteps } from './flows';
+import { defaultStepKind, missingScenarios, missingUseCases, nextPick, openRequest, outlineSteps } from './flows';
 import { stepVocabulary, type UsedStep } from '../../dsl/typesys/vocabulary';
 import StepLabelField from './StepLabelField';
 import { composeLabel, isHttpHead, splitLabel, type LabelParts } from './stepLabel';
@@ -30,7 +30,7 @@ import { accessOf } from '../../dsl/access';
 import Select from '../../design/Select';
 import { MOD_KEY } from '../Playground/modKey';
 import SequenceDiagram, { type SelectMode } from './SequenceDiagram';
-import { allSteps, entrySteps, followStep, scenarioOfStep, sequenceEntries, type Slot } from './sequenceLayout';
+import { allSteps, entrySteps, followStep, inParallel, scenarioOfStep, sequenceEntries, type Slot } from './sequenceLayout';
 import { insertAt, insertedStep, movedStep, samePlaces, unanswered } from './sequenceEdit';
 
 /**
@@ -229,7 +229,15 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
       return step ? [step] : [];
     }, focus);
   };
-  const group = () => commit(groupParallel(source, followed.map((s) => s.line)), (after) => samePlaces(steps, after, followed), true);
+  /** A selected step already in a par block, which groupParallel refuses: the selection is not offered to run at the same time. */
+  const grouped = outline ? followed.find((s) => inParallel(outline.items, s.line)) : undefined;
+  const canGroup = followed.length > 1 && !grouped;
+  // The new block's first step is selected, so the action is not offered again for steps that now run at the same time.
+  const group = () =>
+    commit(groupParallel(source, followed.map((s) => s.line)), (after) => {
+      const placed = samePlaces(steps, after, followed);
+      return placed && [placed.reduce((a, b) => (b.line < a.line ? b : a))];
+    }, true);
   const ungroup = (line: number) => commit(ungroupParallel(source, line), (after) => samePlaces(steps, after, followed), true);
   const openComposer = (slot: Slot, index: number, stepEnds?: { from: string; to: string }) => {
     setError(undefined);
@@ -632,7 +640,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
         <section aria-label="Selected steps" className="space-y-2">
           <p className="text-sm font-semibold">{followed.length} steps selected</p>
           <div className="flex flex-wrap gap-1.5">
-            {runTogether}
+            {canGroup && runTogether}
             <button type="button" onClick={() => deleteSelected(true)} className={`${toolButton} !px-2 !py-1 text-xs text-red-700 dark:text-red-300`}>
               <Trash2 size={13} aria-hidden="true" />
               Delete them
@@ -641,7 +649,11 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
               Clear
             </button>
           </div>
-          <p className="text-xs text-muted">Steps that follow each other in one flow or scenario can run at the same time.</p>
+          <p className="text-xs text-muted">
+            {grouped
+              ? `Step ${drawnNumbers?.get(grouped.line)} already runs at the same time as others: ungroup its block first.`
+              : 'Steps that follow each other in one flow or scenario can run at the same time.'}
+          </p>
         </section>
       ) : chosen ? (
         <section aria-label="Selected step" className="space-y-2">
@@ -720,7 +732,14 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
                 e.stopPropagation();
                 closeComposer();
               }}
-              className="shadow-brutal-md"
+              // As tall as the diagram in sight lets it be (SequenceDiagram sets --composer-max): its body scrolls, its buttons pinned at
+              // its foot, and a field that takes the focus is scrolled clear of them.
+              className="max-h-[var(--composer-max,none)] scroll-pb-14 overflow-y-auto overscroll-contain rounded-sm shadow-brutal-md"
+              // The browser scrolls a focused field into sight however the top falls: snapped after it, to a whole line.
+              onFocus={(e) => {
+                const box = e.currentTarget;
+                requestAnimationFrame(() => snapToField(box));
+              }}
             >
               <StepForm
                 key={`${composing.slot.kind}:${'line' in composing.slot ? composing.slot.line : 'name' in composing.slot ? composing.slot.name : ''}`}
@@ -790,14 +809,15 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
               <AddScenario suggestions={missingScenarios(diagram, current, scenarios)} onAdd={newScenario} />
             </div>
           )}
-          {followed.length > 1 && <div className="ml-auto shrink-0">{runTogether}</div>}
-          <button type="button" aria-label="Close the flows" title="Close the flows" onClick={onClose} className={`${iconButton} ${followed.length > 1 ? '' : 'ml-auto'} !h-8 !w-8 shrink-0`}>
+          {canGroup && <div className="ml-auto shrink-0">{runTogether}</div>}
+          <button type="button" aria-label="Close the flows" title="Close the flows" onClick={onClose} className={`${iconButton} ${canGroup ? '' : 'ml-auto'} !h-8 !w-8 shrink-0`}>
             <X size={16} />
           </button>
         </div>
         {current && outline ? (
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto @3xl:flex-row @3xl:overflow-hidden">
-            <div className="min-w-0 shrink-0 overflow-x-auto bg-paper @3xl:min-h-0 @3xl:flex-1 @3xl:overflow-auto">
+            {/* The lane headers stick at its top, so what the browser scrolls into sight (a field that takes the focus) goes under them. */}
+            <div className="min-w-0 shrink-0 scroll-pt-[52px] overflow-x-auto bg-paper @3xl:min-h-0 @3xl:flex-1 @3xl:overflow-auto">
               <SequenceDiagram
                 outline={outline}
                 scenario={laneNow}
@@ -813,6 +833,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
                 onUngroup={ungroup}
                 composer={composer}
                 focusKey={focusKey}
+                onPickLane={pick ? (id) => onPick(nextPick(pick, id)) : undefined}
               />
             </div>
             <section ref={detailsRef} aria-label={`Use case ${current}`} className="shrink-0 space-y-3 [&_form>.sticky]:shadow-[0_12px_0_0_rgb(var(--c-surface))] border-t border-ink/15 p-3 @3xl:w-72 @3xl:overflow-y-auto @3xl:border-l @3xl:border-t-0 @5xl:w-80">
@@ -1249,8 +1270,9 @@ function StepForm({
           <MoreFields kind={kind} head={head} more={more} onMore={setMore} headers={vocabulary.headers} typeName={vocabulary.type?.name} />
           {problems.length > 0 && (
             <ul aria-label="Problems with this step" className="space-y-1">
-              {problems.map((p) => (
-                <li key={p} className="flex items-start gap-1.5 rounded-sm border-bw-1 border-amber-600/50 bg-amber-100/60 px-1.5 py-1 text-xs text-amber-950 dark:bg-amber-900/30 dark:text-amber-100">
+              {problems.map((p, i) => (
+                // The same message can come twice (two lines with the same problem): its count so far tells them apart.
+                <li key={`${p}#${problems.slice(0, i).filter((q) => q === p).length}`} className="flex items-start gap-1.5 rounded-sm border-bw-1 border-amber-600/50 bg-amber-100/60 px-1.5 py-1 text-xs text-amber-950 dark:bg-amber-900/30 dark:text-amber-100">
                   <AlertTriangle size={13} aria-hidden="true" className="mt-px shrink-0" />
                   <span className="min-w-0 break-words">{p}</span>
                 </li>
@@ -1260,7 +1282,7 @@ function StepForm({
         </>
       )}
       {/* Pinned to the bottom of what scrolls it (the pane's column, the diagram), so it is in sight however long the form. */}
-      <div className="sticky bottom-0 z-10 -mx-2.5 -mb-2.5 flex flex-wrap gap-1.5 rounded-b-sm border-t border-ink/15 bg-paper px-2.5 py-2">
+      <div data-form-foot className="sticky bottom-0 z-10 -mx-2.5 -mb-2.5 flex flex-wrap gap-1.5 rounded-b-sm border-t border-ink/15 bg-paper px-2.5 py-2">
         <button type="submit" disabled={!both} className={`${primaryButton} disabled:opacity-50`}>
           {button ?? (mode === 'edit' ? 'Save step' : mode === 'insert' ? 'Insert step' : 'Add step')}
         </button>
@@ -1357,4 +1379,26 @@ function Labelled({ id, label, children }: { id: string; label: string; children
       {children}
     </div>
   );
+}
+
+/**
+ * Scrolls a form's body (`box`, its buttons pinned at its foot) so the focused field in it is in sight with nothing cut
+ * in half at the top: at the top when the whole form fits, else at the highest edge of a row that still shows the field.
+ */
+function snapToField(box: HTMLElement) {
+  const max = box.scrollHeight - box.clientHeight;
+  if (max <= 0) {
+    box.scrollTop = 0;
+    return;
+  }
+  const field = document.activeElement;
+  if (!(field instanceof HTMLElement) || field === box || !box.contains(field)) return;
+  const foot = box.querySelector<HTMLElement>('[data-form-foot]');
+  // Where the body's content starts on the screen: a row's place in the body is its top less this.
+  const origin = box.getBoundingClientRect().top + box.clientTop - box.scrollTop;
+  const shown = box.clientHeight - (foot?.offsetHeight ?? 0);
+  const reach = field.getBoundingClientRect().bottom - origin + 4;
+  const rows = Array.from(box.querySelectorAll<HTMLElement>('*'), (el) => (foot?.contains(el) ? Infinity : el.getBoundingClientRect().top - origin));
+  const top = [0, ...rows].filter((y) => y <= max && y + shown >= reach).sort((a, b) => a - b)[0];
+  box.scrollTop = top ?? max;
 }

@@ -1,4 +1,5 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { opLabel, type StepVocabulary } from '../../dsl/typesys/vocabulary';
 import { field } from '../Playground/ui';
 import { statusRank } from './stepLabel';
@@ -8,8 +9,16 @@ import { statusRank } from './stepLabel';
  * target's operations (its own first, each with read or write), on a
  * response the responder's statuses, and the labels the design already uses
  * between such components. Typing filters the list; anything else typed
- * still works, as in the code.
+ * still works, as in the code. The list is drawn in a portal with fixed
+ * position, as the design system's Select draws its own, so no scroll
+ * container (the Flows pane, a composer that scrolls) clips it: it opens
+ * under the field, or over it when there is more room there.
  */
+
+/** Kept this far from the viewport's edges. */
+const MARGIN = 8;
+/** At most this tall; it scrolls past that. */
+const LIST_MAX = 192;
 
 interface Option {
   key: string;
@@ -179,6 +188,56 @@ export default function StepLabelField({
     return [...starts, ...contains];
   }, [all, word]);
   const index = Math.min(active, shown.length - 1);
+  // Shown while the first word (the operation or status) is being picked. Once the label goes on past its first word, it is out of the way.
+  const expanded = open && shown.length > 0 && !/\s/.test(value.trimStart());
+
+  // Before paint: under the field, or over it when there is more room there, inside the viewport.
+  const place = useCallback(() => {
+    const input = inputRef.current;
+    const list = listRef.current;
+    if (!input || !list) return;
+    const r = input.getBoundingClientRect();
+    const vw = document.documentElement.clientWidth;
+    const vh = window.innerHeight;
+    list.style.maxHeight = '';
+    list.style.width = `${Math.min(r.width, vw - 2 * MARGIN)}px`;
+    const height = Math.min(list.scrollHeight + 2, LIST_MAX);
+    const below = vh - r.bottom - MARGIN - 4;
+    const above = r.top - MARGIN - 4;
+    const up = below < height && above > below;
+    const shownHeight = Math.min(height, Math.max(up ? above : below, 96));
+    list.style.maxHeight = `${shownHeight}px`;
+    list.style.left = `${Math.max(MARGIN, Math.min(r.left, vw - MARGIN - list.offsetWidth))}px`;
+    list.style.top = `${up ? r.top - 4 - shownHeight : r.bottom + 4}px`;
+    list.dataset.side = up ? 'up' : 'down';
+  }, []);
+  useLayoutEffect(() => {
+    if (expanded) place();
+  }, [expanded, place, shown]);
+  // It follows the field as what holds it scrolls, and closes once the field is scrolled out of sight or a click lands elsewhere.
+  useEffect(() => {
+    if (!expanded) return;
+    const onScroll = (e: Event) => {
+      const box = e.target instanceof Element ? e.target : null;
+      if (box && listRef.current?.contains(box)) return;
+      const input = inputRef.current?.getBoundingClientRect();
+      const view = box?.getBoundingClientRect();
+      if (input && view && (input.bottom < view.top || input.top > view.bottom)) setOpen(false);
+      else place();
+    };
+    const onPointer = (e: PointerEvent) => {
+      const t = e.target as Node;
+      if (!listRef.current?.contains(t) && !inputRef.current?.contains(t)) setOpen(false);
+    };
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', onScroll, true);
+    document.addEventListener('pointerdown', onPointer);
+    return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', onScroll, true);
+      document.removeEventListener('pointerdown', onPointer);
+    };
+  }, [expanded, place]);
 
   useEffect(() => {
     if (index >= 0) listRef.current?.querySelector(`[data-index="${index}"]`)?.scrollIntoView({ block: 'nearest' });
@@ -196,9 +255,6 @@ export default function StepLabelField({
     });
   };
 
-  // Shown while the first word (the operation or status) is being picked, and kept on blur: closing it then would move
-  // the form's buttons from under the pointer. Once the label goes on past its first word, it is out of the way.
-  const expanded = open && shown.length > 0 && !/\s/.test(value.trimStart());
   let lastGroup = '';
   return (
     <div>
@@ -218,6 +274,8 @@ export default function StepLabelField({
           setActive(-1);
         }}
         onFocus={() => setOpen(true)}
+        // A click on the list keeps the focus here (its mousedown is prevented), so leaving the field is done with it.
+        onBlur={() => setOpen(false)}
         onKeyDown={(e) => {
           if (e.key === 'ArrowDown') {
             e.preventDefault();
@@ -240,7 +298,8 @@ export default function StepLabelField({
         spellCheck={false}
         className={`w-full ${field} !py-1 font-mono`}
       />
-      {expanded && (
+      {expanded &&
+        createPortal(
         <ul
           ref={listRef}
           id={listId}
@@ -248,7 +307,8 @@ export default function StepLabelField({
           aria-label="Labels"
           // Keep focus in the field while picking.
           onMouseDown={(e) => e.preventDefault()}
-          className="mt-1 max-h-48 overflow-y-auto rounded-sm border-bw-1 border-ink bg-surface py-1"
+          className="fixed z-[1000] overflow-y-auto overscroll-contain rounded-sm border-bw-1 border-ink bg-surface py-1 text-ink shadow-brutal-sm"
+          style={{ left: 0, top: 0 }}
         >
           {shown.map((o, i) => {
             const heading = o.group !== lastGroup ? o.group : undefined;
@@ -271,8 +331,9 @@ export default function StepLabelField({
               </li>
             );
           })}
-        </ul>
-      )}
+        </ul>,
+          inputRef.current?.closest('dialog[open]') ?? document.body,
+        )}
       <p className="mt-1 text-xs text-muted">{hint(vocabulary, kind)}</p>
     </div>
   );

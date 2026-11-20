@@ -114,6 +114,8 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
   const [flowsUseCase, setFlowsUseCase] = useState<string>();
   /** The step being added in the Flows builder: node clicks pick its ends instead of selecting. */
   const [pick, setPick] = useState<StepPick | null>(null);
+  /** A Flows step's ends are picked: a click on a node picks it, so the affordances that edit it are put away. */
+  const picking = !!pick && flowsOpen;
   /** The two components of the Flows step row under the pointer, lit up on the canvas. */
   const [flowHover, setFlowHover] = useState<string[] | null>(null);
   const paletteOpen = !viewOnly && (phone ? sheet : docked) && !flowsInRail;
@@ -126,6 +128,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
   /** The type picker of a node's "+", or of a connection let go on empty canvas. */
   const [addAfter, setAddAfter] = useState<AddAfterState | null>(null);
   const closeAddAfter = useCallback(() => setAddAfter(null), []);
+  if (picking && addAfter) setAddAfter(null);
   /** The last id a name changed, so a click that comes before the layout catches up still means that node. */
   const renamed = useRef<{ from: string; to: string } | null>(null);
   /** The component added last on this canvas: the fit keeps it readable (useFitOnChange `added`). */
@@ -500,7 +503,15 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
   const cover = railOpen && floating ? FLOATING_RAIL : 0;
   // Below the top bar's buttons, tools and folded legend, so no node of the fit sits under them.
   const barInset = useTopBarInset(canvasRef, `${nodes.length > 0}:${canOverlay}:${!!overlay}:${pinned}:${!!diagram.legend}`);
-  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { glide: `${paletteOpen}:${flowsOpen}:${railOpen}:${paneMoves}`, right: cover, inset: barInset ? { top: barInset } : undefined, added: lastAdded });
+  // A phone's sheet takes half of the canvas at once: the diagram is fitted to what is left before it is drawn, not glided there.
+  const railKey = `${paletteOpen}:${flowsOpen}:${railOpen}`;
+  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, {
+    glide: `${phone ? '' : railKey}:${paneMoves}`,
+    still: phone ? railKey : undefined,
+    right: cover,
+    inset: barInset ? { top: barInset } : undefined,
+    added: lastAdded,
+  });
   useKeepInView(current?.kind === 'node' ? current.id : undefined, railOpen);
   // A component just added keeps its settings closed (the palette stays for the next add), but where the Selection
   // tab is already showing, it shows them rather than "Nothing selected".
@@ -532,8 +543,9 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
     finishNameRef.current = finishName;
   });
   const nodeActions = useMemo<NodeActions | null>(
-    () => (viewOnly ? null : { editing, onName: (id, name) => finishNameRef.current(id, name), onAddAfter: (id, at) => setAddAfter({ from: id, ...at }) }),
-    [editing, viewOnly],
+    // While a Flows step is picked, a click on a node picks it: no "+" to land on instead.
+    () => (viewOnly ? null : { editing, onName: (id, name) => finishNameRef.current(id, name), onAddAfter: picking ? undefined : (id, at) => setAddAfter({ from: id, ...at }) }),
+    [editing, viewOnly, picking],
   );
 
   return (
@@ -567,7 +579,8 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
       <div
         ref={canvasRef}
         tabIndex={-1}
-        className={`relative h-full min-w-0 flex-1 outline-hidden ${viewOnly ? '' : 'pc-editable'}`}
+        // While a Flows step is picked, a click on a node picks it: the dots, grips and resizer that edit it are put away.
+        className={`relative h-full min-w-0 flex-1 outline-hidden ${viewOnly ? '' : picking ? 'pc-picking' : 'pc-editable'}`}
         data-layout-busy={layoutBusy || undefined}
         onDragOver={(e) => {
           if (viewOnly || !e.dataTransfer.types.includes(TECH_DRAG_TYPE)) return;
@@ -599,21 +612,21 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
           nodeTypes={nodeTypes}
           edgeTypes={EDGE_TYPES}
           // Dragging a node pins it where it is dropped (`pos x,y`); Auto-layout unpins them all.
-          nodesDraggable={!viewOnly}
+          nodesDraggable={!viewOnly && !picking}
           onNodesChange={onNodesChange}
           onNodeDragStart={pinDrag.onNodeDragStart}
           onNodeDragStop={pinDrag.onNodeDragStop}
-          nodesConnectable={!viewOnly}
+          nodesConnectable={!viewOnly && !picking}
           elementsSelectable
           // Dragging an end of a connection onto another node moves that end, in the text.
-          edgesUpdatable={!viewOnly}
+          edgesUpdatable={!viewOnly && !picking}
           onReconnect={(ed, c) => c.source && c.target && edits.reconnect(ed.id, c.source, c.target)}
           onReconnectStart={connectDrop.onReconnectStart}
           onReconnectEnd={connectDrop.onReconnectEnd}
-          onNodeClick={(_e, n) => (pick && flowsOpen ? pickNode(n.id) : select({ kind: 'node', id: n.id }))}
-          onNodeDoubleClick={(_e, n) => !viewOnly && !(pick && flowsOpen) && void rename(n.id)}
+          onNodeClick={(_e, n) => (picking ? pickNode(n.id) : select({ kind: 'node', id: n.id }))}
+          onNodeDoubleClick={(_e, n) => !viewOnly && !picking && void rename(n.id)}
           // While a Flows step is picked, a click on a connection sends the step along it.
-          onEdgeClick={(_e, ed) => (pick && flowsOpen ? setPick({ from: ed.source, to: ed.target }) : select({ kind: 'edge', id: ed.id }))}
+          onEdgeClick={(_e, ed) => (picking ? setPick({ from: ed.source, to: ed.target }) : select({ kind: 'edge', id: ed.id }))}
           onPaneClick={() => (pick ? undefined : setSelected(null))}
           // A connection drops anywhere on a node's body; one it can't take is refused, saying why.
           isValidConnection={connectDrop.isValidConnection}

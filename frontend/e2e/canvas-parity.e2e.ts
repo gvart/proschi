@@ -200,7 +200,7 @@ test.describe('the editor canvas', () => {
     // The operations come from the API's type: pick GET, then type the path.
     const label = step.getByRole('combobox', { name: 'Operation' });
     await label.click();
-    await step.getByRole('option', { name: /^GET\b/ }).click();
+    await page.getByRole('listbox', { name: 'Labels' }).getByRole('option', { name: /^GET\b/ }).click();
     await expect(label).toHaveValue('GET /');
     await label.pressSequentially('items');
     await step.getByRole('button', { name: 'Add step' }).click();

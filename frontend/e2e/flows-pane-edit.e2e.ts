@@ -244,10 +244,10 @@ test.describe('editing on the Flows pane', () => {
     await expect.poll(() => useCase(page)).toBe(original);
 
     // Steps that can't run at the same time say why, in the pane; Cmd/Ctrl-click adds one to the selection, and the header has the action too.
-    await option(page, 2).click();
-    await option(page, 3).click({ modifiers: ['ControlOrMeta'] });
+    await option(page, 1).click();
+    await option(page, 5).click({ modifiers: ['ControlOrMeta'] });
     await flows(page).getByRole('button', { name: 'Run at the same time' }).first().click();
-    await expect(flows(page).getByRole('alert')).toHaveText(/already runs at the same time/);
+    await expect(flows(page).getByRole('alert')).toHaveText(/follow each other/);
     expect(await useCase(page)).toBe(original);
 
     // A par frame's actions: one more step alongside, then ungroup.
@@ -263,6 +263,103 @@ test.describe('editing on the Flows pane', () => {
     await flows(page).getByRole('button', { name: 'Ungroup' }).click();
     await expect.poll(() => useCase(page)).toContain('  }\n  api -> db : INSERT order\n  api ->> events : PUBLISH OrderPlaced\n  api -> cache : DEL cart\n  api --> shopper : 201\n');
     await expect(flows(page).locator('[data-frame="parallel"]')).toHaveCount(0);
+  });
+
+  test('after Run at the same time the block\'s first step is selected, and steps already in a block are never offered it', async ({ page }) => {
+    await openPane(page);
+    const run = flows(page).getByRole('button', { name: 'Run at the same time' });
+    await option(page, 1).click();
+    await option(page, 2).click({ modifiers: ['Shift'] });
+    await expect(run).toHaveCount(2);
+    await run.first().click();
+    await expect.poll(() => useCase(page)).toContain('  par {\n    shopper -> api : POST /checkout\n    api -> cache : GET cart\n  }\n');
+    // The block's first step, alone: the action is gone from the header and the column.
+    await expect(option(page, 1)).toHaveAttribute('aria-selected', 'true');
+    await expect(option(page, 2)).toHaveAttribute('aria-selected', 'false');
+    await expect(flows(page).getByRole('region', { name: 'Selected step' })).toContainText('Step 1');
+    await expect(run).toHaveCount(0);
+    // Both steps of the new block, selected again: not offered, and the column says why.
+    await option(page, 2).click({ modifiers: ['Shift'] });
+    await expect(flows(page).getByRole('region', { name: 'Selected steps' })).toContainText('2 steps selected');
+    await expect(run).toHaveCount(0);
+    await expect(flows(page).getByRole('region', { name: 'Selected steps' })).toContainText('already runs at the same time as others: ungroup its block first');
+    // A step of the block with one outside it: not offered either.
+    await option(page, 5).click();
+    await option(page, 4).click({ modifiers: ['ControlOrMeta'] });
+    await expect(flows(page).getByRole('region', { name: 'Selected steps' })).toContainText('Step 4 already runs at the same time');
+    await expect(run).toHaveCount(0);
+  });
+
+  test("while a step's ends are picked, a lane's header or lifeline picks its component, by the pointer or the keys", async ({ page }) => {
+    await openPane(page);
+    const header = (name: string) => flows(page).getByRole('button', { name: `Pick ${name}`, exact: true });
+    // Nothing is being picked: the headers only show the lanes.
+    await expect(header('Orders DB')).toHaveCount(0);
+
+    await flows(page).getByRole('button', { name: 'Add a step', exact: true }).click();
+    const step = flows(page).getByRole('form', { name: 'New step' });
+    // From where the last step went; the form asks for where it goes, and a header (lit up under the pointer) picks it.
+    await expect(step.getByLabel('Starts at')).toHaveAttribute('data-value', 'shopper');
+    await expect(step).toContainText('Now click the component it goes to.');
+    const api = header('Checkout API');
+    const idle = await api.evaluate((el) => getComputedStyle(el).backgroundColor);
+    await api.hover();
+    await expect.poll(() => api.evaluate((el) => getComputedStyle(el).backgroundColor)).not.toBe(idle);
+    await api.click();
+    await expect(step.getByLabel('Goes to')).toHaveAttribute('data-value', 'api');
+
+    // By the keys: Tab goes from header to header, the focused one ringed, and Enter picks it; after both ends, a pick starts over, as on the canvas.
+    await page.mouse.move(0, 0);
+    const db = header('Orders DB');
+    const unfocused = await db.evaluate((el) => getComputedStyle(el).boxShadow);
+    await api.focus();
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Tab');
+    await expect(db).toBeFocused();
+    await expect.poll(() => db.evaluate((el) => getComputedStyle(el).boxShadow)).not.toBe(unfocused);
+    await page.keyboard.press('Enter');
+    await expect(step.getByLabel('Starts at')).toHaveAttribute('data-value', 'db');
+    await expect(step.getByLabel('Goes to')).toHaveAttribute('data-value', '');
+
+    // A click on a lifeline picks too.
+    const line = (await flows(page).locator('[data-lifeline="cache"]').boundingBox())!;
+    await page.mouse.click(line.x + line.width / 2, line.y + 8);
+    await expect(step.getByLabel('Goes to')).toHaveAttribute('data-value', 'cache');
+
+    // The composer of a "+" picks from the headers too.
+    await step.getByRole('button', { name: 'Cancel' }).click();
+    await (await insertPoint(page, 'Add a step before step 2')).click();
+    await expect(composer(page).getByLabel('Goes to')).toBeFocused();
+    await header('Order events').click();
+    await expect(composer(page).getByLabel('Starts at')).toHaveAttribute('data-value', 'api');
+    await expect(composer(page).getByLabel('Goes to')).toHaveAttribute('data-value', 'events');
+  });
+
+  test("while a step's ends are picked, a click anywhere on a small node picks it: its \"+\" and dots are put away", async ({ page }) => {
+    await openPane(page);
+    // The pane at its tallest, so the canvas and its nodes are small.
+    await page.getByRole('separator', { name: 'Resize the flows pane' }).focus();
+    await page.keyboard.press('End');
+    await flows(page).getByRole('button', { name: 'Add a step', exact: true }).click();
+    const step = flows(page).getByRole('form', { name: 'New step' });
+    await expect(step.getByLabel('Starts at')).toHaveAttribute('data-value', 'shopper');
+    const node = canvasNodes(page).filter({ hasText: 'Orders DB' });
+    await expect(node.getByRole('button', { name: 'Add a component after Orders DB' })).toHaveCount(0);
+    // Where the "+" is when nothing is picked: on the node's right edge, half way down.
+    await node.hover();
+    const box = (await node.boundingBox())!;
+    await page.mouse.click(box.x + box.width - 2, box.y + box.height / 2);
+    await expect(page.getByRole('dialog', { name: 'Add after Orders DB' })).toHaveCount(0);
+    await expect(step.getByLabel('Goes to')).toHaveAttribute('data-value', 'db');
+    // Where its dot is, at the bottom: picked too (it starts over), no connection dragged.
+    const cache = canvasNodes(page).filter({ hasText: 'Cart cache' });
+    const at = (await cache.boundingBox())!;
+    await page.mouse.click(at.x + at.width / 2, at.y + at.height - 1);
+    await expect(step.getByLabel('Starts at')).toHaveAttribute('data-value', 'cache');
+    // Done picking, the "+" is back.
+    await step.getByRole('button', { name: 'Cancel' }).click();
+    await node.hover();
+    await expect(node.getByRole('button', { name: 'Add a component after Orders DB' })).toBeVisible();
   });
 
   test('Add reply answers a selected request right after it, before the block that follows', async ({ page }) => {
@@ -407,6 +504,94 @@ test.describe('the Flows pane, polished', () => {
       })
       .toBe(true);
   });
+});
+
+type Box = { x: number; y: number; width: number; height: number };
+/** The part of the diagram in sight: its scrolling box, less the sticky lane headers at its top. */
+async function diagramView(page: Page): Promise<{ top: number; bottom: number; left: number; right: number }> {
+  return sequence(page).evaluate((el) => {
+    const box = el.closest('.bg-paper')!.getBoundingClientRect();
+    const headers = el.closest('.bg-paper')!.querySelector('[data-lane]')!.parentElement!.getBoundingClientRect();
+    return { top: headers.bottom, bottom: box.bottom, left: box.left, right: box.right };
+  });
+}
+const inside = (b: Box, v: { top: number; bottom: number; left: number; right: number }) => b.y >= v.top - 0.5 && b.y + b.height <= v.bottom + 0.5 && b.x >= v.left - 0.5 && b.x + b.width <= v.right + 0.5;
+const overlap = (a: Box, b: Box) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+
+/** At 1280x800 with the pane at its first height, as the blog's clips were recorded. */
+test.describe('the composer in sight, at 1280x800', () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test('a step inserted mid-diagram: the form fits the pane, scrolls inside with its buttons pinned, and the operation list is not clipped', async ({ page }) => {
+    await openPane(page);
+    await (await insertPoint(page, 'Add a step before step 2')).click();
+    const step = composer(page);
+    await chooseOption(step.getByLabel('Goes to'), 'Orders DB');
+    // With both ends, the operation takes the focus and its list opens (no click, which would scroll the page as a test does).
+    const field = step.getByRole('combobox', { name: 'Operation' });
+    await expect(field).toBeFocused();
+    const list = page.getByRole('listbox', { name: 'Labels' });
+    await expect(list).toBeVisible();
+    await expect(list.getByRole('option').first()).toBeVisible();
+
+    const view = await diagramView(page);
+    // The whole form, its buttons too, is in the part of the pane in sight.
+    await expect.poll(async () => inside((await step.boundingBox())!, view)).toBe(true);
+    expect(inside((await step.getByRole('button', { name: 'Add step' }).boundingBox())!, view)).toBe(true);
+    // Its body scrolls inside it, under the pinned buttons.
+    expect(await step.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true);
+    await step.evaluate((el) => el.scrollTo(0, 10_000));
+    expect(inside((await step.getByRole('button', { name: 'Add step' }).boundingBox())!, view)).toBe(true);
+    await step.evaluate((el) => el.scrollTo(0, 0));
+
+    // The list is drawn whole, nothing over it: the top of its first option and the bottom of what it shows are its own.
+    const l = (await list.boundingBox())!;
+    expect(l.y + l.height).toBeLessThanOrEqual(800);
+    const own = (x: number, y: number) => list.evaluate((el, [px, py]) => el.contains(document.elementFromPoint(px, py)), [x, y] as const);
+    expect(await own(l.x + l.width / 2, l.y + 6)).toBe(true);
+    expect(await own(l.x + l.width / 2, l.y + l.height - 6)).toBe(true);
+    // An operation from it goes in the field; typed again, the list is back, and a click elsewhere closes it.
+    await list.getByRole('option', { name: /^INSERT/ }).first().click();
+    await expect(field).toHaveValue(/^INSERT /);
+    await expect(list).toHaveCount(0);
+    await field.fill('SEL');
+    await expect(list).toBeVisible();
+    await step.getByRole('radio', { name: 'Message' }).click();
+    await expect(list).toHaveCount(0);
+  });
+
+  for (const [n, name] of [
+    [2, 'the cart request, high in the diagram'],
+    [3, 'the order insert, low in it'],
+  ] as const) {
+    test(`the reply composer of ${name} never covers the request it answers, which stays in sight`, async ({ page }) => {
+      await openPane(page);
+      await option(page, n).click();
+      await flows(page).getByRole('button', { name: 'Add reply' }).click();
+      const step = composer(page);
+      await expect(step.getByRole('radio', { name: 'Response' })).toHaveAttribute('aria-checked', 'true');
+      const view = await diagramView(page);
+      await expect
+        .poll(async () => {
+          const [row, form] = [(await option(page, n).boundingBox())!, (await step.boundingBox())!];
+          return { covered: overlap(row, form), rowInSight: inside(row, view), formInSight: inside(form, view) };
+        })
+        .toEqual({ covered: false, rowInSight: true, formInSight: true });
+      // Its field is in sight, and the body above it is not cut through a line: at its top, or at the edge of a row.
+      await expect(step.getByRole('combobox', { name: 'Answer' })).toBeFocused();
+      await expect
+        .poll(() =>
+          step.evaluate((box) => {
+            const origin = box.getBoundingClientRect().top + box.clientTop - box.scrollTop;
+            const foot = box.querySelector('[data-form-foot]')!;
+            const field = box.querySelector('input:focus')!.getBoundingClientRect();
+            const edge = box.scrollTop === 0 || [...Array.from(box.querySelectorAll('*'))].some((el) => !foot.contains(el) && Math.abs(el.getBoundingClientRect().top - origin - box.scrollTop) < 1);
+            return { edge, fieldInSight: field.top >= box.getBoundingClientRect().top && field.bottom <= foot.getBoundingClientRect().top };
+          }),
+        )
+        .toEqual({ edge: true, fieldInSight: true });
+    });
+  }
 });
 
 /** A phone keeps the list of steps in its sheet, each row with its own actions. */

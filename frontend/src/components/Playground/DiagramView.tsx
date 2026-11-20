@@ -239,6 +239,8 @@ export default function DiagramView({
   /** The type picker of a node's "+", or of a connection let go on empty canvas. */
   const [addAfter, setAddAfter] = useState<AddAfterState | null>(null);
   const closeAddAfter = useCallback(() => setAddAfter(null), []);
+  // A click on the canvas picks a Flows step's end while one is picked, so its edit affordances are put away (see `picking` below).
+  if (picking && addAfter) setAddAfter(null);
   const connectDrop = useConnectDrop(
     diagram,
     (from, to) => {
@@ -432,8 +434,9 @@ export default function DiagramView({
   });
   const readOnly = playing || viewOnly || crumbs.length > 1;
   const nodeActions = useMemo<NodeActions | null>(
-    () => (readOnly ? null : { editing, onName: (id, name) => finishNameRef.current(id, name), onAddAfter: canAdd ? (id, at) => setAddAfter({ from: id, ...at }) : undefined }),
-    [readOnly, editing, canAdd],
+    // While a Flows step is picked, a click on a node picks it: no "+" to land on instead.
+    () => (readOnly ? null : { editing, onName: (id, name) => finishNameRef.current(id, name), onAddAfter: canAdd && !picking ? (id, at) => setAddAfter({ from: id, ...at }) : undefined }),
+    [readOnly, editing, canAdd, picking],
   );
 
   const deleteSelection = () => {
@@ -703,7 +706,15 @@ export default function DiagramView({
   const barInset = useTopBarInset(wrapperRef, `${nodes.length > 0}:${playing}:${crumbs.length}:${canOverlay}:${!!overlay}:${hasPinnedNodes}:${!!diagram.legend}`);
   const narrow = useNarrow(wrapperRef);
   const fitInset = useMemo(() => (barInset > (inset?.top ?? 0) ? { top: barInset, bottom: inset?.bottom } : inset), [barInset, inset]);
-  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { wrapper: wrapperRef, inset: fitInset, glide: `${playing ? 'playing' : ''}:${glideKey}:${paletteOpen}:${flowsOpen}:${railOpen}:${paneMoves}`, added: lastAdded });
+  // A phone's sheet takes half of the canvas at once: the diagram is fitted to what is left before it is drawn, not glided there.
+  const railKey = `${paletteOpen}:${flowsOpen}:${railOpen}`;
+  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, {
+    wrapper: wrapperRef,
+    inset: fitInset,
+    glide: `${playing ? 'playing' : ''}:${glideKey}:${phone ? '' : railKey}:${paneMoves}`,
+    still: phone ? railKey : undefined,
+    added: lastAdded,
+  });
   useKeepInView(playing ? undefined : singleNode?.id, railOpen);
 
   const handleEdgesChange = useCallback(
@@ -828,7 +839,8 @@ export default function DiagramView({
       ref={wrapperRef}
       // Focusable, so the keys above work after a drop from the palette.
       tabIndex={-1}
-      className={`relative h-full min-w-0 flex-1 outline-hidden ${playing || viewOnly ? '' : 'pc-editable'}`}
+      // While a Flows step is picked, a click on a node picks it: the dots, grips and resizer that edit it are put away.
+      className={`relative h-full min-w-0 flex-1 outline-hidden ${playing || viewOnly ? '' : picking ? 'pc-picking' : 'pc-editable'}`}
       data-layout-busy={layoutBusy || undefined}
       onDragOver={(e) => {
         if (viewOnly || !e.dataTransfer.types.includes(TECH_DRAG_TYPE)) return;
@@ -863,8 +875,8 @@ export default function DiagramView({
         nodeTypes={nodeTypes}
         edgeTypes={PLAYBACK_EDGE_TYPES}
         // Playing a use case shows it over this canvas, read-only.
-        nodesDraggable={!playing && !viewOnly}
-        nodesConnectable={!playing && !viewOnly}
+        nodesDraggable={!playing && !viewOnly && !picking}
+        nodesConnectable={!playing && !viewOnly && !picking}
         elementsSelectable={!playing && !picking}
         onNodesChange={handleNodesChange}
         onEdgesChange={handleEdgesChange}
@@ -895,7 +907,7 @@ export default function DiagramView({
           setMenu({ x: event.clientX, y: event.clientY, label: `${edge.source} → ${edge.target}`, id: edge.id });
         }}
         // Dragging an end of a connection onto another node moves that end, in the text.
-        edgesUpdatable={!playing && !viewOnly}
+        edgesUpdatable={!playing && !viewOnly && !picking}
         onReconnect={(edge, connection) => {
           if (playing || edge.id.startsWith('step:') || !connection.source || !connection.target) return;
           onReconnect(edge.id, connection.source, connection.target);
@@ -904,7 +916,7 @@ export default function DiagramView({
         onReconnectEnd={connectDrop.onReconnectEnd}
         // A system box opens its team design; renaming it stays in its settings and the selection bar.
         onNodeDoubleClick={(_event, node) => {
-          if (playing) return;
+          if (playing || picking) return;
           if (node.type === 'systemNode' || node.data?.system) onOpenSystem(node.id);
           else if (!viewOnly) void promptRename(node);
         }}
