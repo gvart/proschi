@@ -62,3 +62,22 @@ export function missingScenarios(diagram: Diagram, useCase: string, defined: str
   const entry = diagram.traffic?.find((t) => t.useCase === useCase);
   return (entry?.mix ?? []).map((m) => m.scenario).filter((name) => !defined.includes(name));
 }
+
+/** The Flows pane's height (FlowsPane.tsx): at least this, so its header and a few rows show. */
+export const PANE_MIN = 160;
+/** …and at most this share of the canvas column, so the canvas above it stays usable. */
+export const PANE_MAX_SHARE = 0.7;
+
+/** A pane height kept between PANE_MIN and PANE_MAX_SHARE of a column `column` pixels tall. */
+export function clampPaneHeight(height: number, column: number): number {
+  const max = Math.max(PANE_MIN, Math.floor(column * PANE_MAX_SHARE));
+  return Math.round(Math.min(max, Math.max(PANE_MIN, height)));
+}
+
+/**
+ * The connection a step travels on the canvas: the one from its start to its
+ * end, or, for an answer (or a call against the arrow), the one the other way.
+ */
+export function stepEdge(step: { from: string; to: string }, edges: readonly { id: string; source: string; target: string }[]): string | undefined {
+  return (edges.find((e) => e.source === step.from && e.target === step.to) ?? edges.find((e) => e.source === step.to && e.target === step.from))?.id;
+}
