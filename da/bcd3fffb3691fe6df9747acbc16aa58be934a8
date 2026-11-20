@@ -1,0 +1,20 @@
+frontend/e2e/canvas-keys.e2e.ts
+  s_733d66441cadaa::t_987b68a0675706 1-2,4-153
+  s_733d66441cadaa::t_793e9c8cd2973f 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "dabcd3fffb3691fe6df9747acbc16aa58be934a8",
+  "prompts": {},
+  "sessions": {
+    "s_733d66441cadaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9649973d-f497-4440-b031-a92483a592e6",
+        "model": "unknown"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
