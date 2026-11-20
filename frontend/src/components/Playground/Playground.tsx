@@ -66,9 +66,10 @@ import { filesResolver, importableFiles, teamFileOf, usedImports, type TeamFile 
 import { LONG_LINK_MESSAGE, LONG_LINK_SHORTEN_MESSAGE, decodeShareLink, encodeShareHash, isLongLink, readShareLink, shareUrl, type PlaybackTarget } from '../../playground/share';
 import { applyMerge, backupFileName, buildBackup, mergeSummary, planMerge, readBackup } from '../../playground/backup';
 import { loadProgress, mergeProgress, saveProgress } from '../../practice/progress';
-import { addConnection, addNode, addWhatIf, removeConnections, removeNode, renameNode, scaleTraffic, uniqueId } from '../../dsl/edit';
+import { addConnection, addWhatIf, removeConnections, removeNode, scaleTraffic } from '../../dsl/edit';
 import { useCanvasEdits } from '../Diagram/useCanvasEdits';
 import { newConnection } from '../Diagram/connect';
+import { addComponent, addStarter, nameNode, namedElsewhere } from '../Diagram/addFlow';
 import { useOverlayOn, withEdgeLoads } from '../Diagram/canvasShared';
 import { EmptyCanvas } from '../Diagram/CanvasEditing';
 import { isShortcutsKey } from '../Diagram/canvasEditState';
@@ -827,22 +828,32 @@ export default function Playground() {
     if (!playing) startPlaying();
   };
 
+  /** Names a node; its id follows the name while it is the generated one (addFlow.ts). Returns the id after. */
   const renameFromCanvas = (id: string, name: string) => {
     const file = importedNodes.get(id);
-    if (file) setNotice(`'${id}' is declared in ${file}; rename it there.`);
-    else editSource((src) => renameNode(src, id, name));
+    if (file) {
+      setNotice(`'${id}' is declared in ${file}; rename it there.`);
+      return undefined;
+    }
+    const result = nameNode(source, id, name, { taken: importedNodes.keys(), keepId: namedElsewhere(shown, id) });
+    if (result.source !== source) editSource(() => result.source);
+    return result.id;
   };
 
-  /** Adds a catalog component and returns its id; one dropped on the canvas is pinned where it fell, a clicked one is laid out. */
-  const addFromCanvas = (tech: string, position?: { x: number; y: number }) => {
+  /**
+   * Adds a catalog component and returns its id; one dropped on the canvas is pinned where it fell, a clicked one
+   * is laid out, connected from `from` (the selection) when given.
+   */
+  const addFromCanvas = (tech: string, position?: { x: number; y: number }, from?: string) => {
     if (systems.focusFile) {
       setNotice(`This is the design in ${systems.focusFile}; add components there.`);
       return undefined;
     }
     // The id is picked here, against imported nodes too, so the canvas can select the new node.
-    const id = uniqueId(source, tech, importedNodes.keys());
-    editSource((src) => addNode(src, { id, name: tech, tech, position }).source);
-    return id;
+    // A connection from an imported node is written in its file (connectNodes), so the new one comes alone.
+    const result = addComponent(source, tech, { from: from && !importedNodes.has(from) ? from : undefined, taken: importedNodes.keys(), position });
+    editSource(() => result.source);
+    return result.id;
   };
   const canvasEdits = useCanvasEdits({ source, diagram: shown, apply: editSource, imported: importedNodes, onNotice: setNotice, lockedIn: systems.focusFile });
   const locOf = (id: string) => shown.nodes.find((n) => n.id === id)?.loc ?? shown.edges.find((e) => e.id === id)?.loc;
@@ -1484,6 +1495,20 @@ export default function Playground() {
                           notice={notice}
                           onNotice={setNotice}
                           cover={tour === 'tour' ? tourCover : null}
+                          empty={
+                            nodes.length === 0 &&
+                            !playing &&
+                            (isBlank(source) ? (
+                              // Click-through, so the canvas under it (and its Add component button) still works.
+                              <div className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-y-auto p-4">
+                                <Suspense fallback={null}>
+                                  <StarterCard onTemplate={setSource} onExamples={() => setShowExamples(true)} onStarter={(starter) => editSource((src) => addStarter(src, starter))} />
+                                </Suspense>
+                              </div>
+                            ) : (
+                              <EmptyCanvas />
+                            ))
+                          }
                         />
                         </SystemActionsContext.Provider>
                       </ReactFlowProvider>
@@ -1491,17 +1516,6 @@ export default function Playground() {
                   </UseCasePlayback>
                 )}
               </Suspense>
-              {nodes.length === 0 && !playing && view === 'diagram' &&
-                (isBlank(source) ? (
-                  // Click-through, so the canvas's own Add component button (under this) still works.
-                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-y-auto p-4">
-                    <Suspense fallback={null}>
-                      <StarterCard onTemplate={setSource} onExamples={() => setShowExamples(true)} />
-                    </Suspense>
-                  </div>
-                ) : (
-                  <EmptyCanvas />
-                ))}
             </div>
           </section>
         </SplitPanel>

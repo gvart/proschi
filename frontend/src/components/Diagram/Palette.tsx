@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { GripVertical, Search, X } from 'lucide-react';
 import { getTechStackIcon } from '../../utils/iconMapping';
 import { eyebrow, field, iconButton } from '../Playground/ui';
@@ -11,8 +11,13 @@ interface PaletteProps {
   /** Adds the component; the canvas places it. */
   onAdd: (techStack: string) => void;
   onClose: () => void;
-  /** `panel`: docked beside the canvas, drag or click; `sheet`: a phone's bottom sheet, tap to add. */
-  variant?: 'panel' | 'sheet';
+  /**
+   * `panel`: docked beside the canvas, drag or click; `sheet`: a phone's bottom sheet, tap to add;
+   * `picker`: the small type picker a node's "+" opens on the canvas, click to add.
+   */
+  variant?: 'panel' | 'sheet' | 'picker';
+  /** The name of the selected component a click connects the new one from, if any. */
+  connectFrom?: string;
   /** Focus the search when shown: when the reader opened it, never on page load. */
   autoFocus?: boolean;
 }
@@ -22,7 +27,8 @@ interface PaletteProps {
  * onto the canvas to add it where it is dropped, or click (tap) it to add it
  * where the layout puts it.
  */
-export default function Palette({ onAdd, onClose, variant = 'panel', autoFocus = false }: PaletteProps) {
+export default function Palette({ onAdd, onClose, variant = 'panel', autoFocus = false, connectFrom }: PaletteProps) {
+  const id = useId();
   const [query, setQuery] = useState('');
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
@@ -32,11 +38,14 @@ export default function Palette({ onAdd, onClose, variant = 'panel', autoFocus =
   const groups = useMemo(() => paletteGroups(query), [query]);
   const searching = query.trim() !== '';
   const sheet = variant === 'sheet';
+  const picker = variant === 'picker';
+  /** What Enter in the search adds. */
+  const first = groups[0]?.entries[0];
 
   return (
     <aside
       role="region"
-      aria-label="Components"
+      aria-label={picker ? 'Component types' : 'Components'}
       className={`flex min-h-0 flex-col bg-surface text-ink ${sheet ? 'max-h-full' : 'h-full'}`}
       onKeyDown={(e) => {
         if (e.key === 'Escape') {
@@ -55,13 +64,14 @@ export default function Palette({ onAdd, onClose, variant = 'panel', autoFocus =
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && groups[0]) onAdd(groups[0].entries[0].techStack);
+              if (e.key === 'Enter' && first) onAdd(first.techStack);
             }}
-            placeholder="Search"
+            placeholder="Search, Enter adds"
+            aria-describedby={`${id}-hint`}
             className={`${field} w-full pl-7`}
           />
         </label>
-        <button type="button" aria-label="Hide components" title="Hide components" onClick={onClose} className={iconButton}>
+        <button type="button" aria-label={picker ? 'Close' : 'Hide components'} title={picker ? 'Close' : 'Hide components'} onClick={onClose} className={iconButton}>
           <X size={16} />
         </button>
       </div>
@@ -79,18 +89,18 @@ export default function Palette({ onAdd, onClose, variant = 'panel', autoFocus =
                   <li key={c.techStack}>
                     <button
                       type="button"
-                      draggable={!sheet}
+                      draggable={variant === 'panel'}
                       onDragStart={(e) => {
                         e.dataTransfer.setData(TECH_DRAG_TYPE, c.techStack);
                         e.dataTransfer.effectAllowed = 'copy';
                       }}
                       onClick={() => onAdd(c.techStack)}
-                      title={sheet ? undefined : `Drag onto the canvas, or click to add ${c.techStack}`}
-                      className={`group flex w-full items-center gap-2 rounded-sm px-2 text-left text-sm text-ink hover:bg-ink/10 focus-visible:bg-ink/10 ${sheet ? 'py-2.5' : 'py-1.5 cursor-grab active:cursor-grabbing'}`}
+                      title={variant === 'panel' ? `Drag onto the canvas, or click to add ${c.techStack}` : undefined}
+                      className={`group flex w-full items-center gap-2 rounded-sm px-2 text-left text-sm text-ink hover:bg-ink/10 focus-visible:bg-ink/10 ${sheet ? 'py-2.5' : picker ? 'py-1' : 'py-1.5 cursor-grab active:cursor-grabbing'}`}
                     >
                       <span className="flex h-6 w-6 shrink-0 items-center justify-center [&_svg]:h-4 [&_svg]:w-4">{getTechStackIcon(c.techStack, c.type)}</span>
                       <span className="flex-1 truncate">{c.techStack}</span>
-                      {!sheet && <GripVertical size={14} className="text-muted opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100" aria-hidden />}
+                      {variant === 'panel' && <GripVertical size={14} className="text-muted opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100" aria-hidden />}
                     </button>
                   </li>
                 ))}
@@ -108,7 +118,22 @@ export default function Palette({ onAdd, onClose, variant = 'panel', autoFocus =
           );
         })}
       </div>
-      <p className="border-t border-ink/15 px-3 py-2 text-xs text-muted">{sheet ? 'Tap a component to add it.' : 'Drag onto the canvas, or click to add.'}</p>
+      <p id={`${id}-hint`} className="border-t border-ink/15 px-3 py-2 text-xs text-muted">
+        {first && searching ? (
+          <>
+            <kbd className="font-sans font-semibold text-ink">Enter</kbd> adds {first.techStack}
+            {connectFrom ? `, connected from ${connectFrom}` : ''}.
+          </>
+        ) : connectFrom ? (
+          `${sheet ? 'Tap' : 'Click'} to add one connected from ${connectFrom}.`
+        ) : sheet ? (
+          'Tap a component to add it.'
+        ) : picker ? (
+          'Click to add, or search and press Enter.'
+        ) : (
+          'Drag onto the canvas, or click to add.'
+        )}
+      </p>
     </aside>
   );
 }

@@ -9,14 +9,16 @@ import TextNode from '../Canvas/TextNode';
 import RoutedEdge from '../Canvas/RoutedEdge';
 import FlowParticles from '../Overlay/FlowParticles';
 import { parse, type Diagram } from '../../dsl';
-import { addConnection, addNode, removeConnections, removeNode, renameNode, uniqueId } from '../../dsl/edit';
+import { addConnection, removeConnections, removeNode, renameNode } from '../../dsl/edit';
 import { analysisOverlay } from '../../sim/overlay';
 import type { Analysis } from '../../sim';
 import { prompt } from '../../design/dialogs';
 import { FIT_VIEW_OPTIONS, useFitOnChange } from './useFitOnChange';
 import Inspector from './Inspector';
 import { TECH_DRAG_TYPE } from './Palette';
-import { CanvasMenu, ConnectHint, FlowsToggle, PaletteDock, PaletteToggle, type CanvasMenuActions, type CanvasMenuState } from './CanvasEditing';
+import { AddAfterPicker, CanvasMenu, ConnectHint, EmptyCanvas, FlowsToggle, PaletteDock, PaletteToggle, type AddAfterState, type CanvasMenuActions, type CanvasMenuState } from './CanvasEditing';
+import { addComponent, nameNode, namedElsewhere } from './addFlow';
+import { NodeActionsContext, type NodeActions } from '../Canvas/nodeActions';
 import FlowsPanel, { type StepPick } from './FlowsPanel';
 import { nextPick } from './flows';
 import { canvasKey, historyKey, useConnectHint, useMiniMap, usePaletteOpen, type CanvasKey } from './canvasEditState';
@@ -103,8 +105,17 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
   const paletteOpen = (phone ? sheet : docked) && !flowsOpen;
   /** Whether the palette floats over the canvas (a narrow pane) rather than sitting beside it. */
   const [floating, setFloating] = useState(false);
-  /** A component just added, selected once the layout draws it. */
-  const [pending, setPending] = useState<string | null>(null);
+  /** A component just added, selected once the layout draws it; `settings` opens its settings (a drop), else the palette stays for the next. */
+  const [pending, setPending] = useState<{ id: string; settings: boolean } | null>(null);
+  /** The component whose name is typed on the canvas (ComponentNode's field). */
+  const [editing, setEditing] = useState<string | null>(null);
+  /** The type picker of a node's "+", or of a connection let go on empty canvas. */
+  const [addAfter, setAddAfter] = useState<AddAfterState | null>(null);
+  const closeAddAfter = useCallback(() => setAddAfter(null), []);
+  /** The last id a name changed, so a click that comes before the layout catches up still means that node. */
+  const renamed = useRef<{ from: string; to: string } | null>(null);
+  /** The component added last on this canvas: the fit keeps it readable (useFitOnChange `added`). */
+  const [lastAdded, setLastAdded] = useState<string>();
 
   useEffect(() => {
     if (!notice) return;
@@ -178,17 +189,45 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
   };
 
   useEffect(() => {
-    if (!pending || !nodes.some((n) => n.id === pending)) return;
-    setSelected({ kind: 'node', id: pending });
-    setSettingsClosed(false);
+    if (!pending || !nodes.some((n) => n.id === pending.id)) return;
+    setSelected({ kind: 'node', id: pending.id });
+    setSettingsClosed(!pending.settings);
     setPending(null);
   }, [nodes, pending]);
 
-  /** Adds a component where the layout puts it; a dropped one (or a phone's tap) is selected, a clicked one leaves the palette shown for the next. */
-  const add = (tech: string, select: boolean) => {
-    const id = uniqueId(source, tech, imported.keys());
-    onChange(addNode(source, { id, name: tech, tech }).source);
-    if (select) setPending(id);
+  /** The component a new one is connected from: the one just added, else the selected component or system. */
+  const chainFrom = (() => {
+    const id = pending?.id ?? (node && (node.kind === 'component' || node.kind === 'system') ? node.id : undefined);
+    return id && renamed.current?.from === id ? renamed.current.to : id;
+  })();
+  /**
+   * Adds a component where the layout puts it, connected from `from` (a palette click: the selection), selected,
+   * with its name ready to type. A dropped one opens its settings; one clicked leaves the palette for the next.
+   */
+  const add = (tech: string, { from, drop = false }: { from?: string; drop?: boolean } = {}) => {
+    const result = addComponent(source, tech, { from, taken: imported.keys() });
+    onChange(result.source);
+    if (from) dismissHint();
+    setPending({ id: result.id, settings: drop });
+    setEditing(result.id);
+    setLastAdded(result.id);
+  };
+  /** The name typed on the canvas: written, and the id follows it while it is the generated one. */
+  const finishName = (id: string, name: string | null) => {
+    setEditing(null);
+    // Enter or Escape: back to the canvas's keys (a click elsewhere keeps its own focus).
+    requestAnimationFrame(() => {
+      if (document.activeElement === document.body) canvasRef.current?.focus({ preventScroll: true });
+    });
+    if (name === null) return;
+    const result = nameNode(source, id, name, { taken: imported.keys(), keepId: namedElsewhere(diagram, id) });
+    if (result.source === source) return;
+    onChange(result.source);
+    if (result.id !== id) {
+      renamed.current = { from: id, to: result.id };
+      if (lastAdded === id) setLastAdded(result.id);
+      if (current?.kind === 'node' && current.id === id) setSelected({ kind: 'node', id: result.id });
+    }
   };
 
   const connect = (from: string, to: string) => {
@@ -197,7 +236,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
     if (error !== undefined) return setNotice(error);
     onChange(addConnection(source, from, to, label));
   };
-  const connectDrop = useConnectDrop(diagram, connect, setNotice);
+  const connectDrop = useConnectDrop(diagram, connect, setNotice, (from, at) => setAddAfter({ from, ...at }));
 
   const remove = () => {
     if (node) {
@@ -249,13 +288,15 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
 
   /** Selects a node once the layout draws it (a paste or a duplicate: the first of its new nodes). */
   const selectNew = (ids: string[] | undefined) => {
-    if (ids?.length) setPending(ids[0]);
+    if (ids?.length) setPending({ id: ids[0], settings: true });
   };
+  /** Names a component in place on the canvas; other nodes (a group, a note) in a dialog. */
   const rename = async (id: string) => {
     const target = diagram.nodes.find((n) => n.id === id);
     if (!target) return;
     const file = imported.get(id);
     if (file) return setNotice(`"${target.name}" is part of ${file}; it stays.`);
+    if (target.kind === 'component' && nodes.find((n) => n.id === id)?.type === 'componentNode') return setEditing(id);
     const name = await prompt({ title: 'Rename', label: 'Display name', defaultValue: target.name, confirmLabel: 'Rename' });
     if (name !== null) onChange(renameNode(source, id, name));
   };
@@ -268,6 +309,9 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
     } else if (key === 'paste') selectNew(edits.paste());
     else if (key === 'duplicate') {
       if (ids.length > 0) selectNew(edits.duplicate(ids));
+    } else if (key === 'rename') {
+      if (ids.length === 0) return false;
+      void rename(ids[0]);
     } else setFinder({});
     return true;
   };
@@ -302,7 +346,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
   const cover = (paletteOpen || flowsOpen) && !phone && floating ? (flowsOpen ? FLOATING_SETTINGS : FLOATING_PALETTE) : current && !settingsClosed && !dockSettings && !phone ? FLOATING_SETTINGS : 0;
   // Below the top bar's buttons, tools and folded legend, so no node of the fit sits under them.
   const barInset = useTopBarInset(canvasRef, `${nodes.length > 0}:${canOverlay}:${!!overlay}:${pinned}:${!!diagram.legend}`);
-  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { glide: `${paletteOpen}:${flowsOpen}`, right: cover, inset: barInset ? { top: barInset } : undefined });
+  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { glide: `${paletteOpen}:${flowsOpen}`, right: cover, inset: barInset ? { top: barInset } : undefined, added: lastAdded });
   const inspector = current && !settingsClosed && (
     <Inspector
       key={current.id}
@@ -318,6 +362,8 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
       onClose={() => setSettingsClosed(true)}
     />
   );
+
+  const nodeActions: NodeActions = { editing, onName: finishName, onAddAfter: (id, at) => setAddAfter({ from: id, ...at }) };
 
   return (
     <div
@@ -335,7 +381,8 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
         flows={flowsPanel || undefined}
         phone={phone}
         focus={paletteFocus}
-        onAdd={(tech) => add(tech, phone)}
+        onAdd={(tech) => add(tech, { from: chainFrom })}
+        connectFrom={chainFrom ? (diagram.nodes.find((n) => n.id === chainFrom)?.name ?? chainFrom) : undefined}
         onClose={() => (phone ? setSheet(false) : setDocked(false))}
         settings={dockSettings ? inspector : undefined}
         onFloatingChange={setFloating}
@@ -355,7 +402,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
           if (!tech) return;
           e.preventDefault();
           e.currentTarget.focus();
-          add(tech, true);
+          add(tech, { drop: true });
         }}
         onKeyDown={(e) => {
           if ((e.key === 'Delete' || e.key === 'Backspace') && current && !(e.target as Element).closest('input, textarea, select, [contenteditable]')) {
@@ -367,6 +414,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
           if (key && runCanvasKey(key)) e.preventDefault();
         }}
       >
+        <NodeActionsContext.Provider value={nodeActions}>
         <ReactFlow
           nodes={shownNodes}
           edges={shownEdges}
@@ -385,6 +433,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
           onReconnectStart={connectDrop.onReconnectStart}
           onReconnectEnd={connectDrop.onReconnectEnd}
           onNodeClick={(_e, n) => (pick && flowsOpen ? pickNode(n.id) : select({ kind: 'node', id: n.id }))}
+          onNodeDoubleClick={(_e, n) => !(pick && flowsOpen) && void rename(n.id)}
           // While a Flows step is picked, a click on a connection sends the step along it.
           onEdgeClick={(_e, ed) => (pick && flowsOpen ? setPick({ from: ed.source, to: ed.target }) : select({ kind: 'edge', id: ed.id }))}
           onPaneClick={() => (pick ? undefined : setSelected(null))}
@@ -431,6 +480,8 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
               }}
             />
             {flows && <FlowsToggle open={flowsOpen && !dockSettings} onToggle={() => (dockSettings ? setSettingsClosed(true) : toggleFlows())} />}
+            {/* In the top bar's row, so in a narrow pane it wraps below the buttons instead of covering them. */}
+            {!hintSeen && nodes.length >= 2 && edges.length === 0 && <ConnectHint onDismiss={dismissHint} />}
               </>
             }
             right={
@@ -440,11 +491,6 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
               )
             }
           />
-          {!hintSeen && nodes.length >= 2 && edges.length === 0 && (
-            <Panel position="top-center" className="max-md:!top-12">
-              <ConnectHint onDismiss={dismissHint} />
-            </Panel>
-          )}
           {notice && (
             <Panel position="bottom-center">
               <p role="status" className="rounded-sm border-bw-1 border-ink bg-ink px-3 py-1.5 text-xs font-semibold text-paper shadow-brutal-sm">
@@ -453,6 +499,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
             </Panel>
           )}
         </ReactFlow>
+        </NodeActionsContext.Provider>
         {inspector && !dockSettings && (
           <div className="pointer-events-none absolute inset-x-2 bottom-2 z-10 flex max-h-[55%] md:inset-x-auto md:bottom-auto md:right-2 md:top-14 md:max-h-[calc(100%-4.5rem)] md:w-72">
             {inspector}
@@ -462,6 +509,18 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
           <div data-testid="flows-sheet" className="absolute inset-x-0 bottom-0 z-20 flex max-h-[55%] flex-col overflow-hidden rounded-t-brutal border-t-bw-2 border-ink bg-surface shadow-brutal-lg">
             {flowsPanel}
           </div>
+        )}
+        {nodes.length === 0 && <EmptyCanvas />}
+        {addAfter && (
+          <AddAfterPicker
+            at={addAfter}
+            fromName={diagram.nodes.find((n) => n.id === addAfter.from)?.name ?? addAfter.from}
+            onAdd={(tech) => {
+              setAddAfter(null);
+              add(tech, { from: addAfter.from });
+            }}
+            onClose={closeAddAfter}
+          />
         )}
         {menu && <CanvasMenu menu={menu} onSettings={() => setSettingsClosed(false)} onDelete={remove} onClose={closeMenu} actions={menuActions()} />}
         {finder && (

@@ -1,13 +1,14 @@
-import { memo, type CSSProperties } from 'react';
+import { memo, useRef, type CSSProperties } from 'react';
 import { Handle, Position, useNodeId, useStore } from 'reactflow';
 import { NodeResizer } from '@reactflow/node-resizer';
-import { TriangleAlert } from 'lucide-react';
+import { Plus, TriangleAlert } from 'lucide-react';
 import type { NodeProps } from 'reactflow';
 import type { ComponentMetadata } from '../../types/canvas';
 import { getTechStackIcon } from '../../utils/iconMapping';
 import { CANVAS_ACCENT } from '../../utils/canvasColors';
 import { heat, heatText } from '../../utils/heat';
 import type { NodeOverlay } from '../../sim/overlay';
+import { useNodeActions } from './nodeActions';
 import './canvas.css';
 
 /**
@@ -19,6 +20,9 @@ const ComponentNode = ({ data, selected }: NodeProps<ComponentMetadata>) => {
   const icon = getTechStackIcon(data.techStack, data.type);
   const o = data.overlay;
   const u = o?.utilization;
+  const id = useNodeId();
+  const actions = useNodeActions();
+  const editing = !!id && actions?.editing === id;
 
   return (
     <div
@@ -49,7 +53,11 @@ const ComponentNode = ({ data, selected }: NodeProps<ComponentMetadata>) => {
       <div className="flex items-center gap-2.5">
         <div className="pc-node__icon">{icon}</div>
         <div className="flex-1 min-w-0">
-          <div className="pc-node__name truncate">{data.name}</div>
+          {editing ? (
+            <NameField name={data.name} onDone={(name) => id && actions?.onName(id, name)} />
+          ) : (
+            <div className="pc-node__name truncate">{data.name}</div>
+          )}
           <div className="pc-node__tech truncate">{data.techStack}</div>
         </div>
       </div>
@@ -58,9 +66,52 @@ const ComponentNode = ({ data, selected }: NodeProps<ComponentMetadata>) => {
       {o && <LoadBadge overlay={o} />}
 
       <Handle type="source" position={Position.Bottom} className="pc-handle" />
+      {id && actions?.onAddAfter && !editing && (
+        <button
+          type="button"
+          className="pc-node__add nodrag nopan"
+          aria-label={`Add a component after ${data.name}`}
+          title="Add a component connected from this one"
+          onClick={(e) => {
+            e.stopPropagation();
+            const box = e.currentTarget.getBoundingClientRect();
+            actions.onAddAfter?.(id, { x: box.right, y: box.top + box.height / 2 });
+          }}
+        >
+          <Plus size={14} strokeWidth={2.5} aria-hidden="true" />
+        </button>
+      )}
     </div>
   );
 };
+
+/**
+ * The name typed in place on the canvas: Enter (or leaving the field) keeps what is typed,
+ * Escape the name the node had. Its keys stay in the field, away from the canvas's.
+ */
+function NameField({ name, onDone }: { name: string; onDone: (name: string | null) => void }) {
+  const done = useRef(false);
+  const finish = (value: string | null) => {
+    if (done.current) return;
+    done.current = true;
+    onDone(value);
+  };
+  return (
+    <input
+      aria-label="Name"
+      defaultValue={name}
+      autoFocus
+      onFocus={(e) => e.currentTarget.select()}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === 'Enter') finish(e.currentTarget.value);
+        else if (e.key === 'Escape') finish(null);
+      }}
+      onBlur={(e) => finish(e.currentTarget.value)}
+      className="pc-node__name pc-node__name-field nodrag nopan"
+    />
+  );
+}
 
 /**
  * The whole node as a drop target for a new connection. It takes the pointer only while a connection
