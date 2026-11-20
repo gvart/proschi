@@ -735,6 +735,11 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
               // As tall as the diagram in sight lets it be (SequenceDiagram sets --composer-max): its body scrolls, its buttons pinned at
               // its foot, and a field that takes the focus is scrolled clear of them.
               className="max-h-[var(--composer-max,none)] scroll-pb-14 overflow-y-auto overscroll-contain rounded-sm shadow-brutal-md"
+              // The browser scrolls a focused field into sight however the top falls: snapped after it, to a whole line.
+              onFocus={(e) => {
+                const box = e.currentTarget;
+                requestAnimationFrame(() => snapToField(box));
+              }}
             >
               <StepForm
                 key={`${composing.slot.kind}:${'line' in composing.slot ? composing.slot.line : 'name' in composing.slot ? composing.slot.name : ''}`}
@@ -1265,8 +1270,9 @@ function StepForm({
           <MoreFields kind={kind} head={head} more={more} onMore={setMore} headers={vocabulary.headers} typeName={vocabulary.type?.name} />
           {problems.length > 0 && (
             <ul aria-label="Problems with this step" className="space-y-1">
-              {problems.map((p) => (
-                <li key={p} className="flex items-start gap-1.5 rounded-sm border-bw-1 border-amber-600/50 bg-amber-100/60 px-1.5 py-1 text-xs text-amber-950 dark:bg-amber-900/30 dark:text-amber-100">
+              {problems.map((p, i) => (
+                // The same message can come twice (two lines with the same problem): its count so far tells them apart.
+                <li key={`${p}#${problems.slice(0, i).filter((q) => q === p).length}`} className="flex items-start gap-1.5 rounded-sm border-bw-1 border-amber-600/50 bg-amber-100/60 px-1.5 py-1 text-xs text-amber-950 dark:bg-amber-900/30 dark:text-amber-100">
                   <AlertTriangle size={13} aria-hidden="true" className="mt-px shrink-0" />
                   <span className="min-w-0 break-words">{p}</span>
                 </li>
@@ -1276,7 +1282,7 @@ function StepForm({
         </>
       )}
       {/* Pinned to the bottom of what scrolls it (the pane's column, the diagram), so it is in sight however long the form. */}
-      <div className="sticky bottom-0 z-10 -mx-2.5 -mb-2.5 flex flex-wrap gap-1.5 rounded-b-sm border-t border-ink/15 bg-paper px-2.5 py-2">
+      <div data-form-foot className="sticky bottom-0 z-10 -mx-2.5 -mb-2.5 flex flex-wrap gap-1.5 rounded-b-sm border-t border-ink/15 bg-paper px-2.5 py-2">
         <button type="submit" disabled={!both} className={`${primaryButton} disabled:opacity-50`}>
           {button ?? (mode === 'edit' ? 'Save step' : mode === 'insert' ? 'Insert step' : 'Add step')}
         </button>
@@ -1373,4 +1379,26 @@ function Labelled({ id, label, children }: { id: string; label: string; children
       {children}
     </div>
   );
+}
+
+/**
+ * Scrolls a form's body (`box`, its buttons pinned at its foot) so the focused field in it is in sight with nothing cut
+ * in half at the top: at the top when the whole form fits, else at the highest edge of a row that still shows the field.
+ */
+function snapToField(box: HTMLElement) {
+  const max = box.scrollHeight - box.clientHeight;
+  if (max <= 0) {
+    box.scrollTop = 0;
+    return;
+  }
+  const field = document.activeElement;
+  if (!(field instanceof HTMLElement) || field === box || !box.contains(field)) return;
+  const foot = box.querySelector<HTMLElement>('[data-form-foot]');
+  // Where the body's content starts on the screen: a row's place in the body is its top less this.
+  const origin = box.getBoundingClientRect().top + box.clientTop - box.scrollTop;
+  const shown = box.clientHeight - (foot?.offsetHeight ?? 0);
+  const reach = field.getBoundingClientRect().bottom - origin + 4;
+  const rows = Array.from(box.querySelectorAll<HTMLElement>('*'), (el) => (foot?.contains(el) ? Infinity : el.getBoundingClientRect().top - origin));
+  const top = [0, ...rows].filter((y) => y <= max && y + shown >= reach).sort((a, b) => a - b)[0];
+  box.scrollTop = top ?? max;
 }

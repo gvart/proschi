@@ -577,6 +577,19 @@ test.describe('the composer in sight, at 1280x800', () => {
           return { covered: overlap(row, form), rowInSight: inside(row, view), formInSight: inside(form, view) };
         })
         .toEqual({ covered: false, rowInSight: true, formInSight: true });
+      // Its field is in sight, and the body above it is not cut through a line: at its top, or at the edge of a row.
+      await expect(step.getByRole('combobox', { name: 'Answer' })).toBeFocused();
+      await expect
+        .poll(() =>
+          step.evaluate((box) => {
+            const origin = box.getBoundingClientRect().top + box.clientTop - box.scrollTop;
+            const foot = box.querySelector('[data-form-foot]')!;
+            const field = box.querySelector('input:focus')!.getBoundingClientRect();
+            const edge = box.scrollTop === 0 || [...Array.from(box.querySelectorAll('*'))].some((el) => !foot.contains(el) && Math.abs(el.getBoundingClientRect().top - origin - box.scrollTop) < 1);
+            return { edge, fieldInSight: field.top >= box.getBoundingClientRect().top && field.bottom <= foot.getBoundingClientRect().top };
+          }),
+        )
+        .toEqual({ edge: true, fieldInSight: true });
     });
   }
 });
