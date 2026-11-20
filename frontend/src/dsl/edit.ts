@@ -803,3 +803,62 @@ export function scaleTraffic(source: string, factor: number): string {
   }
   return lines.join('\n');
 }
+
+// ---------------------------------------------------------------------------
+// Renaming a node's id (the canvas's "ids follow names"). Every reference is an
+// identifier token, so the text is read token by token: strings, labels,
+// payloads and comments are never touched.
+
+/** Blocks whose lines name no node of this document: a type's ops, an entity's fields, a decision, a system's team file. */
+const NO_REFERENCES = new Set(['type', 'entity', 'decision', 'system']);
+
+/** What a line that opens a block opens, from its first words (`} alt "Next" {` opens an alt). */
+function blockKind(tokens: Token[]): string {
+  const [first, second] = tokens;
+  if (first?.kind === 'rbrace') return second?.kind === 'ident' ? second.value : 'other';
+  if (first?.kind !== 'ident') return 'other';
+  if (first.value === 'abstract' && second?.kind === 'ident' && second.value === 'type') return 'type';
+  return first.value;
+}
+
+/** Whether a node may take `id`: an identifier no node uses, not a keyword or a replica count (see uniqueId). */
+function isFreeId(source: string, id: string, taken: Iterable<string> = []): boolean {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(id) || RESERVED.has(id) || /^x\d+$/.test(id)) return false;
+  return !new Set([...parse(source).diagram.nodes.map((n) => n.id), ...taken]).has(id);
+}
+
+/**
+ * Renames the node `oldId` to `newId` everywhere this document names it: its
+ * declaration, connections and steps (`old.port` too), group membership,
+ * capacity, entities, tests and what-ifs. Refused when `newId` is not free
+ * (`taken` adds ids the text alone does not show), or this document has no `oldId`.
+ */
+export function renameId(source: string, oldId: string, newId: string, taken?: Iterable<string>): EditResult {
+  if (oldId === newId) return { source };
+  if (!parse(source).diagram.nodes.some((n) => n.id === oldId && n.loc.file === undefined)) return { error: `There is no '${oldId}' here.` };
+  if (!isFreeId(source, newId, taken)) return { error: `'${newId}' can't be used as an id here.` };
+  const lines = source.split('\n');
+  /** The kinds of the blocks open at this line, innermost last. */
+  const blocks: string[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const { tokens } = tokenizeLine(lines[i], i + 1);
+    if (tokens.length === 0) continue;
+    const inside = blocks.some((b) => NO_REFERENCES.has(b));
+    const kind = blockKind(tokens);
+    const opens = tokens[tokens.length - 1].kind === 'lbrace';
+    if (tokens[0].kind === 'rbrace') blocks.pop();
+    if (opens) blocks.push(kind);
+    // A type's header names types, `let` a constant, `import` a file; an entity's header names the entity, then the node it is `in`;
+    // `any cache` names a kind.
+    if (!inside && kind !== 'type' && kind !== 'let' && kind !== 'import') {
+      const isNode = (at: number) => !(kind === 'entity' && at === 1) && !(tokens[at - 1]?.kind === 'ident' && tokens[at - 1].value === 'any');
+      const named = tokens.filter((t, at) => t.kind === 'ident' && t.value === oldId && isNode(at));
+      let text = lines[i];
+      for (const t of named.reverse()) text = text.slice(0, t.col - 1) + newId + text.slice(end(t));
+      lines[i] = text;
+    }
+    // A payload over several lines is text.
+    i = statementEnd(lines, i);
+  }
+  return { source: lines.join('\n') };
+}
