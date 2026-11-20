@@ -458,8 +458,9 @@ export default function Playground() {
 
   // Another `#code=` link opened in this tab (pasted into the address bar): it opens as it would on a fresh load.
   useEffect(() => {
-    const onHashChange = () => {
-      const link = readShareLink(window.location.hash);
+    const onHashChange = (event: HashChangeEvent) => {
+      // From the event: a pending update may have rewritten the address before it was dispatched.
+      const link = readShareLink(new URL(event.newURL).hash);
       if (!link) return;
       // The pending update would write the diagram open before back over the link.
       clearTimeout(addressUpdate.current);
