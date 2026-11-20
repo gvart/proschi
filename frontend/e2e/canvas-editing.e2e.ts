@@ -206,9 +206,9 @@ test.describe('canvas editing', () => {
     await page.keyboard.press('?');
     const sheet = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
     await expect(sheet).toBeVisible();
-    for (const section of ['Canvas', 'Flows pane', 'Code editor', 'Everywhere']) await expect(sheet.getByRole('region', { name: section })).toBeVisible();
+    for (const section of ['Canvas', 'Flows', 'Code editor', 'Everywhere']) await expect(sheet.getByRole('region', { name: section })).toBeVisible();
     await expect(sheet.getByText('Duplicate the selection')).toBeVisible();
-    await expect(sheet.getByRole('region', { name: 'Flows pane' })).toContainText('Move the selected step up or down');
+    await expect(sheet.getByRole('region', { name: 'Flows' })).toContainText('Move the selected step up or down');
     await page.keyboard.press('Escape');
     await expect(sheet).toBeHidden();
 
