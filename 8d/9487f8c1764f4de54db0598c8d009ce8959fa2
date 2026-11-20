@@ -1,0 +1,36 @@
+frontend/src/components/Diagram/FlowsPanel.tsx
+  s_733d66441cadaa::t_f72b77c8f05565 25
+  s_733d66441cadaa::t_a82173b40c1c9b 828
+frontend/e2e/flows-pane-edit.e2e.ts
+  s_733d66441cadaa::t_d4962de5f7402c 314,319
+  s_733d66441cadaa::t_2440fa88e43991 326
+  s_733d66441cadaa::t_fbe046b2a1505c 311,315-318
+  s_733d66441cadaa::t_e95ca5ad67c94a 301,304-309,321-322,324,327
+  s_733d66441cadaa::t_d58154041d3234 293-300,302-303,310,312-313,320,323,325,328-337
+frontend/src/components/Diagram/SequenceDiagram.tsx
+  s_733d66441cadaa::t_a5a1fd9d332ced 218-226,229,231,234-238,245
+  s_733d66441cadaa::t_b2aa68159e6399 299-300
+  s_733d66441cadaa::t_10d7cc304384c4 51-52
+  s_733d66441cadaa::t_4fbcf98518b1e6 124-125
+  s_733d66441cadaa::t_cd0efff12056ef 281-282
+  s_733d66441cadaa::t_bba92aadf4318d 288-289
+  s_733d66441cadaa::t_c7a2b03e31ccf9 60
+docs/VISUAL-EDITOR.md
+  s_733d66441cadaa::t_abbb877ece02c0 88-89
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8d9487f8c1764f4de54db0598c8d009ce8959fa2",
+  "prompts": {},
+  "sessions": {
+    "s_733d66441cadaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9649973d-f497-4440-b031-a92483a592e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
