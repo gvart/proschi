@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { DiagramNode } from '../dsl';
 import { renameNode } from '../dsl/edit';
 import type { View } from '../components/Analysis/view';
+import type { EditorMode } from '../components/Diagram/editorMode';
 import Tour, { type CoverBand, type TourStep } from './Tour';
 import { useIsPhone } from './layout';
 import { nameTarget, type NameTarget } from './nameTarget';
@@ -15,6 +16,8 @@ export interface EditorTourProps {
   canPlay: boolean;
   playing: boolean;
   view: View;
+  /** Code or Visual: the first steps show the text in the code pane, or on the canvas. */
+  mode: EditorMode;
   hasTraffic: boolean;
   /** The share link was just copied. */
   copied: boolean;
@@ -38,7 +41,8 @@ const Code = ({ children }: { children: string }) => <code className="rounded-sm
 
 /** The editor's first-run tour: text → diagram, edit, play, results, share. */
 export default function EditorTour(props: EditorTourProps) {
-  const { source, nodes, diagramKey, canPlay, playing, view, hasTraffic, copied, setMobilePane, stopPlaying, edit, selectInEditor, openHldExample, onClose, onCover } = props;
+  const { source, nodes, diagramKey, canPlay, playing, view, mode, hasTraffic, copied, setMobilePane, stopPlaying, edit, selectInEditor, openHldExample, onClose, onCover } = props;
+  const visual = mode === 'visual';
   const phone = useIsPhone();
   const [editing, setEditing] = useState<{ baseline: string; target?: NameTarget }>();
   const [played, setPlayed] = useState(false);
@@ -56,60 +60,101 @@ export default function EditorTour(props: EditorTourProps) {
 
   const steps = useMemo<TourStep[]>(
     () => [
-      {
-        id: 'text',
-        title: 'Text in, diagram out',
-        target: phone ? q('[data-tour="panes"]') : q('[data-tour="code"]'),
-        sides: ['right'],
-        body: phone ? (
-          <p>
-            A Proschi diagram is plain text. <strong>Code</strong> holds the text, <strong>Diagram</strong> draws it, and they always stay in sync.
-          </p>
-        ) : (
-          <p>
-            A Proschi diagram is plain text. Every node and arrow on the right comes from a line on the left, and they always stay in sync.
-          </p>
-        ),
-      },
-      {
-        id: 'edit',
-        title: 'Change a line, watch the diagram',
-        target: q('[data-tour="code"] .cm-activeLine'),
-        clip: q('[data-tour="code"] .cm-scroller'),
-        sides: ['right', 'bottom'],
-        dock: 'bottom',
-        onEnter: () => {
-          if (phone) setMobilePane('code');
-          const found = nameTarget(source, nodes);
-          setEditing({ baseline: diagramKey, target: found });
-          if (found) selectInEditor(found.line, found.col, found.name.length, !phone);
-        },
-        body: target ? (
-          <p>
-            Line {target.line} declares <Code>{target.id}</Code>; the text in quotes is the name the diagram shows.
-          </p>
-        ) : (
-          <p>Each line declares a node, a connection or a step. Add one and the diagram redraws as you type.</p>
-        ),
-        task: target ? (
-          <>Type a new name for “{target.name}”.</>
-        ) : (
-          <>
-            Add a line such as <Code>{'cache "Cache" [Redis]'}</Code>
-          </>
-        ),
-        done: edited,
-        doneText: 'The diagram followed your text.',
-        auto: true,
-        settleKey: diagramKey,
-        settleMs: 1500,
-        action: edited
-          ? undefined
-          : {
-              label: 'Show me',
-              run: () => (target ? edit((s) => renameNode(s, target.id, `My ${target.name}`)) : edit((s) => `${s.trimEnd()}\ncache "Cache" [Redis]\n`)),
+      visual
+        ? {
+            id: 'text',
+            title: 'One design, two ways in',
+            target: phone ? q('[data-tour="panes"]') : q('[data-tour="mode"]'),
+            sides: ['bottom', 'right'],
+            body: (
+              <p>
+                A Proschi diagram is plain text. In <strong>Visual</strong> you build it on the canvas; <strong>Code</strong> shows the same text, with the
+                diagram beside it. Switch any time: they always stay in sync.
+              </p>
+            ),
+          }
+        : {
+            id: 'text',
+            title: 'Text in, diagram out',
+            target: phone ? q('[data-tour="panes"]') : q('[data-tour="code"]'),
+            sides: ['right'],
+            body: phone ? (
+              <p>
+                A Proschi diagram is plain text. the code holds the text, <strong>Preview</strong> draws it, and they always stay in sync.
+              </p>
+            ) : (
+              <p>
+                A Proschi diagram is plain text. Every node and arrow on the right comes from a line on the left, and they always stay in sync.
+              </p>
+            ),
+          },
+      visual
+        ? {
+            id: 'edit',
+            title: 'Name a component',
+            target: target ? q(`.react-flow__node[data-id="${target.id}"]`) : q('#pane-panel-diagram'),
+            sides: ['right', 'bottom'],
+            dock: 'bottom',
+            onEnter: () => setEditing({ baseline: diagramKey, target: nameTarget(source, nodes) }),
+            body: target ? (
+              <p>
+                Every box is a line of the text: “{target.name}” is <Code>{target.id}</Code>. Its name is what the diagram shows.
+              </p>
+            ) : (
+              <p>Add a component from Add component, top left, and the text follows.</p>
+            ),
+            task: target ? <>Double-click “{target.name}” and type a new name.</> : <>Add a component.</>,
+            done: edited,
+            doneText: 'The text followed your change: View code shows it.',
+            auto: true,
+            settleKey: diagramKey,
+            settleMs: 1500,
+            action: edited
+              ? undefined
+              : {
+                  label: 'Show me',
+                  run: () => (target ? edit((s) => renameNode(s, target.id, `My ${target.name}`)) : edit((s) => `${s.trimEnd()}\ncache "Cache" [Redis]\n`)),
+                },
+          }
+        : {
+            id: 'edit',
+            title: 'Change a line, watch the diagram',
+            target: q('[data-tour="code"] .cm-activeLine'),
+            clip: q('[data-tour="code"] .cm-scroller'),
+            sides: ['right', 'bottom'],
+            dock: 'bottom',
+            onEnter: () => {
+              if (phone) setMobilePane('code');
+              const found = nameTarget(source, nodes);
+              setEditing({ baseline: diagramKey, target: found });
+              if (found) selectInEditor(found.line, found.col, found.name.length, !phone);
             },
-      },
+            body: target ? (
+              <p>
+                Line {target.line} declares <Code>{target.id}</Code>; the text in quotes is the name the diagram shows.
+              </p>
+            ) : (
+              <p>Each line declares a node, a connection or a step. Add one and the diagram redraws as you type.</p>
+            ),
+            task: target ? (
+              <>Type a new name for “{target.name}”.</>
+            ) : (
+              <>
+                Add a line such as <Code>{'cache "Cache" [Redis]'}</Code>
+              </>
+            ),
+            done: edited,
+            doneText: 'The diagram followed your text.',
+            auto: true,
+            settleKey: diagramKey,
+            settleMs: 1500,
+            action: edited
+              ? undefined
+              : {
+                  label: 'Show me',
+                  run: () => (target ? edit((s) => renameNode(s, target.id, `My ${target.name}`)) : edit((s) => `${s.trimEnd()}\ncache "Cache" [Redis]\n`)),
+                },
+          },
       playing
         ? {
             id: 'play',
@@ -189,7 +234,7 @@ export default function EditorTour(props: EditorTourProps) {
         doneText: 'Link copied. Paste it anywhere.',
       },
     ],
-    [phone, source, nodes, diagramKey, target, edited, playing, canPlay, played, view, hasTraffic, shared, setMobilePane, selectInEditor, edit, stopPlaying, openHldExample],
+    [phone, visual, source, nodes, diagramKey, target, edited, playing, canPlay, played, view, hasTraffic, shared, setMobilePane, selectInEditor, edit, stopPlaying, openHldExample],
   );
 
   return <Tour label="Quick tour" steps={steps} phone={phone} onClose={onClose} onCover={onCover} />;

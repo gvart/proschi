@@ -14,6 +14,7 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  Eye,
   FilePlus,
   LayoutGrid,
   Link,
@@ -24,7 +25,6 @@ import {
   Play,
   Route,
   Upload,
-  Code2,
   Network,
   ArchiveRestore,
   Import,
@@ -74,6 +74,9 @@ import { useOverlayOn, withEdgeLoads } from '../Diagram/canvasShared';
 import { EmptyCanvas } from '../Diagram/CanvasEditing';
 import { isShortcutsKey } from '../Diagram/canvasEditState';
 import ShortcutsDialog from './ShortcutsDialog';
+import ModeSwitch from '../Diagram/ModeSwitch';
+import CodeDrawer from '../Diagram/CodeDrawer';
+import { useEditorMode } from '../Diagram/editorMode';
 import { SystemActionsContext, type SystemActions } from '../Canvas/systemActions';
 import { useSystemView, type Crumb } from './useSystemView';
 import PaneLoading from '../PaneLoading';
@@ -118,7 +121,6 @@ import { withCloudErrors } from '../../playground/cloudRefs';
 import type { VersionInfo } from '../../playground/versions';
 import type { VersionMode } from './VersionViewer';
 import { eyebrow, iconButton, outlineButton, primaryButton, subBar, toolButton } from './ui';
-import Tabs from '../../design/Tabs';
 import Select from '../../design/Select';
 import HelpMenu from '../../onboarding/HelpMenu';
 import Header from '../../design/Header';
@@ -212,11 +214,6 @@ function initialTourMode(): StartMode {
 
 const EDITOR_CONTEXT = { kind: 'editor' } as const;
 
-/** The pane a phone opens on: the code on a first visit, where it all starts; the diagram for a link or a returning visitor. */
-function initialMobilePane(): 'code' | 'diagram' {
-  return !isDeepLink() && !isReturning() ? 'code' : 'diagram';
-}
-
 export default function Playground() {
   // An external store, so cloud sync can merge into the latest diagrams (src/playground/docStore.ts).
   const [docStore] = useState(() => createDocStore(loadInitialState()));
@@ -281,8 +278,16 @@ export default function Playground() {
   const [splitLayout] = useState(() => loadJson<Layout | undefined>(SPLIT_KEY, undefined));
   /** Bumped when the splitter is let go, so the diagram re-fits its new width. */
   const [splitMoves, setSplitMoves] = useState(0);
-  // Phones show one pane at a time.
-  const [mobilePane, setMobilePane] = useState<'code' | 'diagram'>(initialMobilePane);
+  /** Code or Visual (components/Diagram/editorMode.ts): the code pane beside a view-only diagram, or the canvas alone. */
+  const [mode] = useEditorMode();
+  const visual = mode === 'visual';
+  // Phones show one pane at a time: in Code mode the code, with a peek at the diagram (not remembered); in Visual the canvas.
+  const [mobilePane, setMobilePane] = useState<'code' | 'diagram'>('code');
+  const phonePane = visual ? 'diagram' : mobilePane;
+  /** Visual mode's View code: open, and the declaration to select in it. */
+  const [codeView, setCodeView] = useState<{ at: (SourceLoc & { n: number }) | null } | null>(null);
+  const viewCode = (loc?: SourceLoc) => setCodeView((v) => ({ at: loc ? { ...loc, n: (v?.at?.n ?? 0) + 1 } : null }));
+  const closeCodeView = useCallback(() => setCodeView(null), []);
   const [view, setView] = useState<View>(initialView);
   const [copied, setCopied] = useState(false);
   const [tour, setTour] = useState<StartMode>(initialTourMode);
@@ -861,6 +866,7 @@ export default function Playground() {
   const jumpToCode = (id: string) => {
     const loc = locOf(id);
     if (!loc) return;
+    if (visual && (loc.file === undefined || loc.file === team?.path)) return viewCode(loc);
     setMobilePane('code');
     if (loc.file !== undefined || team) return selectDiagnostic(loc);
     // After the code pane is shown, so the editor can take the focus.
@@ -886,6 +892,8 @@ export default function Playground() {
    * several are shaded. The canvas keeps the focus (and its keys), and the pane stays as it is on a phone.
    */
   const linkSelection = (ids: string[]) => {
+    // Visual mode has no code pane to show it in.
+    if (visual) return;
     const editor = team ? teamEditorRef.current : editorRef.current;
     // While the reader is in the code, the canvas follows it, not the other way round.
     if (!editor || editor.hasFocus()) return;
@@ -910,6 +918,12 @@ export default function Playground() {
 
   /** A problem (or test) in an imported file opens that file, if it is saved in this browser. */
   const selectDiagnostic = (d: SourceLoc) => {
+    // Visual mode shows it in View code, the text it would be in.
+    if (visual && (d.file === undefined || d.file === team?.path)) {
+      if (team && d.file === undefined) systems.goTo('');
+      viewCode(d);
+      return;
+    }
     if (team && d.file === team.path) {
       teamEditorRef.current?.goTo(d.line, d.col);
       return;
@@ -1131,6 +1145,13 @@ export default function Playground() {
             )}
           </Menu>
         </div>
+        {/* Phones have the switch in the bar under the header. */}
+        {!phone && (
+          <div className="flex items-center gap-1">
+            <ModeSwitch problems={problemCount} />
+            {visual && <ViewCodeButton open={!!codeView} onToggle={() => (codeView ? closeCodeView() : viewCode())} />}
+          </div>
+        )}
         <HelpMenu
           className="sm:order-last"
           onTour={() => {
@@ -1302,24 +1323,26 @@ export default function Playground() {
           />
         )}
 
-        <div data-tour="panes" className="md:hidden flex items-stretch bg-surface">
-          <div className="flex-1 min-w-0">
-          <Tabs
-            label="View"
-            idPrefix="pane"
-            fill
-            value={mobilePane}
-            onChange={setMobilePane}
-            items={[
-              { id: 'code', label: 'Code', icon: <Code2 size={16} />, badge: problemCount > 0 ? problemCount : undefined },
-              // Not named after the pane's own Diagram, Results and HLD tabs, which sit right under it.
-              { id: 'diagram', label: playing ? 'Playback' : 'Preview', icon: <Network size={16} /> },
-            ]}
-          />
+        {phone && (
+          <div data-tour="panes" className={`flex items-center gap-1 pl-2 ${subBar}`}>
+            <ModeSwitch problems={problemCount} />
+            <div className="flex min-w-0 flex-1 justify-end py-1">
+              {visual ? (
+                <ViewCodeButton open={!!codeView} onToggle={() => (codeView ? closeCodeView() : viewCode())} />
+              ) : (
+                // A peek at the diagram the code draws; not named after the pane's own Diagram, Results and HLD tabs.
+                (nodes.length > 0 || playing || mobilePane === 'diagram') && (
+                  <button type="button" aria-pressed={mobilePane === 'diagram'} onClick={() => setMobilePane(mobilePane === 'diagram' ? 'code' : 'diagram')} className={toolButton}>
+                    <Network size={16} aria-hidden="true" />
+                    {playing ? 'Playback' : 'Preview'}
+                  </button>
+                )
+              )}
+            </div>
+            {/* Phones: in the bar, not floating over the panes. */}
+            {hasPartner && <PartnerButton bar open={partnerOpen} onToggle={togglePartner} />}
           </div>
-          {/* Phones: in the tab bar, not floating over the panes. */}
-          {hasPartner && phone && <PartnerButton bar open={partnerOpen} onToggle={togglePartner} />}
-        </div>
+        )}
       </ZenCollapse>
 
       <div className="relative flex flex-1 min-h-0">
@@ -1348,7 +1371,8 @@ export default function Playground() {
       {/* Side by side on wider screens, with a splitter between; phones show one pane at a time (the tabs above). */}
       <Group
         id="playground-split"
-        className="flex-1 min-h-0 min-w-0 max-md:[&>[data-mobile-hidden]]:!hidden"
+        // Visual mode hides the code pane, still mounted: the canvas's undo and redo are its editor's history.
+        className="flex-1 min-h-0 min-w-0 [&>[data-mode-hidden]]:!hidden max-md:[&>[data-mobile-hidden]]:!hidden"
         defaultLayout={splitLayout}
         onLayoutChanged={(layout, meta) => {
           if (!meta.isUserInteraction) return;
@@ -1356,7 +1380,7 @@ export default function Playground() {
           setSplitMoves((n) => n + 1);
         }}
       >
-        <SplitPanel id="code" defaultSize="42%" minSize="240px" maxSize="75%" data-mobile-hidden={mobilePane !== 'code' || undefined} className="flex">
+        <SplitPanel id="code" defaultSize="42%" minSize="240px" maxSize="75%" data-mode-hidden={visual || undefined} data-mobile-hidden={phonePane !== 'code' || undefined} className="flex">
           <EditorZone
             id="pane-panel-code"
             data-tour="code"
@@ -1386,11 +1410,12 @@ export default function Playground() {
           </EditorZone>
         </SplitPanel>
         <Separator
+          data-mode-hidden={visual || undefined}
           aria-label="Resize the code and diagram panes"
           className="hidden md:block w-[2px] bg-ink outline-hidden transition-colors hover:bg-pop-pink focus-visible:bg-pop-pink data-[separator=active]:bg-pop-pink"
         />
-        <SplitPanel id="diagram" minSize="320px" data-mobile-hidden={mobilePane !== 'diagram' || undefined} className="flex">
-          <section id="pane-panel-diagram" className="flex flex-col flex-1 min-h-0 min-w-0">
+        <SplitPanel id="diagram" minSize="320px" data-mobile-hidden={phonePane !== 'diagram' || undefined} className="flex">
+          <section id="pane-panel-diagram" className="relative flex flex-col flex-1 min-h-0 min-w-0">
             <ZenCollapse zen={zen.zen}>
               {!playing && <ViewTabs view={view} onChange={setView} results={simulation.results} />}
               {hasScenarios && useCase && scenario && (view === 'diagram' || playing) && (
@@ -1484,12 +1509,14 @@ export default function Playground() {
                           onReconnect={canvasEdits.reconnect}
                           onUnpinNode={canvasEdits.unpin}
                           flows={systems.focusFile ? undefined : { source, diagram, onChange: (next) => editSource(() => next), useCase: useCase?.id, onUseCase: chooseUseCase }}
+                          viewOnly={!visual}
                           onJumpToCode={jumpToCode}
                           onSelectionLink={linkSelection}
-                          linked={linkedIds}
-                          fitKey={`${mobilePane}:${layoutSettled}`}
+                          linked={visual ? NO_IDS : linkedIds}
+                          fitKey={`${phonePane}:${layoutSettled}`}
                           layoutBusy={layoutBusy}
-                        glideKey={String(splitMoves)}
+                          // A mode switch widens or narrows the canvas in place, as the splitter does.
+                          glideKey={`${splitMoves}:${mode}`}
                           imageRequest={imageRequest}
                           onImageDone={() => setImageRequest(null)}
                           notice={notice}
@@ -1498,7 +1525,9 @@ export default function Playground() {
                           empty={
                             nodes.length === 0 &&
                             !playing &&
-                            (isBlank(source) ? (
+                            (!visual ? (
+                              <EmptyCanvas viewOnly />
+                            ) : isBlank(source) ? (
                               // Click-through, so the canvas under it (and its Add component button) still works.
                               <div className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-y-auto p-4">
                                 <Suspense fallback={null}>
@@ -1517,6 +1546,17 @@ export default function Playground() {
                 )}
               </Suspense>
             </div>
+            {visual && codeView && (
+              <CodeDrawer
+                source={team ? team.source : source}
+                file={team ? team.path : rootPath}
+                diagnostics={team ? teamDiagnostics : rootDiagnostics}
+                nodeIds={team ? shown.nodes.map((n) => n.id) : nodeIds}
+                diagram={team ? shown : diagram}
+                at={codeView.at}
+                onClose={closeCodeView}
+              />
+            )}
           </section>
         </SplitPanel>
       </Group>
@@ -1535,6 +1575,7 @@ export default function Playground() {
               undo={undoPartner}
               onClose={closePartner}
               diagramOf={partnerDiagram}
+              view={mode}
             />
           </Suspense>
         </PartnerDock>
@@ -1652,6 +1693,7 @@ export default function Playground() {
             canPlay={canPlay}
             playing={playing}
             view={view}
+            mode={mode}
             hasTraffic={(diagram.traffic ?? []).length > 0}
             copied={copied}
             setMobilePane={setMobilePane}
@@ -1680,6 +1722,16 @@ export default function Playground() {
   );
   // The paid features (components/Feature.tsx) for everything below: the review panel, the share link dialog.
   return <FeaturesContext.Provider value={features}>{page}</FeaturesContext.Provider>;
+}
+
+/** Visual mode's View code: the Proschi behind the canvas, read-only (CodeDrawer). */
+function ViewCodeButton({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  return (
+    <button type="button" aria-pressed={open} onClick={onToggle} className={`${toolButton} shrink-0 whitespace-nowrap aria-pressed:border-ink aria-pressed:bg-pop-yellow aria-pressed:text-on-accent`} title="The Proschi code behind the canvas, read-only">
+      <Eye size={16} aria-hidden="true" />
+      View code
+    </button>
+  );
 }
 
 interface ScenarioBarProps {

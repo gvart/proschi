@@ -165,7 +165,7 @@ export interface CanvasMenuActions {
   down?: boolean;
 }
 
-/** The right-click menu of a node or connection: its settings, the actions given, and Delete. */
+/** The right-click menu of a node or connection: its settings, the actions given, and Delete (each when given; a view-only canvas has neither). */
 export function CanvasMenu({
   menu,
   onSettings,
@@ -174,8 +174,8 @@ export function CanvasMenu({
   actions = {},
 }: {
   menu: CanvasMenuState;
-  onSettings: () => void;
-  onDelete: () => void;
+  onSettings?: () => void;
+  onDelete?: () => void;
   onClose: () => void;
   actions?: CanvasMenuActions;
 }) {
@@ -226,7 +226,7 @@ export function CanvasMenu({
       {item(<PinOff size={14} />, 'Unpin position', actions.onUnpin)}
       {item(<Code2 size={14} />, 'Jump to code', actions.onJumpToCode)}
       {item(actions.down ? <Power size={14} /> : <PowerOff size={14} />, actions.down ? 'Bring back up' : 'Simulate down', actions.onSimulateDown)}
-      <div className="my-1 border-t border-ink/10" />
+      {onDelete && <div className="my-1 border-t border-ink/10" />}
       {item(<Trash2 size={14} />, <>Delete {hint('Del')}</>, onDelete)}
     </div>
   );
@@ -291,12 +291,12 @@ export function AddAfterPicker({ at, fromName, onAdd, onClose }: { at: AddAfterS
 }
 
 /** An empty canvas: where to start, with the mouse or in code. */
-export function EmptyCanvas({ children }: { children?: ReactNode }) {
+export function EmptyCanvas({ children, viewOnly = false }: { children?: ReactNode; viewOnly?: boolean }) {
   return (
     <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-4">
       <div className="max-w-xs rounded-sm border-bw-1 border-dashed border-ink/40 px-5 py-4 text-center text-sm text-muted">
-        <p className="font-semibold text-ink">Drag a component here or describe it in code</p>
-        <p className="mt-1">Components are under Add component, top left.</p>
+        <p className="font-semibold text-ink">{viewOnly ? 'Describe your design in code' : 'Drag a component here or describe it in code'}</p>
+        <p className="mt-1">{viewOnly ? 'The diagram draws itself as you type; switch to Visual to build it on the canvas.' : 'Components are under Add component, top left.'}</p>
         <p className="mt-1">
           For example <code className="rounded-sm bg-ink/5 px-1 font-mono">api -&gt; db</code>
         </p>

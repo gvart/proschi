@@ -133,6 +133,11 @@ export interface DiagramViewProps {
   flows?: { source: string; diagram: Diagram; onChange: (next: string) => void; useCase: string | undefined; onUseCase: (id: string) => void };
   /** What an empty canvas shows (the editor's starter card), centred on the canvas. */
   empty?: ReactNode;
+  /**
+   * Code mode: the diagram is there to look at, the text is edited in the code. Panning, zooming, selecting
+   * (to find its line), playback and the what-ifs stay; nothing on the canvas changes the text.
+   */
+  viewOnly?: boolean;
 }
 
 /** Renders the parsed diagram. Canvas edits are written back to the text, which stays the source of truth. */
@@ -187,6 +192,7 @@ export default function DiagramView({
   onOpenSystem,
   flows,
   empty,
+  viewOnly = false,
 }: DiagramViewProps) {
   const playing = playback.active;
   const { getNode, getNodes, getViewport, screenToFlowPosition, fitView, setViewport } = useReactFlow();
@@ -198,7 +204,7 @@ export default function DiagramView({
   const [docked, setDocked] = usePaletteOpen('proschi.canvas.palette');
   const [sheet, setSheet] = useState(false);
   const [paletteFocus, setPaletteFocus] = useState(false);
-  const canAdd = !playing && crumbs.length === 1;
+  const canAdd = !playing && !viewOnly && crumbs.length === 1;
   // The Flows builder takes the palette's place beside the canvas (a sheet on phones), as on the practice canvas.
   const [flowsShown, setFlowsShown] = usePaletteOpen('proschi.canvas.flows');
   const flowsOpen = canAdd && !!flows && flowsShown;
@@ -249,9 +255,9 @@ export default function DiagramView({
   const single = selection.nodes.length + selection.edges.length === 1 ? (selection.nodes[0] ?? selection.edges[0]) : undefined;
   const selectedNode = selection.nodes.length === 1 ? diagram.nodes.find((n) => n.id === selection.nodes[0].id) : undefined;
   const selectedEdge = selection.edges.length === 1 ? diagram.edges.find((e) => e.id === selection.edges[0].id) : undefined;
-  const showSettings = !playing && single !== undefined && single.id !== closedSettings && (selectedNode !== undefined || selectedEdge !== undefined);
+  const showSettings = !playing && !viewOnly && single !== undefined && single.id !== closedSettings && (selectedNode !== undefined || selectedEdge !== undefined);
   const selectionCount = selection.nodes.length + selection.edges.length;
-  const hasSelection = !playing && selectionCount > 0;
+  const hasSelection = !playing && !viewOnly && selectionCount > 0;
   const singleNode = selection.nodes.length === 1 && selection.edges.length === 0 ? selection.nodes[0] : undefined;
   const pinDrag = usePinDrag({
     imported: importedNodes,
@@ -395,14 +401,14 @@ export default function DiagramView({
   useLayoutEffect(() => {
     finishNameRef.current = finishName;
   });
-  const readOnly = playing || crumbs.length > 1;
+  const readOnly = playing || viewOnly || crumbs.length > 1;
   const nodeActions = useMemo<NodeActions | null>(
     () => (readOnly ? null : { editing, onName: (id, name) => finishNameRef.current(id, name), onAddAfter: canAdd ? (id, at) => setAddAfter({ from: id, ...at }) : undefined }),
     [readOnly, editing, canAdd],
   );
 
   const deleteSelection = () => {
-    if (playing || (selection.nodes.length === 0 && selection.edges.length === 0)) return;
+    if (playing || viewOnly || (selection.nodes.length === 0 && selection.edges.length === 0)) return;
     onDelete(
       selection.nodes.map((n) => n.id),
       selection.edges.map((e) => e.id).filter((id) => !id.startsWith('step:')),
@@ -452,6 +458,15 @@ export default function DiagramView({
     const node = menu?.id ? diagram.nodes.find((n) => n.id === menu.id) : undefined;
     if (!menu?.id) return {};
     if (!node) return { onJumpToCode: () => onJumpToCode(menu.id!) };
+    const simulateDown =
+      onSimulateDown && node.kind === 'component' && crumbs.length === 1
+        ? () => {
+            setClosedSettings(node.id);
+            onSimulateDown(node.id);
+          }
+        : undefined;
+    // In Code mode the menu only looks: at the code, or at the design without this node.
+    if (viewOnly) return { onJumpToCode: () => onJumpToCode(node.id), onSimulateDown: simulateDown, down: downIds?.includes(node.id) };
     const drawn = nodes.find((n) => n.id === node.id);
     const own = !importedNodes.has(node.id);
     const plain = node.kind === 'component' || node.kind === 'text';
@@ -462,13 +477,7 @@ export default function DiagramView({
       onUnpin: own && node.position ? () => onUnpinNode(node.id) : undefined,
       onJumpToCode: () => onJumpToCode(node.id),
       // The settings would cover the what-if card, so they close.
-      onSimulateDown:
-        onSimulateDown && node.kind === 'component' && crumbs.length === 1
-          ? () => {
-              setClosedSettings(node.id);
-              onSimulateDown(node.id);
-            }
-          : undefined,
+      onSimulateDown: simulateDown,
       down: downIds?.includes(node.id),
     };
   };
@@ -641,7 +650,8 @@ export default function DiagramView({
     <div
       className="flex h-full"
       onKeyDown={(e) => {
-        const step = playing ? null : historyKey(e);
+        // Code mode's undo is the code editor's own.
+        const step = playing || viewOnly ? null : historyKey(e);
         if (!step) return;
         e.preventDefault();
         if (step === 'undo') onUndo();
@@ -662,16 +672,16 @@ export default function DiagramView({
       ref={wrapperRef}
       // Focusable, so the keys above work after a drop from the palette.
       tabIndex={-1}
-      className={`relative h-full min-w-0 flex-1 outline-hidden ${playing ? '' : 'pc-editable'}`}
+      className={`relative h-full min-w-0 flex-1 outline-hidden ${playing || viewOnly ? '' : 'pc-editable'}`}
       data-layout-busy={layoutBusy || undefined}
       onDragOver={(e) => {
-        if (!e.dataTransfer.types.includes(TECH_DRAG_TYPE)) return;
+        if (viewOnly || !e.dataTransfer.types.includes(TECH_DRAG_TYPE)) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = 'copy';
       }}
       onDrop={(e) => {
         const tech = e.dataTransfer.getData(TECH_DRAG_TYPE);
-        if (!tech || playing) return;
+        if (!tech || playing || viewOnly) return;
         e.preventDefault();
         e.currentTarget.focus();
         addComponent(tech, screenToFlowPosition({ x: e.clientX, y: e.clientY }));
@@ -686,7 +696,8 @@ export default function DiagramView({
           return;
         }
         const key = playing ? null : canvasKey(e);
-        if (key && runCanvasKey(key)) e.preventDefault();
+        // Finding a node only looks; the other keys edit.
+        if (key && (!viewOnly || key === 'find') && runCanvasKey(key)) e.preventDefault();
       }}
     >
       <NodeActionsContext.Provider value={nodeActions}>
@@ -696,8 +707,8 @@ export default function DiagramView({
         nodeTypes={nodeTypes}
         edgeTypes={PLAYBACK_EDGE_TYPES}
         // Playing a use case shows it over this canvas, read-only.
-        nodesDraggable={!playing}
-        nodesConnectable={!playing}
+        nodesDraggable={!playing && !viewOnly}
+        nodesConnectable={!playing && !viewOnly}
         elementsSelectable={!playing && !picking}
         onNodesChange={handleNodesChange}
         onEdgesChange={handleEdgesChange}
@@ -728,7 +739,7 @@ export default function DiagramView({
           setMenu({ x: event.clientX, y: event.clientY, label: `${edge.source} → ${edge.target}`, id: edge.id });
         }}
         // Dragging an end of a connection onto another node moves that end, in the text.
-        edgesUpdatable={!playing}
+        edgesUpdatable={!playing && !viewOnly}
         onReconnect={(edge, connection) => {
           if (playing || edge.id.startsWith('step:') || !connection.source || !connection.target) return;
           onReconnect(edge.id, connection.source, connection.target);
@@ -739,7 +750,7 @@ export default function DiagramView({
         onNodeDoubleClick={(_event, node) => {
           if (playing) return;
           if (node.type === 'systemNode' || node.data?.system) onOpenSystem(node.id);
-          else void promptRename(node);
+          else if (!viewOnly) void promptRename(node);
         }}
         onSelectionChange={handleSelectionChange}
         // Deleting goes through the text; React Flow's own delete would only hide the node until the next render.
@@ -783,7 +794,7 @@ export default function DiagramView({
                 canOverlay={canOverlay}
                 onToggleOverlay={onToggleOverlay}
                 whatIfControl={whatIfControl}
-                pinned={hasPinnedNodes}
+                pinned={hasPinnedNodes && !viewOnly}
                 onResetLayout={onResetLayout}
                 hideTools={playing}
                 phone={phone}
@@ -831,7 +842,11 @@ export default function DiagramView({
         {/* The minimap takes this corner. */}
         {nodes.length > 0 && !playing && !miniMap && !notice && !(hasSelection && !showSettings) && (
           <Panel position="bottom-right" className="hidden md:block text-xs text-muted bg-paper/85 rounded-sm px-2 py-1">
-            {narrow ? '? for shortcuts' : 'Drag to pin · select to edit · drag from a dot onto a component to connect · right-click for more · ? for shortcuts'}
+            {narrow
+              ? '? for shortcuts'
+              : viewOnly
+                ? 'Select to find its line · edit in the code, or switch to Visual to edit here · ? for shortcuts'
+                : 'Drag to pin · select to edit · drag from a dot onto a component to connect · right-click for more · ? for shortcuts'}
           </Panel>
         )}
       </ReactFlow>
@@ -858,7 +873,9 @@ export default function DiagramView({
           onClose={closeAddAfter}
         />
       )}
-      {menu && <CanvasMenu menu={menu} onSettings={() => setClosedSettings(null)} onDelete={deleteSelection} onClose={closeMenu} actions={menuActions()} />}
+      {menu && (
+        <CanvasMenu menu={menu} onSettings={viewOnly ? undefined : () => setClosedSettings(null)} onDelete={viewOnly ? undefined : deleteSelection} onClose={closeMenu} actions={menuActions()} />
+      )}
       {finder && (
         <NodeFinder
           items={finderItems()}
