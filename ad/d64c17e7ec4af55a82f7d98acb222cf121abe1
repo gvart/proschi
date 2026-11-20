@@ -1,0 +1,26 @@
+blog/2026-11-20-visual-editor/index.md
+  s_733d66441cadaa::t_3b59094cef03ad 69,90-91
+  s_733d66441cadaa::t_a524b93b6fffad 114
+  s_733d66441cadaa::t_e14d0e73d162fd 24-25,37-38,75,112
+  s_733d66441cadaa::t_327760215ca803 73-74
+  s_733d66441cadaa::t_9ebbf349451e3d 71
+  s_733d66441cadaa::t_b7722e35950c25 4,23,26-27,31-36,39-40,44-45,51-52,56-57,61-63,67-68,72,76-77,82,84,86-87,111,113,124-128,138-140
+  s_733d66441cadaa::t_402040392a5abe 88
+  s_733d66441cadaa::t_faa088dc528dc8 89,129
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "add64c17e7ec4af55a82f7d98acb222cf121abe1",
+  "prompts": {},
+  "sessions": {
+    "s_733d66441cadaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9649973d-f497-4440-b031-a92483a592e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": null
+    }
+  }
+}
