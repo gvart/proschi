@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { Plus, Ungroup } from 'lucide-react';
 import type { OutlineStep, UseCaseOutline } from '../../dsl/edit';
 import type { Diagram } from '../../dsl/types';
@@ -9,7 +9,7 @@ import { entrySteps, laneOrder, layoutSequence, sameSlot, SEQ, sequenceEntries, 
 import { slotNear } from './sequenceEdit';
 
 /**
- * A use case as a sequence diagram (the Flows pane, FlowsPane.tsx): one lane
+ * A use case as a sequence diagram (the Flows view, FlowsView.tsx): one lane
  * per component, one numbered message per step, top to bottom as written.
  * Responses (`-->`) are dashed arrows back, messages (`->>`) have an open
  * head, failed calls (`-x`) end in a red cross, and a `par` block is a frame.
@@ -48,8 +48,10 @@ interface SequenceDiagramProps {
   composer?: { slot: Slot; node: ReactNode };
   /** Changed to put the focus back on the selected message (after an edit took it away). */
   focusKey?: number;
-  /** While a step's ends are being picked: a click on a lane's header or lifeline picks its component, as a click on the canvas does. */
+  /** While a step's ends are being picked: a click on a lane's header or lifeline picks its component, as a click on the map does. */
   onPickLane?: (id: string) => void;
+  /** The width the lanes fit in (the Flows view's, less its column); narrower lanes are centred in it. */
+  fitWidth?: number;
 }
 
 /** The arrow sits under its label, this far below the row's centre. */
@@ -57,33 +59,36 @@ const LINE_DY = 8;
 /** The lane headers' strip, which stays at the top as the diagram scrolls. */
 const HEADER = 52;
 
-export default function SequenceDiagram({ outline, scenario, diagram, selected, onSelect, onScenario, onInsert, onMove, onDelete, onEdit, onClear, onUngroup, composer, focusKey, onPickLane }: SequenceDiagramProps) {
+export default function SequenceDiagram({ outline, scenario, diagram, selected, onSelect, onScenario, onInsert, onMove, onDelete, onEdit, onClear, onUngroup, composer, focusKey, onPickLane, fitWidth }: SequenceDiagramProps) {
   const nodes = useMemo(() => new Map(diagram.nodes.map((n) => [n.id, n])), [diagram]);
   const name = (id: string) => nodes.get(id)?.name ?? id;
   const lanes = useMemo(() => laneOrder(outline), [outline]);
   const entries = useMemo(() => sequenceEntries(outline.items, scenario), [outline, scenario]);
   const rootRef = useRef<HTMLDivElement>(null);
   const empty = lanes.length === 0;
-  /** The width the diagram has (its scrolling box's), which the labels give room back to fit. */
-  const [fit, setFit] = useState<number>();
-  const layout = useMemo(() => layoutSequence(entries, lanes, (id) => nodes.get(id)?.name ?? id, undefined, fit), [entries, lanes, nodes, fit]);  /** The height of the diagram in sight (its scrolling box, as the pane clips it), which the composer fits in. */
+  /** The width the diagram has (the Flows view's, else its box's), which the labels give room back to fit. */
+  const [measured, setMeasured] = useState<number>();
+  const fit = fitWidth ?? measured;
+  const layout = useMemo(() => layoutSequence(entries, lanes, (id) => nodes.get(id)?.name ?? id, undefined, fit), [entries, lanes, nodes, fit]);
+  /** The height of the diagram in sight (what scrolls it), for the composer to open under or over its "+". */
   const [view, setView] = useState<number>();
   useLayoutEffect(() => {
     const root = rootRef.current;
     const box = root?.parentElement;
     if (!root || !box) return;
+    const scroller = scrollerOf(root);
     const measure = () => {
-      setFit(box.clientWidth || undefined);
-      setView(visibleHeight(root) || undefined);
+      setMeasured(box.clientWidth || undefined);
+      setView(scroller.clientHeight || undefined);
     };
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(box);
-    // The pane resized changes what is in sight, where the column scrolls rather than the diagram's own box.
-    const pane = root.closest('[role="region"]');
-    if (pane) observer.observe(pane);
+    observer.observe(scroller);
     return () => observer.disconnect();
   }, [empty]);
+  /** Lanes narrower than the width they have are centred in it. */
+  const offset = fit && layout.width < fit ? Math.floor((fit - layout.width) / 2) : 0;
   const listRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
@@ -143,9 +148,6 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
     const last = layout.slots.at(-1);
     return last && { x: last.x, top: last.y, bottom: last.y };
   })();
-  const anchored = !!placement && placement.bottom > placement.top;
-  /** At most the height in sight under the sticky headers (with the anchored row in sight too), so its buttons always are; its body scrolls inside it. */
-  const composerMax = view && (empty ? view - 24 : Math.max(Math.min(view - 8, 120), view - HEADER - 16 - (anchored ? SEQ.row + 4 : 0)));
   // Under its insertion point; over it (and over the row it is anchored to) only when there is no room under it and there is over it.
   const roomBelow = placement ? Math.max(layout.height, (view ?? 0) - HEADER) - placement.bottom : 0;
   const above = !!placement && composerHeight > 0 && roomBelow < composerHeight + 8 && placement.top >= composerHeight + 8;
@@ -156,12 +158,13 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
     const el = composerRef.current;
     const root = rootRef.current;
     if (!composerAt || !el || !root || !contentRef.current) return;
-    const scroller = verticalScroller(root);
+    const scroller = scrollerOf(root);
     const s = scroller.getBoundingClientRect();
     const c = el.getBoundingClientRect();
     const content = contentRef.current.getBoundingClientRect().top;
     const a = placement ? { top: content + placement.top, bottom: content + placement.bottom } : { top: c.top, bottom: c.bottom };
-    const lo = s.top + (scroller === root.parentElement ? HEADER : 0) + 4;
+    // Under the sticky lane headers.
+    const lo = s.top + HEADER + 4;
     const hi = s.top + scroller.clientHeight - 4;
     // How far to scroll down (up when negative).
     let d = Math.max(0, c.bottom - hi);
@@ -169,11 +172,10 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
     if (a.top - d < lo && c.bottom - (a.top - lo) <= hi) d = a.top - lo;
     else if (a.bottom - d > hi && c.top - (a.bottom - hi) >= lo) d = a.bottom - hi;
     if (d) scroller.scrollTop += d;
-    // Sideways, in the diagram's own box.
-    const box = root.parentElement!;
-    const b = box.getBoundingClientRect();
-    if (c.right > b.right - 4) box.scrollLeft += Math.min(c.right - b.right + 4, c.left - b.left - 4);
-    else if (c.left < b.left + 4) box.scrollLeft -= b.left + 4 - c.left;
+    // Sideways, on the same surface (short of the column beside the diagram).
+    const right = Math.min(s.left + scroller.clientWidth, root.getBoundingClientRect().right);
+    if (c.right > right - 4) scroller.scrollLeft += Math.min(c.right - right + 4, c.left - s.left - 4);
+    else if (c.left < s.left + 4) scroller.scrollLeft -= s.left + 4 - c.left;
     // Measured, not its inputs: it runs when the composer opens, is placed or grows.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [composerAt, composerHeight, composerTop]);
@@ -183,13 +185,13 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
 
   if (empty) {
     return (
-      <div ref={rootRef} className="flex h-full min-h-32 flex-col items-center justify-center gap-3 p-6 text-center text-sm text-muted">
+      <div ref={rootRef} className="flex h-full min-h-32 flex-1 flex-col items-center justify-center gap-3 p-6 text-center text-sm text-muted">
         <p className="max-w-sm">
           <span className="block font-semibold text-ink">No steps yet</span>
           Add the first request, from where the user starts. Each step is drawn here, with a lane per component.
         </p>
         {composer ? (
-          <div className="w-80 max-w-full text-left" style={composerMax ? ({ '--composer-max': `${composerMax}px` } as CSSProperties) : undefined}>
+          <div className="w-80 max-w-full text-left">
             {composer.node}
           </div>
         ) : (
@@ -279,7 +281,7 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
               className={`absolute top-2 flex h-9 -translate-x-1/2 items-center gap-1.5 rounded-sm border-bw-1 border-ink bg-surface py-1 pl-1 pr-2 text-ink shadow-brutal-sm ${
                 onPickLane ? 'cursor-pointer outline-hidden hover:bg-pop-yellow focus-visible:bg-pop-yellow focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-1' : ''
               }`}
-              style={{ left: lane.x, maxWidth: lane.width }}
+              style={{ left: lane.x + offset, maxWidth: lane.width }}
             >
               <span className="grid h-6 w-6 shrink-0 place-items-center rounded-sm border-bw-1 border-ink bg-paper [&_svg]:h-3.5 [&_svg]:w-3.5">
                 {node ? getTechStackIcon(node.techStack, node.type) : null}
@@ -290,7 +292,7 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
         })}
       </div>
       {/* As tall as the composer reaches too, so what scrolls the diagram (its own box, or the column on a narrow pane) takes it in. */}
-      <div ref={contentRef} className="relative" style={{ height: Math.max(layout.height, composerTop === undefined ? 0 : composerTop + composerHeight + 8) }}>
+      <div ref={contentRef} className="relative" style={{ marginLeft: offset, width: layout.width, height: Math.max(layout.height, composerTop === undefined ? 0 : composerTop + composerHeight + 8) }}>
         {/* Frames under everything: a par block, the chosen scenario's branch. Their titles (and a par block's actions) go over the lifelines, below. */}
         {layout.frames.map((f) => (
           <div
@@ -420,6 +422,7 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
         <div
           ref={listRef}
           role="listbox"
+          data-sequence
           aria-label={`Sequence of ${outline.name}`}
           aria-orientation="vertical"
           aria-multiselectable="true"
@@ -462,7 +465,7 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
               ref={composerRef}
               data-placement={above ? 'above' : 'below'}
               className="absolute z-30 w-80 py-1"
-              style={{ left: Math.max(2, placement.x), top: composerTop, ...(composerMax ? { '--composer-max': `${composerMax}px` } : {}) } as CSSProperties}
+              style={{ left: Math.max(2, placement.x), top: composerTop }}
             >
               {composer.node}
             </div>
@@ -475,25 +478,9 @@ export default function SequenceDiagram({ outline, scenario, diagram, selected, 
 
 const KIND_TAG: Partial<Record<OutlineStep['kind'], string>> = { async: 'message', failed: 'fails' };
 
-/**
- * The height of the diagram in sight: the pane's body under its header (which the diagram's own box fills on a wide
- * pane, and which scrolls the diagram and the column on a narrow one), less the box's sideways scrollbar.
- */
-function visibleHeight(root: HTMLElement): number {
-  const box = root.parentElement!;
-  const region = box.closest('[role="region"]');
-  let body: HTMLElement = box;
-  while (region && body.parentElement && body.parentElement !== region) body = body.parentElement;
-  return body.clientHeight - (box.offsetHeight - box.clientHeight);
-}
-
-/** What scrolls the diagram up and down: its own box on a wide pane, the pane's column on a narrow one. */
-function verticalScroller(root: HTMLElement): HTMLElement {
-  for (let p = root.parentElement; p && p !== document.body; p = p.parentElement) {
-    if (/(auto|scroll)/.test(getComputedStyle(p).overflowY) && p.scrollHeight > p.clientHeight + 1) return p;
-    if (p.getAttribute('role') === 'region') break;
-  }
-  return root.parentElement!;
+/** What scrolls the diagram: the Flows view's one scrolling surface, else (outside the view) its own box. */
+function scrollerOf(root: HTMLElement): HTMLElement {
+  return root.closest<HTMLElement>('[data-flows-scroller]') ?? root.parentElement!;
 }
 
 const slotKey = (slot: Slot) => `${slot.kind}:${'line' in slot ? slot.line : 'name' in slot ? slot.name : ''}`;

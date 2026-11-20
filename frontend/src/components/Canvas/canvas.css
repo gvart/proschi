@@ -278,11 +278,6 @@
   background: rgb(var(--c-pink));
   color: rgb(var(--c-on-accent));
 }
-/* The step selected in the Flows pane (Diagram/FlowsPanel.tsx): its two nodes as above, and the connection it travels. */
-.react-flow .react-flow__edge.pc-active .react-flow__edge-path {
-  stroke: rgb(var(--c-pink));
-  stroke-width: 3;
-}
 .react-flow__node.pc-failing .pc-node {
   border-color: rgb(var(--c-fail));
   box-shadow: 5px 5px 0 rgb(var(--c-fail));

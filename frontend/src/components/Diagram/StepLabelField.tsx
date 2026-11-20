@@ -11,7 +11,7 @@ import { statusRank } from './stepLabel';
  * between such components. Typing filters the list; anything else typed
  * still works, as in the code. The list is drawn in a portal with fixed
  * position, as the design system's Select draws its own, so no scroll
- * container (the Flows pane, a composer that scrolls) clips it: it opens
+ * container (the Flows view, the column beside the diagram) clips it: it opens
  * under the field, or over it when there is more room there.
  */
 

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { Blocks, Cable, Code2, Copy, MousePointerClick, Pencil, PinOff, Power, PowerOff, Settings2, Trash2, Workflow, X } from 'lucide-react';
+import { Blocks, Boxes, Cable, Code2, Copy, MousePointerClick, Pencil, PinOff, Power, PowerOff, Settings2, Trash2, Workflow, X } from 'lucide-react';
 import { MenuItem } from '../Playground/Menu';
 import { MOD_KEY } from '../Playground/modKey';
 import { iconButton, toolButton } from '../Playground/ui';
@@ -31,7 +31,28 @@ export function PaletteToggle({ open, onToggle }: { open: boolean; onToggle: () 
   );
 }
 
-/** The toolbar button that shows or hides the Flows builder (use cases and scenarios). */
+/**
+ * The `Architecture | Flows` switch of a wider screen, at the top left of the canvas and of the Flows view
+ * (FlowsView.tsx) alike: which of the two the column shows. F flips it.
+ */
+export function ViewSwitch({ flows, onChange }: { flows: boolean; onChange: (flows: boolean) => void }) {
+  const segment =
+    'inline-flex h-full items-center gap-1.5 rounded-[3px] px-2.5 text-sm font-semibold text-ink/75 hover:bg-ink/[0.07] hover:text-ink aria-pressed:bg-ink aria-pressed:text-paper aria-pressed:hover:bg-ink';
+  return (
+    <div role="group" aria-label="View" className="inline-flex h-9 shrink-0 items-stretch gap-0.5 rounded-sm border-bw-1 border-ink bg-surface p-[3px] shadow-brutal-sm">
+      <button type="button" aria-pressed={!flows} onClick={() => onChange(false)} title="The architecture (F)" className={segment}>
+        <Boxes size={15} aria-hidden="true" />
+        Architecture
+      </button>
+      <button type="button" aria-pressed={flows} onClick={() => onChange(true)} title="Flows: each use case as a sequence diagram (F)" className={segment}>
+        <Workflow size={15} aria-hidden="true" />
+        Flows
+      </button>
+    </div>
+  );
+}
+
+/** The toolbar button that shows or hides the Flows builder (use cases and scenarios) in a phone's sheet. */
 export function FlowsToggle({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   return (
     <button
@@ -62,8 +83,8 @@ interface PaletteDockProps {
   tab: RailTab;
   onTab: (tab: RailTab) => void;
   /**
-   * The canvas offers the Flows builder, so the rail has its tab. On a phone the tab shows it in the sheet; on wider
-   * screens it opens the pane under the canvas (FlowsPane.tsx) and the rail keeps the tab it shows.
+   * The phone's canvas offers the Flows builder, so the sheet has its tab. Wider screens have no such tab: the
+   * `Architecture | Flows` switch (ViewSwitch) shows Flows as a view of its own (FlowsView.tsx).
    */
   offersFlows: boolean;
   /** The Flows builder, while it is open in the sheet (kept mounted, hidden, while another tab shows). */

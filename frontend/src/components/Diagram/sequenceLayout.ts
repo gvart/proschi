@@ -1,7 +1,7 @@
 import type { OutlineBranchItem, OutlineItem, OutlineStep, UseCaseOutline } from '../../dsl/edit';
 
 /**
- * The Flows pane's sequence diagram (FlowsPane.tsx, SequenceDiagram.tsx), as
+ * The Flows view's sequence diagram (FlowsView.tsx, SequenceDiagram.tsx), as
  * plain functions: what one tab shows of a use case's outline, the order of
  * its lanes, and where each lane, message and frame goes. It reads the
  * line-addressed outline (dsl/edit.ts outlineOf), so every message is the
