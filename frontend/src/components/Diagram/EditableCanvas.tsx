@@ -477,7 +477,9 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
   // Below the top bar's buttons, tools and folded legend, so no node of the fit sits under them.
   const barInset = useTopBarInset(canvasRef, `${nodes.length > 0}:${canOverlay}:${!!overlay}:${pinned}:${!!diagram.legend}`);
   useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { glide: `${paletteOpen}:${flowsOpen}:${railOpen}`, right: cover, inset: barInset ? { top: barInset } : undefined, added: lastAdded });
-  const inspector = showSettings && (
+  // A component just added keeps its settings closed (the palette stays for the next add), but where the Selection
+  // tab is already showing, it shows them rather than "Nothing selected".
+  const inspector = (showSettings || (selectionShown && !!current)) && current && (
     <Inspector
       key={current.id}
       diagram={diagram}

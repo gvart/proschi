@@ -47,6 +47,19 @@ test.describe('the command bar', () => {
     expect(await editorText(page)).toMatch(/^api -> redis : RESP$/m);
   });
 
+  test('the Selection tab, already open, shows the component the bar added, not "Nothing selected"', async ({ page }) => {
+    await open(page);
+    await node(page, 'Orders API').click();
+    const rail = page.getByTestId('palette-dock');
+    await expect(rail.getByRole('region', { name: 'Orders API settings' })).toBeVisible();
+    await page.keyboard.press('a');
+    await page.keyboard.type('redis');
+    await page.keyboard.press('Enter');
+    await page.locator('.pc-node__name-field').press('Enter');
+    await expect(rail.getByRole('region', { name: 'Redis settings' })).toBeVisible();
+    await expect(rail.getByText('Nothing selected')).toHaveCount(0);
+  });
+
   test('Ctrl/Cmd+K lists the actions; one runs by its words', async ({ page }) => {
     await open(page);
     await node(page, 'Orders API').click();

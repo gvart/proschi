@@ -742,7 +742,9 @@ export default function DiagramView({
   const flowsPanel = flowsOpen && flows && (
     <FlowsPanel source={flows.source} diagram={flows.diagram} onChange={flows.onChange} pick={pick} onPick={setPick} useCase={flows.useCase} onUseCase={flows.onUseCase} onClose={toggleFlows} onHighlight={setFlowHover} />
   );
-  const inspector = showSettings && (
+  // A component just added keeps its settings closed (the palette stays for the next add), but where the Selection
+  // tab is already showing, it shows them rather than "Nothing selected".
+  const inspector = (showSettings || (selectionShown && !playing && !viewOnly && (selectedNode !== undefined || selectedEdge !== undefined))) && single && (
     <Inspector
       key={single.id}
       diagram={diagram}
