@@ -1023,7 +1023,7 @@ export function ungroupParallel(source: string, parLine: number): EditResult {
   const first = body.find((l) => l.trim() !== '');
   const step = first === undefined ? '' : indentStep(indentOf(first), outer);
   const dedent = (l: string) => {
-    if (!l.startsWith(outer)) return l;
+    if (!l.startsWith(outer) || l.trim() === '') return l;
     let n = 0;
     while (n < step.length && l[outer.length + n] === step[n]) n++;
     return outer + l.slice(outer.length + n);

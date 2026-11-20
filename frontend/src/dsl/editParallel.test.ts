@@ -198,6 +198,9 @@ describe('ungrouping a par block', () => {
     const scenario = ok(groupParallel(src, [19, 20]));
     expect(ok(ungroupParallel(scenario, 19))).toBe(src);
     expect(outlineOf(ok(ungroupParallel(scenario, 19)), 'Order')).toEqual(outlineOf(src, 'Order'));
+    // A line of spaces between them stays as it is.
+    const spaced = src.replace('  # the receipt goes out at once\n', '      \n');
+    expect(ok(ungroupParallel(ok(groupParallel(spaced, [13, 15])), 13))).toBe(spaced);
   });
 
   it('dedents a hand-written block, keeping blank lines', () => {
