@@ -1,0 +1,109 @@
+frontend/e2e/layout-chips.e2e.ts
+  s_733d66441cadaa::t_1305cd98f7e8a7 5-7
+frontend/e2e/mobile.e2e.ts
+  s_733d66441cadaa::t_bdfe6e764a9ecd 335-336,338
+  s_733d66441cadaa::t_7e34fc5c3a7723 242-255
+frontend/e2e/import.e2e.ts
+  s_733d66441cadaa::t_1305cd98f7e8a7 4-6
+frontend/e2e/playback.e2e.ts
+  s_733d66441cadaa::t_1305cd98f7e8a7 4-6
+  s_733d66441cadaa::t_6bc94bb08d5006 125-126,129-130,133
+frontend/e2e/focus.e2e.ts
+  s_733d66441cadaa::t_1305cd98f7e8a7 4-6
+frontend/e2e/billing.accounts.e2e.ts
+  s_733d66441cadaa::t_1305cd98f7e8a7 5-7
+frontend/e2e/interview.e2e.ts
+  s_733d66441cadaa::t_e2ab25e5655b7f 2,7,280,282,284,286-288,290-293,296,299,302,304,431,447
+frontend/e2e/versions.accounts.e2e.ts
+  s_733d66441cadaa::t_1305cd98f7e8a7 7-9
+frontend/e2e/whatif.e2e.ts
+  s_733d66441cadaa::t_1305cd98f7e8a7 7
+  s_733d66441cadaa::t_0ff27e84f2568c 2
+  s_733d66441cadaa::t_4bc5fc02953ca9 5-6,190
+frontend/e2e/editor.accounts.e2e.ts
+  s_733d66441cadaa::t_1305cd98f7e8a7 5-7
+frontend/e2e/model.e2e.ts
+  s_733d66441cadaa::t_1305cd98f7e8a7 4-6
+frontend/e2e/fixtures.ts
+  s_733d66441cadaa::t_e5776c23980af3 63-109,273-278
+  s_733d66441cadaa::t_f773af56f7a711 281-283
+frontend/e2e/embed.e2e.ts
+  s_733d66441cadaa::t_1305cd98f7e8a7 4-6
+frontend/e2e/shares.accounts.e2e.ts
+  s_733d66441cadaa::t_1305cd98f7e8a7 5-7
+frontend/e2e/billingOff.free.e2e.ts
+  s_733d66441cadaa::t_278c3ac15a156e 46
+frontend/e2e/selection-sync.e2e.ts
+  s_733d66441cadaa::t_abc82fc8310202 79-80,82-83
+  s_733d66441cadaa::t_1305cd98f7e8a7 4-6
+  s_733d66441cadaa::t_6bc94bb08d5006 158,161-162,165
+frontend/e2e/stages.e2e.ts
+  s_733d66441cadaa::t_13c794d95c1756 43,87
+  s_733d66441cadaa::t_4719a3510f2a34 3,182-184
+frontend/e2e/share.e2e.ts
+  s_733d66441cadaa::t_13c794d95c1756 4-6
+frontend/e2e/practice.e2e.ts
+  s_733d66441cadaa::t_13c794d95c1756 5-7
+frontend/e2e/editor.e2e.ts
+  s_733d66441cadaa::t_83c45afdf22810 4,96
+  s_733d66441cadaa::t_1305cd98f7e8a7 6-7
+  s_733d66441cadaa::t_76ca8e4d1af952 71,76,110-111
+  s_733d66441cadaa::t_6bc94bb08d5006 429-430,432,437,439-440,444-445,450-451,458,462,464,467-469
+  s_733d66441cadaa::t_461b380a783348 5
+frontend/e2e/problem-board.accounts.e2e.ts
+  s_733d66441cadaa::t_83c45afdf22810 4-6
+frontend/e2e/filesRail.accounts.e2e.ts
+  s_733d66441cadaa::t_1305cd98f7e8a7 5-7
+frontend/e2e/docs-screenshots.accounts.screens.ts
+  s_733d66441cadaa::t_0b02c3b1a7bcf0 6-8
+frontend/e2e/files.e2e.ts
+  s_733d66441cadaa::t_1305cd98f7e8a7 4-6
+frontend/e2e/liveShare.accounts.e2e.ts
+  s_733d66441cadaa::t_1305cd98f7e8a7 6-8
+frontend/e2e/onboarding.e2e.ts
+  s_733d66441cadaa::t_f0748a96edb60d 355,362-364
+  s_733d66441cadaa::t_ad50d25dace79e 32-33,51,55,60-66,70-71,73-78,220-221,232,234,240
+  s_733d66441cadaa::t_76ca8e4d1af952 39-40
+  s_733d66441cadaa::t_36df3e0e6cb73f 280-281
+  s_733d66441cadaa::t_07d85e246abfdf 80-92,94-106,108-141
+frontend/e2e/visual-editing.e2e.ts
+  s_733d66441cadaa::t_473bd4a778271b 455
+  s_733d66441cadaa::t_1305cd98f7e8a7 4-5
+  s_733d66441cadaa::t_73386dc82fa9f7 2
+  s_733d66441cadaa::t_36df3e0e6cb73f 190-191,320-321
+  s_733d66441cadaa::t_71e0f9f1e302e0 3
+frontend/e2e/docs-screenshots.screens.ts
+  s_733d66441cadaa::t_0b02c3b1a7bcf0 6-8
+frontend/e2e/canvas-editing.e2e.ts
+  s_733d66441cadaa::t_14f6de63ed6ad3 2-5,19,21,93,153-161,163
+frontend/e2e/canvas-parity.e2e.ts
+  s_733d66441cadaa::t_acf9daab6713c4 352
+  s_733d66441cadaa::t_93637900476cd9 2
+  s_733d66441cadaa::t_4ab8a323997b63 4-5,160,162,221,223,270,275,321,323
+  s_733d66441cadaa::t_e82d300e5b86b9 351
+  s_733d66441cadaa::t_4f41cf962211fb 3
+frontend/e2e/partner.accounts.e2e.ts
+  s_733d66441cadaa::t_1305cd98f7e8a7 6-8
+frontend/e2e/systems.e2e.ts
+  s_733d66441cadaa::t_1305cd98f7e8a7 7-9
+  s_733d66441cadaa::t_83c45afdf22810 4,320
+frontend/e2e/editor-modes.e2e.ts
+  s_733d66441cadaa::t_0facf5a89de19d 1-50,54-170
+  s_733d66441cadaa::t_7ea6f89acf4699 51-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a37dd30e990aad92d827d5c82a1a14c3fa1b0734",
+  "prompts": {},
+  "sessions": {
+    "s_733d66441cadaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9649973d-f497-4440-b031-a92483a592e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
