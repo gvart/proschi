@@ -27,13 +27,18 @@
   --c-lilac: 182 156 255;
   /* Text on the accent fills above: dark in both themes. */
   --c-on-accent: 17 17 17;
+  /* Text on a blue fill: the light theme's blue is too dark for --c-on-accent (3.7:1). */
+  --c-on-blue: 255 255 255;
+  /* Pass and fail as text on paper or surface: the fills are too light for text (2.4:1 and 3.4:1). */
+  --c-pass-ink: 0 122 98;
+  --c-fail-ink: 215 38 28;
   /* The footer's dark slab and its text. */
   --c-slab: 17 17 17;
   --c-on-slab: 255 248 231;
   /* Hard offset shadows (no blur), here so they pick up each theme's shadow colour. */
-  --sh-sm: 3px 3px 0 rgb(var(--c-shadow));
-  --sh-md: 6px 6px 0 rgb(var(--c-shadow));
-  --sh-lg: 10px 10px 0 rgb(var(--c-shadow));
+  --sh-sm: var(--sh-o-sm) var(--sh-o-sm) 0 rgb(var(--c-shadow));
+  --sh-md: var(--sh-o-md) var(--sh-o-md) 0 rgb(var(--c-shadow));
+  --sh-lg: var(--sh-o-lg) var(--sh-o-lg) 0 rgb(var(--c-shadow));
 }
 
 .ps-light {
@@ -56,6 +61,22 @@
   --lh-display: 1.05;
   --lh-body: 1.55;
   --ls-display: -0.02em;
+
+  /* Spacing: a 4px grid, for padding, margins and gaps. */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+  --sp-12: 48px;
+  --sp-16: 64px;
+
+  /* How far the hard shadows (--sh-*, above) are offset. */
+  --sh-o-sm: 3px;
+  --sh-o-md: 6px;
+  --sh-o-lg: 10px;
 
   /* Borders and radii. */
   --bw-1: 2px;
@@ -102,6 +123,9 @@
   --c-pass: 46 230 182;
   --c-fail: 255 107 97;
   --c-lilac: 182 156 255;
+  --c-on-blue: 17 17 17;
+  --c-pass-ink: 46 230 182;
+  --c-fail-ink: 255 107 97;
   --c-slab: 10 10 12;
   --c-on-slab: 244 239 227;
 }
@@ -120,6 +144,9 @@
     --c-pass: 46 230 182;
     --c-fail: 255 107 97;
     --c-lilac: 182 156 255;
+    --c-on-blue: 17 17 17;
+    --c-pass-ink: 46 230 182;
+    --c-fail-ink: 255 107 97;
     --c-slab: 10 10 12;
     --c-on-slab: 244 239 227;
   }

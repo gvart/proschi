@@ -51,6 +51,32 @@ describe('tokens', () => {
     expect(themeInit).toContain(`light: '${THEME_COLOR.light}', dark: '${THEME_COLOR.dark}'`);
     expect(themeInit).toContain(`'${THEME_KEY}'`);
   });
+
+  it('keeps text readable (4.5:1) on the fills and grounds it is made for', () => {
+    const luminance = (channels: string) => {
+      const [r, g, b] = channels.split(/\s+/).map((c) => {
+        const v = Number(c) / 255;
+        return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const contrast = (a: string, b: string) => {
+      const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+      return (hi + 0.05) / (lo + 0.05);
+    };
+    const pairs = [
+      ['--c-on-blue', '--c-blue'],
+      ['--c-pass-ink', '--c-paper'],
+      ['--c-pass-ink', '--c-surface'],
+      ['--c-fail-ink', '--c-paper'],
+      ['--c-fail-ink', '--c-surface'],
+    ];
+    for (const theme of [light, dark]) {
+      for (const [text, ground] of pairs) {
+        expect(contrast(theme.get(text)!, theme.get(ground)!), `${text} on ${ground}`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+  });
 });
 
 describe('theme', () => {

@@ -99,11 +99,11 @@ export default function Report(props: {
           Rank <strong>#{result.rank}</strong> of {result.players} on this leaderboard.
         </p>
       )}
-      {result?.firstClear && <p className="text-sm text-pass">First clear of {game.scenario.title}: +5 Blueprints.</p>}
+      {result?.firstClear && <p className="text-sm text-pass-ink">First clear of {game.scenario.title}: +5 Blueprints.</p>}
       {result?.firstClear && !game.twists && game.scenario.mode === 'scale' && (
         <p className="text-sm font-semibold">Twists unlocked: from your next run, mutators (a rule twist on the whole run that pays more points), bounties (optional goals for a wave), forecast ranges, live changes and more. Kernel, your cat SRE lead, will brief you.</p>
       )}
-      {result?.error && <p className="text-sm text-fail">{result.error}</p>}
+      {result?.error && <p className="text-sm text-fail-ink">{result.error}</p>}
       {share && (
         <section aria-label="Share your daily run" className="rounded-brutal border-bw-1 border-ink bg-surface p-3">
           <p className={eyebrow}>Share</p>

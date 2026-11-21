@@ -108,7 +108,7 @@ export function ChangesPanel({ game, planning, onMigrate, onSunset }: { game: Ga
                 {at < MIGRATION_PHASES.indexOf('cutover') && (
                   <button
                     type="button"
-                    className={`${outlineButton} text-fail`}
+                    className={`${outlineButton} text-fail-ink`}
                     disabled={stepped}
                     onClick={async () => {
                       if (await confirm({ title: `Do ${m.name} in one go?`, body: `It rewrites every ${m.entity} row while holding the table's write lock, and drops the old shape at once.`, confirmLabel: 'All at once', tone: 'danger' })) onMigrate(m.id, 'big-bang');
@@ -179,7 +179,7 @@ export function DiagnosisPanel({ diagnosis, picked, onPick }: { diagnosis: Diagn
                     {o.text}
                     {picked && (
                       <span className="mt-0.5 flex items-start gap-1 text-muted">
-                        {o.correct ? <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-pass" aria-label="Right" /> : <XCircle size={14} className="mt-0.5 shrink-0 text-fail" aria-label="Wrong" />}
+                        {o.correct ? <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-pass-ink" aria-label="Right" /> : <XCircle size={14} className="mt-0.5 shrink-0 text-fail-ink" aria-label="Wrong" />}
                         {o.why}
                       </span>
                     )}
@@ -195,7 +195,7 @@ export function DiagnosisPanel({ diagnosis, picked, onPick }: { diagnosis: Diagn
           Commit to this cause
         </button>
       )}
-      {picked && <p className={`mt-2 text-sm font-semibold ${picked.correct ? 'text-pass' : 'text-fail'}`}>{picked.correct ? 'Right: now fix it on the board.' : 'Not it: that cost Trust. Fix the real cause on the board.'}</p>}
+      {picked && <p className={`mt-2 text-sm font-semibold ${picked.correct ? 'text-pass-ink' : 'text-fail-ink'}`}>{picked.correct ? 'Right: now fix it on the board.' : 'Not it: that cost Trust. Fix the real cause on the board.'}</p>}
     </section>
   );
 }

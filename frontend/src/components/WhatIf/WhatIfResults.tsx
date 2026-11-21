@@ -7,7 +7,7 @@ import { Feature } from '../Feature';
 import UpgradeHint from '../UpgradeHint';
 import { eyebrow, field, iconButton, outlineButton, primaryButton } from '../Playground/ui';
 
-const TONE: Record<DeltaRow['tone'], string> = { better: 'text-pass', worse: 'text-fail', same: 'text-muted' };
+const TONE: Record<DeltaRow['tone'], string> = { better: 'text-pass-ink', worse: 'text-fail-ink', same: 'text-muted' };
 
 const headlineRows = (base: Headline, now: Headline) => [p99Row('Worst p99', base.p99Ms, now.p99Ms), availabilityRow('Availability', base.availability, now.availability), costRow(base.costUsd, now.costUsd)];
 
@@ -117,7 +117,7 @@ function WhatIfTable({ diagram, previewing, onPreview }: SavedProps) {
                 <tr key={w.name} data-testid="whatif-row" className={on ? 'bg-pop-yellow/15' : undefined}>
                   <td className="py-1.5 pr-3 font-medium text-ink">{w.name}</td>
                   <td className="py-1.5 pr-3">
-                    <span className={`inline-flex items-center gap-1 font-semibold ${w.passed ? 'text-pass' : 'text-fail'}`}>
+                    <span className={`inline-flex items-center gap-1 font-semibold ${w.passed ? 'text-pass-ink' : 'text-fail-ink'}`}>
                       {w.passed ? <CheckCircle2 size={14} aria-hidden="true" /> : <XCircle size={14} aria-hidden="true" />}
                       {w.passed ? 'pass' : 'fail'}
                     </span>

@@ -25,7 +25,11 @@ export default {
         muted: token('muted'),
         pass: token('pass'),
         fail: token('fail'),
+        // Pass and fail as text: text-pass-ink, not text-pass, on paper or surface.
+        'pass-ink': token('pass-ink'),
+        'fail-ink': token('fail-ink'),
         'on-accent': token('on-accent'),
+        'on-blue': token('on-blue'),
         pop: {
           yellow: token('yellow'),
           pink: token('pink'),

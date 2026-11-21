@@ -65,7 +65,7 @@ export default function CodeDrawer({ source, file, diagnostics, nodeIds, diagram
           <span className="font-mono">{file}</span> <span className="font-normal text-muted">· read-only</span>
         </h2>
         <button type="button" onClick={() => void copy()} className={toolButton} title="Copy the whole code">
-          {copied ? <Check size={15} className="text-pass" aria-hidden="true" /> : <Copy size={15} aria-hidden="true" />}
+          {copied ? <Check size={15} className="text-pass-ink" aria-hidden="true" /> : <Copy size={15} aria-hidden="true" />}
           {copied ? 'Copied' : 'Copy'}
         </button>
         <button type="button" onClick={() => setEditorMode('code')} className={toolButton} title="Switch to Code mode to edit the text">

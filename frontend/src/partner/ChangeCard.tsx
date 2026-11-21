@@ -153,7 +153,7 @@ export default function ChangeCard({ change, source, decision, onAccept, onRejec
         )}
         {status === 'applied' && (
           <p role="status" className="flex items-center gap-1.5 text-sm font-semibold text-ink">
-            <Check size={14} className="text-pass" aria-hidden="true" />
+            <Check size={14} className="text-pass-ink" aria-hidden="true" />
             Applied
             {canUndo && (
               <>
@@ -170,7 +170,7 @@ export default function ChangeCard({ change, source, decision, onAccept, onRejec
         )}
         {status === 'present' && (
           <p className="flex items-center gap-1.5 text-sm text-muted">
-            <Check size={14} className="text-pass" aria-hidden="true" />
+            <Check size={14} className="text-pass-ink" aria-hidden="true" />
             Already in your {yours}
           </p>
         )}
@@ -266,7 +266,7 @@ export function MetricsDelta({ before, after }: { before: Metrics; after: Metric
               <>
                 <span className="text-muted">{r.b ?? '—'}</span>
                 <ArrowRight size={11} className="shrink-0 self-center text-muted" aria-label="to" />
-                <span className={`font-semibold ${r.trend === 'better' ? 'text-emerald-700 dark:text-pass' : 'text-red-700 dark:text-fail'}`}>
+                <span className={`font-semibold ${r.trend === 'better' ? 'text-pass-ink' : 'text-fail-ink'}`}>
                   {r.a ?? '—'}
                   <span className="sr-only"> ({r.trend})</span>
                 </span>
@@ -298,7 +298,7 @@ export function SourceDiff({ hunks, folded = false }: { hunks: Hunk[]; folded?: 
         <ChevronRight size={13} className={`transition-transform duration-d1 ${open ? 'rotate-90' : ''}`} aria-hidden="true" />
         Code
         <span className="font-mono font-normal tabular-nums">
-          <span className="text-emerald-700 dark:text-pass">+{added}</span> <span className="text-red-700 dark:text-fail">−{removed}</span>
+          <span className="text-pass-ink">+{added}</span> <span className="text-fail-ink">−{removed}</span>
         </span>
       </button>
       {open && (

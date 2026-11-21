@@ -22,7 +22,7 @@
 .ps-dialog__panel {
   max-height: calc(100dvh - 24px);
   overflow-y: auto;
-  padding: 20px;
+  padding: var(--sp-5);
   border: var(--bw-2) solid rgb(var(--c-ink));
   border-radius: var(--r-md);
   background: rgb(var(--c-surface));
@@ -40,7 +40,7 @@
   overflow-wrap: anywhere;
 }
 .ps-dialog__body {
-  margin-top: 8px;
+  margin-top: var(--sp-2);
   color: rgb(var(--c-muted));
   font-size: var(--fs-14);
   line-height: var(--lh-body);
@@ -48,7 +48,7 @@
 }
 .ps-dialog__label {
   display: block;
-  margin-top: 16px;
+  margin-top: var(--sp-4);
   font-size: var(--fs-14);
   font-weight: 600;
 }
@@ -61,8 +61,8 @@
 .ps-dialog__field {
   display: block;
   width: 100%;
-  margin-top: 8px;
-  padding: 8px 12px;
+  margin-top: var(--sp-2);
+  padding: var(--sp-2) var(--sp-3);
   border: var(--bw-1) solid rgb(var(--c-ink));
   border-radius: var(--r-sm);
   background: rgb(var(--c-paper));
@@ -82,16 +82,16 @@
   word-break: break-all;
 }
 .ps-dialog__error {
-  margin: 8px 0 0;
-  color: rgb(var(--c-fail));
+  margin: var(--sp-2) 0 0;
+  color: rgb(var(--c-fail-ink));
   font-size: var(--fs-14);
   font-weight: 600;
 }
 .ps-dialog__actions {
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
-  margin-top: 20px;
+  gap: var(--sp-3);
+  margin-top: var(--sp-5);
 }
 
 @media (max-width: 480px) {
@@ -114,15 +114,15 @@
   z-index: 1000;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--sp-2);
   width: min(24rem, calc(100vw - 32px));
   pointer-events: none;
 }
 .ps-toast {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 12px;
+  gap: var(--sp-3);
+  padding: var(--sp-3);
   border: var(--bw-1) solid rgb(var(--c-ink));
   border-left-width: 8px;
   border-radius: var(--r-md);
@@ -152,7 +152,7 @@
   overflow-wrap: anywhere;
 }
 .ps-toast__body {
-  margin-top: 4px;
+  margin-top: var(--sp-1);
   color: rgb(var(--c-muted));
   font-size: var(--fs-14);
   line-height: 1.45;

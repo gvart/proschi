@@ -103,11 +103,11 @@ export function BountyResult({ result, def }: { result: NonNullable<WaveSummary[
         <p className="font-semibold">
           Bounty {result.met ? 'claimed' : 'missed'}: {def?.name ?? result.id}
           {result.met ? (
-            <span className="ml-1 font-mono text-pass">
+            <span className="ml-1 font-mono text-pass-ink">
               +{usd(result.cash)}, +{result.points.toLocaleString('en-US')} pts
             </span>
           ) : result.cash < 0 ? (
-            <span className="ml-1 font-mono text-fail">{usd(result.cash)}</span>
+            <span className="ml-1 font-mono text-fail-ink">{usd(result.cash)}</span>
           ) : null}
         </p>
         {def && <p className="text-xs text-muted">{def.text}</p>}

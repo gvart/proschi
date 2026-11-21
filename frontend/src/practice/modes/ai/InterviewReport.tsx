@@ -146,7 +146,7 @@ function Sheet({ report, diagram }: { report: Report; diagram?: Diagram }) {
                   <ul data-testid="report-tests" className="mt-2 space-y-1 text-sm">
                     {grade.results.map((r) => (
                       <li key={r.id} className="flex items-start gap-2">
-                        {r.passed ? <CircleCheck size={15} className="mt-0.5 shrink-0 text-pass" aria-label="Passed" /> : <CircleX size={15} className="mt-0.5 shrink-0 text-fail" aria-label="Failed" />}
+                        {r.passed ? <CircleCheck size={15} className="mt-0.5 shrink-0 text-pass-ink" aria-label="Passed" /> : <CircleX size={15} className="mt-0.5 shrink-0 text-fail-ink" aria-label="Failed" />}
                         <span>
                           <span className="font-semibold">{r.name}</span> <span className="text-ink/75">{r.message}</span>
                         </span>

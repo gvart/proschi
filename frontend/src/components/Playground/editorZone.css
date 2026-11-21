@@ -15,6 +15,9 @@
   --c-blue: 154 167 199; /* the keyword colour */
   --c-pass: 168 191 160; /* the string colour: calm green */
   --c-fail: 255 107 97;
+  --c-pass-ink: var(--c-pass);
+  --c-fail-ink: var(--c-fail);
+  --c-on-blue: 17 17 17;
 }
 .editor-zone[data-editor-zone='light'] {
   color-scheme: light;
@@ -25,5 +28,8 @@
   --c-blue: 61 79 184;
   --c-pass: 47 122 85;
   --c-fail: 198 40 40;
+  --c-pass-ink: var(--c-pass);
+  --c-fail-ink: var(--c-fail);
+  --c-on-blue: 255 255 255;
   --c-yellow: 154 91 0; /* warnings: the number colour, readable on cream */
 }
