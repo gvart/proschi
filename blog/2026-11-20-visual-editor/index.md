@@ -15,7 +15,7 @@ type, so a step to PostgreSQL offers PostgreSQL's own operations.
 
 - **Code and Visual modes.** A **Code | Visual** switch in the header, or
   **Ctrl+\\** (**⌘\\** on a Mac), replaces the side-by-side split. Visual
-  gives the page to the canvas, with a rail of **Components**, **Flows** and
+  gives the page to the canvas, with a rail of **Components** and
   **Selection** tabs and a read-only **View code** drawer. Code puts the
   text beside a diagram you can look at but not edit. A first visit opens
   in Visual, and the editor remembers your last mode.
@@ -28,10 +28,11 @@ type, so a step to PostgreSQL offers PostgreSQL's own operations.
 - **A command bar and canvas keys.** **A** or **Ctrl+K** opens the bar:
   type `redis`, press **Enter**. **Tab**, **C**, **T**, **F2**, **+**, **-**
   and **R** cover the rest.
-- **Use cases as a sequence diagram.** **Flows** opens a resizable pane
-  under the canvas: a lane per component, numbered steps, dashed responses
-  and a tab per scenario. Steps get their operations, statuses and headers
-  from the target's type.
+- **Use cases as a sequence diagram.** The **Architecture | Flows** switch
+  above the canvas, or **F**, turns the canvas into the use case: a lane per
+  component, numbered steps, dashed responses, a frame with a tab per
+  scenario and a small map of the architecture. Steps get their operations,
+  statuses and headers from the target's type.
 - **Parallel blocks without code.** Select several steps and **Run at the
   same time** wraps them in a `par` block.
 - **Undo everywhere.** Every Visual edit can be undone. In Code mode,
@@ -65,16 +66,20 @@ PostgreSQL does not have.
 ![The old Flows panel: a use case named Place order gets three steps, each started with Add a step, two clicks on the canvas and a label picked or typed.](before-flows.webp)
 
 Now you see the use case as a sequence diagram and edit it there. A **+**
-between two steps opens a form at that spot, and the operations come from
-the target's type. **Add reply** starts the answer to a request, right after it.
+between two steps starts a dashed arrow at that spot. Click the lane it goes
+to and type its label, and the operations come from the target's type.
+**Enter** adds the step and starts the next arrow where it went, so the
+answer to a request is one more **Enter**. Click an arrow and a toolbar
+under it changes its kind, moves it or deletes it.
 
-![The Flows pane under the canvas: a + between steps 1 and 2 opens a form from Orders API, a click on the Orders DB lane header picks the target, SELECT is picked from PostgreSQL's operations and named SELECT stock, and Add reply adds the answer in stock right after it.](after-flows.webp)
+![The Flows view with a map of the architecture in the corner: a + between steps 1 and 2 starts a dashed arrow from Orders API, a click on the Orders DB lane aims it, SELECT is picked from PostgreSQL's operations and named SELECT stock, and Enter adds it. The next arrow starts at Orders DB, Enter takes the reply it offers and in stock is typed on it. A click on INSERT order shows its toolbar.](after-flows.webp)
 
 Steps that happen together no longer need code. Shift-click two steps and
 click **Run at the same time**. A frame marks the block, with **Ungroup**
-on it.
+on it. Scenarios get a frame too, with a tab for each: the tab you pick is
+the one **Play** plays.
 
-![Two calls from Orders API, GET cart and SELECT stock, are Shift-selected and grouped with Run at the same time. The At the same time frame appears, Ungroup removes it, and Ctrl+Z brings it back.](parallel.webp)
+![Two calls from Orders API, GET cart and SELECT stock, are Shift-selected and grouped with Run at the same time. The At the same time frame appears, Ungroup removes it, and Ctrl+Z brings it back. A click on the Out of stock tab of the Scenarios frame shows its 409 sold out step, and the scenarios row above the canvas picks Out of stock too.](parallel.webp)
 
 ## How to use it
 
@@ -83,10 +88,10 @@ on it.
 2. Click **Orders API**, press **A**, type `redis` and press **Enter**.
    Name it `Cart cache` and press **Enter**. It is connected from the API
    with `RESP`.
-3. Click **Flows**. Hover the sequence diagram and click the **+** between
-   steps 1 and 2.
-4. Pick **Cart cache** in **Goes to** (it has no lane yet), type
-   `GET cart` as the operation and click **Add step**.
+3. Click **Flows** above the canvas. Hover the sequence diagram and click
+   the **+** between steps 1 and 2.
+4. Click **Cart cache** on the map in the corner (it has no lane yet), type
+   `GET cart` and press **Enter**, then **Escape**.
 5. Click **GET cart**, Shift-click **INSERT order**, then click **Run at
    the same time**.
 
@@ -108,8 +113,9 @@ usecase "Place order" {
 }
 ```
 
-Click a step to edit it beside the diagram. **Alt+↑** and **Alt+↓** move
-it, and **Delete** removes it.
+Click a step to edit it on its arrow: **Enter** edits the label, and the
+toolbar changes its kind. **Alt+↑** and **Alt+↓** move it, and **Delete**
+removes it.
 
 Switch to Code to edit the text. The diagram follows it.
 
@@ -121,10 +127,11 @@ Press **T** to change the type.
 
 ![The Selection tab for Orders DB and then Cart cache, with each type card's protocol and operations, and T opening the type picker filtered to Memcached.](selection.webp)
 
-On a phone, tap a component and the sheet opens on **Selection**. Its
-**Flows** tab lists the steps.
+On a phone, tap a component and the sheet opens on **Selection**.
+**Flows** turns the page into a list of the steps, and a tap on a step
+edits it in a sheet.
 
-![A phone-width editor: tapping Orders DB opens the sheet on Selection while the canvas shrinks above it, and the Flows tab shows the Place order steps as a list.](phone.webp)
+![A phone-width editor: tapping Orders DB opens the sheet on Selection while the canvas shrinks above it. Flows shows the Place order steps as a list, and tapping step 2 opens its sheet with From, To, the kind and the operation.](phone.webp)
 
 Every key is in
 [Build a diagram without code](../../docs/VISUAL-EDITOR.md).
@@ -136,5 +143,6 @@ practise system design and want to sketch fast. If you already write
 Proschi, stay in Code mode: the text editor works as before.
 
 The diagram in Code mode is view-only, so edits happen in the text there.
-On a phone, Flows is a plain list of steps: grouping steps to run at the
-same time needs the wider pane.
+On a phone, Flows is a list of steps instead of a sequence diagram, and
+each step's menu moves it instead of a drag.
+
