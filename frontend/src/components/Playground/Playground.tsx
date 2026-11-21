@@ -1280,7 +1280,7 @@ export default function Playground() {
               buttonClassName={outlineButton}
               trigger={
                 <>
-                  {copied ? <Check size={16} className="text-pass" /> : <Link size={16} />}
+                  {copied ? <Check size={16} className="text-pass-ink" /> : <Link size={16} />}
                   <span className="hidden xl:inline">{copied ? 'Copied' : shortening ? 'Sharing…' : 'Share'}</span>
                 </>
               }
@@ -1812,7 +1812,7 @@ function ScenarioBar({ useCase, current, onPick }: ScenarioBarProps) {
           >
             <span aria-hidden="true" className={`h-2 w-2 rounded-[2px] border border-current ${error ? 'bg-fail' : 'bg-pass'}`} />
             {s.name}
-            {status !== undefined && <span className={`font-mono text-xs tabular-nums ${active ? '' : error ? 'text-fail' : 'text-muted'}`}>{status}</span>}
+            {status !== undefined && <span className={`font-mono text-xs tabular-nums ${active ? '' : error ? 'text-fail-ink' : 'text-muted'}`}>{status}</span>}
             <span className="sr-only">{error ? '(error path)' : '(success path)'}</span>
           </button>
         );
@@ -1848,7 +1848,7 @@ interface DiagnosticsPanelProps {
 function DiagnosticsPanel({ diagnostics, onSelect }: DiagnosticsPanelProps) {
   if (diagnostics.length === 0) {
     return (
-      <div className="flex items-center gap-2 px-3 py-2 text-xs text-pass border-t border-ink/15">
+      <div className="flex items-center gap-2 px-3 py-2 text-xs text-pass-ink border-t border-ink/15">
         <CheckCircle2 size={14} />
         No problems
       </div>
@@ -1861,7 +1861,7 @@ function DiagnosticsPanel({ diagnostics, onSelect }: DiagnosticsPanelProps) {
         <li key={i}>
           <button onClick={() => onSelect(d)} className="w-full flex items-start gap-2 px-3 py-1.5 text-left hover:bg-ink/10">
             {d.severity === 'error' ? (
-              <AlertCircle size={14} className="text-fail shrink-0 mt-px" />
+              <AlertCircle size={14} className="text-fail-ink shrink-0 mt-px" />
             ) : d.severity === 'info' ? (
               <Info size={14} className="text-muted shrink-0 mt-px" />
             ) : (

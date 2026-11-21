@@ -16,7 +16,7 @@
   position: relative;
   display: block;
   margin: 0;
-  padding: 20px;
+  padding: var(--sp-5);
   background: rgb(var(--c-surface));
   color: rgb(var(--c-ink));
   border: var(--bw-2) solid rgb(var(--c-ink));
@@ -46,7 +46,7 @@
   content: '';
   display: block;
   height: 12px;
-  margin: -20px -20px 16px;
+  margin: calc(var(--sp-5) * -1) calc(var(--sp-5) * -1) var(--sp-4);
   background: var(--card-accent);
   border-bottom: var(--bw-2) solid rgb(var(--c-ink));
   border-radius: calc(var(--r-md) - var(--bw-2)) calc(var(--r-md) - var(--bw-2)) 0 0;
@@ -72,7 +72,7 @@
 .ps-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--sp-1);
   padding: 3px 9px;
   border: var(--bw-1) solid rgb(var(--c-ink));
   border-radius: var(--r-pill);
@@ -104,6 +104,9 @@
 }
 :is(.ps-badge--yellow, .ps-badge--pink, .ps-badge--blue, .ps-badge--lilac, .ps-badge--pass, .ps-badge--fail) {
   --badge-fg: var(--c-on-accent);
+}
+.ps-badge--blue {
+  --badge-fg: var(--c-on-blue);
 }
 
 /* ---------- tabs ---------- */

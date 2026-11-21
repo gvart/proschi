@@ -190,7 +190,7 @@ const ALIGN = { left: 'text-left', center: 'text-center', right: 'text-right' } 
 /** The landing page's display highlighter (src/landing/highlight.ts), as Tailwind colours. */
 const TOKEN_CLASS: Record<TokenClass, string> = {
   keyword: 'font-bold text-ink',
-  string: 'text-pass',
+  string: 'text-pass-ink',
   tech: 'text-pop-blue',
   arrow: 'font-bold text-pop-blue',
   team: 'italic text-ink/75',

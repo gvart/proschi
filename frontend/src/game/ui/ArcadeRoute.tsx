@@ -194,9 +194,9 @@ export default function ArcadeRoute({ account, activity, focusDaily = false }: {
         </div>
       </header>
 
-      {errors.length > 0 && <p className="text-sm text-fail">Some game content did not load: {errors[0].message}</p>}
-      {arcade.error && <p className="text-sm text-fail">{arcade.error}</p>}
-      {startError && <p className="text-sm text-fail">{startError}</p>}
+      {errors.length > 0 && <p className="text-sm text-fail-ink">Some game content did not load: {errors[0].message}</p>}
+      {arcade.error && <p className="text-sm text-fail-ink">{arcade.error}</p>}
+      {startError && <p className="text-sm text-fail-ink">{startError}</p>}
       {signedOut && apiEnabled && (
         <p className="text-sm text-muted">
           Signed out, your progress stays in this browser and runs are not ranked.{' '}
@@ -374,7 +374,7 @@ function Shop(props: { items: ShopItem[]; blueprints: number; equipped: string[]
                       {i.cost} <Gem size={12} aria-hidden="true" />
                     </button>
                   ) : (
-                    i.kind !== 'perk' && <span className="text-xs font-semibold text-pass">Owned</span>
+                    i.kind !== 'perk' && <span className="text-xs font-semibold text-pass-ink">Owned</span>
                   )}
                 </div>
               </li>

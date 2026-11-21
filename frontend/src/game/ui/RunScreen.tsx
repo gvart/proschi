@@ -664,13 +664,13 @@ export default function RunScreen(props: RunScreenProps) {
         </div>
       )}
       {message && drafting && (
-        <p role="status" className={`text-sm ${message.tone === 'error' ? 'text-fail' : 'text-muted'}`}>
+        <p role="status" className={`text-sm ${message.tone === 'error' ? 'text-fail-ink' : 'text-muted'}`}>
           {message.text}
         </p>
       )}
       {editing && placing && <p className="text-sm text-muted">Tap the + in the {placeOf(placing)} row{narrow ? ', or hold the chip and drag it there' : ', or drag the chip onto the board'}.</p>}
       {drafting && (problems.length > 0 || broken.length > 0) && (
-        <ul className="text-sm text-fail list-disc pl-5">
+        <ul className="text-sm text-fail-ink list-disc pl-5">
           {[...problems, ...broken].slice(0, narrow ? 2 : 4).map((p) => (
             <li key={p}>{p}</li>
           ))}
@@ -805,7 +805,7 @@ export default function RunScreen(props: RunScreenProps) {
               <CodeEditor value={code} onChange={onCode} diagnostics={codeProblems} nodeIds={shown.nodes.map((n) => n.id)} techs={techs} extensions={codeExtensions} readOnly={!editing || codeLevel === 'watch'} />
             </Suspense>
             {codeProblems.length > 0 && (
-              <ul className="border-t border-ink/15 px-3 py-1.5 text-xs text-fail">
+              <ul className="border-t border-ink/15 px-3 py-1.5 text-xs text-fail-ink">
                 {codeProblems.slice(0, 3).map((d) => (
                   <li key={`${d.line}:${d.message}`}>
                     Line {d.line}: {d.message}
@@ -874,7 +874,7 @@ export default function RunScreen(props: RunScreenProps) {
   );
   const stampEl = stamp && (
     <div className="pointer-events-none fixed inset-x-0 top-1/3 z-40 flex justify-center px-3" aria-hidden="true">
-      <p className={`sf-stamp rounded-brutal border-bw-3 border-ink px-5 py-3 text-center font-display text-3xl sm:text-5xl font-extrabold shadow-brutal-lg ${forecast.boss ? 'bg-fail text-white' : 'bg-pop-yellow text-on-accent'}`}>
+      <p className={`sf-stamp rounded-brutal border-bw-3 border-ink px-5 py-3 text-center font-display text-3xl sm:text-5xl font-extrabold shadow-brutal-lg ${forecast.boss ? 'bg-fail text-on-accent' : 'bg-pop-yellow text-on-accent'}`}>
         {stamp.toUpperCase()}
       </p>
     </div>

@@ -60,12 +60,12 @@ export function Hud(props: { wave: number; waves: number; endless: boolean; cash
           <span className="text-muted">/{props.endless ? '∞' : props.waves}</span>
           {props.tick !== undefined && <span className="text-xs text-muted"> ·{Math.min(props.tick + 1, TICKS)}</span>}
         </span>
-        <span className={props.cash < 0 ? 'text-fail' : ''}>
+        <span className={props.cash < 0 ? 'text-fail-ink' : ''}>
           {usd(props.cash)}
           {props.monthly !== undefined && <span className="text-xs font-normal text-muted"> −{usd(props.monthly)}</span>}
         </span>
         <span className="inline-flex items-center gap-1" aria-label={`Trust ${props.trust}`} title={TRUST_HELP}>
-          <Heart size={13} aria-hidden="true" className={trustShare < 0.3 ? 'text-fail' : 'text-pass'} />
+          <Heart size={13} aria-hidden="true" className={trustShare < 0.3 ? 'text-fail-ink' : 'text-pass-ink'} />
           {props.trust}
         </span>
         <span>{props.score.toLocaleString('en-US')}</span>
@@ -85,7 +85,7 @@ export function Hud(props: { wave: number; waves: number; endless: boolean; cash
       </div>
       <div>
         <p className={eyebrow}>Cash</p>
-        <p className={`font-display font-extrabold text-lg sf-count ${props.cash < 0 ? 'text-fail' : ''}`}>
+        <p className={`font-display font-extrabold text-lg sf-count ${props.cash < 0 ? 'text-fail-ink' : ''}`}>
           {usd(props.cash)}
           {props.monthly !== undefined && <span className="ml-1 text-xs text-muted">−{usd(props.monthly)}/mo</span>}
         </p>
@@ -125,7 +125,7 @@ export function ForecastPanel({ forecast, scenario, events, act, collapsible, ch
       )}
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="font-display font-extrabold text-lg">
-          {forecast.boss && <span className="mr-1 rounded-sm bg-fail px-1.5 py-0.5 text-xs text-white align-middle">BOSS</span>}
+          {forecast.boss && <span className="mr-1 rounded-sm bg-fail px-1.5 py-0.5 text-xs text-on-accent align-middle">BOSS</span>}
           Wave {forecast.wave + 1}
           {forecast.name ? `: ${forecast.name}` : ''}
         </h3>
@@ -178,7 +178,7 @@ export function ForecastPanel({ forecast, scenario, events, act, collapsible, ch
             const def = events.get(e.id);
             return (
             <li key={e.id} className="flex items-start gap-1.5">
-              {def ? <IconTile name={def.icon} tone={CATEGORY_TILE[def.category]} size="sm" /> : <AlertTriangle size={15} aria-hidden="true" className="mt-0.5 shrink-0 text-fail" />}
+              {def ? <IconTile name={def.icon} tone={CATEGORY_TILE[def.category]} size="sm" /> : <AlertTriangle size={15} aria-hidden="true" className="mt-0.5 shrink-0 text-fail-ink" />}
               <span>
                 <strong>{e.title}</strong>
                 {e.from !== undefined ? ` at tick ${e.from}${e.duration > 1 ? `–${e.from + e.duration - 1}` : ''}` : ''}: {e.telegraph}
@@ -313,7 +313,7 @@ export function Inspector(p: InspectorProps) {
         <dl className="grid grid-cols-3 gap-2 text-xs">
           <div>
             <dt className="text-muted">Busy</dt>
-            <dd className={`font-mono font-bold ${p.stats.utilization >= 1 ? 'text-fail' : ''}`}>{p.stats.down ? 'down' : `${Math.round(p.stats.utilization * 100)}%`}</dd>
+            <dd className={`font-mono font-bold ${p.stats.utilization >= 1 ? 'text-fail-ink' : ''}`}>{p.stats.down ? 'down' : `${Math.round(p.stats.utilization * 100)}%`}</dd>
           </div>
           <div>
             <dt className="text-muted">Load</dt>
@@ -481,7 +481,7 @@ export function WaveResult({ summary, trustFull, scenario, events, onContinue, c
             {lines.map(([k, v]) => (
               <div key={k} className="flex justify-between sf-card">
                 <dt>{k}</dt>
-                <dd className={`font-mono font-bold ${v < 0 ? 'text-fail' : ''}`}>{usd(v)}</dd>
+                <dd className={`font-mono font-bold ${v < 0 ? 'text-fail-ink' : ''}`}>{usd(v)}</dd>
               </div>
             ))}
             <div className="flex justify-between border-t-bw-1 border-ink/30 pt-1 sf-card">
@@ -489,7 +489,7 @@ export function WaveResult({ summary, trustFull, scenario, events, onContinue, c
               <dd className="font-mono font-bold">{summary.points.toLocaleString('en-US')}</dd>
             </div>
             {summary.leanBonus > 0 && (
-              <div className="flex justify-between text-pass sf-card">
+              <div className="flex justify-between text-pass-ink sf-card">
                 <dt>Right-sized bonus</dt>
                 <dd className="font-mono font-bold">+{summary.leanBonus.toLocaleString('en-US')}</dd>
               </div>
@@ -503,9 +503,9 @@ export function WaveResult({ summary, trustFull, scenario, events, onContinue, c
             <div className="flex justify-between sf-card">
               <dt>Trust</dt>
               {trustFull !== undefined && summary.trustDelta >= 0 ? (
-                <dd className="font-mono font-bold text-pass">Trust is full ({trustFull})</dd>
+                <dd className="font-mono font-bold text-pass-ink">Trust is full ({trustFull})</dd>
               ) : (
-                <dd className={`font-mono font-bold ${summary.trustDelta < 0 ? 'text-fail' : 'text-pass'}`}>
+                <dd className={`font-mono font-bold ${summary.trustDelta < 0 ? 'text-fail-ink' : 'text-pass-ink'}`}>
                   {summary.trustDelta >= 0 ? '+' : ''}
                   {summary.trustDelta}
                   {summary.clean ? ' (+5 clean)' : ''}
@@ -532,7 +532,7 @@ export function WaveResult({ summary, trustFull, scenario, events, onContinue, c
                   <span className="inline-flex items-center gap-1.5 align-middle">
                     <IconTile name={def.icon} tone={CATEGORY_TILE[def.category]} size="sm" />
                     {def.title}
-                    {e.chained ? <span className="text-xs font-normal text-fail">set off by the incident before it</span> : e.surprise ? <span className="text-xs font-normal text-muted">unannounced</span> : null}
+                    {e.chained ? <span className="text-xs font-normal text-fail-ink">set off by the incident before it</span> : e.surprise ? <span className="text-xs font-normal text-muted">unannounced</span> : null}
                   </span>
                 </summary>
                 <p className="mt-1">{def.whatHappened}</p>
@@ -569,7 +569,7 @@ export function BreachCard({ breach, count, during }: { breach: Breach; count?: 
   return (
     <div className="rounded-sm border-bw-1 border-ink bg-fail/10 p-2">
       <p className="flex items-center gap-1 font-semibold">
-        <AlertTriangle size={15} aria-hidden="true" className="text-fail" />
+        <AlertTriangle size={15} aria-hidden="true" className="text-fail-ink" />
         {BREACH_TITLE[breach.kind]}
         {count && count > 1 ? <span className="text-muted font-normal"> ×{count} ticks</span> : null}
       </p>

@@ -211,14 +211,14 @@ export default function VersionsDialog({ docId, fileName, hint, pushedVersion, p
                 {busy ? 'Saving…' : 'Save version'}
               </button>
             </form>
-            {problem && tag !== '' && <p className="mt-1.5 text-xs text-fail">{problem}</p>}
+            {problem && tag !== '' && <p className="mt-1.5 text-xs text-fail-ink">{problem}</p>}
             {error && (
-              <p role="alert" className="mt-2 text-sm text-fail">
+              <p role="alert" className="mt-2 text-sm text-fail-ink">
                 {error}
               </p>
             )}
             {saved && (
-              <p role="status" className="mt-2 text-sm text-pass">
+              <p role="status" className="mt-2 text-sm text-pass-ink">
                 Saved version {saved}.
               </p>
             )}
@@ -257,7 +257,7 @@ export default function VersionsDialog({ docId, fileName, hint, pushedVersion, p
                           >
                             <Copy size={16} />
                           </button>
-                          <button type="button" aria-label={`Delete ${v.tag}`} title="Delete" className="p-1.5 rounded-md hover:bg-fail/10 hover:text-fail" onClick={() => setOpen(`delete:${v.tag}`)}>
+                          <button type="button" aria-label={`Delete ${v.tag}`} title="Delete" className="p-1.5 rounded-md hover:bg-fail/10 hover:text-fail-ink" onClick={() => setOpen(`delete:${v.tag}`)}>
                             <Trash2 size={16} />
                           </button>
                         </div>
@@ -297,7 +297,7 @@ export default function VersionsDialog({ docId, fileName, hint, pushedVersion, p
                             <span className="flex-1 min-w-0">
                               Delete version <span className="font-mono">{v.tag}</span>? Diagrams that use it stop resolving, and the tag can't be reused for this diagram.
                             </span>
-                            <button type="button" className="rounded-sm border-bw-1 border-fail px-2.5 py-1 font-semibold text-fail hover:bg-fail/10" onClick={() => void remove(v.tag)}>
+                            <button type="button" className="rounded-sm border-bw-1 border-fail px-2.5 py-1 font-semibold text-fail-ink hover:bg-fail/10" onClick={() => void remove(v.tag)}>
                               Delete
                             </button>
                             <button type="button" className="rounded-sm px-2.5 py-1 font-semibold hover:bg-ink/10" onClick={() => setOpen(null)}>

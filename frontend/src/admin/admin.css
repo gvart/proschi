@@ -327,7 +327,7 @@
 }
 
 .adm-warn {
-  color: rgb(var(--c-fail));
+  color: rgb(var(--c-fail-ink));
   font-weight: 700;
 }
 
@@ -1077,7 +1077,7 @@
 }
 
 .adm-plus {
-  color: rgb(var(--c-pass));
+  color: rgb(var(--c-pass-ink));
   font-weight: 700;
 }
 

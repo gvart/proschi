@@ -318,7 +318,7 @@ function Summary({
           <p className="mt-1.5 text-sm text-muted">No changes: the two are the same design.</p>
         ) : (
           <p className="mt-1.5 text-sm" data-testid="diff-counts">
-            <span className="font-semibold text-pass">{counts.added} added</span> · <span className="font-semibold text-fail">{counts.removed} removed</span> ·{' '}
+            <span className="font-semibold text-pass-ink">{counts.added} added</span> · <span className="font-semibold text-fail-ink">{counts.removed} removed</span> ·{' '}
             <span className="font-semibold text-pop-blue">{counts.changed} changed</span>
           </p>
         )}
@@ -331,13 +331,13 @@ function Summary({
               <ul className="mt-1 grid gap-1 text-sm">
                 {d.added.map((item, i) => (
                   <li key={`a${i}`} className="flex gap-2">
-                    <span aria-label="added" className="w-4 flex-none text-center font-bold text-pass">+</span>
+                    <span aria-label="added" className="w-4 flex-none text-center font-bold text-pass-ink">+</span>
                     <span className="min-w-0 break-words">{itemLabel(s, item)}</span>
                   </li>
                 ))}
                 {d.removed.map((item, i) => (
                   <li key={`r${i}`} className="flex gap-2">
-                    <span aria-label="removed" className="w-4 flex-none text-center font-bold text-fail">−</span>
+                    <span aria-label="removed" className="w-4 flex-none text-center font-bold text-fail-ink">−</span>
                     <span className="min-w-0 break-words line-through decoration-ink/30">{itemLabel(s, item)}</span>
                   </li>
                 ))}
