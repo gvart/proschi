@@ -340,32 +340,30 @@ test.describe('the interview room on your own', () => {
     await expect(settings.getByText('x15', { exact: true })).toBeVisible();
     await board.click({ position: { x: 600, y: 700 } });
 
-    // The second use case, from the traffic's suggestion, with two steps picked on the canvas.
+    // The second use case, from the traffic's suggestion, with two steps picked on the architecture map.
     await board.getByRole('button', { name: 'Flows' }).click();
     const flows = page.getByRole('region', { name: 'Flows' });
     const picker = flows.getByRole('combobox', { name: 'Use case' });
     await chooseOption(picker, 'Start generator');
     await expect(picker).toHaveText(/Start generator/);
-    await expect(flows.getByRole('region', { name: 'Use case Start generator' })).toBeVisible();
-    await flows.getByRole('button', { name: 'Add a step' }).click();
-    const step = flows.getByRole('form', { name: 'New step' });
-    await expect(step.getByRole('status')).toHaveText('Click the component the step starts at.');
-    await canvasNodes(page).filter({ hasText: 'ID Generator' }).click();
-    await expect(step.getByRole('status')).toHaveText('Now click the component it goes to.');
-    await canvasNodes(page).filter({ hasText: 'ZooKeeper' }).click();
-    await expect(step.getByLabel('Starts at')).toHaveAttribute('data-value', 'idgen');
-    await expect(step.getByLabel('Goes to')).toHaveAttribute('data-value', 'zk');
-    await step.getByRole('combobox', { name: 'Operation' }).fill('CREATE worker id');
-    await step.getByRole('button', { name: 'Add step' }).click();
-    // The composer stays open, and Reply answers the open request in one click.
-    await step.getByRole('button', { name: 'Reply: ZooKeeper answers ID Generator' }).click();
-    await expect(step.getByLabel('Starts at')).toHaveAttribute('data-value', 'zk');
-    await expect(step.getByLabel('Goes to')).toHaveAttribute('data-value', 'idgen');
-    await expect(step.getByRole('radio', { name: 'Response' })).toHaveAttribute('aria-checked', 'true');
-    await step.getByRole('combobox', { name: 'Answer' }).fill('worker id');
-    await step.getByRole('button', { name: 'Add step' }).click();
+    // With no steps, its draft is already there: the map picks where it starts and where it goes.
+    const draft = flows.locator('[data-draft]');
+    const status = draft.locator('[data-draft-status]');
+    await expect(status).toHaveText('Click the component that starts the flow.');
+    const map = page.getByTestId('flows-map');
+    await map.getByRole('button', { name: 'ID Generator', exact: true }).click();
+    await expect(status).toHaveText('ID Generator starts. Click what it calls.');
+    await map.getByRole('button', { name: 'ZooKeeper', exact: true }).click();
+    await draft.getByRole('combobox', { name: 'Operation' }).fill('CREATE worker id');
+    await draft.getByRole('combobox', { name: 'Operation' }).press('Enter');
+    // The next draft starts where it went, and its reply answers the open request in one click.
+    await draft.getByRole('button', { name: 'Reply to 1: ZooKeeper answers ID Generator' }).click();
+    await expect(draft.getByRole('toolbar', { name: 'New step' }).getByRole('button', { name: 'Response' })).toHaveAttribute('aria-pressed', 'true');
+    await draft.getByRole('combobox', { name: 'Answer' }).fill('worker id');
+    await draft.getByRole('combobox', { name: 'Answer' }).press('Enter');
     await expect(flows.getByRole('listbox', { name: 'Sequence of Start generator' }).getByRole('option')).toHaveCount(2);
-
+    await page.keyboard.press('Escape');
+    await expect(draft).toHaveCount(0);
     await rail(page).getByRole('button', { name: 'Check my design' }).click();
     await expect(page.getByTestId('checks').getByRole('status')).toHaveText(/^All \d+ checks pass$/);
     await expect(rail(page).getByText(/Last check: \d+ of \d+ pass, solved\./)).toBeVisible();

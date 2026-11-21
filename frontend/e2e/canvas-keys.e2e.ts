@@ -90,11 +90,11 @@ test.describe('the command bar', () => {
     await dialog.getByLabel('Name').fill('Checkout');
     await dialog.getByRole('button', { name: 'Add' }).click();
     await expect.poll(() => editorText(page)).toContain('usecase "Checkout" {');
-    // On a wide screen, in the pane under the canvas, on the new use case.
+    // On a wide screen, in the Flows view, on the new use case.
     const flows = page.getByRole('region', { name: 'Flows' });
     await expect(flows).toBeVisible();
-    await expect(page.getByTestId('flows-pane')).toBeVisible();
-    await expect(flows.getByRole('combobox', { name: 'Use case' })).toHaveText(/Checkout/);
+    await expect(page.getByTestId('flows-view')).toBeVisible();
+    await expect(flows.getByRole('button', { name: 'Rename the use case Checkout' })).toBeVisible();
   });
 });
 

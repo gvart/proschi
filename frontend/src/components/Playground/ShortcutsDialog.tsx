@@ -19,7 +19,7 @@ interface Section {
 
 /**
  * Every key the editor page answers to. Keep in step with the handlers: the
- * canvas's (canvasEditState.ts, DiagramView.tsx), the Flows pane's (SequenceDiagram.tsx), the page's (Playground.tsx,
+ * canvas's (canvasEditState.ts, DiagramView.tsx), the Flows view's (FlowsView.tsx, FlowsPanel.tsx, SequenceDiagram.tsx), the page's (Playground.tsx,
  * useZenMode.ts, partner/shortcut.ts, Diagram/editorMode.ts) and the code editor's (CodeEditor.tsx:
  * CodeMirror's basicSetup, tabKeymap.ts and format).
  */
@@ -51,17 +51,33 @@ function shortcutSections(partner: boolean): Section[] {
       ],
     },
     {
-      title: 'Flows pane',
-      note: 'Click a message in the sequence diagram first. Its form is beside the diagram.',
+      title: 'Flows',
+      note: 'Click a message in the sequence diagram first. Its toolbar shows under it; every change is written at once, and undo takes it back. "Add step" (or N) starts a new step: click where it goes, type its label, Enter.',
       bindings: [
+        { keys: [['F']], action: 'Switch between the architecture and Flows' },
+        { keys: [['M']], action: 'Show or collapse the architecture map' },
         { keys: [['↑ ↓'], ['Home'], ['End']], action: 'Select the previous or next step, or the first or last' },
         { keys: [['Shift', '↑ ↓'], ['Shift', 'Click']], action: 'Select the steps from the first selected to this one' },
         { keys: [[MOD_KEY, 'Click']], action: 'Add a step to the selection, or take it out' },
         { keys: [[ALT, '↑ ↓']], action: 'Move the selected step up or down' },
         { keys: [['Delete'], ['Backspace']], action: 'Delete the selected steps' },
-        { keys: [['Enter']], action: "Go to the step's form" },
-        { keys: [['Escape']], action: 'Let go of the selection, or close the composer' },
+        { keys: [['Enter'], ['Double-click']], action: 'Edit the label on its arrow (Enter applies, Escape keeps the old one)' },
+        { keys: [['1'], ['2'], ['3'], ['4']], action: 'Make it a request, a response, a message or a failed call' },
+        { keys: [['N']], action: 'Add a step at the end, or after the selected one' },
+        { keys: [['Shift', 'N']], action: 'Add a step before the selected one' },
+        { keys: [['← →'], ['Enter']], action: 'While adding: aim at a lane, then take it (or the reply offered)' },
+        { keys: [['Enter']], action: 'While adding, in its label: add the step and start the next from where it went' },
+        { keys: [['R']], action: 'Add the reply to the selected request' },
+        { keys: [['D']], action: 'Open or close its headers, payload and fan-out' },
+        { keys: [['X']], action: 'Swap where the step starts and where it goes' },
+        { keys: [[ALT, '← →'], [ALT, 'Shift', '← →']], action: 'Move where it goes, or where it starts, a lane over' },
+        { keys: [['Tab']], action: 'Go to the step toolbar (arrows move along it, Escape goes back)' },
+        { keys: [[MOD_KEY, 'Z']], action: 'Undo the last change' },
+        { keys: [['Escape']], action: 'Let go of the selection, or stop adding steps' },
+        { keys: [['Drag an end']], action: 'Change where the selected step starts or goes, a "+ Lane" lane too' },
         { keys: [['Drag a lifeline']], action: 'Add a step from that component to the one you drop on' },
+        { keys: [['Drag a step']], action: 'Move it up or down, to where the pink line shows (Escape cancels)' },
+        { keys: [['['], [']']], action: "Show the scenario before or after the selected step's, in its frame" },
       ],
     },
     {

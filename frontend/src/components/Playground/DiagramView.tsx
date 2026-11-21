@@ -16,11 +16,10 @@ import { TECH_DRAG_TYPE } from '../Diagram/Palette';
 import { CanvasMiniMap, CanvasTopBar, MiniMapButton, OverlayTools } from '../Diagram/CanvasTools';
 import { finderItemsOf, useKeepInView, useLateOpen, useNarrow, usePinDrag, useTopBarInset } from '../Diagram/canvasShared';
 import FlowsPanel, { type StepPick } from '../Diagram/FlowsPanel';
-import { markStep, nextPick } from '../Diagram/flows';
-import { FlowsSplit } from '../Diagram/FlowsPane';
-import { AddAfterPicker, CanvasMenu, ConnectHint, FlowsToggle, PaletteDock, PaletteToggle, SelectionEmpty, type AddAfterState, type CanvasMenuActions, type CanvasMenuState, type RailTab } from '../Diagram/CanvasEditing';
+import { FlowsView } from '../Diagram/FlowsView';
+import { AddAfterPicker, CanvasMenu, ConnectHint, PaletteDock, PaletteToggle, SelectionEmpty, ViewSwitch, type AddAfterState, type CanvasMenuActions, type CanvasMenuState, type RailTab } from '../Diagram/CanvasEditing';
 import { NodeActionsContext, type NodeActions } from '../Canvas/nodeActions';
-import { canvasKey, historyKey, scalable, stepNode, stepReplicas, useConnectHint, useMiniMap, usePaletteOpen, type CanvasKey } from '../Diagram/canvasEditState';
+import { canvasKey, scalable, stepNode, stepReplicas, useConnectHint, useMiniMap, usePaletteOpen, type CanvasKey } from '../Diagram/canvasEditState';
 import Inspector from '../Diagram/Inspector';
 import { ConnectAtAnyZoom, connectionLabels, useConnectDrop } from '../Diagram/connect';
 import NodeFinder from '../Diagram/NodeFinder';
@@ -133,7 +132,7 @@ export interface DiagramViewProps {
   /** Navigates into a system box (double-click). */
   onOpenSystem: (id: string) => void;
   /** Offers the Flows builder (use cases and scenarios without code, FlowsPanel.tsx) on this document's text. */
-  flows?: { source: string; diagram: Diagram; onChange: (next: string) => void; useCase: string | undefined; onUseCase: (id: string) => void };
+  flows?: { source: string; diagram: Diagram; onChange: (next: string) => void; useCase: string | undefined; onUseCase: (id: string) => void; scenario?: string; onScenario?: (id: string | undefined) => void };
   /** What an empty canvas shows (the editor's starter card), centred on the canvas. */
   empty?: ReactNode;
   /**
@@ -208,23 +207,14 @@ export default function DiagramView({
   const [sheet, setSheet] = useState(false);
   const [paletteFocus, setPaletteFocus] = useState(false);
   const canAdd = !playing && !viewOnly && crumbs.length === 1;
-  // The Flows builder is the pane under the canvas (FlowsPane.tsx), beside whatever the rail shows; on phones a tab
-  // of the sheet. As on the practice canvas.
+  // The Flows builder is a view of its own over the canvas (FlowsView.tsx), behind the `Architecture | Flows` switch,
+  // on phones too. As on the practice canvas.
   const [flowsShown, setFlowsShown] = usePaletteOpen('proschi.canvas.flows');
   const flowsOpen = canAdd && !!flows && flowsShown;
-  const flowsInRail = flowsOpen && phone;
-  /** The step selected in the Flows pane, lit up on the canvas. */
-  const [flowStep, setFlowStep] = useState<{ from: string; to: string } | null>(null);
-  /** Counts the Flows pane's resizes by hand, so the diagram glides to its new fit (unless the reader moved the view). */
-  const [paneMoves, setPaneMoves] = useState(0);
-  /** The step being added in the Flows builder: node clicks pick its ends instead of selecting. */
+  /** The ends of a step being added in the Flows view (the command bar's "Add a step" gives it the first). */
   const [pick, setPick] = useState<StepPick | null>(null);
-  /** The two components of the Flows step row under the pointer, lit up on the canvas. */
-  const [flowHover, setFlowHover] = useState<string[] | null>(null);
-  const picking = flowsOpen && pick !== null;
-  const paletteOpen = canAdd && (phone ? sheet : docked) && !flowsInRail;
+  const paletteOpen = canAdd && (phone ? sheet : docked);
   const togglePalette = () => {
-    if (flowsInRail) setFlowsShown(false);
     setPick(null);
     setPaletteFocus(!paletteOpen);
     // Opened, the palette is what shows: the selection's settings, which would take its place, are put away.
@@ -239,8 +229,6 @@ export default function DiagramView({
   /** The type picker of a node's "+", or of a connection let go on empty canvas. */
   const [addAfter, setAddAfter] = useState<AddAfterState | null>(null);
   const closeAddAfter = useCallback(() => setAddAfter(null), []);
-  // A click on the canvas picks a Flows step's end while one is picked, so its edit affordances are put away (see `picking` below).
-  if (picking && addAfter) setAddAfter(null);
   const connectDrop = useConnectDrop(
     diagram,
     (from, to) => {
@@ -277,10 +265,10 @@ export default function DiagramView({
    */
   const [selectionTab, setSelectionTab] = useState(false);
   const selectionShown = !viewOnly && !playing && (showSettings || (selectionTab && canAdd));
-  const railTab: RailTab = selectionShown ? 'selection' : flowsInRail ? 'flows' : 'components';
+  const railTab: RailTab = selectionShown ? 'selection' : 'components';
   // Opened by a selection alone, the rail waits for the click to finish (useLateOpen) before it narrows the canvas.
-  const selectionOpens = useLateOpen(selectionShown && !paletteOpen && !flowsInRail);
-  const railOpen = paletteOpen || flowsInRail || selectionOpens;
+  const selectionOpens = useLateOpen(selectionShown && !paletteOpen);
+  const railOpen = paletteOpen || selectionOpens;
   const selectionCount = selection.nodes.length + selection.edges.length;
   const hasSelection = !playing && !viewOnly && selectionCount > 0;
   const singleNode = selection.nodes.length === 1 && selection.edges.length === 0 ? selection.nodes[0] : undefined;
@@ -330,8 +318,8 @@ export default function DiagramView({
   }, [nodes, pendingSelect, selectOnly]);
 
   useEffect(() => {
-    if (showSettings && !paletteOpen && !flowsInRail) setSelectionTab(true);
-  }, [showSettings, paletteOpen, flowsInRail]);
+    if (showSettings && !paletteOpen) setSelectionTab(true);
+  }, [showSettings, paletteOpen]);
 
   // React Flow re-sends the selection when this handler changes, so it must be stable
   // and must not store an equal selection again.
@@ -354,19 +342,11 @@ export default function DiagramView({
   }, [selectionKey, playing]);
 
   // What the code's cursor sits on wears a ring of its own (pc-linked in canvas.css), the selection untouched.
-  const linkedKey = (flowsOpen && flowHover ? flowHover : picking ? [pick.from, pick.to].filter((id): id is string => !!id) : linked).join('\n');
+  const linkedKey = linked.join('\n');
   const linkedIds = useMemo(() => new Set(linkedKey ? linkedKey.split('\n') : []), [linkedKey]);
   const linkedClass = (className: string | undefined) => (className ? `${className} pc-linked` : 'pc-linked');
-  // The Flows pane's selected step is lit up as playback lights its step.
-  const shownStep = flowsOpen ? flowStep : null;
-  const drawnNodes = useMemo(
-    () => markStep(linkedIds.size === 0 ? nodes : nodes.map((n) => (linkedIds.has(n.id) ? { ...n, className: linkedClass(n.className) } : n)), [], shownStep).nodes,
-    [nodes, linkedIds, shownStep],
-  );
-  const drawnEdges = useMemo(
-    () => markStep([], linkedIds.size === 0 ? edges : edges.map((e) => (linkedIds.has(e.id) ? { ...e, className: linkedClass(e.className) } : e)), shownStep).edges,
-    [edges, linkedIds, shownStep],
-  );
+  const drawnNodes = useMemo(() => (linkedIds.size === 0 ? nodes : nodes.map((n) => (linkedIds.has(n.id) ? { ...n, className: linkedClass(n.className) } : n))), [nodes, linkedIds]);
+  const drawnEdges = useMemo(() => (linkedIds.size === 0 ? edges : edges.map((e) => (linkedIds.has(e.id) ? { ...e, className: linkedClass(e.className) } : e))), [edges, linkedIds]);
   // A linked node out of sight, or under a card over the canvas (a floating rail, the legend),
   // is brought into the uncovered part: a short pan at the same zoom.
   useEffect(() => {
@@ -435,8 +415,8 @@ export default function DiagramView({
   const readOnly = playing || viewOnly || crumbs.length > 1;
   const nodeActions = useMemo<NodeActions | null>(
     // While a Flows step is picked, a click on a node picks it: no "+" to land on instead.
-    () => (readOnly ? null : { editing, onName: (id, name) => finishNameRef.current(id, name), onAddAfter: canAdd && !picking ? (id, at) => setAddAfter({ from: id, ...at }) : undefined }),
-    [readOnly, editing, canAdd, picking],
+    () => (readOnly ? null : { editing, onName: (id, name) => finishNameRef.current(id, name), onAddAfter: canAdd ? (id, at) => setAddAfter({ from: id, ...at }) : undefined }),
+    [readOnly, editing, canAdd],
   );
 
   const deleteSelection = () => {
@@ -532,11 +512,11 @@ export default function DiagramView({
             if (!added) return;
             flows.onChange(added.source);
             flows.onUseCase(added.id);
-            showTab('flows');
+            if (!flowsOpen) toggleFlows();
           }
         : undefined,
       addStep: flows && local ? () => {
-        showTab('flows');
+        if (!flowsOpen) toggleFlows();
         setPick({ from });
       } : undefined,
       rename: singleNode && (() => void promptRename(singleNode)),
@@ -711,7 +691,7 @@ export default function DiagramView({
   useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, {
     wrapper: wrapperRef,
     inset: fitInset,
-    glide: `${playing ? 'playing' : ''}:${glideKey}:${phone ? '' : railKey}:${paneMoves}`,
+    glide: `${playing ? 'playing' : ''}:${glideKey}:${phone ? '' : railKey}`,
     still: phone ? railKey : undefined,
     added: lastAdded,
   });
@@ -738,16 +718,8 @@ export default function DiagramView({
       setSelectionTab(true);
       return;
     }
-    // The rail's Flows tab opens the pane on wider screens, and the rail keeps its tab.
-    if (tab === 'flows' && !phone) {
-      if (!flowsOpen) toggleFlows();
-      return;
-    }
     closeSelection();
-    if (tab === 'flows') {
-      if (!flowsOpen) toggleFlows();
-    } else if (!paletteOpen) {
-      if (flowsInRail) setFlowsShown(false);
+    if (!paletteOpen) {
       setPick(null);
       setPaletteFocus(true);
       if (phone) setSheet(true);
@@ -756,15 +728,12 @@ export default function DiagramView({
   };
   const toggleFlows = () => {
     setPick(null);
-    // In the sheet, Flows takes the place of the selection's settings and the palette; the pane leaves them be.
-    if (!flowsOpen && phone) {
-      selectOnly();
-      setSheet(false);
-    }
     setFlowsShown(!flowsOpen);
   };
-  const pickNode = (id: string) => {
-    if (pick) setPick(nextPick(pick, id));
+  /** A phone's "Show on the architecture": the canvas, with a step's components selected. */
+  const showOnCanvas = (ids: string[]) => {
+    toggleFlows();
+    setPendingSelect(ids);
   };
   const flowsPanel = flowsOpen && flows && (
     <FlowsPanel
@@ -775,10 +744,14 @@ export default function DiagramView({
       onPick={setPick}
       useCase={flows.useCase}
       onUseCase={flows.onUseCase}
+      scenario={flows.scenario}
+      onScenario={flows.onScenario}
       onClose={toggleFlows}
-      onHighlight={setFlowHover}
-      layout={phone ? 'rail' : 'pane'}
-      onStep={setFlowStep}
+      onUndo={phone ? onUndo : undefined}
+      onRedo={phone ? onRedo : undefined}
+      onShow={phone ? showOnCanvas : undefined}
+      layout={phone ? 'phone' : 'pane'}
+      headerPicker
     />
   );
   // A component just added keeps its settings closed (the palette stays for the next add), but where the Selection
@@ -809,25 +782,18 @@ export default function DiagramView({
   );
 
   return (
-    <FlowsSplit
+    // Ctrl/Cmd+Z in Code mode too: the view-only diagram edits nothing, but undoes and redoes the code it shows.
+    <FlowsView
       phone={phone}
-      pane={!phone && flowsPanel}
-      onResized={() => setPaneMoves((n) => n + 1)}
-      onKeyDown={(e) => {
-        // In Code mode too: the view-only diagram edits nothing, but undoes and redoes the code it shows.
-        const step = playing ? null : historyKey(e);
-        if (!step) return;
-        e.preventDefault();
-        if (step === 'undo') onUndo();
-        else onRedo();
-      }}
+      view={flowsPanel}
+      onToggle={canAdd && flows ? toggleFlows : undefined}
+      onUndo={() => !playing && onUndo()}
+      onRedo={() => !playing && onRedo()}
     >
     <PaletteDock
       open={railOpen}
       tab={railTab}
       onTab={showTab}
-      offersFlows={canAdd && !!flows}
-      flows={(flowsInRail && flowsPanel) || undefined}
       selection={selectionShown ? inspector || <SelectionEmpty onClose={() => setSelectionTab(false)} /> : undefined}
       phone={phone}
       focus={paletteFocus}
@@ -839,8 +805,9 @@ export default function DiagramView({
       ref={wrapperRef}
       // Focusable, so the keys above work after a drop from the palette.
       tabIndex={-1}
+      data-canvas-focus
       // While a Flows step is picked, a click on a node picks it: the dots, grips and resizer that edit it are put away.
-      className={`relative h-full min-w-0 flex-1 outline-hidden ${playing || viewOnly ? '' : picking ? 'pc-picking' : 'pc-editable'}`}
+      className={`relative h-full min-w-0 flex-1 outline-hidden ${playing || viewOnly ? '' : 'pc-editable'}`}
       data-layout-busy={layoutBusy || undefined}
       onDragOver={(e) => {
         if (viewOnly || !e.dataTransfer.types.includes(TECH_DRAG_TYPE)) return;
@@ -875,18 +842,15 @@ export default function DiagramView({
         nodeTypes={nodeTypes}
         edgeTypes={PLAYBACK_EDGE_TYPES}
         // Playing a use case shows it over this canvas, read-only.
-        nodesDraggable={!playing && !viewOnly && !picking}
-        nodesConnectable={!playing && !viewOnly && !picking}
-        elementsSelectable={!playing && !picking}
+        nodesDraggable={!playing && !viewOnly}
+        nodesConnectable={!playing && !viewOnly}
+        elementsSelectable={!playing}
         onNodesChange={handleNodesChange}
         onEdgesChange={handleEdgesChange}
         onNodeDragStart={pinDrag.onNodeDragStart}
         onNodeDragStop={pinDrag.onNodeDragStop}
-        // While a Flows step is picked, a click picks its end instead of selecting.
         // A click on a node whose settings were put away (one just added from the palette, say) shows them again.
-        onNodeClick={(_event, node) => (picking ? pickNode(node.id) : closedSettings === node.id && editing !== node.id && setClosedSettings(null))}
-        // …and a click on a connection sends the step along it.
-        onEdgeClick={(_event, edge) => picking && setPick({ from: edge.source, to: edge.target })}
+        onNodeClick={(_event, node) => closedSettings === node.id && editing !== node.id && setClosedSettings(null)}
         // A connection drops anywhere on a node's body; one it can't take is refused, saying why.
         isValidConnection={connectDrop.isValidConnection}
         onConnectStart={connectDrop.onConnectStart}
@@ -907,7 +871,7 @@ export default function DiagramView({
           setMenu({ x: event.clientX, y: event.clientY, label: `${edge.source} → ${edge.target}`, id: edge.id });
         }}
         // Dragging an end of a connection onto another node moves that end, in the text.
-        edgesUpdatable={!playing && !viewOnly && !picking}
+        edgesUpdatable={!playing && !viewOnly}
         onReconnect={(edge, connection) => {
           if (playing || edge.id.startsWith('step:') || !connection.source || !connection.target) return;
           onReconnect(edge.id, connection.source, connection.target);
@@ -916,7 +880,7 @@ export default function DiagramView({
         onReconnectEnd={connectDrop.onReconnectEnd}
         // A system box opens its team design; renaming it stays in its settings and the selection bar.
         onNodeDoubleClick={(_event, node) => {
-          if (playing || picking) return;
+          if (playing) return;
           if (node.type === 'systemNode' || node.data?.system) onOpenSystem(node.id);
           else if (!viewOnly) void promptRename(node);
         }}
@@ -946,9 +910,9 @@ export default function DiagramView({
             ) : (
               canAdd && (
                 <>
+                  {flows && <ViewSwitch flows={flowsOpen} onChange={(next) => next !== flowsOpen && toggleFlows()} />}
                   {/* Each shows its tab of the rail, or hides the rail when its tab is the one shown. */}
                   <PaletteToggle open={paletteOpen && railTab === 'components'} onToggle={() => (paletteOpen && railTab === 'components' ? togglePalette() : showTab('components'))} />
-                  {flows && <FlowsToggle open={phone ? flowsInRail && railTab === 'flows' : flowsOpen} onToggle={() => ((phone ? flowsInRail && railTab === 'flows' : flowsOpen) ? toggleFlows() : showTab('flows'))} />}
                 </>
               )
             ))
@@ -1007,8 +971,8 @@ export default function DiagramView({
             )}
           </Panel>
         )}
-        {/* The minimap takes this corner; with the Flows pane under it the canvas is short, and the hint would cover its lowest nodes. */}
-        {nodes.length > 0 && !playing && !miniMap && !notice && !(hasSelection && !showSettings) && !(flowsOpen && !phone) && (
+        {/* The minimap takes this corner. */}
+        {nodes.length > 0 && !playing && !miniMap && !notice && !(hasSelection && !showSettings) && (
           <Panel position="bottom-right" className="hidden md:block text-xs text-muted bg-paper/85 rounded-sm px-2 py-1">
             {narrow
               ? '? for shortcuts'
@@ -1053,7 +1017,7 @@ export default function DiagramView({
         />
       )}
     </div>
-    </FlowsSplit>
+    </FlowsView>
   );
 }
 

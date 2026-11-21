@@ -1,5 +1,5 @@
 ---
-updated: 2026-11-20
+updated: 2026-11-21
 ---
 
 # Build a diagram without code
@@ -32,9 +32,9 @@ The **Code | Visual** switch in the header, or **Ctrl+\\** (**⌘\\** on a
 Mac), changes the mode. A first visit opens in Visual. Practice and the
 mock interview use the same switch.
 
-- **Visual** gives the page to the canvas, with a rail of three tabs:
-  **Components**, **Flows** and **Selection**. **View code** shows the text,
-  read-only.
+- **Visual** gives the page to the canvas, with a rail of two tabs:
+  **Components** and **Selection** (on a phone, a sheet under the canvas).
+  **View code** shows the text, read-only.
 - **Code** puts the text editor beside the diagram. The diagram only looks:
   select, pan, zoom and play, but edit in the text.
 
@@ -77,23 +77,43 @@ words a step to it can use.
 
 ## 5. Build a use case
 
-**Flows** opens a pane under the canvas. It draws the chosen
+The **Architecture | Flows** switch above the canvas, or **F**, turns the
+canvas into the Flows view, and back. It draws the chosen
 [use case](USE-CASES.md) as a sequence diagram: a lane per component and a
-numbered arrow per step. Drag the pane's top edge to make it taller or
-shorter. Each [scenario](SCENARIOS.md) has a tab, and **Add scenario**
-starts a new one.
+numbered arrow per step. The lanes fit the width, and only a diagram too
+wide for it scrolls sideways; before it does, a lane no step in sight uses
+folds to a thin icon, which a click shows again. A set of
+[scenarios](SCENARIOS.md) is a frame where the flow branches, with a tab for
+each scenario: the chosen one's steps show in the frame, between the steps
+they all share. The bar names the scenarios shown. The view is remembered,
+and the canvas keeps its zoom while you are away.
 
-1. Pick a use case, or **+ New use case…** in the picker, and name it.
-2. Click **Add a step** beside the diagram. Then click the component it
-   starts at and the one it goes to: on the canvas, on its lane's header
-   or lifeline in the pane, or in the form.
-3. Pick the kind: **Request**, **Response**, **Message** (sent without
-   waiting) or **Fails** (a call that never gets an answer).
-4. Pick an operation from the list and click **Add step**.
+A small map of the architecture floats in the corner. It lights up the
+selected step's components and the connection it travels, and draws a
+dashed line where there is none. Collapse it, or press **M**, to keep it out
+of the way.
 
-The form stays open for the next step, from where the last one ended.
-**Reply** answers the open request in one click. Warnings show before you
-add the step. On a scenario's tab, steps go into that scenario.
+1. Pick a use case in the editor's header. The Flows bar shows its name:
+   click it to rename it. Its **⋯** menu adds a new use case or deletes
+   this one. (In practice and the interview, the bar has its own picker.)
+   With no use case yet, the view asks you to **Name the first use case**.
+2. Click **Add step** under the last arrow, or press **N**. A dashed arrow
+   starts where the last step ended. An empty use case starts it at the
+   user, with every component shown as a dashed lane.
+3. Click the component it goes to: its lane, its header or the map. Clicking
+   the start's own lane starts over, so you can pick a different start.
+4. Type the label on the arrow, or pick an operation from the list. The kind
+   (**Request**, **Response**, **Message** or **Fails**) sits under it.
+5. Press **Enter** to add the step. The next arrow starts where this one
+   went, so you can chain a whole flow. **Escape** stops.
+
+While a request waits for its answer, a **Reply to …** button under the
+arrow (or **Enter**) adds the answer back. Warnings show before you add the
+step. A scenario frame's **Add step** row adds to the scenario it shows.
+
+**+ Lane**, after the last lane's header, adds a lane for a component the
+flow doesn't use yet. A new arrow, or the end of a selected one, can then go
+there. Its last choice, **New component…**, goes back to the architecture.
 
 The operations come from the target's type: PostgreSQL offers `SELECT` and
 `INSERT`, a REST API its HTTP methods, a response its statuses. **Headers,
@@ -104,48 +124,121 @@ operations of its own** writes a [type](TYPES.md#declare-a-type) from the
 steps you used, so the next ones are checked.
 
 To add a step in the middle, hover the diagram and click a **+** between
-two arrows, or drag from one lifeline to another. A small form opens there,
-starting where the step before it ended. **Goes to** lists every component,
-and one that is not in the use case yet gets its own lane. A step can't go
-from a component to itself.
+two arrows, or drag from one lifeline to another. The same dashed arrow
+starts there, from where the step before it ended, or with both ends when
+you dragged.
 
-Click an arrow to select it, and its form shows beside the diagram. Change
-its ends, kind or operation and click **Save step**. **Add reply** answers
-a selected request right after it. **Alt+↑** and **Alt+↓** (**⌥** on a Mac)
-or the arrow buttons move it, and **Delete** removes it.
+Click an arrow to select it, and a small toolbar shows under it. The arrows
+below move down to make room, so nothing is covered. Every change is written
+at once, with no Save:
+
+- **Request**, **Response**, **Message** and **Fails** change its kind.
+- Double-click the arrow, or press **Enter**, to edit its label in place,
+  with the type's operations listed as you type. **Enter** applies it and
+  **Escape** keeps the old one.
+- Drag either end of the arrow to another lane to change where the step
+  starts or goes. A step can't go from a component to itself.
+- **Add reply** answers a selected request right after it. The arrow
+  buttons, or **Alt+↑** and **Alt+↓** (**⌥** on a Mac), move it, and the
+  bin or **Delete** removes it.
+- Drag an arrow up or down by its middle to move it anywhere: a pink line
+  shows where it lands, into a frame too. **Escape** cancels the drag.
+- **⋯** opens **Headers, payload and fan-out** in a card under the arrow.
 
 Shift-click or Ctrl-click (**⌘**-click) to select several steps. **Run at
 the same time** puts them in a [parallel block](SCENARIOS.md#parallel-steps).
-They must follow each other in one flow or scenario, or the pane says why.
-A block's **Ungroup** runs its steps one after another again, and **Add
-alongside** adds one more step to it.
+They must follow each other in one flow or scenario, or the view says why.
+A block's **Ungroup** runs its steps one after another again, and its **Add
+alongside** row adds one more step to it.
 
-With a scenario's tab open and nothing selected, the side of the pane
-renames or deletes that scenario. The pencil beside the picker renames the
-use case.
+A scenario frame's tabs are edited in place:
+
+- Click a tab to show its steps. **[** and **]** show the scenario before or
+  after the selected step's.
+- **+** names a new scenario on its own tab, with the problem's scenarios
+  offered under it. **Enter** adds it and **Escape** cancels.
+- Double-click a tab, or press **F2** on it, to rename it.
+- The **⋯** menu by the chosen tab renames or deletes it.
+
+With no scenario yet, **Add scenario** in the bar starts the first one, in
+an empty frame at the end of the flow.
 
 Every change edits the text. **Ctrl+Z** (**⌘Z**) undoes it in Visual mode,
-and Code mode has it in the code editor's history too. On a phone, Flows is
-a sheet under the canvas with the steps as a list: tap a step to edit it,
-and its row moves it or inserts a step before it.
+and Code mode has it in the code editor's history too.
+
+The scenario the view shows is the one **Play** plays: pick a branch on a
+frame and the scenarios row over the canvas picks the same, and a scenario
+played there shows its branches on the frames.
+
+### On a phone
+
+The same **Architecture | Flows** switch shows Flows as a page of its own.
+The steps are the page, numbered as they run, and the page is the one
+thing that scrolls:
+
+- A set of scenarios is a dashed group, with a chip for each scenario. Tap
+  a chip to show its steps, **+** to name a new one, and its **⋯** to add a
+  step to it, rename it or delete it. With no scenario yet, **Add scenario**
+  under the use case's name starts one at the end.
+- A parallel block is a group of its own, with **Ungroup**.
+- Tap a step to edit it in a sheet over the bottom of the page: its **From**
+  and **To**, its kind, its operation (the type's list as you type) and
+  **Headers, payload and fan-out**. Each change is written at once: a tap
+  for the ends and the kind, leaving the field or **Enter** for the
+  operation. **Show on the architecture** switches back with the step's
+  components selected, and **Done** puts the sheet away.
+- A step's **⋯** moves it up or down, inserts a step before it, replies to
+  a request, runs it at the same time as the next step, or deletes it.
+- **Add step**, the last row, opens the same sheet for a new step, starting
+  where the last one ended. Choose where it goes, type the operation and
+  tap **Add step**: the sheet stays for the next one until **Done**.
+- The **Undo** and **Redo** buttons in the bar take back any change.
 
 ## 6. Work from the keyboard
 
 Click the canvas first. **?** lists every shortcut.
 
+On the canvas:
+
 | Key | What it does |
 |---|---|
 | **A** or **Ctrl+K** (**⌘K**) | The command bar: type plain words, like `redis` or `rename`, and **Enter** adds the component or runs the action. |
+| **/** or **Ctrl+F** (**⌘F**) | Find a component. |
 | **Tab**, **Shift+Tab** | Select the next or previous component. |
 | **C** | Add a component connected from the selected one. |
 | **F2** | Rename the selected component. |
 | **T** | Change its type. |
 | **+**, **-** | More or fewer replicas. |
 | **R** | Lay out again, when you have dragged components into place. |
+| **Ctrl+C**, **Ctrl+V** (**⌘C**, **⌘V**) | Copy the selected components and the connections between them, and paste them. |
+| **Ctrl+D** (**⌘D**) | Duplicate the selection. |
+| **Delete** or **Backspace** | Delete the selection. |
+| **Ctrl+Z** (**⌘Z**) | Undo. **Ctrl+Shift+Z** or **Ctrl+Y** (**⌘⇧Z**) redoes. |
+| **F** | Switch between the architecture and Flows. |
 
-In the Flows pane, click a step first. **↑** and **↓** select the next
-step, **Shift+↑** and **Shift+↓** select several, **Enter** goes to its
-form and **Escape** lets it go.
+In the Flows view:
+
+| Key | What it does |
+|---|---|
+| **N** | Add a step at the end, or after the selected step. **Shift+N** adds one before it. |
+| **←**, **→**, **Enter** | While adding: aim at a lane, then take it (or the reply offered). |
+| **Enter** | While adding, in its label: add the step and start the next from where it went. **Escape** stops. |
+| **↑**, **↓**, **Home**, **End** | Select the previous or next step, or the first or last. |
+| **Shift+↑**, **Shift+↓**, **Shift**-click | Select the steps from the first selected to this one. |
+| **Ctrl**-click (**⌘**-click) | Add a step to the selection, or take it out. |
+| **Enter** or a double click | Edit the selected step's label on its arrow. **Enter** applies and **Escape** keeps the old one. |
+| **1** to **4** | Make it a request, a response, a message or a failed call. |
+| **R** | Add the reply to the selected request. |
+| **D** | Open or close its headers, payload and fan-out. |
+| **X** | Swap where the step starts and where it goes. |
+| **Alt+←**, **Alt+→** (**⌥**) | Move where it goes a lane over; with **Shift**, where it starts. |
+| **Alt+↑**, **Alt+↓** (**⌥**) | Move the selected step up or down. |
+| **Delete** or **Backspace** | Delete the selected steps. |
+| **[**, **]** | Show the scenario before or after the selected step's, in its frame. |
+| **Tab** | Go to the step's toolbar; the arrow keys go along it and **Escape** goes back. |
+| **M** | Show or collapse the architecture map. |
+| **Escape** | Let go of the selection, or stop adding steps. |
+| **Ctrl+Z** (**⌘Z**) | Undo the last change. |
 
 ## 7. Ask the AI in Visual mode
 

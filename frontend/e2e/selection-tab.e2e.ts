@@ -73,12 +73,11 @@ test.describe('the Selection tab', () => {
     // The other tabs are a click away.
     await rail.getByRole('tab', { name: 'Components' }).click();
     await expect(rail.getByRole('region', { name: 'Components' })).toBeVisible();
-    // Flows opens its pane under the canvas, and the rail keeps its tab.
-    await rail.getByRole('tab', { name: 'Flows' }).click();
-    const flows = page.getByRole('region', { name: 'Flows' });
-    await expect(flows).toBeVisible();
-    await expect(rail.getByRole('region', { name: 'Components' })).toBeVisible();
-    expect((await flows.boundingBox())!.y).toBeGreaterThanOrEqual((await page.locator('.react-flow').boundingBox())!.y + 100);
+    // Flows is not a tab on a wide screen: the switch above the canvas shows it over the canvas and the rail.
+    await expect(rail.getByRole('tab', { name: 'Flows' })).toHaveCount(0);
+    await page.getByRole('group', { name: 'View' }).getByRole('button', { name: 'Flows', exact: true }).click();
+    await expect(page.getByRole('region', { name: 'Flows' })).toBeVisible();
+    await expect(rail).toBeHidden();
   });
 
   test('the type picker lists the design’s own types first, and the type card reads the type', async ({ page }) => {
@@ -158,15 +157,16 @@ test.describe('the canvas sheet on a phone', () => {
     await sheet.getByRole('tab', { name: 'Components' }).click();
     await expect(sheet.getByRole('region', { name: 'Components' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Add component' })).toHaveAttribute('aria-expanded', 'true');
-    await sheet.getByRole('tab', { name: 'Flows' }).click();
-    await expect(sheet.getByRole('region', { name: 'Flows' })).toBeVisible();
-    await sheet.getByRole('button', { name: 'Close the flows' }).click();
-    await expect(sheet).toHaveCount(0);
+    // Flows is no tab of the sheet: on a phone too, the switch shows it as a view over the canvas and the sheet.
+    await expect(sheet.getByRole('tab', { name: 'Flows' })).toHaveCount(0);
+    await page.getByRole('group', { name: 'View' }).getByRole('button', { name: 'Flows', exact: true }).click();
+    const view = page.getByTestId('flows-view');
+    await expect(view.getByRole('region', { name: 'Flows' })).toBeVisible();
+    await view.getByRole('button', { name: 'Architecture' }).click();
+    await expect(view).toHaveCount(0);
 
-    // The toolbar's Flows opens the sheet on its tab, and a palette tap adds and puts the sheet away.
-    await page.getByRole('button', { name: 'Flows', exact: true }).click();
-    await expect(sheet.getByRole('tab', { name: 'Flows' })).toHaveAttribute('aria-selected', 'true');
-    await page.getByRole('button', { name: 'Add component' }).click();
+    // The palette is still open, and a tap in it adds and puts the sheet away.
+    await expect(page.getByRole('button', { name: 'Add component' })).toHaveAttribute('aria-expanded', 'true');
     await sheet.getByRole('button', { name: 'Redis', exact: true }).click();
     await expect(sheet).toHaveCount(0);
     await page.locator('.pc-node__name-field').press('Escape');
@@ -204,7 +204,8 @@ test.describe('the canvas sheet on a phone', () => {
     await expect(sheet.getByRole('region', { name: 'Shortener API settings' })).toBeVisible();
     await settled(page);
     await expectNothingUnder(page, sheet);
-    await sheet.getByRole('tab', { name: 'Flows' }).click();
-    await expect(sheet.getByRole('region', { name: 'Flows' })).toBeVisible();
+    await expect(sheet.getByRole('tab', { name: 'Flows' })).toHaveCount(0);
+    await page.getByRole('group', { name: 'View' }).getByRole('button', { name: 'Flows', exact: true }).click();
+    await expect(page.getByTestId('flows-view').getByRole('region', { name: 'Flows' })).toBeVisible();
   });
 });

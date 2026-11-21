@@ -7,6 +7,9 @@ import type { Diagram } from '../../dsl/types';
  * step. The labels come from the components' types (dsl/typesys/vocabulary.ts).
  */
 
+/** What each kind of step is called in the Flows view's toolbars and a phone's sheet. */
+export const KIND_LABEL: Record<StepKind, string> = { request: 'Request', response: 'Response', async: 'Message', failed: 'Fails' };
+
 /** Every step of an outline, the main flow's, each scenario's and each parallel block's, in text order. */
 export function outlineSteps(items: OutlineItem[]): OutlineStep[] {
   return items.flatMap((item) =>
@@ -63,17 +66,6 @@ export function missingScenarios(diagram: Diagram, useCase: string, defined: str
   return (entry?.mix ?? []).map((m) => m.scenario).filter((name) => !defined.includes(name));
 }
 
-/** The Flows pane's height (FlowsPane.tsx): at least this, so its header and a few rows show. */
-export const PANE_MIN = 160;
-/** …and at most this share of the canvas column, so the canvas above it stays usable. */
-export const PANE_MAX_SHARE = 0.7;
-
-/** A pane height kept between PANE_MIN and PANE_MAX_SHARE of a column `column` pixels tall. */
-export function clampPaneHeight(height: number, column: number): number {
-  const max = Math.max(PANE_MIN, Math.floor(column * PANE_MAX_SHARE));
-  return Math.round(Math.min(max, Math.max(PANE_MIN, height)));
-}
-
 /**
  * The connection a step travels on the canvas: the one from its start to its
  * end, or, for an answer (or a call against the arrow), the one the other way.
@@ -82,22 +74,36 @@ export function stepEdge(step: { from: string; to: string }, edges: readonly { i
   return (edges.find((e) => e.source === step.from && e.target === step.to) ?? edges.find((e) => e.source === step.to && e.target === step.from))?.id;
 }
 
-const withActive = (className: string | undefined) => (className ? `${className} pc-active` : 'pc-active');
+/** The names of a scenario's path (DiagramScenario.name joins them with ' › '). */
+const pathOf = (name: string) => name.split(' › ');
 
 /**
- * The canvas with the Flows pane's selected step lit up as playback lights its
- * current step (`pc-active`, Canvas/canvas.css): its two nodes and the
- * connection it travels. The same arrays when no step is selected.
+ * The scenario Play plays for the branches the Flows view shows, one per set
+ * of scenarios in order: the first whose path takes them all, in that order
+ * (a nested set's names come between). Undefined when none does.
  */
-export function markStep<N extends { id: string; className?: string }, E extends { id: string; source: string; target: string; className?: string }>(
-  nodes: N[],
-  edges: E[],
-  step: { from: string; to: string } | null,
-): { nodes: N[]; edges: E[] } {
-  if (!step) return { nodes, edges };
-  const edge = stepEdge(step, edges);
-  return {
-    nodes: nodes.map((n) => (n.id === step.from || n.id === step.to ? { ...n, className: withActive(n.className) } : n)),
-    edges: edge ? edges.map((e) => (e.id === edge ? { ...e, className: withActive(e.className) } : e)) : edges,
-  };
+export function scenarioOfChoice(scenarios: readonly { id: string; name: string }[], names: readonly string[]): string | undefined {
+  return scenarios.find((s) => {
+    const path = pathOf(s.name);
+    let at = 0;
+    for (const name of names) {
+      at = path.indexOf(name, at) + 1;
+      if (at === 0) return false;
+    }
+    return true;
+  })?.id;
+}
+
+/** The branch each set of scenarios shows for a scenario Play plays: its path's names matched to the sets (each its branches' names) in order. */
+export function choiceOfScenario(name: string, sets: readonly (readonly string[])[]): Record<number, string> {
+  const path = pathOf(name);
+  const choice: Record<number, string> = {};
+  let at = 0;
+  sets.forEach((branches, set) => {
+    const i = path.findIndex((p, j) => j >= at && branches.includes(p));
+    if (i < 0) return;
+    choice[set] = path[i];
+    at = i + 1;
+  });
+  return choice;
 }

@@ -2,16 +2,16 @@ import type { Page } from '@playwright/test';
 import lz from 'lz-string';
 import { canvasNodes, expect, setMode, test, waitForCanvas } from './fixtures';
 
-// The Flows pane is a Visual mode tool of wider screens (a phone keeps the list in its sheet, selection-tab.e2e.ts).
+// The Flows view is a Visual mode tool of wider screens (a phone keeps the list in its sheet, selection-tab.e2e.ts).
 test.use({ mode: 'visual' });
 
 /**
- * The Flows pane: on a wider screen Flows opens under the canvas, which gets
- * shorter but stays in view. It draws the chosen use case as a sequence
- * diagram (a lane per component, a numbered message per step, a frame per
- * par block, a tab per scenario), and a step selected there, in the list or
- * with the arrow keys lights up on the canvas. Its height is dragged or keyed,
- * and remembered.
+ * The Flows view: on a wider screen the `Architecture | Flows` switch (or F)
+ * shows Flows over the whole canvas column, the canvas kept under it as it
+ * was. It draws the chosen use case as a sequence diagram (a lane per
+ * component, a numbered message per step, a frame per par block, a frame per
+ * set of scenarios with a tab per branch) on one scrolling surface, and a floating map of the architecture
+ * lights up the selected step.
  */
 
 const SOURCE = `shopper "Shopper" [Browser]
@@ -45,7 +45,10 @@ usecase "Checkout" {
 const link = (source: string) => `app/#code=${lz.compressToEncodedURIComponent(source)}`;
 const flows = (page: Page) => page.getByRole('region', { name: 'Flows' });
 const sequence = (page: Page) => flows(page).getByRole('listbox', { name: 'Sequence of Checkout' });
-const handle = (page: Page) => page.getByRole('separator', { name: 'Resize the flows pane' });
+const map = (page: Page) => page.getByTestId('flows-map');
+const switchTo = (page: Page, view: 'Architecture' | 'Flows') => page.getByRole('group', { name: 'View' }).getByRole('button', { name: view, exact: true });
+/** The ids of the map's lit components, sorted. */
+const litNodes = (page: Page) => map(page).locator('[data-map-node][data-active]').evaluateAll((els) => els.map((e) => e.getAttribute('data-map-node')).sort());
 
 /** The canvas's viewport transform, as React Flow sets it. */
 const viewport = (page: Page) => page.locator('.react-flow__viewport').first().evaluate((el) => (el as HTMLElement).style.transform);
@@ -67,226 +70,336 @@ async function settled(page: Page) {
     .toBe(true);
 }
 
-async function openEditor(page: Page) {
-  await page.goto(link(SOURCE));
+async function openEditor(page: Page, source = SOURCE) {
+  await page.goto(link(source));
   await waitForCanvas(page, 5);
   await settled(page);
 }
 
-test.describe('the Flows pane', () => {
-  test('opens under the canvas, which stays in view above it, and draws the use case as lanes and numbered messages', async ({ page }) => {
+test.describe('the Flows view', () => {
+  test('takes the whole canvas column and draws the use case as lanes and numbered messages', async ({ page }) => {
     await openEditor(page);
-    await page.getByRole('button', { name: 'Flows', exact: true }).click();
-    const pane = flows(page);
-    await expect(pane).toBeVisible();
-    // Below the canvas, across its width, and the canvas still shows every node above it.
     const canvas = (await page.locator('.react-flow').first().boundingBox())!;
-    const box = (await page.getByTestId('flows-pane').boundingBox())!;
-    expect(box.y).toBeGreaterThanOrEqual(canvas.y + canvas.height - 1);
+    await switchTo(page, 'Flows').click();
+    const view = flows(page);
+    await expect(view).toBeVisible();
+    await expect(switchTo(page, 'Flows')).toHaveAttribute('aria-pressed', 'true');
+    // Over the canvas column (the canvas and the rail beside it), the canvas hidden under it.
+    const box = (await page.getByTestId('flows-view').boundingBox())!;
+    expect(box.x).toBeLessThanOrEqual(canvas.x + 1);
     expect(box.width).toBeGreaterThanOrEqual(canvas.width - 1);
-    expect(canvas.height).toBeGreaterThan(200);
-    await settled(page);
-    for (const node of await canvasNodes(page).all()) {
-      const b = (await node.boundingBox())!;
-      expect(b.y + b.height, 'a node below the canvas').toBeLessThanOrEqual(canvas.y + canvas.height + 1);
-    }
+    expect(box.height).toBeGreaterThanOrEqual(canvas.height - 1);
+    await expect(page.locator('.react-flow').first()).toBeHidden();
+    await expect(page.getByRole('separator', { name: /Resize/ })).toHaveCount(0);
 
     // A lane per component, in the order the steps first meet them.
-    await expect(pane.locator('[data-lane]')).toHaveCount(5);
-    expect(await pane.locator('[data-lane]').evaluateAll((els) => els.map((e) => e.getAttribute('data-lane')))).toEqual(['shopper', 'api', 'cache', 'db', 'events']);
-    // The main flow: its own steps, numbered, the scenarios folded and the par block framed.
-    await expect(sequence(page).getByRole('option')).toHaveText(['1POST /checkout', '2GET cart', '3INSERT order', '4PUBLISH OrderPlacedmessage', '5201']);
-    await expect(sequence(page).getByRole('option').nth(4)).toHaveAccessibleName('5. Checkout API answers Shopper: 201 (response)');
-    await expect(pane.locator('[data-frame-title="parallel"]')).toContainText('At the same time');
-    const parallel = (await pane.locator('[data-frame="parallel"]').boundingBox())!;
-    for (const i of [2, 3]) {
+    await expect(view.locator('[data-lane]')).toHaveCount(5);
+    expect(await view.locator('[data-lane]').evaluateAll((els) => els.map((e) => e.getAttribute('data-lane')))).toEqual(['shopper', 'api', 'cache', 'db', 'events']);
+    // The flow, numbered: the set of scenarios a frame where it branches, its first branch shown in it; the par block framed.
+    await expect(sequence(page).getByRole('option')).toHaveText(['1POST /checkout', '2GET cart', '3cart', '4INSERT order', '5PUBLISH OrderPlacedmessage', '6201']);
+    await expect(sequence(page).getByRole('option').nth(5)).toHaveAccessibleName('6. Checkout API answers Shopper: 201 (response)');
+    await expect(view.locator('[data-frame-title="parallel"]')).toContainText('At the same time');
+    const parallel = (await view.locator('[data-frame="parallel"]').boundingBox())!;
+    for (const i of [3, 4]) {
       const b = (await sequence(page).getByRole('option').nth(i).boundingBox())!;
       expect(b.y).toBeGreaterThan(parallel.y);
       expect(b.y + b.height).toBeLessThan(parallel.y + parallel.height);
     }
 
-    // A scenario's tab shows its steps in place of the set.
-    const tabs = pane.getByRole('tablist', { name: 'Scenarios' });
-    await expect(tabs.getByRole('tab')).toHaveText(['Main flow', 'Cart cached', 'Cart expired']);
+    // The set's branches are tabs on its frame, and nowhere else; one shows its steps in the frame, between the shared ones.
+    await expect(view.getByRole('tablist', { name: 'Scenarios' })).toHaveCount(1);
+    const tabs = view.locator('[data-frame-title="scenario"]').getByRole('tablist', { name: 'Scenarios' });
+    await expect(tabs.getByRole('tab')).toHaveText(['Cart cached', 'Cart expired']);
+    await expect(tabs.getByRole('tab', { name: 'Cart cached' })).toHaveAttribute('aria-selected', 'true');
+    const frame = (await view.locator('[data-frame="scenario"]').boundingBox())!;
+    const cart = (await sequence(page).getByRole('option').nth(2).boundingBox())!;
+    expect(cart.y).toBeGreaterThan(frame.y);
+    expect(cart.y + cart.height).toBeLessThan(frame.y + frame.height);
     await tabs.getByRole('tab', { name: 'Cart expired' }).click();
     await expect(tabs.getByRole('tab', { name: 'Cart expired' })).toHaveAttribute('aria-selected', 'true');
     await expect(sequence(page).getByRole('option')).toHaveText(['1POST /checkout', '2GET cart', '3nil', '4SELECT cart', '5INSERT order', '6PUBLISH OrderPlacedmessage', '7201']);
-    await expect(pane.locator('[data-frame-title="scenario"]')).toContainText('Scenario: Cart expired');
-    // The folded set on the main flow opens a scenario's tab too.
-    await tabs.getByRole('tab', { name: 'Main flow' }).click();
-    await pane.getByRole('button', { name: 'Show the scenario Cart cached' }).click();
-    await expect(tabs.getByRole('tab', { name: 'Cart cached' })).toHaveAttribute('aria-selected', 'true');
-    await expect(sequence(page).getByRole('option').nth(2)).toHaveText('3cart');
+    // The bar names the scenario shown.
+    await expect(view.getByTestId('flows-scenario')).toContainText('Cart expired');
 
-    // A new scenario from the header gets its own tab, chosen.
-    await pane.getByRole('button', { name: 'Add scenario', exact: true }).click();
-    const name = pane.getByRole('textbox', { name: 'New scenario' });
+    // A new scenario is named on its tab, in place: no card.
+    await view.getByRole('button', { name: 'Add a scenario here' }).click();
+    const name = view.getByRole('textbox', { name: 'New scenario' });
     await expect(name).toBeFocused();
+    await expect(page.getByRole('dialog', { name: 'Add a scenario' })).toHaveCount(0);
     await name.fill('Out of stock');
     await name.press('Enter');
     await expect(tabs.getByRole('tab', { name: 'Out of stock' })).toHaveAttribute('aria-selected', 'true');
+    await expect(tabs.getByRole('tab')).toHaveText(['Cart cached', 'Cart expired', 'Out of stock']);
   });
 
-  test('a step clicked in the diagram lights up on the canvas and has its form beside it, and Up and Down move it', async ({ page }) => {
+  test('a step clicked in the diagram lights up on the map and has its toolbar over it, and Up and Down move it', async ({ page }) => {
     await openEditor(page);
-    await page.getByRole('button', { name: 'Flows', exact: true }).click();
+    await switchTo(page, 'Flows').click();
+    await expect(map(page)).toBeVisible();
     const options = sequence(page).getByRole('option');
     await options.nth(1).click();
     await expect(options.nth(1)).toHaveAttribute('aria-selected', 'true');
     await expect(options.nth(1)).toBeFocused();
-    // Its two components and the connection it travels, as playback lights a step.
-    await expect(page.locator('.react-flow__node.pc-active')).toHaveCount(2);
-    expect(await page.locator('.react-flow__node.pc-active').evaluateAll((els) => els.map((e) => e.getAttribute('data-id')).sort())).toEqual(['api', 'cache']);
-    await expect(page.locator('.react-flow__edge.pc-active')).toHaveCount(1);
-    const selected = flows(page).getByRole('region', { name: 'Selected step' });
-    const edit = selected.getByRole('form', { name: 'Edit step' });
-    await expect(selected).toContainText('Step 2');
-    await expect(edit.getByRole('combobox', { name: 'Operation' })).toHaveValue('GET cart');
+    // Its two components and the connection it travels, the rest faded.
+    await expect.poll(() => litNodes(page)).toEqual(['api', 'cache']);
+    await expect(map(page).locator('[data-map-edge][data-active]')).toHaveCount(1);
+    await expect(map(page).locator('[data-map-node="shopper"]')).toHaveCSS('opacity', '0.4');
+    const selected = flows(page).getByRole('toolbar', { name: /^Step \d+$/ });
+    await expect(selected).toHaveAccessibleName('Step 2');
 
     await page.keyboard.press('ArrowDown');
-    await expect(options.nth(2)).toHaveAttribute('aria-selected', 'true');
-    await expect(options.nth(2)).toBeFocused();
-    expect(await page.locator('.react-flow__node.pc-active').evaluateAll((els) => els.map((e) => e.getAttribute('data-id')).sort())).toEqual(['api', 'db']);
-    await expect(edit.getByRole('combobox', { name: 'Operation' })).toHaveValue('INSERT order');
+    await page.keyboard.press('ArrowDown');
+    await expect(options.nth(3)).toHaveAttribute('aria-selected', 'true');
+    await expect(options.nth(3)).toBeFocused();
+    await expect.poll(() => litNodes(page)).toEqual(['api', 'db']);
+    await expect(selected).toHaveAccessibleName('Step 4');
+    await page.keyboard.press('ArrowUp');
     await page.keyboard.press('ArrowUp');
     await page.keyboard.press('ArrowUp');
     await expect(options.nth(0)).toHaveAttribute('aria-selected', 'true');
-    expect(await page.locator('.react-flow__node.pc-active').evaluateAll((els) => els.map((e) => e.getAttribute('data-id')).sort())).toEqual(['api', 'shopper']);
+    await expect.poll(() => litNodes(page)).toEqual(['api', 'shopper']);
 
-    // A scenario's step, on its tab, is numbered as that tab draws it; another tab lets it go.
+    // A scenario's step, its branch shown, is numbered as the diagram draws it; another branch of its set lets it go.
     await flows(page).getByRole('tab', { name: 'Cart expired' }).click();
     await sequence(page).getByRole('option', { name: /SELECT cart/ }).click();
     await expect(sequence(page).getByRole('option', { name: /SELECT cart/ })).toHaveAccessibleName(/^4\. /);
-    await expect(selected).toContainText('Step 4');
+    await expect(selected).toHaveAccessibleName('Step 4');
     await flows(page).getByRole('tab', { name: 'Cart cached' }).click();
     await expect(selected).toHaveCount(0);
     await expect(sequence(page).getByRole('option', { selected: true })).toHaveCount(0);
+    await expect.poll(() => litNodes(page)).toEqual([]);
 
-    // Closed, the pane lets the canvas go.
-    await flows(page).getByRole('button', { name: 'Close the flows' }).click();
+    // Back on the architecture, the canvas shows and the view is gone.
+    await switchTo(page, 'Architecture').click();
     await expect(flows(page)).toHaveCount(0);
-    await expect(page.locator('.pc-active')).toHaveCount(0);
+    await expect(page.locator('.react-flow').first()).toBeVisible();
   });
 
-  test('the handle resizes the pane with the mouse and the keys, and the height is remembered', async ({ page }) => {
+  test('F switches the view from the canvas and back, not while typing; the choice is remembered and the canvas keeps its view', async ({ page }) => {
     await openEditor(page);
-    await page.getByRole('button', { name: 'Flows', exact: true }).click();
-    const pane = page.getByTestId('flows-pane');
-    const before = (await pane.boundingBox())!.height;
-    const h = (await handle(page).boundingBox())!;
-    await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(h.x + h.width / 2, h.y - 100, { steps: 6 });
-    await page.mouse.up();
-    await expect.poll(async () => Math.round((await pane.boundingBox())!.height)).toBe(Math.round(before + 100 + h.height / 2));
-    const dragged = Math.round((await pane.boundingBox())!.height);
-    await expect(handle(page)).toHaveAttribute('aria-valuenow', String(dragged));
-
-    await handle(page).focus();
-    await page.keyboard.press('ArrowDown');
-    await expect(handle(page)).toHaveAttribute('aria-valuenow', String(dragged - 24));
-    await page.keyboard.press('ArrowUp');
-    await page.keyboard.press('ArrowUp');
-    await expect(handle(page)).toHaveAttribute('aria-valuenow', String(dragged + 24));
-    // Never past 70% of the column, nor under its least height.
-    await page.keyboard.press('End');
-    const max = Number(await handle(page).getAttribute('aria-valuemax'));
-    await expect(handle(page)).toHaveAttribute('aria-valuenow', String(max));
-    const column = (await page.locator('.react-flow').first().boundingBox())!.height + max;
-    expect(max).toBeLessThanOrEqual(Math.ceil(column * 0.7) + 2);
-    await page.keyboard.press('Home');
-    await expect(handle(page)).toHaveAttribute('aria-valuenow', '160');
-    await page.keyboard.press('Shift+ArrowUp');
-    await expect(handle(page)).toHaveAttribute('aria-valuenow', '256');
-
-    await page.reload();
-    await waitForCanvas(page, 5);
-    await expect(flows(page)).toBeVisible();
-    await expect(handle(page)).toHaveAttribute('aria-valuenow', '256');
-    expect(Math.round((await page.getByTestId('flows-pane').boundingBox())!.height)).toBe(256);
-  });
-
-  test('a view zoomed by hand stays as it is when the pane opens and is resized; an untouched one fits again', async ({ page }) => {
-    await openEditor(page);
-    // Untouched: opening the pane glides the diagram to fit the shorter canvas.
-    const fitted = await viewport(page);
-    await page.getByRole('button', { name: 'Flows', exact: true }).click();
-    await settled(page);
-    expect(await viewport(page)).not.toBe(fitted);
-    await page.getByRole('button', { name: 'Flows', exact: true }).click();
-    await expect(flows(page)).toHaveCount(0);
-    await settled(page);
-
-    // Zoomed by hand: the view is kept.
-    const canvas = (await page.locator('.react-flow__pane').first().boundingBox())!;
-    const whole = await viewport(page);
-    await page.mouse.move(canvas.x + canvas.width / 2, canvas.y + canvas.height / 3);
+    // A view zoomed by hand, which the round trip must keep.
+    const pane = (await page.locator('.react-flow__pane').first().boundingBox())!;
+    await page.mouse.move(pane.x + pane.width / 2, pane.y + pane.height / 3);
     await page.mouse.wheel(0, -300);
     await settled(page);
     const zoomed = await viewport(page);
-    expect(zoomed).not.toBe(whole);
 
-    await page.getByRole('button', { name: 'Flows', exact: true }).click();
+    // F on the canvas: Flows, with the focus in it.
+    await page.mouse.click(pane.x + 20, pane.y + pane.height - 20);
+    await page.keyboard.press('f');
     await expect(flows(page)).toBeVisible();
-    await page.waitForTimeout(700);
-    await settled(page);
+    await expect(switchTo(page, 'Flows')).toHaveAttribute('aria-pressed', 'true');
+    await expect(sequence(page).getByRole('option').first()).toBeFocused();
+
+    // Typed in a field (the label, edited on its arrow), F is a letter; Escape puts the label back.
+    await sequence(page).getByRole('option').nth(1).click();
+    await page.keyboard.press('Enter');
+    const field = flows(page).getByRole('combobox', { name: 'Operation' });
+    await expect(field).toBeFocused();
+    await page.keyboard.press('End');
+    await page.keyboard.type('f');
+    await expect(field).toHaveValue('GET cartf');
+    await expect(flows(page)).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(field).toHaveCount(0);
+
+    // F on the diagram: back to the canvas, focused, its view as it was.
+    await sequence(page).getByRole('option').nth(1).focus();
+    await page.keyboard.press('f');
+    await expect(flows(page)).toHaveCount(0);
+    await expect(switchTo(page, 'Architecture')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('[data-canvas-focus]')).toBeFocused();
     expect(await viewport(page)).toBe(zoomed);
 
-    await handle(page).focus();
-    await page.keyboard.press('ArrowUp');
-    await page.keyboard.press('ArrowUp');
-    const h = (await handle(page).boundingBox())!;
-    await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(h.x + h.width / 2, h.y + 80, { steps: 5 });
-    await page.mouse.up();
-    await page.waitForTimeout(700);
-    await settled(page);
-    expect(await viewport(page)).toBe(zoomed);
+    // Remembered: a reload opens on Flows.
+    await page.keyboard.press('f');
+    await expect(flows(page)).toBeVisible();
+    await page.reload();
+    await expect(sequence(page)).toBeVisible();
+    await expect(switchTo(page, 'Flows')).toHaveAttribute('aria-pressed', 'true');
   });
 
-  test('Code mode has no pane', async ({ page }) => {
+  test('the map lights up a step, collapses to a pill and back (by its buttons or M), and stays as it was left', async ({ page }) => {
     await openEditor(page);
-    await page.getByRole('button', { name: 'Flows', exact: true }).click();
+    await switchTo(page, 'Flows').click();
+    // Open at first on a wide screen, in the bottom right corner of the diagram.
+    await expect(map(page)).toHaveAttribute('aria-label', 'Architecture map');
+    const m = (await map(page).boundingBox())!;
+    const right = await page.locator('[data-flows-scroller]').evaluate((el) => el.getBoundingClientRect().left + el.clientWidth);
+    const view = (await page.getByTestId('flows-view').boundingBox())!;
+    expect(m.x + m.width).toBeLessThanOrEqual(right);
+    expect(m.x + m.width).toBeGreaterThan(right - 40);
+    expect(m.y + m.height).toBeLessThanOrEqual(view.y + view.height);
+    expect(m.y + m.height).toBeGreaterThan(view.y + view.height - 40);
+    // Every component of the use case is drawn, and a selected answer lights the connection it goes back along.
+    await expect(map(page).locator('[data-map-node]')).toHaveCount(5);
+    await sequence(page).getByRole('option', { name: /201/ }).click();
+    await expect.poll(() => litNodes(page)).toEqual(['api', 'shopper']);
+    await expect(map(page).locator('[data-map-edge][data-active]')).toHaveAttribute('data-map-edge', /.+/);
+
+    await map(page).getByRole('button', { name: 'Collapse the architecture map' }).click();
+    await expect(map(page)).toHaveAttribute('aria-label', 'Show the architecture map');
+    await expect(map(page).locator('[data-map-node]')).toHaveCount(0);
+    expect((await map(page).boundingBox())!.height).toBeLessThanOrEqual(40);
+    // M, on the diagram, opens it again and collapses it.
+    await sequence(page).getByRole('option').first().focus();
+    await page.keyboard.press('m');
+    await expect(map(page)).toHaveAttribute('aria-label', 'Architecture map');
+    await page.keyboard.press('m');
+    await expect(map(page)).toHaveAttribute('aria-label', 'Show the architecture map');
+
+    // Collapsed, it stays so after a reload, and the pill opens it.
+    await page.reload();
+    await expect(sequence(page)).toBeVisible();
+    await expect(map(page)).toHaveAttribute('aria-label', 'Show the architecture map');
+    await map(page).click();
+    await expect(map(page)).toHaveAttribute('aria-label', 'Architecture map');
+    await page.reload();
+    await expect(sequence(page)).toBeVisible();
+    await expect(map(page)).toHaveAttribute('aria-label', 'Architecture map');
+  });
+
+  test('Code mode has no Flows view', async ({ page }) => {
+    await openEditor(page);
+    await switchTo(page, 'Flows').click();
     await expect(flows(page)).toBeVisible();
     await setMode(page, 'code');
-    await expect(page.getByTestId('flows-pane')).toHaveCount(0);
+    await expect(page.getByTestId('flows-view')).toHaveCount(0);
     await expect(flows(page)).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Flows', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('group', { name: 'View' })).toHaveCount(0);
+    // F does nothing there.
+    await page.locator('.react-flow__pane').first().click();
+    await page.keyboard.press('f');
+    await expect(flows(page)).toHaveCount(0);
     // Back in Visual mode it is where it was.
     await setMode(page, 'visual');
     await expect(flows(page)).toBeVisible();
   });
 
-  test('practice has the pane too', async ({ page }) => {
+  test('practice has the view too: a use case and its first step, picked on the map', async ({ page }) => {
     await page.goto('practice/#/url-shortener');
     await waitForCanvas(page, 2);
-    await page.getByRole('button', { name: 'Flows', exact: true }).click();
-    const pane = flows(page);
-    await expect(pane).toBeVisible();
-    const canvas = (await page.locator('.react-flow').first().boundingBox())!;
-    expect((await page.getByTestId('flows-pane').boundingBox())!.y).toBeGreaterThanOrEqual(canvas.y + canvas.height - 1);
-    await expect(handle(page)).toBeVisible();
-    // A use case the problem asks for, and its first step from the canvas, drawn in the diagram.
-    const picker = pane.getByRole('combobox', { name: 'Use case' });
+    await switchTo(page, 'Flows').click();
+    const view = flows(page);
+    await expect(view).toBeVisible();
+    await expect(page.locator('.react-flow').first()).toBeHidden();
+    // A new use case: its draft starts at the visitor, and the map picks what it calls.
+    const picker = view.getByRole('combobox', { name: 'Use case' });
     await expect(picker).toBeVisible();
-    await pane.getByRole('button', { name: 'New use case' }).first().click();
-    const name = pane.getByRole('textbox', { name: 'New use case' });
+    await view.getByRole('button', { name: 'New use case' }).first().click();
+    const name = view.getByRole('textbox', { name: 'New use case' });
     await name.fill('Try it');
     await name.press('Enter');
-    await pane.getByRole('button', { name: 'Add a step', exact: true }).click();
-    const step = pane.getByRole('form', { name: 'New step' });
-    await canvasNodes(page).filter({ hasText: 'Visitor' }).click();
-    await canvasNodes(page).filter({ hasText: 'Shortener API' }).click();
-    await step.getByRole('combobox', { name: 'Operation' }).fill('GET /abc');
-    await step.getByRole('button', { name: 'Add step' }).click();
-    const option = pane.getByRole('listbox', { name: 'Sequence of Try it' }).getByRole('option');
+    await expect(picker).toHaveText(/Try it/);
+    const draft = view.locator('[data-draft]');
+    await expect(draft.locator('[data-draft-status]')).toHaveText(/^Visitor starts\./);
+    await map(page).getByRole('button', { name: 'Shortener API', exact: true }).click();
+    await draft.getByRole('combobox', { name: 'Operation' }).fill('GET /abc');
+    await page.keyboard.press('Enter');
+    const option = view.getByRole('listbox', { name: 'Sequence of Try it' }).getByRole('option');
     await expect(option).toHaveText(['1GET /abc']);
-    // Selected, it lights up on the practice canvas too.
-    await step.getByRole('button', { name: 'Done' }).click();
+    // Selected, it lights up on the map.
+    await page.keyboard.press('Escape');
     await option.click();
     await expect(option).toHaveAttribute('aria-selected', 'true');
-    expect(await page.locator('.react-flow__node.pc-active').evaluateAll((els) => els.map((e) => e.getAttribute('data-id')).sort())).toEqual(['api', 'visitor']);
-    await expect(page.locator('.react-flow__edge.pc-active')).toHaveCount(1);
+    await expect.poll(() => litNodes(page)).toEqual(['api', 'visitor']);
+    await expect(map(page).locator('[data-map-edge][data-active]')).toHaveCount(1);
+  });
+});
+
+/** Many steps between lanes with long names: taller and wider than the view at 1024x768. */
+const LONG = `${['gateway "Public API gateway"', 'orders "Order orchestration service"', 'payments "Payment authorisation service"', 'fraud "Fraud scoring service"', 'search "Product search indexer"', 'ledger "Accounting ledger writer"', 'mail "Customer notification sender"', 'audit "Compliance audit trail"']
+  .map((n) => `${n} [REST API]`)
+  .join('\n')}
+
+usecase "Checkout" {
+${Array.from({ length: 14 }, (_, i) => `  gateway -> orders : POST /orders/${i}/confirm-and-reserve
+  orders -> payments : POST /authorise-payment-${i}
+  payments -> fraud : POST /score-the-payment-${i}
+  orders -> search : POST /reindex-the-products-${i}
+  payments --> orders : 201
+  orders -> audit : POST /audit-record-${i}`).join('\n')}
+}
+`;
+
+test.describe('one scrolling surface', () => {
+  test.use({ viewport: { width: 1024, height: 768 } });
+
+  test('nothing in the view scrolls but the view itself: down and sideways on one surface, the lane headers pinned', async ({ page }) => {
+    await page.goto(link(LONG));
+    await waitForCanvas(page, 7);
+    await switchTo(page, 'Flows').click();
+    await expect(sequence(page)).toBeVisible();
+    // Every element in the view (the diagram, the toolbar, the label's field, the details card, the composer, the map,
+    // the bar) and the label's list, drawn outside it: one with a scroll of its own.
+    const scrollers = () =>
+      page.evaluate(() =>
+        [...Array.from(document.querySelectorAll('[data-testid="flows-view"], [data-testid="flows-view"] *')), ...Array.from(document.querySelectorAll('[role="listbox"][aria-label="Labels"], [role="listbox"][aria-label="Labels"] *'))]
+          .filter((el) => /(auto|scroll)/.test(`${getComputedStyle(el).overflowX} ${getComputedStyle(el).overflowY}`) || (el.getAttribute('aria-label') === 'Labels' && el.scrollHeight > el.clientHeight))
+          .map((el) => (el.hasAttribute('data-flows-scroller') ? 'surface' : el.outerHTML.slice(0, 120))),
+      );
+    expect(await scrollers()).toEqual(['surface']);
+    // A step selected (its toolbar over it), its label edited with its list open, its details card, and the composer open: still one.
+    await sequence(page).getByRole('option').nth(3).click();
+    expect(await scrollers()).toEqual(['surface']);
+    await page.keyboard.press('Enter');
+    await flows(page).getByRole('combobox', { name: 'Operation' }).fill('');
+    await expect(page.getByRole('listbox', { name: 'Labels' })).toBeVisible();
+    expect(await scrollers()).toEqual(['surface']);
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('d');
+    await expect(flows(page).getByRole('dialog', { name: 'Details of step 4' })).toBeVisible();
+    expect(await scrollers()).toEqual(['surface']);
+    await page.keyboard.press('Escape');
+    await flows(page).locator('[data-lane]').first().hover();
+    await flows(page).getByRole('button', { name: 'Add a step before step 3', exact: true }).click();
+    // The draft, with its label's list open: still one.
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('listbox', { name: 'Labels' })).toBeVisible();
+    expect(await scrollers()).toEqual(['surface']);
+    await page.keyboard.press('Escape');
+    await expect(flows(page).locator('[data-draft]')).toHaveCount(0);
+    // The surface scrolls both ways; scrolled, the lane headers stay at its top.
+    const surface = page.locator('[data-flows-scroller]');
+    const size = await surface.evaluate((el) => ({ down: el.scrollHeight > el.clientHeight, across: el.scrollWidth > el.clientWidth, top: el.getBoundingClientRect().top }));
+    expect(size).toMatchObject({ down: true, across: true });
+    await surface.evaluate((el) => el.scrollTo(0, 600));
+    const lane = (await flows(page).locator('[data-lane="gateway"]').boundingBox())!;
+    expect(Math.abs(lane.y - size.top)).toBeLessThanOrEqual(12);
+    // Scrolled to the far end, the last lane is in sight.
+    await surface.evaluate((el) => el.scrollTo(10_000, 0));
+    const last = (await flows(page).locator('[data-lane="audit"]').boundingBox())!;
+    const right = await surface.evaluate((el) => el.getBoundingClientRect().left + el.clientWidth);
+    expect(last.x + last.width).toBeLessThanOrEqual(right + 1);
+  });
+
+  test('a first scenario is named on its tab, on an empty frame at the end: nothing covers its field, and Escape leaves the text as it was', async ({ page }) => {
+    await page.goto(link(SOURCE.replace(/ {2}alt "Cart cached" \{\n[\s\S]*?\n {2}\}\n/, '')));
+    await waitForCanvas(page, 5);
+    await switchTo(page, 'Flows').click();
+    await expect(sequence(page)).toBeVisible();
+    // With no scenarios, the bar offers the first; with some, their frames' tabs do.
+    const add = flows(page).getByRole('button', { name: 'Add scenario', exact: true });
+    await add.click();
+    await expect(add).toHaveCount(0);
+    const name = flows(page).getByRole('textbox', { name: 'New scenario' });
+    await expect(name).toBeFocused();
+    // On an empty frame after the last step, its field its own: nothing painted over it.
+    const frame = (await flows(page).locator('[data-frame="scenario"]').boundingBox())!;
+    const last = (await sequence(page).getByRole('option').last().boundingBox())!;
+    expect(frame.y).toBeGreaterThanOrEqual(last.y + last.height);
+    expect(await name.evaluate((el) => { const r = el.getBoundingClientRect(); return el.contains(document.elementFromPoint(r.left + 20, r.top + r.height / 2)); })).toBe(true);
+    // Escape: nothing written, the frame gone, the bar's button back.
+    await name.press('Escape');
+    await expect(flows(page).locator('[data-frame="scenario"]')).toHaveCount(0);
+    await expect(add).toBeVisible();
+    // Typed and Enter: its frame and its one tab, chosen.
+    await add.click();
+    await name.fill('Out of stock');
+    await name.press('Enter');
+    await expect(flows(page).getByRole('tab', { name: 'Out of stock' })).toHaveAttribute('aria-selected', 'true');
+    await expect(add).toHaveCount(0);
+    await expect(flows(page).getByTestId('flows-scenario')).toContainText('Out of stock');
   });
 });

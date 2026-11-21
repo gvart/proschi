@@ -1,42 +1,59 @@
-import type { OutlineBranchItem, OutlineItem, OutlineStep, UseCaseOutline } from '../../dsl/edit';
+import type { OutlineBranchItem, OutlineItem, OutlineStep, StepPlace, UseCaseOutline } from '../../dsl/edit';
 
 /**
- * The Flows pane's sequence diagram (FlowsPane.tsx, SequenceDiagram.tsx), as
+ * The Flows view's sequence diagram (FlowsView.tsx, SequenceDiagram.tsx), as
  * plain functions: what one tab shows of a use case's outline, the order of
  * its lanes, and where each lane, message and frame goes. It reads the
  * line-addressed outline (dsl/edit.ts outlineOf), so every message is the
  * step on one line of the text, which the edits address.
  */
 
-/** What a tab shows, in text order. */
+/** What the view shows, in text order. */
 export type SequenceEntry =
   | { kind: 'step'; step: OutlineStep }
   | { kind: 'parallel'; line: number; steps: OutlineStep[]; other: number }
-  /** The chosen scenario's branch, in place of its set of alternatives. */
-  | { kind: 'scenario'; name: string; line: number; entries: SequenceEntry[]; other: number }
-  /** A set of alternatives whose steps another tab shows. */
-  | { kind: 'scenarios'; line: number; names: string[] }
+  /**
+   * A set of alternatives, as the branch chosen in it: its name and line, its steps, what in it is left to the code,
+   * the set's place among the use case's sets (the first is 0) and the names of all its branches, its tabs.
+   */
+  | { kind: 'scenario'; name: string; line: number; entries: SequenceEntry[]; other: number; set: number; names: string[] }
   /** A block left to the code. */
   | { kind: 'other'; line: number };
+
+/** The branch chosen in each set of alternatives, by the set's place among the use case's sets (the first is 0). */
+export type BranchChoice = Readonly<Record<number, string>>;
 
 const branchEntries = (items: OutlineBranchItem[]): SequenceEntry[] =>
   items.map((i) => (i.kind === 'step' ? i : { kind: 'parallel', line: i.block.line, steps: i.block.steps, other: i.block.other }));
 
 /**
- * What the tab of `scenario` shows: the main flow's steps and `par` blocks,
- * with the chosen scenario's branch in place of its set of alternatives. The
- * main flow (`scenario` empty) shows each set folded, to be opened on its tab.
+ * What the view shows: the main flow's steps and `par` blocks, and each set
+ * of alternatives as the branch `choice` picks in it (by default its first),
+ * the steps before and after it shared by every branch.
  */
-export function sequenceEntries(items: OutlineItem[], scenario: string): SequenceEntry[] {
+export function sequenceEntries(items: OutlineItem[], choice: BranchChoice = {}): SequenceEntry[] {
+  let set = -1;
   return items.map((item): SequenceEntry => {
     if (item.kind === 'step' || item.kind === 'other') return item.kind === 'step' ? item : { kind: 'other', line: item.line };
     if (item.kind === 'parallel') return { kind: 'parallel', line: item.block.line, steps: item.block.steps, other: item.block.other };
-    const chosen = scenario ? item.branches.find((b) => b.name === scenario) : undefined;
-    if (!chosen) return { kind: 'scenarios', line: item.branches[0]?.line ?? 0, names: item.branches.map((b) => b.name) };
+    set++;
+    const chosen = item.branches.find((b) => b.name === choice[set]) ?? item.branches[0];
     // The par blocks are counted in `other` too; only what the outline does not show is left.
     const other = chosen.other - chosen.items.filter((i) => i.kind === 'parallel').length;
-    return { kind: 'scenario', name: chosen.name, line: chosen.line, entries: branchEntries(chosen.items), other };
+    return { kind: 'scenario', name: chosen.name, line: chosen.line, entries: branchEntries(chosen.items), other, set, names: item.branches.map((b) => b.name) };
   });
+}
+
+/** The set of alternatives (its place among the use case's sets) whose branch `name` has the step on `line`, or undefined for none. */
+export function setOfStep(items: OutlineItem[], line: number): { set: number; name: string } | undefined {
+  let set = -1;
+  for (const item of items) {
+    if (item.kind !== 'scenarios') continue;
+    set++;
+    const branch = item.branches.find((b) => b.items.some((i) => (i.kind === 'step' ? i.step.line === line : i.block.steps.some((s) => s.line === line))));
+    if (branch) return { set, name: branch.name };
+  }
+  return undefined;
 }
 
 /** Every step a tab shows, in the order drawn (and numbered). */
@@ -94,14 +111,14 @@ const sameEnds = (a: OutlineStep, b: OutlineStep) => a.from === b.from && a.to =
 
 /**
  * The selected step after the text changed: the step on its line while it is
- * still the same call (its label may have been edited), else the one step
+ * still the same call between the same two (its label or kind may have been edited), else the one step
  * with the same ends, kind and label (it was moved, or lines were added
  * above it), else none.
  */
 export function followStep(selected: OutlineStep | undefined, steps: OutlineStep[]): OutlineStep | undefined {
   if (!selected) return undefined;
   const at = steps.find((s) => s.line === selected.line);
-  if (at && sameEnds(at, selected)) return at;
+  if (at && at.from === selected.from && at.to === selected.to) return at;
   const same = steps.filter((s) => sameEnds(s, selected) && s.label === selected.label);
   return same.length === 1 ? same[0] : undefined;
 }
@@ -140,6 +157,8 @@ export const SEQ = {
   labelChrome: 44,
   /** How far a message to its own lane loops out. */
   loop: 44,
+  /** The "Add step" row at the end of the flow and of each frame. */
+  add: 30,
 } as const;
 
 export interface LaneBox {
@@ -148,6 +167,8 @@ export interface LaneBox {
   x: number;
   /** Its header's width. */
   width: number;
+  /** No step in sight touches it, and the lanes did not fit: a sliver with its icon, unfolded by a click. */
+  folded?: boolean;
 }
 
 export interface MessageBox {
@@ -166,19 +187,23 @@ export interface MessageBox {
 export interface FrameBox {
   kind: 'parallel' | 'scenario';
   title: string;
-  /** The line that opens it. */
+  /** The line that opens it (a scenario's: its chosen branch's; -1 for a set being started, not in the text yet). */
   line: number;
   x: number;
   y: number;
   width: number;
   height: number;
+  /** A set of alternatives: its place among the use case's sets, its branches (its tabs) and the one shown. */
+  set?: number;
+  names?: string[];
+  chosen?: string;
+  /** Its title strip's height: taller while a branch is named in it, with the problem's names under it. */
+  head: number;
 }
 
 export interface NoteBox {
-  kind: 'scenarios' | 'other' | 'empty';
+  kind: 'other' | 'empty';
   line: number;
-  /** The scenarios of a folded set. */
-  names: string[];
   x: number;
   y: number;
   width: number;
@@ -186,13 +211,13 @@ export interface NoteBox {
 }
 
 /**
- * Where a step can be added (dsl/edit.ts): before or right after the step on
- * a line (in its block), at the end of a scenario's branch or of a `par`
- * block, or at the end of the main flow. `after` is drawn only where a block
- * follows the step (elsewhere it is "before" the next one), and is where a
- * reply goes.
+ * Where a step can be added or moved to (dsl/edit.ts StepPlace): before or
+ * right after the step on a line (in its block), at the end of a scenario's
+ * branch or of a `par` block, or at the end of the main flow. `after` is
+ * drawn only where a block follows the step (elsewhere it is "before" the
+ * next one), and is where a reply goes.
  */
-export type Slot = { kind: 'before' | 'after'; line: number } | { kind: 'scenario'; name: string } | { kind: 'par'; line: number } | { kind: 'end' };
+export type Slot = StepPlace;
 
 export interface SlotBox {
   slot: Slot;
@@ -205,6 +230,21 @@ export interface SlotBox {
 
 export const sameSlot = (a: Slot, b: Slot) => a.kind === b.kind && (a.kind === 'end' || (a.kind === 'scenario' ? a.name === (b as { name: string }).name : a.line === (b as { line: number }).line));
 
+/** The row of a step being drafted: its insertion point, and the band it takes. */
+export interface DraftBox {
+  slot: Slot;
+  top: number;
+  height: number;
+}
+
+/** An "Add step" row: the end of the flow or of a frame (its slot), its left edge, top and width. */
+export interface AddBox {
+  slot: Slot;
+  x: number;
+  y: number;
+  width: number;
+}
+
 export interface SequenceLayout {
   lanes: LaneBox[];
   messages: MessageBox[];
@@ -212,9 +252,38 @@ export interface SequenceLayout {
   notes: NoteBox[];
   /** The insertion points, top to bottom. */
   slots: SlotBox[];
+  /** The step being drafted, when there is one. */
+  draft?: DraftBox;
+  /** The "Add step" rows, when asked for. */
+  adds: AddBox[];
   width: number;
   height: number;
 }
+
+/** What the view adds to the rows of the text: room under a step, a draft's row, the "Add step" rows. */
+export interface LayoutExtras {
+  /** Room under the step on `line` (its toolbar, its details card), which the rows below it make by moving down. */
+  room?: { line: number; below: number };
+  /** A step being drafted at `slot`: a row `height` tall there. */
+  draft?: { slot: Slot; height: number };
+  /** An "Add step" row at the end of the flow and of each frame. */
+  adds?: boolean;
+  /**
+   * A branch being named in a set's title strip (the set's place; -1 for a first set, drawn as an empty frame at the
+   * end of the main flow): the strip is `height` taller, for the problem's names under the field.
+   */
+  naming?: { set: number; height: number };
+  /** Lanes no step in sight touches, folded to a sliver when the lanes do not fit the width. */
+  idle?: string[];
+}
+
+/** A folded lane's width. */
+export const FOLDED = 28;
+/** A branch's tab: its name's width (cut at 160) and padding; the strip's "+" and menu after the tabs. */
+const tabWidth = (name: string, measure: Measure) => Math.min(160, measure.name(name)) + 26;
+const TABS_CHROME = 150;
+/** A branch's name field in its strip. */
+const NAMING_W = 190;
 
 export interface Measure {
   /** A lane header's text width (the component's name). */
@@ -241,10 +310,19 @@ const headerWidth = (name: string, measure: Measure) => Math.min(SEQ.headerMax, 
  * cut shorter then, and past that the diagram is wider than its pane. Rows follow the text, a frame around each `par` block
  * and the chosen scenario's branch.
  */
-export function layoutSequence(entries: SequenceEntry[], laneIds: string[], names: (id: string) => string, measure: Measure = ESTIMATE, fit?: number): SequenceLayout {
+export function layoutSequence(entries: SequenceEntry[], laneIds: string[], names: (id: string) => string, measure: Measure = ESTIMATE, fit?: number, extras: LayoutExtras = {}): SequenceLayout {
+  const plain = laidOut(entries, laneIds, names, measure, fit, extras, new Set());
+  // Too wide for the width it has: the lanes no step in sight touches fold, before the view scrolls sideways.
+  const idle = (extras.idle ?? []).filter((id) => laneIds.includes(id));
+  if (fit === undefined || plain.width <= fit || idle.length === 0) return plain;
+  return laidOut(entries, laneIds, names, measure, fit, extras, new Set(idle));
+}
+
+function laidOut(entries: SequenceEntry[], laneIds: string[], names: (id: string) => string, measure: Measure, fit: number | undefined, extras: LayoutExtras, folded: Set<string>): SequenceLayout {
   const index = new Map(laneIds.map((id, i) => [id, i]));
-  const widths = laneIds.map((id) => headerWidth(names(id), measure));
-  const headers = widths.slice(1).map((w, i) => Math.max(SEQ.minGap, (widths[i] + w) / 2 + 20));
+  const widths = laneIds.map((id) => (folded.has(id) ? FOLDED : headerWidth(names(id), measure)));
+  // Beside a folded lane, only the headers' room.
+  const headers = widths.slice(1).map((w, i) => (folded.has(laneIds[i]) || folded.has(laneIds[i + 1]) ? (widths[i] + w) / 2 + 10 : Math.max(SEQ.minGap, (widths[i] + w) / 2 + 20)));
   const steps = entrySteps(entries);
   const labelOf = (s: OutlineStep) => Math.min(SEQ.labelMax, measure.label(s.label || ' '));
   /** The word after a message's or a failed call's label. */
@@ -288,7 +366,7 @@ export function layoutSequence(entries: SequenceEntry[], laneIds: string[], name
   }
   const xs: number[] = [];
   laneIds.forEach((_, i) => xs.push(i === 0 ? left : xs[i - 1] + gaps[i - 1]));
-  const lanes = laneIds.map((id, i) => ({ id, x: Math.round(xs[i]), width: widths[i] }));
+  const lanes: LaneBox[] = laneIds.map((id, i) => ({ id, x: Math.round(xs[i]), width: widths[i], ...(folded.has(id) ? { folded: true } : {}) }));
   const laneX = (id: string) => lanes[index.get(id) ?? 0]?.x ?? left;
   const firstX = lanes[0]?.x ?? left;
   const lastX = lanes.at(-1)?.x ?? left;
@@ -297,10 +375,18 @@ export function layoutSequence(entries: SequenceEntry[], laneIds: string[], name
   const frames: FrameBox[] = [];
   const notes: NoteBox[] = [];
   const slots: SlotBox[] = [];
+  const adds: AddBox[] = [];
+  let draft: DraftBox | undefined;
   /** The left edge of the frame being laid out, where its "+"s go; the diagram's own left edge is fixed up after the shift. */
   let edge = 0;
   let y = SEQ.top;
   let n = 0;
+  /** The draft's row, if it goes at `slot`. */
+  const drafted = (slot: Slot) => {
+    if (!extras.draft || draft || !sameSlot(extras.draft.slot, slot)) return;
+    draft = { slot: extras.draft.slot, top: y, height: extras.draft.height };
+    y += extras.draft.height;
+  };
 
   /** Lays out `list` from the current row; returns the horizontal reach of its messages. */
   const place = (list: SequenceEntry[], level: number): { lo: number; hi: number } => {
@@ -312,16 +398,21 @@ export function layoutSequence(entries: SequenceEntry[], laneIds: string[], name
     };
     const message = (step: OutlineStep) => {
       slots.push({ slot: { kind: 'before', line: step.line }, x: edge, y, index: n });
+      drafted({ kind: 'before', line: step.line });
       const x1 = laneX(step.from);
       const self = step.from === step.to;
       const x2 = self ? x1 : laneX(step.to);
       messages.push({ step, n: ++n, y: y + SEQ.row / 2, x1, x2, labelWidth: labelOf(step) });
       reach(Math.min(x1, x2), self ? x1 + SEQ.loop : Math.max(x1, x2));
       y += SEQ.row;
+      if (extras.room?.line === step.line) y += extras.room.below;
+      drafted({ kind: 'after', line: step.line });
     };
-    const frame = (kind: FrameBox['kind'], title: string, line: number, end: Slot, body: () => { lo: number; hi: number }) => {
+    const frame = (kind: FrameBox['kind'], title: string, line: number, end: Slot | undefined, body: () => { lo: number; hi: number }, set?: { set: number; names: string[]; chosen: string }) => {
       const top = y;
-      y += SEQ.frameHead;
+      const naming = set && extras.naming?.set === set.set;
+      const head = SEQ.frameHead + (naming ? extras.naming!.height : 0);
+      y += head;
       // Where the frame will be is known once its body is: its "+"s are fixed up below.
       const first = slots.length;
       const outer = edge;
@@ -331,20 +422,29 @@ export function layoutSequence(entries: SequenceEntry[], laneIds: string[], name
       const from = Number.isFinite(inner.lo) ? inner.lo : firstX;
       const to = Number.isFinite(inner.hi) ? inner.hi : Math.max(lastX, firstX + SEQ.minGap);
       const x = from - pad;
-      const width = Math.max(to + pad - x, measure.name(title) + 40 + (kind === 'parallel' ? SEQ.frameActions : 0));
-      slots.push({ slot: end, x: NaN, y: y + 2, index: n });
+      // A set's strip holds its tabs (and the name field of one being named); a par block's, its actions.
+      const strip = set ? set.names.reduce((w, nm) => w + tabWidth(nm, measure), TABS_CHROME) + (naming ? NAMING_W : 0) : measure.name(title) + 40 + (kind === 'parallel' ? SEQ.frameActions : 0);
+      const width = Math.max(to + pad - x, strip);
+      if (end) {
+        drafted(end);
+        slots.push({ slot: end, x: NaN, y: y + 2, index: n });
+        if (extras.adds) {
+          adds.push({ slot: end, x: x + 4, y: y + 2, width: width - 8 });
+          y += SEQ.add;
+        }
+      }
       for (const s of slots.slice(first)) if (Number.isNaN(s.x)) s.x = x + 4;
       edge = outer;
       y += SEQ.frameFoot;
-      frames.push({ kind, title, line, x, y: top, width, height: y - top });
+      frames.push({ kind, title, line, x, y: top, width, height: y - top, head, ...(set ? { set: set.set, names: set.names, chosen: set.chosen } : {}) });
       reach(x, x + width);
     };
-    const note = (kind: NoteBox['kind'], line: number, names: string[] = [], at = level) => {
+    const note = (kind: NoteBox['kind'], line: number, at = level) => {
       // Inside a frame, a little inside its edge.
       const pad = SEQ.framePad - 10 * at;
       const x = firstX - pad;
       const width = Math.max(lastX + pad, firstX + 260) - x;
-      notes.push({ kind, line, names, x, y: y + 4, width, height: SEQ.note - 8 });
+      notes.push({ kind, line, x, y: y + 4, width, height: SEQ.note - 8 });
       y += SEQ.note;
     };
     for (const [k, e] of list.entries()) {
@@ -358,23 +458,44 @@ export function layoutSequence(entries: SequenceEntry[], laneIds: string[], name
             e.steps.map((step) => ({ kind: 'step', step })),
             level + 1,
           );
-          if (e.steps.length === 0) note('empty', e.line, [], level + 1);
+          if (e.steps.length === 0) note('empty', e.line, level + 1);
           return inner;
         });
       else if (e.kind === 'scenario')
-        frame('scenario', `Scenario: ${e.name}`, e.line, { kind: 'scenario', name: e.name }, () => {
-          const inner = place(e.entries, level + 1);
-          if (e.entries.length === 0) note('empty', e.line, [], level + 1);
-          if (e.other > 0) note('other', e.line, [], level + 1);
-          return inner;
-        });
-      else if (e.kind === 'scenarios') note('scenarios', e.line, e.names);
+        frame(
+          'scenario',
+          `Scenario: ${e.name}`,
+          e.line,
+          { kind: 'scenario', name: e.name },
+          () => {
+            const inner = place(e.entries, level + 1);
+            if (e.entries.length === 0 && e.other === 0) note('empty', e.line, level + 1);
+            if (e.other > 0) note('other', e.line, level + 1);
+            return inner;
+          },
+          { set: e.set, names: e.names, chosen: e.name },
+        );
       else note('other', e.line);
     }
     return { lo, hi };
   };
   place(entries, 0);
+  if (extras.naming?.set === -1) {
+    // A first set of alternatives being started: an empty frame at the end of the main flow, its first branch being named.
+    const top = y;
+    const head = SEQ.frameHead + extras.naming.height;
+    y += head + SEQ.note + SEQ.frameFoot;
+    const x = firstX - SEQ.framePad;
+    const width = Math.max(Math.max(lastX, firstX + SEQ.minGap) + SEQ.framePad - x, TABS_CHROME + NAMING_W);
+    frames.push({ kind: 'scenario', title: 'New scenario', line: -1, x, y: top, width, height: y - top, head, set: -1, names: [], chosen: '' });
+  }
+  drafted({ kind: 'end' });
   slots.push({ slot: { kind: 'end' }, x: 0, y: y + 6, index: n });
+  if (extras.adds) {
+    // Its width is the diagram's, known below.
+    adds.push({ slot: { kind: 'end' }, x: 0, y: y + 4, width: 0 });
+    y += SEQ.add;
+  }
   y += SEQ.bottom;
 
   // Everything right of zero, and the width to the farthest frame, label or header.
@@ -395,11 +516,18 @@ export function layoutSequence(entries: SequenceEntry[], laneIds: string[], name
     for (const f of frames) f.x += shift;
     for (const nb of notes) nb.x += shift;
     for (const s of slots) if (s.x > 0) s.x += shift;
+    for (const a of adds) if (a.x > 0) a.x += shift;
   }
   // The main flow's "+"s at the very left, in the margin.
   for (const s of slots) if (s.x === 0) s.x = 2;
   const width = Math.ceil(Math.max(0, ...rights) + shift + SEQ.margin);
-  return { lanes, messages, frames, notes, slots, width, height: Math.ceil(y) };
+  // The main flow's "Add step" row: from the left margin to the last lane.
+  for (const a of adds)
+    if (a.x === 0) {
+      a.x = 2;
+      a.width = Math.max(220, (lanes.at(-1)?.x ?? 0) + 24 - a.x);
+    }
+  return { lanes, messages, frames, notes, slots, draft, adds, width, height: Math.ceil(y) };
 }
 
 /** How deep the frames nest: 1 for a `par` block or a scenario, 2 for a `par` block in a scenario. */
