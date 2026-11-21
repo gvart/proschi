@@ -129,7 +129,7 @@ const ADDER_W = 96;
 const DRAFT_H = SEQ.row + 30;
 /** What is under a selected step keeps this far from the row boundaries (and their "+"s) above and below it. */
 const UNDER_GAP = 12;
-/** A set's strip grows by this for the problem's names under a branch being named. */
+/** A set's strip grows by this for the problem's names under a branch being named, until their row is measured. */
 const CHIPS_H = 30;
 /** How far a message is dragged before it moves rather than is clicked. */
 const DRAG_START = 6;
@@ -193,7 +193,9 @@ export default function SequenceDiagram({
   }, [entries, own, unfolded, draft?.from, draft?.to]);
   const idleKey = idle.join(' ');
   const naming = tabs?.naming;
-  const namingHeight = naming !== undefined && tabs!.suggestions.length > 0 ? CHIPS_H : 0;
+  /** The problem's names under a branch being named, as tall as their row wraps to. */
+  const [chipsHeight, setChipsHeight] = useState(CHIPS_H);
+  const namingHeight = naming !== undefined && tabs!.suggestions.length > 0 ? chipsHeight : 0;
 
   // What goes under the selected step (its toolbar, its card) and under a label being edited (its warnings): the rows
   // below move down to make room for it, so it covers nothing.
@@ -313,21 +315,22 @@ export default function SequenceDiagram({
   const [dragged, setEndDrag] = useState<{ line: number; end: 'from' | 'to'; x: number } | null>(null);
   /** A message dragged up or down by its middle: its line, where the pointer went down and is, and whether it moved far enough to be a drag. */
   const [reorder, setReorder] = useState<{ line: number; y0: number; y: number; active: boolean } | null>(null);
-  /** A drag ends in a click on the message, which must not select it again. */
-  const dropAt = useRef(0);
+  /** A drag ends in a click on the message dragged (its line, when), which must not select it again. */
+  const dropAt = useRef({ line: -1, at: 0 });
   // Escape lets a message's drag go, where it was.
   useEffect(() => {
-    if (!reorder?.active) return;
+    const line = reorder?.active ? reorder.line : undefined;
+    if (line === undefined) return;
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       e.preventDefault();
       e.stopPropagation();
       setReorder(null);
-      dropAt.current = Date.now();
+      dropAt.current = { line, at: Date.now() };
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [reorder?.active]);
+  }, [reorder?.active, reorder?.line]);
   /** The row boundary under the pointer, whose "+" shows. */
   const [hoverSlot, setHoverSlot] = useState<string>();
   // Escape lets the drag go.
@@ -677,7 +680,7 @@ export default function SequenceDiagram({
           ))}
         {layout.frames.map((f) =>
           f.kind === 'scenario' ? (
-            <ScenarioStrip key={`s${f.set}`} frame={f} tabs={tabs} className={move} />
+            <ScenarioStrip key={`s${f.set}`} frame={f} tabs={tabs} onChips={setChipsHeight} className={move} />
           ) : (
           <div
             key={`${f.kind}${f.line}`}
@@ -732,7 +735,7 @@ export default function SequenceDiagram({
               selected={selected.includes(m.step.line)}
               focusable={m.step.line === focusable}
               editing={editing?.line === m.step.line}
-              onSelect={(mode) => Date.now() - dropAt.current > 300 && onSelect(m.step, mode)}
+              onSelect={(mode) => (dropAt.current.line !== m.step.line || Date.now() - dropAt.current.at > 300) && onSelect(m.step, mode)}
               onEdit={onEdit}
               dragging={dragging === m}
               drag={
@@ -753,7 +756,7 @@ export default function SequenceDiagram({
                         if (reorder?.line !== m.step.line) return;
                         setReorder(null);
                         if (!reorder.active) return;
-                        dropAt.current = Date.now();
+                        dropAt.current = { line: m.step.line, at: Date.now() };
                         if (dropSlot) onMoveTo(m.step, dropSlot.slot);
                       },
                       onPointerCancel: () => setReorder(null),
@@ -913,7 +916,7 @@ export default function SequenceDiagram({
               ) : (
                 <div aria-hidden="true" style={{ height: SEQ.row - 4 }} />
               )}
-            <div className="pointer-events-auto flex flex-col items-start gap-1.5" style={{ marginLeft: promptLeft, maxWidth: layout.width - promptLeft - 8 }}>
+            <div className="flex flex-col items-start gap-1.5" style={{ marginLeft: promptLeft, maxWidth: layout.width - promptLeft - 8 }}>
               <div data-draft-prompt className={`flex max-w-full items-start gap-2 rounded-sm border-bw-1 border-pop-pink bg-surface px-2.5 py-1 text-ink shadow-brutal-sm ${draft.first ? 'text-base' : 'text-sm'}`}>
                 <span aria-hidden="true" className={`shrink-0 rounded-full bg-pop-pink ${draft.first ? 'mt-2 h-2.5 w-2.5' : 'mt-1.5 h-2 w-2'}`} />
                 <div className="min-w-0">
@@ -928,13 +931,13 @@ export default function SequenceDiagram({
                   type="button"
                   onClick={draft.reply.onTake}
                   title="Add the answer (Enter)"
-                  className="inline-flex items-center gap-1 rounded-sm border-bw-1 border-ink bg-surface px-1.5 py-0.5 text-xs font-semibold shadow-brutal-sm hover:bg-pop-yellow/40"
+                  className="pointer-events-auto inline-flex items-center gap-1 rounded-sm border-bw-1 border-ink bg-surface px-1.5 py-0.5 text-xs font-semibold shadow-brutal-sm hover:bg-pop-yellow/40"
                 >
                   <CornerDownLeft size={12} aria-hidden="true" />
                   {draft.reply.text}
                 </button>
               )}
-              {draft.to && draft.toolbar}
+              {draft.to && <div className="pointer-events-auto">{draft.toolbar}</div>}
             </div>
             </div>
           </div>
@@ -981,7 +984,7 @@ function NameField({ label, value, placeholder, onDone }: { label: string; value
  * renames it), a menu on the one shown (rename, delete), and "+" to name a new one on its tab, with the problem's
  * scenarios under it to pick. A first set (-1) is only being named.
  */
-function ScenarioStrip({ frame, tabs, className }: { frame: FrameBox; tabs?: ScenarioTabs; className: string }) {
+function ScenarioStrip({ frame, tabs, onChips, className }: { frame: FrameBox; tabs?: ScenarioTabs; onChips: (height: number) => void; className: string }) {
   const set = frame.set!;
   const names = frame.names ?? [];
   const [renaming, setRenaming] = useState<string>();
@@ -989,6 +992,18 @@ function ScenarioStrip({ frame, tabs, className }: { frame: FrameBox; tabs?: Sce
   const chosen = frame.chosen ?? '';
   const refusal = tabs && chosen ? tabs.refusal(set, chosen) : undefined;
   const icon = 'grid h-6 w-6 shrink-0 place-items-center rounded-sm text-ink/70 hover:bg-pop-yellow/40 hover:text-ink focus-visible:outline-2 focus-visible:outline-ink';
+  // The names' row, wrapped to the frame's width: the strip makes room for all of it (its margin and a gap under it).
+  const chipsRef = useRef<HTMLDivElement>(null);
+  const chipsShown = naming && !!tabs && tabs.suggestions.length > 0;
+  useLayoutEffect(() => {
+    const el = chipsRef.current;
+    if (!chipsShown || !el) return;
+    const measure = () => onChips(el.offsetHeight + 8);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [chipsShown, onChips]);
   return (
     <div data-frame-title="scenario" data-set={set} className={`absolute z-20 flex flex-col items-start ${className}`} style={{ left: frame.x + 1, top: frame.y + 1, maxWidth: frame.width - 2 }}>
       <div className="flex max-w-full items-center gap-1 whitespace-nowrap rounded-br-sm border-b border-r border-dashed border-ink/50 bg-pop-yellow/30 py-0.5 pl-1.5 pr-0.5">
@@ -1058,7 +1073,7 @@ function ScenarioStrip({ frame, tabs, className }: { frame: FrameBox; tabs?: Sce
         )}
       </div>
       {naming && tabs && tabs.suggestions.length > 0 && (
-        <div role="group" aria-label="Scenarios the problem asks for" className="mt-1 flex flex-wrap items-center gap-1 pl-1.5">
+        <div ref={chipsRef} role="group" aria-label="Scenarios the problem asks for" className="mt-1 flex flex-wrap items-center gap-1 pl-1.5">
           <span className="text-xs text-muted">Suggested:</span>
           {tabs.suggestions.map((s) => (
             <button
