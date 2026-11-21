@@ -43,17 +43,14 @@ import { insertAt, insertedStep, movedStep, samePlaces, unanswered } from './seq
 
 /**
  * The Flows builder (docs/design/paid-plans.md P46): use cases and their
- * scenarios without code. Pick a use case in the select, or add one from its
- * last options (a suggestion, or "New use case…" and a name), then its steps:
- * click the component a step starts at on the canvas, then the one it goes
- * to, and pick or type its label. Only the chosen use case's steps and
- * scenarios show. A scenario is an alternative within a use case (a cache
- * hit or a miss); steps go to the main flow or to one scenario. Every change
- * is a dsl/edit.ts edit of the text, which stays the source of truth.
+ * scenarios without code: the Flows view (FlowsView.tsx) over the canvas.
+ * Each set of scenarios (an alternative within a use case: a cache hit or a
+ * miss) shows one branch, the one Play plays where the host plays them. Every
+ * change is a dsl/edit.ts edit of the text, which stays the source of truth.
  *
- * It has two layouts. In the rail (a phone's sheet) it is one narrow column.
- * As the Flows view of a wider screen (FlowsView.tsx) the use case and its
- * scenario tabs head it, and the chosen tab is drawn as a sequence diagram
+ * It has two layouts. On a phone the steps are a list, the page, and one
+ * sheet edits the step tapped or adds one (FlowsPhone.tsx). On a wider
+ * screen the use case heads it and is drawn as a sequence diagram
  * (SequenceDiagram.tsx) that is edited on its arrows: a click selects a step
  * (Shift or Cmd/Ctrl several) and shows its toolbar (its kind, Add reply,
  * move, its details, delete); Enter or a double click edits its label in
@@ -66,7 +63,7 @@ import { insertAt, insertedStep, movedStep, samePlaces, unanswered } from './seq
  * architecture map lights up the selected step.
  */
 
-/** A step being added: the components picked so far (on the canvas or in the form). */
+/** A step being added: its ends picked so far (on its lanes, the map or a phone's sheet). */
 export interface StepPick {
   from?: string;
   to?: string;
