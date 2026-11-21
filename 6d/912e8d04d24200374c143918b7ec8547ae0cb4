@@ -1,0 +1,59 @@
+frontend/src/components/Playground/DiagramView.tsx
+  s_733d66441cadaa::t_2f81b226d700c9 20
+  s_733d66441cadaa::t_1abdcdc2b95149 210-211,214,216,268,270-271,321-322,345,418-419,515,519,722,733-736,750-752,788-789,810,845-847,853,874,883,913
+  s_733d66441cadaa::t_cdef3a78046051 753
+frontend/src/components/Diagram/stepLabel.ts
+  s_733d66441cadaa::t_81454763375d8c 24-27
+frontend/src/components/Diagram/flows.ts
+  s_733d66441cadaa::t_3777da485467a3 10-12
+frontend/e2e/selection-tab.e2e.ts
+  s_733d66441cadaa::t_789d9fd9765e7e 160-166,168-169,207-209
+frontend/src/components/Diagram/CanvasEditing.tsx
+  s_733d66441cadaa::t_2f81b226d700c9 56,101-103,110,116,138
+frontend/src/components/Diagram/sequenceLayout.ts
+  s_733d66441cadaa::t_6b9678260a654a 114,121
+frontend/src/components/Diagram/FlowsPhone.tsx
+  s_733d66441cadaa::t_bf99b86ffc8338 321
+  s_733d66441cadaa::t_3777da485467a3 10-12,60
+  s_733d66441cadaa::t_e5493b152a66a0 320
+  s_733d66441cadaa::t_1584be7642cb64 1-9,13-59,61-319,322-427,429-441,450-571
+  s_733d66441cadaa::t_1c6fd4f5237287 428
+  s_733d66441cadaa::t_4415e2d03b4a68 442-449
+frontend/src/components/Diagram/FlowsPanel.tsx
+  s_733d66441cadaa::t_f6d3e17116f034 849-856,896,956-1036,1038-1052,1054-1059,1061-1078,1080-1098
+  s_733d66441cadaa::t_53d51e1c1f028e 87-93,116,152-154,836-839,848,1079
+  s_733d66441cadaa::t_3777da485467a3 26,29-31
+  s_733d66441cadaa::t_2536ea2de169ba 840-847
+  s_733d66441cadaa::t_cdef3a78046051 1,3
+  s_733d66441cadaa::t_331e778d28cbad 155-156,190,221-222,242-243,245-246,248-254,256,262,267-269,272,380,405-406,431-432,442-444,446,464,535,773-774,780,794
+frontend/e2e/flows-pane-edit.e2e.ts
+  s_733d66441cadaa::t_0f294edb181f09 3
+frontend/src/components/Diagram/EditableCanvas.tsx
+  s_733d66441cadaa::t_65466f8ff91ac9 19,23,525-526,548,580,584,587,591-594
+  s_733d66441cadaa::t_ae46bed797d063 109,111,188-190,192-193,285,293,298-303,324,336-338,444,448,531,629
+  s_733d66441cadaa::t_cdef3a78046051 339
+frontend/src/components/Diagram/StepDetails.tsx
+  s_733d66441cadaa::t_97cab3e00dec56 1-4,6-99
+  s_733d66441cadaa::t_3777da485467a3 5
+frontend/e2e/flows-phone.e2e.ts
+  s_733d66441cadaa::t_fd65743ab885c8 67-69
+  s_733d66441cadaa::t_4e7698b29866f1 1-36,38-39,41-43,45-51,53-66,70-81,83-135,137-191
+  s_733d66441cadaa::t_0f294edb181f09 40
+  s_733d66441cadaa::t_15283146aaaef0 37,44,52,82,136
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6d912e8d04d24200374c143918b7ec8547ae0cb4",
+  "prompts": {},
+  "sessions": {
+    "s_733d66441cadaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9649973d-f497-4440-b031-a92483a592e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
