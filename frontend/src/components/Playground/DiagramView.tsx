@@ -133,7 +133,7 @@ export interface DiagramViewProps {
   /** Navigates into a system box (double-click). */
   onOpenSystem: (id: string) => void;
   /** Offers the Flows builder (use cases and scenarios without code, FlowsPanel.tsx) on this document's text. */
-  flows?: { source: string; diagram: Diagram; onChange: (next: string) => void; useCase: string | undefined; onUseCase: (id: string) => void };
+  flows?: { source: string; diagram: Diagram; onChange: (next: string) => void; useCase: string | undefined; onUseCase: (id: string) => void; scenario?: string; onScenario?: (id: string | undefined) => void };
   /** What an empty canvas shows (the editor's starter card), centred on the canvas. */
   empty?: ReactNode;
   /**
@@ -758,6 +758,8 @@ export default function DiagramView({
       onPick={setPick}
       useCase={flows.useCase}
       onUseCase={flows.onUseCase}
+      scenario={flows.scenario}
+      onScenario={flows.onScenario}
       onClose={toggleFlows}
       onHighlight={setFlowHover}
       layout={phone ? 'rail' : 'pane'}

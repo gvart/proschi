@@ -24,7 +24,7 @@ import {
 import { parse } from '../../dsl/parser';
 import type { Diagram } from '../../dsl/types';
 import { eyebrow, field, iconButton, outlineButton, primaryButton, toolButton } from '../Playground/ui';
-import { defaultStepKind, missingScenarios, missingUseCases, nextPick, openRequest, outlineSteps } from './flows';
+import { choiceOfScenario, defaultStepKind, missingScenarios, missingUseCases, nextPick, openRequest, outlineSteps, scenarioOfChoice } from './flows';
 import { stepVocabulary, type UsedStep } from '../../dsl/typesys/vocabulary';
 import StepLabelField from './StepLabelField';
 import { composeLabel, isHttpHead, splitLabel, type LabelParts } from './stepLabel';
@@ -89,6 +89,12 @@ interface FlowsPanelProps {
   layout?: 'rail' | 'pane';
   /** The host has a use case picker of its own (the editor's header): the view's bar shows the use case's name and a menu, not another picker. */
   headerPicker?: boolean;
+  /**
+   * The scenario Play plays (its id; undefined for the first), where the host plays them: the view shows its branch
+   * in each set, and a branch shown here is what Play plays (`onScenario`). Without it the view keeps its own.
+   */
+  scenario?: string;
+  onScenario?: (id: string | undefined) => void;
 }
 
 /** A step the builder adds. */
@@ -115,7 +121,7 @@ const SUGGEST = '\u0000suggest:';
 /** No branch chosen yet: each set of scenarios shows its first. */
 const FIRSTS: BranchChoice = {};
 
-export default function FlowsPanel({ source, diagram, onChange, pick, onPick, useCase, onUseCase, onClose, onHighlight, layout = 'rail', headerPicker = false }: FlowsPanelProps) {
+export default function FlowsPanel({ source, diagram, onChange, pick, onPick, useCase, onUseCase, onClose, onHighlight, layout = 'rail', headerPicker = false, scenario, onScenario }: FlowsPanelProps) {
   const pane = layout === 'pane';
   const [mapOpen, setMapOpen] = useMapOpen();
   const local = useMemo(() => diagram.useCases.filter((u) => u.loc.file === undefined), [diagram]);
@@ -128,10 +134,28 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   const scenarios = useMemo(() => outline?.items.flatMap((i) => (i.kind === 'scenarios' ? i.branches.map((b) => b.name) : [])) ?? [], [outline]);
   const [lane, setLane] = useState(MAIN);
   const laneNow = scenarios.includes(lane) ? lane : MAIN;
-  /** The pane's branch shown in each set of scenarios, by use case. */
+  /** The sets of scenarios, each its branches, in order. */
+  const sets = useMemo(() => outline?.items.flatMap((i) => (i.kind === 'scenarios' ? [i.branches] : [])) ?? [], [outline]);
+  const parsed = useMemo(() => parse(source), [source]);
+  /** The branch shown in each set of scenarios, by use case, where the host does not play them. */
   const [choices, setChoices] = useState<Record<string, BranchChoice>>({});
-  const choiceNow = (current && choices[current]) || FIRSTS;
-  const choose1 = (set: number, name: string) => current && setChoices((all) => ({ ...all, [current]: { ...(all[current] ?? {}), [set]: name } }));
+  /** Where the host plays them, the branches of the scenario it plays. */
+  const played = useMemo(() => {
+    if (!onScenario || !current) return undefined;
+    const name = parsed.diagram.useCases.find((u) => u.loc.file === undefined && u.name === current)?.scenarios.find((s) => s.id === scenario)?.name;
+    return name ? choiceOfScenario(name, sets.map((b) => b.map((x) => x.name))) : FIRSTS;
+  }, [onScenario, current, parsed, scenario, sets]);
+  const choiceNow = played ?? ((current && choices[current]) || FIRSTS);
+  /** Shows `name` in its set; where the host plays them, it plays that scenario (of `text`, the source just changed to, if given). */
+  const choose1 = (set: number, name: string, text?: string) => {
+    if (!current) return;
+    if (!onScenario) return setChoices((all) => ({ ...all, [current]: { ...(all[current] ?? {}), [set]: name } }));
+    const next: BranchChoice = { ...choiceNow, [set]: name };
+    const now = text === undefined ? sets : (outlineOf(text, current)?.items.flatMap((i) => (i.kind === 'scenarios' ? [i.branches] : [])) ?? []);
+    const names = now.flatMap((branches, i) => (branches.find((b) => b.name === next[i]) ?? branches[0])?.name ?? []);
+    const useCase = (text === undefined ? parsed : parse(text)).diagram.useCases.find((u) => u.loc.file === undefined && u.name === current);
+    onScenario(scenarioOfChoice(useCase?.scenarios ?? [], names));
+  };
   /** The set a scenario is being named in on its frame (-1: a first set, at the end), if any. */
   const [namingSet, setNamingSet] = useState<number>();
   const [error, setError] = useState<string>();
@@ -205,8 +229,8 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
     if (outline && followed.some((s) => (scenarioOfStep(outline.items, s.line) ?? next) !== next)) clearSelection();
   };
   /** Shows a branch of a set of scenarios; a step selected in another of its branches is let go, and so is a draft. */
-  const chooseBranch = (set: number, name: string) => {
-    choose1(set, name);
+  const chooseBranch = (set: number, name: string, text?: string) => {
+    choose1(set, name, text);
     if (draft) {
       setDraft(null);
       onPick(null);
@@ -293,7 +317,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   };
 
   // What a step would add to the problems: the diagnostics the text gets with it that it does not have now.
-  const baseline = useMemo(() => parse(source).diagnostics.map((d) => `${d.severity}:${d.message}`), [source]);
+  const baseline = useMemo(() => parsed.diagnostics.map((d) => `${d.severity}:${d.message}`), [parsed]);
   const check = (step: NewStepInput, at?: Editing): string[] => {
     if (!current) return [];
     return problemsOf(at ? (at.insert ? addStep(source, current, step, undefined, at.line, diagram) : setStep(source, at.line, step, diagram)) : addStep(source, current, step, laneNow || undefined, undefined, diagram));
@@ -798,23 +822,23 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
         }}
       />
     ) : undefined;
-  /** The sets of scenarios, each its branches, in order. */
-  const sets = useMemo(() => outline?.items.flatMap((i) => (i.kind === 'scenarios' ? [i.branches] : [])) ?? [], [outline]);
   /** The tabs on the sets' frames: a branch shown, named in place (a new one, or a first set), renamed or deleted. */
   const tabs: ScenarioTabs | undefined = current
     ? {
         onChoose: chooseBranch,
         onAdd: (set, name) => {
           const clean = name.trim();
-          if (!clean || !apply(addScenario(source, current, clean, set >= 0 ? set : undefined))) return false;
+          const result = addScenario(source, current, clean, set >= 0 ? set : undefined);
+          if (!clean || !apply(result)) return false;
           // A first set is the last set now.
-          chooseBranch(set >= 0 ? set : sets.length, clean);
+          chooseBranch(set >= 0 ? set : sets.length, clean, result.source);
           setNews(`Scenario ${clean} added.`);
           return true;
         },
         onRename: (set, from, to) => {
-          if (!apply(renameScenario(source, current, from, to))) return false;
-          choose1(set, to.trim());
+          const result = renameScenario(source, current, from, to);
+          if (!apply(result)) return false;
+          choose1(set, to.trim(), result.source);
           setNews(`Scenario ${from} is now ${to.trim()}.`);
           return true;
         },
