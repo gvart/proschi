@@ -9,6 +9,13 @@ deployed from `main` and ships with the same changes. From 0.12.0 on,
 [release-please](https://github.com/googleapis/release-please) writes each
 section from the conventional commit titles of the merged pull requests.
 
+## [0.22.1](https://github.com/gvart/proschi/compare/tooling-v0.22.0...tooling-v0.22.1) (2026-11-21)
+
+
+### Fixed
+
+* **design:** readable text on blue, pass and fail; spacing and shadow tokens; on-brand favicon ([#235](https://github.com/gvart/proschi/issues/235)) ([5a09a6d](https://github.com/gvart/proschi/commit/5a09a6d2bc906bcfce3ee60f9a3fd3e6bef56ceb))
+
 ## [0.22.0](https://github.com/gvart/proschi/compare/tooling-v0.21.0...tooling-v0.22.0) (2026-11-21)
 
 
