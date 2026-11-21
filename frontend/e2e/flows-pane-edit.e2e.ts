@@ -636,6 +636,8 @@ test.describe('editing on the Flows view', () => {
     await expect(map.locator('[data-map-hint]')).toHaveText('Click where it goes');
     await onMap(page, 'Email').click();
     await expect(draftField(page)).toBeFocused();
+    // Both ends picked: the hint says what is next, as the arrow's prompt does.
+    await expect(map.locator('[data-map-hint]')).toHaveText('Type the label, then Enter adds the step');
     // Not connected: the map draws the way it would go, dashed.
     await expect(map.locator('[data-map-missing]')).toHaveCount(1);
     // Another component: it goes there instead.

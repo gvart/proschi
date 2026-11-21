@@ -759,7 +759,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
       marked={pick ? [pick.from, pick.to].filter((id): id is string => !!id) : []}
       focus={stepless ? [] : shownLanes}
       onPick={pick ? (id) => (live ? draftLane(id) : onPick(nextPick(pick, id))) : undefined}
-      hint={pick ? (pick.from ? 'Click where it goes' : 'Click where it starts') : undefined}
+      hint={pick ? (!pick.from ? 'Click where it starts' : live && pick.to ? 'Type the label, then Enter adds the step' : 'Click where it goes') : undefined}
     />
   );
 
