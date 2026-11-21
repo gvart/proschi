@@ -1,11 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { CornerDownLeft, Plus, Ungroup } from 'lucide-react';
+import { CornerDownLeft, MoreHorizontal, Pencil, Plus, Trash2, Ungroup } from 'lucide-react';
 import type { OutlineStep, StepKind, UseCaseOutline } from '../../dsl/edit';
 import type { Diagram } from '../../dsl/types';
 import { shorten } from '../../dsl/sequence';
 import { getTechStackIcon } from '../../utils/iconMapping';
 import { eyebrow } from '../Playground/ui';
-import { entrySteps, laneOrder, layoutSequence, sameSlot, SEQ, sequenceEntries, type MessageBox, type Slot, type SlotBox } from './sequenceLayout';
+import { entrySteps, FOLDED, laneOrder, layoutSequence, sameSlot, SEQ, sequenceEntries, type BranchChoice, type FrameBox, type MessageBox, type Slot, type SlotBox } from './sequenceLayout';
+import Menu, { MenuItem } from '../Playground/Menu';
 import { slotNear } from './sequenceEdit';
 import { MOD_KEY } from '../Playground/modKey';
 
@@ -14,8 +15,11 @@ import { MOD_KEY } from '../Playground/modKey';
  * per component, one numbered message per step, top to bottom as written.
  * Responses (`-->`) are dashed arrows back, messages (`->>`) have an open
  * head, failed calls (`-x`) end in a red cross, and a `par` block is a frame.
- * The main flow folds its scenarios; a scenario's tab shows its branch in
- * place. The messages are a list box: a click or Up and Down select a step,
+ * A set of scenarios is a frame where the flow branches, its branches tabs on
+ * it: the chosen one's steps show in it, between the steps every branch
+ * shares; a new branch is named on its tab, in place. A message dragged up or
+ * down by its middle moves to where a pink line shows. Lanes no step in sight
+ * touches fold to a sliver when the lanes do not fit. The messages are a list box: a click or Up and Down select a step,
  * which the architecture map lights up; Shift or Cmd/Ctrl select several. It
  * is edited in place (FlowsPanel.tsx does the edits): the selected step has
  * a toolbar under it, in room the rows below make for it (and for its
@@ -37,8 +41,10 @@ export interface DraftView {
   from?: string;
   to?: string;
   kind: StepKind;
-  /** The hint under its row. */
+  /** What to do next, at the arrow. */
   status: string;
+  /** The use case's first step: the prompt is larger, with how to pick. */
+  first?: boolean;
   /** The label's field on the arrow, once both ends are known. */
   field?: ReactNode;
   /** Under the hint, once both ends are known: its kind. */
@@ -50,16 +56,35 @@ export interface DraftView {
   onCancel: () => void;
 }
 
+/** The tabs on a set of scenarios' frame (FlowsPanel.tsx does the edits). A set is its place among the use case's sets; -1 is a first one being started. */
+export interface ScenarioTabs {
+  /** Shows a branch of a set. */
+  onChoose: (set: number, name: string) => void;
+  /** Names a new branch of a set (or a first set); false when the name is refused (the error shows). */
+  onAdd: (set: number, name: string) => boolean;
+  onRename: (set: number, from: string, to: string) => boolean;
+  onDelete: (set: number, name: string) => void;
+  /** Why a branch can't be deleted here (it opens on the line that closes the one before), if it can't. */
+  refusal: (set: number, name: string) => string | undefined;
+  /** The problem's scenarios not written yet, offered under a name being typed. */
+  suggestions: string[];
+  /** The set a branch is being named in, -1 for a first set (an empty frame at the end), if any. */
+  naming?: number;
+  onNaming: (set: number | undefined) => void;
+}
+
 interface SequenceDiagramProps {
   outline: UseCaseOutline;
-  /** The scenario whose tab is shown; empty for the main flow. */
-  scenario: string;
+  /** The branch shown in each set of scenarios (its first by default). */
+  choice: BranchChoice;
   diagram: Diagram;
   /** The lines of the selected steps; the last is the one in focus. */
   selected: number[];
   onSelect: (step: OutlineStep, mode: SelectMode) => void;
-  /** Opens a folded scenario's tab. */
-  onScenario: (name: string) => void;
+  /** The tabs on the sets of scenarios. */
+  tabs?: ScenarioTabs;
+  /** A message dragged up or down by its middle, dropped at an insertion point. */
+  onMoveTo?: (step: OutlineStep, slot: Slot) => void;
   /** Starts a draft at an insertion point (`index`: how many messages are drawn before it), with both ends when a drag drew them. */
   onInsert?: (slot: Slot, index: number, ends?: { from: string; to: string }) => void;
   /** The keys on a selected step: Alt+Up and Down move it, Delete removes the selection, Enter edits its label, Escape lets go. */
@@ -100,18 +125,23 @@ const LINE_DY = 8;
 const HEADER = 52;
 /** The room "+ Lane" takes after the last lane. */
 const ADDER_W = 96;
-/** A draft's row: the arrow and its label, the hint, and under it the kind or a reply. */
-const DRAFT_H = SEQ.row + 64;
+/** A draft's row at its least: the arrow, and the prompt under it. */
+const DRAFT_H = SEQ.row + 30;
 /** What is under a selected step keeps this far from the row boundaries (and their "+"s) above and below it. */
 const UNDER_GAP = 12;
+/** A set's strip grows by this for the problem's names under a branch being named, until their row is measured. */
+const CHIPS_H = 30;
+/** How far a message is dragged before it moves rather than is clicked. */
+const DRAG_START = 6;
 
 export default function SequenceDiagram({
   outline,
-  scenario,
+  choice,
   diagram,
   selected,
   onSelect,
-  onScenario,
+  tabs,
+  onMoveTo,
   onInsert,
   onMove,
   onDelete,
@@ -151,8 +181,21 @@ export default function SequenceDiagram({
     // By what they hold: the arrays are new on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [own, extraKey, candidateKey, nodes, fit, roomy]);
-  const entries = useMemo(() => sequenceEntries(outline.items, scenario), [outline, scenario]);
+  const entries = useMemo(() => sequenceEntries(outline.items, choice), [outline, choice]);
   const primary = selected.at(-1);
+  /** Lanes folded to a sliver and unfolded by a click, until the use case changes. */
+  const [unfolded, setUnfolded] = useState<string[]>([]);
+  useEffect(() => setUnfolded([]), [outline.name]);
+  /** The lanes no step in sight touches (not one "+ Lane" added or a draft's), which fold when the lanes do not fit. */
+  const idle = useMemo(() => {
+    const touched = new Set(entrySteps(entries).flatMap((s) => [s.from, s.to]));
+    return own.filter((id) => !touched.has(id) && !unfolded.includes(id) && id !== draft?.from && id !== draft?.to);
+  }, [entries, own, unfolded, draft?.from, draft?.to]);
+  const idleKey = idle.join(' ');
+  const naming = tabs?.naming;
+  /** The problem's names under a branch being named, as tall as their row wraps to. */
+  const [chipsHeight, setChipsHeight] = useState(CHIPS_H);
+  const namingHeight = naming !== undefined && tabs!.suggestions.length > 0 ? chipsHeight : 0;
 
   // What goes under the selected step (its toolbar, its card) and under a label being edited (its warnings): the rows
   // below move down to make room for it, so it covers nothing.
@@ -173,16 +216,18 @@ export default function SequenceDiagram({
         draft: draftSlot && { slot: draftSlot, height: draftHeight },
         // While a step is drafted, it is the one place a step is added: no "Add step" row besides it.
         adds: !!onInsert && !draftSlot,
+        naming: naming !== undefined ? { set: naming, height: namingHeight } : undefined,
+        idle,
       }),
-    // `room` by what it holds.
+    // `room` and `idle` by what they hold.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [entries, lanes, nodes, fit, roomy, room?.line, room?.below, draftSlot, draftHeight, onInsert],
+    [entries, lanes, nodes, fit, roomy, room?.line, room?.below, draftSlot, draftHeight, onInsert, naming, namingHeight, idleKey],
   );
   const hasDraft = !!draft;
   useLayoutEffect(() => {
     const el = draftBodyRef.current;
     if (!el) return;
-    const measure = () => setDraftHeight(Math.max(DRAFT_H, el.offsetHeight + 12));
+    const measure = () => setDraftHeight(Math.max(DRAFT_H, el.offsetHeight + 8));
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(el);
@@ -268,6 +313,26 @@ export default function SequenceDiagram({
   const [drag, setDrag] = useState<{ from: string; x1: number; x: number; y: number; x0: number; y0: number } | null>(null);
   /** A selected step's end being dragged to another lane: the step, which end, and where the pointer is. */
   const [dragged, setEndDrag] = useState<{ line: number; end: 'from' | 'to'; x: number } | null>(null);
+  /** A message dragged up or down by its middle: its line, where the pointer went down and is, and whether it moved far enough to be a drag. */
+  const [reorder, setReorder] = useState<{ line: number; y0: number; y: number; active: boolean } | null>(null);
+  /** A drag ends in a click on the message dragged (its line, when), which must not select it again. */
+  const dropAt = useRef({ line: -1, at: 0 });
+  // Escape lets a message's drag go, where it was.
+  useEffect(() => {
+    const line = reorder?.active ? reorder.line : undefined;
+    if (line === undefined) return;
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      setReorder(null);
+      dropAt.current = { line, at: Date.now() };
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [reorder?.active, reorder?.line]);
+  /** The row boundary under the pointer, whose "+" shows. */
+  const [hoverSlot, setHoverSlot] = useState<string>();
   // Escape lets the drag go.
   useEffect(() => {
     if (!dragged) return;
@@ -430,6 +495,15 @@ export default function SequenceDiagram({
     target?.id === id || drag?.from === id || (endTarget && !endTarget.refused && endTarget.lane.id === id) || (!!draft && (draft.from === id || draft.to === id || aimed === id));
   const dashed = (id: string) => !own.includes(id);
   const move = 'transition-[top,height] duration-[120ms] ease-out motion-reduce:transition-none';
+  /** The "+"s between rows: before and after steps (the ends of the flow and of its frames have "Add step" rows). */
+  const between = layout.slots.filter((b) => b.slot.kind === 'before' || b.slot.kind === 'after');
+  // A message's drag: where it would land (not on its own place), and the frame that would hold it, lit up.
+  const dragging = reorder?.active ? layout.messages.find((m) => m.step.line === reorder.line) : undefined;
+  const dropSlot = dragging ? slotNear(layout.slots.filter((s) => !('line' in s.slot && (s.slot.kind === 'before' || s.slot.kind === 'after') && s.slot.line === reorder!.line)), reorder!.y) : undefined;
+  const dropFrame = dropSlot && layout.frames.filter((f) => f.x <= dropSlot.x && dropSlot.y > f.y && dropSlot.y < f.y + f.height).sort((a, b) => a.width - b.width)[0];
+  const dropRight = dropFrame ? dropFrame.x + dropFrame.width - 6 : layout.width - 8;
+  // The prompt of a draft, at its start, in the row's width.
+  const promptLeft = Math.max(4, Math.min((fromX ?? layout.lanes[0]?.x ?? SEQ.margin) - 12, layout.width - 280));
 
   return (
     <div ref={rootRef} className="group/seq relative min-w-full" style={{ width }}>
@@ -444,7 +518,28 @@ export default function SequenceDiagram({
         {layout.lanes.map((lane) => {
           const node = nodes.get(lane.id);
           const picks = !!onPickLane || !!draft;
+          if (lane.folded)
+            // No step in sight touches it: a sliver with its icon; a click shows it (and picks it, while a step's ends are picked).
+            return (
+              <button
+                key={lane.id}
+                type="button"
+                data-lane={lane.id}
+                data-folded
+                aria-label={picks ? `Pick ${name(lane.id)}` : `Show ${name(lane.id)}`}
+                title={`${name(lane.id)}: no step shown here uses it. Click to show it.`}
+                onClick={() => {
+                  setUnfolded((all) => [...all, lane.id]);
+                  if (picks) lanePick(lane.id);
+                }}
+                className={`absolute top-2 grid h-9 -translate-x-1/2 place-items-center rounded-sm border-bw-1 border-dashed border-ink/40 bg-surface text-ink/60 hover:border-ink hover:bg-pop-yellow hover:text-ink focus-visible:ring-2 focus-visible:ring-ink [&_svg]:h-3.5 [&_svg]:w-3.5 ${move}`}
+                style={{ left: lane.x + offset, width: FOLDED }}
+              >
+                {node ? getTechStackIcon(node.techStack, node.type) : null}
+              </button>
+            );
           const Tag = picks ? 'button' : 'div';
+          const starts = !!draft?.first && draft.from === lane.id;
           return (
             <Tag
               key={lane.id}
@@ -454,7 +549,7 @@ export default function SequenceDiagram({
               title={picks ? `Pick ${name(lane.id)} for the step` : node ? `${node.name} (${node.techStack})` : lane.id}
               className={`absolute top-2 flex h-9 -translate-x-1/2 items-center gap-1.5 rounded-sm border-bw-1 py-1 pl-1 pr-2 text-ink ${move} ${
                 dashed(lane.id) ? 'border-dashed border-ink/50 bg-surface/80' : 'border-ink bg-surface shadow-brutal-sm'
-              } ${lit(lane.id) ? '!border-pop-pink' : ''} ${
+              } ${lit(lane.id) ? '!border-pop-pink' : ''} ${starts ? '!border-2 !bg-pop-pink/15 shadow-brutal-sm' : ''} ${
                 picks ? 'cursor-pointer outline-hidden hover:bg-pop-yellow focus-visible:bg-pop-yellow focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-1' : ''
               }`}
               style={{ left: lane.x + offset, maxWidth: lane.width }}
@@ -476,21 +571,47 @@ export default function SequenceDiagram({
         ref={contentRef}
         className="relative"
         style={{ marginLeft: offset, width: layout.width, height: layout.height }}
-        onPointerMove={(e) => choosing && setPointerX(pointerAt(e).x)}
-        onPointerLeave={() => choosing && setPointerX(undefined)}
+        onPointerMove={(e) => {
+          const at = pointerAt(e);
+          if (choosing) setPointerX(at.x);
+          // The "+" of the row boundary nearest the pointer, within half a row of it.
+          const near = onInsert ? slotNear(between, at.y) : undefined;
+          const key = near && Math.abs(near.y - at.y) <= SEQ.row / 2 ? slotKey(near.slot) : undefined;
+          if (key !== hoverSlot) setHoverSlot(key);
+        }}
+        onPointerLeave={() => {
+          if (choosing) setPointerX(undefined);
+          setHoverSlot(undefined);
+        }}
       >
-        {/* Frames under everything: a par block, the chosen scenario's branch. Their titles (and a par block's Ungroup) go over the lifelines, below. */}
+        {/* Frames under everything: a par block, a set of scenarios (its chosen branch). Their titles (a par block's Ungroup, a set's tabs) go over the lifelines, below. */}
         {layout.frames.map((f) => (
           <div
-            key={`${f.kind}${f.line}`}
+            key={`${f.kind}${f.set ?? ''}${f.line}`}
             data-frame={f.kind}
-            className={`absolute rounded-sm border-bw-1 ${move} ${f.kind === 'parallel' ? 'border-ink/45 bg-ink/[0.025]' : 'border-dashed border-ink/50 bg-pop-yellow/10'}`}
+            data-drop={f === dropFrame || undefined}
+            className={`absolute rounded-sm border-bw-1 ${move} ${f.kind === 'parallel' ? 'border-ink/45 bg-ink/[0.025]' : 'border-dashed border-ink/50 bg-pop-yellow/10'} ${f === dropFrame ? '!border-solid !border-pop-pink !bg-pop-pink/[0.06]' : ''}`}
             style={{ left: f.x, top: f.y, width: f.width, height: f.height }}
-          />
+          >
+            {f.line === -1 && <p className="absolute bottom-3 left-3 text-xs text-muted">Name the first scenario on its tab, then Enter. Escape to cancel.</p>}
+          </div>
         ))}
+        {/* While a draft's target is picked: the lane aimed at, lit down its length. */}
+        {choosing && aimed && laneX(aimed) !== undefined && (
+          <div data-aim-column={aimed} aria-hidden="true" className="pointer-events-none absolute top-0 rounded-sm bg-pop-pink/[0.08]" style={{ left: laneX(aimed)! - 36, width: 72, height: layout.height }} />
+        )}
         <svg className="pointer-events-none absolute left-0 top-0 overflow-visible" width={layout.width} height={layout.height} aria-hidden="true">
           {layout.lanes.map((lane) => (
-            <line key={lane.id} x1={lane.x} x2={lane.x} y1={0} y2={layout.height} className={lit(lane.id) ? 'stroke-pop-pink' : dashed(lane.id) ? 'stroke-ink/15' : 'stroke-ink/25'} strokeWidth={1.5} strokeDasharray="4 5" />
+            <line
+              key={lane.id}
+              x1={lane.x}
+              x2={lane.x}
+              y1={0}
+              y2={layout.height}
+              className={lit(lane.id) ? 'stroke-pop-pink' : dashed(lane.id) || lane.folded ? 'stroke-ink/15' : 'stroke-ink/25'}
+              strokeWidth={draft?.first && draft.from === lane.id ? 3 : 1.5}
+              strokeDasharray={draft?.first && draft.from === lane.id ? undefined : '4 5'}
+            />
           ))}
           {layout.messages.map((m) => (
             <g key={m.step.line} style={{ transform: `translateY(${m.y}px)` }} className="transition-transform duration-[120ms] ease-out motion-reduce:transition-none">
@@ -557,7 +678,10 @@ export default function SequenceDiagram({
               onPointerCancel={() => setDrag(null)}
             />
           ))}
-        {layout.frames.map((f) => (
+        {layout.frames.map((f) =>
+          f.kind === 'scenario' ? (
+            <ScenarioStrip key={`s${f.set}`} frame={f} tabs={tabs} onChips={setChipsHeight} className={move} />
+          ) : (
           <div
             key={`${f.kind}${f.line}`}
             data-frame-title={f.kind}
@@ -579,37 +703,15 @@ export default function SequenceDiagram({
               </span>
             )}
           </div>
-        ))}
+          ),
+        )}
         {layout.notes.map((note) => (
           <div
             key={`${note.kind}${note.line}`}
-            className={`absolute flex items-center gap-2 rounded-sm px-2.5 text-xs ${move} ${note.kind === 'scenarios' ? 'border-bw-1 border-dashed border-ink/35 bg-surface' : 'text-muted'}`}
+            className={`absolute flex items-center gap-2 rounded-sm px-2.5 text-xs text-muted ${move}`}
             style={{ left: note.x, top: note.y, width: note.width, height: note.height }}
           >
-            {note.kind === 'scenarios' ? (
-              <>
-                <span className={eyebrow}>Scenarios</span>
-                <span className="flex min-w-0 flex-wrap gap-1">
-                  {note.names.map((n) => (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => onScenario(n)}
-                      aria-label={`Show the scenario ${n}`}
-                      title={`Show the steps of ${n}`}
-                      className="scroll-mt-16 rounded-full border-bw-1 border-ink/40 bg-surface px-2 py-0.5 text-xs font-semibold text-ink hover:border-ink hover:bg-pop-yellow/30"
-                    >
-                      {n}
-                    </button>
-                  ))}
-                </span>
-                <span className="ml-auto hidden truncate text-muted @2xl:inline">Pick one to see its steps</span>
-              </>
-            ) : note.kind === 'empty' ? (
-              'No steps yet.'
-            ) : (
-              'A block you can edit in Code mode.'
-            )}
+            {note.kind === 'empty' ? 'No steps yet.' : 'Left to the code (a set of scenarios inside another, say): edit it in Code mode.'}
           </div>
         ))}
         <div
@@ -633,12 +735,56 @@ export default function SequenceDiagram({
               selected={selected.includes(m.step.line)}
               focusable={m.step.line === focusable}
               editing={editing?.line === m.step.line}
-              onSelect={(mode) => onSelect(m.step, mode)}
+              onSelect={(mode) => (dropAt.current.line !== m.step.line || Date.now() - dropAt.current.at > 300) && onSelect(m.step, mode)}
               onEdit={onEdit}
+              dragging={dragging === m}
+              drag={
+                onMoveTo && editing?.line !== m.step.line && !draft
+                  ? {
+                      onPointerDown: (e) => {
+                        if (e.button !== 0 || e.shiftKey || e.metaKey || e.ctrlKey) return;
+                        e.currentTarget.setPointerCapture(e.pointerId);
+                        const { y } = pointerAt(e);
+                        setReorder({ line: m.step.line, y0: y, y, active: false });
+                      },
+                      onPointerMove: (e) => {
+                        if (reorder?.line !== m.step.line) return;
+                        const { y } = pointerAt(e);
+                        setReorder({ ...reorder, y, active: reorder.active || Math.abs(y - reorder.y0) > DRAG_START });
+                      },
+                      onPointerUp: () => {
+                        if (reorder?.line !== m.step.line) return;
+                        setReorder(null);
+                        if (!reorder.active) return;
+                        dropAt.current = { line: m.step.line, at: Date.now() };
+                        if (dropSlot) onMoveTo(m.step, dropSlot.slot);
+                      },
+                      onPointerCancel: () => setReorder(null),
+                    }
+                  : undefined
+              }
               className={move}
             />
           ))}
         </div>
+        {/* A message being dragged: where it would land, and the message with the pointer. */}
+        {dropSlot && dragging && (
+          <div data-drop-indicator aria-hidden="true" className="pointer-events-none absolute z-40 flex items-center" style={{ left: dropSlot.x + 4, top: dropSlot.y - 2, width: Math.max(40, dropRight - dropSlot.x - 4) }}>
+            <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-pop-pink" />
+            <span className="h-0.5 flex-1 bg-pop-pink" />
+          </div>
+        )}
+        {dragging && (
+          <div
+            data-drag-ghost
+            aria-hidden="true"
+            className="pointer-events-none absolute z-40 inline-flex h-[23px] items-center gap-1.5 rounded-sm border-bw-1 border-pop-pink bg-surface pl-0.5 pr-1.5 font-mono text-[11.5px] shadow-brutal-sm"
+            style={{ left: Math.min(dragging.x1, dragging.x2) + 12, top: reorder!.y - 11 }}
+          >
+            <span className="grid h-4 min-w-4 place-items-center rounded-full bg-pop-pink px-1 text-[10px] font-bold text-on-accent">{dragging.n}</span>
+            {shorten(dragging.step.label || 'no label', 60)}
+          </div>
+        )}
         {/* Right after the list, so Tab goes from the selected step to its toolbar. In the room the rows below made. */}
         {focused && hasUnder && (
           <div
@@ -705,16 +851,16 @@ export default function SequenceDiagram({
               <span className="h-2.5 w-2.5 rounded-full border-2 border-pop-pink bg-surface transition-transform group-hover/end:scale-150" />
             </div>
           ))}
-        {/* The insertion points between the rows: a "+" at the left of each boundary, seen while the pointer is over the
-            diagram or one is focused. The ends of the flow and of its frames have their "Add step" rows instead. */}
+        {/* The insertion points between the rows: a "+" at the left of each boundary, seen while the pointer is over that
+            row or it is focused. The ends of the flow and of its frames have their "Add step" rows instead. */}
         {onInsert &&
-          layout.slots
-            .filter((b) => b.slot.kind === 'before' || b.slot.kind === 'after')
-            .map((b) => (
+          !dragging &&
+          between.map((b) => (
               <InsertPoint
                 key={slotKey(b.slot)}
                 box={b}
                 width={layout.width}
+                shown={hoverSlot === slotKey(b.slot)}
                 open={!!draft && sameSlot(draft.slot, b.slot)}
                 label={`Add a step ${b.slot.kind === 'before' ? 'before' : 'after'} step ${number((b.slot as { line: number }).line)}`}
                 onOpen={() => onInsert(b.slot, b.index)}
@@ -759,11 +905,10 @@ export default function SequenceDiagram({
                 const lane = nearest(pointerAt(e).x, draft.from);
                 if (lane) draft.onLane(lane.id);
               }}
-              className={`absolute inset-x-0 top-0 rounded-sm outline-hidden focus-visible:ring-2 focus-visible:ring-pop-pink ${choosing ? 'cursor-crosshair bg-pop-pink/[0.06]' : ''}`}
-              style={{ height: SEQ.row }}
+              className={`absolute inset-0 rounded-sm border border-dashed border-pop-pink/45 bg-pop-pink/[0.05] outline-hidden focus-visible:ring-2 focus-visible:ring-pop-pink ${choosing ? 'cursor-crosshair' : ''}`}
             />
-            {/* What it shows, in one column measured for the room its row takes: the field (and its warnings), the hint, the kind or a reply. */}
-            <div ref={draftBodyRef} className="pointer-events-none absolute inset-x-0 top-0 flex flex-col items-start gap-1">
+            {/* What it shows, in one column measured for the room its row takes: the field (and its warnings), the prompt, the kind or a reply. */}
+            <div ref={draftBodyRef} className="pointer-events-none absolute inset-x-0 top-0 flex flex-col items-start gap-1.5 pb-1">
               {draft.field && fromX !== undefined && toX !== undefined ? (
                 <div data-draft-field className="pointer-events-auto pt-px" style={{ marginLeft: Math.min(fromX, toX) + 6, width: Math.max(260, Math.abs(toX - fromX) - 12), minHeight: SEQ.row - 4 }}>
                   {draft.field}
@@ -771,23 +916,28 @@ export default function SequenceDiagram({
               ) : (
                 <div aria-hidden="true" style={{ height: SEQ.row - 4 }} />
               )}
-            <div className="pointer-events-auto flex flex-col items-start gap-1" style={{ marginLeft: Math.max(4, Math.min((fromX ?? layout.lanes[0]?.x ?? SEQ.margin) + 8, layout.width - 300)) }}>
-              <p data-draft-status className="flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold text-ink">
-                <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-pop-pink" />
-                {draft.status}
-              </p>
+            <div className="flex flex-col items-start gap-1.5" style={{ marginLeft: promptLeft, maxWidth: layout.width - promptLeft - 8 }}>
+              <div data-draft-prompt className={`flex max-w-full items-start gap-2 rounded-sm border-bw-1 border-pop-pink bg-surface px-2.5 py-1 text-ink shadow-brutal-sm ${draft.first ? 'text-base' : 'text-sm'}`}>
+                <span aria-hidden="true" className={`shrink-0 rounded-full bg-pop-pink ${draft.first ? 'mt-2 h-2.5 w-2.5' : 'mt-1.5 h-2 w-2'}`} />
+                <div className="min-w-0">
+                  <p data-draft-status className={draft.first ? 'font-bold' : 'font-semibold'}>
+                    {draft.status}
+                  </p>
+                  {draft.first && choosing && <p className="text-xs font-medium text-muted">Click its lane, or aim with ← → and press Enter.</p>}
+                </div>
+              </div>
               {draft.reply && !draft.to && (
                 <button
                   type="button"
                   onClick={draft.reply.onTake}
                   title="Add the answer (Enter)"
-                  className="inline-flex items-center gap-1 rounded-sm border-bw-1 border-ink bg-surface px-1.5 py-0.5 text-xs font-semibold shadow-brutal-sm hover:bg-pop-yellow/40"
+                  className="pointer-events-auto inline-flex items-center gap-1 rounded-sm border-bw-1 border-ink bg-surface px-1.5 py-0.5 text-xs font-semibold shadow-brutal-sm hover:bg-pop-yellow/40"
                 >
                   <CornerDownLeft size={12} aria-hidden="true" />
                   {draft.reply.text}
                 </button>
               )}
-              {draft.to && draft.toolbar}
+              {draft.to && <div className="pointer-events-auto">{draft.toolbar}</div>}
             </div>
             </div>
           </div>
@@ -802,8 +952,149 @@ const ALT_KEY = MOD_KEY === '⌘' ? '⌥' : 'Alt';
 
 const slotKey = (slot: Slot) => `${slot.kind}:${'line' in slot ? slot.line : 'name' in slot ? slot.name : ''}`;
 
+/** A small field for a branch's name, in its tab: Enter gives it, Escape (or leaving it empty) takes it back. */
+function NameField({ label, value, placeholder, onDone }: { label: string; value: string; placeholder?: string; onDone: (value: string | undefined) => void }) {
+  const [text, setText] = useState(value);
+  return (
+    <input
+      autoFocus
+      aria-label={label}
+      value={text}
+      placeholder={placeholder}
+      onFocus={(e) => e.currentTarget.select()}
+      onChange={(e) => setText(e.target.value)}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          onDone(text.trim() || undefined);
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          onDone(undefined);
+        }
+      }}
+      onBlur={() => (value ? onDone(undefined) : !text.trim() && onDone(undefined))}
+      className="h-6 w-44 shrink-0 rounded-sm border-bw-1 border-ink bg-surface px-1.5 text-xs font-semibold text-ink shadow-brutal-sm outline-hidden focus-visible:ring-2 focus-visible:ring-pop-pink"
+    />
+  );
+}
+
+/**
+ * A set of scenarios' title strip, over its frame: its branches as tabs (a click shows one, a double click or F2
+ * renames it), a menu on the one shown (rename, delete), and "+" to name a new one on its tab, with the problem's
+ * scenarios under it to pick. A first set (-1) is only being named.
+ */
+function ScenarioStrip({ frame, tabs, onChips, className }: { frame: FrameBox; tabs?: ScenarioTabs; onChips: (height: number) => void; className: string }) {
+  const set = frame.set!;
+  const names = frame.names ?? [];
+  const [renaming, setRenaming] = useState<string>();
+  const naming = tabs?.naming === set;
+  const chosen = frame.chosen ?? '';
+  const refusal = tabs && chosen ? tabs.refusal(set, chosen) : undefined;
+  const icon = 'grid h-6 w-6 shrink-0 place-items-center rounded-sm text-ink/70 hover:bg-pop-yellow/40 hover:text-ink focus-visible:outline-2 focus-visible:outline-ink';
+  // The names' row, wrapped to the frame's width: the strip makes room for all of it (its margin and a gap under it).
+  const chipsRef = useRef<HTMLDivElement>(null);
+  const chipsShown = naming && !!tabs && tabs.suggestions.length > 0;
+  useLayoutEffect(() => {
+    const el = chipsRef.current;
+    if (!chipsShown || !el) return;
+    const measure = () => onChips(el.offsetHeight + 8);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [chipsShown, onChips]);
+  return (
+    <div data-frame-title="scenario" data-set={set} className={`absolute z-20 flex flex-col items-start ${className}`} style={{ left: frame.x + 1, top: frame.y + 1, maxWidth: frame.width - 2 }}>
+      <div className="flex max-w-full items-center gap-1 whitespace-nowrap rounded-br-sm border-b border-r border-dashed border-ink/50 bg-pop-yellow/30 py-0.5 pl-1.5 pr-0.5">
+        <span className={`mr-0.5 ${eyebrow} !text-ink/75`}>Scenarios</span>
+        <div role="tablist" aria-label="Scenarios" className="flex min-w-0 items-center gap-1">
+          {names.map((n) =>
+            renaming === n && tabs ? (
+              <NameField key={n} label={`Rename the scenario ${n}`} value={n} onDone={(next) => (!next || next === n || tabs.onRename(set, n, next)) && setRenaming(undefined)} />
+            ) : (
+              <button
+                key={n}
+                type="button"
+                role="tab"
+                aria-selected={chosen === n}
+                title={`Show the steps of ${n} (double-click or F2 to rename)`}
+                onClick={() => tabs?.onChoose(set, n)}
+                onDoubleClick={() => tabs && setRenaming(n)}
+                onKeyDown={(e) => {
+                  if (e.key !== 'F2' || !tabs) return;
+                  e.preventDefault();
+                  setRenaming(n);
+                }}
+                className={`max-w-40 shrink-0 truncate whitespace-nowrap rounded-sm border-bw-1 px-2 py-0.5 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-ink ${
+                  chosen === n ? 'border-ink bg-pop-yellow text-on-accent' : 'border-transparent text-ink/75 hover:border-ink/40 hover:text-ink'
+                }`}
+              >
+                {n}
+              </button>
+            ),
+          )}
+          {naming && tabs && <NameField label="New scenario" value="" placeholder="Name it, then Enter" onDone={(next) => (!next || tabs.onAdd(set, next)) && tabs.onNaming(undefined)} />}
+        </div>
+        {tabs && chosen && !renaming && (
+          <Menu label={`Scenario ${chosen} actions`} title="Rename or delete this scenario" align="left" buttonClassName={icon} trigger={<MoreHorizontal size={14} aria-hidden="true" />}>
+            {(close) => (
+              <>
+                <MenuItem
+                  icon={<Pencil size={14} aria-hidden="true" />}
+                  onSelect={() => {
+                    close();
+                    setRenaming(chosen);
+                  }}
+                >
+                  Rename
+                </MenuItem>
+                <MenuItem
+                  icon={<Trash2 size={14} aria-hidden="true" />}
+                  disabled={!!refusal}
+                  onSelect={() => {
+                    close();
+                    tabs.onDelete(set, chosen);
+                  }}
+                >
+                  <span>
+                    Delete this scenario
+                    {refusal && <span className="block text-xs font-normal text-muted">{refusal}</span>}
+                  </span>
+                </MenuItem>
+              </>
+            )}
+          </Menu>
+        )}
+        {tabs && !naming && set >= 0 && (
+          <button type="button" aria-label="Add a scenario here" title="Add a scenario to this set: name it on its tab" onClick={() => tabs.onNaming(set)} className={icon}>
+            <Plus size={13} aria-hidden="true" />
+          </button>
+        )}
+      </div>
+      {naming && tabs && tabs.suggestions.length > 0 && (
+        <div ref={chipsRef} role="group" aria-label="Scenarios the problem asks for" className="mt-1 flex flex-wrap items-center gap-1 pl-1.5">
+          <span className="text-xs text-muted">Suggested:</span>
+          {tabs.suggestions.map((s) => (
+            <button
+              key={s}
+              type="button"
+              // Keeps the focus in the name field, which would give up on blur.
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => tabs.onAdd(set, s) && tabs.onNaming(undefined)}
+              className="rounded-full border-bw-1 border-ink/40 bg-surface px-2 py-0.5 text-xs font-semibold hover:border-ink hover:bg-pop-yellow/30"
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** A "+" at a row boundary, with a guide across the diagram while it is hovered or focused. */
-function InsertPoint({ box, width, open, label, onOpen }: { box: SlotBox; width: number; open: boolean; label: string; onOpen: () => void }) {
+function InsertPoint({ box, width, shown, open, label, onOpen }: { box: SlotBox; width: number; shown: boolean; open: boolean; label: string; onOpen: () => void }) {
   return (
     <>
       <button
@@ -812,7 +1103,8 @@ function InsertPoint({ box, width, open, label, onOpen }: { box: SlotBox; width:
         aria-expanded={open}
         title={`${label} (Shift+N before the selected step)`}
         onClick={onOpen}
-        className={`peer absolute z-10 grid h-5 w-5 scroll-mt-16 place-items-center rounded-full border-bw-1 border-ink transition-[opacity,top] duration-[120ms] hover:!opacity-100 focus-visible:!opacity-100 motion-reduce:transition-none ${open ? 'bg-pop-pink text-on-accent' : 'bg-surface text-ink opacity-0 hover:bg-pop-yellow focus-visible:bg-pop-yellow group-hover/seq:opacity-60'}`}
+        data-insert-point
+        className={`peer absolute z-10 grid h-5 w-5 scroll-mt-16 place-items-center rounded-full border-bw-1 border-ink transition-[opacity,top] duration-[120ms] hover:!opacity-100 focus-visible:!opacity-100 motion-reduce:transition-none ${open ? 'bg-pop-pink text-on-accent' : `bg-surface text-ink hover:bg-pop-yellow focus-visible:bg-pop-yellow ${shown ? 'opacity-70' : 'opacity-0'}`}`}
         style={{ left: box.x, top: box.y - 10 }}
       >
         <Plus size={12} aria-hidden="true" />
@@ -831,6 +1123,8 @@ function Message({
   editing,
   onSelect,
   onEdit,
+  drag,
+  dragging = false,
   className = '',
 }: {
   m: MessageBox;
@@ -842,6 +1136,10 @@ function Message({
   onSelect: (mode: SelectMode) => void;
   /** A double click edits the label. */
   onEdit?: () => void;
+  /** Dragged up or down by its middle, it moves. */
+  drag?: Pick<React.DOMAttributes<HTMLDivElement>, 'onPointerDown' | 'onPointerMove' | 'onPointerUp' | 'onPointerCancel'>;
+  /** It is being dragged: faint where it was. */
+  dragging?: boolean;
   className?: string;
 }) {
   const { step } = m;
@@ -858,7 +1156,6 @@ function Message({
       aria-label={`${m.n}. ${text}`}
       data-line={step.line}
       tabIndex={focusable ? 0 : -1}
-      title={step.label ? `${m.n}. ${step.label}` : undefined}
       // Shift-click picks a range, so it selects no text.
       onMouseDown={(e) => e.shiftKey && e.preventDefault()}
       onClick={(e) => {
@@ -870,7 +1167,9 @@ function Message({
         if (e.shiftKey || e.metaKey || e.ctrlKey) return;
         onEdit?.();
       }}
-      className={`group/msg pointer-events-auto absolute flex scroll-mt-16 cursor-pointer select-none justify-center rounded-sm outline-hidden focus-visible:ring-2 focus-visible:ring-ink ${className} ${self ? '!justify-start pl-[52px]' : ''}`}
+      {...drag}
+      title={step.label ? `${m.n}. ${step.label}${drag ? ' (drag up or down to move it)' : ''}` : undefined}
+      className={`group/msg pointer-events-auto absolute flex scroll-mt-16 select-none justify-center rounded-sm outline-hidden focus-visible:ring-2 focus-visible:ring-ink ${className} ${self ? '!justify-start pl-[52px]' : ''} ${drag ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'} ${dragging ? 'opacity-35' : ''}`}
       style={{ left, width, top: m.y - SEQ.row / 2 + 1, height: SEQ.row - 2 }}
     >
       <span

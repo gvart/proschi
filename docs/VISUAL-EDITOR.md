@@ -81,9 +81,12 @@ The **Architecture | Flows** switch above the canvas, or **F**, turns the
 canvas into the Flows view, and back. It draws the chosen
 [use case](USE-CASES.md) as a sequence diagram: a lane per component and a
 numbered arrow per step. The lanes fit the width, and only a diagram too
-wide for it scrolls sideways. Each [scenario](SCENARIOS.md) has a tab, and
-**Add scenario** starts a new one. The view is remembered, and the canvas
-keeps its zoom while you are away.
+wide for it scrolls sideways; before it does, a lane no step in sight uses
+folds to a thin icon, which a click shows again. A set of
+[scenarios](SCENARIOS.md) is a frame where the flow branches, with a tab for
+each scenario: the chosen one's steps show in the frame, between the steps
+they all share. The bar names the scenarios shown. The view is remembered,
+and the canvas keeps its zoom while you are away.
 
 A small map of the architecture floats in the corner. It lights up the
 selected step's components and the connection it travels, and draws a
@@ -106,7 +109,7 @@ of the way.
 
 While a request waits for its answer, a **Reply to …** button under the
 arrow (or **Enter**) adds the answer back. Warnings show before you add the
-step. On a scenario's tab, steps go into that scenario.
+step. A scenario frame's **Add step** row adds to the scenario it shows.
 
 **+ Lane**, after the last lane's header, adds a lane for a component the
 flow doesn't use yet. A new arrow, or the end of a selected one, can then go
@@ -138,6 +141,8 @@ at once, with no Save:
 - **Add reply** answers a selected request right after it. The arrow
   buttons, or **Alt+↑** and **Alt+↓** (**⌥** on a Mac), move it, and the
   bin or **Delete** removes it.
+- Drag an arrow up or down by its middle to move it anywhere: a pink line
+  shows where it lands, into a frame too. **Escape** cancels the drag.
 - **⋯** opens **Headers, payload and fan-out** in a card under the arrow.
 
 Shift-click or Ctrl-click (**⌘**-click) to select several steps. **Run at
@@ -146,8 +151,17 @@ They must follow each other in one flow or scenario, or the view says why.
 A block's **Ungroup** runs its steps one after another again, and its **Add
 alongside** row adds one more step to it.
 
-With a scenario's tab open, the pencil and bin beside its tab rename or
-delete that scenario.
+A scenario frame's tabs are edited in place:
+
+- Click a tab to show its steps. **[** and **]** show the scenario before or
+  after the selected step's.
+- **+** names a new scenario on its own tab, with the problem's scenarios
+  offered under it. **Enter** adds it and **Escape** cancels.
+- Double-click a tab, or press **F2** on it, to rename it.
+- The **⋯** menu by the chosen tab renames or deletes it.
+
+With no scenario yet, **Add scenario** in the bar starts the first one, in
+an empty frame at the end of the flow.
 
 Every change edits the text. **Ctrl+Z** (**⌘Z**) undoes it in Visual mode,
 and Code mode has it in the code editor's history too. On a phone, Flows is

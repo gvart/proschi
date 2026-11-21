@@ -9,8 +9,8 @@ test.use({ mode: 'visual' });
  * The Flows view: on a wider screen the `Architecture | Flows` switch (or F)
  * shows Flows over the whole canvas column, the canvas kept under it as it
  * was. It draws the chosen use case as a sequence diagram (a lane per
- * component, a numbered message per step, a frame per par block, a tab per
- * scenario) on one scrolling surface, and a floating map of the architecture
+ * component, a numbered message per step, a frame per par block, a frame per
+ * set of scenarios with a tab per branch) on one scrolling surface, and a floating map of the architecture
  * lights up the selected step.
  */
 
@@ -95,37 +95,41 @@ test.describe('the Flows view', () => {
     // A lane per component, in the order the steps first meet them.
     await expect(view.locator('[data-lane]')).toHaveCount(5);
     expect(await view.locator('[data-lane]').evaluateAll((els) => els.map((e) => e.getAttribute('data-lane')))).toEqual(['shopper', 'api', 'cache', 'db', 'events']);
-    // The main flow: its own steps, numbered, the scenarios folded and the par block framed.
-    await expect(sequence(page).getByRole('option')).toHaveText(['1POST /checkout', '2GET cart', '3INSERT order', '4PUBLISH OrderPlacedmessage', '5201']);
-    await expect(sequence(page).getByRole('option').nth(4)).toHaveAccessibleName('5. Checkout API answers Shopper: 201 (response)');
+    // The flow, numbered: the set of scenarios a frame where it branches, its first branch shown in it; the par block framed.
+    await expect(sequence(page).getByRole('option')).toHaveText(['1POST /checkout', '2GET cart', '3cart', '4INSERT order', '5PUBLISH OrderPlacedmessage', '6201']);
+    await expect(sequence(page).getByRole('option').nth(5)).toHaveAccessibleName('6. Checkout API answers Shopper: 201 (response)');
     await expect(view.locator('[data-frame-title="parallel"]')).toContainText('At the same time');
     const parallel = (await view.locator('[data-frame="parallel"]').boundingBox())!;
-    for (const i of [2, 3]) {
+    for (const i of [3, 4]) {
       const b = (await sequence(page).getByRole('option').nth(i).boundingBox())!;
       expect(b.y).toBeGreaterThan(parallel.y);
       expect(b.y + b.height).toBeLessThan(parallel.y + parallel.height);
     }
 
-    // A scenario's tab shows its steps in place of the set.
-    const tabs = view.getByRole('tablist', { name: 'Scenarios' });
-    await expect(tabs.getByRole('tab')).toHaveText(['Main flow', 'Cart cached', 'Cart expired']);
+    // The set's branches are tabs on its frame, and nowhere else; one shows its steps in the frame, between the shared ones.
+    await expect(view.getByRole('tablist', { name: 'Scenarios' })).toHaveCount(1);
+    const tabs = view.locator('[data-frame-title="scenario"]').getByRole('tablist', { name: 'Scenarios' });
+    await expect(tabs.getByRole('tab')).toHaveText(['Cart cached', 'Cart expired']);
+    await expect(tabs.getByRole('tab', { name: 'Cart cached' })).toHaveAttribute('aria-selected', 'true');
+    const frame = (await view.locator('[data-frame="scenario"]').boundingBox())!;
+    const cart = (await sequence(page).getByRole('option').nth(2).boundingBox())!;
+    expect(cart.y).toBeGreaterThan(frame.y);
+    expect(cart.y + cart.height).toBeLessThan(frame.y + frame.height);
     await tabs.getByRole('tab', { name: 'Cart expired' }).click();
     await expect(tabs.getByRole('tab', { name: 'Cart expired' })).toHaveAttribute('aria-selected', 'true');
     await expect(sequence(page).getByRole('option')).toHaveText(['1POST /checkout', '2GET cart', '3nil', '4SELECT cart', '5INSERT order', '6PUBLISH OrderPlacedmessage', '7201']);
-    await expect(view.locator('[data-frame-title="scenario"]')).toContainText('Scenario: Cart expired');
-    // The folded set on the main flow opens a scenario's tab too.
-    await tabs.getByRole('tab', { name: 'Main flow' }).click();
-    await view.getByRole('button', { name: 'Show the scenario Cart cached' }).click();
-    await expect(tabs.getByRole('tab', { name: 'Cart cached' })).toHaveAttribute('aria-selected', 'true');
-    await expect(sequence(page).getByRole('option').nth(2)).toHaveText('3cart');
+    // The bar names the scenario shown.
+    await expect(view.getByTestId('flows-scenario')).toContainText('Cart expired');
 
-    // A new scenario from the bar gets its own tab, chosen.
-    await view.getByRole('button', { name: 'Add scenario', exact: true }).click();
-    const name = page.getByRole('dialog', { name: 'Add a scenario' }).getByRole('textbox', { name: 'New scenario' });
+    // A new scenario is named on its tab, in place: no card.
+    await view.getByRole('button', { name: 'Add a scenario here' }).click();
+    const name = view.getByRole('textbox', { name: 'New scenario' });
     await expect(name).toBeFocused();
+    await expect(page.getByRole('dialog', { name: 'Add a scenario' })).toHaveCount(0);
     await name.fill('Out of stock');
     await name.press('Enter');
     await expect(tabs.getByRole('tab', { name: 'Out of stock' })).toHaveAttribute('aria-selected', 'true');
+    await expect(tabs.getByRole('tab')).toHaveText(['Cart cached', 'Cart expired', 'Out of stock']);
   });
 
   test('a step clicked in the diagram lights up on the map and has its toolbar over it, and Up and Down move it', async ({ page }) => {
@@ -144,16 +148,18 @@ test.describe('the Flows view', () => {
     await expect(selected).toHaveAccessibleName('Step 2');
 
     await page.keyboard.press('ArrowDown');
-    await expect(options.nth(2)).toHaveAttribute('aria-selected', 'true');
-    await expect(options.nth(2)).toBeFocused();
+    await page.keyboard.press('ArrowDown');
+    await expect(options.nth(3)).toHaveAttribute('aria-selected', 'true');
+    await expect(options.nth(3)).toBeFocused();
     await expect.poll(() => litNodes(page)).toEqual(['api', 'db']);
-    await expect(selected).toHaveAccessibleName('Step 3');
+    await expect(selected).toHaveAccessibleName('Step 4');
+    await page.keyboard.press('ArrowUp');
     await page.keyboard.press('ArrowUp');
     await page.keyboard.press('ArrowUp');
     await expect(options.nth(0)).toHaveAttribute('aria-selected', 'true');
     await expect.poll(() => litNodes(page)).toEqual(['api', 'shopper']);
 
-    // A scenario's step, on its tab, is numbered as that tab draws it; another tab lets it go.
+    // A scenario's step, its branch shown, is numbered as the diagram draws it; another branch of its set lets it go.
     await flows(page).getByRole('tab', { name: 'Cart expired' }).click();
     await sequence(page).getByRole('option', { name: /SELECT cart/ }).click();
     await expect(sequence(page).getByRole('option', { name: /SELECT cart/ })).toHaveAccessibleName(/^4\. /);
@@ -368,35 +374,32 @@ test.describe('one scrolling surface', () => {
     expect(last.x + last.width).toBeLessThanOrEqual(right + 1);
   });
 
-  test("Add scenario's card is over the lane headers, whole, and takes clicks", async ({ page }) => {
-    await page.goto(link(SOURCE));
+  test('a first scenario is named on its tab, on an empty frame at the end: nothing covers its field, and Escape leaves the text as it was', async ({ page }) => {
+    await page.goto(link(SOURCE.replace(/ {2}alt "Cart cached" \{\n[\s\S]*?\n {2}\}\n/, '')));
     await waitForCanvas(page, 5);
     await switchTo(page, 'Flows').click();
     await expect(sequence(page)).toBeVisible();
-    await flows(page).getByRole('button', { name: 'Add scenario', exact: true }).click();
-    const card = page.getByRole('dialog', { name: 'Add a scenario' });
-    await expect(card).toBeVisible();
-    // The card runs over the lane headers' strip: its title, help, field and button are its own, nothing painted over them.
-    const headers = (await flows(page).locator('[data-lane]').first().boundingBox())!;
-    const box = (await card.boundingBox())!;
-    expect(box.y).toBeLessThan(headers.y + headers.height);
-    const own = (target: string) => card.locator(target).first().evaluate((el) => {
-      const r = el.getBoundingClientRect();
-      const hit = document.elementFromPoint(r.left + Math.min(r.width / 2, 20), r.top + r.height / 2);
-      return !!hit && el.closest('[role="dialog"]')!.contains(hit);
-    });
-    for (const target of ['label', 'p', 'input', 'button[type="submit"]']) expect(await own(target), target).toBe(true);
-    // A click lands: typed and added with its button, not by Enter.
-    await card.getByRole('textbox', { name: 'New scenario' }).fill('Out of stock');
-    await card.getByRole('button', { name: 'Add the scenario' }).click();
-    await expect(card).toHaveCount(0);
+    // With no scenarios, the bar offers the first; with some, their frames' tabs do.
+    const add = flows(page).getByRole('button', { name: 'Add scenario', exact: true });
+    await add.click();
+    await expect(add).toHaveCount(0);
+    const name = flows(page).getByRole('textbox', { name: 'New scenario' });
+    await expect(name).toBeFocused();
+    // On an empty frame after the last step, its field its own: nothing painted over it.
+    const frame = (await flows(page).locator('[data-frame="scenario"]').boundingBox())!;
+    const last = (await sequence(page).getByRole('option').last().boundingBox())!;
+    expect(frame.y).toBeGreaterThanOrEqual(last.y + last.height);
+    expect(await name.evaluate((el) => { const r = el.getBoundingClientRect(); return el.contains(document.elementFromPoint(r.left + 20, r.top + r.height / 2)); })).toBe(true);
+    // Escape: nothing written, the frame gone, the bar's button back.
+    await name.press('Escape');
+    await expect(flows(page).locator('[data-frame="scenario"]')).toHaveCount(0);
+    await expect(add).toBeVisible();
+    // Typed and Enter: its frame and its one tab, chosen.
+    await add.click();
+    await name.fill('Out of stock');
+    await name.press('Enter');
     await expect(flows(page).getByRole('tab', { name: 'Out of stock' })).toHaveAttribute('aria-selected', 'true');
-    // Escape and a click outside close it.
-    await flows(page).getByRole('button', { name: 'Add scenario', exact: true }).click();
-    await page.keyboard.press('Escape');
-    await expect(card).toHaveCount(0);
-    await flows(page).getByRole('button', { name: 'Add scenario', exact: true }).click();
-    await sequence(page).getByRole('option').first().click();
-    await expect(card).toHaveCount(0);
+    await expect(add).toHaveCount(0);
+    await expect(flows(page).getByTestId('flows-scenario')).toContainText('Out of stock');
   });
 });

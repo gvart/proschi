@@ -8,6 +8,7 @@ import {
   giveOperations,
   groupParallel,
   moveStep,
+  moveStepTo,
   removeScenario,
   removeStep,
   removeUseCase,
@@ -29,8 +30,8 @@ import StepLabelField from './StepLabelField';
 import { composeLabel, isHttpHead, splitLabel, type LabelParts } from './stepLabel';
 import { accessOf } from '../../dsl/access';
 import Select from '../../design/Select';
-import SequenceDiagram, { type SelectMode } from './SequenceDiagram';
-import { allSteps, entrySteps, followStep, inParallel, laneOrder, scenarioOfStep, sequenceEntries, type Slot } from './sequenceLayout';
+import SequenceDiagram, { type ScenarioTabs, type SelectMode } from './SequenceDiagram';
+import { allSteps, entrySteps, followStep, inParallel, laneOrder, scenarioOfStep, sequenceEntries, setOfStep, type BranchChoice, type Slot } from './sequenceLayout';
 import ArchitectureMap from './ArchitectureMap';
 import { useMapOpen } from './canvasEditState';
 import { ViewSwitch } from './CanvasEditing';
@@ -111,6 +112,8 @@ const said = (list: OutlineStep[]) => list.map((s) => `${s.line} ${s.from} ${s.t
 /** The select's options that add a use case rather than pick one. */
 const NEW = '\u0000new';
 const SUGGEST = '\u0000suggest:';
+/** No branch chosen yet: each set of scenarios shows its first. */
+const FIRSTS: BranchChoice = {};
 
 export default function FlowsPanel({ source, diagram, onChange, pick, onPick, useCase, onUseCase, onClose, onHighlight, layout = 'rail', headerPicker = false }: FlowsPanelProps) {
   const pane = layout === 'pane';
@@ -125,6 +128,12 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   const scenarios = useMemo(() => outline?.items.flatMap((i) => (i.kind === 'scenarios' ? i.branches.map((b) => b.name) : [])) ?? [], [outline]);
   const [lane, setLane] = useState(MAIN);
   const laneNow = scenarios.includes(lane) ? lane : MAIN;
+  /** The pane's branch shown in each set of scenarios, by use case. */
+  const [choices, setChoices] = useState<Record<string, BranchChoice>>({});
+  const choiceNow = (current && choices[current]) || FIRSTS;
+  const choose1 = (set: number, name: string) => current && setChoices((all) => ({ ...all, [current]: { ...(all[current] ?? {}), [set]: name } }));
+  /** The set a scenario is being named in on its frame (-1: a first set, at the end), if any. */
+  const [namingSet, setNamingSet] = useState<number>();
   const [error, setError] = useState<string>();
   const [editing, setEditing] = useState<Editing | null>(null);
   /** The use case or scenario being renamed: its current name, and the scenario's use case. */
@@ -159,14 +168,17 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   const [laneAdds, setLaneAdds] = useState<Record<string, string[]>>({});
   /** Changed to put the focus back on the diagram's selected message after an edit. */
   const [focusKey, setFocusKey] = useState(0);
-  /** The steps the tab draws, in order. */
-  const drawn = useMemo(() => (outline ? entrySteps(sequenceEntries(outline.items, laneNow)) : []), [outline, laneNow]);
+  /** The steps the diagram draws, in order: each set of scenarios as its chosen branch. */
+  const drawn = useMemo(() => (outline ? entrySteps(sequenceEntries(outline.items, choiceNow)) : []), [outline, choiceNow]);
   const endsOf = (s: OutlineStep) => ({ from: s.from, to: s.to });
-  /** Selects steps (a scenario's shows on its tab). */
+  /** Selects steps (a scenario's shows in its set's frame, on the rail on its tab). */
   const selectSteps = (next: OutlineStep[]) => {
     setSel(next);
-    const scenario = next[0] && outline ? scenarioOfStep(outline.items, next.at(-1)!.line) : undefined;
+    if (!next[0] || !outline) return;
+    const scenario = scenarioOfStep(outline.items, next.at(-1)!.line);
     if (scenario && scenario !== laneNow) setLane(scenario);
+    const at = setOfStep(outline.items, next.at(-1)!.line);
+    if (at && choiceNow[at.set] !== at.name) choose1(at.set, at.name);
   };
   const select = (step: OutlineStep, mode: SelectMode) => {
     setError(undefined);
@@ -191,6 +203,15 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
       onPick(null);
     }
     if (outline && followed.some((s) => (scenarioOfStep(outline.items, s.line) ?? next) !== next)) clearSelection();
+  };
+  /** Shows a branch of a set of scenarios; a step selected in another of its branches is let go, and so is a draft. */
+  const chooseBranch = (set: number, name: string) => {
+    choose1(set, name);
+    if (draft) {
+      setDraft(null);
+      onPick(null);
+    }
+    if (outline && followed.some((s) => setOfStep(outline.items, s.line)?.set === set)) clearSelection();
   };
   /** In the pane, each step's number as the diagram draws the tab shown; the rail numbers the main flow's. */
   const drawnNumbers = useMemo(() => (pane ? new Map(drawn.map((s, i) => [s.line, i + 1])) : undefined), [pane, drawn]);
@@ -228,7 +249,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
     setNews(followed.length > 1 ? `${followed.length} steps deleted.` : `Step ${index + 1} deleted.`);
     commit({ source: next }, (after) => {
       if (followed.length > 1) return [];
-      const left = after.length ? entrySteps(sequenceEntries(outlineOf(next, current)!.items, laneNow)) : [];
+      const left = after.length ? entrySteps(sequenceEntries(outlineOf(next, current)!.items, choiceNow)) : [];
       const step = left[index] ?? left[index - 1];
       return step ? [step] : [];
     }, focus);
@@ -243,6 +264,14 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
       return placed && [placed.reduce((a, b) => (b.line < a.line ? b : a))];
     }, true);
   const ungroup = (line: number) => commit(ungroupParallel(source, line), (after) => samePlaces(steps, after, followed), true);
+  /** A step dragged to an insertion point: moved there in one edit, and selected where it went. */
+  const moveTo = (step: OutlineStep, slot: Slot) => {
+    if (!current) return;
+    setError(undefined);
+    const result = moveStepTo(source, step.line, slot);
+    if (result.source === source) return;
+    if (commit(result, (after) => [insertedStep(steps.filter((s) => s.line !== step.line), after, slot) ?? step], true)) setNews('Step moved.');
+  };
   /** The components a flow can run between, and where one starts: the design's first actor or client. */
   const parts = useMemo(() => diagram.nodes.filter((x) => x.kind !== 'group' && x.kind !== 'text'), [diagram]);
   const starter = useMemo(() => parts.find((x) => x.resolvedType?.kind === 'client')?.id, [parts]);
@@ -598,9 +627,9 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
     </section>
   );
 
-  /** Where a step at the end of the tab shown goes: the end of the use case, or of the scenario; and how many steps are drawn before it. */
+  /** Where a step at the end goes (the pane's: the end of the use case; the rail's tab: of its scenario); and how many steps are drawn before it. */
   const endSlot = (): [Slot, number] => {
-    if (!laneNow || !outline) return [{ kind: 'end' }, drawn.length];
+    if (pane || !laneNow || !outline) return [{ kind: 'end' }, drawn.length];
     const last = drawn.reduce((at, s, i) => (scenarioOfStep(outline.items, s.line) === laneNow ? i : at), -1);
     return [{ kind: 'scenario', name: laneNow }, last >= 0 ? last + 1 : drawn.length];
   };
@@ -667,6 +696,19 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
       if (key === 'r' && reply && !e.shiftKey) return reply(), true;
       if (key === 'd' && !e.shiftKey) return setDetailsOf(detailsOpen ? null : chosen.line), true;
       if (key === 'x' && !e.shiftKey) return change({ from: chosen.to, to: chosen.from }, `Step ${n} now goes from ${name(chosen.to)} to ${name(chosen.from)}.`), true;
+      if ((e.key === '[' || e.key === ']') && !e.shiftKey) {
+        // The branch before or after the one shown, in the set the step is in.
+        const at = setOfStep(outline.items, chosen.line);
+        const set = at && outline.items.filter((i) => i.kind === 'scenarios')[at.set];
+        if (!at || !set || set.kind !== 'scenarios' || set.branches.length < 2) return true;
+        const names = set.branches.map((b) => b.name);
+        const next = names[(names.indexOf(at.name) + (e.key === ']' ? 1 : -1) + names.length) % names.length];
+        chooseBranch(at.set, next);
+        const first = set.branches.find((b) => b.name === next)?.steps[0];
+        if (first) selectSteps([first]);
+        setNews(`Scenario ${next} shown.`);
+        return true;
+      }
       if (key === 'n') {
         // After it, from where it went; with Shift, before it.
         const at = drawn.findIndex((d) => d.line === chosen.line);
@@ -756,31 +798,45 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
         }}
       />
     ) : undefined;
-  const scenarioTools = laneNow && current && (
-    <div role="group" aria-label={`Scenario ${laneNow}`} className="flex items-center gap-0.5">
-      {renaming?.scenario === laneNow ? (
-        <RenameField
-          label={`Rename the scenario ${laneNow}`}
-          value={laneNow}
-          onRename={(next) => apply(renameScenario(source, current, laneNow, next)) && (setRenaming(null), next !== laneNow && setLane(next), true)}
-          onCancel={() => setRenaming(null)}
-        />
-      ) : (
-        <button type="button" aria-label={`Rename the scenario ${laneNow}`} title="Rename this scenario" onClick={() => setRenaming({ scenario: laneNow })} className={`${iconButton} !h-7 !w-7`}>
-          <Pencil size={12} />
-        </button>
-      )}
-      <button
-        type="button"
-        aria-label={`Delete the scenario ${laneNow}`}
-        title="Delete this scenario and its steps"
-        onClick={() => apply(removeScenario(source, current, laneNow)) && chooseLane(MAIN)}
-        className={`${iconButton} !h-7 !w-7 text-red-700 dark:text-red-300`}
-      >
-        <Trash2 size={13} />
-      </button>
-    </div>
-  );
+  /** The sets of scenarios, each its branches, in order. */
+  const sets = useMemo(() => outline?.items.flatMap((i) => (i.kind === 'scenarios' ? [i.branches] : [])) ?? [], [outline]);
+  /** The tabs on the sets' frames: a branch shown, named in place (a new one, or a first set), renamed or deleted. */
+  const tabs: ScenarioTabs | undefined = current
+    ? {
+        onChoose: chooseBranch,
+        onAdd: (set, name) => {
+          const clean = name.trim();
+          if (!clean || !apply(addScenario(source, current, clean, set >= 0 ? set : undefined))) return false;
+          // A first set is the last set now.
+          chooseBranch(set >= 0 ? set : sets.length, clean);
+          setNews(`Scenario ${clean} added.`);
+          return true;
+        },
+        onRename: (set, from, to) => {
+          if (!apply(renameScenario(source, current, from, to))) return false;
+          choose1(set, to.trim());
+          setNews(`Scenario ${from} is now ${to.trim()}.`);
+          return true;
+        },
+        onDelete: (set, name) => {
+          if (!apply(removeScenario(source, current, name))) return;
+          if (outline && followed.some((s) => setOfStep(outline.items, s.line)?.set === set)) clearSelection();
+          setNews(`Scenario ${name} deleted.`);
+          setFocusKey((k) => k + 1);
+        },
+        refusal: (set, name) => (sets[set]?.find((b) => b.name === name)?.shared ? 'It opens on the line that closes the one before: delete it in Code mode.' : undefined),
+        suggestions: missingScenarios(diagram, current, scenarios),
+        naming: namingSet,
+        onNaming: (set) => {
+          setError(undefined);
+          setNamingSet(set);
+        },
+      }
+    : undefined;
+  // Another use case: a name being typed for its scenarios was for the last one.
+  useEffect(() => setNamingSet(undefined), [current]);
+  /** The scenario the diagram shows, as the language names it ("A › X"): each set's branch shown. */
+  const path = sets.map((branches, i) => branches.find((b) => b.name === choiceNow[i])?.name ?? branches[0]?.name).filter(Boolean);
   /**
    * The draft, while it is for this use case and its ends are being picked: where it is now. Before or after a step,
    * it follows that step through edits of the text; with the step gone, it goes to the end. At the end, it stays there.
@@ -788,9 +844,14 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   const live = (() => {
     if (!draft || !pick || !current || draft.useCase !== current) return null;
     const { slot } = draft;
-    if (slot.kind === 'end' || slot.kind === 'scenario') {
+    if (slot.kind === 'end') {
       const [, index] = endSlot();
       return { ...draft, index };
+    }
+    if (slot.kind === 'scenario') {
+      // After the last step drawn of that branch.
+      const last = outline ? drawn.reduce((at, s, i) => (scenarioOfStep(outline.items, s.line) === slot.name ? i : at), -1) : -1;
+      return last >= 0 ? { ...draft, index: last + 1 } : draft;
     }
     if (slot.kind === 'par') return draft;
     const anchor = draft.anchor && followStep(draft.anchor, steps);
@@ -840,6 +901,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
       to,
       kind,
       status,
+      first: drawn.length === 0,
       reply: waiting
         ? {
             text: `Reply to ${asked}: ${name(waiting.to)} answers ${name(waiting.from)}`,
@@ -999,23 +1061,28 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
           {useCases.length > 0 && <div className="min-w-0 shrink-0">{headerPicker ? title : picker}</div>}
           {current && outline && (
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 border-l border-ink/15 pl-3">
-              <div role="tablist" aria-label="Scenarios" className="flex min-w-0 flex-wrap items-center gap-1">
-                {[MAIN, ...scenarios].map((s) => (
-                  <button
-                    key={s || 'main'}
-                    type="button"
-                    role="tab"
-                    aria-selected={laneNow === s}
-                    onClick={() => chooseLane(s)}
-                    title={s ? `The steps of ${s}, and the steps it shares with the main flow` : 'The steps every scenario shares'}
-                    className="shrink-0 whitespace-nowrap rounded-sm border-bw-1 border-transparent px-2 py-1 text-xs font-semibold text-ink/75 hover:border-ink/40 hover:text-ink aria-selected:border-ink aria-selected:bg-pop-yellow aria-selected:text-on-accent"
-                  >
-                    {s || 'Main flow'}
+              {path.length > 0 ? (
+                // The scenario shown, as Play names it: the branch shown in each set, chosen on its frame.
+                <p data-testid="flows-scenario" title="The scenario shown: pick another branch on its frame's tabs" className="flex min-w-0 items-center gap-1 truncate text-sm font-semibold text-ink/80">
+                  {path.map((p, i) => (
+                    <span key={i} className="flex min-w-0 items-center gap-1">
+                      <span aria-hidden="true" className="text-ink/40">
+                        ›
+                      </span>
+                      <span className="truncate">{p}</span>
+                    </span>
+                  ))}
+                </p>
+              ) : (
+                // Not before the first step, whose prompt is the one thing to do.
+                namingSet !== -1 &&
+                drawn.length > 0 && (
+                  <button type="button" onClick={() => tabs?.onNaming(-1)} title="An alternative path within this use case: a frame at the end, its first branch named on its tab" className={`${toolButton} !px-2 !py-1 text-xs`}>
+                    <Plus size={13} aria-hidden="true" />
+                    Add scenario
                   </button>
-                ))}
-              </div>
-              {scenarioTools}
-              <AddScenario suggestions={missingScenarios(diagram, current, scenarios)} onAdd={newScenario} />
+                )
+              )}
             </div>
           )}
         </div>
@@ -1036,7 +1103,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
             {(fit) => (
               <SequenceDiagram
                 outline={outline}
-                scenario={laneNow}
+                choice={choiceNow}
                 diagram={diagram}
                 fitWidth={fit}
                 selected={followed.map((st) => st.line)}
@@ -1044,7 +1111,8 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
                   setLabelEdit(null);
                   select(step, mode);
                 }}
-                onScenario={chooseLane}
+                tabs={tabs}
+                onMoveTo={moveTo}
                 onInsert={startDraft}
                 onMove={move}
                 onDelete={() => deleteSelected()}
@@ -1091,92 +1159,6 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
         {alert}
       </div>
     </aside>
-  );
-}
-
-/** The card's width (w-72), to keep it on the screen. */
-const CARD_W = 288;
-
-/**
- * The bar's "Add scenario": a name, with the problem's own as one-click suggestions, in a small card under it. The
- * card is drawn in a portal with a fixed position, over everything (the diagram's sticky lane headers too).
- */
-function AddScenario({ suggestions, onAdd }: { suggestions: string[]; onAdd: (name: string) => boolean }) {
-  const [open, setOpen] = useState(false);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const cardRef = useRef<HTMLDivElement>(null);
-  const [at, setAt] = useState<{ left: number; top: number } | null>(null);
-  useLayoutEffect(() => {
-    if (!open) return;
-    const place = () => {
-      const r = buttonRef.current?.getBoundingClientRect();
-      if (r) setAt({ left: Math.max(8, Math.min(r.left, window.innerWidth - CARD_W - 8)), top: r.bottom + 6 });
-    };
-    place();
-    const onPointer = (e: PointerEvent) => {
-      const target = e.target as Node;
-      if (!buttonRef.current?.contains(target) && !cardRef.current?.contains(target)) setOpen(false);
-    };
-    document.addEventListener('pointerdown', onPointer);
-    window.addEventListener('resize', place);
-    window.addEventListener('scroll', place, true);
-    return () => {
-      document.removeEventListener('pointerdown', onPointer);
-      window.removeEventListener('resize', place);
-      window.removeEventListener('scroll', place, true);
-    };
-  }, [open]);
-  const close = () => {
-    setOpen(false);
-    buttonRef.current?.focus({ preventScroll: true });
-  };
-  return (
-    <div className="shrink-0">
-      <button
-        ref={buttonRef}
-        type="button"
-        aria-expanded={open}
-        aria-haspopup="dialog"
-        onClick={() => setOpen(!open)}
-        className={`${toolButton} !px-2 !py-1 text-xs aria-expanded:border-ink aria-expanded:bg-surface`}
-      >
-        <Plus size={13} aria-hidden="true" />
-        Add scenario
-      </button>
-      {open &&
-        at &&
-        createPortal(
-        <div
-          ref={cardRef}
-          role="dialog"
-          aria-label="Add a scenario"
-          data-testid="add-scenario"
-          className="fixed z-[1000] w-72 rounded-sm border-bw-1 border-ink bg-surface p-3 text-ink shadow-brutal-md"
-          style={at}
-          onKeyDown={(e) => {
-            if (e.key !== 'Escape') return;
-            e.preventDefault();
-            e.stopPropagation();
-            close();
-          }}
-        >
-          <NameForm
-            label="New scenario"
-            placeholder="e.g. Cache miss"
-            button="Add the scenario"
-            help="An alternative path within this use case."
-            suggestions={suggestions}
-            autoFocus
-            onAdd={(name) => {
-              const done = onAdd(name);
-              if (done) setOpen(false);
-              return done;
-            }}
-          />
-        </div>,
-          document.body,
-        )}
-    </div>
   );
 }
 

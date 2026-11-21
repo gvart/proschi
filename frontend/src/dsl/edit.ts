@@ -855,6 +855,68 @@ export function moveStep(source: string, line: number, direction: 'up' | 'down')
   return { source: swapped.join('\n') };
 }
 
+/**
+ * A place in a use case a step can go (the Flows view's insertion points):
+ * before or right after the step on a line (in its block), at the end of a
+ * scenario's branch or of a `par` block, or at the end of the main flow.
+ */
+export type StepPlace = { kind: 'before' | 'after'; line: number } | { kind: 'scenario'; name: string } | { kind: 'par'; line: number } | { kind: 'end' };
+
+/**
+ * Moves the step written at `line` (its whole payload too, re-indented) to
+ * `place`, in one edit: into or out of a `par` block or a scenario's branch,
+ * anywhere in its use case. A `par` block it leaves empty goes too. Dropped
+ * where it already is, the text stays as it is.
+ */
+export function moveStepTo(source: string, line: number, place: StepPlace): EditResult {
+  const outline = outlineWithStep(source, line);
+  if (!outline) return { error: 'There is no step on that line.' };
+  const lines = source.split('\n');
+  const start = line - 1;
+  const end = statementEnd(lines, start);
+  const isStep = (l: number) => stepsOf(outline).some((s) => s.line === l);
+  const inner = (opener: number) => `${indentOf(lines[opener - 1])}  `;
+  // Where it goes (0-based, the line it goes before) and its indent there, in the text as it is.
+  let at: number;
+  let indent: string;
+  if (place.kind === 'before' || place.kind === 'after') {
+    if (!isStep(place.line)) return { error: 'There is no step on that line of this use case.' };
+    if (place.line === line) return { source };
+    at = place.kind === 'before' ? place.line - 1 : statementEnd(lines, place.line - 1) + 1;
+    indent = indentOf(lines[place.line - 1]);
+  } else if (place.kind === 'scenario') {
+    const branch = outline.items.flatMap((item) => (item.kind === 'scenarios' ? item.branches : [])).find((b) => b.name === place.name);
+    if (!branch) return { error: `"${outline.name}" has no scenario "${place.name}".` };
+    at = branch.endLine - 1;
+    indent = inner(branch.line);
+  } else if (place.kind === 'par') {
+    const block = parallelsOf(outline).find((p) => p.line === place.line);
+    if (!block) return { error: 'There is no parallel block on that line.' };
+    at = block.endLine - 1;
+    indent = inner(block.line);
+  } else {
+    at = outline.endLine - 1;
+    indent = inner(outline.line);
+  }
+  if (at === start || at === end + 1) return { source };
+  const old = indentOf(lines[start]);
+  const moved = lines.slice(start, end + 1).map((text, i) => (i === 0 ? `${indent}${text.trimStart()}` : text.startsWith(old) ? `${indent}${text.slice(old.length)}` : text));
+  // The lines that go: the step's, and those of a `par` block it was the only step of.
+  const gone = new Set(Array.from({ length: end - start + 1 }, (_, i) => start + i));
+  const block = parallelsOf(outline).find((p) => p.steps.length === 1 && p.steps[0].line === line && p.other === 0);
+  if (block) {
+    if (at > block.line - 1 && at < block.endLine) return { source };
+    gone.add(block.line - 1);
+    gone.add(block.endLine - 1);
+  }
+  const out: string[] = [];
+  for (let i = 0; i <= lines.length; i++) {
+    if (i === at) out.push(...moved);
+    if (i < lines.length && !gone.has(i)) out.push(lines[i]);
+  }
+  return { source: out.join('\n') };
+}
+
 /** The `"name"` string token that follows a line's leading keyword (`usecase "A"`, `alt "B"`), as its column range. */
 function nameAfter(line: string, number: number, keyword: string): { from: number; to: number; value: string } | undefined {
   const tokens = tokenizeLine(line, number).tokens.filter((t) => t.kind !== 'rbrace');
@@ -921,10 +983,11 @@ export function removeStep(source: string, line: number): string {
 }
 
 /**
- * Adds a scenario, an `alt "name" { }` branch, to a use case: after its
- * other scenarios when it has some, else at the end of its main flow.
+ * Adds a scenario, an `alt "name" { }` branch, to a use case: after the
+ * branches of its set of alternatives `set` (the first is 0), by default its
+ * last set, or at the end of its main flow when it has none.
  */
-export function addScenario(source: string, useCase: string, name: string): EditResult {
+export function addScenario(source: string, useCase: string, name: string, set?: number): EditResult {
   const clean = cleanText(name);
   if (!clean) return { error: 'Name the scenario.' };
   const outline = outlineOf(source, useCase);
@@ -932,7 +995,9 @@ export function addScenario(source: string, useCase: string, name: string): Edit
   const branches = outline.items.flatMap((item) => (item.kind === 'scenarios' ? item.branches : []));
   if (branches.some((b) => b.name === clean)) return { error: `"${useCase}" already has a scenario "${clean}".` };
   const lines = source.split('\n');
-  const last = branches.at(-1);
+  const sets = outline.items.flatMap((item) => (item.kind === 'scenarios' ? [item.branches] : []));
+  if (set !== undefined && !sets[set]) return { error: `"${useCase}" has no such set of scenarios.` };
+  const last = set !== undefined ? sets[set].at(-1) : branches.at(-1);
   const at = last ? last.endLine : outline.endLine - 1;
   const indent = last ? indentOf(lines[last.endLine - 1]) : `${indentOf(lines[outline.line - 1])}  `;
   lines.splice(at, 0, `${indent}alt ${quote(clean)} {`, `${indent}}`);

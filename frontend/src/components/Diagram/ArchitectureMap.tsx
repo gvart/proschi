@@ -124,7 +124,7 @@ export default function ArchitectureMap({ open, onOpen, steps, marked, focus, on
     >
       <div className="flex h-8 items-center gap-1.5 border-b border-ink/15 pl-2.5 pr-1">
         <MapIcon size={13} aria-hidden="true" className="shrink-0 text-ink/70" />
-        <h3 className="min-w-0 flex-1 truncate text-[11px] font-bold uppercase tracking-[0.08em] text-ink/75">{hint ?? 'Architecture'}</h3>
+        <h3 className="min-w-0 flex-1 truncate text-[11px] font-bold uppercase tracking-[0.08em] text-ink/75">Architecture</h3>
         <button
           type="button"
           aria-label="Collapse the architecture map"
@@ -136,6 +136,13 @@ export default function ArchitectureMap({ open, onOpen, steps, marked, focus, on
           <Minus size={14} />
         </button>
       </div>
+      {/* While a step's ends are picked: what to click, small, over the map. */}
+      {hint && (
+        <p data-map-hint className="flex items-center gap-1.5 border-b border-pop-pink/40 bg-pop-pink/[0.07] px-2.5 py-1 text-xs font-semibold text-ink/85">
+          <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-pop-pink" />
+          {hint}
+        </p>
+      )}
       <div className="relative bg-paper" style={{ width: MAP_W, height: MAP_H }}>
         {!view ? (
           <p className="grid h-full place-items-center px-6 text-center text-xs text-muted">No components yet.</p>
