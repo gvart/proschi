@@ -1,0 +1,19 @@
+docs/VISUAL-EDITOR.md
+  s_733d66441cadaa::t_ee21b8e689012e 84-89,112,144-145,154-164
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "954cc762dbc41c3f1509cb994e5e0b9c0581b4b6",
+  "prompts": {},
+  "sessions": {
+    "s_733d66441cadaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9649973d-f497-4440-b031-a92483a592e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
