@@ -1,0 +1,25 @@
+frontend/e2e/flows-pane.e2e.ts
+  s_733d66441cadaa::t_002aaa9a3c0a7e 12-13,98-100,103,109-117,121-122,124-126,128,132,151-153,155-156,162,377-378,382-400,402-403
+frontend/e2e/flows-pane-edit.e2e.ts
+  s_733d66441cadaa::t_68b43ce07683c3 50-52,120,180-182,205,212,267,269,281,480,536,578-580,652,661,1007,1009-1010,1015-1018,1023,1108
+  s_733d66441cadaa::t_c95c9ef6c0efbe 710-711,715-718,791-861,950-951,961-962
+  s_733d66441cadaa::t_41b91e9fd5b164 634-636
+  s_733d66441cadaa::t_10c87ba01b280a 700-709,712-714,719-790,862-914,916-930,932-933,935-949,952-960,963-968
+  s_733d66441cadaa::t_78e9a4a0426344 931,934
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a7ce6c1e355eaddc9a5b7ccadacda6d08e863575",
+  "prompts": {},
+  "sessions": {
+    "s_733d66441cadaa": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9649973d-f497-4440-b031-a92483a592e6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
