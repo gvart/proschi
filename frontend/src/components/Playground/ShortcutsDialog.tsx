@@ -76,6 +76,8 @@ function shortcutSections(partner: boolean): Section[] {
         { keys: [['Escape']], action: 'Let go of the selection, or stop adding steps' },
         { keys: [['Drag an end']], action: 'Change where the selected step starts or goes, a "+ Lane" lane too' },
         { keys: [['Drag a lifeline']], action: 'Add a step from that component to the one you drop on' },
+        { keys: [['Drag a step']], action: 'Move it up or down, to where the pink line shows (Escape cancels)' },
+        { keys: [['['], [']']], action: "Show the scenario before or after the selected step's, in its frame" },
       ],
     },
     {

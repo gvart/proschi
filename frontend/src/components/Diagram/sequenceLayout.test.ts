@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { outlineOf } from '../../dsl/edit';
 import { stepEdge } from './flows';
-import { allSteps, entrySteps, followStep, inParallel, laneOrder, layoutSequence, scenarioOfStep, SEQ, sequenceEntries, type Measure, type Slot } from './sequenceLayout';
+import { allSteps, entrySteps, followStep, inParallel, laneOrder, layoutSequence, scenarioOfStep, SEQ, sequenceEntries, setOfStep, FOLDED, type Measure, type Slot } from './sequenceLayout';
 
 const SRC = [
   'web "Web" [Browser]',
@@ -29,21 +29,23 @@ const SRC = [
 ].join('\n');
 
 const outline = outlineOf(SRC, 'Order')!;
+/** The first set of scenarios showing its branch Miss. */
+const MISS = { 0: 'Miss' };
 const label = (s: { from: string; to: string; label: string }) => `${s.from}>${s.to}:${s.label}`;
 /** Every character 8px wide, so the widths are easy to reason about. */
 const FIXED: Measure = { name: (t) => t.length * 8, label: (t) => t.length * 8 };
 
 describe('what a tab of the sequence shows', () => {
-  it('the main flow folds each set of scenarios', () => {
-    const entries = sequenceEntries(outline.items, '');
-    expect(entries.map((e) => e.kind)).toEqual(['step', 'scenarios', 'parallel', 'step']);
-    expect(entries[1]).toMatchObject({ kind: 'scenarios', names: ['Hit', 'Miss'], line: 8 });
-    expect(entrySteps(entries).map(label)).toEqual(['web>api:POST /orders', 'api>db:INSERT audit', 'api>q:SEND audit', 'api>web:201']);
+  it('shows each set of scenarios as its first branch, by default', () => {
+    const entries = sequenceEntries(outline.items);
+    expect(entries.map((e) => e.kind)).toEqual(['step', 'scenario', 'parallel', 'step']);
+    expect(entries[1]).toMatchObject({ kind: 'scenario', name: 'Hit', line: 8, set: 0, names: ['Hit', 'Miss'] });
+    expect(entrySteps(entries).map(label)).toEqual(['web>api:POST /orders', 'api>cache:GET order', 'api>db:INSERT audit', 'api>q:SEND audit', 'api>web:201']);
   });
 
-  it('a scenario shows its branch, with its par blocks, in place of the set', () => {
-    const entries = sequenceEntries(outline.items, 'Miss');
-    expect(entries[1]).toMatchObject({ kind: 'scenario', name: 'Miss', line: 10, other: 0 });
+  it('shows the branch chosen in a set, with its par blocks, between the steps every branch shares', () => {
+    const entries = sequenceEntries(outline.items, MISS);
+    expect(entries[1]).toMatchObject({ kind: 'scenario', name: 'Miss', line: 10, other: 0, set: 0 });
     expect(entrySteps(entries).map(label)).toEqual([
       'web>api:POST /orders',
       'api>db:SELECT order',
@@ -53,8 +55,19 @@ describe('what a tab of the sequence shows', () => {
       'api>q:SEND audit',
       'api>web:201',
     ]);
-    // An unknown scenario is the main flow.
-    expect(sequenceEntries(outline.items, 'Nope').map((e) => e.kind)).toEqual(['step', 'scenarios', 'parallel', 'step']);
+    // A branch that is not there is the set's first.
+    expect(sequenceEntries(outline.items, { 0: 'Nope' })[1]).toMatchObject({ name: 'Hit' });
+  });
+
+  it('chooses a branch in each set on its own', () => {
+    const two = outlineOf('usecase "U" {\n  alt "A" {\n    a -> b : 1\n  } alt "B" {\n    a -> b : 2\n  }\n  a -> b : mid\n  alt "C" {\n    a -> b : 3\n  } alt "D" {\n    a -> b : 4\n  }\n}', 'U')!;
+    const shown = (choice: Record<number, string>) => entrySteps(sequenceEntries(two.items, choice)).map((s) => s.label);
+    // Blocks one after another are one set: a step between them makes two.
+    expect(shown({})).toEqual(['1', 'mid', '3']);
+    expect(shown({ 1: 'D' })).toEqual(['1', 'mid', '4']);
+    expect(shown({ 0: 'B', 1: 'D' })).toEqual(['2', 'mid', '4']);
+    expect(setOfStep(two.items, 11)).toEqual({ set: 1, name: 'D' });
+    expect(setOfStep(two.items, 3)).toEqual({ set: 0, name: 'A' });
   });
 
   it('orders the lanes as the components first appear, in every scenario, so they stay put across tabs', () => {
@@ -98,7 +111,7 @@ describe('the sequence layout', () => {
   const names = (id: string) => id.toUpperCase();
 
   it('puts the lanes left to right, at least the least gap apart, and numbers the messages in order', () => {
-    const layout = layoutSequence(sequenceEntries(outline.items, 'Miss'), lanes, names, FIXED);
+    const layout = layoutSequence(sequenceEntries(outline.items, MISS), lanes, names, FIXED);
     expect(layout.lanes.map((l) => l.id)).toEqual(lanes);
     for (let i = 1; i < layout.lanes.length; i++) expect(layout.lanes[i].x - layout.lanes[i - 1].x).toBeGreaterThanOrEqual(SEQ.minGap);
     expect(layout.messages.map((m) => m.n)).toEqual([1, 2, 3, 4, 5, 6, 7]);
@@ -109,7 +122,7 @@ describe('the sequence layout', () => {
   });
 
   it('draws a message from its lane to the other, and an answer back', () => {
-    const layout = layoutSequence(sequenceEntries(outline.items, ''), lanes, names, FIXED);
+    const layout = layoutSequence(sequenceEntries(outline.items), lanes, names, FIXED);
     const x = (id: string) => layout.lanes.find((l) => l.id === id)!.x;
     const first = layout.messages[0];
     expect([first.x1, first.x2]).toEqual([x('web'), x('api')]);
@@ -122,13 +135,13 @@ describe('the sequence layout', () => {
     const long = 'x'.repeat(30);
     const src = `usecase "U" {\n  a -> b : ${long}\n  b -> c : y\n}`;
     const o = outlineOf(src, 'U')!;
-    const layout = layoutSequence(sequenceEntries(o.items, ''), laneOrder(o), names, FIXED);
+    const layout = layoutSequence(sequenceEntries(o.items), laneOrder(o), names, FIXED);
     const [a, b, c] = layout.lanes;
     expect(b.x - a.x).toBeGreaterThanOrEqual(30 * 8 + SEQ.labelChrome);
     expect(c.x - b.x).toBe(SEQ.minGap);
     // A label past the widest is cut, so it widens no further.
     const longer = `usecase "U" {\n  a -> b : ${'x'.repeat(200)}\n}`;
-    const cut = layoutSequence(sequenceEntries(outlineOf(longer, 'U')!.items, ''), ['a', 'b'], names, FIXED);
+    const cut = layoutSequence(sequenceEntries(outlineOf(longer, 'U')!.items), ['a', 'b'], names, FIXED);
     expect(cut.messages[0].labelWidth).toBe(SEQ.labelMax);
     expect(cut.lanes[1].x - cut.lanes[0].x).toBe(SEQ.labelMax + SEQ.labelChrome);
   });
@@ -136,25 +149,25 @@ describe('the sequence layout', () => {
   it('gives back the widening to fit the width it has, down to a label of its least width', () => {
     const src = `usecase "U" {\n  a -> b : ${'x'.repeat(30)}\n  b -> c : y\n}`;
     const o = outlineOf(src, 'U')!;
-    const wide = layoutSequence(sequenceEntries(o.items, ''), laneOrder(o), names, FIXED);
-    const fitted = layoutSequence(sequenceEntries(o.items, ''), laneOrder(o), names, FIXED, wide.width - 40);
+    const wide = layoutSequence(sequenceEntries(o.items), laneOrder(o), names, FIXED);
+    const fitted = layoutSequence(sequenceEntries(o.items), laneOrder(o), names, FIXED, wide.width - 40);
     const gap = (l: typeof wide) => l.lanes[1].x - l.lanes[0].x;
     expect(gap(fitted)).toBeCloseTo(gap(wide) - 40, 0);
     expect(fitted.lanes[2].x - fitted.lanes[1].x).toBe(SEQ.minGap);
     // Never closer than the headers need, however narrow.
     // Never narrower than a label of SEQ.labelMin: the pane scrolls instead.
-    const narrow = layoutSequence(sequenceEntries(o.items, ''), laneOrder(o), names, FIXED, 100);
+    const narrow = layoutSequence(sequenceEntries(o.items), laneOrder(o), names, FIXED, 100);
     expect(gap(narrow)).toBe(SEQ.labelMin + SEQ.labelChrome);
     expect(narrow.width).toBeGreaterThan(100);
     // A label shorter than that keeps its whole width.
     const short = outlineOf(`usecase "U" {\n  a -> b : ${'x'.repeat(20)}\n  b -> c : ${'y'.repeat(30)}\n}`, 'U')!;
-    const tight = layoutSequence(sequenceEntries(short.items, ''), laneOrder(short), names, FIXED, 100);
+    const tight = layoutSequence(sequenceEntries(short.items), laneOrder(short), names, FIXED, 100);
     expect(tight.lanes[1].x - tight.lanes[0].x).toBe(Math.max(SEQ.minGap, 20 * 8 + SEQ.labelChrome));
-    expect(layoutSequence(sequenceEntries(o.items, ''), laneOrder(o), names, FIXED, 5000).lanes).toEqual(wide.lanes);
+    expect(layoutSequence(sequenceEntries(o.items), laneOrder(o), names, FIXED, 5000).lanes).toEqual(wide.lanes);
   });
 
   it('frames a par block and the chosen scenario around their messages, the par block inside the scenario', () => {
-    const layout = layoutSequence(sequenceEntries(outline.items, 'Miss'), lanes, names, FIXED);
+    const layout = layoutSequence(sequenceEntries(outline.items, MISS), lanes, names, FIXED);
     const scenario = layout.frames.find((f) => f.kind === 'scenario')!;
     const [inner, outer] = layout.frames.filter((f) => f.kind === 'parallel');
     expect(scenario.title).toBe('Scenario: Miss');
@@ -172,16 +185,43 @@ describe('the sequence layout', () => {
     expect(layout.width).toBeGreaterThanOrEqual(Math.max(...layout.frames.map((f) => f.x + f.width)));
   });
 
-  it('notes a folded set of scenarios across the lanes', () => {
-    const layout = layoutSequence(sequenceEntries(outline.items, ''), lanes, names, FIXED);
-    expect(layout.notes).toHaveLength(1);
-    expect(layout.notes[0]).toMatchObject({ kind: 'scenarios', names: ['Hit', 'Miss'] });
-    expect(layout.notes[0].x).toBeLessThan(layout.lanes[0].x);
-    expect(layout.notes[0].x + layout.notes[0].width).toBeGreaterThan(layout.lanes.at(-1)!.x);
+  it('frames a set of scenarios with its tabs: the branches, the one shown, and a strip wide enough for them', () => {
+    const layout = layoutSequence(sequenceEntries(outline.items), lanes, names, FIXED);
+    const set = layout.frames.find((f) => f.kind === 'scenario')!;
+    expect(set).toMatchObject({ set: 0, names: ['Hit', 'Miss'], chosen: 'Hit', head: SEQ.frameHead });
+    expect(set.width).toBeGreaterThanOrEqual(FIXED.name('Hit') + 26 + FIXED.name('Miss') + 26);
+    expect(layout.notes).toEqual([]);
+  });
+
+  it('grows the strip of a set a branch is being named in, and starts a first set as an empty frame at the end', () => {
+    const plain = layoutSequence(sequenceEntries(outline.items), lanes, names, FIXED);
+    const naming = layoutSequence(sequenceEntries(outline.items), lanes, names, FIXED, undefined, { naming: { set: 0, height: 30 } });
+    const [a, b] = [plain, naming].map((l) => l.frames.find((f) => f.kind === 'scenario')!);
+    expect(b.head).toBe(a.head + 30);
+    expect(b.height).toBe(a.height + 30);
+    expect(b.width).toBeGreaterThan(a.width);
+    const flat = outlineOf('usecase "U" {\n  a -> b : x\n}', 'U')!;
+    const first = layoutSequence(sequenceEntries(flat.items), ['a', 'b'], names, FIXED, undefined, { naming: { set: -1, height: 0 } });
+    const frame = first.frames.find((f) => f.line === -1)!;
+    expect(frame).toMatchObject({ kind: 'scenario', set: -1, names: [] });
+    expect(frame.y).toBeGreaterThan(first.messages[0].y);
+    expect(first.slots.at(-1)!.y).toBeGreaterThan(frame.y + frame.height);
+  });
+
+  it('folds the lanes no step in sight touches, only when the lanes do not fit', () => {
+    const idle = ['cache', 'q'];
+    const wide = layoutSequence(sequenceEntries(outline.items, MISS), lanes, names, FIXED, undefined, { idle });
+    expect(wide.lanes.some((l) => l.folded)).toBe(false);
+    const fits = layoutSequence(sequenceEntries(outline.items, MISS), lanes, names, FIXED, wide.width + 100, { idle });
+    expect(fits.lanes.some((l) => l.folded)).toBe(false);
+    const tight = layoutSequence(sequenceEntries(outline.items, MISS), lanes, names, FIXED, 200, { idle });
+    expect(tight.lanes.filter((l) => l.folded).map((l) => l.id)).toEqual(idle);
+    expect(tight.lanes.find((l) => l.id === 'cache')!.width).toBe(FOLDED);
+    expect(tight.width).toBeLessThan(layoutSequence(sequenceEntries(outline.items, MISS), lanes, names, FIXED, 200).width);
   });
 
   it('has an insertion point before each message, at the end of each frame and of the diagram', () => {
-    const layout = layoutSequence(sequenceEntries(outline.items, 'Miss'), lanes, names, FIXED);
+    const layout = layoutSequence(sequenceEntries(outline.items, MISS), lanes, names, FIXED);
     const kinds = layout.slots.map((s) => (s.slot.kind === 'before' || s.slot.kind === 'after' ? `${s.slot.kind} ${s.slot.line}` : s.slot.kind === 'scenario' ? `scenario ${s.slot.name}` : s.slot.kind === 'par' ? `par ${s.slot.line}` : s.slot.kind));
     // Right after a step a frame follows, too (7 before the scenario, 11 before its par block).
     expect(kinds).toEqual(['before 7', 'after 7', 'before 11', 'after 11', 'before 13', 'before 14', 'par 12', 'scenario Miss', 'before 18', 'before 19', 'par 17', 'before 21', 'end']);
@@ -197,8 +237,8 @@ describe('the sequence layout', () => {
   });
 
   it('widens a par frame for its actions', () => {
-    const layout = layoutSequence(sequenceEntries(outline.items, ''), lanes, names, FIXED);
-    expect(layout.frames[0].width).toBeGreaterThanOrEqual(FIXED.name('At the same time') + 40 + SEQ.frameActions);
+    const layout = layoutSequence(sequenceEntries(outline.items), lanes, names, FIXED);
+    expect(layout.frames.find((f) => f.kind === 'parallel')!.width).toBeGreaterThanOrEqual(FIXED.name('At the same time') + 40 + SEQ.frameActions);
   });
 
   it('lays out an empty use case as no lanes and no rows', () => {
@@ -214,7 +254,7 @@ describe('the sequence layout', () => {
 describe('what the view adds to the rows', () => {
   const lanes = laneOrder(outline);
   const names = (id: string) => id.toUpperCase();
-  const entries = sequenceEntries(outline.items, 'Miss');
+  const entries = sequenceEntries(outline.items, MISS);
   const plain = layoutSequence(entries, lanes, names, FIXED);
   const y = (l: typeof plain, line: number) => l.messages.find((m) => m.step.line === line)!.y;
 
