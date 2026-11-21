@@ -1,5 +1,5 @@
 ---
-updated: 2026-11-20
+updated: 2026-11-21
 ---
 
 # Use cases
@@ -168,4 +168,4 @@ call itself, and a document with no connections at all is not checked.
 - [Scenarios](SCENARIOS.md): success and failure paths, and parallel steps.
 - [Traffic](HLD.md#traffic): requests per second for each use case.
 - [Build a diagram without code](VISUAL-EDITOR.md): the same steps,
-  picked on the canvas in the **Flows** tab.
+  picked on the **Flows** view.

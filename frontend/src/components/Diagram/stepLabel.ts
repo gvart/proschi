@@ -21,6 +21,10 @@ export interface LabelParts {
   tail: string;
 }
 
+/** A label's parts past its operation: what a step's details edit. */
+export type More = Omit<LabelParts, 'head'>;
+export const restOf = (p: LabelParts): More => ({ fanOut: p.fanOut, size: p.size, sizeFirst: p.sizeFirst, headers: p.headers, tail: p.tail });
+
 const HTTP = /^([A-Z]+)\s+(\S+)\s*([\s\S]*)$/;
 const HEADERS = /^header\s+([A-Za-z0-9-]+(?:\s*,\s*[A-Za-z0-9-]+)*)(?=\s|$)\s*([\s\S]*)$/;
 

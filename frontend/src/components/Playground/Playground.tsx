@@ -858,6 +858,11 @@ export default function Playground() {
     setImageRequest({ format, scale });
   };
 
+  /** The branches the Flows view shows: Play plays that scenario when it starts. */
+  const showScenario = (id: string | undefined) => {
+    setSelectedScenarioId(id);
+    setInitialStep(undefined);
+  };
   const pickScenario = (id: string) => {
     setSelectedScenarioId(id);
     setInitialStep(undefined);
@@ -1450,7 +1455,7 @@ export default function Playground() {
             <ZenCollapse zen={zen.zen}>
               {!playing && <ViewTabs view={view} onChange={setView} results={simulation.results} />}
               {hasScenarios && useCase && scenario && (view === 'diagram' || playing) && (
-                <ScenarioBar useCase={useCase} current={playing ? scenario.id : undefined} onPick={pickScenario} />
+                <ScenarioBar useCase={useCase} current={scenario.id} onPick={pickScenario} />
               )}
             </ZenCollapse>
             <div id={playing ? undefined : `view-panel-${view}`} className="flex-1 min-h-0 relative">
@@ -1539,7 +1544,7 @@ export default function Playground() {
                           onDuplicateNodes={canvasEdits.duplicate}
                           onReconnect={canvasEdits.reconnect}
                           onUnpinNode={canvasEdits.unpin}
-                          flows={systems.focusFile ? undefined : { source, diagram, onChange: (next) => editSource(() => next), useCase: useCase?.id, onUseCase: chooseUseCase }}
+                          flows={systems.focusFile ? undefined : { source, diagram, onChange: (next) => editSource(() => next), useCase: useCase?.id, onUseCase: chooseUseCase, scenario: scenario?.id, onScenario: showScenario }}
                           viewOnly={!visual}
                           onJumpToCode={jumpToCode}
                           onSelectionLink={linkSelection}
@@ -1767,12 +1772,12 @@ function ViewCodeButton({ open, onToggle }: { open: boolean; onToggle: () => voi
 
 interface ScenarioBarProps {
   useCase: DiagramUseCase;
-  /** The scenario being played, if any. */
+  /** The scenario Play plays (the one the Flows view shows). */
   current?: string;
   onPick: (id: string) => void;
 }
 
-/** One tab per scenario of the selected use case; picking one plays it. */
+/** One tab per scenario of the selected use case, the one Play plays selected; picking one plays it. */
 function ScenarioBar({ useCase, current, onPick }: ScenarioBarProps) {
   const activeRef = useRef<HTMLButtonElement>(null);
   // On narrow screens the bar scrolls sideways; keep the playing scenario in view.

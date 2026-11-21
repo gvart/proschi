@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parse } from '../../dsl/parser';
 import { outlineOf } from '../../dsl/edit';
-import { defaultStepKind, missingScenarios, missingUseCases, nextPick, openRequest, outlineSteps } from './flows';
+import { choiceOfScenario, defaultStepKind, missingScenarios, missingUseCases, nextPick, openRequest, outlineSteps, scenarioOfChoice } from './flows';
 
 describe('flows builder suggestions', () => {
   const src = [
@@ -47,5 +47,58 @@ describe('flows builder suggestions', () => {
     expect(missingUseCases(diagram, ['Redirect'])).toEqual(['Shorten']);
     expect(missingScenarios(diagram, 'Redirect', ['Cache hit'])).toEqual(['Cache miss']);
     expect(missingScenarios(diagram, 'Shorten', [])).toEqual([]);
+  });
+});
+
+describe('the scenario Play plays and the branches Flows shows', () => {
+  const src = [
+    'shopper [Client]',
+    'api [Service]',
+    'cache [Redis]',
+    'db [Postgres]',
+    'usecase "Checkout" {',
+    '  shopper -> api : POST /checkout',
+    '  alt "Cart cached" {',
+    '    api -> cache : GET cart',
+    '    alt "Warm" {',
+    '      cache --> api : hit',
+    '    } alt "Cold" {',
+    '      cache --> api : miss',
+    '    }',
+    '  } alt "Cart expired" {',
+    '    api -> db : SELECT cart',
+    '  }',
+    '  api -> cache : SET cart',
+    '  alt "Paid" {',
+    '    api -> db : INSERT order',
+    '  } alt "Declined" {',
+    '    api --> shopper : 402',
+    '  }',
+    '}',
+  ].join('\n');
+  const useCase = parse(src).diagram.useCases[0];
+  const sets = outlineOf(src, 'Checkout')!.items.flatMap((i) => (i.kind === 'scenarios' ? [i.branches.map((b) => b.name)] : []));
+
+  it('finds the first scenario whose path takes the branch of each set, a nested set between', () => {
+    expect(sets).toEqual([
+      ['Cart cached', 'Cart expired'],
+      ['Paid', 'Declined'],
+    ]);
+    expect(scenarioOfChoice(useCase.scenarios, ['Cart cached', 'Paid'])).toBe('cart-cached-warm-paid');
+    expect(scenarioOfChoice(useCase.scenarios, ['Cart expired', 'Declined'])).toBe('cart-expired-declined');
+    expect(scenarioOfChoice(useCase.scenarios, ['Declined', 'Cart expired'])).toBeUndefined();
+    expect(scenarioOfChoice(useCase.scenarios, [])).toBe(useCase.scenarios[0].id);
+  });
+
+  it('reads the branch of each set back from a scenario, and the two agree', () => {
+    for (const s of useCase.scenarios) {
+      const choice = choiceOfScenario(s.name, sets);
+      const names = sets.map((_, i) => choice[i]);
+      expect(names.every(Boolean)).toBe(true);
+      // Back to a scenario with those branches (with a nested set, its first branch).
+      expect(choiceOfScenario(useCase.scenarios.find((x) => x.id === scenarioOfChoice(useCase.scenarios, names))!.name, sets)).toEqual(choice);
+    }
+    expect(choiceOfScenario('Cart cached › Cold › Declined', sets)).toEqual({ 0: 'Cart cached', 1: 'Declined' });
+    expect(choiceOfScenario('Checkout', sets)).toEqual({});
   });
 });

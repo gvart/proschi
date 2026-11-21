@@ -1,5 +1,5 @@
 ---
-updated: 2026-11-20
+updated: 2026-11-21
 ---
 
 # Build a diagram without code
@@ -33,8 +33,8 @@ Mac), changes the mode. A first visit opens in Visual. Practice and the
 mock interview use the same switch.
 
 - **Visual** gives the page to the canvas, with a rail of two tabs:
-  **Components** and **Selection** (a phone adds **Flows**). **View code**
-  shows the text, read-only.
+  **Components** and **Selection** (on a phone, a sheet under the canvas).
+  **View code** shows the text, read-only.
 - **Code** puts the text editor beside the diagram. The diagram only looks:
   select, pan, zoom and play, but edit in the text.
 
@@ -164,37 +164,81 @@ With no scenario yet, **Add scenario** in the bar starts the first one, in
 an empty frame at the end of the flow.
 
 Every change edits the text. **Ctrl+Z** (**⌘Z**) undoes it in Visual mode,
-and Code mode has it in the code editor's history too. On a phone, Flows is
-a sheet under the canvas with the steps as a list: tap a step to edit it,
-and its row moves it or inserts a step before it.
+and Code mode has it in the code editor's history too.
+
+The scenario the view shows is the one **Play** plays: pick a branch on a
+frame and the scenarios row over the canvas picks the same, and a scenario
+played there shows its branches on the frames.
+
+### On a phone
+
+The same **Architecture | Flows** switch shows Flows as a page of its own.
+The steps are the page, numbered as they run, and the page is the one
+thing that scrolls:
+
+- A set of scenarios is a dashed group, with a chip for each scenario. Tap
+  a chip to show its steps, **+** to name a new one, and its **⋯** to add a
+  step to it, rename it or delete it. With no scenario yet, **Add scenario**
+  under the use case's name starts one at the end.
+- A parallel block is a group of its own, with **Ungroup**.
+- Tap a step to edit it in a sheet over the bottom of the page: its **From**
+  and **To**, its kind, its operation (the type's list as you type) and
+  **Headers, payload and fan-out**. Each change is written at once: a tap
+  for the ends and the kind, leaving the field or **Enter** for the
+  operation. **Show on the architecture** switches back with the step's
+  components selected, and **Done** puts the sheet away.
+- A step's **⋯** moves it up or down, inserts a step before it, replies to
+  a request, runs it at the same time as the next step, or deletes it.
+- **Add step**, the last row, opens the same sheet for a new step, starting
+  where the last one ended. Choose where it goes, type the operation and
+  tap **Add step**: the sheet stays for the next one until **Done**.
+- The **Undo** and **Redo** buttons in the bar take back any change.
 
 ## 6. Work from the keyboard
 
 Click the canvas first. **?** lists every shortcut.
 
+On the canvas:
+
 | Key | What it does |
 |---|---|
 | **A** or **Ctrl+K** (**⌘K**) | The command bar: type plain words, like `redis` or `rename`, and **Enter** adds the component or runs the action. |
+| **/** or **Ctrl+F** (**⌘F**) | Find a component. |
 | **Tab**, **Shift+Tab** | Select the next or previous component. |
 | **C** | Add a component connected from the selected one. |
 | **F2** | Rename the selected component. |
 | **T** | Change its type. |
 | **+**, **-** | More or fewer replicas. |
 | **R** | Lay out again, when you have dragged components into place. |
+| **Ctrl+C**, **Ctrl+V** (**⌘C**, **⌘V**) | Copy the selected components and the connections between them, and paste them. |
+| **Ctrl+D** (**⌘D**) | Duplicate the selection. |
+| **Delete** or **Backspace** | Delete the selection. |
+| **Ctrl+Z** (**⌘Z**) | Undo. **Ctrl+Shift+Z** or **Ctrl+Y** (**⌘⇧Z**) redoes. |
 | **F** | Switch between the architecture and Flows. |
 
-In the Flows view, **N** adds a step: at the end, or after the selected
-step (**Shift+N** before it). While you pick its target, **←** and **→**
-aim at a lane and **Enter** takes it. In its label, **Enter** adds the step
-and starts the next, and **Escape** stops.
+In the Flows view:
 
-To edit a step, click it first. **↑** and **↓** select the next
-step, **Shift+↑** and **Shift+↓** select several, and **Escape** lets it
-go. **Enter** edits its label. **1** to **4** set its kind (request,
-response, message, fails), **R** adds its reply, **D** opens its details
-and **X** swaps its ends. **Alt+←** and **Alt+→** move where it goes a lane
-over, and with **Shift** where it starts. **Tab** reaches its toolbar,
-whose buttons the arrow keys go along. **M** shows or collapses the map.
+| Key | What it does |
+|---|---|
+| **N** | Add a step at the end, or after the selected step. **Shift+N** adds one before it. |
+| **←**, **→**, **Enter** | While adding: aim at a lane, then take it (or the reply offered). |
+| **Enter** | While adding, in its label: add the step and start the next from where it went. **Escape** stops. |
+| **↑**, **↓**, **Home**, **End** | Select the previous or next step, or the first or last. |
+| **Shift+↑**, **Shift+↓**, **Shift**-click | Select the steps from the first selected to this one. |
+| **Ctrl**-click (**⌘**-click) | Add a step to the selection, or take it out. |
+| **Enter** or a double click | Edit the selected step's label on its arrow. **Enter** applies and **Escape** keeps the old one. |
+| **1** to **4** | Make it a request, a response, a message or a failed call. |
+| **R** | Add the reply to the selected request. |
+| **D** | Open or close its headers, payload and fan-out. |
+| **X** | Swap where the step starts and where it goes. |
+| **Alt+←**, **Alt+→** (**⌥**) | Move where it goes a lane over; with **Shift**, where it starts. |
+| **Alt+↑**, **Alt+↓** (**⌥**) | Move the selected step up or down. |
+| **Delete** or **Backspace** | Delete the selected steps. |
+| **[**, **]** | Show the scenario before or after the selected step's, in its frame. |
+| **Tab** | Go to the step's toolbar; the arrow keys go along it and **Escape** goes back. |
+| **M** | Show or collapse the architecture map. |
+| **Escape** | Let go of the selection, or stop adding steps. |
+| **Ctrl+Z** (**⌘Z**) | Undo the last change. |
 
 ## 7. Ask the AI in Visual mode
 

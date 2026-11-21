@@ -7,6 +7,9 @@ import type { Diagram } from '../../dsl/types';
  * step. The labels come from the components' types (dsl/typesys/vocabulary.ts).
  */
 
+/** What each kind of step is called in the Flows view's toolbars and a phone's sheet. */
+export const KIND_LABEL: Record<StepKind, string> = { request: 'Request', response: 'Response', async: 'Message', failed: 'Fails' };
+
 /** Every step of an outline, the main flow's, each scenario's and each parallel block's, in text order. */
 export function outlineSteps(items: OutlineItem[]): OutlineStep[] {
   return items.flatMap((item) =>
@@ -69,4 +72,38 @@ export function missingScenarios(diagram: Diagram, useCase: string, defined: str
  */
 export function stepEdge(step: { from: string; to: string }, edges: readonly { id: string; source: string; target: string }[]): string | undefined {
   return (edges.find((e) => e.source === step.from && e.target === step.to) ?? edges.find((e) => e.source === step.to && e.target === step.from))?.id;
+}
+
+/** The names of a scenario's path (DiagramScenario.name joins them with ' › '). */
+const pathOf = (name: string) => name.split(' › ');
+
+/**
+ * The scenario Play plays for the branches the Flows view shows, one per set
+ * of scenarios in order: the first whose path takes them all, in that order
+ * (a nested set's names come between). Undefined when none does.
+ */
+export function scenarioOfChoice(scenarios: readonly { id: string; name: string }[], names: readonly string[]): string | undefined {
+  return scenarios.find((s) => {
+    const path = pathOf(s.name);
+    let at = 0;
+    for (const name of names) {
+      at = path.indexOf(name, at) + 1;
+      if (at === 0) return false;
+    }
+    return true;
+  })?.id;
+}
+
+/** The branch each set of scenarios shows for a scenario Play plays: its path's names matched to the sets (each its branches' names) in order. */
+export function choiceOfScenario(name: string, sets: readonly (readonly string[])[]): Record<number, string> {
+  const path = pathOf(name);
+  const choice: Record<number, string> = {};
+  let at = 0;
+  sets.forEach((branches, set) => {
+    const i = path.findIndex((p, j) => j >= at && branches.includes(p));
+    if (i < 0) return;
+    choice[set] = path[i];
+    at = i + 1;
+  });
+  return choice;
 }

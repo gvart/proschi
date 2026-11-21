@@ -1,9 +1,8 @@
-import { useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
+import { useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp, CornerDownLeft, MoreHorizontal, MousePointerClick, Pencil, Plus, Trash2, Workflow, X } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, CornerDownLeft, MoreHorizontal, Pencil, Plus, Redo2, Rows2, Trash2, Undo2, X } from 'lucide-react';
 import {
   addScenario,
-  addStep,
   addUseCase,
   giveOperations,
   groupParallel,
@@ -24,10 +23,12 @@ import {
 import { parse } from '../../dsl/parser';
 import type { Diagram } from '../../dsl/types';
 import { eyebrow, field, iconButton, outlineButton, primaryButton, toolButton } from '../Playground/ui';
-import { defaultStepKind, missingScenarios, missingUseCases, nextPick, openRequest, outlineSteps } from './flows';
+import { choiceOfScenario, defaultStepKind, KIND_LABEL, missingScenarios, missingUseCases, nextPick, openRequest, outlineSteps, scenarioOfChoice } from './flows';
 import { stepVocabulary, type UsedStep } from '../../dsl/typesys/vocabulary';
 import StepLabelField from './StepLabelField';
-import { composeLabel, isHttpHead, splitLabel, type LabelParts } from './stepLabel';
+import { composeLabel, restOf, splitLabel, type More } from './stepLabel';
+import { MoreBody } from './StepDetails';
+import { DraftFields, PhoneSheet, PhoneSteps, StepFields, type RowAction } from './FlowsPhone';
 import { accessOf } from '../../dsl/access';
 import Select from '../../design/Select';
 import SequenceDiagram, { type ScenarioTabs, type SelectMode } from './SequenceDiagram';
@@ -42,17 +43,14 @@ import { insertAt, insertedStep, movedStep, samePlaces, unanswered } from './seq
 
 /**
  * The Flows builder (docs/design/paid-plans.md P46): use cases and their
- * scenarios without code. Pick a use case in the select, or add one from its
- * last options (a suggestion, or "New use case…" and a name), then its steps:
- * click the component a step starts at on the canvas, then the one it goes
- * to, and pick or type its label. Only the chosen use case's steps and
- * scenarios show. A scenario is an alternative within a use case (a cache
- * hit or a miss); steps go to the main flow or to one scenario. Every change
- * is a dsl/edit.ts edit of the text, which stays the source of truth.
+ * scenarios without code: the Flows view (FlowsView.tsx) over the canvas.
+ * Each set of scenarios (an alternative within a use case: a cache hit or a
+ * miss) shows one branch, the one Play plays where the host plays them. Every
+ * change is a dsl/edit.ts edit of the text, which stays the source of truth.
  *
- * It has two layouts. In the rail (a phone's sheet) it is one narrow column.
- * As the Flows view of a wider screen (FlowsView.tsx) the use case and its
- * scenario tabs head it, and the chosen tab is drawn as a sequence diagram
+ * It has two layouts. On a phone the steps are a list, the page, and one
+ * sheet edits the step tapped or adds one (FlowsPhone.tsx). On a wider
+ * screen the use case heads it and is drawn as a sequence diagram
  * (SequenceDiagram.tsx) that is edited on its arrows: a click selects a step
  * (Shift or Cmd/Ctrl several) and shows its toolbar (its kind, Add reply,
  * move, its details, delete); Enter or a double click edits its label in
@@ -65,7 +63,7 @@ import { insertAt, insertedStep, movedStep, samePlaces, unanswered } from './seq
  * architecture map lights up the selected step.
  */
 
-/** A step being added: the components picked so far (on the canvas or in the form). */
+/** A step being added: its ends picked so far (on its lanes, the map or a phone's sheet). */
 export interface StepPick {
   from?: string;
   to?: string;
@@ -83,29 +81,26 @@ interface FlowsPanelProps {
   useCase: string | undefined;
   onUseCase: (id: string) => void;
   onClose: () => void;
-  /** Lights up a step's two components on the canvas while its row is hovered; null when none is. */
-  onHighlight?: (ids: string[] | null) => void;
-  /** The narrow column of a phone's sheet (the default), or the Flows view of a wider screen (FlowsView.tsx) with the sequence diagram. */
-  layout?: 'rail' | 'pane';
+  /** A phone's Undo and Redo, which it has no keys for. */
+  onUndo?: () => void;
+  onRedo?: () => void;
+  /** Switches to the architecture with these components selected (a phone's "Show on the architecture"). */
+  onShow?: (ids: string[]) => void;
+  /** A phone's list of steps with its sheet (FlowsPhone.tsx), or the Flows view of a wider screen (FlowsView.tsx) with the sequence diagram. */
+  layout: 'phone' | 'pane';
   /** The host has a use case picker of its own (the editor's header): the view's bar shows the use case's name and a menu, not another picker. */
   headerPicker?: boolean;
+  /**
+   * The scenario Play plays (its id; undefined for the first), where the host plays them: the view shows its branch
+   * in each set, and a branch shown here is what Play plays (`onScenario`). Without it the view keeps its own.
+   */
+  scenario?: string;
+  onScenario?: (id: string | undefined) => void;
 }
 
 /** A step the builder adds. */
 type NewStepInput = { from: string; to: string; kind: StepKind; label: string };
 
-const KIND_LABEL: Record<StepKind, string> = { request: 'Request', response: 'Response', async: 'Message', failed: 'Fails' };
-const KIND_HELP: Record<StepKind, string> = {
-  request: 'Asks and waits for an answer',
-  response: 'Answers a request',
-  async: 'Sent without waiting',
-  failed: 'A call that never gets an answer: a timeout, a refused connection',
-};
-
-/** A step being changed in place, or one being inserted before it. */
-type Editing = { line: number; insert: boolean };
-
-const MAIN = '';
 const SELF = "A step can't go from a component to itself.";
 /** What steps say and where, to tell when following them changed anything. */
 const said = (list: OutlineStep[]) => list.map((s) => `${s.line} ${s.from} ${s.to} ${s.kind} ${s.label}`).join('\n');
@@ -115,7 +110,7 @@ const SUGGEST = '\u0000suggest:';
 /** No branch chosen yet: each set of scenarios shows its first. */
 const FIRSTS: BranchChoice = {};
 
-export default function FlowsPanel({ source, diagram, onChange, pick, onPick, useCase, onUseCase, onClose, onHighlight, layout = 'rail', headerPicker = false }: FlowsPanelProps) {
+export default function FlowsPanel({ source, diagram, onChange, pick, onPick, useCase, onUseCase, onClose, onUndo, onRedo, onShow, layout, headerPicker = false, scenario, onScenario }: FlowsPanelProps) {
   const pane = layout === 'pane';
   const [mapOpen, setMapOpen] = useMapOpen();
   const local = useMemo(() => diagram.useCases.filter((u) => u.loc.file === undefined), [diagram]);
@@ -126,18 +121,36 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   const outline = useMemo(() => (current ? outlineOf(source, current) : undefined), [source, current]);
   const used = useMemo(() => useCases.flatMap((u) => outlineSteps(outlineOf(source, u)?.items ?? [])), [source, useCases]);
   const scenarios = useMemo(() => outline?.items.flatMap((i) => (i.kind === 'scenarios' ? i.branches.map((b) => b.name) : [])) ?? [], [outline]);
-  const [lane, setLane] = useState(MAIN);
-  const laneNow = scenarios.includes(lane) ? lane : MAIN;
-  /** The pane's branch shown in each set of scenarios, by use case. */
+  /** The sets of scenarios, each its branches, in order. */
+  const sets = useMemo(() => outline?.items.flatMap((i) => (i.kind === 'scenarios' ? [i.branches] : [])) ?? [], [outline]);
+  const parsed = useMemo(() => parse(source), [source]);
+  /** The branch shown in each set of scenarios, by use case, where the host does not play them. */
   const [choices, setChoices] = useState<Record<string, BranchChoice>>({});
-  const choiceNow = (current && choices[current]) || FIRSTS;
-  const choose1 = (set: number, name: string) => current && setChoices((all) => ({ ...all, [current]: { ...(all[current] ?? {}), [set]: name } }));
+  /** Where the host plays them, the branches of the scenario it plays. */
+  const played = useMemo(() => {
+    if (!onScenario || !current) return undefined;
+    const name = parsed.diagram.useCases.find((u) => u.loc.file === undefined && u.name === current)?.scenarios.find((s) => s.id === scenario)?.name;
+    return name ? choiceOfScenario(name, sets.map((b) => b.map((x) => x.name))) : FIRSTS;
+  }, [onScenario, current, parsed, scenario, sets]);
+  const choiceNow = played ?? ((current && choices[current]) || FIRSTS);
+  /** Shows `name` in its set; where the host plays them, it plays that scenario (of `text`, the source just changed to, if given). */
+  const choose1 = (set: number, name: string, text?: string) => {
+    if (!current) return;
+    if (!onScenario) return setChoices((all) => ({ ...all, [current]: { ...(all[current] ?? {}), [set]: name } }));
+    const next: BranchChoice = { ...choiceNow, [set]: name };
+    const now = text === undefined ? sets : (outlineOf(text, current)?.items.flatMap((i) => (i.kind === 'scenarios' ? [i.branches] : [])) ?? []);
+    const names = now.flatMap((branches, i) => (branches.find((b) => b.name === next[i]) ?? branches[0])?.name ?? []);
+    const useCase = (text === undefined ? parsed : parse(text)).diagram.useCases.find((u) => u.loc.file === undefined && u.name === current);
+    onScenario(scenarioOfChoice(useCase?.scenarios ?? [], names));
+  };
   /** The set a scenario is being named in on its frame (-1: a first set, at the end), if any. */
   const [namingSet, setNamingSet] = useState<number>();
   const [error, setError] = useState<string>();
-  const [editing, setEditing] = useState<Editing | null>(null);
-  /** The use case or scenario being renamed: its current name, and the scenario's use case. */
-  const [renaming, setRenaming] = useState<{ scenario?: string } | null>(null);
+  /** A phone's sheet is open on the selected step, and how tall it is. */
+  const [sheet, setSheet] = useState(false);
+  const [sheetHeight, setSheetHeight] = useState(0);
+  /** The use case's name is being changed. */
+  const [renaming, setRenaming] = useState(false);
   const names = useMemo(() => new Map(diagram.nodes.map((n) => [n.id, n.name])), [diagram]);
   const name = (id: string) => names.get(id) ?? id;
 
@@ -171,12 +184,10 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   /** The steps the diagram draws, in order: each set of scenarios as its chosen branch. */
   const drawn = useMemo(() => (outline ? entrySteps(sequenceEntries(outline.items, choiceNow)) : []), [outline, choiceNow]);
   const endsOf = (s: OutlineStep) => ({ from: s.from, to: s.to });
-  /** Selects steps (a scenario's shows in its set's frame, on the rail on its tab). */
+  /** Selects steps (a scenario's shows in its set's frame, or in its group of a phone's list). */
   const selectSteps = (next: OutlineStep[]) => {
     setSel(next);
     if (!next[0] || !outline) return;
-    const scenario = scenarioOfStep(outline.items, next.at(-1)!.line);
-    if (scenario && scenario !== laneNow) setLane(scenario);
     const at = setOfStep(outline.items, next.at(-1)!.line);
     if (at && choiceNow[at.set] !== at.name) choose1(at.set, at.name);
   };
@@ -195,26 +206,17 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
     } else selectSteps([step]);
   };
   const clearSelection = () => setSel([]);
-  /** Shows a tab (the main flow, or a scenario); a step selected in another scenario is let go. */
-  const chooseLane = (next: string) => {
-    setLane(next);
-    if (draft) {
-      setDraft(null);
-      onPick(null);
-    }
-    if (outline && followed.some((s) => (scenarioOfStep(outline.items, s.line) ?? next) !== next)) clearSelection();
-  };
   /** Shows a branch of a set of scenarios; a step selected in another of its branches is let go, and so is a draft. */
-  const chooseBranch = (set: number, name: string) => {
-    choose1(set, name);
+  const chooseBranch = (set: number, name: string, text?: string) => {
+    choose1(set, name, text);
     if (draft) {
       setDraft(null);
       onPick(null);
     }
     if (outline && followed.some((s) => setOfStep(outline.items, s.line)?.set === set)) clearSelection();
   };
-  /** In the pane, each step's number as the diagram draws the tab shown; the rail numbers the main flow's. */
-  const drawnNumbers = useMemo(() => (pane ? new Map(drawn.map((s, i) => [s.line, i + 1])) : undefined), [pane, drawn]);
+  /** Each step's number, as the diagram (or a phone's list) draws the branches shown. */
+  const drawnNumbers = useMemo(() => new Map(drawn.map((s, i) => [s.line, i + 1])), [drawn]);
   const pickRef = useRef(onPick);
   useEffect(() => {
     pickRef.current = onPick;
@@ -234,35 +236,37 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
     if (focus) setFocusKey((k) => k + 1);
     return true;
   };
-  const move = (direction: 'up' | 'down') => {
-    if (!chosen) return;
-    const result = moveStep(source, chosen.line, direction);
+  const moveOne = (step: OutlineStep, direction: 'up' | 'down') => {
+    const result = moveStep(source, step.line, direction);
     // At its block's edge it stays (and a twin elsewhere is not it).
-    if (result.source === source) return setNews(`Step ${drawnNumbers?.get(chosen.line) ?? ''} can't move ${direction} from there.`);
-    if (commit(result, (after) => [movedStep(after, chosen, direction) ?? chosen])) setNews(`Step moved ${direction}.`);
+    if (result.source === source) return setNews(`Step ${drawnNumbers.get(step.line) ?? ''} can't move ${direction} from there.`);
+    if (commit(result, (after) => [movedStep(after, step, direction) ?? step])) setNews(`Step moved ${direction}.`);
   };
-  /** Deletes the selected steps; the step drawn next (or else the one before) is selected in place of one. */
-  const deleteSelected = (focus = false) => {
-    if (!followed.length || !current) return;
-    const next = [...followed].sort((a, b) => b.line - a.line).reduce((text, s) => removeStep(text, s.line), source);
-    const index = drawn.findIndex((d) => d.line === followed[0].line);
-    setNews(followed.length > 1 ? `${followed.length} steps deleted.` : `Step ${index + 1} deleted.`);
+  const move = (direction: 'up' | 'down') => chosen && moveOne(chosen, direction);
+  /** Deletes steps (the selected ones); the step drawn next (or else the one before) is selected in place of one. */
+  const deleteSteps = (list: OutlineStep[], focus: boolean) => {
+    if (!list.length || !current) return;
+    const next = [...list].sort((a, b) => b.line - a.line).reduce((text, s) => removeStep(text, s.line), source);
+    const index = drawn.findIndex((d) => d.line === list[0].line);
+    setNews(list.length > 1 ? `${list.length} steps deleted.` : `Step ${index + 1} deleted.`);
     commit({ source: next }, (after) => {
-      if (followed.length > 1) return [];
+      if (list.length > 1) return [];
       const left = after.length ? entrySteps(sequenceEntries(outlineOf(next, current)!.items, choiceNow)) : [];
       const step = left[index] ?? left[index - 1];
       return step ? [step] : [];
     }, focus);
   };
+  const deleteSelected = (focus = false) => deleteSteps(followed, focus);
   /** A selected step already in a par block, which groupParallel refuses: the selection is not offered to run at the same time. */
   const grouped = outline ? followed.find((s) => inParallel(outline.items, s.line)) : undefined;
   const canGroup = followed.length > 1 && !grouped;
   // The new block's first step is selected, so the action is not offered again for steps that now run at the same time.
-  const group = () =>
-    commit(groupParallel(source, followed.map((s) => s.line)), (after) => {
-      const placed = samePlaces(steps, after, followed);
+  const groupSteps = (list: OutlineStep[]) =>
+    commit(groupParallel(source, list.map((s) => s.line)), (after) => {
+      const placed = samePlaces(steps, after, list);
       return placed && [placed.reduce((a, b) => (b.line < a.line ? b : a))];
     }, true);
+  const group = () => groupSteps(followed);
   const ungroup = (line: number) => commit(ungroupParallel(source, line), (after) => samePlaces(steps, after, followed), true);
   /** A step dragged to an insertion point: moved there in one edit, and selected where it went. */
   const moveTo = (step: OutlineStep, slot: Slot) => {
@@ -293,11 +297,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   };
 
   // What a step would add to the problems: the diagnostics the text gets with it that it does not have now.
-  const baseline = useMemo(() => parse(source).diagnostics.map((d) => `${d.severity}:${d.message}`), [source]);
-  const check = (step: NewStepInput, at?: Editing): string[] => {
-    if (!current) return [];
-    return problemsOf(at ? (at.insert ? addStep(source, current, step, undefined, at.line, diagram) : setStep(source, at.line, step, diagram)) : addStep(source, current, step, laneNow || undefined, undefined, diagram));
-  };
+  const baseline = useMemo(() => parsed.diagnostics.map((d) => `${d.severity}:${d.message}`), [parsed]);
   const problemsOf = (result: EditResult): string[] => {
     if (result.error !== undefined) return [result.error];
     const left = [...baseline];
@@ -323,7 +323,6 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
     onChange(next);
     const id = parse(next).diagram.useCases.find((u) => u.loc.file === undefined && u.name === clean)?.id;
     if (id) onUseCase(id);
-    setLane(MAIN);
     setNaming(false);
     onPick(null);
     return true;
@@ -337,8 +336,6 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
       newUseCase(value.slice(SUGGEST.length));
     } else {
       onUseCase(value);
-      setLane(MAIN);
-      setEditing(null);
       setSel([]);
       setDraft(null);
       onPick(null);
@@ -366,58 +363,6 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
     apply(giveOperations(base, node, name === parent ? `${name} API` : name, parent, ops));
   };
 
-  const stopEditing = () => {
-    setEditing(null);
-    onPick(null);
-  };
-  /** A step's row, or the composer in its place while it is edited (or one inserted before it). */
-  const row = (step: OutlineStep, n?: number) => {
-    const form =
-      editing?.line === step.line && pick && current && outline ? (
-        <li key={`edit${step.line}`} className="list-none">
-          <StepForm
-            key={`${editing.insert ? 'insert' : 'edit'}${step.line}`}
-            diagram={diagram}
-            steps={outlineSteps(outline.items)}
-            used={used}
-            pick={pick}
-            onPick={(p) => (p ? onPick(p) : stopEditing())}
-            where={editing.insert ? 'A step before this one.' : 'Change this step, or click other components.'}
-            mode={editing.insert ? 'insert' : 'edit'}
-            initial={editing.insert ? undefined : { kind: step.kind, label: step.label }}
-            check={(s) => check(s, editing)}
-            onGiveOps={giveOps}
-            onAdd={(s) => {
-              const done = apply(editing.insert ? addStep(source, current, s, undefined, step.line, diagram) : setStep(source, step.line, s, diagram));
-              if (done) stopEditing();
-              return done;
-            }}
-          />
-        </li>
-      ) : null;
-    const shown = (
-      <StepRow
-        key={step.line}
-        n={n}
-        step={step}
-        name={name}
-        onHighlight={onHighlight}
-        onEdit={() => {
-          setEditing({ line: step.line, insert: false });
-          onPick({ from: step.from, to: step.to });
-        }}
-        onInsert={() => {
-          setEditing({ line: step.line, insert: true });
-          onPick({ from: step.from });
-        }}
-        onMove={(direction) => apply(moveStep(source, step.line, direction))}
-        onDelete={() => onChange(removeStep(source, step.line))}
-      />
-    );
-    if (!form) return shown;
-    return editing!.insert ? [form, shown] : form;
-  };
-
   const suggestions = missingUseCases(diagram, useCases);
   const options = [
     ...local.map((u) => ({ value: u.id, label: u.name })),
@@ -429,7 +374,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   const pickerButtons = (
     <>
       {current && (
-        <button type="button" onClick={() => setRenaming({})} aria-label={`Rename the use case ${current}`} title="Rename this use case" className={`${iconButton} !h-8 !w-8 shrink-0`}>
+        <button type="button" onClick={() => setRenaming(true)} aria-label={`Rename the use case ${current}`} title="Rename this use case" className={`${iconButton} !h-8 !w-8 shrink-0`}>
           <Pencil size={14} />
         </button>
       )}
@@ -454,8 +399,8 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   );
   const picker = naming ? (
     <NewUseCase onAdd={newUseCase} onCancel={stopNaming} inline={pane} />
-  ) : renaming && !renaming.scenario && current ? (
-    <RenameField label={`Rename the use case ${current}`} value={current} onRename={(next) => apply(renameUseCase(source, current, next)) && (setRenaming(null), true)} onCancel={() => setRenaming(null)} />
+  ) : renaming && current ? (
+    <RenameField label={`Rename the use case ${current}`} value={current} onRename={(next) => apply(renameUseCase(source, current, next)) && (setRenaming(false), true)} onCancel={() => setRenaming(false)} />
   ) : pane ? (
     <div className="flex min-w-0 items-center gap-1.5">
       <label htmlFor={selectId} className={`${eyebrow} mr-0.5 shrink-0 @max-5xl:sr-only`}>
@@ -475,164 +420,13 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
       </div>
     </>
   );
-  const empty = useCases.length === 0 && !naming && (
-    <div className="space-y-2 pt-1">
-      <p className="text-sm text-muted">A use case is one thing a user does, written as the requests it makes from component to component.</p>
-      <button type="button" onClick={() => choose(NEW)} className={primaryButton}>
-        <Plus size={14} aria-hidden="true" />
-        New use case
-      </button>
-      {suggestions.length > 0 && (
-        <div className="flex flex-wrap gap-1" aria-label="Use cases the problem asks for">
-          {suggestions.map((s) => (
-            <button key={s} type="button" onClick={() => newUseCase(s)} className="inline-flex items-center gap-1 rounded-full border-bw-1 border-ink/40 px-2 py-0.5 text-xs font-semibold hover:border-ink hover:bg-pop-yellow/30">
-              <Plus size={11} aria-hidden="true" />
-              {s}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
   const alert = error && (
     <p role="alert" className="text-xs text-red-700 dark:text-red-300">
       {error}
     </p>
   );
-  const newScenario = (value: string) => {
-    const clean = value.trim();
-    if (!clean || !current || !apply(addScenario(source, current, clean))) return false;
-    chooseLane(clean);
-    return true;
-  };
-
-  /** The chosen use case: its steps (each scenario's in a box), what to add, and in the rail the scenario to add to. */
-  const body = current && outline && (
-    <section aria-label={`Use case ${current}`} className={pane ? 'space-y-3' : 'space-y-3 rounded-sm border-bw-1 border-ink p-2.5'}>
-      {outline.items.length === 0 ? (
-        // The pane's diagram says so.
-        !pane && <p className="text-xs text-muted">No steps yet. Add the first request, from where the user starts.</p>
-      ) : (
-        <ol aria-label="Steps" className="space-y-1">
-          {(() => {
-            let n = 0;
-            return outline.items.map((item, i) =>
-              item.kind === 'step' ? (
-                row(item.step, ++n)
-              ) : item.kind === 'scenarios' ? (
-                <li key={`s${i}`} className="space-y-1.5 py-1">
-                  {item.branches.map((b) => (
-                    <div key={b.line} role="group" aria-label={`Scenario ${b.name}`} className={`rounded-sm border-bw-1 border-dashed px-2 py-1.5 ${laneNow === b.name ? 'border-ink bg-pop-yellow/15' : 'border-ink/30'}`}>
-                      <div className="flex items-center gap-1">
-                        {renaming?.scenario === b.name ? (
-                          <RenameField
-                            label={`Rename the scenario ${b.name}`}
-                            value={b.name}
-                            onRename={(next) => apply(renameScenario(source, current, b.name, next)) && (setRenaming(null), next !== b.name && laneNow === b.name && setLane(next), true)}
-                            onCancel={() => setRenaming(null)}
-                          />
-                        ) : (
-                          <>
-                            <span className={`${eyebrow} min-w-0 flex-1 truncate`}>Scenario: {b.name}</span>
-                            <button type="button" aria-label={`Rename the scenario ${b.name}`} title="Rename this scenario" onClick={() => setRenaming({ scenario: b.name })} className={`${iconButton} !h-7 !w-7`}>
-                              <Pencil size={12} />
-                            </button>
-                          </>
-                        )}
-                        <button
-                          type="button"
-                          aria-label={`Delete the scenario ${b.name}`}
-                          title="Delete this scenario and its steps"
-                          onClick={() => apply(removeScenario(source, current, b.name))}
-                          className={`${iconButton} !h-7 !w-7 text-red-700 dark:text-red-300`}
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                      {b.steps.length === 0 && b.other === 0 ? (
-                        <p className="text-xs text-muted">No steps yet.</p>
-                      ) : (
-                        <ol className="space-y-1">
-                          {b.steps.map((s) => row(s))}
-                        </ol>
-                      )}
-                      {b.other > 0 && <p className="text-xs text-muted">And {b.other === 1 ? 'a block' : `${b.other} blocks`} you can edit in Code mode.</p>}
-                    </div>
-                  ))}
-                </li>
-              ) : item.kind === 'parallel' ? (
-                <li key={`p${item.block.line}`} className="py-1">
-                  <div role="group" aria-label="At the same time" className="rounded-sm border-bw-1 border-ink/30 px-2 py-1.5">
-                    <span className={eyebrow}>At the same time</span>
-                    <ol className="mt-1 space-y-1">{item.block.steps.map((s) => row(s, ++n))}</ol>
-                    {item.block.other > 0 && <p className="text-xs text-muted">And {item.block.other === 1 ? 'a statement' : `${item.block.other} statements`} you can edit in Code mode.</p>}
-                  </div>
-                </li>
-              ) : (
-                <li key={`o${item.line}`} className="text-xs text-muted">
-                  A block you can edit in Code mode.
-                </li>
-              ),
-            );
-          })()}
-        </ol>
-      )}
-
-      {!pane && scenarios.length > 0 && (
-        <fieldset>
-          <legend className={eyebrow}>Add steps to</legend>
-          <div role="radiogroup" aria-label="Add steps to" className="mt-1 flex flex-wrap gap-1">
-            {[MAIN, ...scenarios].map((s) => (
-              <button
-                key={s || 'main'}
-                type="button"
-                role="radio"
-                aria-checked={laneNow === s}
-                onClick={() => setLane(s)}
-                className={`rounded-sm border-bw-1 px-2 py-0.5 text-xs font-semibold ${laneNow === s ? 'border-ink bg-pop-yellow text-on-accent' : 'border-ink/30 hover:border-ink'}`}
-              >
-                {s || 'Main flow'}
-              </button>
-            ))}
-          </div>
-        </fieldset>
-      )}
-
-      {editing ? null : pick ? (
-        <StepForm
-          key={`${current}:${laneNow}`}
-          diagram={diagram}
-          steps={outlineSteps(outline.items)}
-          used={used}
-          pick={pick}
-          onPick={onPick}
-          where={`A step in ${laneNow ? `scenario “${laneNow}”` : scenarios.length ? 'the main flow' : current}.`}
-          check={check}
-          onGiveOps={giveOps}
-          onAdd={(step) => apply(addStep(source, current, step, laneNow || undefined, undefined, diagram))}
-        />
-      ) : (
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => onPick({ from: lastEnd(outlineSteps(outline.items)) })} className={primaryButton}>
-            <Plus size={14} aria-hidden="true" />
-            Add a step
-          </button>
-          <ReplyButton steps={outlineSteps(outline.items)} name={name} onReply={onPick} />
-        </div>
-      )}
-
-      {!pane && (
-        <NameForm label="New scenario" placeholder="e.g. Cache miss" button="Add scenario" help="An alternative path within this use case." suggestions={missingScenarios(diagram, current, scenarios)} onAdd={newScenario} />
-      )}
-    </section>
-  );
-
-  /** Where a step at the end goes (the pane's: the end of the use case; the rail's tab: of its scenario); and how many steps are drawn before it. */
-  const endSlot = (): [Slot, number] => {
-    if (pane || !laneNow || !outline) return [{ kind: 'end' }, drawn.length];
-    const last = drawn.reduce((at, s, i) => (scenarioOfStep(outline.items, s.line) === laneNow ? i : at), -1);
-    return [{ kind: 'scenario', name: laneNow }, last >= 0 ? last + 1 : drawn.length];
-  };
+  /** Where a step at the end goes (the end of the use case), and how many steps are drawn before it. */
+  const endSlot = (): [Slot, number] => [{ kind: 'end' }, drawn.length];
   const addAtEnd = (ends?: StepPick) => {
     const [slot, index] = endSlot();
     startDraft(slot, index, ends);
@@ -642,10 +436,11 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   /** No steps (but perhaps scenarios or blocks): the design's components show as lanes to start from. */
   const stepless = !!outline && steps.length === 0;
   useEffect(() => {
-    if (!pane || !current) return;
-    // A step's ends picked from elsewhere (the command bar's "Add a step"): a draft at the end takes them.
+    if (!current) return;
+    // A step's ends picked from elsewhere (the command bar's "Add a step"): a draft at the end takes them. A phone's
+    // blank use case waits for its Add step, as its sheet would cover the list.
     if (pick && !draft) addAtEnd(pick);
-    else if (blank && !draft && !naming) addAtEnd();
+    else if (pane && blank && !draft && !naming) addAtEnd();
     // Only when a pick comes without a draft, or the use case is blank.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pane, pick, draft, current, blank, naming]);
@@ -663,7 +458,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
     if (ok) setNews(done);
     return ok;
   };
-  const n = chosen ? drawnNumbers?.get(chosen.line) : undefined;
+  const n = chosen ? drawnNumbers.get(chosen.line) : undefined;
   /** The lanes shown beyond the steps': those "+ Lane" added, and a draft's ends. */
   const shownLanes = useMemo(() => {
     const own = outline ? laneOrder(outline) : [];
@@ -734,7 +529,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
       <GroupToolbar
         count={followed.length}
         onGroup={canGroup ? group : undefined}
-        refusal={grouped ? `Step ${drawnNumbers?.get(grouped.line)} already runs at the same time as others: ungroup its block first.` : undefined}
+        refusal={grouped ? `Step ${drawnNumbers.get(grouped.line)} already runs at the same time as others: ungroup its block first.` : undefined}
         onDelete={() => deleteSelected(true)}
         onClear={() => {
           clearSelection();
@@ -798,23 +593,23 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
         }}
       />
     ) : undefined;
-  /** The sets of scenarios, each its branches, in order. */
-  const sets = useMemo(() => outline?.items.flatMap((i) => (i.kind === 'scenarios' ? [i.branches] : [])) ?? [], [outline]);
   /** The tabs on the sets' frames: a branch shown, named in place (a new one, or a first set), renamed or deleted. */
   const tabs: ScenarioTabs | undefined = current
     ? {
         onChoose: chooseBranch,
         onAdd: (set, name) => {
           const clean = name.trim();
-          if (!clean || !apply(addScenario(source, current, clean, set >= 0 ? set : undefined))) return false;
+          const result = addScenario(source, current, clean, set >= 0 ? set : undefined);
+          if (!clean || !apply(result)) return false;
           // A first set is the last set now.
-          chooseBranch(set >= 0 ? set : sets.length, clean);
+          chooseBranch(set >= 0 ? set : sets.length, clean, result.source);
           setNews(`Scenario ${clean} added.`);
           return true;
         },
         onRename: (set, from, to) => {
-          if (!apply(renameScenario(source, current, from, to))) return false;
-          choose1(set, to.trim());
+          const result = renameScenario(source, current, from, to);
+          if (!apply(result)) return false;
+          choose1(set, to.trim(), result.source);
           setNews(`Scenario ${from} is now ${to.trim()}.`);
           return true;
         },
@@ -972,14 +767,14 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
   const title =
     naming ? (
       <NewUseCase onAdd={newUseCase} onCancel={stopNaming} inline />
-    ) : renaming && !renaming.scenario && current ? (
-      <RenameField label={`Rename the use case ${current}`} value={current} onRename={(next) => apply(renameUseCase(source, current, next)) && (setRenaming(null), true)} onCancel={() => setRenaming(null)} />
+    ) : renaming && current ? (
+      <RenameField label={`Rename the use case ${current}`} value={current} onRename={(next) => apply(renameUseCase(source, current, next)) && (setRenaming(false), true)} onCancel={() => setRenaming(false)} />
     ) : current ? (
       <div className="flex min-w-0 items-center gap-0.5">
         <button
           type="button"
           id={selectId}
-          onClick={() => setRenaming({})}
+          onClick={() => setRenaming(true)}
           aria-label={`Rename the use case ${current}`}
           title="Rename this use case"
           className="min-w-0 max-w-64 truncate rounded-sm px-1.5 py-0.5 text-left text-[15px] font-bold hover:bg-pop-yellow/30 focus-visible:outline-2 focus-visible:outline-ink"
@@ -993,7 +788,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
                 icon={<Pencil size={14} aria-hidden="true" />}
                 onSelect={() => {
                   close();
-                  setRenaming({});
+                  setRenaming(true);
                 }}
               >
                 Rename
@@ -1035,6 +830,27 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
       </div>
     ) : null;
 
+  // A phone's step whose sheet opens comes into sight above it.
+  const openLine = !pane && sheet && !live ? chosen?.line : undefined;
+  useEffect(() => {
+    if (openLine === undefined || !sheetHeight) return;
+    const row = document.querySelector(`[data-step-line="${openLine}"]`);
+    const scroller = row?.closest('[data-flows-scroller]');
+    if (!row || !scroller) return;
+    const r = row.getBoundingClientRect();
+    const s = scroller.getBoundingClientRect();
+    // Its scroll margin is the sheet's height, so at the end it is just above the sheet.
+    if (r.bottom > s.bottom - sheetHeight) row.scrollIntoView({ block: 'end' });
+    else if (r.top < s.top) row.scrollIntoView({ block: 'start' });
+  }, [openLine, sheetHeight]);
+  /** A first set of scenarios, named at the end; not before the first step, whose prompt (or Add step) is the one thing to do. */
+  const addFirstScenario = namingSet !== -1 && drawn.length > 0 && (
+    <button type="button" onClick={() => tabs?.onNaming(-1)} title="An alternative path within this use case: a frame at the end, its first branch named on its tab" className={`${toolButton} !px-2 !py-1 text-xs`}>
+      <Plus size={13} aria-hidden="true" />
+      Add scenario
+    </button>
+  );
+
   if (pane)
     return (
       <section
@@ -1074,14 +890,7 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
                   ))}
                 </p>
               ) : (
-                // Not before the first step, whose prompt is the one thing to do.
-                namingSet !== -1 &&
-                drawn.length > 0 && (
-                  <button type="button" onClick={() => tabs?.onNaming(-1)} title="An alternative path within this use case: a frame at the end, its first branch named on its tab" className={`${toolButton} !px-2 !py-1 text-xs`}>
-                    <Plus size={13} aria-hidden="true" />
-                    Add scenario
-                  </button>
-                )
+                addFirstScenario
               )}
             </div>
           )}
@@ -1141,24 +950,149 @@ export default function FlowsPanel({ source, diagram, onChange, pick, onPick, us
         )}
       </section>
     );
+  /** A phone's row menu: the step, and the one after it in its flow (to run with it at the same time). */
+  const rowActions = (step: OutlineStep, next: OutlineStep | undefined): RowAction[] => {
+    const at = drawn.findIndex((d) => d.line === step.line);
+    const alone = !!outline && !inParallel(outline.items, step.line);
+    return [
+      { label: 'Move up', icon: <ArrowUp size={14} aria-hidden="true" />, onSelect: () => moveOne(step, 'up') },
+      { label: 'Move down', icon: <ArrowDown size={14} aria-hidden="true" />, onSelect: () => moveOne(step, 'down') },
+      { label: 'Insert a step before', icon: <Plus size={14} aria-hidden="true" />, onSelect: () => startDraft({ kind: 'before', line: step.line }, at) },
+      ...(step.kind === 'request' && unanswered(drawn, step.line)
+        ? [{ label: 'Reply', icon: <CornerDownLeft size={14} aria-hidden="true" />, onSelect: () => startDraft({ kind: 'after', line: step.line }, at + 1, { from: step.to, to: step.from }) }]
+        : []),
+      ...(next && alone ? [{ label: 'Run at the same time as the next', icon: <Rows2 size={14} aria-hidden="true" />, onSelect: () => groupSteps([step, next]) }] : []),
+      { label: 'Delete', icon: <Trash2 size={14} aria-hidden="true" />, onSelect: () => deleteSteps([step], false) },
+    ].map((a) => ({
+      ...a,
+      onSelect: () => {
+        setError(undefined);
+        setSheet(false);
+        a.onSelect();
+      },
+    }));
+  };
+  /** A tap on a phone's step: it is selected, and its sheet opens. */
+  const openStep = (step: OutlineStep) => {
+    setError(undefined);
+    if (draft) {
+      setDraft(null);
+      onPick(null);
+    }
+    selectSteps([step]);
+    setSheet(true);
+  };
+  const closeSheet = () => {
+    const line = chosen?.line;
+    setSheet(false);
+    // Back on the step's row.
+    requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-step-line="${line}"] button`)?.focus({ preventScroll: true }));
+  };
+  const n1 = live ? live.index + 1 : n;
+  const phoneSheet = !current ? null : live && draftView ? (
+    <PhoneSheet title={`New step ${n1}`} onDone={endDraft} onHeight={setSheetHeight}>
+      <DraftFields
+        key={`${slotKeyOf(live.slot)}:${live.chained ?? 0}`}
+        diagram={diagram}
+        used={used}
+        from={draftView.from}
+        to={draftView.to}
+        kind={draftView.kind}
+        status={!draftView.from ? 'Choose where the step starts.' : !draftView.to ? (live.chained ? `Added. The next from ${name(draftView.from)}: choose where it goes.` : `From ${name(draftView.from)}: choose where it goes.`) : 'Type what it does, then Add step.'}
+        reply={draftView.reply && !draftView.to ? draftView.reply : undefined}
+        onEnds={(ends) => {
+          setError(undefined);
+          onPick(ends);
+        }}
+        onKind={(kind) => setDraft({ ...live, kind })}
+        check={(label) => (draftView.from && draftView.to ? problemsOf(insertAt(source, current, live.slot, { from: draftView.from, to: draftView.to, kind: draftView.kind, label }, diagram)) : [])}
+        onAdd={(label) => draftView.from && draftView.to && addDraft({ from: draftView.from, to: draftView.to, kind: draftView.kind, label })}
+        onGiveOps={(head) => draftView.to && giveOps(draftView.to, head)}
+      />
+    </PhoneSheet>
+  ) : sheet && chosen ? (
+    <PhoneSheet title={`Step ${n}`} onDone={closeSheet} onHeight={setSheetHeight}>
+      <StepFields
+        key={chosen.line}
+        step={chosen}
+        diagram={diagram}
+        used={used}
+        onEnd={(end, id) => retarget(chosen, end, id)}
+        onKind={setKind}
+        onLabel={(label) => change({ label }, `Step ${n} now says ${label || 'nothing'}.`, false)}
+        check={(label) => problemsOf(setStep(source, chosen.line, { ...endsOf(chosen), kind: chosen.kind, label }, diagram))}
+        onGiveOps={(head, label) => {
+          const result = setStep(source, chosen.line, { ...endsOf(chosen), kind: chosen.kind, label }, diagram);
+          if (result.error !== undefined) setError(result.error);
+          else giveOps(chosen.to, head, result.source);
+        }}
+        onShow={onShow ? () => onShow([chosen.from, chosen.to]) : undefined}
+      />
+    </PhoneSheet>
+  ) : null;
+  // A phone: the steps are the page, and one sheet over its foot edits the step tapped (or adds one).
   return (
-    <aside role="region" aria-label="Flows" className="flex h-full min-h-0 flex-col bg-surface text-ink">
-      <div className="flex items-center gap-2 border-b border-ink/15 py-1 pl-3 pr-1">
-        <Workflow size={15} aria-hidden="true" />
-        <h2 className="min-w-0 flex-1 text-sm font-bold">Flows</h2>
-        <button type="button" aria-label="Close the flows" onClick={onClose} className={iconButton}>
-          <X size={16} />
-        </button>
-      </div>
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3">
-        <div className="space-y-1">
-          {picker}
-          {empty}
+    <section role="region" aria-label="Flows" tabIndex={-1} data-flows-focus className="relative flex h-full min-h-0 flex-col bg-surface text-ink outline-hidden">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-2 border-b-bw-1 border-ink bg-surface px-3 py-2">
+        <h2 className="sr-only">Flows</h2>
+        <ViewSwitch flows onChange={(flows) => !flows && onClose()} />
+        <div className="ml-auto flex items-center gap-1">
+          {onUndo && (
+            <button type="button" onClick={onUndo} aria-label="Undo" title="Undo" className={`${iconButton} !h-9 !w-9`}>
+              <Undo2 size={17} />
+            </button>
+          )}
+          {onRedo && (
+            <button type="button" onClick={onRedo} aria-label="Redo" title="Redo" className={`${iconButton} !h-9 !w-9`}>
+              <Redo2 size={17} />
+            </button>
+          )}
         </div>
-        {body}
-        {alert}
+        {useCases.length > 0 && (
+          <div className="flex w-full min-w-0 flex-wrap items-center gap-2">
+            <div className="min-w-0">{headerPicker ? title : picker}</div>
+            {sets.length === 0 && addFirstScenario}
+          </div>
+        )}
       </div>
-    </aside>
+      {alert && <div className="shrink-0 border-b border-ink/15 bg-surface px-4 py-1.5">{alert}</div>}
+      <p role="status" data-testid="flows-news" className="sr-only">
+        {news}
+      </p>
+      {parts.length === 0 ? (
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 bg-paper p-6 text-center">
+          <p className="max-w-sm text-sm text-muted">A flow runs between components. Add some on the Architecture view.</p>
+          <button type="button" onClick={onClose} className={primaryButton}>
+            Go to Architecture
+          </button>
+        </div>
+      ) : current && outline ? (
+        // The one scroller: room at its foot for the sheet, and each row scrolls into sight clear of it.
+        <div data-flows-scroller className="min-h-0 flex-1 overflow-y-auto bg-paper p-3" style={{ paddingBottom: sheetHeight + 12, ['--sheet' as string]: `${sheetHeight + 8}px` }}>
+          <PhoneSteps
+            entries={sequenceEntries(outline.items, choiceNow)}
+            numbers={drawnNumbers}
+            name={name}
+            open={openLine}
+            onOpen={openStep}
+            actions={rowActions}
+            tabs={tabs!}
+            onAddTo={(scenario) => {
+              setSheet(false);
+              startDraft({ kind: 'scenario', name: scenario }, drawn.length);
+            }}
+            onUngroup={ungroup}
+            onAddStep={() => {
+              setSheet(false);
+              addAtEnd();
+            }}
+          />
+        </div>
+      ) : (
+        <div className="min-h-0 flex-1 bg-paper p-4">{!naming && <FirstUseCase suggestions={suggestions} onAdd={newUseCase} />}</div>
+      )}
+      {phoneSheet}
+    </section>
   );
 }
 
@@ -1337,91 +1271,6 @@ function LaneAdder({ options, onAdd, onNew }: { options: Diagram['nodes']; onAdd
 }
 
 /** Where the next step starts: where the last one went. */
-function lastEnd(steps: OutlineStep[]): string | undefined {
-  return steps.at(-1)?.to;
-}
-
-/** One click to answer the latest open request: the callee back to its caller. */
-function ReplyButton({ steps, name, onReply }: { steps: OutlineStep[]; name: (id: string) => string; onReply: (pick: StepPick) => void }) {
-  const open = openRequest(steps);
-  if (!open) return null;
-  return (
-    <button type="button" onClick={() => onReply({ from: open.to, to: open.from })} className={outlineButton} title={`Add the answer from ${name(open.to)} to ${name(open.from)}`}>
-      <CornerDownLeft size={14} aria-hidden="true" />
-      Reply to {name(open.from)}
-    </button>
-  );
-}
-
-function StepRow({
-  n,
-  step,
-  name,
-  onDelete,
-  onEdit,
-  onInsert,
-  onMove,
-  onHighlight,
-}: {
-  n?: number;
-  step: OutlineStep;
-  name: (id: string) => string;
-  onDelete: () => void;
-  onEdit: () => void;
-  onInsert: () => void;
-  onMove: (direction: 'up' | 'down') => void;
-  onHighlight?: (ids: string[] | null) => void;
-}) {
-  const reply = step.kind === 'response';
-  const text = `${name(step.from)} ${reply ? 'answers' : 'to'} ${name(step.to)}${step.label ? `: ${step.label}` : ''}`;
-  const action = `${iconButton} !h-6 !w-6 shrink-0`;
-  return (
-    <li
-      className="group relative -mx-1 flex items-start gap-1 rounded-sm px-1 text-xs hover:bg-pop-yellow/20 focus-within:bg-pop-yellow/20"
-      aria-label={text}
-      onMouseEnter={() => onHighlight?.([step.from, step.to])}
-      onMouseLeave={() => onHighlight?.(null)}
-    >
-      {n !== undefined && <span className="w-4 shrink-0 pt-0.5 text-right font-mono tabular-nums text-muted">{n}</span>}
-      <button
-        type="button"
-        onClick={onEdit}
-        onKeyDown={(e) => {
-          if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
-          e.preventDefault();
-          onMove(e.key === 'ArrowUp' ? 'up' : 'down');
-        }}
-        title="Edit this step (Alt+↑/↓ moves it)"
-        aria-label={`Edit step: ${text}`}
-        className="min-w-0 flex-1 cursor-pointer rounded-sm pt-0.5 text-left"
-      >
-        <span className="font-semibold">{name(step.from)}</span>
-        <ArrowRight size={11} aria-hidden="true" className={`mx-0.5 inline align-[-1px] ${reply ? 'text-muted' : ''}`} />
-        <span className="font-semibold">{name(step.to)}</span>
-        {step.label && <span className={`ml-1 break-words font-mono ${reply ? 'text-muted' : 'text-ink/80'}`}>{step.label}</span>}
-        {reply && <span className="ml-1 text-muted">(response)</span>}
-        {step.kind === 'async' && <span className="ml-1 text-muted">(message)</span>}
-        {step.kind === 'failed' && <span className="ml-1 font-semibold text-red-700 dark:text-red-300">(fails)</span>}
-      </button>
-      {/* Over the row's end while it is hovered or focused, so they never take room from the step's text. */}
-      <span className="absolute right-7 top-0 hidden rounded-sm border-bw-1 border-ink/20 bg-surface group-hover:flex group-focus-within:flex">
-        <button type="button" aria-label={`Insert a step before: ${text}`} title="Insert a step before this one" onClick={onInsert} className={action}>
-          <Plus size={12} />
-        </button>
-        <button type="button" aria-label={`Move up: ${text}`} title="Move up" onClick={() => onMove('up')} className={action}>
-          <ArrowUp size={12} />
-        </button>
-        <button type="button" aria-label={`Move down: ${text}`} title="Move down" onClick={() => onMove('down')} className={action}>
-          <ArrowDown size={12} />
-        </button>
-      </span>
-      <button type="button" aria-label={`Delete step: ${text}`} title="Delete this step" onClick={onDelete} className={`${action} opacity-60 hover:opacity-100 focus-visible:opacity-100`}>
-        <X size={12} />
-      </button>
-    </li>
-  );
-}
-
 /** A name edited in place: Enter renames, Escape keeps it. */
 function RenameField({ label, value, onRename, onCancel }: { label: string; value: string; onRename: (name: string) => boolean; onCancel: () => void }) {
   const [text, setText] = useState(value);
@@ -1496,224 +1345,6 @@ function NewUseCase({ onAdd, onCancel, inline = false }: { onAdd: (name: string)
     </form>
   );
 }
-
-/** A name to add (a use case, a scenario), with the problem's own names as one-click suggestions. */
-function NameForm({
-  label,
-  placeholder,
-  button,
-  help,
-  suggestions,
-  autoFocus,
-  onAdd,
-}: {
-  label: string;
-  placeholder: string;
-  button: string;
-  help?: string;
-  suggestions: string[];
-  autoFocus?: boolean;
-  onAdd: (name: string) => boolean;
-}) {
-  const [value, setValue] = useState('');
-  const id = useId();
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    if (onAdd(value)) setValue('');
-  };
-  return (
-    <form onSubmit={submit} className="space-y-1.5">
-      <label htmlFor={id} className={`block ${eyebrow}`}>
-        {label}
-      </label>
-      {help && <p className="text-xs text-muted">{help}</p>}
-      {suggestions.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {suggestions.map((s) => (
-            <button key={s} type="button" onClick={() => onAdd(s)} className="inline-flex items-center gap-1 rounded-full border-bw-1 border-ink/40 px-2 py-0.5 text-xs font-semibold hover:border-ink hover:bg-pop-yellow/30">
-              <Plus size={11} aria-hidden="true" />
-              {s}
-            </button>
-          ))}
-        </div>
-      )}
-      <div className="flex gap-1.5">
-        <input id={id} autoFocus={autoFocus} value={value} onChange={(e) => setValue(e.target.value)} placeholder={placeholder} autoComplete="off" className={`min-w-0 flex-1 ${field} !py-1`} />
-        <button type="submit" disabled={!value.trim()} className={`${outlineButton} !px-2 !py-1`} aria-label={button} title={button}>
-          <Plus size={14} aria-hidden="true" />
-        </button>
-      </div>
-    </form>
-  );
-}
-
-function StepForm({
-  diagram,
-  steps,
-  used,
-  pick,
-  onPick,
-  where,
-  mode = 'add',
-  initial,
-  button,
-  autoFocus = false,
-  quiet = false,
-  check,
-  onGiveOps,
-  onAdd,
-}: {
-  diagram: Diagram;
-  steps: OutlineStep[];
-  /** Every step of the design's use cases, for the labels already used. */
-  used: UsedStep[];
-  pick: StepPick;
-  onPick: (pick: StepPick | null) => void;
-  where: string;
-  /** Adding at the end (the composer then stays open for the next step), inserting before a step, or changing one. */
-  mode?: 'add' | 'insert' | 'edit';
-  /** The step being changed, in edit mode. */
-  initial?: { kind: StepKind; label: string };
-  /** The submit button's text, when not the mode's. */
-  button?: string;
-  /** Focuses the end it still needs on opening (the label takes the focus once both are known). */
-  autoFocus?: boolean;
-  /** Takes no focus at all: it opens beside a selection that keeps it. */
-  quiet?: boolean;
-  /** The problems the step would bring, before it is added. */
-  check: (step: NewStepInput) => string[];
-  /** Gives `node` a type of its own with operations, `head` among them; absent where the builder can't. */
-  onGiveOps?: (node: string, head: string) => void;
-  /** Adds the step; false when it could not be. */
-  onAdd: (step: NewStepInput) => boolean;
-}) {
-  const fromId = useId();
-  const toId = useId();
-  const labelId = useId();
-  const { from, to } = pick;
-  const both = !!from && !!to;
-  const suggested = both ? defaultStepKind(steps, from, to) : 'request';
-  const [chosen, setKind] = useState<StepKind | undefined>(initial?.kind);
-  const kind = chosen ?? suggested;
-  // The label in its parts: the operation (the combobox) and the rest under More.
-  const [start] = useState(() => splitLabel(initial?.label ?? ''));
-  const [head, setHead] = useState(start.head);
-  const [more, setMore] = useState<Omit<LabelParts, 'head'>>(() => ({ fanOut: start.fanOut, size: start.size, sizeFirst: start.sizeFirst, headers: start.headers, tail: start.tail }));
-  const label = composeLabel({ ...more, head });
-  const vocabulary = useMemo(() => stepVocabulary(diagram, from ?? '', to ?? '', kind, used), [diagram, from, to, kind, used]);
-  const nodes = diagram.nodes.filter((n) => n.kind !== 'group' && n.kind !== 'text');
-  const select = (value: string, which: 'from' | 'to') => onPick({ ...pick, [which]: value || undefined });
-  const [added, setAdded] = useState(0);
-  const deferred = useDeferredValue(label);
-  const problems = useMemo(() => (both ? check({ from, to, kind, label: deferred }) : []), [both, check, from, to, kind, deferred]);
-  const open = openRequest(steps);
-  const replying = !!open && open.from === to && open.to === from;
-  const focusFirst = useRef(autoFocus && !both && (!from ? fromId : toId));
-  useEffect(() => {
-    if (focusFirst.current) document.getElementById(focusFirst.current)?.focus();
-  }, []);
-  return (
-    <form
-      aria-label={mode === 'edit' ? 'Edit step' : 'New step'}
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!both || !onAdd({ from, to, kind, label }) || mode !== 'add') return;
-        // The composer stays open for the next step, which starts where this one went.
-        setHead('');
-        setMore({ headers: [], tail: '' });
-        setKind(undefined);
-        setAdded(added + 1);
-        onPick({ from: to });
-      }}
-      className="space-y-2.5 rounded-sm border-bw-1 border-ink bg-paper p-2.5"
-    >
-      <p role="status" className="flex items-start gap-1.5 text-xs font-semibold">
-        <MousePointerClick size={14} aria-hidden="true" className="mt-px shrink-0" />
-        {!from ? 'Click the component the step starts at.' : !to ? (added ? `Added. Next step from ${diagram.nodes.find((n) => n.id === from)?.name ?? from}: click where it goes.` : 'Now click the component it goes to.') : where}
-      </p>
-      {open && !replying && mode === 'add' && (
-        <button type="button" onClick={() => onPick({ from: open.to, to: open.from })} className={`${toolButton} !px-1.5 !py-0.5 text-xs`}>
-          <CornerDownLeft size={13} aria-hidden="true" />
-          Reply: {diagram.nodes.find((n) => n.id === open.to)?.name ?? open.to} answers {diagram.nodes.find((n) => n.id === open.from)?.name ?? open.from}
-        </button>
-      )}
-      <div className="grid grid-cols-2 gap-1.5">
-        <Labelled id={fromId} label="Starts at">
-          <Select
-            size="sm"
-            id={fromId}
-            value={from ?? ''}
-            onChange={(v) => select(v, 'from')}
-            options={[{ value: '', label: 'Choose…' }, ...nodes.map((n) => ({ value: n.id, label: n.name }))]}
-            className="w-full"
-          />
-        </Labelled>
-        <Labelled id={toId} label="Goes to">
-          <Select
-            size="sm"
-            id={toId}
-            value={to ?? ''}
-            onChange={(v) => select(v, 'to')}
-            options={[{ value: '', label: 'Choose…' }, ...nodes.filter((n) => n.id !== from).map((n) => ({ value: n.id, label: n.name }))]}
-            className="w-full"
-          />
-        </Labelled>
-      </div>
-      {both && (
-        <>
-          <div role="radiogroup" aria-label="Kind of step" className="grid grid-cols-2 gap-1">
-            {(['request', 'response', 'async', 'failed'] as const).map((k) => (
-              <button
-                key={k}
-                type="button"
-                role="radio"
-                aria-checked={kind === k}
-                title={KIND_HELP[k]}
-                onClick={() => setKind(k)}
-                className={`rounded-sm border-bw-1 px-1 py-1 text-xs font-semibold ${kind === k ? 'border-ink bg-ink text-paper' : 'border-ink/30 hover:border-ink'}`}
-              >
-                {KIND_LABEL[k]}
-              </button>
-            ))}
-          </div>
-          <p className="-mt-1 text-xs text-muted">{KIND_HELP[kind]}.</p>
-          <Labelled id={labelId} label={kind === 'response' ? 'Answer' : 'Operation'}>
-            <StepLabelField key={`${from}>${to}:${added}`} id={labelId} value={head} onChange={setHead} vocabulary={vocabulary} kind={kind} autoFocus={!quiet} />
-          </Labelled>
-          {onGiveOps && kind !== 'response' && vocabulary.type && vocabulary.ops.length === 0 && (
-            <button type="button" onClick={() => onGiveOps(to, head)} className="text-left text-xs font-semibold underline underline-offset-2 hover:text-ink">
-              Give {diagram.nodes.find((n) => n.id === to)?.name ?? to} operations of its own, so its steps are checked
-            </button>
-          )}
-          <MoreFields kind={kind} head={head} more={more} onMore={setMore} headers={vocabulary.headers} typeName={vocabulary.type?.name} />
-          {problems.length > 0 && (
-            <ul aria-label="Problems with this step" className="space-y-1">
-              {problems.map((p, i) => (
-                // The same message can come twice (two lines with the same problem): its count so far tells them apart.
-                <li key={`${p}#${problems.slice(0, i).filter((q) => q === p).length}`} className="flex items-start gap-1.5 rounded-sm border-bw-1 border-amber-600/50 bg-amber-100/60 px-1.5 py-1 text-xs text-amber-950 dark:bg-amber-900/30 dark:text-amber-100">
-                  <AlertTriangle size={13} aria-hidden="true" className="mt-px shrink-0" />
-                  <span className="min-w-0 break-words">{p}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </>
-      )}
-      {/* Pinned to the bottom of what scrolls it (the pane's column, the diagram), so it is in sight however long the form. */}
-      <div data-form-foot className="sticky bottom-0 z-10 -mx-2.5 -mb-2.5 flex flex-wrap gap-1.5 rounded-b-sm border-t border-ink/15 bg-paper px-2.5 py-2">
-        <button type="submit" disabled={!both} className={`${primaryButton} disabled:opacity-50`}>
-          {button ?? (mode === 'edit' ? 'Save step' : mode === 'insert' ? 'Insert step' : 'Add step')}
-        </button>
-        <button type="button" onClick={() => onPick(null)} className={toolButton}>
-          {added ? 'Done' : 'Cancel'}
-        </button>
-      </div>
-    </form>
-  );
-}
-
-type More = Omit<LabelParts, 'head'>;
-const restOf = (p: LabelParts): More => ({ fanOut: p.fanOut, size: p.size, sizeFirst: p.sizeFirst, headers: p.headers, tail: p.tail });
 
 /**
  * A step's label edited on its arrow (SequenceDiagram draws it over the label): the operation or status, with the
@@ -1868,104 +1499,6 @@ function DetailsCard({ step, n, headers, typeName, onApply, onClose }: { step: O
         headers={headers}
         typeName={typeName}
       />
-    </div>
-  );
-}
-
-/** The rest of a label, folded: headers from the target's type, the payload, fan-out and payload size. */
-function MoreFields({ kind, head, more, onMore, headers, typeName }: { kind: StepKind; head: string; more: More; onMore: (more: More) => void; headers: string[]; typeName?: string }) {
-  const count = (more.tail ? 1 : 0) + (more.fanOut ? 1 : 0) + (more.size ? 1 : 0) + more.headers.length;
-  return (
-    <details className="group/more rounded-sm border-bw-1 border-ink/20 px-2 py-1" open={count > 0 || undefined}>
-      <summary className="cursor-pointer select-none text-xs font-semibold">
-        {kind === 'response' ? 'Payload' : 'Headers, payload and fan-out'}
-        {count > 0 && <span className="ml-1 text-muted">({count})</span>}
-      </summary>
-      <div className="pb-1 pt-2">
-        <MoreBody kind={kind} head={head} more={more} onMore={onMore} headers={headers} typeName={typeName} />
-      </div>
-    </details>
-  );
-}
-
-/** The fields of the rest of a label: at most eight header chips (a filter narrows them), the payload, fan-out and size. */
-function MoreBody({ kind, head, more, onMore, headers, typeName }: { kind: StepKind; head: string; more: More; onMore: (more: More) => void; headers: string[]; typeName?: string }) {
-  const id = useId();
-  const [filter, setFilter] = useState('');
-  const set = (patch: Partial<More>) => onMore({ ...more, ...patch });
-  const http = isHttpHead(head) && kind !== 'response';
-  const offered = headers.filter((h) => !more.headers.includes(h) && h.toLowerCase().includes(filter.trim().toLowerCase())).slice(0, 8);
-  return (
-    <>
-      <div className="space-y-2">
-        {http && headers.length > 0 && (
-          <div className="space-y-1">
-            <label htmlFor={`${id}-h`} className={`block ${eyebrow}`}>
-              Headers {typeName ? `${typeName} takes` : ''}
-            </label>
-            {more.headers.length > 0 && (
-              <div className="flex flex-wrap gap-1">
-                {more.headers.map((h) => (
-                  <button key={h} type="button" aria-label={`Remove header ${h}`} onClick={() => set({ headers: more.headers.filter((x) => x !== h) })} className="inline-flex items-center gap-1 rounded-full border-bw-1 border-ink bg-pop-yellow/40 px-2 py-0.5 font-mono text-[11px]">
-                    {h}
-                    <X size={10} aria-hidden="true" />
-                  </button>
-                ))}
-              </div>
-            )}
-            <input id={`${id}-h`} value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Filter headers" autoComplete="off" className={`w-full ${field} !py-1 text-xs`} />
-            <div className="flex flex-wrap gap-1" aria-label="Headers to add">
-              {offered.map((h) => (
-                <button key={h} type="button" onClick={() => set({ headers: [...more.headers, h] })} className="rounded-full border-bw-1 border-ink/30 px-2 py-0.5 font-mono text-[11px] hover:border-ink hover:bg-pop-yellow/30">
-                  + {h}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        {kind !== 'response' && !http && headers.length > 0 && <p className="text-xs text-muted">Headers go after an HTTP method and a path, e.g. GET /orders.</p>}
-        <div className="space-y-0.5">
-          <label htmlFor={`${id}-t`} className={`block ${eyebrow}`}>
-            Payload or note
-          </label>
-          <input id={`${id}-t`} value={more.tail} onChange={(e) => set({ tail: e.target.value })} placeholder={'e.g. {"id": 42}'} autoComplete="off" spellCheck={false} className={`w-full ${field} !py-1 font-mono text-xs`} />
-        </div>
-        {kind !== 'response' && (
-          <div className="grid grid-cols-2 gap-1.5">
-            <div className="space-y-0.5">
-              <label htmlFor={`${id}-x`} className={`block ${eyebrow}`}>
-                Calls per request
-              </label>
-              <input
-                id={`${id}-x`}
-                type="number"
-                min={1}
-                value={more.fanOut ?? ''}
-                onChange={(e) => set({ fanOut: e.target.value === '' ? undefined : Math.max(1, Number(e.target.value)) })}
-                placeholder="1"
-                className={`w-full ${field} !py-1 text-xs`}
-              />
-            </div>
-            <div className="space-y-0.5">
-              <label htmlFor={`${id}-s`} className={`block ${eyebrow}`}>
-                Payload size
-              </label>
-              <input id={`${id}-s`} value={more.size ?? ''} onChange={(e) => set({ size: e.target.value.trim() || undefined })} placeholder="e.g. 2MB" autoComplete="off" className={`w-full ${field} !py-1 text-xs`} />
-            </div>
-          </div>
-        )}
-      </div>
-    </>
-  );
-}
-
-function Labelled({ id, label, children }: { id: string; label: string; children: ReactNode }) {
-  return (
-    <div className="min-w-0 space-y-0.5">
-      <label htmlFor={id} className={`block ${eyebrow}`}>
-        {label}
-      </label>
-      {children}
     </div>
   );
 }
