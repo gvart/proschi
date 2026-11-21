@@ -1,6 +1,7 @@
 ---
 title: A new visual editor for Proschi, driven by component types
 date: 2026-11-20
+version: 0.22.0
 description: Build a Proschi diagram without code. Code and Visual modes, connected components, and use cases edited as a sequence diagram with steps from each type.
 audience: You draw Proschi diagrams with the mouse, or want to start without learning the language first.
 tags: [editor, visual-editor, use-cases]
@@ -42,8 +43,23 @@ type, so a step to PostgreSQL offers PostgreSQL's own operations.
 - **AI that follows the mode.** In Visual, the Design partner and the
   Interview coach answer in components and connections, without code.
 
-The work is in [pull request #230](https://github.com/gvart/proschi/pull/230)
-and its follow-up.
+The work is in pull requests
+[#230](https://github.com/gvart/proschi/pull/230),
+[#232](https://github.com/gvart/proschi/pull/232) and
+[#234](https://github.com/gvart/proschi/pull/234).
+
+### Also in 0.22.0
+
+- **Practice tabs.** Roadmap, All problems, Mock interview and Daily
+  replace the two dropdowns, and the roadmap shows one "Up next" card
+  ([#227](https://github.com/gvart/proschi/pull/227),
+  [#224](https://github.com/gvart/proschi/pull/224)).
+- **An Interview coach** on a problem's interview prep stages
+  ([#226](https://github.com/gvart/proschi/pull/226)).
+- **Start over.** Start a problem or an interview over and keep what you
+  earned ([#220](https://github.com/gvart/proschi/pull/220)).
+- **Numbers by value.** Review cards accept `2.5M` or `2,500,000` for
+  "2.5 million" ([#229](https://github.com/gvart/proschi/pull/229)).
 
 ## What problem it solves
 

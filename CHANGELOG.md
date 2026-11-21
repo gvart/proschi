@@ -9,6 +9,28 @@ deployed from `main` and ships with the same changes. From 0.12.0 on,
 [release-please](https://github.com/googleapis/release-please) writes each
 section from the conventional commit titles of the merged pull requests.
 
+## [0.22.0](https://github.com/gvart/proschi/compare/tooling-v0.21.0...tooling-v0.22.0) (2026-11-21)
+
+
+### Added
+
+* **admin:** comp Pro or Max for a period, with plans on the users page ([#221](https://github.com/gvart/proschi/issues/221)) ([ee4a3ce](https://github.com/gvart/proschi/commit/ee4a3cec902973b889eea8f47d845af9a4f0dd33))
+* **editor:** a visual editor driven by component types, with Code and Visual modes ([#230](https://github.com/gvart/proschi/issues/230)) ([f19b72a](https://github.com/gvart/proschi/commit/f19b72a85d6ff1f267b6e76db84b441b5455b3b7))
+* **editor:** edit flows as a sequence diagram, with parallel blocks, a phone sheet and undo in Code mode ([#232](https://github.com/gvart/proschi/issues/232)) ([4a8468a](https://github.com/gvart/proschi/commit/4a8468afb403e7a864f51689fc9bc155d8b53c47))
+* **editor:** full-screen Flows view, edited on the diagram ([#234](https://github.com/gvart/proschi/issues/234)) ([4ace594](https://github.com/gvart/proschi/commit/4ace594518ad9826cd13888dbb10504e75d777dc))
+* **practice:** an interview coach on the interview prep stages ([#226](https://github.com/gvart/proschi/issues/226)) ([2794910](https://github.com/gvart/proschi/commit/27949101bf46812fbd7134eb2c90cb30fad94efa))
+* **practice:** flat practice tabs: Roadmap, All problems, Mock interview, Daily ([#227](https://github.com/gvart/proschi/issues/227)) ([73d91f0](https://github.com/gvart/proschi/commit/73d91f07cbfb7837e3b5f93b6b6f34c4e31ccebf))
+* **practice:** grade numeric card answers by value, and review lessons, interviews and cloze cards ([#229](https://github.com/gvart/proschi/issues/229)) ([1e000bc](https://github.com/gvart/proschi/commit/1e000bcdbbcce71a22861c5bc3b1e9e06fd74dfc))
+* **practice:** one "Up next" on the roadmap, collapsed stages ([#224](https://github.com/gvart/proschi/issues/224)) ([971ba99](https://github.com/gvart/proschi/commit/971ba99e24581fbb5f2cdaa919fdb0070ee1df12))
+* **practice:** start a problem or an interview over ([#220](https://github.com/gvart/proschi/issues/220)) ([664f5b2](https://github.com/gvart/proschi/commit/664f5b2c157e7d6fa2f9d76344c52c528dd2a814))
+
+
+### Fixed
+
+* **practice:** interview plan never suggests a locked problem, starts closed ([#225](https://github.com/gvart/proschi/issues/225)) ([a09531b](https://github.com/gvart/proschi/commit/a09531b1a0ddaa3aa5549fdbb321258dd3ca69cd))
+* **practice:** progress page tiles fit their labels ([#219](https://github.com/gvart/proschi/issues/219)) ([9b1f541](https://github.com/gvart/proschi/commit/9b1f541656b054ec5a475a3bf7516771a12757c4))
+* **practice:** review and correct lessons and interviews of all problems ([#228](https://github.com/gvart/proschi/issues/228)) ([5054447](https://github.com/gvart/proschi/commit/505444750977927bb871f2bc0ea97c66a349a6f2))
+
 ## [0.21.0](https://github.com/gvart/proschi/compare/tooling-v0.20.0...tooling-v0.21.0) (2026-11-18)
 
 
