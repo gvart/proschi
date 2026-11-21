@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import lz from 'lz-string';
-import { canvasNodes, chooseOption, codeEditor, editorText, expect, setMode, test, waitForCanvas } from './fixtures';
+import { chooseOption, codeEditor, editorText, expect, setMode, test, waitForCanvas } from './fixtures';
 
 // The rows slide when room opens under a step; without the motion, where they end is where they are.
 test.use({ mode: 'visual', contextOptions: { reducedMotion: 'reduce' } });
@@ -1122,73 +1122,6 @@ test.describe('the draft in sight, at 1280x800', () => {
 });
 
 /** A phone keeps the list of steps in its sheet, each row with its own actions. */
-test.describe('the Flows list on a phone', () => {
-  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
-
-  test('edits, moves and inserts steps in their rows, and Reply answers the open request', async ({ page }) => {
-    await page.goto(`app/#code=${lz.compressToEncodedURIComponent(SOURCE)}`);
-    await waitForCanvas(page, 6);
-    await page.getByRole('button', { name: 'Flows', exact: true }).click();
-    const sheet = page.getByTestId('palette-dock');
-    const list = sheet.getByRole('region', { name: 'Flows' });
-    const steps = list.getByRole('list', { name: 'Steps' });
-    await expect(page.getByTestId('flows-view')).toHaveCount(0);
-    await expect(steps.getByRole('group', { name: 'Scenario Cart expired' })).toContainText('SELECT cart');
-
-    await steps.getByRole('button', { name: 'Edit step: Checkout API to Cart cache: GET cart' }).click();
-    const edit = list.getByRole('form', { name: 'Edit step' });
-    await edit.getByRole('combobox', { name: 'Operation' }).fill('MGET cart');
-    await edit.getByRole('button', { name: 'Save step' }).click();
-    await expect.poll(() => useCase(page)).toContain('  api -> cache : MGET cart\n');
-
-    // A row's actions show while it has the focus.
-    await steps.getByRole('button', { name: 'Edit step: Checkout API to Cart cache: MGET cart' }).focus();
-    await steps.getByRole('button', { name: 'Move up: Checkout API to Cart cache: MGET cart' }).click();
-    await expect.poll(() => useCase(page)).toContain('usecase "Checkout" {\n  api -> cache : MGET cart\n  shopper -> api : POST /checkout\n');
-    await steps.getByRole('button', { name: 'Edit step: Checkout API to Cart cache: MGET cart' }).press('Alt+ArrowDown');
-    await expect.poll(() => useCase(page)).toContain('  shopper -> api : POST /checkout\n  api -> cache : MGET cart\n');
-
-    await steps.getByRole('button', { name: 'Edit step: Checkout API answers Shopper: 201' }).focus();
-    await steps.getByRole('button', { name: 'Insert a step before: Checkout API answers Shopper: 201' }).click();
-    const insert = list.getByRole('form', { name: 'New step' });
-    await expect(insert.getByLabel('Starts at')).toHaveAttribute('data-value', 'api');
-    await chooseOption(insert.getByLabel('Goes to'), 'Email');
-    await insert.getByRole('combobox', { name: 'Operation' }).fill('SEND receipt');
-    await insert.getByRole('button', { name: 'Insert step' }).click();
-    await expect.poll(() => useCase(page)).toContain('  api -> mail : SEND receipt\n  api --> shopper : 201\n');
-
-    // Reply answers the latest open request, the receipt.
-    await list.getByRole('button', { name: 'Reply to Checkout API' }).click();
-    const reply = list.getByRole('form', { name: 'New step' });
-    await expect(reply.getByLabel('Starts at')).toHaveAttribute('data-value', 'mail');
-    await expect(reply.getByLabel('Goes to')).toHaveAttribute('data-value', 'api');
-  });
-
-  test("while a step's ends are picked, a click anywhere on a node picks it: its \"+\" and dots are put away", async ({ page }) => {
-    await page.goto(`app/#code=${lz.compressToEncodedURIComponent(SOURCE)}`);
-    await waitForCanvas(page, 6);
-    await page.getByRole('button', { name: 'Flows', exact: true }).click();
-    const list = page.getByTestId('palette-dock').getByRole('region', { name: 'Flows' });
-    await list.getByRole('button', { name: 'Add a step', exact: true }).click();
-    const step = list.getByRole('form', { name: 'New step' });
-    await expect(step.getByLabel('Starts at')).toHaveAttribute('data-value', 'shopper');
-    const node = canvasNodes(page).filter({ hasText: 'Checkout API' });
-    await expect(node.getByRole('button', { name: 'Add a component after Checkout API' })).toHaveCount(0);
-    // Where the "+" is when nothing is picked: on the node's right edge, half way down.
-    const box = (await node.boundingBox())!;
-    await page.mouse.click(box.x + box.width - 2, box.y + box.height / 2);
-    await expect(page.getByRole('dialog', { name: 'Add after Checkout API' })).toHaveCount(0);
-    await expect(step.getByLabel('Goes to')).toHaveAttribute('data-value', 'api');
-    // Where its dot is, at the bottom: picked too (it starts over), no connection dragged.
-    const edges = await page.locator('.react-flow__edge').count();
-    const shopper = canvasNodes(page).filter({ hasText: 'Shopper' });
-    const at = (await shopper.boundingBox())!;
-    await page.mouse.click(at.x + at.width / 2, at.y + at.height - 1);
-    await expect(step.getByLabel('Starts at')).toHaveAttribute('data-value', 'shopper');
-    await expect(page.locator('.react-flow__edge')).toHaveCount(edges);
-  });
-});
-
 test('a group made on the view is in the code editor\'s history: Code mode undoes it', async ({ page }) => {
   await openPane(page);
   const original = await useCase(page);

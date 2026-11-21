@@ -256,13 +256,6 @@
     transition: none;
   }
 }
-/* While a Flows step's ends are picked (.pc-picking), a click anywhere on a node picks it: nothing on it resizes. */
-.pc-picking .react-flow__resize-control {
-  display: none;
-}
-.pc-picking .react-flow__node {
-  cursor: pointer;
-}
 /* A group's handles only let React Flow draw its edges (they follow their route, not the handle), so they stay out of sight. */
 .pc-handle--hidden {
   opacity: 0;

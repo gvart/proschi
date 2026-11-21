@@ -111,14 +111,14 @@ const sameEnds = (a: OutlineStep, b: OutlineStep) => a.from === b.from && a.to =
 
 /**
  * The selected step after the text changed: the step on its line while it is
- * still the same call (its label may have been edited), else the one step
+ * still the same call between the same two (its label or kind may have been edited), else the one step
  * with the same ends, kind and label (it was moved, or lines were added
  * above it), else none.
  */
 export function followStep(selected: OutlineStep | undefined, steps: OutlineStep[]): OutlineStep | undefined {
   if (!selected) return undefined;
   const at = steps.find((s) => s.line === selected.line);
-  if (at && sameEnds(at, selected)) return at;
+  if (at && at.from === selected.from && at.to === selected.to) return at;
   const same = steps.filter((s) => sameEnds(s, selected) && s.label === selected.label);
   return same.length === 1 ? same[0] : undefined;
 }

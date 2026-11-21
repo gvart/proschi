@@ -7,6 +7,9 @@ import type { Diagram } from '../../dsl/types';
  * step. The labels come from the components' types (dsl/typesys/vocabulary.ts).
  */
 
+/** What each kind of step is called in the Flows view's toolbars and a phone's sheet. */
+export const KIND_LABEL: Record<StepKind, string> = { request: 'Request', response: 'Response', async: 'Message', failed: 'Fails' };
+
 /** Every step of an outline, the main flow's, each scenario's and each parallel block's, in text order. */
 export function outlineSteps(items: OutlineItem[]): OutlineStep[] {
   return items.flatMap((item) =>
