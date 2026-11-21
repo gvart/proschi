@@ -62,7 +62,7 @@ export default function ShortLinksDialog({ onClose, onDeleted }: ShortLinksDialo
           </button>
         </div>
         <div className="p-5">
-          {error && <p className="mb-3 text-sm text-fail">{error}</p>}
+          {error && <p className="mb-3 text-sm text-fail-ink">{error}</p>}
           {!listing && !error && <p className="text-sm text-muted">Loading…</p>}
           {listing && listing.shares.length === 0 && <p className="text-sm text-muted">No short links yet. Share → Short link with preview makes one.</p>}
           {listing && listing.shares.length > 0 && (

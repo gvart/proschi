@@ -185,7 +185,7 @@ export default function ShareLinkDialog({ docId, title, hint, pushedVersion, onC
             }
           />
           {error && (
-            <p role="alert" className="text-fail">
+            <p role="alert" className="text-fail-ink">
               {error}
             </p>
           )}

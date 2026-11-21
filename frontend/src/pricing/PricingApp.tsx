@@ -422,7 +422,7 @@ function Features({ items }: { items: string[] }) {
     <ul className="mt-4 space-y-2 text-sm text-ink">
       {items.map((item) => (
         <li key={item} className="flex items-start gap-2">
-          <Check size={16} className="mt-0.5 shrink-0 text-pass" aria-hidden="true" />
+          <Check size={16} className="mt-0.5 shrink-0 text-pass-ink" aria-hidden="true" />
           {item}
         </li>
       ))}

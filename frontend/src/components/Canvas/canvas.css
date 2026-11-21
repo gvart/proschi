@@ -312,6 +312,7 @@
 .react-flow__node.pc-diff-changed .pc-node::after {
   content: 'changed';
   background: rgb(var(--c-blue));
+  color: rgb(var(--c-on-blue));
 }
 
 /* ---------- simulation overlay (sim/overlay.ts): heat, replicas, load ---------- */
@@ -824,7 +825,7 @@
   text-transform: uppercase;
 }
 .pc-system__status[data-status='over'] .pc-system__tip-head {
-  color: rgb(var(--c-fail));
+  color: rgb(var(--c-fail-ink));
 }
 .pc-system__tip-lines {
   display: flex;

@@ -174,7 +174,7 @@ function PlayedNote({ played }: { played: Played }) {
   if (played.status !== 'ready' || !played.played) return null;
   return (
     <span className="inline-flex items-center gap-1 tabular-nums">
-      <Check size={13} aria-hidden="true" className="text-pass" />
+      <Check size={13} aria-hidden="true" className="text-pass-ink" />
       {typeof played.score === 'number' ? played.score.toLocaleString('en-US') : 'played'}
     </span>
   );

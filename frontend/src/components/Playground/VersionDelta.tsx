@@ -15,7 +15,7 @@ interface VersionDeltaProps {
   plain: ReactNode;
 }
 
-const TONE: Record<Tone, string> = { better: 'text-pass', worse: 'text-fail', same: 'text-muted' };
+const TONE: Record<Tone, string> = { better: 'text-pass-ink', worse: 'text-fail-ink', same: 'text-muted' };
 
 /**
  * The simulation half of a comparison (docs/VERSIONS.md, "View and compare

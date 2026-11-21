@@ -49,7 +49,7 @@ export default function ModeSwitch({ compact = false, problems = 0, className = 
             <Icon size={14} aria-hidden="true" />
             <span className={compact ? 'sr-only' : ''}>{label}</span>
             {badge && (
-              <span className="rounded-full bg-fail px-1 font-mono text-[10px] leading-4 text-white" aria-label={`${problems} ${problems === 1 ? 'problem' : 'problems'}`}>
+              <span className="rounded-full bg-fail px-1 font-mono text-[10px] leading-4 text-on-accent" aria-label={`${problems} ${problems === 1 ? 'problem' : 'problems'}`}>
                 {problems}
               </span>
             )}

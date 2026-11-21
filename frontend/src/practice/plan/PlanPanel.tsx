@@ -52,7 +52,7 @@ const MINUTE_CHOICES = [15, 30, 45, 60, 90, 120];
 
 const PHASE: Record<PlanPhase, { label: string; about: string; cell: string }> = {
   learn: { label: 'Learn', about: 'Problems for your weakest skills', cell: 'bg-pop-yellow text-on-accent' },
-  mock: { label: 'Mock', about: 'Mock interviews on your own', cell: 'bg-pop-blue text-on-accent' },
+  mock: { label: 'Mock', about: 'Mock interviews on your own', cell: 'bg-pop-blue text-on-blue' },
   review: { label: 'Review', about: 'Cards and light revision', cell: 'bg-pop-lilac text-on-accent' },
   rest: { label: 'Rest', about: 'A light recap, nothing new', cell: 'bg-pop-pink text-on-accent' },
   interview: { label: 'Interview', about: 'The day itself', cell: 'bg-ink text-paper' },
@@ -171,7 +171,7 @@ function PlanSetup({ today, current, passed, onSave, onCancel }: { today: string
           </button>
         )}
       </div>
-      {!ok && date && <p className="mt-2 text-sm text-fail">Pick a date from tomorrow to {MAX_DAYS} days ahead.</p>}
+      {!ok && date && <p className="mt-2 text-sm text-fail-ink">Pick a date from tomorrow to {MAX_DAYS} days ahead.</p>}
     </form>
   );
 }
@@ -356,7 +356,7 @@ function DayList({ day, today, done, onTick }: { day: PlanDay; today: string; do
                     aria-checked={isDone}
                     aria-label={`Mark "${item.title}" done`}
                     onClick={() => onTick(item.key)}
-                    className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[3px] border-bw-1 border-ink focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-pop-blue ${isDone ? 'bg-pass text-paper' : 'bg-surface'}`}
+                    className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[3px] border-bw-1 border-ink focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-pop-blue ${isDone ? 'bg-pass text-on-accent' : 'bg-surface'}`}
                   >
                     {isDone && <Check size={13} strokeWidth={3} aria-hidden="true" />}
                   </button>
@@ -367,7 +367,7 @@ function DayList({ day, today, done, onTick }: { day: PlanDay; today: string; do
                 ) : (
                   <span
                     aria-label={isDone ? 'Done' : 'Not done yet'}
-                    className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[3px] border-bw-1 ${isDone ? 'border-ink bg-pass text-paper' : 'border-ink/40'}`}
+                    className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[3px] border-bw-1 ${isDone ? 'border-ink bg-pass text-on-accent' : 'border-ink/40'}`}
                   >
                     {isDone && <Check size={13} strokeWidth={3} aria-hidden="true" />}
                   </span>

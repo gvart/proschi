@@ -94,7 +94,7 @@ export default function ExamplesGallery({ onPick, onClose }: ExamplesGalleryProp
       className={`${card} ps-card--interactive hover:!shadow-brutal-md`}
     >
       {solution && (
-        <div className={`${eyebrow} mb-1 flex items-center gap-1 !text-pass`}>
+        <div className={`${eyebrow} mb-1 flex items-center gap-1 !text-pass-ink`}>
           <CheckCircle2 size={12} aria-hidden="true" /> Solved · reference solution
         </div>
       )}

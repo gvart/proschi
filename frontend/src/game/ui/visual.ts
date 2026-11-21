@@ -88,7 +88,7 @@ export const RARITY_TILE: Record<CardDef['rarity'], string> = {
   legendary: 'bg-pop-yellow text-on-accent',
 };
 export const CATEGORY_TILE: Record<EventDef['category'], string> = {
-  incident: 'bg-fail/15 text-fail',
+  incident: 'bg-fail/15 text-fail-ink',
   spike: 'bg-pop-pink/30 text-ink',
 };
 export const PERK_TILE = 'bg-pop-blue/20 text-ink';
