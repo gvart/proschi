@@ -47,6 +47,9 @@ usecase "Checkout" {
 }
 `;
 
+/** The use case with no answer from the cart cache: the cart request waits for one, and the first branch is empty. */
+const UNANSWERED = SOURCE.replace('    cache --> api : cart\n', '').replace('    cache --> api : nil\n', '');
+
 const flows = (page: Page) => page.getByRole('region', { name: 'Flows' });
 const sequence = (page: Page) => flows(page).getByRole('listbox', { name: 'Sequence of Checkout' });
 const option = (page: Page, n: number) => sequence(page).getByRole('option', { name: new RegExp(`^${n}\\. `) });
@@ -114,7 +117,7 @@ test.describe('editing on the Flows view', () => {
     await expect(draft(page)).toHaveCount(0);
     await expect(sequence(page).getByRole('option').first()).toBeFocused();
 
-    // On a scenario's tab, its frame's "Add step" row adds to it; the request waiting for an answer is offered first.
+    // With a branch shown on its set's tab, its frame's "Add step" row adds to it; the request waiting for an answer is offered first.
     await flows(page).getByRole('tab', { name: 'Cart expired' }).click();
     await flows(page).getByRole('button', { name: 'Add a step to Cart expired' }).click();
     await expect(draftStatus(page)).toHaveText('From Orders DB. Click where it goes.');
@@ -174,9 +177,9 @@ test.describe('editing on the Flows view', () => {
     await openPane(page, SOURCE.replace(/ {2}par \{\n[\s\S]*?\n {2}\}\n/, ''));
     // Every add affordance there was or is, but the hover "+"s (named for the step they are by).
     const adds = () => flows(page).getByRole('button', { name: /^(add step|add a step|add the first step|new step|add alongside|add a step to .*)$/i }).filter({ visible: true });
-    // The flow's own row, and nothing in the bar or on the frames.
-    await expect(adds()).toHaveText(['Add step']);
-    await expect(flows(page).locator('[data-add-row]')).toHaveCount(1);
+    // The scenario frame's row and the flow's own, and nothing in the bar or on the frames' strips.
+    await expect(adds()).toHaveText(['Add step', 'Add step']);
+    await expect(flows(page).locator('[data-add-row]')).toHaveCount(2);
 
     // N, from the diagram: a draft at the end, from where the last step went (the shopper).
     await option(page, 1).click();
@@ -199,14 +202,14 @@ test.describe('editing on the Flows view', () => {
     await page.keyboard.press('Enter');
     await expect.poll(() => useCase(page)).toMatch(/ {2}shopper -> api : GET \/orders\n {2}api -> db : SELECT orders\n\}$/);
     // Escape with a target picked and a label typed: nothing more is added, the draft is gone.
-    await expect(draft(page).getByRole('button', { name: /^Reply to 5: Orders DB answers Checkout API$/ })).toBeVisible();
+    await expect(draft(page).getByRole('button', { name: /^Reply to 6: Orders DB answers Checkout API$/ })).toBeVisible();
     await page.keyboard.press('Enter');
     await page.keyboard.type('12 rows');
     const before = await useCase(page);
     await page.keyboard.press('Escape');
     await expect(draft(page)).toHaveCount(0);
     expect(await useCase(page)).toBe(before);
-    await expect(adds()).toHaveText(['Add step']);
+    await expect(adds()).toHaveText(['Add step', 'Add step']);
     // Each added step is one undo.
     await page.keyboard.press('ControlOrMeta+z');
     await expect.poll(() => useCase(page)).not.toContain('SELECT orders');
@@ -261,9 +264,9 @@ test.describe('editing on the Flows view', () => {
       return node.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
     });
     // Where each row is with nothing selected.
-    const ys = await Promise.all([1, 2, 3, 4, 5].map(async (k) => (await option(page, k).boundingBox())!.y));
+    const ys = await Promise.all([1, 2, 3, 4, 5, 6].map(async (k) => (await option(page, k).boundingBox())!.y));
     // The par block's first step and its last.
-    for (const n of [3, 4]) {
+    for (const n of [4, 5]) {
       const below = { y: ys[n] };
       await option(page, n).click();
       const bar = toolbar(page, `Step ${n}`);
@@ -275,7 +278,7 @@ test.describe('editing on the Flows view', () => {
       await expect.poll(async () => (await option(page, n + 1).boundingBox())!.y).toBeGreaterThanOrEqual(box.y + box.height);
       expect((await option(page, n + 1).boundingBox())!.y).toBeGreaterThan(below.y);
       // Every row's label is its own.
-      for (let k = 1; k <= 5; k++) expect(await clear(option(page, k).locator('span').first()), `step ${k} with step ${n} selected`).toBe(true);
+      for (let k = 1; k <= 6; k++) expect(await clear(option(page, k).locator('span').first()), `step ${k} with step ${n} selected`).toBe(true);
     }
     // Ungroup takes the click.
     await ungroup.click();
@@ -474,7 +477,7 @@ test.describe('editing on the Flows view', () => {
   test('Alt+Up and Down and the buttons move the selected step, Delete and the button remove it, and undo takes each back', async ({ page }) => {
     await openPane(page);
     const original = await useCase(page);
-    await option(page, 5).click();
+    await option(page, 6).click();
     // Past the par block, then past the scenarios, the focus staying on it.
     await page.keyboard.press('Alt+ArrowUp');
     await expect.poll(() => useCase(page)).toContain('  }\n  api --> shopper : 201\n  par {\n');
@@ -530,7 +533,7 @@ test.describe('editing on the Flows view', () => {
 
     // Steps that can't run at the same time say why, under the bar; Cmd/Ctrl-click adds one to the selection.
     await option(page, 1).click();
-    await option(page, 5).click({ modifiers: ['ControlOrMeta'] });
+    await option(page, 6).click({ modifiers: ['ControlOrMeta'] });
     await toolbar(page, '2 steps selected').getByRole('button', { name: 'Run at the same time' }).click();
     await expect(flows(page).getByRole('alert')).toHaveText(/follow each other/);
     expect(await useCase(page)).toBe(original);
@@ -572,9 +575,9 @@ test.describe('editing on the Flows view', () => {
     await expect(run).toHaveCount(0);
     await expect(flows(page).getByText('already runs at the same time as others: ungroup its block first')).toBeVisible();
     // A step of the block with one outside it: not offered either.
-    await option(page, 5).click();
-    await option(page, 4).click({ modifiers: ['ControlOrMeta'] });
-    await expect(flows(page).getByText(/Step 4 already runs at the same time/)).toBeVisible();
+    await option(page, 6).click();
+    await option(page, 5).click({ modifiers: ['ControlOrMeta'] });
+    await expect(flows(page).getByText(/Step 5 already runs at the same time/)).toBeVisible();
     await expect(run).toHaveCount(0);
   });
 
@@ -628,7 +631,9 @@ test.describe('editing on the Flows view', () => {
     await expect(map.getByRole('button', { name: 'Orders DB', exact: true })).toHaveCount(0);
     await flows(page).getByRole('button', { name: 'Add step', exact: true }).click();
     await expect(draftStatus(page)).toHaveText('From Shopper. Click where it goes.');
-    await expect(map).toContainText('Click where it goes');
+    // The map keeps its title; what to click is a small hint in it.
+    await expect(map.getByRole('heading')).toHaveText('Architecture');
+    await expect(map.locator('[data-map-hint]')).toHaveText('Click where it goes');
     await onMap(page, 'Email').click();
     await expect(draftField(page)).toBeFocused();
     // Not connected: the map draws the way it would go, dashed.
@@ -644,7 +649,7 @@ test.describe('editing on the Flows view', () => {
   });
 
   test('Add reply answers a selected request right after it, before the block that follows', async ({ page }) => {
-    await openPane(page);
+    await openPane(page, UNANSWERED);
     await option(page, 2).click();
     await flows(page).getByRole('button', { name: 'Add reply' }).click();
     // Both ends known, back the way the request went: an answer.
@@ -653,7 +658,7 @@ test.describe('editing on the Flows view', () => {
     await expect(draftField(page, 'Answer')).toBeFocused();
     await page.keyboard.type('cart');
     await page.keyboard.press('Enter');
-    await expect.poll(() => useCase(page)).toContain('  api -> cache : GET cart\n  cache --> api : cart\n  alt "Cart cached" {\n');
+    await expect.poll(() => useCase(page)).toContain('  api -> cache : GET cart\n  cache --> api : cart\n  alt "Cart cached" {\n  } alt "Cart expired" {\n');
     // A response has no reply.
     await option(page, 3).click();
     await expect(toolbar(page, 'Step 3')).toBeVisible();
@@ -692,7 +697,275 @@ test.describe('editing on the Flows view', () => {
   });
 });
 
+/** The use case with a second set of scenarios after the answer: two frames, each its own tabs. */
+const TWO_SETS = SOURCE.replace('  api --> shopper : 201\n', '  api --> shopper : 201\n  alt "Mail sent" {\n    api -> mail : SEND receipt\n  } alt "Mail failed" {\n    api -x mail : SEND receipt\n  }\n');
+
+test.describe('scenario tabs on the frames', () => {
+  const strip = (page: Page, set = 0) => flows(page).locator(`[data-frame-title="scenario"][data-set="${set}"]`);
+  const tab = (page: Page, name: string, set = 0) => strip(page, set).getByRole('tab', { name, exact: true });
+
+  test("a scenario is named on its set's tab, in place; a double click renames it, its menu deletes it; each one edit of the text, undone", async ({ page }) => {
+    await openPane(page);
+    const original = await useCase(page);
+    // "+" on the strip: a field on a new tab; Escape writes nothing. Typed keys are the name's, not the view's shortcuts.
+    await option(page, 1).click();
+    await strip(page).getByRole('button', { name: 'Add a scenario here' }).click();
+    const field = strip(page).getByRole('textbox', { name: 'New scenario' });
+    await expect(field).toBeFocused();
+    await field.pressSequentially('n1[]dx');
+    await expect(field).toHaveValue('n1[]dx');
+    await expect(draft(page)).toHaveCount(0);
+    expect(await useCase(page)).toBe(original);
+    await field.press('Escape');
+    await expect(field).toHaveCount(0);
+    expect(await useCase(page)).toBe(original);
+    // Named and Enter: a branch of that set, shown, its frame empty.
+    await strip(page).getByRole('button', { name: 'Add a scenario here' }).click();
+    await field.fill('Cart locked');
+    await field.press('Enter');
+    await expect(tab(page, 'Cart locked')).toHaveAttribute('aria-selected', 'true');
+    await expect.poll(() => useCase(page)).toContain('    api -> db : SELECT cart\n  }\n  alt "Cart locked" {\n  }\n  par {\n');
+    await expect(strip(page).getByRole('tab')).toHaveText(['Cart cached', 'Cart expired', 'Cart locked']);
+    await expect(flows(page).getByText('No steps yet.')).toBeVisible();
+    await expect(page.getByTestId('flows-news')).toHaveText('Scenario Cart locked added.');
+
+    // A double click renames it on its tab.
+    await tab(page, 'Cart locked').dblclick();
+    const rename = strip(page).getByRole('textbox', { name: 'Rename the scenario Cart locked' });
+    await expect(rename).toBeFocused();
+    await rename.fill('Cart held');
+    await rename.press('Enter');
+    await expect(tab(page, 'Cart held')).toHaveAttribute('aria-selected', 'true');
+    await expect.poll(() => useCase(page)).toContain('  alt "Cart held" {\n  }\n');
+
+    // Its menu deletes it; one that opens on the line that closes the one before can't be, and says why.
+    await strip(page).getByRole('button', { name: 'Scenario Cart held actions' }).click();
+    await page.getByRole('menuitem', { name: /^Delete this scenario/ }).click();
+    await expect.poll(() => useCase(page)).not.toContain('Cart held');
+    await expect(strip(page).getByRole('tab')).toHaveText(['Cart cached', 'Cart expired']);
+    await tab(page, 'Cart expired').click();
+    await strip(page).getByRole('button', { name: 'Scenario Cart expired actions' }).click();
+    await expect(page.getByRole('menuitem', { name: /^Delete this scenario/ })).toBeDisabled();
+    await expect(page.getByRole('menuitem', { name: /^Delete this scenario/ })).toContainText('delete it in Code mode');
+    await page.keyboard.press('Escape');
+
+    // Each was one edit: undo takes them back one by one.
+    for (const text of ['Cart held', 'Cart locked']) {
+      await sequence(page).getByRole('option').first().click();
+      await page.keyboard.press('ControlOrMeta+z');
+      await expect.poll(() => useCase(page)).toContain(`alt "${text}"`);
+    }
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect.poll(() => useCase(page)).toBe(original);
+  });
+
+  test('each set shows its own branch, chosen on its tabs or with [ and ]; the bar names them', async ({ page }) => {
+    await openPane(page, TWO_SETS);
+    await expect(flows(page).locator('[data-frame="scenario"]')).toHaveCount(2);
+    await expect(strip(page, 1).getByRole('tab')).toHaveText(['Mail sent', 'Mail failed']);
+    const labels = () => sequence(page).getByRole('option').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')!.replace(/^\d+\. /, '')));
+    // The first branch of each, by default.
+    await expect.poll(labels).toContain('Cart cache answers Checkout API: cart (response)');
+    await expect.poll(labels).toContain('Checkout API to Email: SEND receipt');
+    await expect(flows(page).getByTestId('flows-scenario')).toHaveText('›Cart cached›Mail sent');
+    // One set's tab leaves the other's branch as it was.
+    await tab(page, 'Mail failed', 1).click();
+    await tab(page, 'Cart expired').click();
+    await expect(tab(page, 'Mail failed', 1)).toHaveAttribute('aria-selected', 'true');
+    await expect.poll(labels).toContain('Checkout API to Email: SEND receipt (fails)');
+    await expect.poll(labels).toContain('Checkout API to Orders DB: SELECT cart');
+    await expect(flows(page).getByTestId('flows-scenario')).toHaveText('›Cart expired›Mail failed');
+    // ] and [ on a step of a set show its next branch and the one before, its first step selected.
+    await sequence(page).getByRole('option', { name: /SEND receipt \(fails\)/ }).click();
+    await page.keyboard.press(']');
+    await expect(tab(page, 'Mail sent', 1)).toHaveAttribute('aria-selected', 'true');
+    await expect(sequence(page).getByRole('option', { name: /Email: SEND receipt$/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(tab(page, 'Cart expired')).toHaveAttribute('aria-selected', 'true');
+    await page.keyboard.press('[');
+    await expect(tab(page, 'Mail failed', 1)).toHaveAttribute('aria-selected', 'true');
+    // A step of another branch of the same set added there goes to that branch: the text round-trips.
+    await flows(page).getByRole('button', { name: 'Add a step to Mail failed' }).click();
+    await flows(page).getByRole('button', { name: 'Pick Order events' }).click();
+    await page.keyboard.type('PUBLISH MailFailed');
+    await page.keyboard.press('Enter');
+    // It starts where that branch's last step went, the mail sender.
+    await expect.poll(() => useCase(page)).toContain('    api -x mail : SEND receipt\n    mail -> events : PUBLISH MailFailed\n  }\n}');
+  });
+});
+
+test.describe('the first step and the scenarios the problem asks for', () => {
+  test("the prompt of the first step never takes a click meant for the lane under it", async ({ page }) => {
+    await openPane(page, SOURCE.replace(/usecase "Checkout" \{[\s\S]*\}\n/, 'usecase "Checkout" {\n}\n'));
+    const prompt = draft(page).locator('[data-draft-prompt]');
+    await expect(draftStatus(page)).toHaveText('Shopper starts. Click what it calls.');
+    // One thing to do: no Add scenario before the first step.
+    await expect(flows(page).getByRole('button', { name: 'Add scenario', exact: true })).toHaveCount(0);
+    const [box, lane] = [(await prompt.boundingBox())!, (await flows(page).locator('[data-lifeline="api"]').boundingBox())!];
+    const x = lane.x + lane.width / 2;
+    expect(x).toBeGreaterThan(box.x);
+    expect(x).toBeLessThan(box.x + box.width);
+    await page.mouse.click(x, box.y + box.height / 2);
+    await expect(flows(page).locator('[data-draft-arrow="set"]')).toHaveCount(1);
+    await expect(draftField(page)).toBeFocused();
+  });
+
+  test("the problem's scenarios under a name being typed wrap, and the frame makes room for them: its first row stays its own", async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 800 });
+    const mix = 'traffic {\n  "Checkout" 10 rps mix "Cart cached" 50%, "Cart expired" 20%, "Cart locked by another session" 10%, "Coupon rejected at the till" 10%, "Payment provider down" 10%\n}\n';
+    await openPane(page, `${SOURCE}\n${mix}`);
+    await flows(page).locator('[data-frame-title="scenario"]').getByRole('button', { name: 'Add a scenario here' }).click();
+    const chips = flows(page).getByRole('group', { name: 'Scenarios the problem asks for' });
+    await expect(chips.getByRole('button')).toHaveText(['Cart locked by another session', 'Coupon rejected at the till', 'Payment provider down']);
+    // Under the chips, the branch's first row: nothing over its label.
+    const row = option(page, 3);
+    const [c, r] = [(await chips.boundingBox())!, (await row.boundingBox())!];
+    expect(c.y + c.height).toBeLessThanOrEqual(r.y + 2);
+    expect(await row.locator('span').first().evaluate((el) => { const b = el.getBoundingClientRect(); return el.contains(document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2)); })).toBe(true);
+    // A chip adds that scenario, shown.
+    await chips.getByRole('button', { name: 'Coupon rejected at the till' }).click();
+    await expect(flows(page).getByRole('tab', { name: 'Coupon rejected at the till' })).toHaveAttribute('aria-selected', 'true');
+    await expect.poll(() => useCase(page)).toContain('  alt "Coupon rejected at the till" {\n  }\n');
+  });
+});
+
+test.describe('lanes no step in sight uses, at 1024px', () => {
+  test.use({ viewport: { width: 1024, height: 768 } });
+  /** A long first label, so the lanes don't fit, and the email sender used only in the branch not shown. */
+  const FOLD = SOURCE.replace('POST /checkout', 'POST /checkout {"cart": 42, "coupon": "WINTER-SALE-2026"}').replace('    api -> db : SELECT cart\n', '    api -> db : SELECT cart\n    api ->> mail : SEND CartExpired\n');
+
+  test('fold to a sliver when the lanes do not fit; showing its branch or a click unfolds one, and it still picks', async ({ page }) => {
+    await openPane(page, FOLD);
+    const mail = flows(page).locator('[data-lane="mail"]');
+    await expect(mail).toHaveAttribute('data-folded', 'true');
+    expect((await mail.boundingBox())!.width).toBeLessThanOrEqual(30);
+    // Its branch shown, it is in use.
+    await flows(page).getByRole('tab', { name: 'Cart expired' }).click();
+    await expect(mail).not.toHaveAttribute('data-folded', 'true');
+    await flows(page).getByRole('tab', { name: 'Cart cached' }).click();
+    await expect(mail).toHaveAttribute('data-folded', 'true');
+    // While a step's ends are picked, a click on it picks it, and shows it.
+    await flows(page).getByRole('button', { name: 'Add step', exact: true }).click();
+    await mail.click();
+    await expect(flows(page).locator('[data-draft-arrow="set"]')).toHaveCount(1);
+    await expect(draftField(page)).toBeFocused();
+    await expect(mail).not.toHaveAttribute('data-folded', 'true');
+    await page.keyboard.press('Escape');
+
+    // Otherwise a click only shows it.
+    const other = await page.context().newPage();
+    await openPane(other, FOLD);
+    const folded = flows(other).locator('[data-lane="mail"]');
+    await expect(folded).toHaveAttribute('data-folded', 'true');
+    await folded.click();
+    await expect(folded).not.toHaveAttribute('data-folded', 'true');
+    await expect(draft(other)).toHaveCount(0);
+  });
+});
+
+test.describe('dragging a step to move it', () => {
+  test('a message dragged by its middle shows where it lands, moves there in one edit, selected; undo and Escape take it back', async ({ page }) => {
+    await openPane(page);
+    const original = await useCase(page);
+    const drag = async (n: number, to: { x: number; y: number }, drop = true) => {
+      const box = (await option(page, n).boundingBox())!;
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(to.x, to.y, { steps: 10 });
+      if (drop) await page.mouse.up();
+    };
+    // The checkout request, past the cart request: the pink line under it, mid-drag, the request faded.
+    const second = (await option(page, 2).boundingBox())!;
+    const first = (await option(page, 1).boundingBox())!;
+    await drag(1, { x: first.x + first.width / 2, y: second.y + second.height + 4 }, false);
+    const line = flows(page).locator('[data-drop-indicator]');
+    await expect(line).toBeVisible();
+    const at = (await line.boundingBox())!;
+    expect(at.y).toBeGreaterThan(second.y);
+    await expect(option(page, 1)).toHaveCSS('opacity', '0.35');
+    await page.mouse.up();
+    await expect.poll(() => useCase(page)).toContain('  api -> cache : GET cart\n  shopper -> api : POST /checkout\n  alt "Cart cached" {\n');
+    await expect(line).toHaveCount(0);
+    await expect(sequence(page).getByRole('option', { name: /POST \/checkout/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('flows-news')).toHaveText('Step moved.');
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect.poll(() => useCase(page)).toBe(original);
+
+    // Into a frame: the frame it lands in lights up; the 201 into the par block.
+    const insert = (await option(page, 4).boundingBox())!;
+    await drag(6, { x: insert.x + insert.width / 2, y: insert.y + insert.height + 4 }, false);
+    await expect(flows(page).locator('[data-frame="parallel"][data-drop]')).toHaveCount(1);
+    await page.mouse.up();
+    await expect.poll(() => useCase(page)).toContain('    api -> db : INSERT order\n    api --> shopper : 201\n    api ->> events : PUBLISH OrderPlaced\n  }\n');
+
+    // Escape mid-drag lets it go where it was.
+    const now = await useCase(page);
+    await drag(1, { x: first.x + first.width / 2, y: second.y + second.height + 4 }, false);
+    await expect(line).toBeVisible();
+    await page.keyboard.press('Escape');
+    await page.mouse.up();
+    await expect(line).toHaveCount(0);
+    expect(await useCase(page)).toBe(now);
+    // A click is not a drag: it selects.
+    await option(page, 3).click();
+    await expect(option(page, 3)).toHaveAttribute('aria-selected', 'true');
+    expect(await useCase(page)).toBe(now);
+  });
+});
+
 test.describe('the Flows view, polished', () => {
+  test('a "+" between rows shows only with the pointer on its row or the focus on it', async ({ page }) => {
+    await openPane(page);
+    const plus = flows(page).getByRole('button', { name: 'Add a step before step 2', exact: true });
+    const other = flows(page).getByRole('button', { name: 'Add a step after step 2', exact: true });
+    const opacity = (el: typeof plus) => el.evaluate((node) => Number(getComputedStyle(node).opacity));
+    await page.mouse.move(0, 0);
+    await expect.poll(() => opacity(plus)).toBe(0);
+    // The pointer on the second row's top edge: its "+", and no other.
+    const row = (await option(page, 2).boundingBox())!;
+    await page.mouse.move(row.x + row.width / 2, row.y + 2);
+    await expect.poll(() => opacity(plus)).toBeGreaterThan(0.5);
+    expect(await opacity(other)).toBe(0);
+    // Off the diagram, gone again; by the keys, there in full.
+    await page.mouse.move(0, 0);
+    await expect.poll(() => opacity(plus)).toBe(0);
+    await plus.focus();
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Tab');
+    await expect(plus).toBeFocused();
+    await expect.poll(() => opacity(plus)).toBe(1);
+  });
+
+  for (const width of [1024, 1440]) {
+    test(`at ${width}px the prompt of a step being added is at its arrow, inside its band, which is as tall as what it holds`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await openPane(page);
+      // The longest prompt: a step added, the next chained from where it went.
+      await (await insertPoint(page, 'Add a step before step 2')).click();
+      await flows(page).getByRole('button', { name: 'Pick Order events' }).click();
+      await page.keyboard.type('PUBLISH CheckoutStarted');
+      await page.keyboard.press('Enter');
+      await expect(draftStatus(page)).toHaveText('Added. Next from Order events: click where it goes. Escape to stop.');
+      const prompt = draft(page).locator('[data-draft-prompt]');
+      const [band, box] = [(await draft(page).boundingBox())!, (await prompt.boundingBox())!];
+      // What is under the arrow: the prompt, and the reply offered under it.
+      const column = (await prompt.locator('xpath=..').boundingBox())!;
+      // Inside the band, every side.
+      expect(box.x).toBeGreaterThanOrEqual(band.x);
+      expect(box.x + box.width).toBeLessThanOrEqual(band.x + band.width + 0.5);
+      expect(box.y).toBeGreaterThanOrEqual(band.y);
+      expect(box.y + box.height).toBeLessThanOrEqual(band.y + band.height + 0.5);
+      // Its text wraps rather than overflows, and is legible (14px at least).
+      expect(await prompt.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+      expect(await draftStatus(page).evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(14);
+      // The band ends a little under its content, no more.
+      expect(column.y + column.height).toBeLessThanOrEqual(band.y + band.height + 0.5);
+      expect(band.y + band.height - (column.y + column.height)).toBeLessThanOrEqual(16);
+      // By its arrow: its left near the lane the arrow starts from.
+      const lane = (await flows(page).locator('[data-lifeline="events"]').boundingBox())!;
+      expect(Math.abs(box.x - (lane.x + lane.width / 2))).toBeLessThanOrEqual(width === 1024 ? 300 : 40);
+    });
+  }
+
   test('labels keep a sensible width: the view scrolls sideways rather than starve them', async ({ page }) => {
     const long = SOURCE.replace('POST /checkout', 'POST /checkout {"cart": 42, "coupon": "WINTER-SALE-2026"}');
     const label = (n: number) => option(page, n).locator('span.truncate').first();
@@ -731,19 +1004,23 @@ test.describe('the Flows view, polished', () => {
     await option(page, 1).click();
     await expect(toolbar(page, 'Step 1')).toBeVisible();
     await expect(reply).toHaveCount(0);
-    // On the main flow, the cart request waits (its answers are in the scenarios).
+    // The cart request is answered in the branch shown, and in the other.
     await option(page, 2).click();
-    await expect(reply).toBeVisible();
-    // On a scenario's tab it is answered.
+    await expect(toolbar(page, 'Step 2')).toBeVisible();
+    await expect(reply).toHaveCount(0);
     await flows(page).getByRole('tab', { name: 'Cart expired' }).click();
     await option(page, 2).click();
     await expect(toolbar(page, 'Step 2')).toBeVisible();
     await expect(reply).toHaveCount(0);
+    // The cart's read from the database is not.
+    await option(page, 4).click();
+    await expect(toolbar(page, 'Step 4')).toBeVisible();
+    await expect(reply).toBeVisible();
   });
 
   test('a "+" between a step and the block after it adds there, not into the block', async ({ page }) => {
     await openPane(page);
-    // After step 2, before the folded scenarios.
+    // After step 2, before the set of scenarios.
     await (await insertPoint(page, 'Add a step after step 2')).click();
     await expect(draftStatus(page)).toHaveText('From Cart cache. Click where it goes.');
     await flows(page).getByRole('button', { name: 'Pick Checkout API' }).click();
@@ -828,7 +1105,7 @@ test.describe('the draft in sight, at 1280x800', () => {
     [3, 'the order insert, low in it'],
   ] as const) {
     test(`the reply draft of ${name} never covers the request it answers, which stays in sight`, async ({ page }) => {
-      await openPane(page);
+      await openPane(page, UNANSWERED);
       await option(page, n).click();
       await flows(page).getByRole('button', { name: 'Add reply' }).click();
       await expect(draftField(page, 'Answer')).toBeFocused();
