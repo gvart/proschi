@@ -11572,10 +11572,12 @@ function register(on, options) {
     themeChanged();
     return set;
   });
-  on("prompt.compose", async ($, e, next) => {
-    const composed = await next(e);
-    return { ...composed, sections: [...composed.sections, { id: "proschi:render", text: HINT, scope: "session" }] };
-  });
+  if (options.promptHint !== false && options.promptHint !== "false") {
+    on("prompt.compose", async ($, e, next) => {
+      const composed = await next(e);
+      return { ...composed, sections: [...composed.sections, { id: "proschi:render", text: HINT, scope: "session" }] };
+    });
+  }
   on("command.run", { command: "proschi" }, async ($, e) => {
     const [verb, ...rest] = e.args.trim().split(/\s+/);
     const words = [];
